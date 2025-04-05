@@ -30,6 +30,27 @@ Cache Warmer crawls your Webflow site after publishing, ensuring all pages are c
 - Development: [Coming soon]
 - Production: [Coming soon]
 
+## Security
+
+This project is open source but requires secure configuration for deployment:
+
+1. Environment Variables
+   - Copy `.env.example` to `.env`
+   - Fill in all required credentials
+   - Never commit `.env` file
+2. API Keys
+
+   - Generate new API keys for each environment
+   - Use test keys for development
+   - Rotate production keys regularly
+
+3. Deployment
+   - Follow security best practices
+   - Set up proper monitoring
+   - Enable security features in all services
+
+See [SECURITY.md](SECURITY.md) for more details.
+
 ## Contributing
 
 Project is currently in initial setup phase.
