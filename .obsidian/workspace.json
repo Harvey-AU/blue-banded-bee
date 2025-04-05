@@ -184,8 +184,19 @@
   },
   "active": "2ad2c285fe288f9b",
   "lastOpenFiles": [
+    "src/db/db.go",
+    "src/crawler/types.go",
+    "src/crawler/config.go",
+    "src/crawler/crawler.go",
+    "src/crawler/crawler",
+    "go.sum",
+    "go.mod",
+    "LICENSE",
+    "src/main.go",
+    "src/queue",
+    "src/db",
+    "SECURITY.md",
     "Planning/Development plan.md",
-    "Planning",
     "Planning/Infrastructure.md",
     "README.md"
   ]
