@@ -1,4 +1,4 @@
-## Stage 0: Project Setup & Infrastructure (6-10 hrs) ✅
+## Stage 0: Project Setup & Infrastructure (6-10 hrs) 🟡
 
 ### Development Environment Setup (2-3 hrs) ✅
 
@@ -16,25 +16,29 @@
 - [x] Add basic configs
 - [x] Set up testing framework
 
-### Environment Configuration (2-4 hrs) 🟡
+### Production Infrastructure Setup (2-4 hrs) ⚡Priority
 
 - [x] Set up dev/prod environments
 - [x] Configure environment variables
 - [x] Set up secrets management
-- [ ] Configure Fly.io for both environments
-- [ ] Set up initial deployment workflow
+- [ ] Configure Fly.io
+  - [ ] Set up Fly.io account and project
+  - [ ] Configure deployment settings
+  - [ ] Set up environment variables in Fly.io
+  - [ ] Create deployment workflow
+  - [ ] Add health check endpoint monitoring
+- [ ] Test production deployment
 
 ## Stage 1: Core Setup & Basic Crawling (15-25 hrs) 🟡
 
-### Set up Go project with Fly.io deployment (3-5 hrs) 🟡
+### Core API Implementation (3-5 hrs)
 
 - [x] Initialize Go project structure and dependencies
 - [x] Set up basic API endpoints
-- [ ] Configure Fly.io deployment settings
 - [x] Set up environment variables and configs
 - [x] Implement basic health checks and monitoring
 
-### Implement basic crawler (using Go's Colly) (8-12 hrs) 🟡
+### Enhance Crawler Results (8-12 hrs) ⚡Priority
 
 - [x] Set up Colly crawler configuration
 - [x] Implement concurrent crawling logic
@@ -44,7 +48,7 @@
 - [ ] Implement cache validation checks
 - [ ] Add performance metrics collection
 
-### Set up Turso for storing results (4-8 hrs) ✅
+### Set up Turso for storing results (4-8 hrs) 🟡
 
 - [x] Design database schema
 - [x] Set up Turso connection and config
