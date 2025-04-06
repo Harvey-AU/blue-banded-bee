@@ -10,20 +10,64 @@ Cache Warmer crawls your Webflow site after publishing, ensuring all pages are c
 
 🚧 Currently in initial development
 
+Core functionality implemented:
+
+- ✅ URL crawling with concurrent requests
+- ✅ Database integration with Turso
+- ✅ Basic error handling
+- ✅ Test coverage for core components
+
+Next up:
+
+- 🔄 Rate limiting and retry logic
+- 🔄 Fly.io deployment
+- 🔄 Cache validation improvements
+
 ## Tech Stack
 
 - Backend: Go
 - Database: Turso
-- Hosting: Fly.io
-- Auth: Clerk
-- Payments: Paddle
-- Frontend: Webflow
+- Hosting: Fly.io (coming soon)
+- Auth: Clerk (planned)
+- Payments: Paddle (planned)
+- Frontend: Webflow (planned)
 
 ## Local Development
 
-[Coming soon - will include setup instructions]
+### Prerequisites
 
-## Project Structure
+- Go 1.23 or later
+- A Turso database account
+- Git
+
+### Setup
+
+1. Clone the repository:
+
+   ```bash
+   git clone https://github.com/teamharvey/cache-warmer.git
+   cd cache-warmer
+   ```
+
+2. Set up environment:
+
+   ```bash
+   cp .env.example .env
+   # Edit .env with your Turso credentials
+   ```
+
+3. Install dependencies:
+
+   ```bash
+   go mod download
+   ```
+
+4. Run tests:
+   ```bash
+   go test ./... -v
+   ```
+
+### Project Structure
 
 ## Environment Setup
 
