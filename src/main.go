@@ -70,7 +70,8 @@ func main() {
 	// Basic health check handler
 	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		log.Debug().Str("endpoint", "/health").Msg("Health check requested")
-		fmt.Fprintf(w, "OK")
+		response := fmt.Sprintf("OK - Deployed at: %s", time.Now().Format(time.RFC3339))
+		fmt.Fprintf(w, response)
 	})
 
 	// Test crawl handler
