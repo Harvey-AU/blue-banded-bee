@@ -71,15 +71,16 @@ func main() {
 	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		log.Debug().Str("endpoint", "/health").Msg("Health check requested")
 		w.Header().Set("Content-Type", "text/plain")
-		response := fmt.Sprintf("OK - Deployed at: %s", time.Now().Format(time.RFC3339))
-		fmt.Fprintf(w, response)
+		const healthFormat = "OK - Deployed at: %s"
+		response := fmt.Sprintf(healthFormat, time.Now().Format(time.RFC3339))
+		fmt.Fprint(w, response)
 	})
 
 	// Test crawl handler
 	http.HandleFunc("/test-crawl", func(w http.ResponseWriter, r *http.Request) {
 		url := r.URL.Query().Get("url")
 		if url == "" {
-			url = "https://www.teamharvey.co" // default test URL
+			url = "https://www.teamharvey.co/impact-reports" // default test URL
 		}
 
 		// Initialize database
