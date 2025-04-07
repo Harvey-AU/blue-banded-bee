@@ -1,4 +1,4 @@
-module github.com/teamharvey/cache-warmer
+module github.com/Harvey-AU/blue-banded-bee
 
 go 1.24
 
