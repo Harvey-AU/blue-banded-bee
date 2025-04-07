@@ -16,27 +16,31 @@
 - [x] Add basic configs
 - [x] Set up testing framework
 
-### Production Infrastructure Setup (2-4 hrs) ⚡Priority
+### Production Infrastructure Setup (2-4 hrs) 🟡
 
 - [x] Set up dev/prod environments
 - [x] Configure environment variables
 - [x] Set up secrets management
+- [x] Create Dockerfile and container setup
 - [ ] Configure Fly.io
-  - [ ] Set up Fly.io account and project
+  - [x] Set up Fly.io account and project
   - [ ] Configure deployment settings
-  - [ ] Set up environment variables in Fly.io
+  - [x] Set up environment variables in Fly.io
   - [ ] Create deployment workflow
   - [ ] Add health check endpoint monitoring
 - [ ] Test production deployment
+- [x] Initial Sentry.io connection
 
 ## Stage 1: Core Setup & Basic Crawling (15-25 hrs) 🟡
 
-### Core API Implementation (3-5 hrs)
+### Core API Implementation (3-5 hrs) ✅
 
 - [x] Initialize Go project structure and dependencies
 - [x] Set up basic API endpoints
 - [x] Set up environment variables and configs
 - [x] Implement basic health checks and monitoring
+- [ ] Add basic error monitoring with Sentry
+- [ ] Set up endpoint performance tracking
 
 ### Enhance Crawler Results (8-12 hrs) ⚡Priority
 
@@ -47,6 +51,8 @@
 - [ ] Handle different response types/errors
 - [ ] Implement cache validation checks
 - [ ] Add performance metrics collection
+- [ ] Add crawler-specific error tracking
+- [ ] Set up crawler performance monitoring
 
 ### Set up Turso for storing results (4-8 hrs) 🟡
 
@@ -57,8 +63,28 @@
 - [x] Set up integration tests
 - [ ] Add retry logic
 - [ ] Set up basic data cleanup routines
+- [ ] Add database performance monitoring
+- [ ] Set up query error tracking
 
-## Stage 2: Auth & User Management (10-16 hrs)
+## Stage 2: Deployment & Monitoring (NEW) (8-12 hrs) ⚡Priority
+
+### Fly.io Production Setup (4-6 hrs)
+
+- [ ] Set up production environment on Fly.io
+- [ ] Configure auto-scaling rules
+- [ ] Set up production logging
+- [ ] Implement monitoring alerts
+- [ ] Configure backup strategies
+
+### Performance Optimization (4-6 hrs)
+
+- [ ] Implement caching layer
+- [ ] Optimize database queries
+- [ ] Set up CDN for static assets
+- [ ] Configure rate limiting
+- [ ] Add performance monitoring
+
+## Stage 3: Auth & User Management (10-16 hrs)
 
 ### Implement Clerk authentication (4-6 hrs)
 
@@ -83,7 +109,7 @@
 - [ ] Implement usage notifications
 - [ ] Add basic reporting functions
 
-## Stage 3: Billing & Subscriptions (8-12 hrs)
+## Stage 4: Billing & Subscriptions (8-12 hrs)
 
 ### Implement Paddle integration (4-6 hrs)
 
@@ -107,7 +133,7 @@
 - [ ] Set up usage warnings
 - [ ] Implement grace period
 
-## Stage 4: Webflow Integration & Launch (8-16 hrs)
+## Stage 5: Webflow Integration & Launch (8-16 hrs)
 
 ### Build Webflow frontend interface (4-8 hrs)
 
@@ -138,6 +164,8 @@
 ## Key Risk Areas:
 
 - [ ] Crawler edge cases and error handling
+- [ ] Production deployment stability on Fly.io
 - [ ] Auth integration complexity
 - [ ] Paddle webhook handling
 - [ ] Webflow API limitations
+- [ ] Performance under load
