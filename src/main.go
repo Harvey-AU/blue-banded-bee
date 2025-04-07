@@ -7,11 +7,11 @@ import (
 	"os"
 	"time"
 
+	"github.com/Harvey-AU/blue-banded-bee/src/crawler"
+	"github.com/Harvey-AU/blue-banded-bee/src/db"
 	"github.com/joho/godotenv"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
-	"github.com/teamharvey/cache-warmer/src/crawler"
-	"github.com/teamharvey/cache-warmer/src/db"
 )
 
 type Config struct {
@@ -70,6 +70,7 @@ func main() {
 	// Basic health check handler
 	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		log.Debug().Str("endpoint", "/health").Msg("Health check requested")
+		w.Header().Set("Content-Type", "text/plain")
 		response := fmt.Sprintf("OK - Deployed at: %s", time.Now().Format(time.RFC3339))
 		fmt.Fprintf(w, response)
 	})

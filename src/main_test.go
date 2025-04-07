@@ -3,6 +3,7 @@ package main
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -29,11 +30,10 @@ func TestHealthEndpoint(t *testing.T) {
 			status, http.StatusOK)
 	}
 
-	// Check the response body
-	expected := "OK"
-	if rr.Body.String() != expected {
-		t.Errorf("handler returned unexpected body: got %v want %v",
-			rr.Body.String(), expected)
+	// Check that response starts with "OK"
+	if !strings.HasPrefix(rr.Body.String(), "OK") {
+		t.Errorf("handler returned unexpected body: got %v, want it to start with 'OK'",
+			rr.Body.String())
 	}
 }
 
