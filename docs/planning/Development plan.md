@@ -4,6 +4,7 @@
 
 - [x] Initialise GitHub repository
 - [x] Set up branch protection
+- [x] Resolve naming issues and override branch protection for admins
 - [x] Create dev/prod branches
 - [x] Set up local development environment
 - [x] Add initial documentation
