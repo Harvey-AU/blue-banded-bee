@@ -3,6 +3,7 @@ package crawler
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"net/url"
 	"time"
@@ -89,7 +90,7 @@ func (c *Crawler) WarmURL(ctx context.Context, targetURL string) (*CrawlResult, 
 
 	// Return error if we got a non-2xx status code or any other error
 	if result.Error != "" {
-		return result, fmt.Errorf(result.Error)
+		return result, errors.New(result.Error)
 	}
 
 	return result, nil
