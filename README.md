@@ -45,7 +45,7 @@ Next up:
 1. Clone the repository:
 
    ```bash
-   git clone https://github.com/teamharvey/cache-warmer.git
+   git clone https://github.com/Harvey-AU/blue-banded-bee.git
    cd cache-warmer
    ```
 
