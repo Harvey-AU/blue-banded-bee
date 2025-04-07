@@ -1,5 +1,5 @@
 # Build stage
-FROM golang:1.21-alpine AS builder
+FROM golang:1.24-alpine AS builder
 
 WORKDIR /app
 
@@ -16,12 +16,19 @@ COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -o main ./src/main.go
 
 # Final stage
-FROM alpine:latest
+FROM alpine:3.19
 
 WORKDIR /app
 
+# Install ca-certificates for HTTPS
+RUN apk --no-cache add ca-certificates
+
 # Copy binary from builder
 COPY --from=builder /app/main .
+
+# Add healthcheck
+HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
+    CMD wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1
 
 # Expose port
 EXPOSE 8080
