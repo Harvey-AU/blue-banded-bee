@@ -25,10 +25,10 @@
 - [x] Create Dockerfile and container setup
 - [ ] Configure Fly.io
   - [x] Set up Fly.io account and project
-  - [ ] Configure deployment settings
+  - [x] Configure deployment settings
   - [x] Set up environment variables in Fly.io
-  - [ ] Create deployment workflow
-  - [ ] Add health check endpoint monitoring
+  - [x] Create deployment workflow
+  - [x] Add health check endpoint monitoring
 - [ ] Test production deployment
 - [x] Initial Sentry.io connection
 
