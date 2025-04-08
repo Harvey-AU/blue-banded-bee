@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/rand"
 	"net/http"
+	"net/url"
 	"os"
 	"sync"
 	"time"
@@ -37,7 +38,6 @@ type Config struct {
 func setupLogging(config *Config) {
 	// Set up pretty console logging for development
 	if config.Env == "development" {
-
 		log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: time.RFC3339})
 	}
 
@@ -121,7 +121,7 @@ func wrapWithSentryTransaction(name string, next http.HandlerFunc) http.HandlerF
 			span.SetTag("http.status_code", fmt.Sprintf("%d", recorder.statusCode))
 		}
 		span.SetData("duration_ms", duration.Milliseconds())
-		
+
 		log.Info().
 			Str("endpoint", name).
 			Int("status", recorder.statusCode).
@@ -171,11 +171,11 @@ func (rl *rateLimiter) middleware(next http.HandlerFunc) http.HandlerFunc {
 }
 
 // sanitizeURL removes sensitive information from URLs before logging
-func sanitizeURL(url string) string {
-	if url == "" {
+func sanitizeURL(urlStr string) string {
+	if urlStr == "" {
 		return ""
 	}
-	parsed, err := url.Parse(url)
+	parsed, err := url.Parse(urlStr)
 	if err != nil {
 		return "invalid-url"
 	}
@@ -196,12 +196,12 @@ var resetToken = generateResetToken()
 
 // Metrics tracks various performance and usage metrics for the application
 type Metrics struct {
-	ResponseTimes    []time.Duration // List of response times
-	CacheHits       int             // Number of cache hits
-	CacheMisses     int             // Number of cache misses
-	ErrorCount      int             // Number of errors encountered
-	RequestCount    int             // Total number of requests
-	mu              sync.Mutex
+	ResponseTimes []time.Duration // List of response times
+	CacheHits     int             // Number of cache hits
+	CacheMisses   int             // Number of cache misses
+	ErrorCount    int             // Number of errors encountered
+	RequestCount  int             // Total number of requests
+	mu           sync.Mutex
 }
 
 // recordMetrics records various metrics about a request
@@ -211,11 +211,11 @@ func (m *Metrics) recordMetrics(duration time.Duration, cacheStatus string, hasE
 
 	m.ResponseTimes = append(m.ResponseTimes, duration)
 	m.RequestCount++
-	
+
 	if hasError {
 		m.ErrorCount++
 	}
-	
+
 	if cacheStatus == "HIT" {
 		m.CacheHits++
 	} else {
@@ -237,10 +237,10 @@ func main() {
 
 	// Initialize Sentry
 	err = sentry.Init(sentry.ClientOptions{
-		Dsn:             config.SentryDSN,
-		Environment:     config.Env,
+		Dsn:              config.SentryDSN,
+		Environment:      config.Env,
 		TracesSampleRate: 1.0,
-		Debug:           config.Env == "development",
+		Debug:            config.Env == "development",
 	})
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to initialize Sentry")
@@ -344,7 +344,7 @@ func main() {
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(result)
-	}))
+	})))
 
 	// Recent crawls endpoint
 	// @Summary Recent crawls endpoint
@@ -384,51 +384,50 @@ func main() {
 		span.SetData("result_count", len(results))
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(results)
-	}))
+	})))
 
 	// Reset database endpoint (development only)
 	if config.Env == "development" {
 		devToken := generateResetToken()
 		log.Info().Msg("Development reset token generated - check logs for value")
-		http.HandleFunc("/reset-db", limiter.middleware(wrapWithSentryTransaction("reset-db", 
-			func(w http.ResponseWriter, r *http.Request) {
-				// Only allow POST method
-				if r.Method != http.MethodPost {
-					http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-					return
-				}
+		http.HandleFunc("/reset-db", limiter.middleware(wrapWithSentryTransaction("reset-db", func(w http.ResponseWriter, r *http.Request) {
+			// Only allow POST method
+			if r.Method != http.MethodPost {
+				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
 
-				// Verify token
-				authHeader := r.Header.Get("Authorization")
-				if authHeader != fmt.Sprintf("Bearer %s", devToken) {
-					http.Error(w, "Unauthorized", http.StatusUnauthorized)
-					return
-				}
+			// Verify token
+			authHeader := r.Header.Get("Authorization")
+			if authHeader != fmt.Sprintf("Bearer %s", devToken) {
+				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+				return
+			}
 
-				dbConfig := &db.Config{
-					URL:       config.DatabaseURL,
-					AuthToken: config.AuthToken,
-				}
+			dbConfig := &db.Config{
+				URL:       config.DatabaseURL,
+				AuthToken: config.AuthToken,
+			}
 
-				database, err := db.GetInstance(dbConfig)
-				if err != nil {
-					log.Error().Err(err).Msg("Failed to connect to database")
-					http.Error(w, "Database connection failed", http.StatusInternalServerError)
-					return
-				}
+			database, err := db.GetInstance(dbConfig)
+			if err != nil {
+				log.Error().Err(err).Msg("Failed to connect to database")
+				http.Error(w, "Database connection failed", http.StatusInternalServerError)
+				return
+			}
 
-				if err := database.ResetSchema(); err != nil {
-					sentry.CaptureException(err)
-					log.Error().Err(err).Msg("Failed to reset database schema")
-					http.Error(w, "Failed to reset database", http.StatusInternalServerError)
-					return
-				}
+			if err := database.ResetSchema(); err != nil {
+				sentry.CaptureException(err)
+				log.Error().Err(err).Msg("Failed to reset database schema")
+				http.Error(w, "Failed to reset database", http.StatusInternalServerError)
+				return
+			}
 
-				w.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(w).Encode(map[string]string{
-					"status": "Database schema reset successfully",
-				})
-			})))
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]string{
+				"status": "Database schema reset successfully",
+			})
+		})))
 	}
 
 	// Start server

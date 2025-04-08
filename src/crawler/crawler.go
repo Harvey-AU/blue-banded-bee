@@ -52,8 +52,6 @@ func (c *Crawler) WarmURL(ctx context.Context, targetURL string) (*CrawlResult, 
 	span := sentry.StartSpan(ctx, "crawler.warm_url")
 	defer span.Finish()
 
-	c.colly.WithContext(ctx)
-
 	span.SetTag("crawler.url", targetURL)
 	start := time.Now()
 	
@@ -103,6 +101,7 @@ func (c *Crawler) WarmURL(ctx context.Context, targetURL string) (*CrawlResult, 
 		result.Error = err.Error()
 	})
 
+	// Just use Visit instead, and handle context cancellation through colly's configuration
 	err = c.colly.Visit(targetURL)
 	if err != nil {
 		log.Error().Err(err).Str("url", targetURL).Msg("Failed to crawl URL")
