@@ -17,7 +17,8 @@ The cache warmer proactively visits URLs to ensure content is cached and readily
 2. Rate Limiting
 
    - Token bucket algorithm implementation
-   - Per-IP address limiting
+   - Per-IP address limiting with proper client IP detection
+   - Supports X-Forwarded-For and X-Real-IP headers for proxy environments
    - 5 requests per second default limit
 
 3. Metrics Collection

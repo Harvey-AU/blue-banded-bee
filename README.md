@@ -35,7 +35,7 @@ go run src/main.go
 - ✅ Database integration with Turso
 - ✅ Basic error handling
 - ✅ Test coverage for core components
-- ✅ Rate limiting
+- ✅ Rate limiting with proper client IP detection
 - ✅ Fly.io deployment
 
 ### Coming Soon
@@ -47,9 +47,10 @@ go run src/main.go
 ## Tech Stack
 
 - Backend: Go
-- Database: Turso
+- Database: Turso (Edge SQL database)
 - Hosting: Fly.io
 - Error Tracking: Sentry
+- Cache Layer: Cloudflare
 - Documentation: Obsidian
 
 ## Documentation

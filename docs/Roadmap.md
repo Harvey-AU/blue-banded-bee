@@ -50,7 +50,8 @@
 - [x] Set up Colly crawler configuration
 - [x] Implement concurrent crawling logic
 - [x] Add basic error handling
-- [ ] Add rate limiting and retry logic
+- [x] Add rate limiting (fixed client IP detection)
+- [ ] Add retry logic
 - [ ] Handle different response types/errors
 - [ ] Implement cache validation checks
 - [ ] Add performance metrics collection
@@ -72,7 +73,8 @@
 
 ### Fly.io Production Setup (4-6 hrs)
 
-- [ ] Set up production environment on Fly.io
+- [x] Set up production environment on Fly.io
+- [x] Deploy and test rate limiting in production
 - [ ] Configure auto-scaling rules
 - [ ] Set up production logging
 - [ ] Implement monitoring alerts
@@ -83,7 +85,7 @@
 - [ ] Implement caching layer
 - [ ] Optimize database queries
 - [ ] Set up CDN for static assets
-- [ ] Configure rate limiting
+- [x] Configure rate limiting with proper client IP detection
 - [ ] Add performance monitoring
 
 ## Stage 3: Auth & User Management (10-16 hrs)
@@ -162,6 +164,13 @@
 - [ ] Create basic dashboards
 
 ---
+
+## Recent Accomplishments:
+
+- Fixed rate limiting to correctly identify client IPs in production
+- Added proper header parsing for X-Forwarded-For and X-Real-IP
+- Added rate limiting to health endpoint and improved error tracking
+- Verified functionality in both local and production environments
 
 ## Key Risk Areas:
 
