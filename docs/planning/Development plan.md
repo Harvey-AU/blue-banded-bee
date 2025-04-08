@@ -1,4 +1,4 @@
-## Stage 0: Project Setup & Infrastructure (6-10 hrs) 🟡
+## Stage 0: Project Setup & Infrastructure (6-10 hrs) ✅
 
 ### Development Environment Setup (2-3 hrs) ✅
 
@@ -17,33 +17,35 @@
 - [x] Add basic configs
 - [x] Set up testing framework
 
-### Production Infrastructure Setup (2-4 hrs) 🟡
+### Production Infrastructure Setup (2-4 hrs) ✅
 
 - [x] Set up dev/prod environments
 - [x] Configure environment variables
 - [x] Set up secrets management
 - [x] Create Dockerfile and container setup
-- [ ] Configure Fly.io
+- [x] Configure Fly.io
   - [x] Set up Fly.io account and project
   - [x] Configure deployment settings
   - [x] Set up environment variables in Fly.io
   - [x] Create deployment workflow
   - [x] Add health check endpoint monitoring
-- [ ] Test production deployment
+- [x] Test production deployment
 - [x] Initial Sentry.io connection
 
 ## Stage 1: Core Setup & Basic Crawling (15-25 hrs) 🟡
 
-### Core API Implementation (3-5 hrs) ✅
+### Core API Implementation (3-5 hrs) 🟡
 
 - [x] Initialize Go project structure and dependencies
 - [x] Set up basic API endpoints
 - [x] Set up environment variables and configs
 - [x] Implement basic health checks and monitoring
-- [ ] Add basic error monitoring with Sentry
+- [x] Add basic error monitoring with Sentry
 - [ ] Set up endpoint performance tracking
+- [ ] Add graceful shutdown handling
+- [ ] Implement configuration validation
 
-### Enhance Crawler Results (8-12 hrs) ⚡Priority
+### Enhance Crawler Results (8-12 hrs)
 
 - [x] Set up Colly crawler configuration
 - [x] Implement concurrent crawling logic
@@ -52,7 +54,7 @@
 - [ ] Handle different response types/errors
 - [ ] Implement cache validation checks
 - [ ] Add performance metrics collection
-- [ ] Add crawler-specific error tracking
+- [x] Add crawler-specific error tracking
 - [ ] Set up crawler performance monitoring
 
 ### Set up Turso for storing results (4-8 hrs) 🟡
@@ -61,7 +63,6 @@
 - [x] Set up Turso connection and config
 - [x] Implement data models and queries
 - [x] Add basic error handling
-- [x] Set up integration tests
 - [ ] Add retry logic
 - [ ] Set up basic data cleanup routines
 - [ ] Add database performance monitoring

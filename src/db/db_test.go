@@ -3,6 +3,8 @@ package db
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
@@ -115,20 +117,14 @@ func TestGetRecentResults(t *testing.T) {
 func TestTursoConnection(t *testing.T) {
 	// Set test environment variables
 	t.Setenv("RUN_INTEGRATION_TESTS", "true")
-	t.Setenv("DATABASE_URL", os.Getenv("DATABASE_URL"))               // Use existing if available
-	t.Setenv("DATABASE_AUTH_TOKEN", os.Getenv("DATABASE_AUTH_TOKEN")) // Use existing if available
-
-	// Debug: Print environment variables
-	t.Logf("RUN_INTEGRATION_TESTS=%s", os.Getenv("RUN_INTEGRATION_TESTS"))
-	t.Logf("DATABASE_URL=%s", os.Getenv("DATABASE_URL"))
-	t.Logf("DATABASE_AUTH_TOKEN=%s", os.Getenv("DATABASE_AUTH_TOKEN"))
+	t.Setenv("DATABASE_URL", os.Getenv("DATABASE_URL"))
+	t.Setenv("DATABASE_AUTH_TOKEN", os.Getenv("DATABASE_AUTH_TOKEN"))
 
 	// Skip if not in integration test mode
 	if os.Getenv("RUN_INTEGRATION_TESTS") != "true" {
 		t.Skip("Skipping integration test")
 	}
 
-	// Use real Turso credentials
 	dbConfig := &Config{
 		URL:       os.Getenv("DATABASE_URL"),
 		AuthToken: os.Getenv("DATABASE_AUTH_TOKEN"),
@@ -140,7 +136,6 @@ func TestTursoConnection(t *testing.T) {
 	}
 	defer database.Close()
 
-	// Test actual database operations
 	err = database.TestConnection()
 	if err != nil {
 		t.Errorf("Turso connection test failed: %v", err)
@@ -170,5 +165,43 @@ func TestNullHandling(t *testing.T) {
 	err = database.StoreCrawlResult(context.Background(), testResult)
 	if err != nil {
 		t.Errorf("Failed to store result with null fields: %v", err)
+	}
+}
+
+func TestTestCrawlEndpointError(t *testing.T) {
+	req, err := http.NewRequest("GET", "/test-crawl?url=invalid-url", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rr := httptest.NewRecorder()
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "Invalid URL", http.StatusBadRequest)
+	})
+
+	handler.ServeHTTP(rr, req)
+
+	if status := rr.Code; status != http.StatusBadRequest {
+		t.Errorf("handler returned wrong status code: got %v want %v",
+			status, http.StatusBadRequest)
+	}
+}
+
+func TestRecentCrawlsEndpointError(t *testing.T) {
+	req, err := http.NewRequest("GET", "/recent-crawls", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rr := httptest.NewRecorder()
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "Database error", http.StatusInternalServerError)
+	})
+
+	handler.ServeHTTP(rr, req)
+
+	if status := rr.Code; status != http.StatusInternalServerError {
+		t.Errorf("handler returned wrong status code: got %v want %v",
+			status, http.StatusInternalServerError)
 	}
 }
