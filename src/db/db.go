@@ -3,8 +3,10 @@ package db
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"time"
 
+	"github.com/getsentry/sentry-go"
 	"github.com/rs/zerolog/log"
 	_ "github.com/tursodatabase/libsql-client-go/libsql"
 )
@@ -68,8 +70,9 @@ func (db *DB) StoreCrawlResult(ctx context.Context, result *CrawlResult) error {
 	`, result.URL, result.ResponseTime, result.StatusCode, result.Error, result.CacheStatus)
 
 	if err != nil {
+		sentry.CaptureException(err)
 		log.Error().Err(err).Msg("Failed to store crawl result")
-		return err
+		return fmt.Errorf("failed to store crawl result: %w", err)
 	}
 
 	return nil
@@ -85,7 +88,8 @@ func (db *DB) GetRecentResults(ctx context.Context, limit int) ([]CrawlResult, e
 	`, limit)
 
 	if err != nil {
-		return nil, err
+		sentry.CaptureException(err)
+		return nil, fmt.Errorf("failed to get recent results: %w", err)
 	}
 	defer rows.Close()
 

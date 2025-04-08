@@ -9,6 +9,12 @@ type Config struct {
     UserAgent        string
     RetryAttempts    int
     RetryDelay       time.Duration
+    Port             string
+    Env              string
+    LogLevel         string
+    DatabaseURL      string
+    AuthToken        string
+    SentryDSN        string
 }
 
 func DefaultConfig() *Config {

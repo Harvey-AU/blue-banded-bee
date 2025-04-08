@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/getsentry/sentry-go"
 	"github.com/gocolly/colly/v2"
 	"github.com/rs/zerolog/log"
 )
@@ -81,8 +82,9 @@ func (c *Crawler) WarmURL(ctx context.Context, targetURL string) (*CrawlResult, 
 	err = c.colly.Visit(targetURL)
 	if err != nil {
 		log.Error().Err(err).Str("url", targetURL).Msg("Failed to crawl URL")
+		sentry.CaptureException(err)
 		result.Error = err.Error()
-		return result, err
+		return result, fmt.Errorf("failed to warm URL %s: %w", targetURL, err)
 	}
 
 	c.colly.Wait()
