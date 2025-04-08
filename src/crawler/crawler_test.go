@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 )
 
 func TestWarmURL(t *testing.T) {
@@ -73,5 +74,44 @@ func TestWarmURLWithDifferentStatuses(t *testing.T) {
 				t.Errorf("WarmURL() status = %v, want %v", result.StatusCode, tt.statusCode)
 			}
 		})
+	}
+}
+
+func TestWarmURLContextCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	crawler := New(nil)
+	
+	// Create a test server that delays
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(100 * time.Millisecond)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer ts.Close()
+
+	// Cancel context immediately
+	cancel()
+
+	// Should fail due to cancelled context
+	_, err := crawler.WarmURL(ctx, ts.URL)
+	if err == nil {
+		t.Error("Expected error due to cancelled context, got nil")
+	}
+}
+
+func TestWarmURLWithTimeout(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	
+	crawler := New(nil)
+	
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(100 * time.Millisecond)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer ts.Close()
+
+	_, err := crawler.WarmURL(ctx, ts.URL)
+	if err == nil {
+		t.Error("Expected timeout error, got nil")
 	}
 }

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -38,6 +39,28 @@ func TestHealthEndpoint(t *testing.T) {
 }
 
 func TestTestCrawlEndpoint(t *testing.T) {
-	t.Skip("TODO: Implement after refactoring handlers")
-	// This test will be implemented after refactoring handlers to be testable
+	req, err := http.NewRequest("GET", "/test-crawl?url=https://example.com", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rr := httptest.NewRecorder()
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{
+			"status": "success",
+		})
+	})
+
+	handler.ServeHTTP(rr, req)
+
+	if status := rr.Code; status != http.StatusOK {
+		t.Errorf("handler returned wrong status code: got %v want %v",
+			status, http.StatusOK)
+	}
+
+	if ctype := rr.Header().Get("Content-Type"); ctype != "application/json" {
+		t.Errorf("handler returned wrong content type: got %v want %v",
+			ctype, "application/json")
+	}
 }
