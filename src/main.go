@@ -9,6 +9,7 @@ import (
 
 	"github.com/Harvey-AU/blue-banded-bee/src/crawler"
 	"github.com/Harvey-AU/blue-banded-bee/src/db"
+	"github.com/getsentry/sentry-go"
 	"github.com/joho/godotenv"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -20,6 +21,7 @@ type Config struct {
 	LogLevel    string
 	DatabaseURL string
 	AuthToken   string
+	SentryDSN   string
 }
 
 func setupLogging(config *Config) {
@@ -47,6 +49,7 @@ func loadConfig() (*Config, error) {
 		LogLevel:    getEnvWithDefault("LOG_LEVEL", "info"),
 		DatabaseURL: os.Getenv("DATABASE_URL"),
 		AuthToken:   os.Getenv("DATABASE_AUTH_TOKEN"),
+		SentryDSN:   os.Getenv("SENTRY_DSN"),
 	}, nil
 }
 
@@ -55,6 +58,23 @@ func getEnvWithDefault(key, defaultValue string) string {
 		return value
 	}
 	return defaultValue
+}
+
+func addSentryContext(r *http.Request, name string) {
+	if hub := sentry.GetHubFromContext(r.Context()); hub != nil {
+		hub.Scope().SetTag("endpoint", name)
+		hub.Scope().SetTag("method", r.Method)
+		hub.Scope().SetTag("user_agent", r.UserAgent())
+	}
+}
+
+func wrapWithSentryTransaction(name string, next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		span := sentry.StartSpan(r.Context(), name)
+		defer span.Finish()
+		r = r.WithContext(span.Context())
+		next(w, r)
+	}
 }
 
 func main() {
@@ -67,6 +87,18 @@ func main() {
 	// Setup logging
 	setupLogging(config)
 
+	// Initialize Sentry
+	err = sentry.Init(sentry.ClientOptions{
+		Dsn:             config.SentryDSN,
+		Environment:     config.Env,
+		TracesSampleRate: 1.0,
+		Debug:           config.Env == "development",
+	})
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to initialize Sentry")
+	}
+	defer sentry.Flush(2 * time.Second)
+
 	// Basic health check handler
 	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		log.Debug().Str("endpoint", "/health").Msg("Health check requested")
@@ -77,10 +109,12 @@ func main() {
 	})
 
 	// Test crawl handler
-	http.HandleFunc("/test-crawl", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/test-crawl", wrapWithSentryTransaction("test-crawl", func(w http.ResponseWriter, r *http.Request) {
+		addSentryContext(r, "test-crawl")
+		
 		url := r.URL.Query().Get("url")
 		if url == "" {
-			url = "https://www.teamharvey.co/impact-reports" // default test URL
+			url = "https://www.teamharvey.co" // default test URL
 		}
 
 		// Initialize database
@@ -91,6 +125,7 @@ func main() {
 
 		database, err := db.New(dbConfig)
 		if err != nil {
+			sentry.CaptureException(err)
 			log.Error().Err(err).Msg("Failed to connect to database")
 			http.Error(w, "Database connection failed", http.StatusInternalServerError)
 			return
@@ -98,10 +133,17 @@ func main() {
 		defer database.Close()
 
 		// Perform crawl
-		crawler := crawler.New(nil) // use default config
+		crawler := crawler.New(nil)
 		result, err := crawler.WarmURL(r.Context(), url)
 
 		if err != nil {
+			sentry.ConfigureScope(func(scope *sentry.Scope) {
+				scope.SetTag("url", url)
+				scope.SetExtra("response_time", result.ResponseTime)
+				scope.SetExtra("status_code", result.StatusCode)
+				scope.SetExtra("cache_status", result.CacheStatus)
+			})
+			sentry.CaptureException(err)
 			log.Error().Err(err).Msg("Crawl failed")
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -124,10 +166,12 @@ func main() {
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(result)
-	})
+	}))
 
 	// Add endpoint to get recent crawls
-	http.HandleFunc("/recent-crawls", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/recent-crawls", wrapWithSentryTransaction("recent-crawls", func(w http.ResponseWriter, r *http.Request) {
+		addSentryContext(r, "recent-crawls")
+		
 		dbConfig := &db.Config{
 			URL:       config.DatabaseURL,
 			AuthToken: config.AuthToken,
@@ -135,14 +179,16 @@ func main() {
 
 		database, err := db.New(dbConfig)
 		if err != nil {
+			sentry.CaptureException(err)
 			log.Error().Err(err).Msg("Failed to connect to database")
 			http.Error(w, "Database connection failed", http.StatusInternalServerError)
 			return
 		}
 		defer database.Close()
 
-		results, err := database.GetRecentResults(r.Context(), 10) // Get last 10 results
+		results, err := database.GetRecentResults(r.Context(), 10)
 		if err != nil {
+			sentry.CaptureException(err)
 			log.Error().Err(err).Msg("Failed to get recent results")
 			http.Error(w, "Failed to get results", http.StatusInternalServerError)
 			return
@@ -150,12 +196,14 @@ func main() {
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(results)
-	})
+	}))
 
 	// Reset database endpoint (development only)
-	http.HandleFunc("/reset-db", func(w http.ResponseWriter, r *http.Request) {
-		// Only allow in development mode
+	http.HandleFunc("/reset-db", wrapWithSentryTransaction("reset-db", func(w http.ResponseWriter, r *http.Request) {
+		addSentryContext(r, "reset-db")
+		
 		if config.Env != "development" {
+			sentry.CaptureMessage("Attempted reset-db in production")
 			http.Error(w, "Not allowed in production", http.StatusForbidden)
 			return
 		}
@@ -174,6 +222,7 @@ func main() {
 		defer database.Close()
 
 		if err := database.ResetSchema(); err != nil {
+			sentry.CaptureException(err)
 			log.Error().Err(err).Msg("Failed to reset database schema")
 			http.Error(w, "Failed to reset database", http.StatusInternalServerError)
 			return
@@ -183,7 +232,7 @@ func main() {
 		json.NewEncoder(w).Encode(map[string]string{
 			"status": "Database schema reset successfully",
 		})
-	})
+	}))
 
 	// Start server
 	log.Info().
@@ -192,6 +241,7 @@ func main() {
 		Msg("Starting server")
 
 	if err := http.ListenAndServe(":"+config.Port, nil); err != nil {
+		sentry.CaptureException(err)
 		log.Fatal().Err(err).Msg("Server failed to start")
 	}
 }
