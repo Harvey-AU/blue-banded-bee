@@ -4,9 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/rand"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -157,15 +159,58 @@ func (rl *rateLimiter) getLimiter(ip string) *rate.Limiter {
 	return limiter
 }
 
+// getClientIP extracts the real client IP address from a request
+// It checks X-Forwarded-For and X-Real-IP headers before falling back to RemoteAddr
+func getClientIP(r *http.Request) string {
+	// Check X-Forwarded-For header first (common in proxies)
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		ips := strings.Split(xff, ",")
+		// The leftmost IP is the original client
+		return strings.TrimSpace(ips[0])
+	}
+	
+	// Then X-Real-IP (used by Nginx and others)
+	if xrip := r.Header.Get("X-Real-IP"); xrip != "" {
+		return xrip
+	}
+	
+	// Fallback to RemoteAddr, but strip the port
+	ip, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		// If we couldn't split, just use the whole thing
+		return r.RemoteAddr
+	}
+	return ip
+}
+
 // middleware implements rate limiting for HTTP handlers
 func (rl *rateLimiter) middleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		ip := r.RemoteAddr
+		// Get the real client IP
+		ip := getClientIP(r)
+		
+		// Get or create a rate limiter for this IP
 		limiter := rl.getLimiter(ip)
+		
+		// Check if the request exceeds the rate limit
 		if !limiter.Allow() {
+			log.Info().
+				Str("ip", ip).
+				Str("endpoint", r.URL.Path).
+				Msg("Rate limit exceeded")
+				
+			// Track in Sentry
+			if hub := sentry.GetHubFromContext(r.Context()); hub != nil {
+				hub.Scope().SetTag("rate_limited", "true")
+				hub.Scope().SetTag("client_ip", ip)
+				hub.CaptureMessage("Rate limit exceeded")
+			}
+			
+			// Return 429 Too Many Requests
 			http.Error(w, "Too many requests", http.StatusTooManyRequests)
 			return
 		}
+		
 		next(w, r)
 	}
 }
@@ -257,13 +302,13 @@ func main() {
 	// @Produce plain
 	// @Success 200 {string} string "OK - Deployed at: {timestamp}"
 	// @Router /health [get]
-	http.HandleFunc("/health", wrapWithSentryTransaction("health", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/health", limiter.middleware(wrapWithSentryTransaction("health", func(w http.ResponseWriter, r *http.Request) {
 		log.Debug().Str("endpoint", "/health").Msg("Health check requested")
 		w.Header().Set("Content-Type", "text/plain")
 		const healthFormat = "OK - Deployed at: %s"
 		response := fmt.Sprintf(healthFormat, time.Now().Format(time.RFC3339))
-		fmt.Fprint(w, response)
-	}))
+		fmt.Fprintln(w, response)
+	})))
 
 	// Test crawl handler
 	// @Summary Test crawl endpoint

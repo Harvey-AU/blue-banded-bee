@@ -64,3 +64,37 @@ func TestTestCrawlEndpoint(t *testing.T) {
 			ctype, "application/json")
 	}
 }
+
+func TestRateLimiter(t *testing.T) {
+	// Create a new rate limiter
+	limiter := newRateLimiter()
+	
+	// Mock request with X-Forwarded-For
+	req1, _ := http.NewRequest("GET", "/test", nil)
+	req1.Header.Set("X-Forwarded-For", "192.168.1.1")
+	
+	// Test basic allowance
+	for i := 0; i < 5; i++ {
+		ip := getClientIP(req1)
+		rLimiter := limiter.getLimiter(ip)
+		if !rLimiter.Allow() {
+			t.Errorf("Request %d should be allowed", i+1)
+		}
+	}
+	
+	// This should be blocked
+	ip := getClientIP(req1)
+	rLimiter := limiter.getLimiter(ip)
+	if rLimiter.Allow() {
+		t.Errorf("Request should be blocked after rate limit")
+	}
+	
+	// Different IP should be allowed
+	req2, _ := http.NewRequest("GET", "/test", nil)
+	req2.Header.Set("X-Forwarded-For", "192.168.1.2")
+	ip2 := getClientIP(req2)
+	rLimiter2 := limiter.getLimiter(ip2)
+	if !rLimiter2.Allow() {
+		t.Errorf("Request from different IP should be allowed")
+	}
+}
