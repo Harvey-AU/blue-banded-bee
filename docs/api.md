@@ -90,6 +90,7 @@ Returns the 10 most recent crawl results.
 
 - Implementation: Token bucket algorithm
 - Rate: 5 requests per second per IP address
+- Client IP Detection: Properly handles X-Forwarded-For and X-Real-IP headers
 - Response: Status code 429 when limit exceeded
 
 ## Error Codes
