@@ -52,7 +52,7 @@
 - [x] Add basic error handling
 - [x] Add rate limiting (fixed client IP detection)
 - [x] Add retry logic
-- [ ] Handle different response types/errors
+- [x] Handle different response types/errors
 - [ ] Implement cache validation checks
 - [ ] Add performance metrics collection
 - [x] Add crawler-specific error tracking

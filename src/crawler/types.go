@@ -6,8 +6,11 @@ type CrawlResult struct {
 	ResponseTime int64  // Response time in milliseconds
 	StatusCode   int    // HTTP status code
 	Error        string // Error message if any
+	Warning      string // Warning message if any
 	CacheStatus  string // Cache status (e.g., HIT, MISS)
+	ContentType  string // Content type of the response
 	Timestamp    int64  // Unix timestamp of the crawl
+	RetryCount   int    // Number of retries performed
 }
 
 // CrawlOptions defines configuration options for a crawl operation
