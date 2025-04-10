@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"net/http"
 	"net/url"
 	"strings"
 	"time"
@@ -52,20 +53,6 @@ func New(config *Config) *Crawler {
 // and cache status. Any non-2xx status code is treated as an error.
 // The context can be used to cancel the request or set a timeout.
 func (c *Crawler) WarmURL(ctx context.Context, targetURL string) (*CrawlResult, error) {
-	// Create a collector that allows URL revisits for retries
-	collector := colly.NewCollector(
-		colly.UserAgent(c.config.UserAgent),
-		colly.MaxDepth(1),
-		colly.Async(true),
-		colly.AllowURLRevisit(),  // Allow retrying the same URL
-	)
-	
-	collector.Limit(&colly.LimitRule{
-		DomainGlob:  "*",
-		Parallelism: c.config.MaxConcurrency,
-		RandomDelay: time.Second / time.Duration(c.config.RateLimit),
-	})
-	
 	span := sentry.StartSpan(ctx, "crawler.warm_url")
 	defer span.Finish()
 
@@ -76,7 +63,24 @@ func (c *Crawler) WarmURL(ctx context.Context, targetURL string) (*CrawlResult, 
 		URL:       targetURL,
 		Timestamp: time.Now().Unix(),
 	}
-
+	
+	// Add this block after URL validation but before crawling
+	if c.config.SkipCachedURLs {
+		cacheStatus, checkErr := c.CheckCacheStatus(ctx, targetURL)
+		if checkErr == nil && cacheStatus == "HIT" {
+			log.Info().
+				Str("url", targetURL).
+				Msg("URL already cached (HIT), skipping full crawl")
+				
+			result.StatusCode = http.StatusOK
+			result.CacheStatus = cacheStatus
+			result.ResponseTime = time.Since(start).Milliseconds()
+			result.SkippedCrawl = true
+			
+			return result, nil
+		}
+	}
+	
 	// Parse and validate URL
 	parsedURL, err := url.Parse(targetURL)
 	if err != nil {
@@ -100,6 +104,20 @@ func (c *Crawler) WarmURL(ctx context.Context, targetURL string) (*CrawlResult, 
 		sentry.CaptureException(err)
 		return result, err
 	}
+
+	// Create a collector that allows URL revisits for retries
+	collector := colly.NewCollector(
+		colly.UserAgent(c.config.UserAgent),
+		colly.MaxDepth(1),
+		colly.Async(true),
+		colly.AllowURLRevisit(),  // Allow retrying the same URL
+	)
+	
+	collector.Limit(&colly.LimitRule{
+		DomainGlob:  "*",
+		Parallelism: c.config.MaxConcurrency,
+		RandomDelay: time.Second / time.Duration(c.config.RateLimit),
+	})
 
 	// Set up the collector handlers
 	collector.OnResponse(func(r *colly.Response) {
@@ -185,6 +203,9 @@ func (c *Crawler) WarmURL(ctx context.Context, targetURL string) (*CrawlResult, 
 	span.SetData("response_time_ms", result.ResponseTime)
 	span.SetTag("status_code", fmt.Sprintf("%d", result.StatusCode))
 	span.SetTag("cache_status", result.CacheStatus)
+
+	// Validate cache status
+	c.validateCacheStatus(result)
 
 	// If we didn't succeed after all attempts
 	if !success {
@@ -287,6 +308,70 @@ func (c *Crawler) handleResponseType(result *CrawlResult, response *colly.Respon
 	if len(response.Body) == 0 {
 		result.Warning = "Warning: Empty response body"
 	}
+}
+
+// Add this function to crawler.go to validate cache status
+func (c *Crawler) validateCacheStatus(result *CrawlResult) {
+	// Don't validate if there was an error
+	if result.Error != "" {
+		return
+	}
+	
+	// Check the cache status
+	switch result.CacheStatus {
+	case "HIT":
+		// Successful cache hit
+		log.Debug().
+			Str("url", result.URL).
+			Msg("Cache hit confirmed")
+			
+	case "MISS":
+		// Cache miss - this might be expected for the first request
+		log.Debug().
+			Str("url", result.URL).
+			Msg("Cache miss detected")
+			
+	case "EXPIRED":
+		// The cached resource was expired
+		result.Warning = "Cache expired - resource needed revalidation"
+		
+	case "BYPASS":
+		// Cache was bypassed
+		result.Warning = "Cache was bypassed - check cache headers"
+		
+	case "DYNAMIC":
+		// Content was dynamically generated
+		result.Warning = "Content served dynamically - not cacheable"
+		
+	case "":
+		// No cache status header found
+		result.Warning = "No cache status header found - CDN might not be enabled"
+		
+	default:
+		// Unknown cache status
+		result.Warning = fmt.Sprintf("Unknown cache status: %s", result.CacheStatus)
+	}
+}
+
+func (c *Crawler) CheckCacheStatus(ctx context.Context, targetURL string) (string, error) {
+	req, err := http.NewRequestWithContext(ctx, "HEAD", targetURL, nil)
+	if err != nil {
+		return "", err
+	}
+	
+	req.Header.Set("User-Agent", c.config.UserAgent)
+	
+	client := &http.Client{
+		Timeout: c.config.DefaultTimeout,
+	}
+	
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	
+	return resp.Header.Get("CF-Cache-Status"), nil
 }
 
 func setupSchema(db *sql.DB) error {
