@@ -10,6 +10,7 @@ type Config struct {
     UserAgent        string        // User agent string for requests
     RetryAttempts    int          // Number of retry attempts for failed requests
     RetryDelay       time.Duration // Delay between retry attempts
+    SkipCachedURLs   bool          // Whether to skip URLs that are already cached (HIT)
     Port             string        // Server port
     Env              string        // Environment (development/production)
     LogLevel         string        // Logging level
@@ -27,5 +28,6 @@ func DefaultConfig() *Config {
         UserAgent:      "Cache-Warmer Bot",
         RetryAttempts:  3,
         RetryDelay:     2 * time.Second,
+        SkipCachedURLs: false, // Default to crawling all URLs
     }
 }

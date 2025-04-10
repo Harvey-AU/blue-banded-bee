@@ -331,6 +331,16 @@ func main() {
 		if url == "" {
 			url = "https://www.teamharvey.co"
 		}
+		
+		// Add this line to get skip_cached parameter
+		skipCached := r.URL.Query().Get("skip_cached") == "true"
+		
+		// Modify crawler initialization to include config
+		crawlerConfig := crawler.DefaultConfig()
+		crawlerConfig.SkipCachedURLs = skipCached
+		
+		crawler := crawler.New(crawlerConfig)
+		
 		sanitizedURL := sanitizeURL(url)
 		span.SetTag("crawl.url", sanitizedURL)
 
@@ -353,7 +363,6 @@ func main() {
 
 		// Crawl span
 		crawlSpan := sentry.StartSpan(r.Context(), "crawl.execute")
-		crawler := crawler.New(nil)
 		result, err := crawler.WarmURL(r.Context(), url)
 		if err != nil {
 			crawlSpan.SetTag("error", "true")
