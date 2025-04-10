@@ -3,10 +3,12 @@ package crawler
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/getsentry/sentry-go"
@@ -103,11 +105,9 @@ func (c *Crawler) WarmURL(ctx context.Context, targetURL string) (*CrawlResult, 
 	collector.OnResponse(func(r *colly.Response) {
 		result.StatusCode = r.StatusCode
 		result.CacheStatus = r.Headers.Get("CF-Cache-Status")
-
-		// Treat non-2xx status codes as errors
-		if r.StatusCode < 200 || r.StatusCode >= 300 {
-			result.Error = fmt.Sprintf("HTTP %d: Non-successful status code", r.StatusCode)
-		}
+		
+		// Use the improved response type handler
+		c.handleResponseType(result, r)
 	})
 
 	collector.OnError(func(r *colly.Response, err error) {
@@ -216,6 +216,77 @@ func shouldRetry(err error, statusCode int) bool {
 	}
 	
 	return false
+}
+
+// Add this function to crawler.go to improve error handling for different response types
+func (c *Crawler) handleResponseType(result *CrawlResult, response *colly.Response) {
+	// Get content type from headers
+	contentType := response.Headers.Get("Content-Type")
+	
+	// Set content type for metrics
+	result.ContentType = contentType
+	
+	// Check status code
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		switch {
+		case response.StatusCode == 404:
+			result.Error = "HTTP 404: Page not found"
+		case response.StatusCode == 403:
+			result.Error = "HTTP 403: Access forbidden"
+		case response.StatusCode == 401:
+			result.Error = "HTTP 401: Authentication required"
+		case response.StatusCode == 429:
+			result.Error = "HTTP 429: Too many requests - rate limited"
+		case response.StatusCode >= 500 && response.StatusCode < 600:
+			result.Error = fmt.Sprintf("HTTP %d: Server error", response.StatusCode)
+		default:
+			result.Error = fmt.Sprintf("HTTP %d: Non-successful status code", response.StatusCode)
+		}
+		return
+	}
+	
+	// For 200-level responses, check for specific content types
+	switch {
+	case strings.Contains(contentType, "text/html"):
+		// HTML content - check for specific patterns
+		if len(response.Body) < 100 {
+			// Very small HTML response might indicate an error page
+			result.Warning = "Warning: Unusually small HTML response"
+		}
+		
+		// Check for common error patterns in the body
+		bodyStr := string(response.Body)
+		if strings.Contains(bodyStr, "<title>404") || 
+		   strings.Contains(bodyStr, "not found") ||
+		   strings.Contains(bodyStr, "page doesn't exist") {
+			result.Warning = "Warning: Page content suggests a 404 despite 200 status code"
+		}
+		
+	case strings.Contains(contentType, "application/json"):
+		// JSON content - validate it's proper JSON
+		var jsonObj map[string]interface{}
+		if err := json.Unmarshal(response.Body, &jsonObj); err != nil {
+			result.Warning = "Warning: Invalid JSON response"
+		}
+		
+		// Check for error fields in the JSON
+		if errorMsg, ok := jsonObj["error"].(string); ok {
+			result.Warning = fmt.Sprintf("Warning: JSON contains error field: %s", errorMsg)
+		}
+		
+	case strings.Contains(contentType, "text/plain"):
+		// Plain text - check for obvious error messages
+		bodyStr := string(response.Body)
+		if strings.Contains(strings.ToLower(bodyStr), "error") || 
+		   strings.Contains(strings.ToLower(bodyStr), "not found") {
+			result.Warning = "Warning: Text appears to contain error message"
+		}
+	}
+	
+	// Check for very small response sizes that might indicate an error
+	if len(response.Body) == 0 {
+		result.Warning = "Warning: Empty response body"
+	}
 }
 
 func setupSchema(db *sql.DB) error {
