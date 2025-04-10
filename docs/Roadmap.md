@@ -57,40 +57,47 @@
 - [x] Add crawler-specific error tracking
 - [x] Set up crawler performance monitoring
 
-### Set up Turso for storing results (4-8 hrs) 🟡
+### Set up Turso for storing results (4-8 hrs) ✅
 
 - [x] Design database schema
 - [x] Set up Turso connection and config
 - [x] Implement data models and queries
 - [x] Add basic error handling
-- [ ] Add retry logic
-- [ ] Set up basic data cleanup routines
-- [ ] Add database performance monitoring
-- [ ] Set up query error tracking
+- [x] Add retry logic
+- [x] Add database performance monitoring
+- [x] Set up query error tracking
 
-## Stage 2: Multi-domain Support & Job Management (8-12 hrs)
+## Stage 2: Multi-domain Support & Job Queue Architecture
 
-### Sitemap Integration (3-4 hrs)
+### Job Queue Architecture
+
+- [x] Design job and task data structures
+- [x] Implement persistent job storage in database
+- [x] Create worker pool for concurrent URL processing
+- [x] Add job management API (create, start, cancel, status)
+- [x] Implement database retry logic for job operations to handle transient errors
+- [ ] Enhance error reporting and monitoring
+
+### Sitemap Integration (2-3 hrs)
 
 - [ ] Implement sitemap.xml parser
 - [ ] Add URL filtering based on path patterns
 - [ ] Handle sitemap index files
 - [ ] Process multiple sitemaps
+- [ ] Feed discovered URLs into job queue
 
 ### Link Discovery & Crawling (2-3 hrs)
 
 - [ ] Extract links from crawled pages
 - [ ] Filter links to stay within target domain
 - [ ] Add depth control for crawling
-- [ ] Optimise crawling patterns
+- [ ] Queue discovered links for processing
 
-### Job Management System (3-5 hrs)
+### Job Management API (1-2 hrs)
 
-- [ ] Create job structure and database schema
-- [ ] Implement job creation and status tracking
+- [ ] Create job endpoints (create/list/get/cancel)
 - [ ] Add progress calculation and reporting
 - [ ] Store recent crawled pages in job history
-- [ ] Add job cancellation functionality
 - [ ] Implement multi-domain support
 
 ## Stage 3: Deployment & Monitoring (8-12 hrs)
@@ -104,13 +111,19 @@
 - [ ] Implement monitoring alerts
 - [ ] Configure backup strategies
 
-### Performance Optimisation (4-6 hrs)
+### Performance Optimization (4-6 hrs)
 
 - [ ] Implement caching layer
-- [ ] Optimise database queries
+- [ ] Optimize database queries
 - [ ] Set up CDN for static assets
 - [x] Configure rate limiting with proper client IP detection
 - [ ] Add performance monitoring
+- [ ] Implement database maintenance routines:
+  - [ ] Data archiving for older records
+  - [ ] Database index optimization
+  - [ ] Periodic VACUUM operations
+  - [ ] Duplicate record detection and cleanup
+  - [ ] Error and orphaned data cleanup
 
 ## Stage 4: Auth & User Management (10-16 hrs)
 
