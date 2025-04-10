@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"math/rand"
@@ -8,8 +9,11 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/signal"
+	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/Harvey-AU/blue-banded-bee/src/crawler"
@@ -55,14 +59,21 @@ func loadConfig() (*Config, error) {
 	// Load .env file if it exists
 	godotenv.Load()
 
-	return &Config{
+	config := &Config{
 		Port:        getEnvWithDefault("PORT", "8080"),
 		Env:         getEnvWithDefault("APP_ENV", "development"),
 		LogLevel:    getEnvWithDefault("LOG_LEVEL", "info"),
 		DatabaseURL: os.Getenv("DATABASE_URL"),
 		AuthToken:   os.Getenv("DATABASE_AUTH_TOKEN"),
 		SentryDSN:   os.Getenv("SENTRY_DSN"),
-	}, nil
+	}
+
+	// Validate configuration
+	if err := validateConfig(config); err != nil {
+		return nil, err
+	}
+
+	return config, nil
 }
 
 // getEnvWithDefault retrieves an environment variable or returns a default value if not set
@@ -86,6 +97,7 @@ func addSentryContext(r *http.Request, name string) {
 type statusRecorder struct {
 	http.ResponseWriter
 	statusCode int
+	size       int
 }
 
 func (r *statusRecorder) WriteHeader(statusCode int) {
@@ -94,41 +106,27 @@ func (r *statusRecorder) WriteHeader(statusCode int) {
 }
 
 func (r *statusRecorder) Write(b []byte) (int, error) {
+	size, err := r.ResponseWriter.Write(b)
+	r.size += size
 	if r.statusCode == 0 {
 		r.statusCode = http.StatusOK
 	}
-	return r.ResponseWriter.Write(b)
+	return size, err
 }
 
 // wrapWithSentryTransaction wraps an HTTP handler with Sentry transaction monitoring
 func wrapWithSentryTransaction(name string, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		span := sentry.StartSpan(r.Context(), "http.server")
-		defer span.Finish()
+		transaction := sentry.StartTransaction(r.Context(), name)
+		defer transaction.Finish()
 
-		recorder := &statusRecorder{
-			ResponseWriter: w,
-			statusCode:     0,
-		}
+		rw := &statusRecorder{ResponseWriter: w}
+		next(rw, r.WithContext(transaction.Context()))
 
-		span.SetTag("endpoint", name)
-		span.SetTag("http.method", r.Method)
-		span.SetTag("http.url", r.URL.String())
-
-		start := time.Now()
-		next(recorder, r.WithContext(span.Context()))
-		duration := time.Since(start)
-
-		if recorder.statusCode != 0 {
-			span.SetTag("http.status_code", fmt.Sprintf("%d", recorder.statusCode))
-		}
-		span.SetData("duration_ms", duration.Milliseconds())
-
-		log.Info().
-			Str("endpoint", name).
-			Int("status", recorder.statusCode).
-			Dur("duration", duration).
-			Msg("Request processed")
+		transaction.SetTag("http.method", r.Method)
+		transaction.SetTag("http.url", r.URL.String())
+		transaction.SetTag("http.status_code", fmt.Sprintf("%d", rw.statusCode))
+		transaction.SetData("response_size", rw.size)
 	}
 }
 
@@ -281,16 +279,21 @@ func main() {
 	setupLogging(config)
 
 	// Initialize Sentry
-	err = sentry.Init(sentry.ClientOptions{
-		Dsn:              config.SentryDSN,
-		Environment:      config.Env,
-		TracesSampleRate: 1.0,
-		Debug:            config.Env == "development",
-	})
-	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to initialize Sentry")
+	if config.SentryDSN != "" {
+		err = sentry.Init(sentry.ClientOptions{
+			Dsn:              config.SentryDSN,
+			Environment:      config.Env,
+			TracesSampleRate: 1.0,
+			EnableTracing:    true,
+			Debug:            config.Env == "development",
+		})
+		if err != nil {
+			log.Fatal().Err(err).Msg("Failed to initialize Sentry")
+		}
+		defer sentry.Flush(2 * time.Second)
+	} else {
+		log.Warn().Msg("Sentry not initialized: SENTRY_DSN not provided")
 	}
-	defer sentry.Flush(2 * time.Second)
 
 	// Initialize rate limiter
 	limiter := newRateLimiter()
@@ -475,14 +478,82 @@ func main() {
 		})))
 	}
 
-	// Start server
-	log.Info().
-		Str("port", config.Port).
-		Str("env", config.Env).
-		Msg("Starting server")
-
-	if err := http.ListenAndServe(":"+config.Port, nil); err != nil {
-		sentry.CaptureException(err)
-		log.Fatal().Err(err).Msg("Server failed to start")
+	// Create a new HTTP server
+	server := &http.Server{
+		Addr: ":" + config.Port,
+		Handler: nil, // Uses the default ServeMux
 	}
+
+	// Channel to listen for termination signals
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
+
+	// Channel to signal when the server has shut down
+	done := make(chan struct{})
+
+	go func() {
+		<-stop // Wait for a termination signal
+		log.Info().Msg("Shutting down server...")
+
+		// Create a context with a timeout for the shutdown process
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		// Attempt to gracefully shut down the server
+		if err := server.Shutdown(ctx); err != nil {
+			log.Error().Err(err).Msg("Server forced to shutdown")
+		}
+
+		close(done)
+	}()
+
+	// Start the server
+	log.Info().Msgf("Starting server on port %s", config.Port)
+	if err := server.ListenAndServe(); err != http.ErrServerClosed {
+		log.Fatal().Err(err).Msg("Server error")
+	}
+
+	<-done // Wait for the shutdown process to complete
+	log.Info().Msg("Server stopped")
+}
+
+// Add this function to validate configuration
+func validateConfig(config *Config) error {
+	var errors []string
+
+	// Check required values
+	if config.DatabaseURL == "" {
+		errors = append(errors, "DATABASE_URL is required")
+	}
+
+	if config.AuthToken == "" {
+		errors = append(errors, "DATABASE_AUTH_TOKEN is required")
+	}
+
+	// Validate environment
+	if config.Env != "development" && config.Env != "production" && config.Env != "staging" {
+		errors = append(errors, fmt.Sprintf("APP_ENV must be one of [development, production, staging], got %s", config.Env))
+	}
+
+	// Validate port
+	if _, err := strconv.Atoi(config.Port); err != nil {
+		errors = append(errors, fmt.Sprintf("PORT must be a valid number, got %s", config.Port))
+	}
+
+	// Check log level
+	_, err := zerolog.ParseLevel(config.LogLevel)
+	if err != nil {
+		errors = append(errors, fmt.Sprintf("LOG_LEVEL %s is invalid, using default: info", config.LogLevel))
+	}
+
+	// Warn about missing Sentry DSN
+	if config.SentryDSN == "" {
+		log.Warn().Msg("SENTRY_DSN is not set, error tracking will be disabled")
+	}
+
+	if len(errors) > 0 {
+		return fmt.Errorf("configuration validation failed: %s", strings.Join(errors, "; "))
+	}
+
+	return nil
 }
