@@ -11,6 +11,7 @@ type CrawlResult struct {
 	ContentType  string // Content type of the response
 	Timestamp    int64  // Unix timestamp of the crawl
 	RetryCount   int    // Number of retries performed
+	SkippedCrawl bool   // Whether full crawl was skipped due to cache hit
 }
 
 // CrawlOptions defines configuration options for a crawl operation
