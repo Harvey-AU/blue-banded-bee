@@ -34,7 +34,7 @@
 
 ## Stage 1: Core Setup & Basic Crawling (15-25 hrs) 🟡
 
-### Core API Implementation (3-5 hrs) 🟡
+### Core API Implementation (3-5 hrs) ✅
 
 - [x] Initialize Go project structure and dependencies
 - [x] Set up basic API endpoints
@@ -51,7 +51,7 @@
 - [x] Implement concurrent crawling logic
 - [x] Add basic error handling
 - [x] Add rate limiting (fixed client IP detection)
-- [ ] Add retry logic
+- [x] Add retry logic
 - [ ] Handle different response types/errors
 - [ ] Implement cache validation checks
 - [ ] Add performance metrics collection
