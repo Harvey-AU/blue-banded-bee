@@ -11,7 +11,7 @@
 
 ### Go Project Structure (2-3 hrs) ✅
 
-- [x] Initialize Go project
+- [x] Initialise Go project
 - [x] Set up dependency management
 - [x] Create project structure
 - [x] Add basic configs
@@ -36,7 +36,7 @@
 
 ### Core API Implementation (3-5 hrs) ✅
 
-- [x] Initialize Go project structure and dependencies
+- [x] Initialise Go project structure and dependencies
 - [x] Set up basic API endpoints
 - [x] Set up environment variables and configs
 - [x] Implement basic health checks and monitoring
@@ -45,7 +45,7 @@
 - [x] Add graceful shutdown handling
 - [x] Implement configuration validation
 
-### Enhance Crawler Results (8-12 hrs)
+### Enhance Crawler Results (8-12 hrs) ✅
 
 - [x] Set up Colly crawler configuration
 - [x] Implement concurrent crawling logic
@@ -54,9 +54,8 @@
 - [x] Add retry logic
 - [x] Handle different response types/errors
 - [x] Implement cache validation checks
-- [ ] Add performance metrics collection
 - [x] Add crawler-specific error tracking
-- [ ] Set up crawler performance monitoring
+- [x] Set up crawler performance monitoring
 
 ### Set up Turso for storing results (4-8 hrs) 🟡
 
@@ -69,7 +68,32 @@
 - [ ] Add database performance monitoring
 - [ ] Set up query error tracking
 
-## Stage 2: Deployment & Monitoring (NEW) (8-12 hrs)
+## Stage 2: Multi-domain Support & Job Management (8-12 hrs)
+
+### Sitemap Integration (3-4 hrs)
+
+- [ ] Implement sitemap.xml parser
+- [ ] Add URL filtering based on path patterns
+- [ ] Handle sitemap index files
+- [ ] Process multiple sitemaps
+
+### Link Discovery & Crawling (2-3 hrs)
+
+- [ ] Extract links from crawled pages
+- [ ] Filter links to stay within target domain
+- [ ] Add depth control for crawling
+- [ ] Optimise crawling patterns
+
+### Job Management System (3-5 hrs)
+
+- [ ] Create job structure and database schema
+- [ ] Implement job creation and status tracking
+- [ ] Add progress calculation and reporting
+- [ ] Store recent crawled pages in job history
+- [ ] Add job cancellation functionality
+- [ ] Implement multi-domain support
+
+## Stage 3: Deployment & Monitoring (8-12 hrs)
 
 ### Fly.io Production Setup (4-6 hrs)
 
@@ -80,15 +104,15 @@
 - [ ] Implement monitoring alerts
 - [ ] Configure backup strategies
 
-### Performance Optimization (4-6 hrs)
+### Performance Optimisation (4-6 hrs)
 
 - [ ] Implement caching layer
-- [ ] Optimize database queries
+- [ ] Optimise database queries
 - [ ] Set up CDN for static assets
 - [x] Configure rate limiting with proper client IP detection
 - [ ] Add performance monitoring
 
-## Stage 3: Auth & User Management (10-16 hrs)
+## Stage 4: Auth & User Management (10-16 hrs)
 
 ### Implement Clerk authentication (4-6 hrs)
 
@@ -113,7 +137,7 @@
 - [ ] Implement usage notifications
 - [ ] Add basic reporting functions
 
-## Stage 4: Billing & Subscriptions (8-12 hrs)
+## Stage 5: Billing & Subscriptions (8-12 hrs)
 
 ### Implement Paddle integration (4-6 hrs)
 
@@ -137,7 +161,7 @@
 - [ ] Set up usage warnings
 - [ ] Implement grace period
 
-## Stage 5: Webflow Integration & Launch (8-16 hrs)
+## Stage 6: Webflow Integration & Launch (8-16 hrs)
 
 ### Build Webflow frontend interface (4-8 hrs)
 
@@ -165,17 +189,11 @@
 
 ---
 
-## Recent Accomplishments:
-
-- Fixed rate limiting to correctly identify client IPs in production
-- Added proper header parsing for X-Forwarded-For and X-Real-IP
-- Added rate limiting to health endpoint and improved error tracking
-- Verified functionality in both local and production environments
-
 ## Key Risk Areas:
 
 - [ ] Crawler edge cases and error handling
 - [ ] Production deployment stability on Fly.io
+- [ ] Multi-domain job management and resource utilisation
 - [ ] Auth integration complexity
 - [ ] Paddle webhook handling
 - [ ] Webflow API limitations

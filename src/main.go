@@ -491,6 +491,7 @@ func main() {
 	server := &http.Server{
 		Addr: ":" + config.Port,
 		Handler: nil, // Uses the default ServeMux
+		
 	}
 
 	// Channel to listen for termination signals
