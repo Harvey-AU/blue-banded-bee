@@ -75,6 +75,9 @@ func (wp *WorkerPool) worker(ctx context.Context, id int) {
 
 	log.Info().Int("worker_id", id).Msg("Worker started")
 
+	// Add at the start of the loop
+	log.Info().Int("worker_id", id).Msg("Worker checking for tasks...")
+
 	// Worker loop
 	for {
 		select {
@@ -132,7 +135,7 @@ func (wp *WorkerPool) processNextTask(ctx context.Context, workerID int) error {
 		// Process the task
 		if err := wp.processTask(ctx, task, workerID); err != nil {
 			log.Error().Err(err).Str("task_id", task.ID).Msg("Failed to process task")
-			
+
 			// Update task as failed
 			task.Status = TaskStatusFailed
 			task.Error = err.Error()
@@ -151,7 +154,7 @@ func (wp *WorkerPool) processNextTask(ctx context.Context, workerID int) error {
 func (wp *WorkerPool) processTask(ctx context.Context, task *Task, workerID int) error {
 	span := sentry.StartSpan(ctx, "worker.process_task")
 	defer span.Finish()
-	
+
 	span.SetTag("worker_id", fmt.Sprintf("%d", workerID))
 	span.SetTag("task_id", task.ID)
 	span.SetTag("url", task.URL)
@@ -189,6 +192,21 @@ func (wp *WorkerPool) processTask(ctx context.Context, task *Task, workerID int)
 		return err
 	}
 
+	// Also store results in crawl_results for completed tasks
+	if task.Status == TaskStatusCompleted {
+		// Add to crawl_results table
+		_, err = wp.db.ExecContext(ctx, `
+			INSERT INTO crawl_results (url, response_time, status_code, error, cache_status)
+			VALUES (?, ?, ?, ?, ?)
+		`, task.URL, task.ResponseTime, task.StatusCode, task.Error, task.CacheStatus)
+
+		if err != nil {
+			log.Error().Err(err).Str("url", task.URL).Msg("Failed to store in crawl_results")
+		} else {
+			log.Info().Str("url", task.URL).Msg("Stored in crawl_results")
+		}
+	}
+
 	// Add this new code to update job statistics
 	if err := updateJobProgress(ctx, wp.db, task.JobID); err != nil {
 		log.Error().Err(err).Str("job_id", task.JobID).Msg("Failed to update job progress")
@@ -202,9 +220,9 @@ func (wp *WorkerPool) processTask(ctx context.Context, task *Task, workerID int)
 		return err
 	}
 
-	if job.FindLinks && result.ContentType != "" && 
-	   (result.StatusCode >= 200 && result.StatusCode < 300) && 
-	   task.Depth < job.MaxDepth {
+	if job.FindLinks && result.ContentType != "" &&
+		(result.StatusCode >= 200 && result.StatusCode < 300) &&
+		task.Depth < job.MaxDepth {
 		// This would be where we extract links and add new tasks
 		// We'll need more HTML processing code to do this properly
 		// This is a placeholder for now
@@ -226,7 +244,7 @@ func (wp *WorkerPool) processTask(ctx context.Context, task *Task, workerID int)
 func EnqueueURLs(ctx context.Context, db *sql.DB, jobID string, urls []string, sourceType string, sourceURL string, depth int) error {
 	span := sentry.StartSpan(ctx, "jobs.enqueue_urls")
 	defer span.Finish()
-	
+
 	span.SetTag("job_id", jobID)
 	span.SetData("url_count", len(urls))
 

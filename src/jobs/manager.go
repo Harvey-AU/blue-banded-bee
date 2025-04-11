@@ -13,8 +13,9 @@ import (
 
 // JobManager handles job creation and lifecycle management
 type JobManager struct {
-	db         *sql.DB
-	crawler    *crawler.Crawler
+	db      *sql.DB
+	crawler *crawler.Crawler
+
 	workerPool *WorkerPool
 }
 
@@ -31,7 +32,7 @@ func NewJobManager(db *sql.DB, crawler *crawler.Crawler, workerPool *WorkerPool)
 func (jm *JobManager) CreateJob(ctx context.Context, options *JobOptions) (*Job, error) {
 	span := sentry.StartSpan(ctx, "manager.create_job")
 	defer span.Finish()
-	
+
 	span.SetTag("domain", options.Domain)
 
 	// Create the job
@@ -78,7 +79,7 @@ func (jm *JobManager) CreateJob(ctx context.Context, options *JobOptions) (*Job,
 func (jm *JobManager) StartJob(ctx context.Context, jobID string) error {
 	span := sentry.StartSpan(ctx, "manager.start_job")
 	defer span.Finish()
-	
+
 	span.SetTag("job_id", jobID)
 
 	// Get the job
@@ -89,14 +90,18 @@ func (jm *JobManager) StartJob(ctx context.Context, jobID string) error {
 		return fmt.Errorf("failed to get job: %w", err)
 	}
 
-	// Check if job can be started
-	if job.Status != JobStatusPending {
-		return fmt.Errorf("job is not in pending state: %s", job.Status)
+	// Allow restarting jobs that are either pending or running
+	if job.Status != JobStatusPending && job.Status != JobStatusRunning {
+		return fmt.Errorf("job cannot be started: %s", job.Status)
 	}
 
-	// Update job status to running
+	// Update job status to running (even if it was already running)
 	job.Status = JobStatusRunning
-	job.StartedAt = time.Now()
+
+	// Only update started_at if it wasn't already set
+	if job.StartedAt.IsZero() {
+		job.StartedAt = time.Now()
+	}
 
 	_, err = jm.db.ExecContext(ctx, `
 		UPDATE jobs
@@ -125,7 +130,7 @@ func (jm *JobManager) StartJob(ctx context.Context, jobID string) error {
 func (jm *JobManager) CancelJob(ctx context.Context, jobID string) error {
 	span := sentry.StartSpan(ctx, "manager.cancel_job")
 	defer span.Finish()
-	
+
 	span.SetTag("job_id", jobID)
 
 	// Get the job
@@ -154,7 +159,7 @@ func (jm *JobManager) CancelJob(ctx context.Context, jobID string) error {
 	if err != nil {
 		span.SetTag("error", "true")
 		span.SetData("error.message", err.Error())
-		return fmt.Errorf("failed to update job status: %w", err)
+		log.Error().Err(err).Str("job_id", job.ID).Msg("Failed to cancel pending tasks")
 	}
 
 	// Remove job from worker pool
@@ -185,7 +190,7 @@ func (jm *JobManager) CancelJob(ctx context.Context, jobID string) error {
 func (jm *JobManager) GetJobStatus(ctx context.Context, jobID string) (*Job, error) {
 	span := sentry.StartSpan(ctx, "manager.get_job_status")
 	defer span.Finish()
-	
+
 	span.SetTag("job_id", jobID)
 
 	// Get the job
@@ -203,7 +208,7 @@ func (jm *JobManager) GetJobStatus(ctx context.Context, jobID string) (*Job, err
 func (jm *JobManager) processSitemap(ctx context.Context, jobID, domain string, includePaths, excludePaths []string) {
 	span := sentry.StartSpan(ctx, "manager.process_sitemap")
 	defer span.Finish()
-	
+
 	span.SetTag("job_id", jobID)
 	span.SetTag("domain", domain)
 
@@ -228,14 +233,14 @@ func (jm *JobManager) processSitemap(ctx context.Context, jobID, domain string, 
 			Str("job_id", jobID).
 			Str("domain", domain).
 			Msg("Failed to discover sitemaps")
-		
+
 		// Update job with error
 		_, err = jm.db.ExecContext(ctx, `
 			UPDATE jobs
 			SET error_message = ?
 			WHERE id = ?
 		`, fmt.Sprintf("Failed to discover sitemaps: %v", err), jobID)
-		
+
 		return
 	}
 
@@ -267,7 +272,7 @@ func (jm *JobManager) processSitemap(ctx context.Context, jobID, domain string, 
 			Str("job_id", jobID).
 			Str("domain", domain).
 			Msg("No URLs found in sitemap")
-			
+
 		// Update job with warning
 		_, err = jm.db.ExecContext(ctx, `
 			UPDATE jobs
