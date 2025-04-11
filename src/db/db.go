@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Harvey-AU/blue-banded-bee/src/jobs"
 	"github.com/getsentry/sentry-go"
 	"github.com/rs/zerolog"
 	_ "github.com/tursodatabase/libsql-client-go/libsql"
@@ -16,7 +17,9 @@ import (
 var (
 	instance *DB
 	once     sync.Once
-	log      zerolog.Logger
+	initErr  error
+
+	log zerolog.Logger
 )
 
 // DB represents a database connection with crawl result storage capabilities
@@ -32,22 +35,21 @@ type Config struct {
 
 // CrawlResult represents a stored crawl result in the database
 type CrawlResult struct {
-	ID           int64     `json:"id"`           // Unique identifier
-	URL          string    `json:"url"`          // Crawled URL
-	ResponseTime int64     `json:"response_time_ms"` // Response time in milliseconds
-	StatusCode   int       `json:"status_code"`  // HTTP status code
-	Error        string    `json:"error,omitempty"` // Error message if any
+	ID           int64     `json:"id"`                     // Unique identifier
+	URL          string    `json:"url"`                    // Crawled URL
+	ResponseTime int64     `json:"response_time_ms"`       // Response time in milliseconds
+	StatusCode   int       `json:"status_code"`            // HTTP status code
+	Error        string    `json:"error,omitempty"`        // Error message if any
 	CacheStatus  string    `json:"cache_status,omitempty"` // Cache status
-	CreatedAt    time.Time `json:"created_at"`   // Timestamp of the crawl
+	CreatedAt    time.Time `json:"created_at"`             // Timestamp of the crawl
 }
 
 // GetInstance returns a singleton instance of DB
 func GetInstance(config *Config) (*DB, error) {
-	var err error
 	once.Do(func() {
-		instance, err = New(config)
+		instance, initErr = New(config)
 	})
-	return instance, err
+	return instance, initErr
 }
 
 // New creates a new database connection with the given configuration
@@ -93,11 +95,26 @@ func setupSchema(db *sql.DB) error {
 // It includes response time, status code, and cache status information
 func (db *DB) StoreCrawlResult(ctx context.Context, result *CrawlResult) error {
 	return db.ExecuteWithRetry(ctx, func(ctx context.Context) error {
+		span := sentry.StartSpan(ctx, "db.store_crawl_result")
+		defer span.Finish()
+
+		span.SetTag("url", result.URL)
+
 		_, err := db.ExecWithMetrics(ctx, `
 			INSERT INTO crawl_results (url, response_time, status_code, error, cache_status)
 			VALUES (?, ?, ?, ?, ?)
 		`, result.URL, result.ResponseTime, result.StatusCode, result.Error, result.CacheStatus)
-		
+
+		if err != nil {
+			span.SetTag("error", "true")
+			span.SetData("error.message", err.Error())
+			log.Error().Err(err).
+				Str("url", result.URL).
+				Int64("response_time", result.ResponseTime).
+				Int("status_code", result.StatusCode).
+				Msg("Failed to store crawl result")
+		}
+
 		return err
 	})
 }
@@ -136,6 +153,7 @@ func (db *DB) GetRecentResults(ctx context.Context, limit int) ([]CrawlResult, e
 
 // Close closes the database connection
 func (db *DB) Close() error {
+	log.Warn().Msg("Database connection being closed - add stack trace here")
 	return db.client.Close()
 }
 
@@ -149,24 +167,55 @@ func (db *DB) TestConnection() error {
 }
 
 func (db *DB) ResetSchema() error {
-	_, err := db.client.Exec(`DROP TABLE IF EXISTS crawl_results`)
+	log.Info().Msg("Dropping all database tables")
+
+	// Drop tables in correct order (respecting foreign key constraints)
+	_, err := db.client.Exec(`DROP TABLE IF EXISTS tasks`)
 	if err != nil {
+		log.Error().Err(err).Msg("Failed to drop tasks table")
 		return err
 	}
-	return setupSchema(db.client)
+
+	_, err = db.client.Exec(`DROP TABLE IF EXISTS jobs`)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to drop jobs table")
+		return err
+	}
+
+	_, err = db.client.Exec(`DROP TABLE IF EXISTS crawl_results`)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to drop crawl_results table")
+		return err
+	}
+
+	log.Info().Msg("Recreating database tables")
+
+	// Recreate crawl_results table
+	if err := setupSchema(db.client); err != nil {
+		return err
+
+	}
+
+	// Recreate jobs and tasks tables
+	if err := jobs.InitSchema(db.client); err != nil {
+		return err
+	}
+
+	log.Info().Msg("Database schema reset successfully")
+	return nil
 }
 
 func (db *DB) ExecuteWithRetry(ctx context.Context, operation func(context.Context) error) error {
 	var lastErr error
 	retries := 3
 	backoff := 100 * time.Millisecond
-	
+
 	for attempt := 0; attempt <= retries; attempt++ {
 		if attempt > 0 {
 			log.Info().Int("attempt", attempt).Msg("Retrying database operation")
 			time.Sleep(backoff * time.Duration(1<<uint(attempt-1))) // Exponential backoff
 		}
-		
+
 		if err := operation(ctx); err != nil {
 			lastErr = err
 			if isSQLiteTransientError(err) {
@@ -184,23 +233,23 @@ func isSQLiteTransientError(err error) bool {
 		return false
 	}
 	errMsg := err.Error()
-	return strings.Contains(errMsg, "database is locked") || 
-		   strings.Contains(errMsg, "busy") ||
-		   strings.Contains(errMsg, "connection reset by peer")
+	return strings.Contains(errMsg, "database is locked") ||
+		strings.Contains(errMsg, "busy") ||
+		strings.Contains(errMsg, "connection reset by peer")
 }
 
 func (db *DB) QueryWithMetrics(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error) {
 	span := sentry.StartSpan(ctx, "db.query")
 	defer span.Finish()
-	
+
 	span.SetTag("db.query", query)
-	
+
 	startTime := time.Now()
 	rows, err := db.client.QueryContext(ctx, query, args...)
 	duration := time.Since(startTime)
-	
+
 	span.SetData("duration_ms", duration.Milliseconds())
-	
+
 	// Log slow queries
 	if duration > 1000*time.Millisecond {
 		log.Warn().
@@ -208,27 +257,27 @@ func (db *DB) QueryWithMetrics(ctx context.Context, query string, args ...interf
 			Dur("duration", duration).
 			Msg("Slow database query detected")
 	}
-	
+
 	if err != nil {
 		span.SetTag("error", "true")
 		span.SetData("error.message", err.Error())
 	}
-	
+
 	return rows, err
 }
 
 func (db *DB) ExecWithMetrics(ctx context.Context, query string, args ...interface{}) (sql.Result, error) {
 	span := sentry.StartSpan(ctx, "db.exec")
 	defer span.Finish()
-	
+
 	span.SetTag("db.query", query)
-	
+
 	startTime := time.Now()
 	result, err := db.client.ExecContext(ctx, query, args...)
 	duration := time.Since(startTime)
-	
+
 	span.SetData("duration_ms", duration.Milliseconds())
-	
+
 	// Log slow operations
 	if duration > 1000*time.Millisecond {
 		log.Warn().
@@ -236,11 +285,16 @@ func (db *DB) ExecWithMetrics(ctx context.Context, query string, args ...interfa
 			Dur("duration", duration).
 			Msg("Slow database operation detected")
 	}
-	
+
 	if err != nil {
 		span.SetTag("error", "true")
 		span.SetData("error.message", err.Error())
 	}
-	
+
 	return result, err
+}
+
+// GetDB returns the underlying database connection
+func (db *DB) GetDB() *sql.DB {
+	return db.client
 }
