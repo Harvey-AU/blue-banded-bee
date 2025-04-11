@@ -58,12 +58,12 @@ func (c *Crawler) WarmURL(ctx context.Context, targetURL string) (*CrawlResult, 
 
 	span.SetTag("crawler.url", targetURL)
 	start := time.Now()
-	
+
 	result := &CrawlResult{
 		URL:       targetURL,
 		Timestamp: time.Now().Unix(),
 	}
-	
+
 	// Add this block after URL validation but before crawling
 	if c.config.SkipCachedURLs {
 		cacheStatus, checkErr := c.CheckCacheStatus(ctx, targetURL)
@@ -71,16 +71,16 @@ func (c *Crawler) WarmURL(ctx context.Context, targetURL string) (*CrawlResult, 
 			log.Info().
 				Str("url", targetURL).
 				Msg("URL already cached (HIT), skipping full crawl")
-				
+
 			result.StatusCode = http.StatusOK
 			result.CacheStatus = cacheStatus
 			result.ResponseTime = time.Since(start).Milliseconds()
 			result.SkippedCrawl = true
-			
+
 			return result, nil
 		}
 	}
-	
+
 	// Parse and validate URL
 	parsedURL, err := url.Parse(targetURL)
 	if err != nil {
@@ -110,9 +110,9 @@ func (c *Crawler) WarmURL(ctx context.Context, targetURL string) (*CrawlResult, 
 		colly.UserAgent(c.config.UserAgent),
 		colly.MaxDepth(1),
 		colly.Async(true),
-		colly.AllowURLRevisit(),  // Allow retrying the same URL
+		colly.AllowURLRevisit(), // Allow retrying the same URL
 	)
-	
+
 	collector.Limit(&colly.LimitRule{
 		DomainGlob:  "*",
 		Parallelism: c.config.MaxConcurrency,
@@ -123,7 +123,7 @@ func (c *Crawler) WarmURL(ctx context.Context, targetURL string) (*CrawlResult, 
 	collector.OnResponse(func(r *colly.Response) {
 		result.StatusCode = r.StatusCode
 		result.CacheStatus = r.Headers.Get("CF-Cache-Status")
-		
+
 		// Use the improved response type handler
 		c.handleResponseType(result, r)
 	})
@@ -155,10 +155,10 @@ func (c *Crawler) WarmURL(ctx context.Context, targetURL string) (*CrawlResult, 
 
 		// Clear previous error for new attempt
 		result.Error = ""
-		
+
 		// Attempt the crawl
 		err = collector.Visit(targetURL)
-		
+
 		// If context is canceled, stop retrying
 		if ctx.Err() != nil {
 			result.Error = fmt.Sprintf("Context canceled: %v", ctx.Err())
@@ -167,7 +167,7 @@ func (c *Crawler) WarmURL(ctx context.Context, targetURL string) (*CrawlResult, 
 
 		// Wait for crawl to complete
 		collector.Wait()
-		
+
 		// If no error or non-retryable error, break the loop
 		if err == nil && result.Error == "" {
 			success = true
@@ -181,7 +181,7 @@ func (c *Crawler) WarmURL(ctx context.Context, targetURL string) (*CrawlResult, 
 				Int("max_attempts", retryAttempts+1).
 				Msg("Crawl attempt failed")
 		}
-		
+
 		// Check if we should retry
 		if shouldRetry(err, result.StatusCode) && attempt < retryAttempts {
 			// Wait before retrying with exponential backoff
@@ -210,7 +210,7 @@ func (c *Crawler) WarmURL(ctx context.Context, targetURL string) (*CrawlResult, 
 	// If we didn't succeed after all attempts
 	if !success {
 		if lastErr != nil {
-			return result, fmt.Errorf("failed to warm URL %s after %d attempts: %w", 
+			return result, fmt.Errorf("failed to warm URL %s after %d attempts: %w",
 				targetURL, retryAttempts+1, lastErr)
 		}
 		return result, errors.New(result.Error)
@@ -225,17 +225,17 @@ func shouldRetry(err error, statusCode int) bool {
 	if err != nil {
 		return true
 	}
-	
+
 	// Retry on 5xx server errors
 	if statusCode >= 500 && statusCode < 600 {
 		return true
 	}
-	
+
 	// Retry on 429 Too Many Requests
 	if statusCode == 429 {
 		return true
 	}
-	
+
 	return false
 }
 
@@ -243,10 +243,10 @@ func shouldRetry(err error, statusCode int) bool {
 func (c *Crawler) handleResponseType(result *CrawlResult, response *colly.Response) {
 	// Get content type from headers
 	contentType := response.Headers.Get("Content-Type")
-	
+
 	// Set content type for metrics
 	result.ContentType = contentType
-	
+
 	// Check status code
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		switch {
@@ -265,7 +265,7 @@ func (c *Crawler) handleResponseType(result *CrawlResult, response *colly.Respon
 		}
 		return
 	}
-	
+
 	// For 200-level responses, check for specific content types
 	switch {
 	case strings.Contains(contentType, "text/html"):
@@ -274,36 +274,36 @@ func (c *Crawler) handleResponseType(result *CrawlResult, response *colly.Respon
 			// Very small HTML response might indicate an error page
 			result.Warning = "Warning: Unusually small HTML response"
 		}
-		
+
 		// Check for common error patterns in the body
 		bodyStr := string(response.Body)
-		if strings.Contains(bodyStr, "<title>404") || 
-		   strings.Contains(bodyStr, "not found") ||
-		   strings.Contains(bodyStr, "page doesn't exist") {
+		if strings.Contains(bodyStr, "<title>404") ||
+			strings.Contains(bodyStr, "not found") ||
+			strings.Contains(bodyStr, "page doesn't exist") {
 			result.Warning = "Warning: Page content suggests a 404 despite 200 status code"
 		}
-		
+
 	case strings.Contains(contentType, "application/json"):
 		// JSON content - validate it's proper JSON
 		var jsonObj map[string]interface{}
 		if err := json.Unmarshal(response.Body, &jsonObj); err != nil {
 			result.Warning = "Warning: Invalid JSON response"
 		}
-		
+
 		// Check for error fields in the JSON
 		if errorMsg, ok := jsonObj["error"].(string); ok {
 			result.Warning = fmt.Sprintf("Warning: JSON contains error field: %s", errorMsg)
 		}
-		
+
 	case strings.Contains(contentType, "text/plain"):
 		// Plain text - check for obvious error messages
 		bodyStr := string(response.Body)
-		if strings.Contains(strings.ToLower(bodyStr), "error") || 
-		   strings.Contains(strings.ToLower(bodyStr), "not found") {
+		if strings.Contains(strings.ToLower(bodyStr), "error") ||
+			strings.Contains(strings.ToLower(bodyStr), "not found") {
 			result.Warning = "Warning: Text appears to contain error message"
 		}
 	}
-	
+
 	// Check for very small response sizes that might indicate an error
 	if len(response.Body) == 0 {
 		result.Warning = "Warning: Empty response body"
@@ -316,7 +316,7 @@ func (c *Crawler) validateCacheStatus(result *CrawlResult) {
 	if result.Error != "" {
 		return
 	}
-	
+
 	// Check the cache status
 	switch result.CacheStatus {
 	case "HIT":
@@ -324,29 +324,29 @@ func (c *Crawler) validateCacheStatus(result *CrawlResult) {
 		log.Debug().
 			Str("url", result.URL).
 			Msg("Cache hit confirmed")
-			
+
 	case "MISS":
 		// Cache miss - this might be expected for the first request
 		log.Debug().
 			Str("url", result.URL).
 			Msg("Cache miss detected")
-			
+
 	case "EXPIRED":
 		// The cached resource was expired
 		result.Warning = "Cache expired - resource needed revalidation"
-		
+
 	case "BYPASS":
 		// Cache was bypassed
 		result.Warning = "Cache was bypassed - check cache headers"
-		
+
 	case "DYNAMIC":
 		// Content was dynamically generated
 		result.Warning = "Content served dynamically - not cacheable"
-		
+
 	case "":
 		// No cache status header found
 		result.Warning = "No cache status header found - CDN might not be enabled"
-		
+
 	default:
 		// Unknown cache status
 		result.Warning = fmt.Sprintf("Unknown cache status: %s", result.CacheStatus)
@@ -358,19 +358,19 @@ func (c *Crawler) CheckCacheStatus(ctx context.Context, targetURL string) (strin
 	if err != nil {
 		return "", err
 	}
-	
+
 	req.Header.Set("User-Agent", c.config.UserAgent)
-	
+
 	client := &http.Client{
 		Timeout: c.config.DefaultTimeout,
 	}
-	
+
 	resp, err := client.Do(req)
 	if err != nil {
 		return "", err
 	}
 	defer resp.Body.Close()
-	
+
 	return resp.Header.Get("CF-Cache-Status"), nil
 }
 

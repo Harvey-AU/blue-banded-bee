@@ -122,17 +122,17 @@ func retryDB(operation func() error) error {
 	maxRetries := 5
 	initialBackoff := 50 * time.Millisecond
 	maxBackoff := 2 * time.Second
-	
+
 	var err error
 	for attempt := 0; attempt < maxRetries; attempt++ {
 		err = operation()
 		if err == nil {
 			return nil
 		}
-		
+
 		// Check if error is a database lock error
-		if strings.Contains(err.Error(), "database is locked") || 
-		   strings.Contains(err.Error(), "busy") {
+		if strings.Contains(err.Error(), "database is locked") ||
+			strings.Contains(err.Error(), "busy") {
 			// Calculate backoff with jitter
 			backoff := initialBackoff * time.Duration(1<<uint(attempt))
 			if backoff > maxBackoff {
@@ -140,21 +140,21 @@ func retryDB(operation func() error) error {
 			}
 			jitter := time.Duration(rand.Int63n(int64(backoff) / 2))
 			sleepTime := backoff + jitter
-			
+
 			log.Warn().
 				Err(err).
 				Int("attempt", attempt+1).
 				Dur("backoff", sleepTime).
 				Msg("Database locked, retrying operation")
-				
+
 			time.Sleep(sleepTime)
 			continue
 		}
-		
+
 		// Not a retryable error
 		return err
 	}
-	
+
 	return err
 }
 
@@ -176,7 +176,7 @@ func CreateJob(db *sql.DB, options *JobOptions) (*Job, error) {
 		ExcludePaths:   options.ExcludePaths,
 		RecentURLs:     []string{},
 	}
-	
+
 	err := retryDB(func() error {
 		_, err := db.Exec(
 			`INSERT INTO jobs (
@@ -184,15 +184,15 @@ func CreateJob(db *sql.DB, options *JobOptions) (*Job, error) {
 				created_at, concurrency, find_links, max_depth,
 				include_paths, exclude_paths, recent_urls
 			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			job.ID, job.Domain, string(job.Status), job.Progress, 
+			job.ID, job.Domain, string(job.Status), job.Progress,
 			job.TotalTasks, job.CompletedTasks, job.FailedTasks,
 			job.CreatedAt, job.Concurrency, job.FindLinks, job.MaxDepth,
-			serialize(job.IncludePaths), serialize(job.ExcludePaths), 
+			serialize(job.IncludePaths), serialize(job.ExcludePaths),
 			serialize(job.RecentURLs),
 		)
 		return err
 	})
-	
+
 	return job, err
 }
 
@@ -200,7 +200,7 @@ func CreateJob(db *sql.DB, options *JobOptions) (*Job, error) {
 func CreateTask(ctx context.Context, db *sql.DB, task *Task) error {
 	span := sentry.StartSpan(ctx, "jobs.create_task")
 	defer span.Finish()
-	
+
 	span.SetTag("job_id", task.JobID)
 	span.SetTag("url", task.URL)
 
@@ -232,7 +232,7 @@ func CreateTask(ctx context.Context, db *sql.DB, task *Task) error {
 func GetJob(ctx context.Context, db *sql.DB, jobID string) (*Job, error) {
 	span := sentry.StartSpan(ctx, "jobs.get_job")
 	defer span.Finish()
-	
+
 	span.SetTag("job_id", jobID)
 
 	var job Job
@@ -268,11 +268,11 @@ func GetJob(ctx context.Context, db *sql.DB, jobID string) (*Job, error) {
 	if startedAt.Valid {
 		job.StartedAt = startedAt.Time
 	}
-	
+
 	if completedAt.Valid {
 		job.CompletedAt = completedAt.Time
 	}
-	
+
 	if errorMessage.Valid {
 		job.ErrorMessage = errorMessage.String
 	}
@@ -284,14 +284,14 @@ func GetJob(ctx context.Context, db *sql.DB, jobID string) (*Job, error) {
 			return nil, fmt.Errorf("failed to unmarshal include paths: %w", err)
 		}
 	}
-	
+
 	if len(excludePaths) > 0 {
 		err = json.Unmarshal(excludePaths, &job.ExcludePaths)
 		if err != nil {
 			return nil, fmt.Errorf("failed to unmarshal exclude paths: %w", err)
 		}
 	}
-	
+
 	if len(recentURLs) > 0 {
 		err = json.Unmarshal(recentURLs, &job.RecentURLs)
 		if err != nil {
@@ -306,7 +306,7 @@ func GetJob(ctx context.Context, db *sql.DB, jobID string) (*Job, error) {
 func GetNextPendingTask(ctx context.Context, db *sql.DB, jobID string) (*Task, error) {
 	var task Task
 	var startedAt, completedAt sql.NullTime
-	
+
 	err := retryDB(func() error {
 		// Start a transaction
 		tx, err := db.BeginTx(ctx, nil)
@@ -314,7 +314,7 @@ func GetNextPendingTask(ctx context.Context, db *sql.DB, jobID string) (*Task, e
 			return err
 		}
 		defer tx.Rollback()
-		
+
 		// Select the next pending task with a FOR UPDATE lock to prevent other workers from selecting it
 		row := tx.QueryRowContext(ctx, `
 			SELECT id, job_id, url, status, depth, created_at, started_at, completed_at,
@@ -325,13 +325,13 @@ func GetNextPendingTask(ctx context.Context, db *sql.DB, jobID string) (*Task, e
 			ORDER BY created_at ASC
 			LIMIT 1
 		`, jobID, TaskStatusPending)
-		
+
 		err = row.Scan(
 			&task.ID, &task.JobID, &task.URL, &task.Status, &task.Depth, &task.CreatedAt,
 			&startedAt, &completedAt, &task.RetryCount, &task.Error, &task.StatusCode,
 			&task.ResponseTime, &task.CacheStatus, &task.ContentType, &task.SourceType, &task.SourceURL,
 		)
-		
+
 		if err == sql.ErrNoRows {
 			// No pending tasks, commit transaction and return
 			tx.Commit()
@@ -340,7 +340,7 @@ func GetNextPendingTask(ctx context.Context, db *sql.DB, jobID string) (*Task, e
 		if err != nil {
 			return err
 		}
-		
+
 		// Mark task as running so other workers won't pick it up
 		now := time.Now()
 		_, err = tx.ExecContext(ctx, `
@@ -348,21 +348,21 @@ func GetNextPendingTask(ctx context.Context, db *sql.DB, jobID string) (*Task, e
 			SET status = ?, started_at = ?
 			WHERE id = ?
 		`, TaskStatusRunning, now, task.ID)
-		
+
 		if err != nil {
 			return err
 		}
-		
+
 		// Commit transaction
 		return tx.Commit()
 	})
-	
+
 	if err == sql.ErrNoRows {
 		return nil, nil // No pending tasks
 	} else if err != nil {
 		return nil, fmt.Errorf("failed to get pending task: %w", err)
 	}
-	
+
 	// Update task struct to match database
 	task.Status = TaskStatusRunning
 	if startedAt.Valid {
@@ -370,11 +370,11 @@ func GetNextPendingTask(ctx context.Context, db *sql.DB, jobID string) (*Task, e
 	} else {
 		task.StartedAt = time.Now() // Use current time if not set in DB
 	}
-	
+
 	if completedAt.Valid {
 		task.CompletedAt = completedAt.Time
 	}
-	
+
 	return &task, nil
 }
 
@@ -382,15 +382,16 @@ func GetNextPendingTask(ctx context.Context, db *sql.DB, jobID string) (*Task, e
 func UpdateTaskStatus(ctx context.Context, db *sql.DB, task *Task) error {
 	span := sentry.StartSpan(ctx, "jobs.update_task_status")
 	defer span.Finish()
-	
+
 	span.SetTag("task_id", task.ID)
 	span.SetTag("status", string(task.Status))
 
 	now := time.Now()
-	
+
 	return retryDB(func() error {
 		var err error
-		
+
+		// Use constants for all status comparisons for consistency
 		if task.Status == TaskStatusRunning {
 			task.StartedAt = now
 			_, err = db.ExecContext(ctx, `
@@ -398,7 +399,7 @@ func UpdateTaskStatus(ctx context.Context, db *sql.DB, task *Task) error {
 				SET status = ?, started_at = ?
 				WHERE id = ?
 			`, string(task.Status), task.StartedAt, task.ID)
-			
+
 		} else if task.Status == TaskStatusCompleted || task.Status == TaskStatusFailed {
 			task.CompletedAt = now
 			_, err = db.ExecContext(ctx, `
@@ -407,19 +408,27 @@ func UpdateTaskStatus(ctx context.Context, db *sql.DB, task *Task) error {
 				    status_code = ?, response_time = ?, cache_status = ?, content_type = ?,
 				    error = ?, retry_count = ?
 				WHERE id = ?
-			`, 
+			`,
 				string(task.Status), task.CompletedAt,
 				task.StatusCode, task.ResponseTime, task.CacheStatus, task.ContentType,
 				task.Error, task.RetryCount, task.ID)
-				
+
+		} else if task.Status == TaskStatusSkipped {
+			// Add explicit handling for skipped tasks
+			_, err = db.ExecContext(ctx, `
+				UPDATE tasks 
+				SET status = ?
+				WHERE id = ?
+			`, string(task.Status), task.ID)
 		} else {
+			// Generic update for any other status
 			_, err = db.ExecContext(ctx, `
 				UPDATE tasks 
 				SET status = ?
 				WHERE id = ?
 			`, string(task.Status), task.ID)
 		}
-		
+
 		return err
 	})
 }
@@ -428,9 +437,9 @@ func UpdateTaskStatus(ctx context.Context, db *sql.DB, task *Task) error {
 func updateJobProgress(ctx context.Context, db *sql.DB, jobID string) error {
 	span := sentry.StartSpan(ctx, "jobs.update_job_progress")
 	defer span.Finish()
-	
+
 	span.SetTag("job_id", jobID)
-	
+
 	return retryDB(func() error {
 		// Begin transaction
 		tx, err := db.BeginTx(ctx, nil)
@@ -438,11 +447,11 @@ func updateJobProgress(ctx context.Context, db *sql.DB, jobID string) error {
 			return err
 		}
 		defer tx.Rollback()
-		
+
 		// Get current task counts
 		var total, completed, failed int
 		var recentURLs []string
-		
+
 		// Count tasks by status
 		err = tx.QueryRowContext(ctx, `
 			SELECT COUNT(*) FROM tasks WHERE job_id = ?
@@ -450,21 +459,21 @@ func updateJobProgress(ctx context.Context, db *sql.DB, jobID string) error {
 		if err != nil {
 			return err
 		}
-		
+
 		err = tx.QueryRowContext(ctx, `
 			SELECT COUNT(*) FROM tasks WHERE job_id = ? AND status = ?
 		`, jobID, TaskStatusCompleted).Scan(&completed)
 		if err != nil {
 			return err
 		}
-		
+
 		err = tx.QueryRowContext(ctx, `
 			SELECT COUNT(*) FROM tasks WHERE job_id = ? AND status = ?
 		`, jobID, TaskStatusFailed).Scan(&failed)
 		if err != nil {
 			return err
 		}
-		
+
 		// Get recent URLs (last 5 completed tasks)
 		rows, err := tx.QueryContext(ctx, `
 			SELECT url FROM tasks 
@@ -475,7 +484,7 @@ func updateJobProgress(ctx context.Context, db *sql.DB, jobID string) error {
 			return err
 		}
 		defer rows.Close()
-		
+
 		for rows.Next() {
 			var url string
 			if err := rows.Scan(&url); err != nil {
@@ -483,13 +492,13 @@ func updateJobProgress(ctx context.Context, db *sql.DB, jobID string) error {
 			}
 			recentURLs = append(recentURLs, url)
 		}
-		
+
 		// Calculate progress (avoid division by zero)
 		var progress float64
 		if total > 0 {
 			progress = float64(completed+failed) / float64(total) * 100
 		}
-		
+
 		// Update job status - using the correct column name from schema
 		_, err = tx.ExecContext(ctx, `
 			UPDATE jobs SET
@@ -503,7 +512,7 @@ func updateJobProgress(ctx context.Context, db *sql.DB, jobID string) error {
 		if err != nil {
 			return err
 		}
-		
+
 		// If all tasks are done, update job status to completed
 		if completed+failed == total && total > 0 {
 			_, err = tx.ExecContext(ctx, `
@@ -516,7 +525,7 @@ func updateJobProgress(ctx context.Context, db *sql.DB, jobID string) error {
 				return err
 			}
 		}
-		
+
 		return tx.Commit()
 	})
 }
@@ -525,7 +534,7 @@ func updateJobProgress(ctx context.Context, db *sql.DB, jobID string) error {
 func ListJobs(ctx context.Context, db *sql.DB, limit, offset int) ([]*Job, error) {
 	span := sentry.StartSpan(ctx, "jobs.list_jobs")
 	defer span.Finish()
-	
+
 	span.SetData("limit", limit)
 	span.SetData("offset", offset)
 

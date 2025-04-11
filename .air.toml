@@ -2,8 +2,14 @@ root = "."
 tmp_dir = "tmp"
 
 [build]
-cmd = "go build -o ./tmp/main ./src"
-bin = "./tmp/main"
+# Windows configuration:
+cmd = "go build -o ./tmp/main.exe ./src"
+bin = "tmp/main.exe"
+
+# Mac/Linux configuration (comment above, uncomment below when on Mac/Linux):
+# cmd = "go build -o ./tmp/main ./src"
+# bin = "tmp/main"
+
 include_ext = ["go", "env"]
 exclude_dir = ["tmp", "vendor", "testdata"]
 exclude_regex = ["_test\\.go$"]

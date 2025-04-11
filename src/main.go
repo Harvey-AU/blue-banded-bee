@@ -18,6 +18,7 @@ import (
 
 	"github.com/Harvey-AU/blue-banded-bee/src/crawler"
 	"github.com/Harvey-AU/blue-banded-bee/src/db"
+	"github.com/Harvey-AU/blue-banded-bee/src/jobs"
 	"github.com/getsentry/sentry-go"
 	"github.com/joho/godotenv"
 	"github.com/rs/zerolog"
@@ -132,14 +133,18 @@ func wrapWithSentryTransaction(name string, next http.HandlerFunc) http.HandlerF
 
 // rateLimiter implements a per-IP rate limiting mechanism
 type rateLimiter struct {
-	visitors map[string]*rate.Limiter
-	mu       sync.Mutex
+	visitors    map[string]*rate.Limiter
+	lastSeen    map[string]time.Time // Track when each IP was last seen
+	mu          sync.Mutex
+	lastCleanup time.Time
 }
 
 // newRateLimiter creates a new rate limiter instance
 func newRateLimiter() *rateLimiter {
 	return &rateLimiter{
-		visitors: make(map[string]*rate.Limiter),
+		visitors:    make(map[string]*rate.Limiter),
+		lastSeen:    make(map[string]time.Time),
+		lastCleanup: time.Now(),
 	}
 }
 
@@ -148,11 +153,26 @@ func (rl *rateLimiter) getLimiter(ip string) *rate.Limiter {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
 
+	// Check if we need to clean up old entries
+	if time.Since(rl.lastCleanup) > 1*time.Hour {
+		for ip, lastTime := range rl.lastSeen {
+			if time.Since(lastTime) > 1*time.Hour {
+				delete(rl.visitors, ip)
+				delete(rl.lastSeen, ip)
+			}
+		}
+		rl.lastCleanup = time.Now()
+	}
+
+	// Get or create limiter for this IP
 	limiter, exists := rl.visitors[ip]
 	if !exists {
 		limiter = rate.NewLimiter(rate.Every(1*time.Second), 5) // 5 requests per second
 		rl.visitors[ip] = limiter
 	}
+
+	// Update last seen time
+	rl.lastSeen[ip] = time.Now()
 
 	return limiter
 }
@@ -166,12 +186,12 @@ func getClientIP(r *http.Request) string {
 		// The leftmost IP is the original client
 		return strings.TrimSpace(ips[0])
 	}
-	
+
 	// Then X-Real-IP (used by Nginx and others)
 	if xrip := r.Header.Get("X-Real-IP"); xrip != "" {
 		return xrip
 	}
-	
+
 	// Fallback to RemoteAddr, but strip the port
 	ip, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
@@ -186,29 +206,29 @@ func (rl *rateLimiter) middleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Get the real client IP
 		ip := getClientIP(r)
-		
+
 		// Get or create a rate limiter for this IP
 		limiter := rl.getLimiter(ip)
-		
+
 		// Check if the request exceeds the rate limit
 		if !limiter.Allow() {
 			log.Info().
 				Str("ip", ip).
 				Str("endpoint", r.URL.Path).
 				Msg("Rate limit exceeded")
-				
+
 			// Track in Sentry
 			if hub := sentry.GetHubFromContext(r.Context()); hub != nil {
 				hub.Scope().SetTag("rate_limited", "true")
 				hub.Scope().SetTag("client_ip", ip)
 				hub.CaptureMessage("Rate limit exceeded")
 			}
-			
+
 			// Return 429 Too Many Requests
 			http.Error(w, "Too many requests", http.StatusTooManyRequests)
 			return
 		}
-		
+
 		next(w, r)
 	}
 }
@@ -244,7 +264,7 @@ type Metrics struct {
 	CacheMisses   int             // Number of cache misses
 	ErrorCount    int             // Number of errors encountered
 	RequestCount  int             // Total number of requests
-	mu           sync.Mutex
+	mu            sync.Mutex
 }
 
 // recordMetrics records various metrics about a request
@@ -298,13 +318,55 @@ func main() {
 	// Initialize rate limiter
 	limiter := newRateLimiter()
 
-	// Health check handler
-	// @Summary Health check endpoint
-	// @Description Returns the deployment time of the service
-	// @Tags Health
-	// @Produce plain
-	// @Success 200 {string} string "OK - Deployed at: {timestamp}"
-	// @Router /health [get]
+	// ADD THIS BLOCK HERE - Create a database connection for schema initialization
+	dbConfig := &db.Config{
+		URL:       config.DatabaseURL,
+		AuthToken: config.AuthToken,
+	}
+	dbSetup, err := db.GetInstance(dbConfig)
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to connect to database")
+	}
+
+	// Initialize jobs schema once at startup
+	if err := jobs.InitSchema(dbSetup.GetDB()); err != nil {
+		log.Fatal().Err(err).Msg("Failed to initialize jobs schema")
+	}
+
+	// Replace the existing job monitoring code with this:
+	go func() {
+		log.Info().Msg("Starting job monitor")
+
+		// Create a global worker pool that persists for the life of the server
+		c := crawler.New(crawler.DefaultConfig())
+		w := jobs.NewWorkerPool(dbSetup.GetDB(), c, 3)
+		w.Start(context.Background())
+		m := jobs.NewJobManager(dbSetup.GetDB(), c, w)
+
+		// Get both pending AND running jobs
+		rows, err := dbSetup.GetDB().Query("SELECT id FROM jobs WHERE status IN ('pending', 'running')")
+		if err != nil {
+			log.Error().Err(err).Msg("Query failed")
+			return
+		}
+
+		// Process jobs
+		for rows.Next() {
+			var jobID string
+			if err := rows.Scan(&jobID); err != nil {
+				continue
+			}
+
+			if err := m.StartJob(context.Background(), jobID); err != nil {
+				log.Error().Err(err).Str("job_id", jobID).Msg("Failed")
+			} else {
+				log.Info().Str("job_id", jobID).Msg("Started")
+			}
+		}
+		rows.Close()
+	}()
+
+	// Health check handler - BEFORE THIS PART
 	http.HandleFunc("/health", limiter.middleware(wrapWithSentryTransaction("health", func(w http.ResponseWriter, r *http.Request) {
 		log.Debug().Str("endpoint", "/health").Msg("Health check requested")
 		w.Header().Set("Content-Type", "text/plain")
@@ -331,35 +393,18 @@ func main() {
 		if url == "" {
 			url = "https://www.teamharvey.co"
 		}
-		
+
 		// Add this line to get skip_cached parameter
 		skipCached := r.URL.Query().Get("skip_cached") == "true"
-		
+
 		// Modify crawler initialization to include config
 		crawlerConfig := crawler.DefaultConfig()
 		crawlerConfig.SkipCachedURLs = skipCached
-		
+
 		crawler := crawler.New(crawlerConfig)
-		
+
 		sanitizedURL := sanitizeURL(url)
 		span.SetTag("crawl.url", sanitizedURL)
-
-		// Database connection span
-		dbSpan := sentry.StartSpan(r.Context(), "db.connect")
-		dbConfig := &db.Config{
-			URL:       config.DatabaseURL,
-			AuthToken: config.AuthToken,
-		}
-		database, err := db.GetInstance(dbConfig)
-		if err != nil {
-			dbSpan.SetTag("error", "true")
-			dbSpan.Finish()
-			sentry.CaptureException(err)
-			log.Error().Err(err).Msg("Failed to connect to database")
-			http.Error(w, "Database connection failed", http.StatusInternalServerError)
-			return
-		}
-		dbSpan.Finish()
 
 		// Crawl span
 		crawlSpan := sentry.StartSpan(r.Context(), "crawl.execute")
@@ -390,7 +435,7 @@ func main() {
 			CacheStatus:  result.CacheStatus,
 		}
 
-		if err := database.StoreCrawlResult(r.Context(), crawlResult); err != nil {
+		if err := dbSetup.StoreCrawlResult(r.Context(), crawlResult); err != nil {
 			storeSpan.SetTag("error", "true")
 			storeSpan.Finish()
 			log.Error().Err(err).Msg("Failed to store crawl result")
@@ -415,21 +460,7 @@ func main() {
 		span := sentry.StartSpan(r.Context(), "db.get_recent")
 		defer span.Finish()
 
-		dbConfig := &db.Config{
-			URL:       config.DatabaseURL,
-			AuthToken: config.AuthToken,
-		}
-
-		database, err := db.GetInstance(dbConfig)
-		if err != nil {
-			span.SetTag("error", "true")
-			sentry.CaptureException(err)
-			log.Error().Err(err).Msg("Failed to connect to database")
-			http.Error(w, "Database connection failed", http.StatusInternalServerError)
-			return
-		}
-
-		results, err := database.GetRecentResults(r.Context(), 10)
+		results, err := dbSetup.GetRecentResults(r.Context(), 10)
 		if err != nil {
 			span.SetTag("error", "true")
 			sentry.CaptureException(err)
@@ -446,7 +477,7 @@ func main() {
 	// Reset database endpoint (development only)
 	if config.Env == "development" {
 		devToken := generateResetToken()
-		log.Info().Msg("Development reset token generated - check logs for value")
+		log.Info().Str("token", devToken).Msg("Development reset token generated")
 		http.HandleFunc("/reset-db", limiter.middleware(wrapWithSentryTransaction("reset-db", func(w http.ResponseWriter, r *http.Request) {
 			// Only allow POST method
 			if r.Method != http.MethodPost {
@@ -461,19 +492,7 @@ func main() {
 				return
 			}
 
-			dbConfig := &db.Config{
-				URL:       config.DatabaseURL,
-				AuthToken: config.AuthToken,
-			}
-
-			database, err := db.GetInstance(dbConfig)
-			if err != nil {
-				log.Error().Err(err).Msg("Failed to connect to database")
-				http.Error(w, "Database connection failed", http.StatusInternalServerError)
-				return
-			}
-
-			if err := database.ResetSchema(); err != nil {
+			if err := dbSetup.ResetSchema(); err != nil {
 				sentry.CaptureException(err)
 				log.Error().Err(err).Msg("Failed to reset database schema")
 				http.Error(w, "Failed to reset database", http.StatusInternalServerError)
@@ -487,11 +506,210 @@ func main() {
 		})))
 	}
 
+	// Sitemap scan endpoint
+	// @Summary Scan a sitemap and add URLs to queue
+	// @Description Discovers and parses sitemaps for a domain, adding URLs to the crawl queue
+	// @Tags Jobs
+	// @Param domain query string true "Domain to scan (without http/https)"
+	// @Produce json
+	// @Success 200 {object} map[string]interface{}
+	// @Failure 400 {string} string "Invalid domain"
+	// @Failure 500 {string} string "Internal server error"
+	// @Router /scan-sitemap [get]
+	http.HandleFunc("/scan-sitemap", limiter.middleware(wrapWithSentryTransaction("scan-sitemap", func(w http.ResponseWriter, r *http.Request) {
+		span := sentry.StartSpan(r.Context(), "sitemap.scan")
+		defer span.Finish()
+
+		// Get domain parameter
+		domain := r.URL.Query().Get("domain")
+		if domain == "" {
+			http.Error(w, "Domain parameter is required", http.StatusBadRequest)
+			return
+		}
+
+		// Add this to get a limit parameter
+		limitStr := r.URL.Query().Get("limit")
+		urlLimit := 0 // Default: no limit
+		if limitStr != "" {
+			if parsed, err := strconv.Atoi(limitStr); err == nil && parsed > 0 {
+				urlLimit = parsed
+			}
+		}
+
+		// Initialize crawler
+		crawlerConfig := crawler.DefaultConfig()
+		crawlerConfig.SkipCachedURLs = false
+		crawler := crawler.New(crawlerConfig)
+
+		// Create job options
+		jobOptions := &jobs.JobOptions{
+			Domain:      domain,
+			UseSitemap:  true,
+			FindLinks:   false,
+			MaxDepth:    1,
+			Concurrency: 1, // Minimal for sitemap scanning
+		}
+
+		job, err := jobs.CreateJob(dbSetup.GetDB(), jobOptions)
+		if err != nil {
+			span.SetTag("error", "true")
+			sentry.CaptureException(err)
+			log.Error().Err(err).Msg("Failed to create job record")
+			http.Error(w, "Failed to create job", http.StatusInternalServerError)
+			return
+		}
+
+		// Start sitemap processing in a separate goroutine
+		go func() {
+			// Create a new context since the request context will be canceled
+			ctx := context.Background()
+			hub := sentry.GetHubFromContext(r.Context())
+			if hub != nil {
+				ctx = sentry.SetHubOnContext(ctx, hub.Clone())
+			}
+
+			// Discover sitemaps
+			baseURL := domain
+			if !strings.HasPrefix(baseURL, "http") {
+				baseURL = fmt.Sprintf("https://%s", domain)
+			}
+
+			sitemap, err := crawler.DiscoverSitemaps(ctx, domain)
+			if err != nil {
+				log.Error().Err(err).Str("domain", domain).Msg("Failed to discover sitemaps")
+				return
+			}
+
+			var allURLs []string
+
+			// Process each sitemap
+			for _, sitemapURL := range sitemap {
+				urls, err := crawler.ParseSitemap(ctx, sitemapURL)
+				if err != nil {
+					log.Error().Err(err).Str("sitemap", sitemapURL).Msg("Failed to parse sitemap")
+					continue
+				}
+
+				allURLs = append(allURLs, urls...)
+			}
+
+			// Filter out duplicates
+			uniqueURLs := make(map[string]bool)
+			var filteredURLs []string
+
+			for _, url := range allURLs {
+				if !uniqueURLs[url] {
+					uniqueURLs[url] = true
+					filteredURLs = append(filteredURLs, url)
+
+					// Add this check to limit URLs
+					if urlLimit > 0 && len(filteredURLs) >= urlLimit {
+						break
+					}
+				}
+			}
+
+			// Queue the URLs
+			if err := jobs.EnqueueURLs(ctx, dbSetup.GetDB(), job.ID, filteredURLs, "sitemap", baseURL, 0); err != nil {
+				log.Error().Err(err).Str("job_id", job.ID).Msg("Failed to enqueue URLs")
+
+				// Update job with error status
+				_, updateErr := dbSetup.ExecWithMetrics(ctx, `
+					UPDATE jobs
+					SET error_message = ?
+					WHERE id = ?
+				`, fmt.Sprintf("Failed to enqueue URLs: %v", err), job.ID)
+
+				if updateErr != nil {
+					log.Error().Err(updateErr).Msg("Failed to update job error status")
+				}
+				return
+			}
+
+			log.Info().
+				Str("job_id", job.ID).
+				Str("domain", domain).
+				Int("url_count", len(filteredURLs)).
+				Msg("Added URLs to job queue")
+		}()
+
+		// Return success response immediately
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"status": "Sitemap scan started",
+			"job_id": job.ID,
+			"domain": domain,
+		})
+	})))
+
+	// Start workers endpoint
+	// @Summary Start workers to process the queue
+	// @Description Starts a worker pool to process URLs in the queue
+	// @Tags Jobs
+	// @Param job_id query string true "Job ID to process"
+	// @Param workers query int false "Number of workers (default 5)"
+	// @Produce json
+	// @Success 200 {object} map[string]interface{}
+	// @Failure 400 {string} string "Invalid parameters"
+	// @Failure 500 {string} string "Internal server error"
+	// @Router /start-workers [get]
+	http.HandleFunc("/start-workers", limiter.middleware(wrapWithSentryTransaction("start-workers", func(w http.ResponseWriter, r *http.Request) {
+		span := sentry.StartSpan(r.Context(), "workers.start")
+		defer span.Finish()
+
+		// Get job ID
+		jobID := r.URL.Query().Get("job_id")
+		if jobID == "" {
+			http.Error(w, "Job ID parameter is required", http.StatusBadRequest)
+			return
+		}
+
+		// Get worker count
+		workerCount := 5
+		if countStr := r.URL.Query().Get("workers"); countStr != "" {
+			if parsed, err := strconv.Atoi(countStr); err == nil && parsed > 0 {
+				workerCount = parsed
+			}
+		}
+
+		// Initialize crawler
+		crawler := crawler.New(crawler.DefaultConfig())
+
+		// Initialize worker pool
+		globalWorkerPool := jobs.NewWorkerPool(dbSetup.GetDB(), crawler, workerCount)
+
+		// Create a background context with Sentry tracing
+		bgCtx := context.Background()
+		hub := sentry.GetHubFromContext(r.Context())
+		if hub != nil {
+			bgCtx = sentry.SetHubOnContext(bgCtx, hub.Clone())
+		}
+		jobManager := jobs.NewJobManager(dbSetup.GetDB(), crawler, globalWorkerPool)
+
+		// Start the job
+		err = jobManager.StartJob(bgCtx, jobID)
+		if err != nil {
+
+			span.SetTag("error", "true")
+			sentry.CaptureException(err)
+			log.Error().Err(err).Str("job_id", jobID).Msg("Failed to start job")
+			http.Error(w, fmt.Sprintf("Failed to start job: %s", err.Error()), http.StatusInternalServerError)
+			return
+		}
+
+		// Return response
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"status":       "Workers started",
+			"job_id":       jobID,
+			"worker_count": workerCount,
+		})
+	})))
+
 	// Create a new HTTP server
 	server := &http.Server{
-		Addr: ":" + config.Port,
+		Addr:    ":" + config.Port,
 		Handler: nil, // Uses the default ServeMux
-		
 	}
 
 	// Channel to listen for termination signals
