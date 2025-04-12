@@ -302,93 +302,31 @@ func GetJob(ctx context.Context, db *sql.DB, jobID string) (*Job, error) {
 	return &job, nil
 }
 
-// GetNextPendingTask atomically retrieves and claims a pending task
+// GetNextPendingTask gets and claims the next pending task
 func GetNextPendingTask(ctx context.Context, db *sql.DB, jobID string) (*Task, error) {
-	var task Task
-	var startedAt, completedAt sql.NullTime
+	var task *Task
 
-	err := retryDB(func() error {
-		// Start a transaction
-		tx, err := db.BeginTx(ctx, nil)
-		if err != nil {
-			return err
-		}
-		defer tx.Rollback()
-
-		// Select the next pending task with a FOR UPDATE lock to prevent other workers from selecting it
-		row := tx.QueryRowContext(ctx, `
-			SELECT id, job_id, url, status, depth, created_at, started_at, completed_at,
-			       retry_count, error, status_code, response_time, cache_status, content_type,
-			       source_type, source_url
-			FROM tasks
-			WHERE job_id = ? AND status = ?
-			ORDER BY created_at ASC
-			LIMIT 1
-		`, jobID, TaskStatusPending)
-
-		err = row.Scan(
-			&task.ID, &task.JobID, &task.URL, &task.Status, &task.Depth, &task.CreatedAt,
-			&startedAt, &completedAt, &task.RetryCount, &task.Error, &task.StatusCode,
-			&task.ResponseTime, &task.CacheStatus, &task.ContentType, &task.SourceType, &task.SourceURL,
-		)
-
-		if err == sql.ErrNoRows {
-			// No pending tasks, commit transaction and return
-			tx.Commit()
-			return sql.ErrNoRows
-		}
-		if err != nil {
-			return err
-		}
-
-		// Mark task as running so other workers won't pick it up
-		now := time.Now()
-		_, err = tx.ExecContext(ctx, `
-			UPDATE tasks 
-			SET status = ?, started_at = ?
-			WHERE id = ?
-		`, TaskStatusRunning, now, task.ID)
-
-		if err != nil {
-			return err
-		}
-
-		// Commit transaction
-		return tx.Commit()
+	err := ExecuteInQueue(ctx, func(tx *sql.Tx) error {
+		var err error
+		task, err = GetNextPendingTaskTx(ctx, tx, jobID)
+		return err
 	})
 
-	if err == sql.ErrNoRows {
-		return nil, nil // No pending tasks
-	} else if err != nil {
-		return nil, fmt.Errorf("failed to get pending task: %w", err)
-	}
-
-	// Update task struct to match database
-	task.Status = TaskStatusRunning
-	if startedAt.Valid {
-		task.StartedAt = startedAt.Time
-	} else {
-		task.StartedAt = time.Now() // Use current time if not set in DB
-	}
-
-	if completedAt.Valid {
-		task.CompletedAt = completedAt.Time
-	}
-
-	return &task, nil
+	return task, err
 }
 
 // UpdateTaskStatus updates a task's status and result data
 func UpdateTaskStatus(ctx context.Context, db *sql.DB, task *Task) error {
-	span := sentry.StartSpan(ctx, "jobs.update_task_status")
-	defer span.Finish()
-
-	span.SetTag("task_id", task.ID)
-	span.SetTag("status", string(task.Status))
+	// Only create spans for errors
+	var span *sentry.Span
+	defer func() {
+		if span != nil {
+			span.Finish()
+		}
+	}()
 
 	now := time.Now()
-
-	return retryDB(func() error {
+	err := retryDB(func() error {
 		var err error
 
 		// Use constants for all status comparisons for consistency
@@ -431,6 +369,15 @@ func UpdateTaskStatus(ctx context.Context, db *sql.DB, task *Task) error {
 
 		return err
 	})
+
+	if err != nil {
+		span = sentry.StartSpan(ctx, "jobs.update_task_status.error")
+		span.SetTag("task_id", task.ID)
+		span.SetTag("status", string(task.Status))
+		span.SetTag("error", "true")
+		span.SetData("error.message", err.Error())
+	}
+	return err
 }
 
 // updateJobProgress updates a job's progress based on completed and failed tasks
@@ -513,8 +460,19 @@ func updateJobProgress(ctx context.Context, db *sql.DB, jobID string) error {
 			return err
 		}
 
-		// If all tasks are done, update job status to completed
-		if completed+failed == total && total > 0 {
+		// Add this query to double-check that no pending/running tasks remain
+		var pendingCount int
+		err = tx.QueryRowContext(ctx, `
+			SELECT COUNT(*) FROM tasks 
+			WHERE job_id = ? AND status NOT IN (?, ?, ?)
+		`, jobID, TaskStatusCompleted, TaskStatusFailed, TaskStatusSkipped).Scan(&pendingCount)
+
+		if err != nil {
+			return err
+		}
+
+		// Only mark job as completed if there are truly no pending tasks left
+		if pendingCount == 0 && total > 0 {
 			_, err = tx.ExecContext(ctx, `
 				UPDATE jobs SET
 					status = ?,

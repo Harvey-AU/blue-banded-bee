@@ -103,6 +103,21 @@ func (jm *JobManager) StartJob(ctx context.Context, jobID string) error {
 		job.StartedAt = time.Now()
 	}
 
+	// Recover any tasks that were in progress when the server shut down
+	_, err = jm.db.ExecContext(ctx, `
+		UPDATE tasks 
+		SET status = ?,
+			started_at = NULL,
+			retry_count = retry_count + 1
+		WHERE job_id = ? 
+		AND status = ?
+	`, TaskStatusPending, jobID, TaskStatusRunning)
+
+	if err != nil {
+		log.Error().Err(err).Str("job_id", jobID).Msg("Failed to reset in-progress tasks")
+		// Don't return error, continue with job start
+	}
+
 	_, err = jm.db.ExecContext(ctx, `
 		UPDATE jobs
 		SET status = ?, started_at = ?

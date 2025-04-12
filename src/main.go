@@ -303,7 +303,7 @@ func main() {
 		err = sentry.Init(sentry.ClientOptions{
 			Dsn:              config.SentryDSN,
 			Environment:      config.Env,
-			TracesSampleRate: 1.0,
+			TracesSampleRate: 0.2,
 			EnableTracing:    true,
 			Debug:            config.Env == "development",
 		})
@@ -318,7 +318,7 @@ func main() {
 	// Initialize rate limiter
 	limiter := newRateLimiter()
 
-	// ADD THIS BLOCK HERE - Create a database connection for schema initialization
+	// Initialize database
 	dbConfig := &db.Config{
 		URL:       config.DatabaseURL,
 		AuthToken: config.AuthToken,
@@ -327,6 +327,9 @@ func main() {
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to connect to database")
 	}
+
+	// Set the DB instance for queue operations
+	jobs.SetDBInstance(dbSetup)
 
 	// Initialize jobs schema once at startup
 	if err := jobs.InitSchema(dbSetup.GetDB()); err != nil {
@@ -341,6 +344,10 @@ func main() {
 		c := crawler.New(crawler.DefaultConfig())
 		w := jobs.NewWorkerPool(dbSetup.GetDB(), c, 3)
 		w.Start(context.Background())
+
+		// Start the task monitor
+		w.StartTaskMonitor(context.Background())
+
 		m := jobs.NewJobManager(dbSetup.GetDB(), c, w)
 
 		// Get both pending AND running jobs
@@ -520,20 +527,29 @@ func main() {
 		span := sentry.StartSpan(r.Context(), "sitemap.scan")
 		defer span.Finish()
 
-		// Get domain parameter
+		// Validate domain parameter
 		domain := r.URL.Query().Get("domain")
 		if domain == "" {
 			http.Error(w, "Domain parameter is required", http.StatusBadRequest)
 			return
 		}
 
-		// Add this to get a limit parameter
+		// Add domain validation
+		if strings.Contains(domain, "://") || strings.Contains(domain, "/") {
+			http.Error(w, "Domain should not include protocol or path", http.StatusBadRequest)
+			return
+		}
+
+		// Validate limit parameter if present
 		limitStr := r.URL.Query().Get("limit")
-		urlLimit := 0 // Default: no limit
+		urlLimit := 0
 		if limitStr != "" {
-			if parsed, err := strconv.Atoi(limitStr); err == nil && parsed > 0 {
-				urlLimit = parsed
+			parsed, err := strconv.Atoi(limitStr)
+			if err != nil || parsed < 0 {
+				http.Error(w, "Limit must be a positive number", http.StatusBadRequest)
+				return
 			}
+			urlLimit = parsed
 		}
 
 		// Initialize crawler
@@ -722,6 +738,7 @@ func main() {
 	go func() {
 		<-stop // Wait for a termination signal
 		log.Info().Msg("Shutting down server...")
+		dbSetup.GetQueue().Stop() // Stop queue
 
 		// Create a context with a timeout for the shutdown process
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

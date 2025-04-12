@@ -2,9 +2,11 @@ package crawler
 
 import (
 	"context"
+	"encoding/xml"
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -26,11 +28,13 @@ func (c *Crawler) DiscoverSitemaps(ctx context.Context, domain string) ([]string
 	for _, url := range urls {
 		req, err := http.NewRequestWithContext(ctx, "HEAD", url, nil)
 		if err != nil {
+			log.Warn().Err(err).Str("url", url).Msg("Failed to create request for sitemap")
 			continue
 		}
 
 		resp, err := client.Do(req)
 		if err != nil {
+			log.Warn().Err(err).Str("url", url).Msg("Failed to check sitemap")
 			continue
 		}
 		resp.Body.Close()
@@ -66,38 +70,59 @@ func (c *Crawler) DiscoverSitemaps(ctx context.Context, domain string) ([]string
 	return foundSitemaps, nil
 }
 
+// Create proper sitemap structs
+type SitemapIndex struct {
+	XMLName  xml.Name  `xml:"sitemapindex"`
+	Sitemaps []Sitemap `xml:"sitemap"`
+}
+
+type Sitemap struct {
+	XMLName xml.Name `xml:"sitemap"`
+	Loc     string   `xml:"loc"`
+}
+
+type URLSet struct {
+	XMLName xml.Name `xml:"urlset"`
+	URLs    []URL    `xml:"url"`
+}
+
+type URL struct {
+	XMLName xml.Name `xml:"url"`
+	Loc     string   `xml:"loc"`
+}
+
 // ParseSitemap extracts URLs from a sitemap
 func (c *Crawler) ParseSitemap(ctx context.Context, sitemapURL string) ([]string, error) {
 	var urls []string
-	
+
 	req, err := http.NewRequestWithContext(ctx, "GET", sitemapURL, nil)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
-	
+
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("failed to fetch sitemap: %d", resp.StatusCode)
 	}
-	
+
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	content := string(body)
-	
+
 	// Check if it's a sitemap index
 	if strings.Contains(content, "<sitemapindex") {
 		// Extract sitemap URLs
 		sitemapURLs := extractURLsFromXML(content, "<sitemap>", "</sitemap>", "<loc>", "</loc>")
-		
+
 		// Process each sitemap in the index
 		for _, childSitemapURL := range sitemapURLs {
 			childURLs, err := c.ParseSitemap(ctx, childSitemapURL)
@@ -112,14 +137,14 @@ func (c *Crawler) ParseSitemap(ctx context.Context, sitemapURL string) ([]string
 		extractedURLs := extractURLsFromXML(content, "<url>", "</url>", "<loc>", "</loc>")
 		urls = append(urls, extractedURLs...)
 	}
-	
+
 	return urls, nil
 }
 
 // Helper function to extract URLs from XML content
 func extractURLsFromXML(content, startTag, endTag, locStartTag, locEndTag string) []string {
 	var urls []string
-	
+
 	// Find all instances of the outer tag
 	startIdx := 0
 	for {
@@ -127,38 +152,38 @@ func extractURLsFromXML(content, startTag, endTag, locStartTag, locEndTag string
 		if startTagIdx == -1 {
 			break
 		}
-		
+
 		startTagIdx += startIdx
 		endTagIdx := strings.Index(content[startTagIdx:], endTag)
 		if endTagIdx == -1 {
 			break
 		}
-		
+
 		endTagIdx += startTagIdx
-		
+
 		// Extract the section between tags
-		section := content[startTagIdx:endTagIdx+len(endTag)]
-		
+		section := content[startTagIdx : endTagIdx+len(endTag)]
+
 		// Find the URL in the section
 		locStartIdx := strings.Index(section, locStartTag)
 		if locStartIdx != -1 {
 			locEndIdx := strings.Index(section[locStartIdx:], locEndTag)
 			if locEndIdx != -1 {
 				locEndIdx += locStartIdx
-				
+
 				// Extract the URL
-				url := section[locStartIdx+len(locStartTag):locEndIdx]
+				url := section[locStartIdx+len(locStartTag) : locEndIdx]
 				url = strings.TrimSpace(url)
-				
+
 				if url != "" {
 					urls = append(urls, url)
 				}
 			}
 		}
-		
+
 		startIdx = endTagIdx + len(endTag)
 	}
-	
+
 	return urls
 }
 
@@ -167,9 +192,9 @@ func (c *Crawler) FilterURLs(urls []string, includePaths, excludePaths []string)
 	if len(includePaths) == 0 && len(excludePaths) == 0 {
 		return urls
 	}
-	
+
 	var filtered []string
-	
+
 	for _, url := range urls {
 		// If include patterns exist, URL must match at least one
 		includeMatch := len(includePaths) == 0
@@ -179,11 +204,11 @@ func (c *Crawler) FilterURLs(urls []string, includePaths, excludePaths []string)
 				break
 			}
 		}
-		
+
 		if !includeMatch {
 			continue
 		}
-		
+
 		// If URL matches any exclude pattern, skip it
 		excludeMatch := false
 		for _, pattern := range excludePaths {
@@ -192,11 +217,32 @@ func (c *Crawler) FilterURLs(urls []string, includePaths, excludePaths []string)
 				break
 			}
 		}
-		
+
 		if !excludeMatch {
 			filtered = append(filtered, url)
 		}
 	}
-	
+
 	return filtered
 }
+
+// Add a validateURL helper:
+func validateURL(rawURL string) (string, error) {
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return "", err
+	}
+
+	// Validate scheme and host
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return "", fmt.Errorf("invalid URL scheme: %s", parsed.Scheme)
+	}
+
+	if parsed.Host == "" {
+		return "", fmt.Errorf("missing host in URL")
+	}
+
+	return rawURL, nil
+}
+
+// Then use it for each URL before adding to the results
