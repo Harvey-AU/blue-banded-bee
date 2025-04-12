@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/Harvey-AU/blue-banded-bee/src/crawler"
@@ -24,6 +25,8 @@ type WorkerPool struct {
 	stopCh           chan struct{}
 	wg               sync.WaitGroup
 	recoveryInterval time.Duration
+	stopping         atomic.Bool
+	activeJobs       sync.WaitGroup
 }
 
 // NewWorkerPool creates a new worker pool
@@ -54,10 +57,16 @@ func (wp *WorkerPool) Start(ctx context.Context) {
 
 // Stop stops the worker pool
 func (wp *WorkerPool) Stop() {
+	wp.stopping.Store(true)
 	log.Info().Msg("Stopping worker pool")
 	close(wp.stopCh)
 	wp.wg.Wait()
 	log.Info().Msg("Worker pool stopped")
+}
+
+// WaitForJobs waits for all active jobs to complete
+func (wp *WorkerPool) WaitForJobs() {
+	wp.activeJobs.Wait()
 }
 
 // AddJob adds a job to be processed by the worker pool
@@ -285,10 +294,35 @@ func EnqueueURLs(ctx context.Context, db *sql.DB, jobID string, urls []string, s
 	span.SetTag("job_id", jobID)
 	span.SetData("url_count", len(urls))
 
-	// Add batch size limit to avoid overly large transactions
-	const batchSize = 100
+	// Increase batch size for better performance
+	const batchSize = 500
 
-	// Process URLs in batches
+	// Update total tasks count once at the start in a transaction
+	err := ExecuteInQueue(ctx, func(tx *sql.Tx) error {
+		// First verify the job exists and is in a valid state
+		var status string
+		err := tx.QueryRowContext(ctx, "SELECT status FROM jobs WHERE id = ?", jobID).Scan(&status)
+		if err != nil {
+			return fmt.Errorf("failed to verify job: %w", err)
+		}
+
+		if status != string(JobStatusPending) && status != string(JobStatusRunning) {
+			return fmt.Errorf("job is in invalid state: %s", status)
+		}
+
+		// Update total tasks count
+		_, err = tx.ExecContext(ctx, `
+			UPDATE jobs 
+			SET total_tasks = total_tasks + ?
+			WHERE id = ?
+		`, len(urls), jobID)
+		return err
+	})
+	if err != nil {
+		return fmt.Errorf("failed to update total tasks: %w", err)
+	}
+
+	// Process URLs in larger batches
 	for i := 0; i < len(urls); i += batchSize {
 		end := i + batchSize
 		if end > len(urls) {
@@ -296,49 +330,55 @@ func EnqueueURLs(ctx context.Context, db *sql.DB, jobID string, urls []string, s
 		}
 
 		batch := urls[i:end]
+		if len(batch) == 0 {
+			continue
+		}
 
 		err := ExecuteInQueue(ctx, func(tx *sql.Tx) error {
-			if len(batch) > 0 {
-				// Prepare a single statement with multiple value sets
-				valueStrings := make([]string, 0, len(batch))
-				valueArgs := make([]interface{}, 0, len(batch)*9) // 9 parameters per row
+			// Prepare a single statement with multiple value sets
+			valueStrings := make([]string, 0, len(batch))
+			valueArgs := make([]interface{}, 0, len(batch)*9)
+			now := time.Now()
 
-				now := time.Now()
-
-				for _, url := range batch {
-					taskID := uuid.New().String()
-					valueStrings = append(valueStrings, "(?, ?, ?, ?, ?, ?, ?, ?, ?)")
-					valueArgs = append(valueArgs,
-						taskID, jobID, url, TaskStatusPending, depth, now, 0, sourceType, sourceURL)
+			for _, url := range batch {
+				// Validate URL before adding
+				if url == "" {
+					continue
 				}
-
-				stmt := fmt.Sprintf(`
-					INSERT INTO tasks (
-						id, job_id, url, status, depth, created_at, retry_count,
-						source_type, source_url
-					) VALUES %s`, strings.Join(valueStrings, ","))
-
-				_, err := tx.ExecContext(ctx, stmt, valueArgs...)
-				if err != nil {
-					return err
-				}
-
-				// Add this: Update job total_tasks after inserting
-				_, err = tx.ExecContext(ctx, `
-					UPDATE jobs 
-					SET total_tasks = total_tasks + ?
-					WHERE id = ?
-				`, len(batch), jobID)
-
-				if err != nil {
-					return err
-				}
+				taskID := uuid.New().String()
+				valueStrings = append(valueStrings, "(?, ?, ?, ?, ?, ?, ?, ?, ?)")
+				valueArgs = append(valueArgs,
+					taskID, jobID, url, TaskStatusPending, depth, now, 0, sourceType, sourceURL)
 			}
-			return nil
+
+			if len(valueStrings) == 0 {
+				return nil // Skip if no valid URLs in batch
+			}
+
+			stmt := fmt.Sprintf(`
+				INSERT INTO tasks (
+					id, job_id, url, status, depth, created_at, retry_count,
+					source_type, source_url
+				) VALUES %s`, strings.Join(valueStrings, ","))
+
+			_, err := tx.ExecContext(ctx, stmt, valueArgs...)
+			return err
 		})
 
 		if err != nil {
-			return err
+			// If batch insert fails, adjust total_tasks count back down
+			adjustErr := ExecuteInQueue(ctx, func(tx *sql.Tx) error {
+				_, err := tx.ExecContext(ctx, `
+					UPDATE jobs 
+					SET total_tasks = total_tasks - ?
+					WHERE id = ?
+				`, len(batch), jobID)
+				return err
+			})
+			if adjustErr != nil {
+				log.Error().Err(adjustErr).Msg("Failed to adjust total_tasks after batch failure")
+			}
+			return fmt.Errorf("failed to insert task batch: %w", err)
 		}
 	}
 
@@ -490,4 +530,16 @@ func (wp *WorkerPool) recoveryMonitor(ctx context.Context) {
 			}
 		}
 	}
+}
+
+// processJob processes a single job
+func (wp *WorkerPool) processJob(job *Job) {
+	if wp.stopping.Load() {
+		return // Don't start new jobs during shutdown
+	}
+
+	wp.activeJobs.Add(1)
+	defer wp.activeJobs.Done()
+
+	// ... rest of your existing job processing logic ...
 }

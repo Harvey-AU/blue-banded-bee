@@ -342,13 +342,13 @@ func main() {
 
 		// Create a global worker pool that persists for the life of the server
 		c := crawler.New(crawler.DefaultConfig())
-		w := jobs.NewWorkerPool(dbSetup.GetDB(), c, 3)
-		w.Start(context.Background())
+		workerPool := jobs.NewWorkerPool(dbSetup.GetDB(), c, 3)
+		workerPool.Start(context.Background())
 
 		// Start the task monitor
-		w.StartTaskMonitor(context.Background())
+		workerPool.StartTaskMonitor(context.Background())
 
-		m := jobs.NewJobManager(dbSetup.GetDB(), c, w)
+		m := jobs.NewJobManager(dbSetup.GetDB(), c, workerPool)
 
 		// Get both pending AND running jobs
 		rows, err := dbSetup.GetDB().Query("SELECT id FROM jobs WHERE status IN ('pending', 'running')")
@@ -722,6 +722,9 @@ func main() {
 		})
 	})))
 
+	// Add graceful shutdown timeout
+	const shutdownTimeout = 30 * time.Second
+
 	// Create a new HTTP server
 	server := &http.Server{
 		Addr:    ":" + config.Port,
@@ -736,17 +739,27 @@ func main() {
 	done := make(chan struct{})
 
 	go func() {
-		<-stop // Wait for a termination signal
+		<-stop
 		log.Info().Msg("Shutting down server...")
-		dbSetup.GetQueue().Stop() // Stop queue
 
-		// Create a context with a timeout for the shutdown process
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		// Create shutdown context with timeout
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
-		// Attempt to gracefully shut down the server
+		// First stop accepting new requests
 		if err := server.Shutdown(ctx); err != nil {
 			log.Error().Err(err).Msg("Server forced to shutdown")
+		}
+
+		// Then stop the queue and wait for pending operations
+		dbSetup.GetQueue().Stop()
+
+		// Give pending operations a chance to complete
+		select {
+		case <-time.After(5 * time.Second):
+			log.Warn().Msg("Shutdown timeout reached, some operations may be incomplete")
+		case <-ctx.Done():
+			log.Error().Msg("Context deadline exceeded during shutdown")
 		}
 
 		close(done)
