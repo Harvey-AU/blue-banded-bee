@@ -342,7 +342,7 @@ func main() {
 
 		// Create a global worker pool that persists for the life of the server
 		c := crawler.New(crawler.DefaultConfig())
-		workerPool := jobs.NewWorkerPool(dbSetup.GetDB(), c, 3)
+		workerPool := jobs.NewWorkerPool(dbSetup.GetDB(), c, 5)
 		workerPool.Start(context.Background())
 
 		// Start the task monitor
