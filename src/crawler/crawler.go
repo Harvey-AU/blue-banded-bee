@@ -398,9 +398,12 @@ func (c *Crawler) CreateHTTPClient(timeout time.Duration) *http.Client {
 	return &http.Client{
 		Timeout: timeout,
 		Transport: &http.Transport{
-			MaxIdleConnsPerHost: 10,
-			IdleConnTimeout:     90 * time.Second,
+			MaxIdleConnsPerHost: 25,
+			MaxConnsPerHost:     50,
+			IdleConnTimeout:     120 * time.Second,
 			TLSHandshakeTimeout: 10 * time.Second,
+			DisableCompression:  true,
+			ForceAttemptHTTP2:   true,
 		},
 	}
 }

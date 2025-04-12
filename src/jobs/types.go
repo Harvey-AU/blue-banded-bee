@@ -29,7 +29,7 @@ const (
 
 // Maximum time a task can be "in progress" before being considered stale
 const (
-	TaskStaleTimeout = 5 * time.Minute
+	TaskStaleTimeout = 3 * time.Minute
 	MaxTaskRetries   = 5
 )
 
