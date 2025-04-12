@@ -63,7 +63,7 @@ func main() {
 
 	// Create crawler and worker pool
 	crawler := crawler.New(nil)
-	workerPool := jobs.NewWorkerPool(db, crawler, 2) // 2 workers
+	workerPool := jobs.NewWorkerPool(db, crawler, 5)
 	jobManager := jobs.NewJobManager(db, crawler, workerPool)
 
 	// Start the worker pool
@@ -98,13 +98,13 @@ func main() {
 	// Wait and check job status periodically
 	for i := 0; i < 10; i++ {
 		time.Sleep(1 * time.Second)
-		
+
 		job, err := jobManager.GetJobStatus(ctx, job.ID)
 		if err != nil {
 			log.Error().Err(err).Msg("Failed to get job status")
 			continue
 		}
-		
+
 		log.Info().
 			Str("job_id", job.ID).
 			Str("status", string(job.Status)).
@@ -114,7 +114,7 @@ func main() {
 			Int("total", job.TotalTasks).
 			Strs("recent_urls", job.RecentURLs).
 			Msg("Job status")
-			
+
 		if job.Status != jobs.JobStatusRunning {
 			break
 		}
@@ -122,6 +122,6 @@ func main() {
 
 	// Let worker pool finish any in-progress tasks
 	time.Sleep(2 * time.Second)
-	
+
 	log.Info().Msg("Test completed")
 }
