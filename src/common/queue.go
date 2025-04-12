@@ -3,7 +3,9 @@ package common
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"sync"
+	"time"
 
 	"github.com/rs/zerolog/log"
 )
@@ -27,7 +29,7 @@ type DbQueue struct {
 // NewDbQueue creates and starts a new database queue
 func NewDbQueue(db *sql.DB) *DbQueue {
 	queue := &DbQueue{
-		operations: make(chan DbOperation, 100),
+		operations: make(chan DbOperation, 50),
 		db:         db,
 	}
 	queue.Start()
@@ -48,7 +50,20 @@ func (q *DbQueue) Stop() {
 		close(q.operations)
 	}
 	q.mu.Unlock()
-	q.wg.Wait()
+
+	// Wait with timeout for operations to complete
+	done := make(chan struct{})
+	go func() {
+		q.wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		log.Info().Msg("Queue stopped gracefully")
+	case <-time.After(5 * time.Second):
+		log.Warn().Msg("Queue stop timed out")
+	}
 }
 
 // processOperations handles database operations sequentially
@@ -89,18 +104,17 @@ func (q *DbQueue) processOperations() {
 
 // Execute adds an operation to the queue and waits for it to complete
 func (q *DbQueue) Execute(ctx context.Context, fn func(*sql.Tx) error) error {
-	done := make(chan error, 1)
-
-	q.mu.Lock()
-	stopped := q.stopped
-	q.mu.Unlock()
-
-	if stopped {
-		return sql.ErrConnDone
+	if q.stopped {
+		return fmt.Errorf("queue is stopped")
 	}
 
-	q.operations <- DbOperation{Fn: fn, Done: done, Ctx: ctx}
-	return <-done
+	done := make(chan error, 1)
+	select {
+	case q.operations <- DbOperation{Fn: fn, Done: done, Ctx: ctx}:
+		return <-done
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 // QueueProvider defines an interface for accessing a DB queue

@@ -119,13 +119,15 @@ func serialize(v interface{}) string {
 
 // retryDB executes a database operation with exponential backoff retry
 func retryDB(operation func() error) error {
-	maxRetries := 5
-	initialBackoff := 50 * time.Millisecond
-	maxBackoff := 2 * time.Second
+	var lastErr error
+	retries := 5
+	backoff := 200 * time.Millisecond
 
-	var err error
-	for attempt := 0; attempt < maxRetries; attempt++ {
-		err = operation()
+	for attempt := 0; attempt <= retries; attempt++ {
+		if attempt > 0 {
+			time.Sleep(backoff * time.Duration(1<<uint(attempt-1)))
+		}
+		err := operation()
 		if err == nil {
 			return nil
 		}
@@ -134,10 +136,7 @@ func retryDB(operation func() error) error {
 		if strings.Contains(err.Error(), "database is locked") ||
 			strings.Contains(err.Error(), "busy") {
 			// Calculate backoff with jitter
-			backoff := initialBackoff * time.Duration(1<<uint(attempt))
-			if backoff > maxBackoff {
-				backoff = maxBackoff
-			}
+			backoff := backoff * time.Duration(1<<uint(attempt))
 			jitter := time.Duration(rand.Int63n(int64(backoff) / 2))
 			sleepTime := backoff + jitter
 
@@ -152,10 +151,10 @@ func retryDB(operation func() error) error {
 		}
 
 		// Not a retryable error
-		return err
+		lastErr = err
 	}
 
-	return err
+	return lastErr
 }
 
 // CreateJob inserts a new job into the database

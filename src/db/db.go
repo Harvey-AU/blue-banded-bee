@@ -64,10 +64,11 @@ func New(config *Config) (*DB, error) {
 		return nil, err
 	}
 
-	// Reduced connection pool size
-	client.SetMaxOpenConns(10)
-	client.SetMaxIdleConns(5)
-	client.SetConnMaxLifetime(5 * time.Minute)
+	// Adjusted connection pool settings
+	client.SetMaxOpenConns(5)
+	client.SetMaxIdleConns(2)
+	client.SetConnMaxLifetime(time.Minute)
+	client.SetConnMaxIdleTime(30 * time.Second)
 
 	if err := client.Ping(); err != nil {
 		return nil, err
