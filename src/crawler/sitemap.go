@@ -15,50 +15,36 @@ import (
 
 // DiscoverSitemaps attempts to find sitemaps for a domain by checking common locations
 func (c *Crawler) DiscoverSitemaps(ctx context.Context, domain string) ([]string, error) {
-	urls := []string{
-		"https://" + domain + "/sitemap.xml",
-		"https://" + domain + "/sitemap_index.xml",
-		"https://www." + domain + "/sitemap.xml",
-		"https://www." + domain + "/sitemap_index.xml",
+	// Create a client with shorter timeout and redirect handling
+	client := &http.Client{
+		Timeout: 5 * time.Second,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if len(via) >= 10 {
+				return fmt.Errorf("too many redirects")
+			}
+			return nil
+		},
 	}
 
+	// Check robots.txt first as it's the most authoritative source
+	robotsURL := "https://" + domain + "/robots.txt"
 	var foundSitemaps []string
-	client := &http.Client{Timeout: 10 * time.Second}
 
-	for _, url := range urls {
-		req, err := http.NewRequestWithContext(ctx, "HEAD", url, nil)
-		if err != nil {
-			log.Warn().Err(err).Str("url", url).Msg("Failed to create request for sitemap")
-			continue
-		}
-
+	// Try robots.txt first
+	req, err := http.NewRequestWithContext(ctx, "GET", robotsURL, nil)
+	if err == nil {
 		resp, err := client.Do(req)
-		if err != nil {
-			log.Warn().Err(err).Str("url", url).Msg("Failed to check sitemap")
-			continue
-		}
-		resp.Body.Close()
-
-		if resp.StatusCode == http.StatusOK {
-			foundSitemaps = append(foundSitemaps, url)
-		}
-	}
-
-	if len(foundSitemaps) == 0 {
-		// Try finding sitemaps in robots.txt
-		robotsURL := "https://" + domain + "/robots.txt"
-		req, err := http.NewRequestWithContext(ctx, "GET", robotsURL, nil)
-		if err == nil {
-			resp, err := client.Do(req)
-			if err == nil && resp.StatusCode == http.StatusOK {
-				defer resp.Body.Close()
-				robotsTxt, err := io.ReadAll(resp.Body)
-				if err == nil {
-					lines := strings.Split(string(robotsTxt), "\n")
-					for _, line := range lines {
-						line = strings.TrimSpace(line)
-						if strings.HasPrefix(strings.ToLower(line), "sitemap:") {
-							sitemapURL := strings.TrimSpace(line[8:])
+		if err == nil && resp.StatusCode == http.StatusOK {
+			defer resp.Body.Close()
+			robotsTxt, err := io.ReadAll(resp.Body)
+			if err == nil {
+				lines := strings.Split(string(robotsTxt), "\n")
+				for _, line := range lines {
+					line = strings.TrimSpace(line)
+					if strings.HasPrefix(strings.ToLower(line), "sitemap:") {
+						sitemapURL := strings.TrimSpace(line[8:])
+						// Validate sitemap URL
+						if _, err := url.Parse(sitemapURL); err == nil {
 							foundSitemaps = append(foundSitemaps, sitemapURL)
 						}
 					}
@@ -67,7 +53,41 @@ func (c *Crawler) DiscoverSitemaps(ctx context.Context, domain string) ([]string
 		}
 	}
 
-	return foundSitemaps, nil
+	// If no sitemaps found in robots.txt, check common locations
+	if len(foundSitemaps) == 0 {
+		commonPaths := []string{
+			"https://" + domain + "/sitemap.xml",
+			"https://" + domain + "/sitemap_index.xml",
+		}
+
+		// Check common locations concurrently with a timeout
+		for _, sitemapURL := range commonPaths {
+			req, err := http.NewRequestWithContext(ctx, "HEAD", sitemapURL, nil)
+			if err != nil {
+				continue
+			}
+
+			resp, err := client.Do(req)
+			if err == nil {
+				resp.Body.Close()
+				if resp.StatusCode == http.StatusOK {
+					foundSitemaps = append(foundSitemaps, sitemapURL)
+				}
+			}
+		}
+	}
+
+	// Deduplicate sitemaps
+	seen := make(map[string]bool)
+	var uniqueSitemaps []string
+	for _, sitemap := range foundSitemaps {
+		if !seen[sitemap] {
+			seen[sitemap] = true
+			uniqueSitemaps = append(uniqueSitemaps, sitemap)
+		}
+	}
+
+	return uniqueSitemaps, nil
 }
 
 // Create proper sitemap structs
