@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Harvey-AU/blue-banded-bee/src/common"
 	"github.com/Harvey-AU/blue-banded-bee/src/jobs"
 	"github.com/getsentry/sentry-go"
 	"github.com/rs/zerolog"
@@ -20,6 +21,9 @@ var (
 	initErr  error
 
 	log zerolog.Logger
+
+	globalQueue *common.DbQueue
+	queueOnce   sync.Once
 )
 
 // DB represents a database connection with crawl result storage capabilities
@@ -184,6 +188,7 @@ func (db *DB) ResetSchema() error {
 
 	_, err = db.client.Exec(`DROP TABLE IF EXISTS crawl_results`)
 	if err != nil {
+
 		log.Error().Err(err).Msg("Failed to drop crawl_results table")
 		return err
 	}
@@ -297,4 +302,12 @@ func (db *DB) ExecWithMetrics(ctx context.Context, query string, args ...interfa
 // GetDB returns the underlying database connection
 func (db *DB) GetDB() *sql.DB {
 	return db.client
+}
+
+// GetQueue returns the database queue singleton
+func (db *DB) GetQueue() *common.DbQueue {
+	queueOnce.Do(func() {
+		globalQueue = common.NewDbQueue(db.client)
+	})
+	return globalQueue
 }

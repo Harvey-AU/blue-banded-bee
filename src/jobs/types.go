@@ -27,25 +27,31 @@ const (
 	TaskStatusSkipped   TaskStatus = "skipped"
 )
 
+// Maximum time a task can be "in progress" before being considered stale
+const (
+	TaskStaleTimeout = 5 * time.Minute
+	MaxTaskRetries   = 5
+)
+
 // Job represents a crawling job for a domain
 type Job struct {
-	ID              string    `json:"id"`
-	Domain          string    `json:"domain"`
-	Status          JobStatus `json:"status"`
-	Progress        float64   `json:"progress"`
-	TotalTasks      int       `json:"total_tasks"`
-	CompletedTasks  int       `json:"completed_tasks"`
-	FailedTasks     int       `json:"failed_tasks"`
-	CreatedAt       time.Time `json:"created_at"`
-	StartedAt       time.Time `json:"started_at,omitempty"`
-	CompletedAt     time.Time `json:"completed_at,omitempty"`
-	Concurrency     int       `json:"concurrency"`
-	FindLinks       bool      `json:"find_links"`
-	MaxDepth        int       `json:"max_depth"`
-	IncludePaths    []string  `json:"include_paths,omitempty"`
-	ExcludePaths    []string  `json:"exclude_paths,omitempty"`
-	RecentURLs      []string  `json:"recent_urls,omitempty"`
-	ErrorMessage    string    `json:"error_message,omitempty"`
+	ID             string    `json:"id"`
+	Domain         string    `json:"domain"`
+	Status         JobStatus `json:"status"`
+	Progress       float64   `json:"progress"`
+	TotalTasks     int       `json:"total_tasks"`
+	CompletedTasks int       `json:"completed_tasks"`
+	FailedTasks    int       `json:"failed_tasks"`
+	CreatedAt      time.Time `json:"created_at"`
+	StartedAt      time.Time `json:"started_at,omitempty"`
+	CompletedAt    time.Time `json:"completed_at,omitempty"`
+	Concurrency    int       `json:"concurrency"`
+	FindLinks      bool      `json:"find_links"`
+	MaxDepth       int       `json:"max_depth"`
+	IncludePaths   []string  `json:"include_paths,omitempty"`
+	ExcludePaths   []string  `json:"exclude_paths,omitempty"`
+	RecentURLs     []string  `json:"recent_urls,omitempty"`
+	ErrorMessage   string    `json:"error_message,omitempty"`
 }
 
 // Task represents a single URL to be crawled within a job
@@ -60,15 +66,15 @@ type Task struct {
 	CompletedAt time.Time  `json:"completed_at,omitempty"`
 	RetryCount  int        `json:"retry_count"`
 	Error       string     `json:"error,omitempty"`
-	
+
 	// Result data
 	StatusCode   int    `json:"status_code,omitempty"`
 	ResponseTime int64  `json:"response_time_ms,omitempty"`
 	CacheStatus  string `json:"cache_status,omitempty"`
 	ContentType  string `json:"content_type,omitempty"`
-	
+
 	// Source information
-	SourceType string `json:"source_type"` // "sitemap", "link", "manual"
+	SourceType string `json:"source_type"`          // "sitemap", "link", "manual"
 	SourceURL  string `json:"source_url,omitempty"` // URL where this was discovered (for links)
 }
 

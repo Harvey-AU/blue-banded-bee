@@ -388,3 +388,19 @@ func setupSchema(db *sql.DB) error {
 	`)
 	return err
 }
+
+// CreateHTTPClient returns a configured HTTP client
+func (c *Crawler) CreateHTTPClient(timeout time.Duration) *http.Client {
+	if timeout == 0 {
+		timeout = c.config.DefaultTimeout
+	}
+
+	return &http.Client{
+		Timeout: timeout,
+		Transport: &http.Transport{
+			MaxIdleConnsPerHost: 10,
+			IdleConnTimeout:     90 * time.Second,
+			TLSHandshakeTimeout: 10 * time.Second,
+		},
+	}
+}
