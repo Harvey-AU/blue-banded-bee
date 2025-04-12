@@ -22,12 +22,12 @@ type Config struct {
 // DefaultConfig returns a Config instance with default values
 func DefaultConfig() *Config {
 	return &Config{
-		DefaultTimeout: 30 * time.Second,
-		MaxConcurrency: 10,
-		RateLimit:      20,
+		DefaultTimeout: 15 * time.Second,
+		MaxConcurrency: 50,
+		RateLimit:      100,
 		UserAgent:      "Blue Banded Bee (Cache-warmer)",
 		RetryAttempts:  3,
-		RetryDelay:     2 * time.Second,
+		RetryDelay:     500 * time.Millisecond,
 		SkipCachedURLs: false, // Default to crawling all URLs
 	}
 }
