@@ -27,22 +27,19 @@ go run src/main.go
 
 ## Development Status
 
-🚧 Currently in initial development
+Current development stage: Stage 2 - Multi-domain Support & Job Queue Architecture
 
-### Implemented
+### Project Stages
 
-- ✅ URL crawling with concurrent requests
-- ✅ Database integration with Turso
-- ✅ Basic error handling
-- ✅ Test coverage for core components
-- ✅ Rate limiting with proper client IP detection
-- ✅ Fly.io deployment
+- ✅ Stage 0: Project Setup & Infrastructure
+- ✅ Stage 1: Core Setup & Basic Crawling
+- 🟡 Stage 2: Multi-domain Support & Job Queue Architecture
+- ⭕ Stage 3: Deployment & Monitoring
+- ⭕ Stage 4: Auth & User Management
+- ⭕ Stage 5: Billing & Subscriptions
+- ⭕ Stage 6: Webflow Integration & Launch
 
-### Coming Soon
-
-- 🔄 Retry logic
-- 🔄 Cache validation improvements
-- 🔄 Advanced metrics collection
+See our [detailed roadmap](docs/Roadmap.md) for more information.
 
 ## Tech Stack
 

@@ -1,14 +1,89 @@
 # API Reference
 
-## Overview
+## Job Management
 
-The Cache Warmer API provides endpoints for URL crawling, cache status checking, and retrieving crawl history.
+### Create Job
 
-## Base URL
+```http
+POST /api/v1/jobs
+```
 
-https://blue-banded-bee.fly.dev
+Creates a new crawling job.
 
-## Endpoints
+**Request Body:**
+
+```json
+{
+  "domain": "example.com",
+  "urls": ["https://example.com/page1", "..."],
+  "options": {
+    "maxDepth": 2,
+    "concurrency": 5
+  }
+}
+```
+
+### Get Job Status
+
+```http
+GET /api/v1/jobs/{jobId}
+```
+
+Returns job status and progress.
+
+**Response:**
+
+```json
+{
+  "id": "job_123",
+  "status": "running",
+  "progress": {
+    "total": 100,
+    "completed": 45,
+    "failed": 2
+  },
+  "stats": {
+    "avgResponseTime": 250,
+    "cacheHitRate": 0.75
+  }
+}
+```
+
+### Cancel Job
+
+```http
+POST /api/v1/jobs/{jobId}/cancel
+```
+
+Cancels an active job.
+
+### List Jobs
+
+```http
+GET /api/v1/jobs
+```
+
+Lists all jobs with pagination.
+
+## Task Management
+
+### Get Task Details
+
+```http
+GET /api/v1/tasks/{taskId}
+```
+
+Returns detailed task information.
+
+### Retry Task
+
+```http
+POST /api/v1/tasks/{taskId}/retry
+```
+
+Retries a failed task.
+
+## Monitoring
 
 ### Health Check
 
@@ -16,133 +91,268 @@ https://blue-banded-bee.fly.dev
 GET /health
 ```
 
-Returns the service status and deployment time.
+Returns service health status.
 
-**Response**
-
-200 OK
-Content-Type: text/plain
-OK - Deployed at: 2024-04-07T15:30:00Z
-
-### Test Crawl
+### Metrics
 
 ```http
-GET /test-crawl?url=<url>
+GET /api/v1/metrics
 ```
 
-Crawls a specified URL and returns the result.
+Returns system metrics and statistics.
 
-**Parameters**
+## Error Responses
 
-- `url` (optional): URL to crawl. Defaults to "https://www.teamharvey.co"
-
-**Success Response**
+All endpoints return standard error responses:
 
 ```json
 {
-  "url": "https://example.com",
-  "response_time_ms": 523,
-  "status_code": 200,
-  "error": "",
-  "cache_status": "HIT",
-  "timestamp": 1744065627
-}
-```
-
-**Error Response**
-
-```json
-{
-  "url": "https://invalid-url",
-  "response_time_ms": 0,
-  "status_code": 0,
-  "error": "invalid URL format",
-  "cache_status": "",
-  "timestamp": 1744065627
-}
-```
-
-### Recent Crawls
-
-```http
-GET /recent-crawls
-```
-
-Returns the 10 most recent crawl results.
-
-**Response**
-
-```json
-[
-  {
-    "id": 123,
-    "url": "https://example.com",
-    "response_time_ms": 523,
-    "status_code": 200,
-    "error": "",
-    "cache_status": "HIT",
-    "created_at": "2024-04-07T15:30:00Z"
+  "error": {
+    "code": "ERROR_CODE",
+    "message": "Human readable message",
+    "details": {}
   }
-]
-```
-
-## Rate Limiting
-
-- Implementation: Token bucket algorithm
-- Rate: 5 requests per second per IP address
-- Client IP Detection: Properly handles X-Forwarded-For and X-Real-IP headers
-- Response: Status code 429 when limit exceeded
-
-## Error Codes
-
-- 200: Success
-- 400: Invalid request (e.g., malformed URL)
-- 401: Unauthorized (development endpoints)
-- 429: Too many requests
-- 500: Server error
-
-## Response Types
-
-All endpoints return either:
-
-- `text/plain` for health check
-- `application/json` for all other endpoints
-
-## Development Mode Features
-
-When `APP_ENV=development`:
-
-- Additional debugging information in responses
-- Reset database endpoint available (requires token)
-- More verbose error messages
-- Detailed logging enabled
-
-## Development Mode Endpoints
-
-When running in development mode (`APP_ENV=development`), additional endpoints are available:
-
-### Reset Database
-
-```http
-POST /reset-db
-```
-
-Resets the database schema. Requires authentication token that is generated and logged at server startup.
-
-**Headers**
-
-Authorization: Bearer <token from server startup logs>
-
-**Response**
-
-```json
-{
-  "status": "Database schema reset successfully"
 }
 ```
 
-**Notes**
+````
 
-- Only available in development mode (`APP_ENV=development`)
-- Token is generated when server starts and logged to console
-- Token changes each time server restarts
+```markdown:docs/deployment.md
+# Deployment Guide
+
+## Prerequisites
+- Fly.io account
+- Turso database
+- Sentry.io account
+- Environment variables configured
+
+## Configuration
+
+### Worker Pool Settings
+```env
+WORKER_POOL_SIZE=5
+WORKER_TIMEOUT=300
+RECOVERY_INTERVAL=60
+MAX_RETRIES=3
+````
+
+### Rate Limiting
+
+```env
+RATE_LIMIT_PER_SECOND=10
+RATE_LIMIT_BURST=20
+```
+
+### Database Configuration
+
+```env
+TURSO_DATABASE_URL=
+TURSO_AUTH_TOKEN=
+```
+
+## Deployment Steps
+
+1. **Initial Setup**
+
+   ```bash
+   flyctl launch
+   flyctl secrets set
+   ```
+
+2. **Database Migration**
+
+   ```bash
+   flyctl ssh console
+   ./migrate up
+   ```
+
+3. **Deploy Application**
+   ```bash
+   flyctl deploy
+   ```
+
+## Scaling
+
+### Worker Pool Scaling
+
+- Minimum: 3 workers
+- Recommended: 5 workers
+- Scale based on queue size
+
+### Memory Requirements
+
+- Base: 512MB
+- Per Worker: ~100MB
+- Recommended: 1GB minimum
+
+## Monitoring
+
+### Health Checks
+
+- Endpoint: `/health`
+- Interval: 30s
+- Timeout: 5s
+
+### Metrics
+
+- Response times
+- Cache hit rates
+- Error rates
+- Queue depth
+
+### Alerts
+
+- Worker pool health
+- Database connectivity
+- High error rates
+- Queue backlog
+
+## Maintenance
+
+### Database
+
+- Regular VACUUM
+- Index optimization
+- Connection pool management
+
+### Logs
+
+- Retention: 7 days
+- Error tracking in Sentry
+- Performance monitoring
+
+````
+
+```markdown:docs/development.md
+# Development Guide
+
+## Setup
+
+### Prerequisites
+- Go 1.21+
+- Docker
+- Make
+
+### Local Environment
+1. Clone repository
+2. Copy `.env.example` to `.env`
+3. Configure local environment
+4. Run development server
+
+## Development Server
+
+### Start Local Server
+```bash
+make dev
+````
+
+### Run Tests
+
+```bash
+make test
+```
+
+## Worker Pool Development
+
+### Local Testing
+
+```bash
+# Start worker pool
+make worker
+
+# Monitor tasks
+make monitor
+```
+
+### Debug Configuration
+
+```go
+// worker/config.go
+debug: true
+logLevel: "debug"
+recoveryInterval: "10s"
+```
+
+### Testing Scenarios
+
+#### Recovery Testing
+
+1. Start worker pool
+2. Create test job
+3. Simulate failures
+4. Verify recovery
+
+#### Performance Testing
+
+1. Configure test job
+2. Monitor metrics
+3. Analyze results
+
+## Database
+
+### Local Database
+
+```bash
+make db-setup
+make db-migrate
+```
+
+### Test Data
+
+```bash
+make db-seed
+```
+
+## Testing
+
+### Unit Tests
+
+```bash
+make test-unit
+```
+
+### Integration Tests
+
+```bash
+make test-integration
+```
+
+### Load Tests
+
+```bash
+make test-load
+```
+
+## Debugging
+
+### Logs
+
+- Development: stdout
+- Structured logging
+- Debug level available
+
+### Metrics
+
+- Prometheus format
+- Grafana dashboards
+- Custom metrics
+
+## Code Style
+
+### Formatting
+
+```bash
+make fmt
+```
+
+### Linting
+
+```bash
+make lint
+```
+
+### Pre-commit Hooks
+
+```bash
+make install-hooks
+```

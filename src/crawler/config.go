@@ -1,6 +1,8 @@
 package crawler
 
-import "time"
+import (
+	"time"
+)
 
 // Config holds the configuration for a crawler instance
 type Config struct {
@@ -22,7 +24,7 @@ type Config struct {
 // DefaultConfig returns a Config instance with default values
 func DefaultConfig() *Config {
 	return &Config{
-		DefaultTimeout: 15 * time.Second,
+		DefaultTimeout: 30 * time.Second,
 		MaxConcurrency: 50,
 		RateLimit:      100,
 		UserAgent:      "Blue Banded Bee (Cache-warmer)",
