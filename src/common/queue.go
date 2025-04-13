@@ -29,7 +29,7 @@ type DbQueue struct {
 // NewDbQueue creates and starts a new database queue
 func NewDbQueue(db *sql.DB) *DbQueue {
 	queue := &DbQueue{
-		operations: make(chan DbOperation, 50),
+		operations: make(chan DbOperation, 200),
 		db:         db,
 	}
 	queue.Start()
