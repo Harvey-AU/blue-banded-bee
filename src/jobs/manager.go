@@ -307,3 +307,23 @@ func (jm *JobManager) processSitemap(ctx context.Context, jobID, domain string, 
 		}
 	}
 }
+
+func (jm *JobManager) updateJobStatus(ctx context.Context, job *Job) error {
+	// If all tasks are either completed or permanently failed
+	if job.CompletedTasks+job.FailedTasks == job.TotalTasks {
+		job.Status = JobStatusCompleted
+		job.CompletedAt = time.Now()
+		job.Progress = 100.0
+
+		// Update the database
+		_, err := jm.db.ExecContext(ctx, `
+			UPDATE jobs 
+			SET status = ?, completed_at = ?, progress = ?, 
+				completed_tasks = ?, failed_tasks = ?
+			WHERE id = ?
+		`, job.Status, job.CompletedAt, job.Progress,
+			job.CompletedTasks, job.FailedTasks, job.ID)
+		return err
+	}
+	return nil
+}

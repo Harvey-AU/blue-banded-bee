@@ -6,6 +6,7 @@
 - GitHub account
 - Turso database
 - Sentry account (optional)
+- Environment variables configured
 
 ## Environment Setup
 
@@ -21,6 +22,31 @@ DATABASE_URL=your_turso_url
 DATABASE_AUTH_TOKEN=your_turso_token
 SENTRY_DSN=your_sentry_dsn
 ```
+
+## Configuration
+
+### Environment Variables
+
+```env
+# App
+APP_ENV=development  # development or production
+PORT=8080           # API server port
+DEBUG=true          # Enable debug logging
+LOG_LEVEL=debug     # debug, info, warn, or error
+
+# Database
+DATABASE_URL=libsql://your-db-name.turso.io
+DATABASE_AUTH_TOKEN=your_auth_token
+
+# Error Tracking
+SENTRY_DSN=your_sentry_dsn
+```
+
+### System Defaults
+
+- Worker Pool Size: 5 workers
+- Recovery Interval: 1 minute
+- Rate Limiting: 5 requests/second with burst
 
 ## Fly.io Deployment
 
@@ -111,3 +137,74 @@ SENTRY_DSN=your_sentry_dsn
    ```bash
    fly ssh console
    ```
+
+## Deployment Steps
+
+1. **Initial Setup**
+
+   ```bash
+   flyctl launch
+   flyctl secrets set
+   ```
+
+2. **Database Migration**
+
+   ```bash
+   flyctl ssh console
+   ./migrate up
+   ```
+
+3. **Deploy Application**
+   ```bash
+   flyctl deploy
+   ```
+
+## Scaling
+
+### Worker Pool Scaling
+
+- Minimum: 3 workers
+- Recommended: 5 workers
+- Scale based on queue size
+
+### Memory Requirements
+
+- Base: 512MB
+- Per Worker: ~100MB
+- Recommended: 1GB minimum
+
+## Monitoring
+
+### Health Checks
+
+- Endpoint: `/health`
+- Interval: 30s
+- Timeout: 5s
+
+### Metrics
+
+- Response times
+- Cache hit rates
+- Error rates
+- Queue depth
+
+### Alerts
+
+- Worker pool health
+- Database connectivity
+- High error rates
+- Queue backlog
+
+## Maintenance
+
+### Database
+
+- Regular VACUUM
+- Index optimization
+- Connection pool management
+
+### Logs
+
+- Retention: 7 days
+- Error tracking in Sentry
+- Performance monitoring

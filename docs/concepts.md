@@ -1,5 +1,66 @@
 # Technical Concepts
 
+## Core Concepts
+
+### Jobs and Tasks
+
+- **Job**: A collection of URLs to be crawled from a single domain
+- **Task**: Individual URL processing unit within a job
+- **Worker**: Process that executes tasks concurrently
+
+### Task Processing
+
+1. **Task Creation**: URLs are converted to tasks with unique IDs
+2. **Task Assignment**: Workers pick up available tasks
+3. **Processing**: URL crawling with retry logic
+4. **Completion**: Results stored and status updated
+
+### Recovery Mechanisms
+
+- **Task Recovery**: Automatic recovery of stalled tasks
+- **Job Recovery**: Restoration of interrupted jobs
+- **Error Handling**: Graduated retry with backoff
+- **State Management**: Persistent task state tracking
+
+### Worker Pool
+
+- **Concurrent Processing**: Multiple workers handle tasks
+- **Resource Management**: Controlled concurrency
+- **Load Balancing**: Even task distribution
+- **Health Monitoring**: Worker status tracking
+
+### Rate Limiting
+
+- **Client IP Detection**: Accurate client identification
+- **Request Throttling**: Controlled request rates
+- **Domain Limits**: Per-domain request limits
+- **Burst Handling**: Request burst management
+
+## Data Flow
+
+1. **Input Processing**
+
+   - URL validation
+   - Domain extraction
+   - Task creation
+
+2. **Task Execution**
+
+   - Worker assignment
+   - URL crawling
+   - Result storage
+
+3. **Result Handling**
+
+   - Cache validation
+   - Response analysis
+   - Status reporting
+
+4. **Monitoring**
+   - Performance tracking
+   - Error reporting
+   - Status updates
+
 ## Cache Warming
 
 ### Overview

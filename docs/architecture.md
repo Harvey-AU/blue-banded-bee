@@ -1,136 +1,82 @@
-# System Architecture
+# Architecture
 
-## Overview
+## System Overview
 
-The Blue Banded Bee service is designed with simplicity, performance, and scalability in mind. Our architecture prioritizes maintainability, cost-effectiveness, and efficient resource utilization.
+Blue Banded Bee is built with a worker pool architecture for efficient URL crawling and cache warming. The system consists of several key components:
 
-## Technology Stack & Rationale
+## Core Components
 
-### Backend: Go on Fly.io
+### Worker Pool System
 
-- **Why Go**: Better performance for crawling, excellent concurrency, low resource usage, simple deployment
-- **Why Fly.io**: Simple deployment, global distribution, built-in Redis for potential queue needs, reasonable pricing
+- **Concurrent Processing**: Multiple workers process tasks simultaneously
+- **Job Management**: Jobs are broken down into tasks and distributed across workers
+- **Recovery System**: Automatic recovery of stalled or failed tasks
+- **Task Monitoring**: Real-time monitoring of task progress and status
 
-### Database: Turso
+### Database Layer (Turso)
 
-- **Why Turso**: Edge deployment, zero maintenance, excellent performance, libSQL compatibility
-- **Benefits**: Simpler than managing SQLite, cost-effective for our scale, reliable
+- Stores jobs, tasks, and results
+- Handles concurrent access with proper locking
+- Maintains job history and statistics
 
-### Authentication: Clerk (Planned)
+### API Layer
 
-- **Why Clerk**: Modern UX, simple implementation, great social logins, comprehensive user management
-- **Benefits**: Better than Webflow's native auth, easier to integrate
+- RESTful endpoints for job management
+- Real-time status updates
+- Health monitoring endpoints
 
-### Payments: Paddle (Planned)
+### Crawler System
 
-- **Why Paddle**: Usage-based billing, subscription management, handles international taxes
-- **Benefits**: Better than Webflow ecommerce for SaaS, handles usage limits well
+- Concurrent URL processing
+- Rate limiting and retry logic
+- Cache validation
+- Response monitoring
 
-### Analytics: Google Analytics (Planned)
+## Job Lifecycle
 
-- **Why GA**: Free to start, simple implementation, adequate for initial launch
-- **Future**: Consider PostHog if more detailed analytics are needed
+1. **Job Creation**
 
-## System Components
+   - Job created with initial URLs
+   - URLs broken down into tasks
+   - Job status set to PENDING
 
-┌─────────────┐ ┌─────────────┐ ┌─────────────┐
-│ GitHub │ │ Fly.io │ │ Cloudflare │
-│ Actions │────▶│ Server │────▶│ Cache │
-└─────────────┘ └─────────────┘ └─────────────┘
-│
-│
-┌─────▼─────┐
-│ Turso │
-│ Database │
-└───────────┘
+2. **Task Processing**
 
-## Component Details
+   - Workers pick up pending tasks
+   - URLs are crawled with retry logic
+   - Results stored in database
+   - Task status updated
 
-### 1. Application Server
+3. **Job Completion**
 
-- Go HTTP server handling API requests
-- Manages concurrent crawling operations
-- Implements rate limiting and request throttling
-- Provides error tracking via Sentry
+   - All tasks completed
+   - Final statistics calculated
+   - Job marked as COMPLETED
 
-### 2. Database
+4. **Recovery Handling**
+   - Stalled tasks detected
+   - Tasks reassigned to workers
+   - Failed tasks tracked and reported
 
-- SQLite-compatible Turso database
-- Stores crawl results and historical data
-- Manages user data and usage metrics
-- Provides analytics capabilities
+## System Monitoring
 
-### 3. Cache Layer
+- **Health Checks**: Regular service health monitoring
+- **Task Progress**: Real-time task completion tracking
+- **Error Tracking**: Sentry integration for error reporting
+- **Performance Metrics**: Response times and cache status monitoring
 
-- Cloudflare caches crawled content
-- Provides cache status information
-- Improves response times and reduces origin load
+## Security
 
-### 4. CI/CD Pipeline
+- Rate limiting per client IP
+- Request validation
+- Error handling and sanitization
+- Secure configuration management
 
-- GitHub Actions for automated testing
-- Deployment automation to Fly.io
-- Secret management and version control
+## Deployment Architecture
 
-## Data Flow
+- Fly.io hosting
+- Edge database with Turso
+- Cloudflare caching layer
+- Sentry error tracking
 
-1. **Request Flow**
-
-   ```
-   Client → API Server → URL Crawler → Target Website
-                      ↓
-                   Database
-   ```
-
-2. **Deployment Flow**
-   ```
-   GitHub → GitHub Actions → Fly.io → Production
-   ```
-
-## Security Considerations
-
-1. **Authentication**
-
-   - Development endpoints require tokens
-   - Database authentication
-   - API token management
-
-2. **Rate Limiting**
-
-   - Per-IP limits with proper client IP detection
-   - Global rate limiting
-   - Concurrent request limits
-
-3. **Error Handling**
-   - Sanitized error messages
-   - Secure logging practices
-   - Monitoring and alerts
-
-## Scalability
-
-1. **Horizontal Scaling**
-
-   - Stateless application design
-   - Database connection pooling
-   - Cache distribution
-
-2. **Performance Optimization**
-
-   - Concurrent crawling
-   - Connection pooling
-   - Response caching
-
-3. **Monitoring**
-   - Response time tracking
-   - Error rate monitoring
-   - Cache effectiveness metrics
-
-## Infrastructure Evolution
-
-The current architecture is designed to be simple and maintainable while providing room to scale:
-
-- **Initial phase**: Focus on core crawling functionality with minimal components
-- **Growth phase**: Add auth, user management, and billing capabilities
-- **Scale phase**: Enhance with more sophisticated queuing, caching, and analytics
-
-This approach allows us to start with a cost-effective infrastructure while having a clear path for growth.
+[System Architecture Diagram]
