@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -35,7 +36,7 @@ func NewDbQueue(db *sql.DB) *DbQueue {
 	queue := &DbQueue{
 		operations:  make(chan DbOperation, 200),
 		db:          db,
-		workerCount: 5,
+		workerCount: 3,
 	}
 	queue.Start()
 	return queue
@@ -95,43 +96,97 @@ func (q *DbQueue) processOperations(workerID int) {
 			continue
 		}
 
-		// Start transaction
-		tx, err := q.db.BeginTx(op.Ctx, nil)
-		if err != nil {
-			log.Error().Err(err).Msg("Failed to begin transaction")
-			op.Done <- err
-			continue
+		// Add retry logic for database locks
+		var lastErr error
+		success := false
+
+		// We'll try up to 3 times with increasing backoff
+		for attempt := 0; attempt < 3; attempt++ {
+			// If this is a retry, add some backoff
+			if attempt > 0 {
+				backoffTime := time.Duration(100*(1<<attempt)) * time.Millisecond // Exponential backoff
+				log.Warn().
+					Int("worker_id", workerID).
+					Str("operation_id", op.ID).
+					Int("attempt", attempt+1).
+					Dur("backoff", backoffTime).
+					Err(lastErr).
+					Msg("Retrying database operation after lock error")
+				time.Sleep(backoffTime)
+			}
+
+			// Start transaction
+			tx, err := q.db.BeginTx(op.Ctx, nil)
+			if err != nil {
+				lastErr = err
+				if strings.Contains(err.Error(), "database is locked") {
+					// Retry on locks
+					continue
+				}
+				// Don't retry on other tx begin errors
+				log.Error().Err(err).Msg("Failed to begin transaction")
+				break
+			}
+
+			// Execute the operation
+			err = op.Fn(tx)
+			if err != nil {
+				tx.Rollback()
+				lastErr = err
+				if strings.Contains(err.Error(), "database is locked") {
+					// Retry on locks
+					continue
+				}
+				// Don't retry on other execution errors
+				break
+			}
+
+			// Commit the transaction
+			commitStart := time.Now()
+			err = tx.Commit()
+
+			if err != nil {
+				lastErr = err
+				if strings.Contains(err.Error(), "database is locked") {
+					// Retry on locks
+					continue
+				}
+				// Don't retry on other commit errors
+				log.Error().Err(err).Msg("Failed to commit transaction")
+				break
+			}
+
+			// Success!
+			execDuration := time.Since(execStart)
+			commitDuration := time.Since(commitStart)
+			totalDuration := time.Since(op.StartTime)
+
+			log.Info().
+				Int("worker_id", workerID).
+				Str("operation_id", op.ID).
+				Dur("execution_ms", execDuration).
+				Dur("commit_ms", commitDuration).
+				Dur("total_ms", totalDuration).
+				Bool("succeeded", true).
+				Msg("⏱️ TIMING: DB operation execution completed")
+
+			success = true
+			break
 		}
 
-		// Execute the operation
-		err = op.Fn(tx)
-		if err != nil {
-			tx.Rollback()
-			op.Done <- err
-			continue
+		// Report final result
+		if success {
+			op.Done <- nil
+		} else {
+			if lastErr != nil {
+				log.Error().
+					Err(lastErr).
+					Int("worker_id", workerID).
+					Str("operation_id", op.ID).
+					Msg("Database operation failed after retries")
+			}
+			op.Done <- lastErr
 		}
-
-		// Commit the transaction
-		commitStart := time.Now()
-		err = tx.Commit()
-
-		execDuration := time.Since(execStart)
-		commitDuration := time.Since(commitStart)
-		totalDuration := time.Since(op.StartTime)
-
-		log.Info().
-			Int("worker_id", workerID).
-			Str("operation_id", op.ID).
-			Dur("execution_ms", execDuration).
-			Dur("commit_ms", commitDuration).
-			Dur("total_ms", totalDuration).
-			Bool("succeeded", err == nil).
-			Msg("⏱️ TIMING: DB operation execution completed")
-
-		if err != nil {
-			log.Error().Err(err).Msg("Failed to commit transaction")
-		}
-		op.Done <- err
 	}
 }
 
