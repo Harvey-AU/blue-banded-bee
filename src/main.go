@@ -681,7 +681,7 @@ func main() {
 		}
 
 		// Get worker count
-		workerCount := 5
+		workerCount := 20
 		if countStr := r.URL.Query().Get("workers"); countStr != "" {
 			if parsed, err := strconv.Atoi(countStr); err == nil && parsed > 0 {
 				workerCount = parsed

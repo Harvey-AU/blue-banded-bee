@@ -1,104 +1,160 @@
 # Development Guide
 
-## Prerequisites
+## Setup
 
-- Go 1.21 or later
-- Git
-- Turso CLI (for local database)
-- Air (for live reload)
+### Prerequisites
 
-## Project Structure
+- Go 1.21+
+- [Air](https://github.com/cosmtrek/air) for hot reloading
+- Docker (optional, for containerized development)
 
-src/
-├── main.go # Entry point and HTTP handlers
-├── crawler/ # URL crawling logic
-└── db/ # Database operations
+### Local Environment Setup
 
-## Local Setup
+1. Fork and clone repository:
 
-1. Clone the repository:
+```bash
+git clone https://github.com/[your-username]/blue-banded-bee.git
+cd blue-banded-bee
+```
 
-   ```bash
-   git clone https://github.com/Harvey-AU/blue-banded-bee.git
-   cd blue-banded-bee
-   ```
+2. Copy environment file:
 
-2. Install dependencies:
+```bash
+cp .env.example .env
+```
 
-   ```bash
-   go mod download
-   ```
+3. Configure your `.env` file with required credentials:
 
-3. Set up environment:
+- `DATABASE_URL`
+- `DATABASE_AUTH_TOKEN`
+- Other optional settings
 
-   ```bash
-   cp .env.example .env
-   ```
+## Development Server
 
-   Required environment variables:
+### Start with Hot Reloading
 
-   ```
-   APP_ENV=development
-   PORT=8080
-   LOG_LEVEL=debug
-   DATABASE_URL=your_turso_url
-   DATABASE_AUTH_TOKEN=your_turso_token
-   SENTRY_DSN=your_sentry_dsn
-   ```
+```bash
+air
+```
 
-4. Install Air for live reload:
-   ```bash
-   go install github.com/air-verse/air@latest
-   export PATH=$PATH:$(go env GOPATH)/bin
-   ```
+### Start Without Hot Reloading
 
-## Development Workflow
-
-1. Run with live reload:
-
-   ```bash
-   air
-   ```
-
-2. Run tests:
-
-   ```bash
-   go test ./... -v
-   ```
-
-3. Local endpoints:
-   - Health check: `http://localhost:8080/health`
-   - Test crawl: `http://localhost:8080/test-crawl?url=https://example.com`
-   - Recent crawls: `http://localhost:8080/recent-crawls`
-
-## Development Mode Features
-
-- Verbose logging
-- Additional debugging endpoints
-- Database reset capability
-- Detailed error messages
-
-## Security Best Practices
-
-1. Environment Variables
-
-   - Never commit `.env` files
-   - Use test credentials for development
-   - Rotate tokens regularly
-
-2. Code Security
-
-   - Keep dependencies updated
-   - Follow Go security best practices
-   - Use prepared statements for DB queries
-
-3. Testing
-   - Write security-focused tests
-   - Test error conditions
-   - Validate input handling
+```bash
+go run src/main.go
+```
 
 ## Testing
 
-- Unit tests: Located alongside source files
-- Integration tests: Require database connection
-- Run specific tests: `go test ./src/crawler -v`
+### Run All Tests
+
+```bash
+go test ./... -v
+```
+
+### Run Integration Tests
+
+```bash
+RUN_INTEGRATION_TESTS=true go test ./... -v
+```
+
+### Test Coverage
+
+```bash
+go test ./... -cover
+```
+
+## Docker Development
+
+### Build Container
+
+```bash
+docker build -t blue-banded-bee .
+```
+
+### Run Container
+
+```bash
+docker run -p 8080:8080 --env-file .env blue-banded-bee
+```
+
+## Debugging
+
+### Local Debug Configuration
+
+1. Set in `.env`:
+
+```env
+DEBUG=true
+LOG_LEVEL=debug
+```
+
+2. Watch logs:
+
+```bash
+air # Logs will show in console
+```
+
+### API Testing
+
+The service will be available at:
+
+- Local: http://localhost:8080
+- Health check: http://localhost:8080/health
+
+## Worker Pool Development
+
+### Configuration
+
+The worker pool uses these defaults:
+
+- 5 concurrent workers
+- 1-minute recovery interval
+- 5 requests/second rate limit
+
+### Testing Worker Pool
+
+1. Start the service
+2. Create a test job via API
+3. Monitor logs for worker activity
+4. Check job status via API
+
+## Database
+
+### Local Database
+
+The service uses Turso as the database. Make sure your `.env` contains:
+
+```env
+DATABASE_URL=libsql://your-db-name.turso.io
+DATABASE_AUTH_TOKEN=your_auth_token
+```
+
+## Common Issues
+
+### Windows Users
+
+Use the Windows-specific build commands in `.air.toml`:
+
+```toml
+cmd = "go build -o ./tmp/main.exe ./src"
+bin = "tmp/main.exe"
+```
+
+### Mac/Linux Users
+
+Use the Unix-specific build commands in `.air.toml`:
+
+```toml
+cmd = "go build -o ./tmp/main ./src"
+bin = "tmp/main"
+```
+
+## Contributing
+
+Please see [CONTRIBUTING.md](../CONTRIBUTING.md) for detailed contribution guidelines.
+
+1. Fork the repository
+2. Create your feature branch
+3. Add/update tests
+4. Update documentation
+5. Submit pull request

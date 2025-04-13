@@ -89,6 +89,10 @@ func (wp *WorkerPool) RemoveJob(jobID string) {
 func (wp *WorkerPool) worker(ctx context.Context, id int) {
 	defer wp.wg.Done()
 
+	// Add periodic status logging
+	statusTicker := time.NewTicker(30 * time.Second)
+	defer statusTicker.Stop()
+
 	log.Info().Int("worker_id", id).Msg("Worker started")
 
 	// Add at the start of the loop
@@ -100,6 +104,15 @@ func (wp *WorkerPool) worker(ctx context.Context, id int) {
 		case <-wp.stopCh:
 			log.Info().Int("worker_id", id).Msg("Worker stopping")
 			return
+		case <-statusTicker.C:
+			// Log worker status periodically
+			wp.jobsMutex.RLock()
+			activeJobs := len(wp.jobs)
+			wp.jobsMutex.RUnlock()
+			log.Info().
+				Int("worker_id", id).
+				Int("active_jobs", activeJobs).
+				Msg("Worker status")
 		case <-time.After(100 * time.Millisecond): // Poll interval
 			// Process available tasks
 			if err := wp.processNextTask(ctx, id); err != nil {
@@ -125,9 +138,56 @@ func (wp *WorkerPool) processNextTask(ctx context.Context, workerID int) error {
 
 	// Try to get a task from each active job
 	for _, jobID := range activeJobs {
-		// Use ExecuteInQueue to perform both operations in a single transaction
+		// Lock before checking job status and tasks
+		wp.jobsMutex.Lock()
+
+		// Check if job is still in the pool (might have been removed by another worker)
+		if _, exists := wp.jobs[jobID]; !exists {
+			wp.jobsMutex.Unlock()
+			continue
+		}
+
+		// Check pending tasks within the lock
+		var pendingCount int
+		err := wp.db.QueryRowContext(ctx, `
+			SELECT COUNT(*) FROM tasks 
+			WHERE job_id = ? AND status = ?
+		`, jobID, TaskStatusPending).Scan(&pendingCount)
+
+		if err != nil {
+			log.Error().Err(err).Str("job_id", jobID).Msg("Failed to check pending tasks")
+			wp.jobsMutex.Unlock()
+			continue
+		}
+
+		// If no pending tasks, remove job and update status
+		if pendingCount == 0 {
+			delete(wp.jobs, jobID)
+			wp.jobsMutex.Unlock()
+
+			log.Info().Str("job_id", jobID).Msg("Removing job from worker pool - no pending tasks")
+
+			// Update job status if needed (outside the lock)
+			_, err = wp.db.ExecContext(ctx, `
+				UPDATE jobs 
+				SET status = CASE 
+					WHEN status = ? THEN ?
+					ELSE status 
+				END
+				WHERE id = ?
+			`, JobStatusRunning, JobStatusCompleted, jobID)
+
+			if err != nil {
+				log.Error().Err(err).Str("job_id", jobID).Msg("Failed to update job status")
+			}
+			continue
+		}
+
+		wp.jobsMutex.Unlock()
+
+		// Rest of the existing task processing code...
 		var task *Task
-		err := ExecuteInQueue(ctx, func(tx *sql.Tx) error {
+		err = ExecuteInQueue(ctx, func(tx *sql.Tx) error {
 			// Check job status within transaction
 			row := tx.QueryRowContext(ctx, `
 				SELECT status FROM jobs WHERE id = ?
@@ -144,13 +204,11 @@ func (wp *WorkerPool) processNextTask(ctx context.Context, workerID int) error {
 			}
 
 			// If job is active, get task within same transaction
-			var err error
 			task, err = GetNextPendingTaskTx(ctx, tx, jobID)
 			return err
 		})
 
 		if err == sql.ErrNoRows {
-			// Job is not active
 			wp.RemoveJob(jobID)
 			continue
 		} else if err != nil {
@@ -159,14 +217,12 @@ func (wp *WorkerPool) processNextTask(ctx context.Context, workerID int) error {
 		}
 
 		if task == nil {
-			continue // No pending tasks
+			continue
 		}
 
 		// Process the task
 		if err := wp.processTask(ctx, task, workerID); err != nil {
 			log.Error().Err(err).Str("task_id", task.ID).Msg("Failed to process task")
-
-			// Update task as failed
 			task.Status = TaskStatusFailed
 			task.Error = err.Error()
 			if err := UpdateTaskStatus(ctx, wp.db, task); err != nil {
@@ -199,13 +255,27 @@ func (wp *WorkerPool) processTask(ctx context.Context, task *Task, workerID int)
 	// Crawl the URL (no DB operation)
 	result, err := wp.crawler.WarmURL(ctx, task.URL)
 	if err != nil {
-		// Only create span on error
-		span = sentry.StartSpan(ctx, "worker.process_task.error")
-		span.SetTag("worker_id", fmt.Sprintf("%d", workerID))
-		span.SetTag("task_id", task.ID)
-		span.SetTag("url", task.URL)
-		span.SetTag("error", "true")
-		span.SetData("error.message", err.Error())
+		// Check if error is retryable (timeout)
+		isTimeout := strings.Contains(err.Error(), "context deadline exceeded") ||
+			strings.Contains(err.Error(), "Client.Timeout exceeded")
+
+		if isTimeout && task.RetryCount < MaxTaskRetries {
+			// Increment retry count and set back to pending
+			task.RetryCount++
+			task.Status = TaskStatusPending
+			task.Error = err.Error()
+			if err := UpdateTaskStatus(ctx, wp.db, task); err != nil {
+				log.Error().Err(err).Str("task_id", task.ID).Msg("Failed to update task for retry")
+			}
+			return nil // Return nil to allow retry
+		}
+
+		// If not retryable or max retries exceeded, mark as failed
+		task.Status = TaskStatusFailed
+		task.Error = err.Error()
+		if err := UpdateTaskStatus(ctx, wp.db, task); err != nil {
+			log.Error().Err(err).Str("task_id", task.ID).Msg("Failed to update task status")
+		}
 		return err
 	}
 
@@ -542,4 +612,13 @@ func (wp *WorkerPool) processJob(job *Job) {
 	defer wp.activeJobs.Done()
 
 	// ... rest of your existing job processing logic ...
+}
+
+func (wp *WorkerPool) updateFailedTaskCount(ctx context.Context, jobID string) error {
+	_, err := wp.db.ExecContext(ctx, `
+		UPDATE jobs 
+		SET failed_tasks = failed_tasks + 1
+		WHERE id = ?
+	`, jobID)
+	return err
 }
