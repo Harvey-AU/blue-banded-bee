@@ -66,8 +66,8 @@ func New(config *Config) (*DB, error) {
 	}
 
 	// Optimized connection pool settings
-	client.SetMaxOpenConns(10) // More concurrent connections
-	client.SetMaxIdleConns(5)  // Keep more idle connections
+	client.SetMaxOpenConns(5)
+	client.SetMaxIdleConns(3)
 	client.SetConnMaxLifetime(5 * time.Minute)
 	client.SetConnMaxIdleTime(2 * time.Minute)
 
