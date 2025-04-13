@@ -118,6 +118,10 @@
 - [x] Add performance monitoring
 - [ ] Implement batch assignment & completion of tasks to workers
 - [ ] Plan postgres and/or sqlite setup
+- [ ] Fix Turso connection issues:
+  - [ ] Add connection health checks
+  - [ ] Implement automatic reconnection
+  - [ ] Add better stream error handling
 - [ ] Implement database maintenance routines:
   - [ ] Data archiving for older records
   - [ ] Database index optimization
