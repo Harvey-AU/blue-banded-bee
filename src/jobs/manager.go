@@ -43,7 +43,7 @@ func (jm *JobManager) CreateJob(ctx context.Context, options *JobOptions) (*Job,
 		return nil, fmt.Errorf("failed to create job: %w", err)
 	}
 
-	log.Info().
+	log.Debug().
 		Str("job_id", job.ID).
 		Str("domain", job.Domain).
 		Bool("use_sitemap", options.UseSitemap).
@@ -133,7 +133,7 @@ func (jm *JobManager) StartJob(ctx context.Context, jobID string) error {
 	// Add job to worker pool for processing
 	jm.workerPool.AddJob(job.ID, nil)
 
-	log.Info().
+	log.Debug().
 		Str("job_id", job.ID).
 		Str("domain", job.Domain).
 		Msg("Started job")
@@ -193,7 +193,7 @@ func (jm *JobManager) CancelJob(ctx context.Context, jobID string) error {
 		log.Error().Err(err).Str("job_id", job.ID).Msg("Failed to cancel pending tasks")
 	}
 
-	log.Info().
+	log.Debug().
 		Str("job_id", job.ID).
 		Str("domain", job.Domain).
 		Msg("Cancelled job")
@@ -227,7 +227,7 @@ func (jm *JobManager) processSitemap(ctx context.Context, jobID, domain string, 
 	span.SetTag("job_id", jobID)
 	span.SetTag("domain", domain)
 
-	log.Info().
+	log.Debug().
 		Str("job_id", jobID).
 		Str("domain", domain).
 		Msg("Starting sitemap processing")
@@ -277,7 +277,7 @@ func (jm *JobManager) processSitemap(ctx context.Context, jobID, domain string, 
 			return
 		}
 
-		log.Info().
+		log.Debug().
 			Str("job_id", jobID).
 			Str("domain", domain).
 			Int("url_count", len(urls)).
