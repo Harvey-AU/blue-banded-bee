@@ -90,10 +90,10 @@ func (wp *WorkerPool) Start(ctx context.Context) {
 // Stop stops the worker pool
 func (wp *WorkerPool) Stop() {
 	wp.stopping.Store(true)
-	log.Info().Msg("Stopping worker pool")
+	log.Debug().Msg("Stopping worker pool")
 	close(wp.stopCh)
 	wp.wg.Wait()
-	log.Info().Msg("Worker pool stopped")
+	log.Debug().Msg("Worker pool stopped")
 }
 
 // WaitForJobs waits for all active jobs to complete
@@ -127,7 +127,7 @@ func (wp *WorkerPool) AddJob(jobID string, options *JobOptions) {
 		wp.scaleWorkers(context.Background(), maxRequired)
 	}
 
-	log.Info().
+	log.Debug().
 		Str("job_id", jobID).
 		Int("required_workers", requiredWorkers).
 		Msg("Added job to worker pool")
@@ -156,7 +156,7 @@ func (wp *WorkerPool) RemoveJob(jobID string) {
 			wp.workersMutex.Lock()
 			defer wp.workersMutex.Unlock()
 
-			log.Info().
+			log.Debug().
 				Int("current_workers", wp.currentWorkers).
 				Int("target_workers", maxRequired).
 				Msg("Scaling down worker pool")
@@ -166,7 +166,7 @@ func (wp *WorkerPool) RemoveJob(jobID string) {
 		}()
 	}
 
-	log.Info().
+	log.Debug().
 		Str("job_id", jobID).
 		Msg("Removed job from worker pool")
 }
@@ -194,7 +194,7 @@ func (wp *WorkerPool) worker(ctx context.Context, workerID int) {
 			wp.workersMutex.RUnlock()
 
 			if shouldExit {
-				log.Info().
+				log.Debug().
 					Int("worker_id", workerID).
 					Msg("Worker exiting due to scale down")
 				return
@@ -253,7 +253,7 @@ func (wp *WorkerPool) processNextTask(ctx context.Context, workerID int, workerC
 			delete(wp.jobs, jobID)
 			wp.jobsMutex.Unlock()
 
-			log.Info().Str("job_id", jobID).Msg("Removing job from worker pool - no pending tasks")
+			log.Debug().Str("job_id", jobID).Msg("Removing job from worker pool - no pending tasks")
 
 			// Update job status if needed (outside the lock)
 			_, err = wp.db.ExecContext(ctx, `
@@ -330,7 +330,7 @@ func (wp *WorkerPool) processTask(ctx context.Context, task *Task, workerID int,
 	taskStart := time.Now()
 	taskID := task.ID
 
-	log.Info().
+	log.Debug().
 		Int("worker_id", workerID).
 		Str("task_id", taskID).
 		Str("url", task.URL).
@@ -350,7 +350,7 @@ func (wp *WorkerPool) processTask(ctx context.Context, task *Task, workerID int,
 	result, err := workerCrawler.WarmURL(ctx, task.URL)
 	crawlDuration := time.Since(crawlStart)
 
-	log.Info().
+	log.Debug().
 		Int("worker_id", workerID).
 		Str("task_id", taskID).
 		Str("url", task.URL).
@@ -374,7 +374,7 @@ func (wp *WorkerPool) processTask(ctx context.Context, task *Task, workerID int,
 
 			// Add timing log for DB update start
 			dbUpdateStart := time.Now()
-			log.Info().
+			log.Debug().
 				Int("worker_id", workerID).
 				Str("task_id", taskID).
 				Time("db_update_start", dbUpdateStart).
@@ -384,7 +384,7 @@ func (wp *WorkerPool) processTask(ctx context.Context, task *Task, workerID int,
 				log.Error().Err(err).Str("task_id", task.ID).Msg("Failed to update task status")
 			}
 
-			log.Info().
+			log.Debug().
 				Int("worker_id", workerID).
 				Str("task_id", taskID).
 				Dur("db_update_duration_ms", time.Since(dbUpdateStart)).
@@ -415,7 +415,7 @@ func (wp *WorkerPool) processTask(ctx context.Context, task *Task, workerID int,
 
 	// Record start time for batch logging
 	dbUpdateStart := time.Now()
-	log.Info().
+	log.Debug().
 		Int("worker_id", workerID).
 		Str("task_id", taskID).
 		Time("db_batch_queued", dbUpdateStart).
@@ -444,7 +444,7 @@ func (wp *WorkerPool) processTask(ctx context.Context, task *Task, workerID int,
 	wp.taskBatch.mu.Unlock()
 
 	// Log batch queuing information
-	log.Info().
+	log.Debug().
 		Int("worker_id", workerID).
 		Str("task_id", taskID).
 		Int("current_batch_size", batchSize).
@@ -747,7 +747,7 @@ func (wp *WorkerPool) scaleWorkers(ctx context.Context, targetWorkers int) {
 
 	workersToAdd := targetWorkers - wp.currentWorkers
 
-	log.Info().
+	log.Debug().
 		Int("current_workers", wp.currentWorkers).
 		Int("adding_workers", workersToAdd).
 		Int("target_workers", targetWorkers).
@@ -769,7 +769,7 @@ func (wp *WorkerPool) terminateExcessWorkers() {
 	defer wp.workersMutex.Unlock()
 
 	// Note: The check for shouldExit in the worker method will handle this
-	log.Info().
+	log.Debug().
 		Int("current_workers", wp.currentWorkers).
 		Msg("Worker count adjusted, excess workers will exit on next task attempt")
 }
@@ -808,7 +808,7 @@ func (wp *WorkerPool) flushBatches(ctx context.Context) {
 
 	// Process the batch in a single transaction
 	batchStart := time.Now()
-	log.Info().
+	log.Debug().
 		Int("batch_size", len(tasks)).
 		Int("job_count", len(jobCounts)).
 		Time("batch_update_start", batchStart).
@@ -849,7 +849,7 @@ func (wp *WorkerPool) flushBatches(ctx context.Context) {
 					}
 				}
 			}
-			log.Info().
+			log.Debug().
 				Dur("task_update_duration_ms", time.Since(taskUpdateStart)).
 				Int("task_count", len(tasks)).
 				Msg("⏱️ TIMING: Completed batch task updates")
@@ -882,7 +882,7 @@ func (wp *WorkerPool) flushBatches(ctx context.Context) {
 					return err
 				}
 			}
-			log.Info().
+			log.Debug().
 				Dur("result_insert_duration_ms", time.Since(resultInsertStart)).
 				Int("completed_task_count", len(completedTasks)).
 				Msg("⏱️ TIMING: Completed batch result inserts")
@@ -935,7 +935,7 @@ func (wp *WorkerPool) flushBatches(ctx context.Context) {
 						return err
 					}
 
-					log.Info().
+					log.Debug().
 						Str("job_id", jobID).
 						Int("total_tasks", total).
 						Int("completed", completed).
@@ -944,7 +944,7 @@ func (wp *WorkerPool) flushBatches(ctx context.Context) {
 				}
 			}
 
-			log.Info().
+			log.Debug().
 				Dur("job_update_duration_ms", time.Since(jobUpdateStart)).
 				Int("job_count", len(jobCounts)).
 				Msg("⏱️ TIMING: Completed batch job updates")
@@ -954,7 +954,7 @@ func (wp *WorkerPool) flushBatches(ctx context.Context) {
 	})
 
 	batchDuration := time.Since(batchStart)
-	log.Info().
+	log.Debug().
 		Int("task_count", len(tasks)).
 		Int("job_count", len(jobCounts)).
 		Dur("batch_duration_ms", batchDuration).
