@@ -334,11 +334,6 @@ func main() {
 	// Set the DB instance for queue operations
 	jobs.SetDBInstance(dbSetup)
 
-	// Initialize jobs schema once at startup
-	if err := jobs.InitSchema(dbSetup.GetDB()); err != nil {
-		log.Fatal().Err(err).Msg("Failed to initialize jobs schema")
-	}
-
 	// Replace the existing job monitoring code with this:
 	go func() {
 		log.Info().Msg("Starting job monitor")

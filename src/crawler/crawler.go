@@ -2,7 +2,6 @@ package crawler
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -298,21 +297,6 @@ func (c *Crawler) CheckCacheStatus(ctx context.Context, targetURL string) (strin
 	defer resp.Body.Close()
 
 	return resp.Header.Get("CF-Cache-Status"), nil
-}
-
-func setupSchema(db *sql.DB) error {
-	_, err := db.Exec(`
-		CREATE TABLE IF NOT EXISTS crawl_results (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
-			url TEXT NOT NULL,
-			response_time INTEGER NOT NULL,
-			status_code INTEGER NOT NULL,
-			error TEXT NULL,           -- Changed to allow NULL
-			cache_status TEXT NULL,    -- Changed to allow NULL
-			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-		)
-	`)
-	return err
 }
 
 // CreateHTTPClient returns a configured HTTP client
