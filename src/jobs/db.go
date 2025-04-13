@@ -443,10 +443,9 @@ func updateJobProgress(ctx context.Context, db *sql.DB, jobID string) error {
 				progress = ?,
 				total_tasks = ?,
 				completed_tasks = ?,
-				failed_tasks = ?,
-				recent_urls = ?
+				failed_tasks = ?
 			WHERE id = ?
-		`, progress, total, completed, failed, serialize(recentURLs), jobID)
+		`, progress, total, completed, failed, jobID)
 		if err != nil {
 			return err
 		}
