@@ -212,7 +212,7 @@ func (rl *rateLimiter) middleware(next http.HandlerFunc) http.HandlerFunc {
 
 		// Check if the request exceeds the rate limit
 		if !limiter.Allow() {
-			log.Info().
+			log.Debug().
 				Str("ip", ip).
 				Str("endpoint", r.URL.Path).
 				Msg("Rate limit exceeded")
@@ -336,7 +336,7 @@ func main() {
 
 	// Replace the existing job monitoring code with this:
 	go func() {
-		log.Info().Msg("Starting job monitor")
+		log.Debug().Msg("Starting job monitor")
 
 		// Create a global worker pool that persists for the life of the server
 		c := crawler.New(crawler.DefaultConfig())
@@ -365,7 +365,7 @@ func main() {
 			if err := m.StartJob(context.Background(), jobID); err != nil {
 				log.Error().Err(err).Str("job_id", jobID).Msg("Failed")
 			} else {
-				log.Info().Str("job_id", jobID).Msg("Started")
+				log.Debug().Str("job_id", jobID).Msg("Started")
 			}
 		}
 		rows.Close()
@@ -655,7 +655,7 @@ func main() {
 				return
 			}
 
-			log.Info().
+			log.Debug().
 				Str("job_id", job.ID).
 				Str("domain", domain).
 				Int("url_count", len(filteredURLs)).
@@ -758,7 +758,7 @@ func main() {
 
 	go func() {
 		<-stop
-		log.Info().Msg("Shutting down server...")
+		log.Debug().Msg("Shutting down server...")
 
 		// Create shutdown context with timeout
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -784,13 +784,13 @@ func main() {
 	}()
 
 	// Start the server
-	log.Info().Msgf("Starting server on port %s", config.Port)
+	log.Debug().Msgf("Starting server on port %s", config.Port)
 	if err := server.ListenAndServe(); err != http.ErrServerClosed {
 		log.Fatal().Err(err).Msg("Server error")
 	}
 
 	<-done // Wait for the shutdown process to complete
-	log.Info().Msg("Server stopped")
+	log.Debug().Msg("Server stopped")
 }
 
 // Add this function to validate configuration

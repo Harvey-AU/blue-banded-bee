@@ -253,7 +253,7 @@ func (db *DB) TestConnection() error {
 }
 
 func (db *DB) ResetSchema() error {
-	log.Info().Msg("Dropping all database tables")
+	log.Debug().Msg("Dropping all database tables")
 
 	// Drop tables in correct order (respecting foreign key constraints)
 	_, err := db.client.Exec(`DROP TABLE IF EXISTS crawl_results`)
@@ -274,14 +274,14 @@ func (db *DB) ResetSchema() error {
 		return err
 	}
 
-	log.Info().Msg("Recreating database tables")
+	log.Debug().Msg("Recreating database tables")
 
 	// Use the single setupSchema function to recreate all tables
 	if err := setupSchema(db.client); err != nil {
 		return err
 	}
 
-	log.Info().Msg("Database schema reset successfully")
+	log.Debug().Msg("Database schema reset successfully")
 	return nil
 }
 
@@ -292,7 +292,7 @@ func (db *DB) ExecuteWithRetry(ctx context.Context, operation func(context.Conte
 
 	for attempt := 0; attempt <= retries; attempt++ {
 		if attempt > 0 {
-			log.Info().Int("attempt", attempt).Msg("Retrying database operation")
+			log.Debug().Int("attempt", attempt).Msg("Retrying database operation")
 			time.Sleep(backoff * time.Duration(1<<uint(attempt-1))) // Exponential backoff
 		}
 

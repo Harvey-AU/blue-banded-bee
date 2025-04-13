@@ -59,7 +59,7 @@ func main() {
 	if err := jobs.InitSchema(db); err != nil {
 		log.Fatal().Err(err).Msg("Failed to initialize schema")
 	}
-	log.Info().Msg("Database schema initialized")
+	log.Debug().Msg("Database schema initialized")
 
 	// Create crawler and worker pool
 	crawler := crawler.New(nil)
@@ -122,5 +122,5 @@ func main() {
 	// Let worker pool finish any in-progress tasks
 	time.Sleep(2 * time.Second)
 
-	log.Info().Msg("Test completed")
+	log.Debug().Msg("Test completed")
 }

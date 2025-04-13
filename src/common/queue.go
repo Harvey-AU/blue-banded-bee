@@ -68,7 +68,7 @@ func (q *DbQueue) Stop() {
 
 	select {
 	case <-done:
-		log.Info().Msg("Queue stopped gracefully")
+		log.Debug().Msg("Queue stopped gracefully")
 	case <-time.After(5 * time.Second):
 		log.Warn().Msg("Queue stop timed out")
 	}
@@ -83,7 +83,7 @@ func (q *DbQueue) processOperations(workerID int) {
 		execStart := time.Now()
 
 		// Log when operation starts executing
-		log.Info().
+		log.Debug().
 			Int("worker_id", workerID).
 			Str("operation_id", op.ID).
 			Dur("queue_wait_ms", waitDuration).
@@ -161,7 +161,7 @@ func (q *DbQueue) processOperations(workerID int) {
 			commitDuration := time.Since(commitStart)
 			totalDuration := time.Since(op.StartTime)
 
-			log.Info().
+			log.Debug().
 				Int("worker_id", workerID).
 				Str("operation_id", op.ID).
 				Dur("execution_ms", execDuration).
@@ -199,7 +199,7 @@ func (q *DbQueue) Execute(ctx context.Context, fn func(*sql.Tx) error) error {
 	queueStart := time.Now()
 	operationID := uuid.New().String()[:8] // Generate short unique ID
 
-	log.Info().
+	log.Debug().
 		Str("operation_id", operationID).
 		Time("queue_submit", queueStart).
 		Int("queue_size", len(q.operations)).
@@ -217,7 +217,7 @@ func (q *DbQueue) Execute(ctx context.Context, fn func(*sql.Tx) error) error {
 		err := <-done
 		queueDuration := time.Since(queueStart)
 
-		log.Info().
+		log.Debug().
 			Str("operation_id", operationID).
 			Dur("queue_wait_ms", queueDuration).
 			Bool("succeeded", err == nil).
@@ -225,7 +225,7 @@ func (q *DbQueue) Execute(ctx context.Context, fn func(*sql.Tx) error) error {
 
 		return err
 	case <-ctx.Done():
-		log.Info().
+		log.Debug().
 			Str("operation_id", operationID).
 			Msg("⏱️ TIMING: DB operation cancelled before execution")
 		return ctx.Err()

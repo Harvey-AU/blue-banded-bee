@@ -79,7 +79,7 @@ func (c *Crawler) WarmURL(ctx context.Context, targetURL string) (*CrawlResult, 
 	if c.config.SkipCachedURLs {
 		cacheStatus, checkErr := c.CheckCacheStatus(ctx, targetURL)
 		if checkErr == nil && cacheStatus == "HIT" {
-			log.Info().
+			log.Debug().
 				Str("url", targetURL).
 				Msg("URL already cached (HIT), skipping full crawl")
 
