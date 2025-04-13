@@ -112,7 +112,6 @@ func main() {
 			Int("completed", job.CompletedTasks).
 			Int("failed", job.FailedTasks).
 			Int("total", job.TotalTasks).
-			Strs("recent_urls", job.RecentURLs).
 			Msg("Job status")
 
 		if job.Status != jobs.JobStatusRunning {
