@@ -22,18 +22,20 @@ type DbOperation struct {
 
 // DbQueue serializes all database operations through a single goroutine
 type DbQueue struct {
-	operations chan DbOperation
-	db         *sql.DB
-	wg         sync.WaitGroup
-	stopped    bool
-	mu         sync.Mutex
+	operations  chan DbOperation
+	db          *sql.DB
+	wg          sync.WaitGroup
+	stopped     bool
+	mu          sync.Mutex
+	workerCount int // Number of parallel workers
 }
 
 // NewDbQueue creates and starts a new database queue
 func NewDbQueue(db *sql.DB) *DbQueue {
 	queue := &DbQueue{
-		operations: make(chan DbOperation, 200),
-		db:         db,
+		operations:  make(chan DbOperation, 200),
+		db:          db,
+		workerCount: 1, // Back to 1 worker for now
 	}
 	queue.Start()
 	return queue
@@ -41,8 +43,10 @@ func NewDbQueue(db *sql.DB) *DbQueue {
 
 // Start begins processing operations
 func (q *DbQueue) Start() {
-	q.wg.Add(1)
-	go q.processOperations()
+	for i := 0; i < q.workerCount; i++ {
+		q.wg.Add(1)
+		go q.processOperations(i) // Pass worker ID
+	}
 }
 
 // Stop gracefully stops the queue
@@ -70,7 +74,7 @@ func (q *DbQueue) Stop() {
 }
 
 // processOperations handles database operations sequentially
-func (q *DbQueue) processOperations() {
+func (q *DbQueue) processOperations(workerID int) {
 	defer q.wg.Done()
 
 	for op := range q.operations {
@@ -79,6 +83,7 @@ func (q *DbQueue) processOperations() {
 
 		// Log when operation starts executing
 		log.Info().
+			Int("worker_id", workerID).
 			Str("operation_id", op.ID).
 			Dur("queue_wait_ms", waitDuration).
 			Time("execution_start", execStart).
@@ -115,6 +120,7 @@ func (q *DbQueue) processOperations() {
 		totalDuration := time.Since(op.StartTime)
 
 		log.Info().
+			Int("worker_id", workerID).
 			Str("operation_id", op.ID).
 			Dur("execution_ms", execDuration).
 			Dur("commit_ms", commitDuration).
