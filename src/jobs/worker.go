@@ -31,14 +31,16 @@ type WorkerPool struct {
 
 // NewWorkerPool creates a new worker pool
 func NewWorkerPool(db *sql.DB, crawler *crawler.Crawler, numWorkers int) *WorkerPool {
-	return &WorkerPool{
+	wp := &WorkerPool{
 		db:               db,
 		crawler:          crawler,
 		numWorkers:       numWorkers,
 		jobs:             make(map[string]bool),
 		stopCh:           make(chan struct{}),
-		recoveryInterval: 1 * time.Minute, // Check every minute
+		recoveryInterval: 1 * time.Minute,
 	}
+
+	return wp
 }
 
 // Start starts the worker pool
@@ -86,44 +88,34 @@ func (wp *WorkerPool) RemoveJob(jobID string) {
 }
 
 // worker processes tasks from the database
-func (wp *WorkerPool) worker(ctx context.Context, id int) {
+func (wp *WorkerPool) worker(ctx context.Context, workerID int) {
 	defer wp.wg.Done()
 
-	// Add periodic status logging
-	statusTicker := time.NewTicker(30 * time.Second)
-	defer statusTicker.Stop()
+	// Create a dedicated crawler for this worker
+	workerConfig := crawler.DefaultConfig()
+	workerConfig.MaxConcurrency = 1 // Each worker handles one request at a time
+	workerConfig.RateLimit = 5      // Rate limit per worker
+	workerCrawler := crawler.New(workerConfig, fmt.Sprintf("%d", workerID))
 
-	log.Info().Int("worker_id", id).Msg("Worker started")
-
-	// Add at the start of the loop
-	log.Info().Int("worker_id", id).Msg("Worker checking for tasks...")
-
-	// Worker loop
 	for {
 		select {
 		case <-wp.stopCh:
-			log.Info().Int("worker_id", id).Msg("Worker stopping")
 			return
-		case <-statusTicker.C:
-			// Log worker status periodically
-			wp.jobsMutex.RLock()
-			activeJobs := len(wp.jobs)
-			wp.jobsMutex.RUnlock()
-			log.Info().
-				Int("worker_id", id).
-				Int("active_jobs", activeJobs).
-				Msg("Worker status")
-		case <-time.After(100 * time.Millisecond): // Poll interval
-			// Process available tasks
-			if err := wp.processNextTask(ctx, id); err != nil {
-				log.Error().Err(err).Int("worker_id", id).Msg("Error processing task")
+		case <-ctx.Done():
+			return
+		default:
+			if err := wp.processNextTask(ctx, workerID, workerCrawler); err != nil {
+				if err != sql.ErrNoRows {
+					log.Error().Err(err).Int("worker_id", workerID).Msg("Failed to process task")
+				}
+				time.Sleep(time.Second)
 			}
 		}
 	}
 }
 
 // processNextTask processes the next available task from any active job
-func (wp *WorkerPool) processNextTask(ctx context.Context, workerID int) error {
+func (wp *WorkerPool) processNextTask(ctx context.Context, workerID int, workerCrawler *crawler.Crawler) error {
 	// Get active jobs
 	wp.jobsMutex.RLock()
 	activeJobs := make([]string, 0, len(wp.jobs))
@@ -221,7 +213,7 @@ func (wp *WorkerPool) processNextTask(ctx context.Context, workerID int) error {
 		}
 
 		// Process the task
-		if err := wp.processTask(ctx, task, workerID); err != nil {
+		if err := wp.processTask(ctx, task, workerID, workerCrawler); err != nil {
 			log.Error().Err(err).Str("task_id", task.ID).Msg("Failed to process task")
 			task.Status = TaskStatusFailed
 			task.Error = err.Error()
@@ -237,7 +229,7 @@ func (wp *WorkerPool) processNextTask(ctx context.Context, workerID int) error {
 }
 
 // processTask processes a single task using the crawler
-func (wp *WorkerPool) processTask(ctx context.Context, task *Task, workerID int) error {
+func (wp *WorkerPool) processTask(ctx context.Context, task *Task, workerID int, workerCrawler *crawler.Crawler) error {
 	// Only create spans for errors, not for every task
 	var span *sentry.Span
 	defer func() {
@@ -252,8 +244,8 @@ func (wp *WorkerPool) processTask(ctx context.Context, task *Task, workerID int)
 		Str("url", task.URL).
 		Msg("Processing task")
 
-	// Crawl the URL (no DB operation)
-	result, err := wp.crawler.WarmURL(ctx, task.URL)
+	// Use the worker's crawler instead of wp.crawler
+	result, err := workerCrawler.WarmURL(ctx, task.URL)
 	if err != nil {
 		// Check if error is retryable (timeout)
 		isTimeout := strings.Contains(err.Error(), "context deadline exceeded") ||
