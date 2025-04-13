@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/Harvey-AU/blue-banded-bee/src/common"
@@ -279,4 +280,139 @@ func GetNextPendingTaskTx(ctx context.Context, tx *sql.Tx, jobID string) (*Task,
 	}
 
 	return task, nil
+}
+
+// batchInsertCrawlResults inserts multiple crawl results in a single transaction
+func batchInsertCrawlResults(ctx context.Context, tx *sql.Tx, tasks []*Task) error {
+	span := sentry.StartSpan(ctx, "jobs.batch_insert_crawl_results")
+	defer span.Finish()
+
+	if len(tasks) == 0 {
+		return nil
+	}
+
+	span.SetData("task_count", len(tasks))
+
+	// SQLite supports multi-row insert with VALUES(...),(...),... syntax
+	valueStrings := make([]string, 0, len(tasks))
+	valueArgs := make([]interface{}, 0, len(tasks)*7)
+
+	for _, task := range tasks {
+		valueStrings = append(valueStrings, "(?, ?, ?, ?, ?, ?, ?)")
+		valueArgs = append(valueArgs,
+			task.JobID, task.ID, task.URL, task.ResponseTime,
+			task.StatusCode, task.Error, task.CacheStatus)
+	}
+
+	query := fmt.Sprintf(`
+		INSERT INTO crawl_results 
+		(job_id, task_id, url, response_time, status_code, error, cache_status)
+		VALUES %s
+	`, strings.Join(valueStrings, ","))
+
+	startTime := time.Now()
+	result, err := tx.ExecContext(ctx, query, valueArgs...)
+	duration := time.Since(startTime)
+
+	log.Debug().
+		Int("count", len(tasks)).
+		Dur("duration_ms", duration).
+		Msg("Batch inserted crawl results")
+
+	if err != nil {
+		span.SetTag("error", "true")
+		span.SetData("error.message", err.Error())
+		log.Error().
+			Err(err).
+			Int("task_count", len(tasks)).
+			Msg("Failed to batch insert crawl results")
+		return fmt.Errorf("failed to batch insert crawl results: %w", err)
+	}
+
+	rowsAffected, _ := result.RowsAffected()
+	span.SetData("rows_affected", rowsAffected)
+
+	return nil
+}
+
+// updateJobCounter updates job counters during batch processing
+func updateJobCounter(ctx context.Context, tx *sql.Tx, jobID string, completedCount, failedCount int) error {
+	span := sentry.StartSpan(ctx, "jobs.update_job_counter")
+	defer span.Finish()
+
+	span.SetTag("job_id", jobID)
+	span.SetData("completed_count", completedCount)
+	span.SetData("failed_count", failedCount)
+
+	if completedCount == 0 && failedCount == 0 {
+		return nil
+	}
+
+	startTime := time.Now()
+
+	// More efficient update query that avoids subqueries
+	result, err := tx.ExecContext(ctx, `
+		UPDATE jobs
+		SET 
+			completed_tasks = completed_tasks + ?,
+			failed_tasks = failed_tasks + ?,
+			progress = CAST(100.0 * (completed_tasks + ? + failed_tasks + ?) / 
+					   CASE WHEN total_tasks = 0 THEN 1 ELSE total_tasks END AS FLOAT),
+			status = CASE 
+				WHEN (completed_tasks + ? + failed_tasks + ?) >= total_tasks AND total_tasks > 0 
+				THEN ? ELSE status END,
+			completed_at = CASE 
+				WHEN (completed_tasks + ? + failed_tasks + ?) >= total_tasks AND total_tasks > 0 
+				THEN ? ELSE completed_at END
+		WHERE id = ?
+	`,
+		completedCount, failedCount,
+		completedCount, failedCount,
+		completedCount, failedCount, string(JobStatusCompleted),
+		completedCount, failedCount, time.Now(),
+		jobID)
+
+	duration := time.Since(startTime)
+
+	if err != nil {
+		span.SetTag("error", "true")
+		span.SetData("error.message", err.Error())
+		log.Error().
+			Err(err).
+			Str("job_id", jobID).
+			Int("completed", completedCount).
+			Int("failed", failedCount).
+			Msg("Failed to update job counters")
+		return fmt.Errorf("failed to update job counters: %w", err)
+	}
+
+	rowsAffected, _ := result.RowsAffected()
+
+	log.Debug().
+		Str("job_id", jobID).
+		Int("completed", completedCount).
+		Int("failed", failedCount).
+		Int64("rows_affected", rowsAffected).
+		Dur("duration_ms", duration).
+		Msg("Updated job counters")
+
+	span.SetData("rows_affected", rowsAffected)
+
+	return nil
+}
+
+// filterTasksByStatus returns tasks with a specific status
+func filterTasksByStatus(tasks []*Task, status TaskStatus) []*Task {
+	if len(tasks) == 0 {
+		return nil
+	}
+
+	result := make([]*Task, 0, len(tasks))
+	for _, task := range tasks {
+		if task.Status == status {
+			result = append(result, task)
+		}
+	}
+
+	return result
 }

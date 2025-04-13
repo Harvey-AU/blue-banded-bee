@@ -32,6 +32,18 @@ type WorkerPool struct {
 	currentWorkers   int
 	jobRequirements  map[string]int // Track worker requirements per job
 	workersMutex     sync.RWMutex   // Protect scaling operations
+	taskBatch        *TaskBatch
+	batchTimer       *time.Ticker
+}
+
+// TaskBatch holds groups of tasks for batch processing
+type TaskBatch struct {
+	tasks     []*Task
+	jobCounts map[string]struct {
+		completed int
+		failed    int
+	}
+	mu sync.Mutex
 }
 
 // NewWorkerPool creates a new worker pool
@@ -47,7 +59,16 @@ func NewWorkerPool(db *sql.DB, crawler *crawler.Crawler, numWorkers int) *Worker
 
 		stopCh:           make(chan struct{}),
 		recoveryInterval: 1 * time.Minute,
+		taskBatch: &TaskBatch{
+			tasks:     make([]*Task, 0, 100),
+			jobCounts: make(map[string]struct{ completed, failed int }),
+		},
+		batchTimer: time.NewTicker(5 * time.Second),
 	}
+
+	// Start the batch processor
+	wp.wg.Add(1)
+	go wp.processBatches(context.Background())
 
 	return wp
 }
@@ -392,97 +413,50 @@ func (wp *WorkerPool) processTask(ctx context.Context, task *Task, workerID int,
 		task.Error = result.Error
 	}
 
-	// Use queue for critical DB operations
-	// Add timing log for DB update start
+	// Record start time for batch logging
 	dbUpdateStart := time.Now()
 	log.Info().
 		Int("worker_id", workerID).
 		Str("task_id", taskID).
-		Time("db_update_start", dbUpdateStart).
-		Msg("⏱️ TIMING: Starting DB update for completed task")
+		Time("db_batch_queued", dbUpdateStart).
+		Msg("⏱️ TIMING: Task queued for batch DB update")
 
-	err = ExecuteInQueue(ctx, func(tx *sql.Tx) error {
-		// Update task status
-		if err := UpdateTaskStatusTx(ctx, tx, task); err != nil {
-			return err
-		}
+	wp.taskBatch.mu.Lock()
+	// Add task to batch
+	wp.taskBatch.tasks = append(wp.taskBatch.tasks, task)
 
-		// Insert into crawl_results if task completed successfully
-		if task.Status == TaskStatusCompleted {
-			_, err := tx.ExecContext(ctx, `
-				INSERT INTO crawl_results (job_id, task_id, url, response_time, status_code, error, cache_status)
-				VALUES (?, ?, ?, ?, ?, ?, ?)
-			`, task.JobID, task.ID, task.URL, task.ResponseTime, task.StatusCode, task.Error, task.CacheStatus)
+	// Update job counters
+	counts, exists := wp.taskBatch.jobCounts[task.JobID]
+	if !exists {
+		counts = struct{ completed, failed int }{0, 0}
+	}
 
-			if err != nil {
-				return err
-			}
+	if task.Status == TaskStatusCompleted {
+		counts.completed++
+	} else if task.Status == TaskStatusFailed {
+		counts.failed++
+	}
+	wp.taskBatch.jobCounts[task.JobID] = counts
 
-			// Single query to update completed count, progress, and potentially mark job as complete
-			_, err = tx.ExecContext(ctx, `
-				UPDATE jobs 
-				SET 
-					completed_tasks = completed_tasks + 1,
-					progress = CAST(100.0 * (
-						(SELECT COUNT(*) FROM tasks WHERE job_id = ? AND status = ?) +
-						(SELECT COUNT(*) FROM tasks WHERE job_id = ? AND status = ?)
-					) AS FLOAT) / total_tasks,
-					status = CASE 
-						WHEN (SELECT COUNT(*) FROM tasks WHERE job_id = ? AND status IN (?,?,?)) >= total_tasks THEN ?
-						ELSE status 
-					END,
-					completed_at = CASE 
-						WHEN (SELECT COUNT(*) FROM tasks WHERE job_id = ? AND status IN (?,?,?)) >= total_tasks THEN ?
-						ELSE completed_at 
-					END
-				WHERE id = ? AND status = ?
-			`, task.JobID, TaskStatusCompleted, task.JobID, TaskStatusFailed,
-				task.JobID, TaskStatusCompleted, TaskStatusFailed, TaskStatusSkipped, JobStatusCompleted,
-				task.JobID, TaskStatusCompleted, TaskStatusFailed, TaskStatusSkipped, time.Now(),
-				task.JobID, JobStatusRunning)
+	// If batch is large enough, trigger immediate flush
+	shouldFlush := len(wp.taskBatch.tasks) >= 50
+	batchSize := len(wp.taskBatch.tasks)
+	wp.taskBatch.mu.Unlock()
 
-			return err
-		} else if task.Status == TaskStatusFailed {
-			// Single query to update failed count, progress, and potentially mark job as complete
-			_, err = tx.ExecContext(ctx, `
-				UPDATE jobs 
-				SET 
-					failed_tasks = failed_tasks + 1,
-					progress = CAST((completed_tasks + failed_tasks + 1) AS FLOAT) / total_tasks * 100,
-					status = CASE 
-						WHEN (completed_tasks + failed_tasks + 1) >= total_tasks THEN ?
-						ELSE status 
-					END,
-					completed_at = CASE 
-						WHEN (completed_tasks + failed_tasks + 1) >= total_tasks THEN ?
-						ELSE completed_at 
-					END
-				WHERE id = ? AND status = ?
-			`, JobStatusCompleted, time.Now(), task.JobID, JobStatusRunning)
-
-			return err
-		}
-
-		return nil
-	})
-
-	dbUpdateDuration := time.Since(dbUpdateStart)
-	totalDuration := time.Since(taskStart)
-
+	// Log batch queuing information
 	log.Info().
 		Int("worker_id", workerID).
 		Str("task_id", taskID).
-		Dur("db_update_duration_ms", dbUpdateDuration).
-		Dur("total_task_duration_ms", totalDuration).
-		Time("db_update_completed", time.Now()).
-		Float64("db_percentage", float64(dbUpdateDuration)/float64(totalDuration)*100).
-		Msg("⏱️ TIMING: DB update completed for task")
+		Int("current_batch_size", batchSize).
+		Bool("triggering_flush", shouldFlush).
+		Dur("task_processing_duration_ms", time.Since(taskStart)).
+		Msg("⏱️ TIMING: Task added to batch queue")
 
-	if err != nil {
-		log.Error().Err(err).Str("task_id", task.ID).Str("job_id", task.JobID).Msg("Failed to update task and job status")
+	if shouldFlush {
+		go wp.flushBatches(ctx)
 	}
 
-	return err
+	return nil
 }
 
 // EnqueueURLs adds multiple URLs as tasks for a job
@@ -798,4 +772,191 @@ func (wp *WorkerPool) terminateExcessWorkers() {
 	log.Info().
 		Int("current_workers", wp.currentWorkers).
 		Msg("Worker count adjusted, excess workers will exit on next task attempt")
+}
+
+// Batch processor goroutine
+func (wp *WorkerPool) processBatches(ctx context.Context) {
+	defer wp.wg.Done()
+
+	for {
+		select {
+		case <-wp.batchTimer.C:
+			wp.flushBatches(ctx)
+		case <-wp.stopCh:
+			wp.flushBatches(ctx) // Final flush before shutdown
+			return
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+// Flush collected tasks in a batch
+func (wp *WorkerPool) flushBatches(ctx context.Context) {
+	wp.taskBatch.mu.Lock()
+	tasks := wp.taskBatch.tasks
+	jobCounts := wp.taskBatch.jobCounts
+
+	// Reset batches
+	wp.taskBatch.tasks = make([]*Task, 0, 50)
+	wp.taskBatch.jobCounts = make(map[string]struct{ completed, failed int })
+	wp.taskBatch.mu.Unlock()
+
+	if len(tasks) == 0 {
+		return // Nothing to flush
+	}
+
+	// Process the batch in a single transaction
+	batchStart := time.Now()
+	log.Info().
+		Int("batch_size", len(tasks)).
+		Int("job_count", len(jobCounts)).
+		Time("batch_update_start", batchStart).
+		Msg("⏱️ TIMING: Starting batch DB update")
+
+	// Execute everything in ONE queue operation instead of separate ones
+	err := ExecuteInQueue(ctx, func(tx *sql.Tx) error {
+		// 1. Update all tasks in a single statement with CASE
+		if len(tasks) > 0 {
+			taskUpdateStart := time.Now()
+			stmt, err := tx.PrepareContext(ctx, `
+				UPDATE tasks
+				SET status = ?, 
+					completed_at = ?,
+					status_code = ?,
+					response_time = ?,
+					cache_status = ?,
+					content_type = ?
+				WHERE id = ?
+			`)
+			if err != nil {
+				return err
+			}
+			defer stmt.Close()
+
+			for _, task := range tasks {
+				if task.Status == TaskStatusCompleted || task.Status == TaskStatusFailed {
+					if task.CompletedAt.IsZero() {
+						task.CompletedAt = time.Now()
+					}
+					_, err := stmt.ExecContext(ctx,
+						task.Status, task.CompletedAt,
+						task.StatusCode, task.ResponseTime,
+						task.CacheStatus, task.ContentType,
+						task.ID)
+					if err != nil {
+						return err
+					}
+				}
+			}
+			log.Info().
+				Dur("task_update_duration_ms", time.Since(taskUpdateStart)).
+				Int("task_count", len(tasks)).
+				Msg("⏱️ TIMING: Completed batch task updates")
+		}
+
+		// 2. Batch insert all crawl results
+		if len(tasks) > 0 {
+			resultInsertStart := time.Now()
+			completedTasks := filterTasksByStatus(tasks, TaskStatusCompleted)
+			if len(completedTasks) > 0 {
+				// Use fewer values in the insert to reduce complexity
+				valueStrings := make([]string, 0, len(completedTasks))
+				valueArgs := make([]interface{}, 0, len(completedTasks)*5)
+
+				for _, task := range completedTasks {
+					valueStrings = append(valueStrings, "(?, ?, ?, ?, ?)")
+					valueArgs = append(valueArgs,
+						task.JobID, task.ID, task.URL,
+						task.ResponseTime, task.StatusCode)
+				}
+
+				query := fmt.Sprintf(`
+					INSERT INTO crawl_results 
+					(job_id, task_id, url, response_time, status_code)
+					VALUES %s
+				`, strings.Join(valueStrings, ","))
+
+				_, err := tx.ExecContext(ctx, query, valueArgs...)
+				if err != nil {
+					return err
+				}
+			}
+			log.Info().
+				Dur("result_insert_duration_ms", time.Since(resultInsertStart)).
+				Int("completed_task_count", len(completedTasks)).
+				Msg("⏱️ TIMING: Completed batch result inserts")
+		}
+
+		// 3. Update job counters once per job
+		if len(jobCounts) > 0 {
+			jobUpdateStart := time.Now()
+			for jobID, counts := range jobCounts {
+				// Use a simpler update without the complex CASE expressions
+				_, err := tx.ExecContext(ctx, `
+					UPDATE jobs
+					SET 
+						completed_tasks = completed_tasks + ?,
+						failed_tasks = failed_tasks + ?,
+						progress = CAST(100.0 * (completed_tasks + failed_tasks) / 
+								  CASE WHEN total_tasks = 0 THEN 1 ELSE total_tasks END AS FLOAT)
+					WHERE id = ?
+				`,
+					counts.completed, counts.failed, jobID)
+
+				if err != nil {
+					return err
+				}
+			}
+			log.Info().
+				Dur("job_update_duration_ms", time.Since(jobUpdateStart)).
+				Int("job_count", len(jobCounts)).
+				Msg("⏱️ TIMING: Completed batch job updates")
+		}
+
+		return nil
+	})
+
+	batchDuration := time.Since(batchStart)
+	log.Info().
+		Int("task_count", len(tasks)).
+		Int("job_count", len(jobCounts)).
+		Dur("batch_duration_ms", batchDuration).
+		Time("batch_completed", time.Now()).
+		Bool("success", err == nil).
+		Msg("⏱️ TIMING: Batch DB update completed")
+
+	if err != nil {
+		log.Error().Err(err).Int("task_count", len(tasks)).Msg("Failed to process task batch")
+	}
+}
+
+// Helper functions for batch operations
+func batchUpdateTasks(ctx context.Context, tx *sql.Tx, tasks []*Task) error {
+	// Implementation using prepared statements and multiple executions
+	// or a bulk update statement depending on SQLite capabilities
+	stmt, err := tx.PrepareContext(ctx, `
+		UPDATE tasks
+		SET status = ?, started_at = ?, completed_at = ?,
+			status_code = ?, response_time = ?, cache_status = ?,
+			content_type = ?, error = ?, retry_count = ?
+		WHERE id = ?
+	`)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	for _, task := range tasks {
+		_, err := stmt.ExecContext(ctx,
+			task.Status, task.StartedAt, task.CompletedAt,
+			task.StatusCode, task.ResponseTime, task.CacheStatus,
+			task.ContentType, task.Error, task.RetryCount,
+			task.ID)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
