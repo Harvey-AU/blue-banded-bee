@@ -63,7 +63,7 @@ func main() {
 
 	// Create crawler and worker pool
 	crawler := crawler.New(nil)
-	workerPool := jobs.NewWorkerPool(db, crawler, 20)
+	workerPool := jobs.NewWorkerPool(db, crawler, 5)
 	jobManager := jobs.NewJobManager(db, crawler, workerPool)
 
 	// Start the worker pool
