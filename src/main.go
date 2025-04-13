@@ -288,6 +288,9 @@ func (m *Metrics) recordMetrics(duration time.Duration, cacheStatus string, hasE
 
 var metrics = &Metrics{}
 
+// In main.go, define a single global worker pool
+var globalWorkerPool *jobs.WorkerPool
+
 func main() {
 	// Load configuration
 	config, err := loadConfig()
@@ -342,13 +345,13 @@ func main() {
 
 		// Create a global worker pool that persists for the life of the server
 		c := crawler.New(crawler.DefaultConfig())
-		workerPool := jobs.NewWorkerPool(dbSetup.GetDB(), c, 20)
-		workerPool.Start(context.Background())
+		globalWorkerPool = jobs.NewWorkerPool(dbSetup.GetDB(), c, 20)
+		globalWorkerPool.Start(context.Background())
 
 		// Start the task monitor
-		workerPool.StartTaskMonitor(context.Background())
+		globalWorkerPool.StartTaskMonitor(context.Background())
 
-		m := jobs.NewJobManager(dbSetup.GetDB(), c, workerPool)
+		m := jobs.NewJobManager(dbSetup.GetDB(), c, globalWorkerPool)
 
 		// Get both pending AND running jobs
 		rows, err := dbSetup.GetDB().Query("SELECT id FROM jobs WHERE status IN ('pending', 'running')")
@@ -554,6 +557,18 @@ func main() {
 			urlLimit = parsed
 		}
 
+		// Validate worker count parameter if present
+		workerCountStr := r.URL.Query().Get("workers")
+		workerCount := 20 // Default worker count
+		if workerCountStr != "" {
+			parsed, err := strconv.Atoi(workerCountStr)
+			if err != nil || parsed < 0 {
+				http.Error(w, "Worker count must be a positive number", http.StatusBadRequest)
+				return
+			}
+			workerCount = parsed
+		}
+
 		// Initialize crawler
 		crawlerConfig := crawler.DefaultConfig()
 		crawlerConfig.SkipCachedURLs = false
@@ -561,11 +576,12 @@ func main() {
 
 		// Create job options
 		jobOptions := &jobs.JobOptions{
-			Domain:      domain,
-			UseSitemap:  true,
-			FindLinks:   false,
-			MaxDepth:    1,
-			Concurrency: 1, // Minimal for sitemap scanning
+			Domain:          domain,
+			UseSitemap:      true,
+			FindLinks:       false,
+			MaxDepth:        1,
+			Concurrency:     1,
+			RequiredWorkers: workerCount, // Use the parameter value instead of hardcoding
 		}
 
 		job, err := jobs.CreateJob(dbSetup.GetDB(), jobOptions)
@@ -649,6 +665,11 @@ func main() {
 				Str("domain", domain).
 				Int("url_count", len(filteredURLs)).
 				Msg("Added URLs to job queue")
+
+			// Use the global worker pool to add the job
+			globalWorkerPool.AddJob(job.ID, &jobs.JobOptions{
+				RequiredWorkers: workerCount,
+			})
 		}()
 
 		// Return success response immediately
