@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/Harvey-AU/blue-banded-bee/src/common"
-	"github.com/Harvey-AU/blue-banded-bee/src/jobs"
 	"github.com/getsentry/sentry-go"
 	"github.com/rs/zerolog"
 	_ "github.com/tursodatabase/libsql-client-go/libsql"
@@ -84,7 +83,70 @@ func New(config *Config) (*DB, error) {
 }
 
 func setupSchema(db *sql.DB) error {
+	// First create jobs and tasks tables
 	_, err := db.Exec(`
+		CREATE TABLE IF NOT EXISTS jobs (
+			id TEXT PRIMARY KEY,
+			domain TEXT NOT NULL,
+			status TEXT NOT NULL,
+			progress REAL NOT NULL,
+			total_tasks INTEGER NOT NULL,
+			completed_tasks INTEGER NOT NULL,
+			failed_tasks INTEGER NOT NULL,
+			created_at DATETIME NOT NULL,
+			started_at DATETIME,
+			completed_at DATETIME,
+			concurrency INTEGER NOT NULL,
+			find_links BOOLEAN NOT NULL,
+			include_paths TEXT,
+			exclude_paths TEXT,
+			recent_urls TEXT,
+			required_workers INTEGER DEFAULT 0,
+			error_message TEXT
+		)
+	`)
+	if err != nil {
+		return fmt.Errorf("failed to create jobs table: %w", err)
+	}
+
+	_, err = db.Exec(`
+		CREATE TABLE IF NOT EXISTS tasks (
+			id TEXT PRIMARY KEY,
+			job_id TEXT NOT NULL,
+			url TEXT NOT NULL,
+			status TEXT NOT NULL,
+			depth INTEGER NOT NULL,
+			created_at DATETIME NOT NULL,
+			started_at DATETIME,
+			completed_at DATETIME,
+			retry_count INTEGER NOT NULL,
+			error TEXT,
+			status_code INTEGER,
+			response_time INTEGER,
+			cache_status TEXT,
+			content_type TEXT,
+			source_type TEXT NOT NULL,
+			source_url TEXT,
+			FOREIGN KEY (job_id) REFERENCES jobs(id)
+		)
+	`)
+	if err != nil {
+		return fmt.Errorf("failed to create tasks table: %w", err)
+	}
+
+	// Create indexes for tasks
+	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_tasks_job_id ON tasks(job_id)`)
+	if err != nil {
+		return fmt.Errorf("failed to create task job_id index: %w", err)
+	}
+
+	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status)`)
+	if err != nil {
+		return fmt.Errorf("failed to create task status index: %w", err)
+	}
+
+	// Then create crawl_results with proper foreign keys
+	_, err = db.Exec(`
 		CREATE TABLE IF NOT EXISTS crawl_results (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			job_id TEXT NULL,
@@ -99,7 +161,21 @@ func setupSchema(db *sql.DB) error {
 			FOREIGN KEY (task_id) REFERENCES tasks(id)
 		)
 	`)
-	return err
+	if err != nil {
+		return fmt.Errorf("failed to create crawl_results table: %w", err)
+	}
+
+	_, err = db.Exec(`
+		CREATE TABLE IF NOT EXISTS test_connection (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)
+	`)
+	if err != nil {
+		return fmt.Errorf("failed to create test_connection table: %w", err)
+	}
+
+	return nil
 }
 
 // StoreCrawlResult stores a new crawl result in the database
@@ -181,7 +257,13 @@ func (db *DB) ResetSchema() error {
 	log.Info().Msg("Dropping all database tables")
 
 	// Drop tables in correct order (respecting foreign key constraints)
-	_, err := db.client.Exec(`DROP TABLE IF EXISTS tasks`)
+	_, err := db.client.Exec(`DROP TABLE IF EXISTS crawl_results`)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to drop crawl_results table")
+		return err
+	}
+
+	_, err = db.client.Exec(`DROP TABLE IF EXISTS tasks`)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to drop tasks table")
 		return err
@@ -193,23 +275,10 @@ func (db *DB) ResetSchema() error {
 		return err
 	}
 
-	_, err = db.client.Exec(`DROP TABLE IF EXISTS crawl_results`)
-	if err != nil {
-
-		log.Error().Err(err).Msg("Failed to drop crawl_results table")
-		return err
-	}
-
 	log.Info().Msg("Recreating database tables")
 
-	// Recreate crawl_results table
+	// Use the single setupSchema function to recreate all tables
 	if err := setupSchema(db.client); err != nil {
-		return err
-
-	}
-
-	// Recreate jobs and tasks tables
-	if err := jobs.InitSchema(db.client); err != nil {
 		return err
 	}
 
