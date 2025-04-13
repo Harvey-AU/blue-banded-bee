@@ -365,7 +365,7 @@ func main() {
 			if err := m.StartJob(context.Background(), jobID); err != nil {
 				log.Error().Err(err).Str("job_id", jobID).Msg("Failed")
 			} else {
-				log.Debug().Str("job_id", jobID).Msg("Started")
+				log.Info().Str("job_id", jobID).Msg("Started")
 			}
 		}
 		rows.Close()
@@ -655,7 +655,7 @@ func main() {
 				return
 			}
 
-			log.Debug().
+			log.Info().
 				Str("job_id", job.ID).
 				Str("domain", domain).
 				Int("url_count", len(filteredURLs)).
