@@ -908,6 +908,42 @@ func (wp *WorkerPool) flushBatches(ctx context.Context) {
 					return err
 				}
 			}
+
+			// After updating counters, check if we need to mark the job as completed
+			for jobID, _ := range jobCounts {
+				var total, completed, failed int
+				err := tx.QueryRowContext(ctx, `
+					SELECT total_tasks, completed_tasks, failed_tasks 
+					FROM jobs WHERE id = ?
+				`, jobID).Scan(&total, &completed, &failed)
+
+				if err != nil {
+					return err
+				}
+
+				// If all tasks are done, mark the job as completed
+				if total > 0 && completed+failed >= total {
+					_, err = tx.ExecContext(ctx, `
+						UPDATE jobs SET
+							status = ?,
+							completed_at = ?,
+							progress = 100.0
+						WHERE id = ? AND status = ?
+					`, string(JobStatusCompleted), time.Now(), jobID, string(JobStatusRunning))
+
+					if err != nil {
+						return err
+					}
+
+					log.Info().
+						Str("job_id", jobID).
+						Int("total_tasks", total).
+						Int("completed", completed).
+						Int("failed", failed).
+						Msg("Job marked as completed")
+				}
+			}
+
 			log.Info().
 				Dur("job_update_duration_ms", time.Since(jobUpdateStart)).
 				Int("job_count", len(jobCounts)).

@@ -100,7 +100,6 @@ func setupSchema(db *sql.DB) error {
 			find_links BOOLEAN NOT NULL,
 			include_paths TEXT,
 			exclude_paths TEXT,
-			recent_urls TEXT,
 			required_workers INTEGER DEFAULT 0,
 			error_message TEXT
 		)

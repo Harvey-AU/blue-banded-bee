@@ -149,7 +149,6 @@ func updateJobProgressTx(ctx context.Context, tx *sql.Tx, jobID string) error {
 
 	log.Debug().
 		Str("job_id", jobID).
-		Str("recent_urls_json", recentURLsStr).
 		Msg("Prepared job update data")
 
 	// Update job status
@@ -158,10 +157,9 @@ func updateJobProgressTx(ctx context.Context, tx *sql.Tx, jobID string) error {
 			progress = ?,
 			total_tasks = ?,
 			completed_tasks = ?,
-			failed_tasks = ?,
-			recent_urls = ?
+			failed_tasks = ?
 		WHERE id = ?
-	`, progress, total, completed, failed, recentURLsStr, jobID)
+	`, progress, total, completed, failed, jobID)
 
 	if err != nil {
 		log.Error().Err(err).Str("job_id", jobID).Msg("Failed to update job")
