@@ -116,6 +116,8 @@
 - [x] Optimize database queries
 - [x] Configure rate limiting with proper client IP detection
 - [x] Add performance monitoring
+- [ ] Implement batch assignment & completion of tasks to workers
+- [ ] Plan postgres and/or sqlite setup
 - [ ] Implement database maintenance routines:
   - [ ] Data archiving for older records
   - [ ] Database index optimization
