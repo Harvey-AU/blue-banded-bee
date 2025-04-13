@@ -131,7 +131,7 @@ func (jm *JobManager) StartJob(ctx context.Context, jobID string) error {
 	}
 
 	// Add job to worker pool for processing
-	jm.workerPool.AddJob(job.ID)
+	jm.workerPool.AddJob(job.ID, nil)
 
 	log.Info().
 		Str("job_id", job.ID).
