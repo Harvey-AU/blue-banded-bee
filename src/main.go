@@ -440,6 +440,8 @@ func main() {
 			StatusCode:   result.StatusCode,
 			Error:        result.Error,
 			CacheStatus:  result.CacheStatus,
+			JobID:        "", // Empty for test crawls
+			TaskID:       "", // Empty for test crawls
 		}
 
 		if err := dbSetup.StoreCrawlResult(r.Context(), crawlResult); err != nil {

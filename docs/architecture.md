@@ -78,5 +78,3 @@ Blue Banded Bee is built with a worker pool architecture for efficient URL crawl
 - Edge database with Turso
 - Cloudflare caching layer
 - Sentry error tracking
-
-[System Architecture Diagram]
