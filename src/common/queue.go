@@ -7,14 +7,17 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 )
 
 // DbOperation represents a database operation to be executed
 type DbOperation struct {
-	Fn   func(*sql.Tx) error
-	Done chan error
-	Ctx  context.Context
+	Fn        func(*sql.Tx) error
+	Done      chan error
+	Ctx       context.Context
+	StartTime time.Time
+	ID        string
 }
 
 // DbQueue serializes all database operations through a single goroutine
@@ -71,6 +74,16 @@ func (q *DbQueue) processOperations() {
 	defer q.wg.Done()
 
 	for op := range q.operations {
+		waitDuration := time.Since(op.StartTime)
+		execStart := time.Now()
+
+		// Log when operation starts executing
+		log.Info().
+			Str("operation_id", op.ID).
+			Dur("queue_wait_ms", waitDuration).
+			Time("execution_start", execStart).
+			Msg("⏱️ TIMING: DB operation starting execution")
+
 		// Check if context is canceled
 		if op.Ctx != nil && op.Ctx.Err() != nil {
 			op.Done <- op.Ctx.Err()
@@ -94,7 +107,21 @@ func (q *DbQueue) processOperations() {
 		}
 
 		// Commit the transaction
+		commitStart := time.Now()
 		err = tx.Commit()
+
+		execDuration := time.Since(execStart)
+		commitDuration := time.Since(commitStart)
+		totalDuration := time.Since(op.StartTime)
+
+		log.Info().
+			Str("operation_id", op.ID).
+			Dur("execution_ms", execDuration).
+			Dur("commit_ms", commitDuration).
+			Dur("total_ms", totalDuration).
+			Bool("succeeded", err == nil).
+			Msg("⏱️ TIMING: DB operation execution completed")
+
 		if err != nil {
 			log.Error().Err(err).Msg("Failed to commit transaction")
 		}
@@ -108,11 +135,38 @@ func (q *DbQueue) Execute(ctx context.Context, fn func(*sql.Tx) error) error {
 		return fmt.Errorf("queue is stopped")
 	}
 
+	queueStart := time.Now()
+	operationID := uuid.New().String()[:8] // Generate short unique ID
+
+	log.Info().
+		Str("operation_id", operationID).
+		Time("queue_submit", queueStart).
+		Int("queue_size", len(q.operations)).
+		Msg("⏱️ TIMING: DB operation submitted to queue")
+
 	done := make(chan error, 1)
 	select {
-	case q.operations <- DbOperation{Fn: fn, Done: done, Ctx: ctx}:
-		return <-done
+	case q.operations <- DbOperation{
+		Fn:        fn,
+		Done:      done,
+		Ctx:       ctx,
+		StartTime: queueStart,
+		ID:        operationID,
+	}:
+		err := <-done
+		queueDuration := time.Since(queueStart)
+
+		log.Info().
+			Str("operation_id", operationID).
+			Dur("queue_wait_ms", queueDuration).
+			Bool("succeeded", err == nil).
+			Msg("⏱️ TIMING: DB operation completed")
+
+		return err
 	case <-ctx.Done():
+		log.Info().
+			Str("operation_id", operationID).
+			Msg("⏱️ TIMING: DB operation cancelled before execution")
 		return ctx.Err()
 	}
 }

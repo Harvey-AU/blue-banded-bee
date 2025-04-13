@@ -37,14 +37,14 @@ type WorkerPool struct {
 // NewWorkerPool creates a new worker pool
 func NewWorkerPool(db *sql.DB, crawler *crawler.Crawler, numWorkers int) *WorkerPool {
 	wp := &WorkerPool{
-		db:               db,
-		crawler:          crawler,
-		numWorkers:       numWorkers,
-		baseWorkerCount:  numWorkers,
-		currentWorkers:   numWorkers,
-		jobs:             make(map[string]bool),
-		jobRequirements:  make(map[string]int),
-		
+		db:              db,
+		crawler:         crawler,
+		numWorkers:      numWorkers,
+		baseWorkerCount: numWorkers,
+		currentWorkers:  numWorkers,
+		jobs:            make(map[string]bool),
+		jobRequirements: make(map[string]int),
+
 		stopCh:           make(chan struct{}),
 		recoveryInterval: 1 * time.Minute,
 	}
@@ -305,6 +305,17 @@ func (wp *WorkerPool) processNextTask(ctx context.Context, workerID int, workerC
 
 // processTask processes a single task using the crawler
 func (wp *WorkerPool) processTask(ctx context.Context, task *Task, workerID int, workerCrawler *crawler.Crawler) error {
+	// Record start time
+	taskStart := time.Now()
+	taskID := task.ID
+
+	log.Info().
+		Int("worker_id", workerID).
+		Str("task_id", taskID).
+		Str("url", task.URL).
+		Time("task_picked", taskStart).
+		Msg("⏱️ TIMING: Task picked for processing")
+
 	// Only create spans for errors, not for every task
 	var span *sentry.Span
 	defer func() {
@@ -313,14 +324,19 @@ func (wp *WorkerPool) processTask(ctx context.Context, task *Task, workerID int,
 		}
 	}()
 
+	// Use the worker's crawler instead of wp.crawler
+	crawlStart := time.Now()
+	result, err := workerCrawler.WarmURL(ctx, task.URL)
+	crawlDuration := time.Since(crawlStart)
+
 	log.Info().
 		Int("worker_id", workerID).
-		Str("task_id", task.ID).
+		Str("task_id", taskID).
 		Str("url", task.URL).
-		Msg("Processing task")
+		Dur("crawl_duration_ms", crawlDuration).
+		Time("crawl_completed", time.Now()).
+		Msg("⏱️ TIMING: URL crawling completed")
 
-	// Use the worker's crawler instead of wp.crawler
-	result, err := workerCrawler.WarmURL(ctx, task.URL)
 	if err != nil {
 		// Check if error is retryable (timeout)
 		isTimeout := strings.Contains(err.Error(), "context deadline exceeded") ||
@@ -334,6 +350,26 @@ func (wp *WorkerPool) processTask(ctx context.Context, task *Task, workerID int,
 			if err := UpdateTaskStatus(ctx, wp.db, task); err != nil {
 				log.Error().Err(err).Str("task_id", task.ID).Msg("Failed to update task for retry")
 			}
+
+			// Add timing log for DB update start
+			dbUpdateStart := time.Now()
+			log.Info().
+				Int("worker_id", workerID).
+				Str("task_id", taskID).
+				Time("db_update_start", dbUpdateStart).
+				Msg("⏱️ TIMING: Starting DB update for failed task")
+
+			if err := UpdateTaskStatus(ctx, wp.db, task); err != nil {
+				log.Error().Err(err).Str("task_id", task.ID).Msg("Failed to update task status")
+			}
+
+			log.Info().
+				Int("worker_id", workerID).
+				Str("task_id", taskID).
+				Dur("db_update_duration_ms", time.Since(dbUpdateStart)).
+				Time("db_update_completed", time.Now()).
+				Msg("⏱️ TIMING: DB update completed for failed task")
+
 			return nil // Return nil to allow retry
 		}
 
@@ -357,6 +393,14 @@ func (wp *WorkerPool) processTask(ctx context.Context, task *Task, workerID int,
 	}
 
 	// Use queue for critical DB operations
+	// Add timing log for DB update start
+	dbUpdateStart := time.Now()
+	log.Info().
+		Int("worker_id", workerID).
+		Str("task_id", taskID).
+		Time("db_update_start", dbUpdateStart).
+		Msg("⏱️ TIMING: Starting DB update for completed task")
+
 	err = ExecuteInQueue(ctx, func(tx *sql.Tx) error {
 		// Update task status
 		if err := UpdateTaskStatusTx(ctx, tx, task); err != nil {
@@ -366,9 +410,9 @@ func (wp *WorkerPool) processTask(ctx context.Context, task *Task, workerID int,
 		// Insert into crawl_results if task completed successfully
 		if task.Status == TaskStatusCompleted {
 			_, err := tx.ExecContext(ctx, `
-				INSERT INTO crawl_results (url, response_time, status_code, error, cache_status)
-				VALUES (?, ?, ?, ?, ?)
-			`, task.URL, task.ResponseTime, task.StatusCode, task.Error, task.CacheStatus)
+				INSERT INTO crawl_results (job_id, task_id, url, response_time, status_code, error, cache_status)
+				VALUES (?, ?, ?, ?, ?, ?, ?)
+			`, task.JobID, task.ID, task.URL, task.ResponseTime, task.StatusCode, task.Error, task.CacheStatus)
 
 			if err != nil {
 				return err
@@ -379,17 +423,23 @@ func (wp *WorkerPool) processTask(ctx context.Context, task *Task, workerID int,
 				UPDATE jobs 
 				SET 
 					completed_tasks = completed_tasks + 1,
-					progress = CAST((completed_tasks + 1 + failed_tasks) AS FLOAT) / total_tasks * 100,
+					progress = CAST(100.0 * (
+						(SELECT COUNT(*) FROM tasks WHERE job_id = ? AND status = ?) +
+						(SELECT COUNT(*) FROM tasks WHERE job_id = ? AND status = ?)
+					) AS FLOAT) / total_tasks,
 					status = CASE 
-						WHEN (completed_tasks + 1 + failed_tasks) >= total_tasks THEN ?
+						WHEN (SELECT COUNT(*) FROM tasks WHERE job_id = ? AND status IN (?,?,?)) >= total_tasks THEN ?
 						ELSE status 
 					END,
 					completed_at = CASE 
-						WHEN (completed_tasks + 1 + failed_tasks) >= total_tasks THEN ?
+						WHEN (SELECT COUNT(*) FROM tasks WHERE job_id = ? AND status IN (?,?,?)) >= total_tasks THEN ?
 						ELSE completed_at 
 					END
 				WHERE id = ? AND status = ?
-			`, JobStatusCompleted, time.Now(), task.JobID, JobStatusRunning)
+			`, task.JobID, TaskStatusCompleted, task.JobID, TaskStatusFailed,
+				task.JobID, TaskStatusCompleted, TaskStatusFailed, TaskStatusSkipped, JobStatusCompleted,
+				task.JobID, TaskStatusCompleted, TaskStatusFailed, TaskStatusSkipped, time.Now(),
+				task.JobID, JobStatusRunning)
 
 			return err
 		} else if task.Status == TaskStatusFailed {
@@ -415,6 +465,18 @@ func (wp *WorkerPool) processTask(ctx context.Context, task *Task, workerID int,
 
 		return nil
 	})
+
+	dbUpdateDuration := time.Since(dbUpdateStart)
+	totalDuration := time.Since(taskStart)
+
+	log.Info().
+		Int("worker_id", workerID).
+		Str("task_id", taskID).
+		Dur("db_update_duration_ms", dbUpdateDuration).
+		Dur("total_task_duration_ms", totalDuration).
+		Time("db_update_completed", time.Now()).
+		Float64("db_percentage", float64(dbUpdateDuration)/float64(totalDuration)*100).
+		Msg("⏱️ TIMING: DB update completed for task")
 
 	if err != nil {
 		log.Error().Err(err).Str("task_id", task.ID).Str("job_id", task.JobID).Msg("Failed to update task and job status")
