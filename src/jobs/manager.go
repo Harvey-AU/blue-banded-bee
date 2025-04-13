@@ -227,7 +227,7 @@ func (jm *JobManager) processSitemap(ctx context.Context, jobID, domain string, 
 	span.SetTag("job_id", jobID)
 	span.SetTag("domain", domain)
 
-	log.Debug().
+	log.Info().
 		Str("job_id", jobID).
 		Str("domain", domain).
 		Msg("Starting sitemap processing")
@@ -283,7 +283,7 @@ func (jm *JobManager) processSitemap(ctx context.Context, jobID, domain string, 
 			Int("url_count", len(urls)).
 			Msg("Added sitemap URLs to job queue")
 	} else {
-		log.Warn().
+		log.Info().
 			Str("job_id", jobID).
 			Str("domain", domain).
 			Msg("No URLs found in sitemap")
