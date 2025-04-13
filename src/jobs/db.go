@@ -38,7 +38,8 @@ func InitSchema(db *sql.DB) error {
 			find_links BOOLEAN NOT NULL,
 			include_paths TEXT,
 			exclude_paths TEXT,
-			recent_urls TEXT
+			error_message TEXT,
+			required_workers INTEGER DEFAULT 0
 		)
 	`)
 	if err != nil {
@@ -158,33 +159,34 @@ func retryDB(operation func() error) error {
 // CreateJob inserts a new job into the database
 func CreateJob(db *sql.DB, options *JobOptions) (*Job, error) {
 	job := &Job{
-		ID:             uuid.New().String(),
-		Domain:         options.Domain,
-		Status:         JobStatusPending,
-		Progress:       0,
-		TotalTasks:     0,
-		CompletedTasks: 0,
-		FailedTasks:    0,
-		CreatedAt:      time.Now(),
-		Concurrency:    options.Concurrency,
-		FindLinks:      options.FindLinks,
-		MaxDepth:       options.MaxDepth,
-		IncludePaths:   options.IncludePaths,
-		ExcludePaths:   options.ExcludePaths,
-		RecentURLs:     []string{},
+		ID:              uuid.New().String(),
+		Domain:          options.Domain,
+		Status:          JobStatusPending,
+		Progress:        0,
+		TotalTasks:      0,
+		CompletedTasks:  0,
+		FailedTasks:     0,
+		CreatedAt:       time.Now(),
+		Concurrency:     options.Concurrency,
+		FindLinks:       options.FindLinks,
+		MaxDepth:        options.MaxDepth,
+		IncludePaths:    options.IncludePaths,
+		ExcludePaths:    options.ExcludePaths,
+		RequiredWorkers: options.RequiredWorkers,
 	}
 
 	err := retryDB(func() error {
 		_, err := db.Exec(
 			`INSERT INTO jobs (
 				id, domain, status, progress, total_tasks, completed_tasks, failed_tasks,
-				created_at, concurrency, find_links, include_paths, exclude_paths, recent_urls
+				created_at, concurrency, find_links, include_paths, exclude_paths,
+				required_workers
 			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			job.ID, job.Domain, string(job.Status), job.Progress,
 			job.TotalTasks, job.CompletedTasks, job.FailedTasks,
 			job.CreatedAt, job.Concurrency, job.FindLinks,
 			serialize(job.IncludePaths), serialize(job.ExcludePaths),
-			serialize(job.RecentURLs),
+			job.RequiredWorkers,
 		)
 		return err
 	})
@@ -232,7 +234,7 @@ func GetJob(ctx context.Context, db *sql.DB, jobID string) (*Job, error) {
 	span.SetTag("job_id", jobID)
 
 	var job Job
-	var includePaths, excludePaths, recentURLs []byte
+	var includePaths, excludePaths []byte
 	var startedAt, completedAt sql.NullTime
 	var errorMessage sql.NullString
 
@@ -241,13 +243,13 @@ func GetJob(ctx context.Context, db *sql.DB, jobID string) (*Job, error) {
 			SELECT 
 				id, domain, status, progress, total_tasks, completed_tasks, failed_tasks,
 				created_at, started_at, completed_at, concurrency, find_links,
-				include_paths, exclude_paths, recent_urls, error_message
+				include_paths, exclude_paths, error_message, required_workers
 			FROM jobs
 			WHERE id = ?
 		`, jobID).Scan(
 			&job.ID, &job.Domain, &job.Status, &job.Progress, &job.TotalTasks, &job.CompletedTasks,
 			&job.FailedTasks, &job.CreatedAt, &startedAt, &completedAt, &job.Concurrency,
-			&job.FindLinks, &includePaths, &excludePaths, &recentURLs, &errorMessage,
+			&job.FindLinks, &includePaths, &excludePaths, &errorMessage, &job.RequiredWorkers,
 		)
 		return err
 	})
@@ -285,13 +287,6 @@ func GetJob(ctx context.Context, db *sql.DB, jobID string) (*Job, error) {
 		err = json.Unmarshal(excludePaths, &job.ExcludePaths)
 		if err != nil {
 			return nil, fmt.Errorf("failed to unmarshal exclude paths: %w", err)
-		}
-	}
-
-	if len(recentURLs) > 0 {
-		err = json.Unmarshal(recentURLs, &job.RecentURLs)
-		if err != nil {
-			return nil, fmt.Errorf("failed to unmarshal recent URLs: %w", err)
 		}
 	}
 
@@ -496,7 +491,7 @@ func ListJobs(ctx context.Context, db *sql.DB, limit, offset int) ([]*Job, error
 		SELECT 
 			id, domain, status, progress, total_tasks, completed_tasks, failed_tasks,
 			created_at, started_at, completed_at, concurrency, find_links,
-			include_paths, exclude_paths, recent_urls, error_message
+			include_paths, exclude_paths, error_message
 		FROM jobs
 		ORDER BY created_at DESC
 		LIMIT ? OFFSET ?
@@ -512,13 +507,13 @@ func ListJobs(ctx context.Context, db *sql.DB, limit, offset int) ([]*Job, error
 	var jobs []*Job
 	for rows.Next() {
 		var job Job
-		var includePaths, excludePaths, recentURLs []byte
+		var includePaths, excludePaths []byte
 		var startedAt, completedAt sql.NullTime
 
 		err := rows.Scan(
 			&job.ID, &job.Domain, &job.Status, &job.Progress, &job.TotalTasks, &job.CompletedTasks,
 			&job.FailedTasks, &job.CreatedAt, &startedAt, &completedAt, &job.Concurrency,
-			&job.FindLinks, &includePaths, &excludePaths, &recentURLs, &job.ErrorMessage,
+			&job.FindLinks, &includePaths, &excludePaths, &job.ErrorMessage,
 		)
 
 		if err != nil {
@@ -539,13 +534,6 @@ func ListJobs(ctx context.Context, db *sql.DB, limit, offset int) ([]*Job, error
 			err = json.Unmarshal(excludePaths, &job.ExcludePaths)
 			if err != nil {
 				return nil, fmt.Errorf("failed to unmarshal exclude paths: %w", err)
-			}
-		}
-
-		if len(recentURLs) > 0 {
-			err = json.Unmarshal(recentURLs, &job.RecentURLs)
-			if err != nil {
-				return nil, fmt.Errorf("failed to unmarshal recent URLs: %w", err)
 			}
 		}
 

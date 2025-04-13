@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -27,6 +28,10 @@ type WorkerPool struct {
 	recoveryInterval time.Duration
 	stopping         atomic.Bool
 	activeJobs       sync.WaitGroup
+	baseWorkerCount  int
+	currentWorkers   int
+	jobRequirements  map[string]int // Track worker requirements per job
+	workersMutex     sync.RWMutex   // Protect scaling operations
 }
 
 // NewWorkerPool creates a new worker pool
@@ -35,7 +40,11 @@ func NewWorkerPool(db *sql.DB, crawler *crawler.Crawler, numWorkers int) *Worker
 		db:               db,
 		crawler:          crawler,
 		numWorkers:       numWorkers,
+		baseWorkerCount:  numWorkers,
+		currentWorkers:   numWorkers,
 		jobs:             make(map[string]bool),
+		jobRequirements:  make(map[string]int),
+		
 		stopCh:           make(chan struct{}),
 		recoveryInterval: 1 * time.Minute,
 	}
@@ -72,19 +81,73 @@ func (wp *WorkerPool) WaitForJobs() {
 }
 
 // AddJob adds a job to be processed by the worker pool
-func (wp *WorkerPool) AddJob(jobID string) {
+func (wp *WorkerPool) AddJob(jobID string, options *JobOptions) {
 	wp.jobsMutex.Lock()
-	defer wp.jobsMutex.Unlock()
 	wp.jobs[jobID] = true
-	log.Info().Str("job_id", jobID).Msg("Added job to worker pool")
+
+	// Store the worker requirement for this job
+	requiredWorkers := wp.baseWorkerCount
+	if options != nil && options.RequiredWorkers > 0 {
+		requiredWorkers = options.RequiredWorkers
+		wp.jobRequirements[jobID] = options.RequiredWorkers
+	}
+
+	// Calculate the maximum required workers across all jobs
+	maxRequired := wp.baseWorkerCount
+	for _, count := range wp.jobRequirements {
+		if count > maxRequired {
+			maxRequired = count
+		}
+	}
+	wp.jobsMutex.Unlock()
+
+	// Scale up if needed
+	if maxRequired > wp.currentWorkers {
+		wp.scaleWorkers(context.Background(), maxRequired)
+	}
+
+	log.Info().
+		Str("job_id", jobID).
+		Int("required_workers", requiredWorkers).
+		Msg("Added job to worker pool")
 }
 
 // RemoveJob removes a job from the worker pool
 func (wp *WorkerPool) RemoveJob(jobID string) {
 	wp.jobsMutex.Lock()
-	defer wp.jobsMutex.Unlock()
 	delete(wp.jobs, jobID)
-	log.Info().Str("job_id", jobID).Msg("Removed job from worker pool")
+
+	// Remove worker requirement for this job
+	delete(wp.jobRequirements, jobID)
+
+	// Calculate the maximum required workers across remaining jobs
+	maxRequired := wp.baseWorkerCount
+	for _, count := range wp.jobRequirements {
+		if count > maxRequired {
+			maxRequired = count
+		}
+	}
+	wp.jobsMutex.Unlock()
+
+	// Scale down if possible (in a separate goroutine to avoid blocking)
+	if maxRequired < wp.currentWorkers {
+		go func() {
+			wp.workersMutex.Lock()
+			defer wp.workersMutex.Unlock()
+
+			log.Info().
+				Int("current_workers", wp.currentWorkers).
+				Int("target_workers", maxRequired).
+				Msg("Scaling down worker pool")
+
+			wp.currentWorkers = maxRequired
+			// Note: We don't actually stop excess workers, they'll exit on next task completion
+		}()
+	}
+
+	log.Info().
+		Str("job_id", jobID).
+		Msg("Removed job from worker pool")
 }
 
 // worker processes tasks from the database
@@ -104,6 +167,18 @@ func (wp *WorkerPool) worker(ctx context.Context, workerID int) {
 		case <-ctx.Done():
 			return
 		default:
+			// Check if this worker should exit (we've scaled down)
+			wp.workersMutex.RLock()
+			shouldExit := workerID >= wp.currentWorkers
+			wp.workersMutex.RUnlock()
+
+			if shouldExit {
+				log.Info().
+					Int("worker_id", workerID).
+					Msg("Worker exiting due to scale down")
+				return
+			}
+
 			if err := wp.processNextTask(ctx, workerID, workerCrawler); err != nil {
 				if err != sql.ErrNoRows {
 					log.Error().Err(err).Int("worker_id", workerID).Msg("Failed to process task")
@@ -485,6 +560,7 @@ func (wp *WorkerPool) checkForPendingTasks(ctx context.Context) error {
 	defer rows.Close()
 
 	// For each job with pending tasks, add it to the worker pool
+
 	for rows.Next() {
 		var jobID string
 		if err := rows.Scan(&jobID); err != nil {
@@ -499,7 +575,7 @@ func (wp *WorkerPool) checkForPendingTasks(ctx context.Context) error {
 
 		if !active {
 			// Add job to the worker pool
-			wp.AddJob(jobID)
+			wp.AddJob(jobID, nil)
 
 			// Update job status if needed
 			_, err := wp.db.ExecContext(ctx, `
@@ -613,4 +689,51 @@ func (wp *WorkerPool) updateFailedTaskCount(ctx context.Context, jobID string) e
 		WHERE id = ?
 	`, jobID)
 	return err
+}
+
+// scaleWorkers increases the worker pool size to the target number
+func (wp *WorkerPool) scaleWorkers(ctx context.Context, targetWorkers int) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Error().
+				Interface("panic", r).
+				Str("stack", string(debug.Stack())).
+				Msg("Recovered from panic in scaleWorkers")
+		}
+	}()
+
+	wp.workersMutex.Lock()
+	defer wp.workersMutex.Unlock()
+
+	if targetWorkers <= wp.currentWorkers {
+		return // No need to scale up
+	}
+
+	workersToAdd := targetWorkers - wp.currentWorkers
+
+	log.Info().
+		Int("current_workers", wp.currentWorkers).
+		Int("adding_workers", workersToAdd).
+		Int("target_workers", targetWorkers).
+		Msg("Scaling worker pool")
+
+	// Start additional workers
+	for i := 0; i < workersToAdd; i++ {
+		workerID := wp.currentWorkers + i
+		wp.wg.Add(1)
+		go wp.worker(ctx, workerID)
+	}
+
+	wp.currentWorkers = targetWorkers
+}
+
+// Add a method to gracefully terminate excess workers
+func (wp *WorkerPool) terminateExcessWorkers() {
+	wp.workersMutex.Lock()
+	defer wp.workersMutex.Unlock()
+
+	// Note: The check for shouldExit in the worker method will handle this
+	log.Info().
+		Int("current_workers", wp.currentWorkers).
+		Msg("Worker count adjusted, excess workers will exit on next task attempt")
 }

@@ -35,23 +35,23 @@ const (
 
 // Job represents a crawling job for a domain
 type Job struct {
-	ID             string    `json:"id"`
-	Domain         string    `json:"domain"`
-	Status         JobStatus `json:"status"`
-	Progress       float64   `json:"progress"`
-	TotalTasks     int       `json:"total_tasks"`
-	CompletedTasks int       `json:"completed_tasks"`
-	FailedTasks    int       `json:"failed_tasks"`
-	CreatedAt      time.Time `json:"created_at"`
-	StartedAt      time.Time `json:"started_at,omitempty"`
-	CompletedAt    time.Time `json:"completed_at,omitempty"`
-	Concurrency    int       `json:"concurrency"`
-	FindLinks      bool      `json:"find_links"`
-	MaxDepth       int       `json:"max_depth"`
-	IncludePaths   []string  `json:"include_paths,omitempty"`
-	ExcludePaths   []string  `json:"exclude_paths,omitempty"`
-	RecentURLs     []string  `json:"recent_urls,omitempty"`
-	ErrorMessage   string    `json:"error_message,omitempty"`
+	ID              string    `json:"id"`
+	Domain          string    `json:"domain"`
+	Status          JobStatus `json:"status"`
+	Progress        float64   `json:"progress"`
+	TotalTasks      int       `json:"total_tasks"`
+	CompletedTasks  int       `json:"completed_tasks"`
+	FailedTasks     int       `json:"failed_tasks"`
+	CreatedAt       time.Time `json:"created_at"`
+	StartedAt       time.Time `json:"started_at,omitempty"`
+	CompletedAt     time.Time `json:"completed_at,omitempty"`
+	Concurrency     int       `json:"concurrency"`
+	FindLinks       bool      `json:"find_links"`
+	MaxDepth        int       `json:"max_depth"`
+	IncludePaths    []string  `json:"include_paths,omitempty"`
+	ExcludePaths    []string  `json:"exclude_paths,omitempty"`
+	RequiredWorkers int       `json:"required_workers"`
+	ErrorMessage    string    `json:"error_message,omitempty"`
 }
 
 // Task represents a single URL to be crawled within a job
@@ -80,12 +80,13 @@ type Task struct {
 
 // JobOptions defines configuration options for a crawl job
 type JobOptions struct {
-	Domain       string   `json:"domain"`
-	StartURLs    []string `json:"start_urls,omitempty"`
-	UseSitemap   bool     `json:"use_sitemap"`
-	Concurrency  int      `json:"concurrency"`
-	FindLinks    bool     `json:"find_links"`
-	MaxDepth     int      `json:"max_depth"`
-	IncludePaths []string `json:"include_paths,omitempty"`
-	ExcludePaths []string `json:"exclude_paths,omitempty"`
+	Domain          string   `json:"domain"`
+	StartURLs       []string `json:"start_urls,omitempty"`
+	UseSitemap      bool     `json:"use_sitemap"`
+	Concurrency     int      `json:"concurrency"`
+	FindLinks       bool     `json:"find_links"`
+	MaxDepth        int      `json:"max_depth"`
+	IncludePaths    []string `json:"include_paths,omitempty"`
+	ExcludePaths    []string `json:"exclude_paths,omitempty"`
+	RequiredWorkers int      `json:"required_workers"`
 }
