@@ -4,9 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"math"
 	"net/http"
 	"net/url"
 	"strings"
@@ -21,19 +19,31 @@ import (
 type Crawler struct {
 	config *Config
 	colly  *colly.Collector
+	id     string // Add an ID field to identify each crawler instance
 }
 
-// New creates a new Crawler instance with the given configuration
+// New creates a new Crawler instance with the given configuration and optional ID
 // If config is nil, default configuration is used
-func New(config *Config) *Crawler {
+func New(config *Config, id ...string) *Crawler {
 	if config == nil {
 		config = DefaultConfig()
 	}
 
+	crawlerID := ""
+	if len(id) > 0 {
+		crawlerID = id[0]
+	}
+
+	userAgent := config.UserAgent
+	if crawlerID != "" {
+		userAgent = fmt.Sprintf("%s Worker-%s", config.UserAgent, crawlerID)
+	}
+
 	c := colly.NewCollector(
-		colly.UserAgent(config.UserAgent),
+		colly.UserAgent(userAgent),
 		colly.MaxDepth(1),
 		colly.Async(true),
+		colly.AllowURLRevisit(),
 	)
 
 	c.Limit(&colly.LimitRule{
@@ -45,6 +55,7 @@ func New(config *Config) *Crawler {
 	return &Crawler{
 		config: config,
 		colly:  c,
+		id:     crawlerID,
 	}
 }
 
@@ -57,6 +68,7 @@ func (c *Crawler) WarmURL(ctx context.Context, targetURL string) (*CrawlResult, 
 	defer span.Finish()
 
 	span.SetTag("crawler.url", targetURL)
+	span.SetTag("crawler.id", c.id) // Add crawler ID to spans
 	start := time.Now()
 
 	result := &CrawlResult{
@@ -105,99 +117,22 @@ func (c *Crawler) WarmURL(ctx context.Context, targetURL string) (*CrawlResult, 
 		return result, err
 	}
 
-	// Create a collector that allows URL revisits for retries
-	collector := colly.NewCollector(
-		colly.UserAgent(c.config.UserAgent),
-		colly.MaxDepth(1),
-		colly.Async(true),
-		colly.AllowURLRevisit(), // Allow retrying the same URL
-	)
-
-	collector.Limit(&colly.LimitRule{
-		DomainGlob:  "*",
-		Parallelism: c.config.MaxConcurrency,
-		RandomDelay: time.Second / time.Duration(c.config.RateLimit),
-	})
-
-	// Set up the collector handlers
-	collector.OnResponse(func(r *colly.Response) {
+	// Set up the response handlers
+	c.colly.OnResponse(func(r *colly.Response) {
 		result.StatusCode = r.StatusCode
 		result.CacheStatus = r.Headers.Get("CF-Cache-Status")
-
-		// Use the improved response type handler
 		c.handleResponseType(result, r)
 	})
 
-	collector.OnError(func(r *colly.Response, err error) {
+	c.colly.OnError(func(r *colly.Response, err error) {
 		if r != nil {
 			result.StatusCode = r.StatusCode
 		}
 		result.Error = err.Error()
 	})
 
-	// Define the retry strategy
-	retryAttempts := c.config.RetryAttempts
-	retryDelay := c.config.RetryDelay
-
-	var lastErr error
-	var success bool
-
-	// Retry loop
-	for attempt := 0; attempt <= retryAttempts; attempt++ {
-		// Add attempt information to the span
-		if attempt > 0 {
-			span.SetTag("retry.attempt", fmt.Sprintf("%d", attempt))
-			log.Info().
-				Str("url", targetURL).
-				Int("attempt", attempt).
-				Msg("Retrying crawl")
-		}
-
-		// Clear previous error for new attempt
-		result.Error = ""
-
-		// Attempt the crawl
-		err = collector.Visit(targetURL)
-
-		// If context is canceled, stop retrying
-		if ctx.Err() != nil {
-			result.Error = fmt.Sprintf("Context canceled: %v", ctx.Err())
-			return result, ctx.Err()
-		}
-
-		// Wait for crawl to complete
-		collector.Wait()
-
-		// If no error or non-retryable error, break the loop
-		if err == nil && result.Error == "" {
-			success = true
-			break
-		} else if err != nil {
-			lastErr = err
-			log.Warn().
-				Err(err).
-				Str("url", targetURL).
-				Int("attempt", attempt+1).
-				Int("max_attempts", retryAttempts+1).
-				Msg("Crawl attempt failed")
-		}
-
-		// Check if we should retry
-		if shouldRetry(err, result.StatusCode) && attempt < retryAttempts {
-			// Wait before retrying with exponential backoff
-			backoff := retryDelay * time.Duration(math.Pow(2, float64(attempt)))
-			select {
-			case <-time.After(backoff):
-				// Continue to next attempt
-			case <-ctx.Done():
-				result.Error = fmt.Sprintf("Context canceled during retry wait: %v", ctx.Err())
-				return result, ctx.Err()
-			}
-		} else {
-			// No more retries
-			break
-		}
-	}
+	// Use existing collector for the request
+	err = c.colly.Visit(targetURL)
 
 	result.ResponseTime = time.Since(start).Milliseconds()
 	span.SetData("response_time_ms", result.ResponseTime)
@@ -207,16 +142,7 @@ func (c *Crawler) WarmURL(ctx context.Context, targetURL string) (*CrawlResult, 
 	// Validate cache status
 	c.validateCacheStatus(result)
 
-	// If we didn't succeed after all attempts
-	if !success {
-		if lastErr != nil {
-			return result, fmt.Errorf("failed to warm URL %s after %d attempts: %w",
-				targetURL, retryAttempts+1, lastErr)
-		}
-		return result, errors.New(result.Error)
-	}
-
-	return result, nil
+	return result, err
 }
 
 // Helper function to determine if we should retry based on the error or status code

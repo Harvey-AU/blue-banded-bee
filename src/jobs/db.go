@@ -36,11 +36,9 @@ func InitSchema(db *sql.DB) error {
 			completed_at DATETIME,
 			concurrency INTEGER NOT NULL,
 			find_links BOOLEAN NOT NULL,
-			max_depth INTEGER NOT NULL,
 			include_paths TEXT,
 			exclude_paths TEXT,
-			recent_urls TEXT,
-			error_message TEXT
+			recent_urls TEXT
 		)
 	`)
 	if err != nil {
@@ -180,12 +178,11 @@ func CreateJob(db *sql.DB, options *JobOptions) (*Job, error) {
 		_, err := db.Exec(
 			`INSERT INTO jobs (
 				id, domain, status, progress, total_tasks, completed_tasks, failed_tasks,
-				created_at, concurrency, find_links, max_depth,
-				include_paths, exclude_paths, recent_urls
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				created_at, concurrency, find_links, include_paths, exclude_paths, recent_urls
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			job.ID, job.Domain, string(job.Status), job.Progress,
 			job.TotalTasks, job.CompletedTasks, job.FailedTasks,
-			job.CreatedAt, job.Concurrency, job.FindLinks, job.MaxDepth,
+			job.CreatedAt, job.Concurrency, job.FindLinks,
 			serialize(job.IncludePaths), serialize(job.ExcludePaths),
 			serialize(job.RecentURLs),
 		)
@@ -243,14 +240,14 @@ func GetJob(ctx context.Context, db *sql.DB, jobID string) (*Job, error) {
 		err := db.QueryRowContext(ctx, `
 			SELECT 
 				id, domain, status, progress, total_tasks, completed_tasks, failed_tasks,
-				created_at, started_at, completed_at, concurrency, find_links, max_depth,
+				created_at, started_at, completed_at, concurrency, find_links,
 				include_paths, exclude_paths, recent_urls, error_message
 			FROM jobs
 			WHERE id = ?
 		`, jobID).Scan(
 			&job.ID, &job.Domain, &job.Status, &job.Progress, &job.TotalTasks, &job.CompletedTasks,
 			&job.FailedTasks, &job.CreatedAt, &startedAt, &completedAt, &job.Concurrency,
-			&job.FindLinks, &job.MaxDepth, &includePaths, &excludePaths, &recentURLs, &errorMessage,
+			&job.FindLinks, &includePaths, &excludePaths, &recentURLs, &errorMessage,
 		)
 		return err
 	})
@@ -498,7 +495,7 @@ func ListJobs(ctx context.Context, db *sql.DB, limit, offset int) ([]*Job, error
 	rows, err := db.QueryContext(ctx, `
 		SELECT 
 			id, domain, status, progress, total_tasks, completed_tasks, failed_tasks,
-			created_at, started_at, completed_at, concurrency, find_links, max_depth,
+			created_at, started_at, completed_at, concurrency, find_links,
 			include_paths, exclude_paths, recent_urls, error_message
 		FROM jobs
 		ORDER BY created_at DESC
@@ -521,7 +518,7 @@ func ListJobs(ctx context.Context, db *sql.DB, limit, offset int) ([]*Job, error
 		err := rows.Scan(
 			&job.ID, &job.Domain, &job.Status, &job.Progress, &job.TotalTasks, &job.CompletedTasks,
 			&job.FailedTasks, &job.CreatedAt, &startedAt, &completedAt, &job.Concurrency,
-			&job.FindLinks, &job.MaxDepth, &includePaths, &excludePaths, &recentURLs, &job.ErrorMessage,
+			&job.FindLinks, &includePaths, &excludePaths, &recentURLs, &job.ErrorMessage,
 		)
 
 		if err != nil {
