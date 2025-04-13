@@ -3,7 +3,6 @@ package jobs
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -138,14 +137,6 @@ func updateJobProgressTx(ctx context.Context, tx *sql.Tx, jobID string) error {
 		Int("completed", completed).
 		Int("failed", failed).
 		Msg("Job progress stats calculated")
-
-	// Convert recent URLs to JSON string properly
-	jsonData, err := json.Marshal(recentURLs)
-	if err != nil {
-		log.Error().Err(err).Str("job_id", jobID).Msg("Failed to marshal URLs")
-		return fmt.Errorf("failed to serialize recent URLs: %w", err)
-	}
-	recentURLsStr := string(jsonData)
 
 	log.Debug().
 		Str("job_id", jobID).
