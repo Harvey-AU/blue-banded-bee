@@ -59,15 +59,11 @@ func UpdateTaskStatusTx(ctx context.Context, tx *sql.Tx, task *Task) error {
 		SET status = ?,
 			started_at = ?,
 			completed_at = ?,
-			status_code = ?,
-			response_time = ?,
 			retry_count = ?,
-			error = ?,
-			cache_status = ?,
-			content_type = ?
+			error = ?
 		WHERE id = ?
-	`, task.Status, task.StartedAt, task.CompletedAt, task.StatusCode, task.ResponseTime,
-		task.RetryCount, task.Error, task.CacheStatus, task.ContentType, task.ID)
+	`, task.Status, task.StartedAt, task.CompletedAt,
+		task.RetryCount, task.Error, task.ID)
 
 	if err != nil {
 		span.SetTag("error", "true")
@@ -220,22 +216,19 @@ func GetNextPendingTaskTx(ctx context.Context, tx *sql.Tx, jobID string) (*Task,
 	row = tx.QueryRowContext(ctx, `
 		SELECT 
 			id, job_id, url, status, depth, created_at, started_at, completed_at,
-			retry_count, error, status_code, response_time, cache_status, content_type,
-			source_type, source_url
+			retry_count, error, source_type, source_url
 		FROM tasks 
 		WHERE id = ?
 	`, taskID)
 
 	task := &Task{}
 	var startedAt, completedAt sql.NullTime
-	var errorMsg, cacheStatus, contentType, sourceURL sql.NullString
-	var statusCode sql.NullInt64
-	var responseTime sql.NullInt64
+	var errorMsg, sourceURL sql.NullString
 
 	err = row.Scan(
 		&task.ID, &task.JobID, &task.URL, &task.Status, &task.Depth, &task.CreatedAt,
-		&startedAt, &completedAt, &task.RetryCount, &errorMsg, &statusCode,
-		&responseTime, &cacheStatus, &contentType, &task.SourceType, &sourceURL,
+		&startedAt, &completedAt, &task.RetryCount, &errorMsg, 
+		&task.SourceType, &sourceURL,
 	)
 
 	if err != nil {
@@ -252,18 +245,6 @@ func GetNextPendingTaskTx(ctx context.Context, tx *sql.Tx, jobID string) (*Task,
 	if errorMsg.Valid {
 		task.Error = errorMsg.String
 	}
-	if statusCode.Valid {
-		task.StatusCode = int(statusCode.Int64)
-	}
-	if responseTime.Valid {
-		task.ResponseTime = responseTime.Int64
-	}
-	if cacheStatus.Valid {
-		task.CacheStatus = cacheStatus.String
-	}
-	if contentType.Valid {
-		task.ContentType = contentType.String
-	}
 	if sourceURL.Valid {
 		task.SourceURL = sourceURL.String
 	}
@@ -272,30 +253,25 @@ func GetNextPendingTaskTx(ctx context.Context, tx *sql.Tx, jobID string) (*Task,
 }
 
 // batchInsertCrawlResults inserts multiple crawl results in a single transaction
-func batchInsertCrawlResults(ctx context.Context, tx *sql.Tx, tasks []*Task) error {
-	span := sentry.StartSpan(ctx, "jobs.batch_insert_crawl_results")
-	defer span.Finish()
-
-	if len(tasks) == 0 {
+func batchInsertCrawlResults(ctx context.Context, tx *sql.Tx, results []CrawlResultData) error {
+	if len(results) == 0 {
 		return nil
 	}
 
-	span.SetData("task_count", len(tasks))
+	valueStrings := make([]string, 0, len(results))
+	valueArgs := make([]interface{}, 0, len(results)*8)
 
-	// SQLite supports multi-row insert with VALUES(...),(...),... syntax
-	valueStrings := make([]string, 0, len(tasks))
-	valueArgs := make([]interface{}, 0, len(tasks)*7)
-
-	for _, task := range tasks {
-		valueStrings = append(valueStrings, "(?, ?, ?, ?, ?, ?, ?)")
+	for _, result := range results {
+		valueStrings = append(valueStrings, "(?, ?, ?, ?, ?, ?, ?, ?)")
 		valueArgs = append(valueArgs,
-			task.JobID, task.ID, task.URL, task.ResponseTime,
-			task.StatusCode, task.Error, task.CacheStatus)
+			result.JobID, result.TaskID, result.URL, result.ResponseTime,
+			result.StatusCode, result.Error, result.CacheStatus, 
+			result.ContentType)
 	}
 
 	query := fmt.Sprintf(`
 		INSERT INTO crawl_results 
-		(job_id, task_id, url, response_time, status_code, error, cache_status)
+		(job_id, task_id, url, response_time, status_code, error, cache_status, content_type)
 		VALUES %s
 	`, strings.Join(valueStrings, ","))
 
@@ -304,22 +280,22 @@ func batchInsertCrawlResults(ctx context.Context, tx *sql.Tx, tasks []*Task) err
 	duration := time.Since(startTime)
 
 	log.Debug().
-		Int("count", len(tasks)).
+		Int("count", len(results)).
 		Dur("duration_ms", duration).
 		Msg("Batch inserted crawl results")
 
 	if err != nil {
-		span.SetTag("error", "true")
-		span.SetData("error.message", err.Error())
 		log.Error().
 			Err(err).
-			Int("task_count", len(tasks)).
+			Int("task_count", len(results)).
 			Msg("Failed to batch insert crawl results")
 		return fmt.Errorf("failed to batch insert crawl results: %w", err)
 	}
 
 	rowsAffected, _ := result.RowsAffected()
-	span.SetData("rows_affected", rowsAffected)
+	log.Debug().
+		Int64("rows_affected", rowsAffected).
+		Msg("Job update result")
 
 	return nil
 }
@@ -364,8 +340,6 @@ func updateJobCounter(ctx context.Context, tx *sql.Tx, jobID string, completedCo
 	duration := time.Since(startTime)
 
 	if err != nil {
-		span.SetTag("error", "true")
-		span.SetData("error.message", err.Error())
 		log.Error().
 			Err(err).
 			Str("job_id", jobID).
@@ -384,8 +358,6 @@ func updateJobCounter(ctx context.Context, tx *sql.Tx, jobID string, completedCo
 		Int64("rows_affected", rowsAffected).
 		Dur("duration_ms", duration).
 		Msg("Updated job counters")
-
-	span.SetData("rows_affected", rowsAffected)
 
 	return nil
 }
