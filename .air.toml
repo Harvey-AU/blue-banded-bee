@@ -4,7 +4,7 @@ tmp_dir = "tmp"
 [build]
 # Windows configuration:
 cmd = "go build -o ./tmp/main.exe ./src"
-bin = "tmp/main.exe"
+bin = "tmp/main.exe" 
 
 # Mac/Linux configuration (comment above, uncomment below when on Mac/Linux):
 # cmd = "go build -o ./tmp/main ./src"

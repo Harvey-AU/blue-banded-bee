@@ -46,6 +46,7 @@ type CrawlResult struct {
 	StatusCode   int       `json:"status_code"`            // HTTP status code
 	Error        string    `json:"error,omitempty"`        // Error message if any
 	CacheStatus  string    `json:"cache_status,omitempty"` // Cache status
+	ContentType  string    `json:"content_type,omitempty"` // Content type
 	CreatedAt    time.Time `json:"created_at"`             // Timestamp of the crawl
 }
 
@@ -120,10 +121,6 @@ func setupSchema(db *sql.DB) error {
 			completed_at DATETIME,
 			retry_count INTEGER NOT NULL,
 			error TEXT,
-			status_code INTEGER,
-			response_time INTEGER,
-			cache_status TEXT,
-			content_type TEXT,
 			source_type TEXT NOT NULL,
 			source_url TEXT,
 			FOREIGN KEY (job_id) REFERENCES jobs(id)
@@ -155,6 +152,7 @@ func setupSchema(db *sql.DB) error {
 			status_code INTEGER,
 			error TEXT,
 			cache_status TEXT,
+			content_type TEXT,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			FOREIGN KEY (job_id) REFERENCES jobs(id),
 			FOREIGN KEY (task_id) REFERENCES tasks(id)
@@ -187,9 +185,9 @@ func (db *DB) StoreCrawlResult(ctx context.Context, result *CrawlResult) error {
 		span.SetTag("url", result.URL)
 
 		_, err := db.ExecWithMetrics(ctx, `
-			INSERT INTO crawl_results (job_id, task_id, url, response_time, status_code, error, cache_status)
-			VALUES (?, ?, ?, ?, ?, ?, ?)
-		`, result.JobID, result.TaskID, result.URL, result.ResponseTime, result.StatusCode, result.Error, result.CacheStatus)
+			INSERT INTO crawl_results (job_id, task_id, url, response_time, status_code, error, cache_status, content_type)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+		`, result.JobID, result.TaskID, result.URL, result.ResponseTime, result.StatusCode, result.Error, result.CacheStatus, result.ContentType)
 
 		if err != nil {
 			span.SetTag("error", "true")
@@ -209,7 +207,7 @@ func (db *DB) StoreCrawlResult(ctx context.Context, result *CrawlResult) error {
 // The limit parameter controls how many results to return
 func (db *DB) GetRecentResults(ctx context.Context, limit int) ([]CrawlResult, error) {
 	rows, err := db.QueryWithMetrics(ctx, `
-		SELECT id, job_id, task_id, url, response_time, status_code, error, cache_status, created_at
+		SELECT id, job_id, task_id, url, response_time, status_code, error, cache_status, content_type, created_at
 		FROM crawl_results
 		ORDER BY created_at DESC
 		LIMIT ?
@@ -223,7 +221,7 @@ func (db *DB) GetRecentResults(ctx context.Context, limit int) ([]CrawlResult, e
 	var results []CrawlResult
 	for rows.Next() {
 		var r CrawlResult
-		err := rows.Scan(&r.ID, &r.JobID, &r.TaskID, &r.URL, &r.ResponseTime, &r.StatusCode, &r.Error, &r.CacheStatus, &r.CreatedAt)
+		err := rows.Scan(&r.ID, &r.JobID, &r.TaskID, &r.URL, &r.ResponseTime, &r.StatusCode, &r.Error, &r.CacheStatus, &r.ContentType, &r.CreatedAt)
 		if err != nil {
 			return nil, err
 		}

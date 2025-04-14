@@ -67,15 +67,15 @@ type Task struct {
 	RetryCount  int        `json:"retry_count"`
 	Error       string     `json:"error,omitempty"`
 
-	// Result data
-	StatusCode   int    `json:"status_code,omitempty"`
-	ResponseTime int64  `json:"response_time_ms,omitempty"`
-	CacheStatus  string `json:"cache_status,omitempty"`
-	ContentType  string `json:"content_type,omitempty"`
-
 	// Source information
 	SourceType string `json:"source_type"`          // "sitemap", "link", "manual"
 	SourceURL  string `json:"source_url,omitempty"` // URL where this was discovered (for links)
+	
+	// Result data
+	StatusCode   int    `json:"status_code,omitempty"`
+	ResponseTime int64  `json:"response_time,omitempty"`
+	CacheStatus  string `json:"cache_status,omitempty"`
+	ContentType  string `json:"content_type,omitempty"`
 }
 
 // JobOptions defines configuration options for a crawl job
@@ -89,4 +89,16 @@ type JobOptions struct {
 	IncludePaths    []string `json:"include_paths,omitempty"`
 	ExcludePaths    []string `json:"exclude_paths,omitempty"`
 	RequiredWorkers int      `json:"required_workers"`
+}
+
+// Create a separate CrawlResult struct for batch operations
+type CrawlResultData struct {
+	JobID        string
+	TaskID       string
+	URL          string
+	ResponseTime int64
+	StatusCode   int
+	Error        string
+	CacheStatus  string
+	ContentType  string
 }

@@ -368,11 +368,7 @@ func (wp *WorkerPool) processTask(ctx context.Context, task *Task, workerID int,
 			task.RetryCount++
 			task.Status = TaskStatusPending
 			task.Error = err.Error()
-			if err := UpdateTaskStatus(ctx, wp.db, task); err != nil {
-				log.Error().Err(err).Str("task_id", task.ID).Msg("Failed to update task for retry")
-			}
-
-			// Add timing log for DB update start
+			
 			dbUpdateStart := time.Now()
 			log.Debug().
 				Int("worker_id", workerID).
@@ -381,7 +377,8 @@ func (wp *WorkerPool) processTask(ctx context.Context, task *Task, workerID int,
 				Msg("⏱️ TIMING: Starting DB update for failed task")
 
 			if err := UpdateTaskStatus(ctx, wp.db, task); err != nil {
-				log.Error().Err(err).Str("task_id", task.ID).Msg("Failed to update task status")
+				log.Error().Err(err).Str("task_id", task.ID).Msg("Failed to update task for retry")
+				return err // Return error to prevent task from being lost
 			}
 
 			log.Debug().
@@ -403,15 +400,20 @@ func (wp *WorkerPool) processTask(ctx context.Context, task *Task, workerID int,
 		return err
 	}
 
-	// Update task with result (still no DB operation)
+	// Update task with the result data
+	task.Status = TaskStatusCompleted
+	// Store the crawler result data in the task
 	task.StatusCode = result.StatusCode
 	task.ResponseTime = result.ResponseTime
 	task.CacheStatus = result.CacheStatus
 	task.ContentType = result.ContentType
-	task.Status = TaskStatusCompleted
+
+	// Only keep high-level error message in tasks table
 	if result.Error != "" {
-		task.Error = result.Error
+		task.Error = "Failed: " + result.Error[:min(20, len(result.Error))] + "..."
 	}
+	
+	// All detailed result data will go to crawl_results only
 
 	// Record start time for batch logging
 	dbUpdateStart := time.Now()
@@ -823,10 +825,7 @@ func (wp *WorkerPool) flushBatches(ctx context.Context) {
 				UPDATE tasks
 				SET status = ?, 
 					completed_at = ?,
-					status_code = ?,
-					response_time = ?,
-					cache_status = ?,
-					content_type = ?
+					error = ? -- Only include error (for failure reason)
 				WHERE id = ?
 			`)
 			if err != nil {
@@ -841,9 +840,7 @@ func (wp *WorkerPool) flushBatches(ctx context.Context) {
 					}
 					_, err := stmt.ExecContext(ctx,
 						task.Status, task.CompletedAt,
-						task.StatusCode, task.ResponseTime,
-						task.CacheStatus, task.ContentType,
-						task.ID)
+						task.Error, task.ID)
 					if err != nil {
 						return err
 					}
@@ -860,25 +857,23 @@ func (wp *WorkerPool) flushBatches(ctx context.Context) {
 			resultInsertStart := time.Now()
 			completedTasks := filterTasksByStatus(tasks, TaskStatusCompleted)
 			if len(completedTasks) > 0 {
-				// Use fewer values in the insert to reduce complexity
-				valueStrings := make([]string, 0, len(completedTasks))
-				valueArgs := make([]interface{}, 0, len(completedTasks)*5)
-
+				// Convert Task objects to CrawlResultData
+				crawlResults := make([]CrawlResultData, 0, len(completedTasks))
 				for _, task := range completedTasks {
-					valueStrings = append(valueStrings, "(?, ?, ?, ?, ?)")
-					valueArgs = append(valueArgs,
-						task.JobID, task.ID, task.URL,
-						task.ResponseTime, task.StatusCode)
+					// Use the task's result data that we stored earlier
+					crawlResults = append(crawlResults, CrawlResultData{
+						JobID:        task.JobID,
+						TaskID:       task.ID,
+						URL:          task.URL,
+						ResponseTime: task.ResponseTime,
+						StatusCode:   task.StatusCode,
+						Error:        task.Error,
+						CacheStatus:  task.CacheStatus,
+						ContentType:  task.ContentType,
+					})
 				}
-
-				query := fmt.Sprintf(`
-					INSERT INTO crawl_results 
-					(job_id, task_id, url, response_time, status_code)
-					VALUES %s
-				`, strings.Join(valueStrings, ","))
-
-				_, err := tx.ExecContext(ctx, query, valueArgs...)
-				if err != nil {
+				
+				if err := batchInsertCrawlResults(ctx, tx, crawlResults); err != nil {
 					return err
 				}
 			}
@@ -969,13 +964,10 @@ func (wp *WorkerPool) flushBatches(ctx context.Context) {
 
 // Helper functions for batch operations
 func batchUpdateTasks(ctx context.Context, tx *sql.Tx, tasks []*Task) error {
-	// Implementation using prepared statements and multiple executions
-	// or a bulk update statement depending on SQLite capabilities
 	stmt, err := tx.PrepareContext(ctx, `
 		UPDATE tasks
 		SET status = ?, started_at = ?, completed_at = ?,
-			status_code = ?, response_time = ?, cache_status = ?,
-			content_type = ?, error = ?, retry_count = ?
+			error = ?, retry_count = ?
 		WHERE id = ?
 	`)
 	if err != nil {
@@ -986,9 +978,7 @@ func batchUpdateTasks(ctx context.Context, tx *sql.Tx, tasks []*Task) error {
 	for _, task := range tasks {
 		_, err := stmt.ExecContext(ctx,
 			task.Status, task.StartedAt, task.CompletedAt,
-			task.StatusCode, task.ResponseTime, task.CacheStatus,
-			task.ContentType, task.Error, task.RetryCount,
-			task.ID)
+			task.Error, task.RetryCount, task.ID)
 		if err != nil {
 			return err
 		}
