@@ -60,10 +60,10 @@ func NewWorkerPool(db *sql.DB, crawler *crawler.Crawler, numWorkers int) *Worker
 		stopCh:           make(chan struct{}),
 		recoveryInterval: 1 * time.Minute,
 		taskBatch: &TaskBatch{
-			tasks:     make([]*Task, 0, 100),
+			tasks:     make([]*Task, 0, 50),
 			jobCounts: make(map[string]struct{ completed, failed int }),
 		},
-		batchTimer: time.NewTicker(5 * time.Second),
+		batchTimer: time.NewTicker(10 * time.Second),
 	}
 
 	// Start the batch processor
@@ -177,9 +177,13 @@ func (wp *WorkerPool) worker(ctx context.Context, workerID int) {
 
 	// Create a dedicated crawler for this worker
 	workerConfig := crawler.DefaultConfig()
-	workerConfig.MaxConcurrency = 1 // Each worker handles one request at a time
-	workerConfig.RateLimit = 5      // Rate limit per worker
+	workerConfig.MaxConcurrency = 1
+	workerConfig.RateLimit = 5
 	workerCrawler := crawler.New(workerConfig, fmt.Sprintf("%d", workerID))
+
+	// Add a counter for consecutive errors to implement exponential backoff
+	consecutiveErrors := 0
+	maxSleep := 10 * time.Second
 
 	for {
 		select {
@@ -194,17 +198,24 @@ func (wp *WorkerPool) worker(ctx context.Context, workerID int) {
 			wp.workersMutex.RUnlock()
 
 			if shouldExit {
-				log.Debug().
-					Int("worker_id", workerID).
-					Msg("Worker exiting due to scale down")
 				return
 			}
 
 			if err := wp.processNextTask(ctx, workerID, workerCrawler); err != nil {
+				consecutiveErrors++
+				sleepTime := time.Duration(100*(1<<uint(min(consecutiveErrors, 6)))) * time.Millisecond
+				if sleepTime > maxSleep {
+					sleepTime = maxSleep
+				}
+				
 				if err != sql.ErrNoRows {
 					log.Error().Err(err).Int("worker_id", workerID).Msg("Failed to process task")
 				}
-				time.Sleep(time.Second)
+				time.Sleep(sleepTime)
+			} else {
+				consecutiveErrors = 0
+				// Always sleep a little between tasks (reduce lock contention)
+				time.Sleep(200 * time.Millisecond)
 			}
 		}
 	}

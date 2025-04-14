@@ -36,7 +36,7 @@ func NewDbQueue(db *sql.DB) *DbQueue {
 	queue := &DbQueue{
 		operations:  make(chan DbOperation, 200),
 		db:          db,
-		workerCount: 5,
+		workerCount: 2,
 	}
 	queue.Start()
 	return queue
