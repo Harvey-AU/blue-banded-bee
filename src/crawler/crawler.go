@@ -51,6 +51,13 @@ func New(config *Config, id ...string) *Crawler {
 		RandomDelay: time.Second / time.Duration(config.RateLimit),
 	})
 
+	// Add this to capture requests and responses
+	c.OnRequest(func(r *colly.Request) {
+		log.Debug().
+			Str("url", r.URL.String()).
+			Msg("Crawler sending request")
+	})
+
 	return &Crawler{
 		config: config,
 		colly:  c,
@@ -120,6 +127,15 @@ func (c *Crawler) WarmURL(ctx context.Context, targetURL string) (*CrawlResult, 
 	c.colly.OnResponse(func(r *colly.Response) {
 		result.StatusCode = r.StatusCode
 		result.CacheStatus = r.Headers.Get("CF-Cache-Status")
+		
+		// Add debug logging
+		log.Debug().
+			Int("status_code", r.StatusCode).
+			Str("cache_status", r.Headers.Get("CF-Cache-Status")).
+			Str("content_type", r.Headers.Get("Content-Type")).
+			Str("url", targetURL).
+			Msg("Crawler received response")
+		
 		c.handleResponseType(result, r)
 	})
 
@@ -132,6 +148,13 @@ func (c *Crawler) WarmURL(ctx context.Context, targetURL string) (*CrawlResult, 
 
 	// Use existing collector for the request
 	err = c.colly.Visit(targetURL)
+	if err != nil {
+		// Handle error
+		return result, err
+	}
+
+	// Wait for collector to finish
+	c.colly.Wait()
 
 	result.ResponseTime = time.Since(start).Milliseconds()
 	span.SetData("response_time_ms", result.ResponseTime)
