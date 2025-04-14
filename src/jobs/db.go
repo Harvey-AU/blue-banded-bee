@@ -206,13 +206,12 @@ func CreateTask(ctx context.Context, db *sql.DB, task *Task) error {
 		_, err := db.ExecContext(ctx, `
 			INSERT INTO tasks (
 				id, job_id, url, status, depth, created_at, started_at, completed_at,
-				retry_count, error, status_code, response_time, cache_status, content_type,
-				source_type, source_url
+				retry_count, error, source_type, source_url
 			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		`,
 			task.ID, task.JobID, task.URL, task.Status, task.Depth, task.CreatedAt,
-			task.StartedAt, task.CompletedAt, task.RetryCount, task.Error, task.StatusCode,
-			task.ResponseTime, task.CacheStatus, task.ContentType, task.SourceType, task.SourceURL,
+			task.StartedAt, task.CompletedAt, task.RetryCount, task.Error, task.SourceType, task.SourceURL,
+			
 		)
 		return err
 	})
@@ -334,12 +333,10 @@ func UpdateTaskStatus(ctx context.Context, db *sql.DB, task *Task) error {
 			_, err = db.ExecContext(ctx, `
 				UPDATE tasks 
 				SET status = ?, completed_at = ?, 
-				    status_code = ?, response_time = ?, cache_status = ?, content_type = ?,
-				    error = ?, retry_count = ?
+					error = ?, retry_count = ?
 				WHERE id = ?
 			`,
 				string(task.Status), task.CompletedAt,
-				task.StatusCode, task.ResponseTime, task.CacheStatus, task.ContentType,
 				task.Error, task.RetryCount, task.ID)
 
 		} else if task.Status == TaskStatusSkipped {
