@@ -67,8 +67,8 @@ func New(config *Config) (*DB, error) {
 	}
 
 	// Optimized connection pool settings
-	client.SetMaxOpenConns(5)
-	client.SetMaxIdleConns(3)
+	client.SetMaxOpenConns(3)
+	client.SetMaxIdleConns(2)
 	client.SetConnMaxLifetime(5 * time.Minute)
 	client.SetConnMaxIdleTime(2 * time.Minute)
 
@@ -285,8 +285,8 @@ func (db *DB) ResetSchema() error {
 
 func (db *DB) ExecuteWithRetry(ctx context.Context, operation func(context.Context) error) error {
 	var lastErr error
-	retries := 3
-	backoff := 100 * time.Millisecond
+	retries := 5
+	backoff := 200 * time.Millisecond
 
 	for attempt := 0; attempt <= retries; attempt++ {
 		if attempt > 0 {

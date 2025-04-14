@@ -1,5 +1,47 @@
 # API Reference
 
+## Simple list of endpoints
+
+### Create a crawl job by scanning sitemap
+
+http://localhost:8080/scan-sitemap?domain=teamharvey.co&workers=5
+https://blue-banded-bee.fly.dev/scan-sitemap?domain=teamharvey.co&workers=5
+
+### Test crawl a single URL
+
+http://localhost:8080/test-crawl?url=https://teamharvey.co
+https://blue-banded-bee.fly.dev/test-crawl?url=https://teamharvey.co
+
+### Get job status
+
+http://localhost:8080/job_status?id=job_123abc
+https://blue-banded-bee.fly.dev/job_status?id=job_123abc
+
+### Cancel a job
+
+http://localhost:8080/cancel_job?id=job_123abc
+https://blue-banded-bee.fly.dev/cancel_job?id=job_123abc
+
+### List all jobs
+
+http://localhost:8080/jobs?limit=20&offset=0
+https://blue-banded-bee.fly.dev/jobs?limit=20&offset=0
+
+### Get task details
+
+http://localhost:8080/task?id=task_123
+https://blue-banded-bee.fly.dev/task?id=task_123
+
+### List tasks for a job
+
+http://localhost:8080/job_tasks?job_id=job_123abc&limit=20&offset=0
+https://blue-banded-bee.fly.dev/job_tasks?job_id=job_123abc&limit=20&offset=0
+
+### Retry a failed task
+
+http://localhost:8080/retry_task?id=task_123
+https://blue-banded-bee.fly.dev/retry_task?id=task_123
+
 ## Job Management
 
 ### Create Job
@@ -14,8 +56,8 @@ Creates a new crawling job.
 
 ```json
 {
-  "domain": "example.com",
-  "urls": ["https://example.com/page1", "..."],
+  "domain": "teamharvey.co",
+  "urls": ["https://teamharvey.co/page1", "..."],
   "options": {
     "maxDepth": 2,
     "concurrency": 5
