@@ -34,6 +34,7 @@ type WorkerPool struct {
 	workersMutex     sync.RWMutex   // Protect scaling operations
 	taskBatch        *TaskBatch
 	batchTimer       *time.Ticker
+	cleanupInterval  time.Duration
 }
 
 // TaskBatch holds groups of tasks for batch processing
@@ -63,7 +64,8 @@ func NewWorkerPool(db *sql.DB, crawler *crawler.Crawler, numWorkers int) *Worker
 			tasks:     make([]*Task, 0, 50),
 			jobCounts: make(map[string]struct{ completed, failed int }),
 		},
-		batchTimer: time.NewTicker(10 * time.Second),
+		batchTimer:      time.NewTicker(10 * time.Second),
+		cleanupInterval: time.Minute, // Run cleanup every minute
 	}
 
 	// Start the batch processor
@@ -85,6 +87,15 @@ func (wp *WorkerPool) Start(ctx context.Context) {
 	// Start the recovery monitor
 	wp.wg.Add(1)
 	go wp.recoveryMonitor(ctx)
+
+	// Run initial cleanup
+	if err := CleanupStuckJobs(ctx, wp.db); err != nil {
+		log.Error().Err(err).Msg("Failed to perform initial job cleanup")
+	}
+
+	// Start monitors
+	wp.StartTaskMonitor(ctx)
+	wp.StartCleanupMonitor(ctx)
 }
 
 // Stop stops the worker pool
@@ -207,7 +218,7 @@ func (wp *WorkerPool) worker(ctx context.Context, workerID int) {
 				if sleepTime > maxSleep {
 					sleepTime = maxSleep
 				}
-				
+
 				if err != sql.ErrNoRows {
 					log.Error().Err(err).Int("worker_id", workerID).Msg("Failed to process task")
 				}
@@ -379,7 +390,7 @@ func (wp *WorkerPool) processTask(ctx context.Context, task *Task, workerID int,
 			task.RetryCount++
 			task.Status = TaskStatusPending
 			task.Error = err.Error()
-			
+
 			dbUpdateStart := time.Now()
 			log.Debug().
 				Int("worker_id", workerID).
@@ -423,7 +434,7 @@ func (wp *WorkerPool) processTask(ctx context.Context, task *Task, workerID int,
 	if result.Error != "" {
 		task.Error = "Failed: " + result.Error[:min(20, len(result.Error))] + "..."
 	}
-	
+
 	// All detailed result data will go to crawl_results only
 
 	// Record start time for batch logging
@@ -883,7 +894,7 @@ func (wp *WorkerPool) flushBatches(ctx context.Context) {
 						ContentType:  task.ContentType,
 					})
 				}
-				
+
 				if err := batchInsertCrawlResults(ctx, tx, crawlResults); err != nil {
 					return err
 				}
@@ -996,4 +1007,28 @@ func batchUpdateTasks(ctx context.Context, tx *sql.Tx, tasks []*Task) error {
 	}
 
 	return nil
+}
+
+// Add new method to start the cleanup monitor
+func (wp *WorkerPool) StartCleanupMonitor(ctx context.Context) {
+	wp.wg.Add(1)
+	go func() {
+		defer wp.wg.Done()
+		ticker := time.NewTicker(wp.cleanupInterval)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-wp.stopCh:
+				return
+			case <-ticker.C:
+				if err := CleanupStuckJobs(ctx, wp.db); err != nil {
+					log.Error().Err(err).Msg("Failed to cleanup stuck jobs")
+				}
+			}
+		}
+	}()
+	log.Info().Msg("Job cleanup monitor started")
 }

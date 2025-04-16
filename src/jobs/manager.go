@@ -203,6 +203,12 @@ func (jm *JobManager) CancelJob(ctx context.Context, jobID string) error {
 
 // GetJobStatus gets the current status of a job
 func (jm *JobManager) GetJobStatus(ctx context.Context, jobID string) (*Job, error) {
+	// First cleanup any stuck jobs
+	if err := CleanupStuckJobs(ctx, jm.db); err != nil {
+		log.Error().Err(err).Msg("Failed to cleanup stuck jobs during status check")
+		// Don't return error, continue with status check
+	}
+
 	span := sentry.StartSpan(ctx, "manager.get_job_status")
 	defer span.Finish()
 

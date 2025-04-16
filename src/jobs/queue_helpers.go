@@ -227,7 +227,7 @@ func GetNextPendingTaskTx(ctx context.Context, tx *sql.Tx, jobID string) (*Task,
 
 	err = row.Scan(
 		&task.ID, &task.JobID, &task.URL, &task.Status, &task.Depth, &task.CreatedAt,
-		&startedAt, &completedAt, &task.RetryCount, &errorMsg, 
+		&startedAt, &completedAt, &task.RetryCount, &errorMsg,
 		&task.SourceType, &sourceURL,
 	)
 
@@ -265,7 +265,7 @@ func batchInsertCrawlResults(ctx context.Context, tx *sql.Tx, results []CrawlRes
 		valueStrings = append(valueStrings, "(?, ?, ?, ?, ?, ?, ?, ?)")
 		valueArgs = append(valueArgs,
 			result.JobID, result.TaskID, result.URL, result.ResponseTime,
-			result.StatusCode, result.Error, result.CacheStatus, 
+			result.StatusCode, result.Error, result.CacheStatus,
 			result.ContentType)
 	}
 
@@ -376,4 +376,34 @@ func filterTasksByStatus(tasks []*Task, status TaskStatus) []*Task {
 	}
 
 	return result
+}
+
+// CleanupStuckJobs finds and fixes jobs that are stuck in pending/running state
+// despite having all their tasks completed
+func CleanupStuckJobs(ctx context.Context, db *sql.DB) error {
+	span := sentry.StartSpan(ctx, "jobs.cleanup_stuck_jobs")
+	defer span.Finish()
+
+	result, err := db.ExecContext(ctx, `
+		UPDATE jobs 
+		SET status = ?, completed_at = COALESCE(completed_at, ?)
+		WHERE (status = ? OR status = ?)
+		AND total_tasks > 0 
+		AND total_tasks = completed_tasks + failed_tasks
+	`)
+
+	if err != nil {
+		span.SetTag("error", "true")
+		span.SetData("error.message", err.Error())
+		return fmt.Errorf("failed to cleanup stuck jobs: %w", err)
+	}
+
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected > 0 {
+		log.Info().
+			Int64("jobs_fixed", rowsAffected).
+			Msg("Fixed stuck jobs")
+	}
+
+	return nil
 }
