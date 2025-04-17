@@ -179,6 +179,7 @@ func updateJobProgressTx(ctx context.Context, tx *sql.Tx, jobID string) error {
 // GetNextPendingTaskTx gets and claims the next pending task for a job
 func GetNextPendingTaskTx(ctx context.Context, tx *sql.Tx, jobID string) (*Task, error) {
 	span := sentry.StartSpan(ctx, "jobs.get_next_pending_task_tx")
+
 	defer span.Finish()
 
 	span.SetTag("job_id", jobID)
@@ -386,11 +387,13 @@ func CleanupStuckJobs(ctx context.Context, db *sql.DB) error {
 
 	result, err := db.ExecContext(ctx, `
 		UPDATE jobs 
-		SET status = ?, completed_at = COALESCE(completed_at, ?)
+		SET status = ?, 
+			completed_at = COALESCE(completed_at, ?),
+			progress = 100.0
 		WHERE (status = ? OR status = ?)
 		AND total_tasks > 0 
 		AND total_tasks = completed_tasks + failed_tasks
-	`)
+	`, JobStatusCompleted, time.Now(), JobStatusPending, JobStatusRunning)
 
 	if err != nil {
 		span.SetTag("error", "true")
