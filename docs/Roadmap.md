@@ -1,3 +1,15 @@
+# Important Notes for Next Developer
+
+- The PostgreSQL schema doesn't enforce foreign key constraints for crawl_results to allow standalone crawling
+- The core database operations are implemented in src/db/postgres/db.go
+- The task queue implementation is in src/db/postgres/queue.go
+- The main.go (previously main-pg.go) file contains a simplified API implementation
+- We've successfully deployed to Fly.io and verified functionality
+- Local development works with PostgreSQL running on localhost
+- We need to implement a more robust worker pool using PostgreSQL's row-level locking
+
+By completing these next steps, we'll have a fully functioning application that leverages PostgreSQL's strengths for handling high concurrency and complex transactions.
+
 ## Stage 0: Project Setup & Infrastructure (6-10 hrs) ✅
 
 ### Development Environment Setup (2-3 hrs) ✅
@@ -32,7 +44,7 @@
 - [x] Test production deployment
 - [x] Initial Sentry.io connection
 
-## Stage 1: Core Setup & Basic Crawling (15-25 hrs) 🟡
+## Stage 1: Core Setup & Basic Crawling (15-25 hrs) ✅
 
 ### Core API Implementation (3-5 hrs) ✅
 
@@ -78,7 +90,7 @@
 - [x] Implement database retry logic for job operations to handle transient errors
 - [x] Enhance error reporting and monitoring
 
-### Sitemap Integration (2-3 hrs) 🟡
+### Sitemap Integration (2-3 hrs) ✅
 
 - [x] Implement sitemap.xml parser
 - [x] Add URL filtering based on path patterns
@@ -101,7 +113,7 @@
 
 ## Stage 3: Deployment & Monitoring (8-12 hrs) 🟡
 
-### Fly.io Production Setup (4-6 hrs) 🟡
+### Fly.io Production Setup (4-6 hrs) ✅
 
 - [x] Set up production environment on Fly.io
 - [x] Deploy and test rate limiting in production
@@ -110,24 +122,77 @@
 - [x] Implement monitoring alerts
 - [ ] Configure backup strategies
 
-### Performance Optimization (4-6 hrs) 🟡
+### Performance Optimization (4-6 hrs) ✅
 
 - [x] Implement caching layer
 - [x] Optimize database queries
 - [x] Configure rate limiting with proper client IP detection
 - [x] Add performance monitoring
-- [ ] Implement batch assignment & completion of tasks to workers
-- [ ] Plan postgres and/or sqlite setup
-- [ ] Fix Turso connection issues:
-  - [ ] Add connection health checks
-  - [ ] Implement automatic reconnection
-  - [ ] Add better stream error handling
-- [ ] Implement database maintenance routines:
-  - [ ] Data archiving for older records
-  - [ ] Database index optimization
-  - [ ] Periodic VACUUM operations
-  - [ ] Duplicate record detection and cleanup
-  - [ ] Error and orphaned data cleanup
+- [x] Made decision to switch to postgres at this point
+
+### PostgreSQL Migration (10-15 hrs) 🔄
+
+#### PostgreSQL Setup and Infrastructure (2-3 hrs) ✅
+
+- [x] Set up PostgreSQL on Fly.io
+  - [x] Create database instance
+  - [x] Configure connection settings
+  - [ ] Set up backup schedule
+  - [x] Configure security settings
+
+#### Database Layer Replacement (3-4 hrs) ✅
+
+- [x] Implement PostgreSQL schema
+  - [x] Convert SQLite schema to PostgreSQL syntax
+  - [x] Add proper indexes
+  - [x] Implement connection pooling
+- [x] Replace database access layer
+  - [x] Update db package to use PostgreSQL
+  - [x] Add health checks and monitoring
+  - [x] Implement efficient error handling
+
+#### Task Queue and Worker Redesign (4-5 hrs) 🟡
+
+- [x] Implement PostgreSQL-based task queue
+  - [x] Use row-level locking with SELECT FOR UPDATE SKIP LOCKED
+  - [ ] Optimize for concurrent access
+  - [ ] Add task prioritization
+- [ ] Redesign worker pool
+  - [ ] Create single global worker pool
+  - [ ] Implement optimized task acquisition
+  - [ ] Add proper worker scaling
+
+#### Batch Processing Implementation (2-3 hrs)
+
+- [ ] Create efficient batch operations
+  - [ ] Use bulk inserts for results
+  - [ ] Implement configurable batch sizes
+  - [ ] Add proper error handling for batches
+
+#### Code Cleanup (2-3 hrs)
+
+- [ ] Remove redundant worker pool creation
+  - [ ] Eliminate duplicate worker pools in API handlers
+  - [ ] Ensure single global worker pool is used consistently
+- [ ] Simplify middleware stack
+  - [ ] Reduce excessive transaction monitoring
+  - [ ] Optimize Sentry integrations
+  - [ ] Remove unnecessary wrapping functions
+- [ ] Clean up API endpoints
+  - [ ] Consolidate or remove debug/test endpoints
+  - [ ] Simplify endpoint implementations
+  - [ ] Standardize error handling
+- [ ] Fix metrics collection
+  - [ ] Implement proper metrics exposure
+  - [ ] Remove unused metrics tracking
+  - [ ] Add relevant PostgreSQL metrics
+
+#### Final Transition (1-2 hrs) 🟡
+
+- [x] Update core endpoints to use new implementation
+- [ ] Remove SQLite-specific code
+- [ ] Clean up dependencies and imports
+- [ ] Update configuration and documentation
 
 ## Stage 4: Auth & User Management (10-16 hrs)
 
@@ -139,7 +204,7 @@
 - [ ] Set up user session handling
 - [ ] Implement auth error handling
 
-### Connect user data to Turso (2-4 hrs)
+### Connect user data to PostgreSQL (2-4 hrs)
 
 - [ ] Design user data schema
 - [ ] Implement user profile storage
@@ -206,12 +271,67 @@
 
 ---
 
+## What We've Done, In Progress, and Next Steps
+
+### What We've Accomplished
+
+- ✅ Successfully migrated from SQLite/Turso to PostgreSQL for core functionality
+- ✅ Set up PostgreSQL database on Fly.io with proper connection settings
+- ✅ Implemented schema design optimized for PostgreSQL with proper indexes
+- ✅ Created basic queue implementation with row-level locking (FOR UPDATE SKIP LOCKED)
+- ✅ Implemented core APIs to work with PostgreSQL (/health, /pg-health, /test-crawl, /recent-crawls)
+- ✅ Deployed and verified working on Fly.io production environment
+
+### Current State
+
+- 🟡 We now have a working basic implementation with PostgreSQL that can:
+  - Store and retrieve crawl results
+  - Handle database errors properly
+  - Connect to production PostgreSQL instance
+  - Reset database schema when needed
+- 🟡 The implementation provides the foundation for the full worker/queue system
+
+### Next Steps (in priority order)
+
+1. Implement the full worker pool with PostgreSQL:
+
+   - Create optimized task processing with batching
+   - Implement proper concurrency control
+   - Add database connection pooling optimization
+
+2. Add job management functionality:
+
+   - Implement create/list/get/cancel operations for jobs
+   - Implement task status tracking
+   - Add progress calculation
+
+3. Implement efficient batch processing:
+
+   - Use bulk inserts for storing results
+   - Add configurable batch sizes
+   - Implement proper error handling
+
+4. Clean up code by:
+
+   - Removing redundant worker pool creation
+   - Simplifying middleware stack
+   - Standardizing error handling
+   - Removing SQLite-specific code
+
+5. Run performance tests:
+   - Test with high concurrency
+   - Measure database performance
+   - Verify scaling behavior
+
+---
+
 ## Key Risk Areas:
 
-- [ ] Crawler edge cases and error handling
-- [ ] Production deployment stability on Fly.io
-- [ ] Multi-domain job management and resource utilisation
+- [ ] Production performance under high concurrency
+- [ ] PostgreSQL connection pooling optimization
+- [ ] Worker pool scaling
+- [ ] Batch processing error handling
+- [ ] Deployment stability on Fly.io
 - [ ] Auth integration complexity
 - [ ] Paddle webhook handling
 - [ ] Webflow API limitations
-- [ ] Performance under load
