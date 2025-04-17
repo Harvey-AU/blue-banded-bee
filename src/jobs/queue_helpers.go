@@ -30,7 +30,30 @@ func ExecuteInQueue(ctx context.Context, fn func(*sql.Tx) error) error {
 	if dbInstance == nil {
 		return fmt.Errorf("database instance not initialized")
 	}
-	return dbInstance.GetQueue().Execute(ctx, fn)
+
+	// Add retry logic specifically for connection issues
+	maxRetries := 3
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		err := dbInstance.GetQueue().Execute(ctx, fn)
+		if err == nil {
+			return nil
+		}
+
+		// Check for connection errors
+		if strings.Contains(err.Error(), "stream is closed") ||
+			strings.Contains(err.Error(), "driver: bad connection") {
+			if attempt < maxRetries-1 {
+				log.Warn().
+					Err(err).
+					Int("attempt", attempt+1).
+					Msg("Database connection error, retrying...")
+				time.Sleep(time.Duration(attempt+1) * 200 * time.Millisecond)
+				continue
+			}
+		}
+		return err
+	}
+	return fmt.Errorf("max retries exceeded")
 }
 
 // Only implement transaction versions of critical functions
