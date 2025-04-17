@@ -234,24 +234,37 @@ func (wp *WorkerPool) worker(ctx context.Context, workerID int) {
 
 // processNextTask processes the next available task from any active job
 func (wp *WorkerPool) processNextTask(ctx context.Context, workerID int, workerCrawler *crawler.Crawler) error {
-	task, err := GetNextPendingTask(ctx, wp.db)
-	if err == sql.ErrNoRows {
-		// This isn't really an error - just means no tasks available
-		// Sleep a bit to prevent tight loop
-		time.Sleep(100 * time.Millisecond)
-		return nil
+	// Get the list of active jobs
+	wp.jobsMutex.RLock()
+	activeJobs := make([]string, 0, len(wp.jobs))
+	for jobID := range wp.jobs {
+		activeJobs = append(activeJobs, jobID)
 	}
-	if err != nil {
-		// This is a real error
-		return err
-	}
-	if task == nil {
-		// No tasks available
+	wp.jobsMutex.RUnlock()
+
+	// If no active jobs, sleep and return
+	if len(activeJobs) == 0 {
 		time.Sleep(100 * time.Millisecond)
 		return nil
 	}
 
-	// Process task...
+	// Try to get a task from each active job
+	for _, jobID := range activeJobs {
+		task, err := GetNextPendingTask(ctx, wp.db, jobID)
+		if err == sql.ErrNoRows {
+			continue // Try next job
+		}
+		if err != nil {
+			return err // Return actual errors
+		}
+		if task != nil {
+			// Process the task...
+			return nil
+		}
+	}
+
+	// No tasks found in any job
+	time.Sleep(100 * time.Millisecond)
 	return nil
 }
 
