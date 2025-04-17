@@ -211,7 +211,6 @@ func CreateTask(ctx context.Context, db *sql.DB, task *Task) error {
 		`,
 			task.ID, task.JobID, task.URL, task.Status, task.Depth, task.CreatedAt,
 			task.StartedAt, task.CompletedAt, task.RetryCount, task.Error, task.SourceType, task.SourceURL,
-			
 		)
 		return err
 	})
