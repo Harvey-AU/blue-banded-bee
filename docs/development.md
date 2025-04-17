@@ -7,6 +7,7 @@
 - Go 1.21+
 - [Air](https://github.com/cosmtrek/air) for hot reloading
 - Docker (optional, for containerized development)
+- PostgreSQL database (local or remote)
 
 ### Local Environment Setup
 
@@ -25,8 +26,7 @@ cp .env.example .env
 
 3. Configure your `.env` file with required credentials:
 
-- `DATABASE_URL`
-- `DATABASE_AUTH_TOKEN`
+- PostgreSQL connection details
 - Other optional settings
 
 ## Development Server
@@ -120,14 +120,20 @@ The worker pool uses these defaults:
 
 ## Database
 
-### Local Database
+### Local PostgreSQL Database
 
-The service uses Turso as the database. Make sure your `.env` contains:
+The service uses PostgreSQL as the database. Make sure your `.env` contains:
 
 ```env
-DATABASE_URL=libsql://your-db-name.turso.io
-DATABASE_AUTH_TOKEN=your_auth_token
+PGHOST=localhost
+PGPORT=5432
+PGDATABASE=postgres
+PGUSER=postgres
+PGPASSWORD=your_password
+PGSSLMODE=disable
 ```
+
+For production connections to PostgreSQL on Fly.io, the DATABASE_URL environment variable will be automatically configured.
 
 ## Common Issues
 
