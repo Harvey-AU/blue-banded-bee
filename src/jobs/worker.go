@@ -234,116 +234,25 @@ func (wp *WorkerPool) worker(ctx context.Context, workerID int) {
 
 // processNextTask processes the next available task from any active job
 func (wp *WorkerPool) processNextTask(ctx context.Context, workerID int, workerCrawler *crawler.Crawler) error {
-	// Get active jobs
-	wp.jobsMutex.RLock()
-	activeJobs := make([]string, 0, len(wp.jobs))
-	for jobID := range wp.jobs {
-		activeJobs = append(activeJobs, jobID)
+	task, err := GetNextPendingTask(ctx, wp.db)
+	if err == sql.ErrNoRows {
+		// This isn't really an error - just means no tasks available
+		// Sleep a bit to prevent tight loop
+		time.Sleep(100 * time.Millisecond)
+		return nil
 	}
-	wp.jobsMutex.RUnlock()
-
-	if len(activeJobs) == 0 {
-		return nil // No active jobs
+	if err != nil {
+		// This is a real error
+		return err
 	}
-
-	// Try to get a task from each active job
-	for _, jobID := range activeJobs {
-		// Lock before checking job status and tasks
-		wp.jobsMutex.Lock()
-
-		// Check if job is still in the pool (might have been removed by another worker)
-		if _, exists := wp.jobs[jobID]; !exists {
-			wp.jobsMutex.Unlock()
-			continue
-		}
-
-		// Check pending tasks within the lock
-		var pendingCount int
-		err := wp.db.QueryRowContext(ctx, `
-			SELECT COUNT(*) FROM tasks 
-			WHERE job_id = ? AND status = ?
-		`, jobID, TaskStatusPending).Scan(&pendingCount)
-
-		if err != nil {
-			log.Error().Err(err).Str("job_id", jobID).Msg("Failed to check pending tasks")
-			wp.jobsMutex.Unlock()
-			continue
-		}
-
-		// If no pending tasks, remove job and update status
-		if pendingCount == 0 {
-			delete(wp.jobs, jobID)
-			wp.jobsMutex.Unlock()
-
-			log.Debug().Str("job_id", jobID).Msg("Removing job from worker pool - no pending tasks")
-
-			// Update job status if needed (outside the lock)
-			_, err = wp.db.ExecContext(ctx, `
-				UPDATE jobs 
-				SET status = CASE 
-					WHEN status = ? THEN ?
-					ELSE status 
-				END
-				WHERE id = ?
-			`, JobStatusRunning, JobStatusCompleted, jobID)
-
-			if err != nil {
-				log.Error().Err(err).Str("job_id", jobID).Msg("Failed to update job status")
-			}
-			continue
-		}
-
-		wp.jobsMutex.Unlock()
-
-		// Rest of the existing task processing code...
-		var task *Task
-		err = ExecuteInQueue(ctx, func(tx *sql.Tx) error {
-			// Check job status within transaction
-			row := tx.QueryRowContext(ctx, `
-				SELECT status FROM jobs WHERE id = ?
-			`, jobID)
-
-			var status string
-			if err := row.Scan(&status); err != nil {
-				return err
-			}
-
-			if status != string(JobStatusRunning) && status != string(JobStatusPending) {
-				// Mark for removal outside transaction
-				return sql.ErrNoRows // Using this as signal
-			}
-
-			// If job is active, get task within same transaction
-			task, err = GetNextPendingTaskTx(ctx, tx, jobID)
-			return err
-		})
-
-		if err == sql.ErrNoRows {
-			wp.RemoveJob(jobID)
-			continue
-		} else if err != nil {
-			log.Error().Err(err).Str("job_id", jobID).Msg("Failed to process job")
-			continue
-		}
-
-		if task == nil {
-			continue
-		}
-
-		// Process the task
-		if err := wp.processTask(ctx, task, workerID, workerCrawler); err != nil {
-			log.Error().Err(err).Str("task_id", task.ID).Msg("Failed to process task")
-			task.Status = TaskStatusFailed
-			task.Error = err.Error()
-			if err := UpdateTaskStatus(ctx, wp.db, task); err != nil {
-				log.Error().Err(err).Str("task_id", task.ID).Msg("Failed to update task status")
-			}
-		}
-
-		return nil // Processed a task
+	if task == nil {
+		// No tasks available
+		time.Sleep(100 * time.Millisecond)
+		return nil
 	}
 
-	return nil // No tasks to process
+	// Process task...
+	return nil
 }
 
 // processTask processes a single task using the crawler
