@@ -198,26 +198,28 @@ func (db *DB) GetQueue() *DbQueue {
 
 // CompleteTask marks a task as completed
 func (q *DbQueue) CompleteTask(ctx context.Context, task *Task) error {
-	_, err := q.db.ExecContext(ctx, `
-		UPDATE tasks
-		SET 
-			status = 'completed', 
-			completed_at = $1,
-			status_code = $2,
-			response_time = $3,
-			cache_status = $4,
-			content_type = $5,
-			error = $6
-		WHERE id = $7
-	`, time.Now(), task.StatusCode, task.ResponseTime,
-		task.CacheStatus, task.ContentType, task.Error, task.ID)
+	return q.Execute(ctx, func(tx *sql.Tx) error {
+		// Update task
+		task.Status = "completed"
+		task.CompletedAt = time.Now()
+		_, err := tx.ExecContext(ctx, `
+			UPDATE tasks 
+			SET status = $1, completed_at = $2, status_code = $3, 
+				response_time = $4, cache_status = $5, content_type = $6
+			WHERE id = $7
+		`, task.Status, task.CompletedAt, task.StatusCode,
+			task.ResponseTime, task.CacheStatus, task.ContentType, task.ID)
+		if err != nil {
+			return err
+		}
 
-	if err != nil {
-		return fmt.Errorf("failed to mark task as completed: %w", err)
-	}
+		// Update job progress if this is part of a job
+		if task.JobID != "" {
+			return q.updateJobProgress(ctx, task.JobID)
+		}
 
-	// Update job progress
-	return q.updateJobProgress(ctx, task.JobID)
+		return nil
+	})
 }
 
 // FailTask marks a task as failed
