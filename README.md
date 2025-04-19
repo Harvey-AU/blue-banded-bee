@@ -8,7 +8,7 @@ Automatically warm Webflow site caches (and other websites) after publishing to 
 - 📊 Response time and cache status monitoring
 - 🔒 Built-in rate limiting and security features
 - 📝 Comprehensive logging and error tracking
-- 🗄️ Persistent storage with Turso database
+- 🗄️ Persistent storage with PostgreSQL database
 
 ## Quick Start
 
@@ -27,14 +27,14 @@ go run src/main.go
 
 ## Development Status
 
-Current development stage: Stage 2 - Multi-domain Support & Job Queue Architecture
+Current development stage: Stage 3 - PostgreSQL Migration & Performance Optimization
 
 ### Project Stages
 
 - ✅ Stage 0: Project Setup & Infrastructure
 - ✅ Stage 1: Core Setup & Basic Crawling
-- 🟡 Stage 2: Multi-domain Support & Job Queue Architecture
-- ⭕ Stage 3: Deployment & Monitoring
+- ✅ Stage 2: Multi-domain Support & Job Queue Architecture
+- 🟡 Stage 3: PostgreSQL Migration & Performance Optimization
 - ⭕ Stage 4: Auth & User Management
 - ⭕ Stage 5: Billing & Subscriptions
 - ⭕ Stage 6: Webflow Integration & Launch
@@ -44,7 +44,7 @@ See our [detailed roadmap](docs/Roadmap.md) for more information.
 ## Tech Stack
 
 - Backend: Go
-- Database: Turso (Edge SQL database)
+- Database: PostgreSQL
 - Hosting: Fly.io
 - Error Tracking: Sentry
 - Cache Layer: Cloudflare

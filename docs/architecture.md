@@ -13,10 +13,11 @@ Blue Banded Bee is built with a worker pool architecture for efficient URL crawl
 - **Recovery System**: Automatic recovery of stalled or failed tasks
 - **Task Monitoring**: Real-time monitoring of task progress and status
 
-### Database Layer (Turso)
+### Database Layer (PostgreSQL)
 
 - Stores jobs, tasks, and results
-- Handles concurrent access with proper locking
+- Uses row-level locking for efficient concurrent access
+- Efficient batch operations for better performance
 - Maintains job history and statistics
 
 ### API Layer
@@ -42,7 +43,7 @@ Blue Banded Bee is built with a worker pool architecture for efficient URL crawl
 
 2. **Task Processing**
 
-   - Workers pick up pending tasks
+   - Workers pick up pending tasks using FOR UPDATE SKIP LOCKED
    - URLs are crawled with retry logic
    - Results stored in database
    - Task status updated
@@ -75,6 +76,6 @@ Blue Banded Bee is built with a worker pool architecture for efficient URL crawl
 ## Deployment Architecture
 
 - Fly.io hosting
-- Edge database with Turso
+- PostgreSQL database for efficient concurrent access
 - Cloudflare caching layer
 - Sentry error tracking

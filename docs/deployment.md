@@ -4,7 +4,7 @@
 
 - Fly.io account
 - GitHub account
-- Turso database
+- PostgreSQL database on Fly.io
 - Sentry account (optional)
 - Environment variables configured
 
@@ -18,8 +18,7 @@ Required environment variables:
 APP_ENV=production
 PORT=8080
 LOG_LEVEL=info
-DATABASE_URL=your_turso_url
-DATABASE_AUTH_TOKEN=your_turso_token
+# PostgreSQL environment variables are automatically set by Fly.io
 SENTRY_DSN=your_sentry_dsn
 ```
 
@@ -34,9 +33,13 @@ PORT=8080           # API server port
 DEBUG=true          # Enable debug logging
 LOG_LEVEL=debug     # debug, info, warn, or error
 
-# Database
-DATABASE_URL=libsql://your-db-name.turso.io
-DATABASE_AUTH_TOKEN=your_auth_token
+# Database (Development)
+PGHOST=localhost
+PGPORT=5432
+PGDATABASE=postgres
+PGUSER=postgres
+PGPASSWORD=your_password
+PGSSLMODE=disable
 
 # Error Tracking
 SENTRY_DSN=your_sentry_dsn
@@ -63,10 +66,15 @@ SENTRY_DSN=your_sentry_dsn
    fly launch
    ```
 
-3. Configure secrets:
+3. Setup PostgreSQL:
+
    ```bash
-   fly secrets set DATABASE_URL=your_turso_url
-   fly secrets set DATABASE_AUTH_TOKEN=your_turso_token
+   fly postgres create --name your-app-db
+   fly postgres attach --postgres-app your-app-db
+   ```
+
+4. Configure any additional secrets:
+   ```bash
    fly secrets set SENTRY_DSN=your_sentry_dsn
    ```
 
@@ -75,8 +83,6 @@ SENTRY_DSN=your_sentry_dsn
 1. Repository secrets:
 
    - `FLY_API_TOKEN`
-   - `TURSO_DATABASE_URL`
-   - `TURSO_AUTH_TOKEN`
    - `SENTRY_DSN`
 
 2. Workflow triggers:
@@ -144,17 +150,11 @@ SENTRY_DSN=your_sentry_dsn
 
    ```bash
    flyctl launch
-   flyctl secrets set
+   flyctl postgres create
+   flyctl postgres attach
    ```
 
-2. **Database Migration**
-
-   ```bash
-   flyctl ssh console
-   ./migrate up
-   ```
-
-3. **Deploy Application**
+2. **Deploy Application**
    ```bash
    flyctl deploy
    ```
@@ -199,9 +199,9 @@ SENTRY_DSN=your_sentry_dsn
 
 ### Database
 
-- Regular VACUUM
-- Index optimization
+- Regular index maintenance
 - Connection pool management
+- Performance monitoring
 
 ### Logs
 
