@@ -284,25 +284,25 @@ func (q *DbQueue) updateJobProgress(ctx context.Context, jobID string) error {
 		return fmt.Errorf("failed to get failed tasks: %w", err)
 	}
 
-	// Calculate progress
-	progress := 0.0
+	// Calculate progress - explicitly cast to float64
+	var progress float64 = 0.0
 	if total > 0 {
 		progress = float64(completed+failed) / float64(total) * 100.0
 	}
 
-	// Update job
+	// Update job - ensure progress is explicitly typed as REAL
 	_, err = tx.ExecContext(ctx, `
 		UPDATE jobs
 		SET 
-			progress = $1,
+			progress = $1::REAL,
 			completed_tasks = $2,
 			failed_tasks = $3,
 			status = CASE 
-				WHEN $1 >= 100.0 THEN 'completed'
+				WHEN $1::REAL >= 100.0 THEN 'completed'
 				ELSE status
 			END,
 			completed_at = CASE 
-				WHEN $1 >= 100.0 THEN NOW()
+				WHEN $1::REAL >= 100.0 THEN NOW()
 				ELSE completed_at
 			END
 		WHERE id = $4
