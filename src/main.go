@@ -191,7 +191,7 @@ func main() {
 	})
 
 	// Add this endpoint
-	http.HandleFunc("/crawl-sitemap", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/site", func(w http.ResponseWriter, r *http.Request) {
 		// Get domain from query parameters
 		domain := r.URL.Query().Get("domain")
 		if domain == "" {
