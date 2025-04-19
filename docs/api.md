@@ -4,8 +4,8 @@
 
 ### Create a crawl job by scanning sitemap
 
-http://localhost:8080/scan-sitemap?domain=teamharvey.co&workers=5
-https://blue-banded-bee.fly.dev/scan-sitemap?domain=teamharvey.co&workers=5
+http://localhost:8080/site?domain=teamharvey.co&workers=5
+https://blue-banded-bee.fly.dev/site?domain=teamharvey.co&workers=5
 
 ### Test crawl a single URL
 
