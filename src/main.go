@@ -227,52 +227,40 @@ func main() {
 			allURLs = append(allURLs, urls...)
 		}
 
-		// Start a transaction
-		tx, err := pgDB.GetDB().BeginTx(r.Context(), nil)
-		if err != nil {
-			log.Error().Err(err).Msg("Failed to start transaction")
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
-			return
-		}
-		defer tx.Rollback() // Will be ignored if tx.Commit() is called
-
-		// Insert job
+		// Define current time for consistent timestamps
 		now := time.Now()
-		_, err = tx.ExecContext(r.Context(), `
+
+		// Create a job record FIRST
+		_, err = pgDB.GetDB().ExecContext(r.Context(), `
 			INSERT INTO jobs (id, domain, status, progress, total_tasks, completed_tasks, 
-							 failed_tasks, created_at, concurrency, find_links, max_depth)
+							failed_tasks, created_at, concurrency, find_links, max_depth)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 		`, jobID, domain, "pending", 0.0, len(allURLs), 0, 0, now, 5, false, 1)
+
 		if err != nil {
-			log.Error().Err(err).Str("job_id", jobID).Msg("Failed to create job")
+			log.Error().Err(err).Str("domain", domain).Msg("Failed to create job")
 			http.Error(w, "Failed to create job", http.StatusInternalServerError)
 			return
 		}
 
-		// Insert tasks
+		// THEN add all URLs as tasks after job exists
 		for _, url := range allURLs {
 			taskID := uuid.New().String()
-			_, err := tx.ExecContext(r.Context(), `
+			_, err := pgDB.GetDB().ExecContext(r.Context(), `
 				INSERT INTO tasks (id, job_id, url, status, depth, created_at, retry_count, source_type, source_url)
 				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 			`, taskID, jobID, url, "pending", 0, now, 0, "sitemap", baseURL)
+
 			if err != nil {
 				log.Error().Err(err).Str("url", url).Msg("Failed to add task")
-				// Continue with other tasks
+				// Continue with other tasks despite error
 			}
-		}
-
-		// Commit transaction
-		if err := tx.Commit(); err != nil {
-			log.Error().Err(err).Msg("Failed to commit transaction")
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
-			return
 		}
 
 		// Update job status to running
 		_, err = pgDB.GetDB().ExecContext(r.Context(), `
 			UPDATE jobs SET status = 'running', started_at = $1 WHERE id = $2
-		`, now, jobID)
+		`, time.Now(), jobID)
 		if err != nil {
 			log.Error().Err(err).Str("job_id", jobID).Msg("Failed to update job status")
 		}
