@@ -9,7 +9,7 @@
 ## Testing
 
 - Unit tests: `go test ./...`
-- Integration tests: Require Turso credentials in `.env`
+- Integration tests: Require PostgreSQL credentials in `.env`
 - Test coverage: `go test ./... -cover`
 
 ## Pull Request Process

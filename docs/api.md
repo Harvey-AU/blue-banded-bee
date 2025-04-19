@@ -188,8 +188,12 @@ RATE_LIMIT_BURST=20
 ### Database Configuration
 
 ```env
-TURSO_DATABASE_URL=
-TURSO_AUTH_TOKEN=
+PGHOST=localhost
+PGPORT=5432
+PGDATABASE=postgres
+PGUSER=postgres
+PGPASSWORD=your_password
+PGSSLMODE=disable
 ```
 
 ## Deployment Steps
