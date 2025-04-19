@@ -1,14 +1,12 @@
 # Important Notes for Next Developer
 
-- The PostgreSQL schema doesn't enforce foreign key constraints for crawl_results to allow standalone crawling
-- The core database operations are implemented in src/db/postgres/db.go
-- The task queue implementation is in src/db/postgres/queue.go
-- The main.go (previously main-pg.go) file contains a simplified API implementation
+- We've just moved to postgres and also using supabase (after briefly using postgres in Fly)
+- The main-archive.go.bak contains the original logic/setup for the app pre-postgres
 - We've successfully deployed to Fly.io and verified functionality
 - Local development works with PostgreSQL running on localhost
+- It is running jobs, tasks and recording results
+- Before proceeding with furthur functionality/etc, we want to finalise the data schema to allow for separatation of simple tables with references: site (for each domain), page (for each page being crawled), results (To store actual results), tasks to only have task status in them.
 - We need to implement a more robust worker pool using PostgreSQL's row-level locking
-
-By completing these next steps, we'll have a fully functioning application that leverages PostgreSQL's strengths for handling high concurrency and complex transactions.
 
 ## Stage 0: Project Setup & Infrastructure (6-10 hrs) ✅
 
