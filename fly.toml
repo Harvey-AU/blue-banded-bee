@@ -8,6 +8,10 @@ primary_region = 'syd'
 
 [build]
 
+[env]
+  LOG_LEVEL = "debug"
+  APP_ENV = "production"
+
 [http_service]
   internal_port = 8080
   force_https = true
