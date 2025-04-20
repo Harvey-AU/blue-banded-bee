@@ -121,7 +121,7 @@ func (wp *WorkerPool) processNextTask(ctx context.Context, workerID int) error {
 	err = wp.db.QueryRowContext(ctx, `
 		SELECT d.name FROM domains d
 		JOIN jobs j ON j.domain_id = d.id
-		WHERE j.id = ?`, task.JobID).Scan(&domainName)
+		WHERE j.id = $1`, task.JobID).Scan(&domainName)
 	if err != nil {
 		return fmt.Errorf("failed to get domain name: %w", err)
 	}
