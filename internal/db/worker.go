@@ -1,17 +1,17 @@
-package postgres
+package db
 
 import (
 	"context"
 	"sync"
 	"time"
 
-	"github.com/Harvey-AU/blue-banded-bee/src/crawler"
+	"github.com/Harvey-AU/blue-banded-bee/internal/crawler"
 	"github.com/rs/zerolog/log"
 )
 
 // WorkerPool manages a pool of workers that process tasks using PostgreSQL queue
 type WorkerPool struct {
-	queue        *TaskQueue
+	queue        *DbQueue
 	crawler      *crawler.Crawler
 	workerCount  int
 	stopCh       chan struct{}
@@ -22,7 +22,7 @@ type WorkerPool struct {
 // NewWorkerPool creates a new worker pool with PostgreSQL task queue
 func NewWorkerPool(db *DB, crawler *crawler.Crawler, workerCount int) *WorkerPool {
 	return &WorkerPool{
-		queue:        NewTaskQueue(db.client),
+		queue:        NewDbQueue(db.client),
 		crawler:      crawler,
 		workerCount:  workerCount,
 		stopCh:       make(chan struct{}),
@@ -32,7 +32,7 @@ func NewWorkerPool(db *DB, crawler *crawler.Crawler, workerCount int) *WorkerPoo
 
 // Start begins processing tasks with the worker pool
 func (wp *WorkerPool) Start(ctx context.Context) {
-	log.Info().Int("workers", wp.workerCount).Msg("Starting PostgreSQL worker pool")
+	log.Info().Int("workers", wp.workerCount).Msg("Starting worker pool")
 
 	wp.wg.Add(wp.workerCount)
 	for i := 0; i < wp.workerCount; i++ {
@@ -42,10 +42,10 @@ func (wp *WorkerPool) Start(ctx context.Context) {
 
 // Stop gracefully shuts down the worker pool
 func (wp *WorkerPool) Stop() {
-	log.Debug().Msg("Stopping PostgreSQL worker pool")
+	log.Debug().Msg("Stopping worker pool")
 	close(wp.stopCh)
 	wp.wg.Wait()
-	log.Debug().Msg("PostgreSQL worker pool stopped")
+	log.Debug().Msg("Worker pool stopped")
 }
 
 // worker continuously processes tasks

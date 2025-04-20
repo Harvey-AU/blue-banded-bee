@@ -4,20 +4,23 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
-	"github.com/Harvey-AU/blue-banded-bee/src/crawler"
-	"github.com/Harvey-AU/blue-banded-bee/src/db/postgres"
+	"github.com/Harvey-AU/blue-banded-bee/internal/crawler"
+	"github.com/Harvey-AU/blue-banded-bee/internal/db"
 	"github.com/google/uuid"
 	"github.com/joho/godotenv"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	"golang.org/x/time/rate"
 )
 
 // Config holds the application configuration loaded from environment variables
@@ -44,7 +47,7 @@ func main() {
 	setupLogging(config)
 
 	// Connect to PostgreSQL
-	pgDB, err := postgres.InitFromEnv()
+	pgDB, err := db.InitFromEnv()
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to connect to PostgreSQL database")
 	}
@@ -57,7 +60,7 @@ func main() {
 	cr := crawler.New(crawlerConfig)
 
 	// Create a worker pool for task processing
-	workerPool := postgres.NewWorkerPool(pgDB, cr, 5) // 5 concurrent workers
+	workerPool := db.NewWorkerPool(pgDB, cr, 5) // 5 concurrent workers
 	workerPool.Start(context.Background())
 	defer workerPool.Stop()
 
@@ -93,6 +96,9 @@ func main() {
 			}
 		}
 	}()
+
+	// Create a rate limiter
+	limiter := newRateLimiter()
 
 	// HTTP endpoints
 	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
@@ -160,7 +166,7 @@ func main() {
 		}
 
 		// Store the result
-		pgDB.StoreCrawlResult(r.Context(), &postgres.CrawlResult{
+		pgDB.StoreCrawlResult(r.Context(), &db.CrawlResult{
 			URL:          result.URL,
 			ResponseTime: result.ResponseTime,
 			StatusCode:   result.StatusCode,
@@ -308,7 +314,14 @@ func main() {
 	// Create a new HTTP server
 	server := &http.Server{
 		Addr:    ":" + config.Port,
-		Handler: nil, // Uses the default ServeMux
+		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			ip := getClientIP(r)
+			if !limiter.getLimiter(ip).Allow() {
+				http.Error(w, "Too Many Requests", http.StatusTooManyRequests)
+				return
+			}
+			http.DefaultServeMux.ServeHTTP(w, r)
+		}),
 	}
 
 	// Channel to listen for termination signals
@@ -347,23 +360,83 @@ func main() {
 
 // getEnvWithDefault retrieves an environment variable or returns a default value if not set
 func getEnvWithDefault(key, defaultValue string) string {
-	if value := os.Getenv(key); value != "" {
-		return value
+	value := os.Getenv(key)
+	if value == "" {
+		return defaultValue
 	}
-	return defaultValue
+	return value
 }
 
-// setupLogging configures the logger based on the environment
+// setupLogging configures the logging system
 func setupLogging(config *Config) {
-	// Set up pretty console logging for development
-	if config.Env == "development" {
-		log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: time.RFC3339})
-	}
-
-	// Set log level
+	// Configure log level
 	level, err := zerolog.ParseLevel(config.LogLevel)
 	if err != nil {
 		level = zerolog.InfoLevel
 	}
 	zerolog.SetGlobalLevel(level)
+
+	// Use console writer in development
+	if config.Env == "development" {
+		log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: time.RFC3339})
+	}
+}
+
+// RateLimiter represents a rate limiting system based on client IP addresses
+type RateLimiter struct {
+	limits   map[string]*IPRateLimiter
+	mu       sync.Mutex
+	rate     rate.Limit
+	capacity int
+}
+
+// IPRateLimiter wraps a token bucket rate limiter specific to an IP address
+type IPRateLimiter struct {
+	limiter *rate.Limiter
+}
+
+// newRateLimiter creates a new rate limiter with default settings
+func newRateLimiter() *RateLimiter {
+	return &RateLimiter{
+		limits:   make(map[string]*IPRateLimiter),
+		rate:     rate.Limit(5), // 5 requests per second
+		capacity: 5,             // 5 burst capacity
+	}
+}
+
+// getLimiter returns the rate limiter for a specific IP address
+func (rl *RateLimiter) getLimiter(ip string) *IPRateLimiter {
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+
+	limiter, exists := rl.limits[ip]
+	if !exists {
+		limiter = &IPRateLimiter{
+			limiter: rate.NewLimiter(rl.rate, rl.capacity),
+		}
+		rl.limits[ip] = limiter
+	}
+
+	return limiter
+}
+
+// Allow checks if a request from this IP should be allowed
+func (ipl *IPRateLimiter) Allow() bool {
+	return ipl.limiter.Allow()
+}
+
+// getClientIP extracts the client's IP address from a request
+func getClientIP(r *http.Request) string {
+	// Check for X-Forwarded-For header first (for clients behind proxies)
+	ip := r.Header.Get("X-Forwarded-For")
+	if ip != "" {
+		// X-Forwarded-For might contain multiple IPs, take the first one
+		ips := strings.Split(ip, ",")
+		ip = strings.TrimSpace(ips[0])
+		return ip
+	}
+
+	// If no X-Forwarded-For, use RemoteAddr
+	ip, _, _ = net.SplitHostPort(r.RemoteAddr)
+	return ip
 }

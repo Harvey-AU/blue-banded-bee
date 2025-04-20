@@ -9,7 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/getsentry/sentry-go"
 	"github.com/gocolly/colly/v2"
 	"github.com/rs/zerolog/log"
 )
@@ -65,106 +64,46 @@ func New(config *Config, id ...string) *Crawler {
 	}
 }
 
-// WarmURL performs a crawl of the specified URL and returns the result
-// It validates the URL, makes the request, and tracks metrics like response time
-// and cache status. Any non-2xx status code is treated as an error.
-// The context can be used to cancel the request or set a timeout.
+// WarmURL performs a crawl of the specified URL and returns the result.
+// It respects context cancellation, enforces timeout, and treats non-2xx statuses as errors.
 func (c *Crawler) WarmURL(ctx context.Context, targetURL string) (*CrawlResult, error) {
-	span := sentry.StartSpan(ctx, "crawler.warm_url")
-	defer span.Finish()
-
-	span.SetTag("crawler.url", targetURL)
-	span.SetTag("crawler.id", c.id) // Add crawler ID to spans
-	start := time.Now()
-
-	result := &CrawlResult{
-		URL:       targetURL,
-		Timestamp: time.Now().Unix(),
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
-
-	// Add this block after URL validation but before crawling
-	if c.config.SkipCachedURLs {
-		cacheStatus, checkErr := c.CheckCacheStatus(ctx, targetURL)
-		if checkErr == nil && cacheStatus == "HIT" {
-			log.Debug().
-				Str("url", targetURL).
-				Msg("URL already cached (HIT), skipping full crawl")
-
-			result.StatusCode = http.StatusOK
-			result.CacheStatus = cacheStatus
-			result.ResponseTime = time.Since(start).Milliseconds()
-			result.SkippedCrawl = true
-
-			return result, nil
-		}
-	}
-
-	// Parse and validate URL
-	parsedURL, err := url.Parse(targetURL)
+	parsed, err := url.Parse(targetURL)
 	if err != nil {
-		span.SetTag("error", "true")
-		span.SetTag("error.type", "url_parse_error")
-		span.SetData("error.message", err.Error())
-		result.Error = err.Error()
-		span.Finish()
-		sentry.CaptureException(err)
-		return result, err
+		res := &CrawlResult{URL: targetURL, Timestamp: time.Now().Unix(), Error: err.Error()}
+		return res, err
 	}
-
-	// Additional validation
-	if parsedURL.Scheme == "" || parsedURL.Host == "" {
+	if parsed.Scheme == "" || parsed.Host == "" {
 		err := fmt.Errorf("invalid URL format: %s", targetURL)
-		span.SetTag("error", "true")
-		span.SetTag("error.type", "url_validation_error")
-		span.SetData("error.message", err.Error())
-		result.Error = err.Error()
-		span.Finish()
-		sentry.CaptureException(err)
-		return result, err
+		res := &CrawlResult{URL: targetURL, Timestamp: time.Now().Unix(), Error: err.Error()}
+		return res, err
 	}
-
-	// Set up the response handlers
-	c.colly.OnResponse(func(r *colly.Response) {
-		result.StatusCode = r.StatusCode
-		result.CacheStatus = r.Headers.Get("CF-Cache-Status")
-		
-		// Add debug logging
-		log.Debug().
-			Int("status_code", r.StatusCode).
-			Str("cache_status", r.Headers.Get("CF-Cache-Status")).
-			Str("content_type", r.Headers.Get("Content-Type")).
-			Str("url", targetURL).
-			Msg("Crawler received response")
-		
-		c.handleResponseType(result, r)
-	})
-
-	c.colly.OnError(func(r *colly.Response, err error) {
-		if r != nil {
-			result.StatusCode = r.StatusCode
-		}
-		result.Error = err.Error()
-	})
-
-	// Use existing collector for the request
-	err = c.colly.Visit(targetURL)
+	start := time.Now()
+	res := &CrawlResult{URL: targetURL, Timestamp: start.Unix()}
+	client := &http.Client{Timeout: c.config.DefaultTimeout}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, targetURL, nil)
 	if err != nil {
-		// Handle error
-		return result, err
+		res.Error = err.Error(); res.ResponseTime = time.Since(start).Milliseconds()
+		return res, err
 	}
-
-	// Wait for collector to finish
-	c.colly.Wait()
-
-	result.ResponseTime = time.Since(start).Milliseconds()
-	span.SetData("response_time_ms", result.ResponseTime)
-	span.SetTag("status_code", fmt.Sprintf("%d", result.StatusCode))
-	span.SetTag("cache_status", result.CacheStatus)
-
-	// Validate cache status
-	c.validateCacheStatus(result)
-
-	return result, err
+	resp, err := client.Do(req)
+	res.ResponseTime = time.Since(start).Milliseconds()
+	if err != nil {
+		res.Error = err.Error()
+		return res, err
+	}
+	defer resp.Body.Close()
+	res.StatusCode = resp.StatusCode
+	res.CacheStatus = resp.Header.Get("CF-Cache-Status")
+	res.ContentType = resp.Header.Get("Content-Type")
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		err := fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+		res.Error = err.Error()
+		return res, err
+	}
+	return res, nil
 }
 
 // Helper function to determine if we should retry based on the error or status code
