@@ -1,70 +1,85 @@
-# Database Configuration Variables
+# PostgreSQL Configuration Variables
 
-This document lists all the configuration variables modified to reduce database lock contention.
+This document lists all the configuration variables for the PostgreSQL database to optimize performance and reduce lock contention.
 
 ## Connection Pool Settings
 
-**File**: `src/db/db.go`
+**File**: `internal/db/db.go`
 
 ```go
-// Original values
-client.SetMaxOpenConns(5)
-client.SetMaxIdleConns(3)
-
-// Reduced values
-client.SetMaxOpenConns(3)
-client.SetMaxIdleConns(2)
+// Current optimized values
+client.SetMaxOpenConns(25)
+client.SetMaxIdleConns(10)
+client.SetConnMaxLifetime(5 * time.Minute)
+client.SetConnMaxIdleTime(2 * time.Minute)
 ```
 
 ## Queue Workers
 
-**File**: `src/common/queue.go`
+**File**: `internal/db/worker.go`
 
 ```go
-// Original value
-workerCount: 5
-
-// New value
-workerCount: 2
+// Current value
+workerPool := db.NewWorkerPool(database, crawler, 3) // 3 concurrent workers
 ```
 
-## Retry Settings
+## Task Queue Implementation
 
-**File**: `src/db/db.go`
+**File**: `internal/db/queue.go`
 
 ```go
-// Original values
-retries := 3
-backoff := 100 * time.Millisecond
-
-// Reduced values
-retries := 5
-baseBackoff := 200 * time.Millisecond
+// Task selection uses PostgreSQL's FOR UPDATE SKIP LOCKED for efficient concurrent processing
+rows, err := tx.QueryContext(ctx, `
+    SELECT id, job_id, url, depth, source_type, source_url
+    FROM tasks
+    WHERE status = 'pending'
+    ORDER BY created_at ASC
+    LIMIT 1
+    FOR UPDATE SKIP LOCKED
+`, args...)
 ```
 
-## Sleep Durations
+## Job Progress Tracking
 
-**File**: `src/jobs/worker.go`
+**File**: `internal/db/queue.go`
 
 ```go
-// Reduced values
-// Sleep between successful tasks
-time.Sleep(200 * time.Millisecond)
-
-// Maximum backoff sleep time
-maxSleep := 10 * time.Second
+// Uses explicit REAL type casting for PostgreSQL
+_, err = tx.ExecContext(ctx, `
+    UPDATE jobs
+    SET
+        progress = $1::REAL,
+        completed_tasks = $2,
+        failed_tasks = $3,
+        status = CASE
+            WHEN $1::REAL >= 100.0 THEN 'completed'
+            ELSE status
+        END,
+        completed_at = CASE
+            WHEN $1::REAL >= 100.0 THEN NOW()
+            ELSE completed_at
+        END
+    WHERE id = $4
+`, progress, completed, failed, jobID)
 ```
 
 ## Batch Processing
 
-**File**: `src/jobs/worker.go`
+**File**: `internal/db/queue.go`
 
 ```go
-// Original values
-tasks: make([]*Task, 0, 100)
-batchTimer: time.NewTicker(5 * time.Second)
-
-// Reduced values
-tasks: make([]*Task, 0, 50)
-batchTimer: time.NewTicker(10 * time.Second)
+// Optimized batch insert using PostgreSQL's unnest for better performance
+result, err := tx.ExecContext(ctx, `
+    INSERT INTO tasks (id, job_id, url, status, depth, source_type, source_url, created_at)
+    SELECT
+        gen_random_uuid(),
+        $1,
+        url,
+        'pending',
+        $2,
+        $3,
+        $4,
+        NOW()
+    FROM unnest($5::text[]) AS url
+`, jobID, depth, sourceType, sourceURL, pq.Array(urls))
 ```

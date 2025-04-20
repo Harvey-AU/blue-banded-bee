@@ -2,16 +2,16 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"os"
 	"time"
 
 	"github.com/Harvey-AU/blue-banded-bee/internal/crawler"
+	"github.com/Harvey-AU/blue-banded-bee/internal/db"
 	"github.com/Harvey-AU/blue-banded-bee/internal/jobs"
 	"github.com/joho/godotenv"
+	_ "github.com/lib/pq"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
-	_ "github.com/tursodatabase/libsql-client-go/libsql"
 )
 
 /**
@@ -27,8 +27,7 @@ import (
  * Usage:
  *   go run cmd/test_jobs/main.go
  *
- * The program expects DATABASE_URL and DATABASE_AUTH_TOKEN environment variables
- * to be set in the .env file.
+ * The program expects DATABASE_URL environment variable to be set in the .env file.
  */
 
 func main() {
@@ -43,84 +42,85 @@ func main() {
 
 	// Get database details from environment
 	dbURL := os.Getenv("DATABASE_URL")
-	authToken := os.Getenv("DATABASE_AUTH_TOKEN")
-	if dbURL == "" || authToken == "" {
-		log.Fatal().Msg("DATABASE_URL and DATABASE_AUTH_TOKEN must be set")
+	if dbURL == "" {
+		log.Fatal().Msg("DATABASE_URL must be set")
 	}
 
 	// Connect to database
-	db, err := sql.Open("libsql", dbURL+"?authToken="+authToken)
+	log.Info().Msg("Connecting to PostgreSQL database...")
+	database, err := db.InitFromEnv()
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to connect to database")
 	}
-	defer db.Close()
+	defer database.Close()
 
-	// Initialize database schema
-	if err := jobs.InitSchema(db); err != nil {
-		log.Fatal().Err(err).Msg("Failed to initialize schema")
-	}
-	log.Debug().Msg("Database schema initialized")
-
-	// Create crawler and worker pool
+	// Set up crawler
 	crawler := crawler.New(nil)
-	workerPool := jobs.NewWorkerPool(db, crawler, 5)
-	jobManager := jobs.NewJobManager(db, crawler, workerPool)
 
-	// Start the worker pool
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	workerPool.Start(ctx)
+	// Create worker pool
+	workerPool := db.NewWorkerPool(database, crawler, 3)
+	workerPool.Start(context.Background())
+	defer workerPool.Stop()
+
+	log.Info().Msg("Worker pool started with 3 workers")
 
 	// Create a test job
+	jobManager := jobs.NewJobManager(database.GetDB(), crawler, nil)
+	
+	// Set up job options
 	jobOptions := &jobs.JobOptions{
-		Domain:       "example.com",
-		StartURLs:    []string{"https://example.com"},
-		UseSitemap:   false,
-		Concurrency:  2,
-		FindLinks:    false,
-		MaxDepth:     1,
-		IncludePaths: nil,
-		ExcludePaths: nil,
+		Domain:      "example.com",
+		Concurrency: 2,
+		FindLinks:   true,
+		MaxDepth:    1,
+		StartURLs:   []string{
+			"https://example.com",
+			"https://example.com/about",
+			"https://example.com/contact",
+		},
 	}
 
-	job, err := jobManager.CreateJob(ctx, jobOptions)
+	// Submit the job to the queue
+	job, err := jobManager.CreateJob(context.Background(), jobOptions)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to create job")
 	}
-	log.Info().Str("job_id", job.ID).Msg("Created job")
+
+	log.Info().Str("job_id", job.ID).Msg("Created test job")
 
 	// Start the job
-	if err := jobManager.StartJob(ctx, job.ID); err != nil {
+	if err := jobManager.StartJob(context.Background(), job.ID); err != nil {
 		log.Fatal().Err(err).Msg("Failed to start job")
 	}
-	log.Info().Str("job_id", job.ID).Msg("Started job")
 
-	// Wait and check job status periodically
-	for i := 0; i < 10; i++ {
+	log.Info().Str("job_id", job.ID).Msg("Started job, monitoring progress...")
+
+	// Monitor job progress
+	for {
 		time.Sleep(1 * time.Second)
-
-		job, err := jobManager.GetJobStatus(ctx, job.ID)
+		
+		job, err := jobManager.GetJobStatus(context.Background(), job.ID)
 		if err != nil {
 			log.Error().Err(err).Msg("Failed to get job status")
 			continue
 		}
-
+		
 		log.Info().
-			Str("job_id", job.ID).
 			Str("status", string(job.Status)).
 			Float64("progress", job.Progress).
 			Int("completed", job.CompletedTasks).
 			Int("failed", job.FailedTasks).
 			Int("total", job.TotalTasks).
-			Msg("Job status")
-
-		if job.Status != jobs.JobStatusRunning {
+			Msg("Job progress")
+			
+		if job.Status == jobs.JobStatusCompleted || job.Status == jobs.JobStatusFailed {
+			log.Info().Str("final_status", string(job.Status)).Msg("Job finished")
+			break
+		}
+		
+		if job.Status == jobs.JobStatusRunning && job.Progress >= 100.0 {
+			log.Info().Msg("Job complete")
 			break
 		}
 	}
-
-	// Let worker pool finish any in-progress tasks
-	time.Sleep(2 * time.Second)
-
-	log.Debug().Msg("Test completed")
 }
