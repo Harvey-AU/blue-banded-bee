@@ -265,14 +265,36 @@ func (wp *WorkerPool) processNextTask(ctx context.Context) error {
 			return err // Return actual errors
 		}
 		if task != nil {
-			// Task is already marked as running by GetNextPendingTask
 			log.Info().
 				Str("task_id", task.ID).
 				Str("job_id", task.JobID).
 				Int("page_id", task.PageID).
 				Str("path", task.Path).
 				Msg("Found and claimed pending task")
-			// Actual processing is done elsewhere
+			// Process the task
+			result, err := wp.processTask(ctx, task)
+			now := time.Now()
+			if err != nil {
+				// mark as failed
+				_, updErr := wp.db.ExecContext(ctx, `
+					UPDATE tasks
+					SET status = $1, completed_at = $2, error = $3
+					WHERE id = $4`,
+					TaskStatusFailed, now, err.Error(), task.ID)
+				if updErr != nil {
+					log.Error().Err(updErr).Str("task_id", task.ID).Msg("Failed to mark task as failed")
+				}
+			} else {
+				// mark as completed with metrics
+				_, updErr := wp.db.ExecContext(ctx, `
+					UPDATE tasks
+					SET status = $1, completed_at = $2, status_code = $3, response_time = $4, cache_status = $5, content_type = $6
+					WHERE id = $7`,
+					TaskStatusCompleted, now, result.StatusCode, result.ResponseTime, result.CacheStatus, result.ContentType, task.ID)
+				if updErr != nil {
+					log.Error().Err(updErr).Str("task_id", task.ID).Msg("Failed to mark task as completed")
+				}
+			}
 			return nil
 		}
 	}
@@ -864,4 +886,26 @@ func GetNextPendingTask(ctx context.Context, db *sql.DB, jobID string) (*Task, e
 	}
 
 	return &task, nil
+}
+
+// processTask processes an individual task
+func (wp *WorkerPool) processTask(ctx context.Context, task *Task) (*crawler.CrawlResult, error) {
+	// get domain name for URL reconstruction
+	var domainName string
+	if err := wp.db.QueryRowContext(ctx, `
+		SELECT d.name FROM tasks t
+		JOIN pages p ON t.page_id = p.id
+		JOIN domains d ON p.domain_id = d.id
+		WHERE t.id = $1`, task.ID).Scan(&domainName); err != nil {
+		return nil, fmt.Errorf("failed to get domain for task %s: %w", task.ID, err)
+	}
+	urlStr := fmt.Sprintf("https://%s%s", domainName, task.Path)
+	log.Info().Str("url", urlStr).Str("task_id", task.ID).Msg("Starting URL warm")
+	result, err := wp.crawler.WarmURL(ctx, urlStr)
+	if err != nil {
+		log.Error().Err(err).Str("task_id", task.ID).Msg("Crawler failed")
+		return result, fmt.Errorf("crawler error: %w", err)
+	}
+	log.Info().Int("status_code", result.StatusCode).Str("task_id", task.ID).Msg("Crawler completed")
+	return result, nil
 }
