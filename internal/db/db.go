@@ -123,6 +123,7 @@ func setupSchema(db *sql.DB) error {
 			id TEXT PRIMARY KEY,
 			job_id TEXT NOT NULL,
 			page_id INTEGER NOT NULL REFERENCES pages(id),
+			path TEXT NOT NULL,
 			status TEXT NOT NULL,
 			depth INTEGER NOT NULL,
 			created_at TIMESTAMP NOT NULL,
