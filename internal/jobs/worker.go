@@ -284,15 +284,6 @@ func (wp *WorkerPool) processNextTask(ctx context.Context) error {
 				if updErr != nil {
 					log.Error().Err(updErr).Str("task_id", task.ID).Msg("Failed to mark task as failed")
 				}
-				// update job failure count and progress
-				_, jobErr := wp.db.ExecContext(ctx, `
-					UPDATE jobs
-					SET failed_tasks = failed_tasks + 1,
-						progress = CASE WHEN total_tasks > 0 THEN completed_tasks::float / total_tasks * 100 ELSE 100 END
-					WHERE id = $1`, task.JobID)
-				if jobErr != nil {
-					log.Error().Err(jobErr).Str("job_id", task.JobID).Msg("Failed to update job failure count")
-				}
 			} else {
 				// mark as completed with metrics
 				_, updErr := wp.db.ExecContext(ctx, `
@@ -303,33 +294,27 @@ func (wp *WorkerPool) processNextTask(ctx context.Context) error {
 				if updErr != nil {
 					log.Error().Err(updErr).Str("task_id", task.ID).Msg("Failed to mark task as completed")
 				}
-				// update job completion count and progress
-				_, jobErr2 := wp.db.ExecContext(ctx, `
-					UPDATE jobs
-					SET completed_tasks = completed_tasks + 1,
-						progress = CASE WHEN total_tasks > 0 THEN (completed_tasks + 1)::float / total_tasks * 100 ELSE 100 END
-					WHERE id = $1`, task.JobID)
-				if jobErr2 != nil {
-					log.Error().Err(jobErr2).Str("job_id", task.JobID).Msg("Failed to update job completion count")
-				}
-				// finalize job if all tasks processed
-				var total, compCount, failCount int
-				if err := wp.db.QueryRowContext(ctx, `
-					SELECT total_tasks, completed_tasks, failed_tasks
-					FROM jobs WHERE id = $1`, task.JobID).Scan(&total, &compCount, &failCount); err == nil {
-					if compCount+failCount >= total {
-						finalStatus := JobStatusCompleted
-						if failCount > 0 {
-							finalStatus = JobStatusFailed
-						}
-						_, finErr := wp.db.ExecContext(ctx, `
-							UPDATE jobs
-							SET status = $1, completed_at = $2
-							WHERE id = $3`, finalStatus, now, task.JobID)
-						if finErr != nil {
-							log.Error().Err(finErr).Str("job_id", task.JobID).Msg("Failed to finalize job status")
-						}
+			}
+			// recalc job metrics and finalize job if done
+			var totalTasks, compCount, failCount int
+			if err := wp.db.QueryRowContext(ctx, `
+				SELECT total_tasks, 
+					   (SELECT COUNT(*) FROM tasks WHERE job_id = $1 AND status = $2),
+					   (SELECT COUNT(*) FROM tasks WHERE job_id = $1 AND status = $3)
+				FROM jobs WHERE id = $1`, task.JobID, TaskStatusCompleted, TaskStatusFailed).Scan(&totalTasks, &compCount, &failCount); err == nil {
+				// update metrics
+				_, _ = wp.db.ExecContext(ctx, `
+					UPDATE jobs SET completed_tasks = $2, failed_tasks = $3,
+						progress = CASE WHEN total_tasks > 0 THEN ($2::float / total_tasks * 100) ELSE 100 END
+					WHERE id = $1`, task.JobID, compCount, failCount)
+				// finalize if all tasks accounted
+				if compCount+failCount >= totalTasks {
+					final := JobStatusCompleted
+					if failCount > 0 {
+						final = JobStatusFailed
 					}
+					_, _ = wp.db.ExecContext(ctx, `UPDATE jobs SET status = $1, completed_at = $2 WHERE id = $3`, final, now, task.JobID)
+					wp.RemoveJob(task.JobID)
 				}
 			}
 			return nil
@@ -353,31 +338,6 @@ func EnqueueURLs(ctx context.Context, db *sql.DB, jobID string, urls []string, s
 	// Increase batch size for better performance
 	const batchSize = 500
 
-	// Update total tasks count once at the start in a transaction
-	err := ExecuteInQueue(ctx, func(tx *sql.Tx) error {
-		// First verify the job exists and is in a valid state
-		var status string
-		err := tx.QueryRowContext(ctx, "SELECT status FROM jobs WHERE id = $1", jobID).Scan(&status)
-		if err != nil {
-			return fmt.Errorf("failed to verify job: %w", err)
-		}
-
-		if status != string(JobStatusPending) && status != string(JobStatusRunning) {
-			return fmt.Errorf("job is in invalid state: %s", status)
-		}
-
-		// Update total tasks count
-		_, err = tx.ExecContext(ctx, `
-			UPDATE jobs 
-			SET total_tasks = total_tasks + $1
-			WHERE id = $2`,
-			len(urls), jobID)
-		return err
-	})
-	if err != nil {
-		return fmt.Errorf("failed to update total tasks: %w", err)
-	}
-
 	// Process URLs in larger batches
 	for i := 0; i < len(urls); i += batchSize {
 		end := i + batchSize
@@ -391,6 +351,22 @@ func EnqueueURLs(ctx context.Context, db *sql.DB, jobID string, urls []string, s
 		}
 
 		err := ExecuteInQueue(ctx, func(tx *sql.Tx) error {
+			// Verify job is still pending/running
+			var status string
+			if err := tx.QueryRowContext(ctx, "SELECT status FROM jobs WHERE id = $1", jobID).Scan(&status); err != nil {
+				return fmt.Errorf("failed to verify job: %w", err)
+			}
+			if status != string(JobStatusPending) && status != string(JobStatusRunning) {
+				return fmt.Errorf("job is in invalid state: %s", status)
+			}
+			// Atomically increment total_tasks for this batch
+			if _, err := tx.ExecContext(ctx, `
+				UPDATE jobs
+				SET total_tasks = total_tasks + $1
+				WHERE id = $2`, len(batch), jobID); err != nil {
+				return fmt.Errorf("failed to update total tasks: %w", err)
+			}
+
 			// Get domain_id for this job
 			var domainID int
 			if err := tx.QueryRowContext(ctx,
@@ -441,18 +417,6 @@ func EnqueueURLs(ctx context.Context, db *sql.DB, jobID string, urls []string, s
 		})
 
 		if err != nil {
-			// If batch insert fails, adjust total_tasks count back down
-			adjustErr := ExecuteInQueue(ctx, func(tx *sql.Tx) error {
-				_, err := tx.ExecContext(ctx, `
-					UPDATE jobs 
-					SET total_tasks = total_tasks - $1
-					WHERE id = $2`,
-					len(batch), jobID)
-				return err
-			})
-			if adjustErr != nil {
-				log.Error().Err(adjustErr).Msg("Failed to adjust total_tasks after batch failure")
-			}
 			return fmt.Errorf("failed to insert task batch: %w", err)
 		}
 	}
@@ -784,68 +748,6 @@ func (wp *WorkerPool) flushBatches(ctx context.Context) {
 				Dur("result_insert_duration_ms", time.Since(resultInsertStart)).
 				Int("completed_task_count", len(completedTasks)).
 				Msg("⏱️ TIMING: Completed batch result inserts")
-		}
-
-		// 3. Update job counters once per job
-		if len(jobCounts) > 0 {
-			jobUpdateStart := time.Now()
-			for jobID := range jobCounts {
-				// Use a simpler update without the complex CASE expressions
-				_, err := tx.ExecContext(ctx, `
-					UPDATE jobs
-					SET 
-						completed_tasks = completed_tasks + $1,
-						failed_tasks = failed_tasks + $2,
-						progress = CAST(100.0 * (completed_tasks + failed_tasks) / 
-								  CASE WHEN total_tasks = 0 THEN 1 ELSE total_tasks END AS FLOAT)
-					WHERE id = $3
-				`,
-					jobCounts[jobID].completed, jobCounts[jobID].failed, jobID)
-
-				if err != nil {
-					return err
-				}
-			}
-
-			// After updating counters, check if we need to mark the job as completed
-			for jobID := range jobCounts {
-				var total, completed, failed int
-				err := tx.QueryRowContext(ctx, `
-					SELECT total_tasks, completed_tasks, failed_tasks 
-					FROM jobs WHERE id = $1
-				`, jobID).Scan(&total, &completed, &failed)
-
-				if err != nil {
-					return err
-				}
-
-				// If all tasks are done, mark the job as completed
-				if total > 0 && completed+failed >= total {
-					_, err = tx.ExecContext(ctx, `
-						UPDATE jobs SET
-							status = $1,
-							completed_at = $2,
-							progress = 100.0
-						WHERE id = $3 AND status = $4
-					`, string(JobStatusCompleted), time.Now(), jobID, string(JobStatusRunning))
-
-					if err != nil {
-						return err
-					}
-
-					log.Debug().
-						Str("job_id", jobID).
-						Int("total_tasks", total).
-						Int("completed", completed).
-						Int("failed", failed).
-						Msg("Job marked as completed")
-				}
-			}
-
-			log.Debug().
-				Dur("job_update_duration_ms", time.Since(jobUpdateStart)).
-				Int("job_count", len(jobCounts)).
-				Msg("⏱️ TIMING: Completed batch job updates")
 		}
 
 		return nil
