@@ -186,6 +186,8 @@ func (wp *WorkerPool) RemoveJob(jobID string) {
 func (wp *WorkerPool) worker(ctx context.Context, workerID int) {
 	defer wp.wg.Done()
 
+	log.Info().Int("worker_id", workerID).Msg("Starting worker")
+
 	// Track consecutive errors for exponential backoff
 	consecutiveErrors := 0
 	maxSleep := 10 * time.Second
@@ -193,8 +195,10 @@ func (wp *WorkerPool) worker(ctx context.Context, workerID int) {
 	for {
 		select {
 		case <-wp.stopCh:
+			log.Debug().Int("worker_id", workerID).Msg("Worker received stop signal")
 			return
 		case <-ctx.Done():
+			log.Debug().Int("worker_id", workerID).Msg("Worker context cancelled")
 			return
 		default:
 			// Check if this worker should exit (we've scaled down)
@@ -238,27 +242,43 @@ func (wp *WorkerPool) processNextTask(ctx context.Context) error {
 
 	// If no active jobs, sleep and return
 	if len(activeJobs) == 0 {
+		log.Debug().Msg("No active jobs in worker pool")
 		time.Sleep(100 * time.Millisecond)
 		return nil
 	}
 
+	log.Debug().
+		Int("active_job_count", len(activeJobs)).
+		Strs("job_ids", activeJobs).
+		Msg("Checking for pending tasks in active jobs")
+
 	// Try to get a task from each active job
 	for _, jobID := range activeJobs {
+		log.Debug().Str("job_id", jobID).Msg("Attempting to get next pending task")
 		task, err := GetNextPendingTask(ctx, wp.db, jobID)
 		if err == sql.ErrNoRows {
+			log.Debug().Str("job_id", jobID).Msg("No pending tasks found for job")
 			continue // Try next job
 		}
 		if err != nil {
+			log.Error().Err(err).Str("job_id", jobID).Msg("Error getting next pending task")
 			return err // Return actual errors
 		}
 		if task != nil {
 			// Task is already marked as running by GetNextPendingTask
+			log.Info().
+				Str("task_id", task.ID).
+				Str("job_id", task.JobID).
+				Int("page_id", task.PageID).
+				Str("path", task.Path).
+				Msg("Found and claimed pending task")
 			// Actual processing is done elsewhere
 			return nil
 		}
 	}
 
 	// No tasks found in any job
+	log.Debug().Msg("No pending tasks found in any active job")
 	time.Sleep(100 * time.Millisecond)
 	return nil
 }
@@ -383,6 +403,7 @@ func EnqueueURLs(ctx context.Context, db *sql.DB, jobID string, urls []string, s
 
 // StartTaskMonitor starts a background process that monitors for pending tasks
 func (wp *WorkerPool) StartTaskMonitor(ctx context.Context) {
+	log.Info().Msg("Starting task monitor to check for pending tasks")
 	go func() {
 		ticker := time.NewTicker(5 * time.Second)
 		defer ticker.Stop()
@@ -390,10 +411,13 @@ func (wp *WorkerPool) StartTaskMonitor(ctx context.Context) {
 		for {
 			select {
 			case <-ctx.Done():
+				log.Info().Msg("Task monitor stopped due to context cancellation")
 				return
 			case <-wp.stopCh:
+				log.Info().Msg("Task monitor stopped due to stop signal")
 				return
 			case <-ticker.C:
+				log.Debug().Msg("Task monitor checking for pending tasks")
 				if err := wp.checkForPendingTasks(ctx); err != nil {
 					log.Error().Err(err).Msg("Error checking for pending tasks")
 				}
@@ -401,11 +425,12 @@ func (wp *WorkerPool) StartTaskMonitor(ctx context.Context) {
 		}
 	}()
 
-	log.Info().Msg("Task monitor started")
+	log.Info().Msg("Task monitor started successfully")
 }
 
 // checkForPendingTasks looks for any pending tasks and adds their jobs to the pool
 func (wp *WorkerPool) checkForPendingTasks(ctx context.Context) error {
+	log.Debug().Msg("Checking database for jobs with pending tasks")
 	// Query for jobs with pending tasks
 	rows, err := wp.db.QueryContext(ctx, `
 		SELECT DISTINCT job_id FROM tasks 
@@ -414,13 +439,15 @@ func (wp *WorkerPool) checkForPendingTasks(ctx context.Context) error {
 	`, TaskStatusPending)
 
 	if err != nil {
+		log.Error().Err(err).Msg("Failed to query for jobs with pending tasks")
 		return err
 	}
 	defer rows.Close()
 
+	jobsFound := 0
 	// For each job with pending tasks, add it to the worker pool
-
 	for rows.Next() {
+		jobsFound++
 		var jobID string
 		if err := rows.Scan(&jobID); err != nil {
 			log.Error().Err(err).Msg("Failed to scan job ID")
@@ -434,19 +461,31 @@ func (wp *WorkerPool) checkForPendingTasks(ctx context.Context) error {
 
 		if !active {
 			// Add job to the worker pool
+			log.Info().Str("job_id", jobID).Msg("Adding job with pending tasks to worker pool")
 			wp.AddJob(jobID, nil)
 
 			// Update job status if needed
 			_, err := wp.db.ExecContext(ctx, `
-				UPDATE jobs
-				SET status = $1, started_at = CASE WHEN started_at IS NULL THEN $2 ELSE started_at END
+				UPDATE jobs SET
+					status = $1,
+					started_at = CASE WHEN started_at IS NULL THEN $2 ELSE started_at END
 				WHERE id = $3 AND status = $4
 			`, JobStatusRunning, time.Now(), jobID, JobStatusPending)
 
 			if err != nil {
 				log.Error().Err(err).Str("job_id", jobID).Msg("Failed to update job status")
+			} else {
+				log.Info().Str("job_id", jobID).Msg("Updated job status to running")
 			}
+		} else {
+			log.Debug().Str("job_id", jobID).Msg("Job already active in worker pool")
 		}
+	}
+
+	if jobsFound == 0 {
+		log.Debug().Msg("No jobs with pending tasks found")
+	} else {
+		log.Debug().Int("count", jobsFound).Msg("Found jobs with pending tasks")
 	}
 
 	return rows.Err()
