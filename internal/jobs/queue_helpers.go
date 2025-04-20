@@ -79,12 +79,12 @@ func UpdateTaskStatusTx(ctx context.Context, tx *sql.Tx, task *Task) error {
 	// Update task status
 	_, err := tx.ExecContext(ctx, `
 		UPDATE tasks
-		SET status = ?,
-			started_at = ?,
-			completed_at = ?,
-			retry_count = ?,
-			error = ?
-		WHERE id = ?
+		SET status = $1,
+			started_at = $2,
+			completed_at = $3,
+			retry_count = $4,
+			error = $5
+		WHERE id = $6
 	`, task.Status, task.StartedAt, task.CompletedAt,
 		task.RetryCount, task.Error, task.ID)
 
@@ -111,7 +111,7 @@ func GetNextPendingTaskTx(ctx context.Context, tx *sql.Tx, jobID string) (*Task,
 	var taskID string
 	row := tx.QueryRowContext(ctx, `
 		SELECT id FROM tasks 
-		WHERE job_id = ? AND status = ? 
+		WHERE job_id = $1 AND status = $2 
 		LIMIT 1
 	`, jobID, TaskStatusPending)
 
@@ -126,8 +126,8 @@ func GetNextPendingTaskTx(ctx context.Context, tx *sql.Tx, jobID string) (*Task,
 	// Now update and get the specific task we identified
 	_, err = tx.ExecContext(ctx, `
 		UPDATE tasks 
-		SET status = ?, started_at = ?
-		WHERE id = ?
+		SET status = $1, started_at = $2
+		WHERE id = $3
 	`, TaskStatusRunning, now, taskID)
 
 	if err != nil {
@@ -141,7 +141,7 @@ func GetNextPendingTaskTx(ctx context.Context, tx *sql.Tx, jobID string) (*Task,
 			retry_count, error, source_type, source_url
 		FROM tasks t
 		JOIN pages p ON t.page_id = p.id
-		WHERE t.id = ?
+		WHERE t.id = $1
 	`, taskID)
 
 	task := &Task{}
@@ -184,8 +184,17 @@ func batchInsertCrawlResults(ctx context.Context, tx *sql.Tx, results []CrawlRes
 	valueStrings := make([]string, 0, len(results))
 	valueArgs := make([]interface{}, 0, len(results)*8)
 
+	// Track parameter index for PostgreSQL-style numbered parameters
+	paramIndex := 1
+
 	for _, result := range results {
-		valueStrings = append(valueStrings, "(?, ?, ?, ?, ?, ?, ?, ?)")
+		// Create PostgreSQL-style parameter placeholders
+		placeholders := fmt.Sprintf("($%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d)",
+			paramIndex, paramIndex+1, paramIndex+2, paramIndex+3,
+			paramIndex+4, paramIndex+5, paramIndex+6, paramIndex+7)
+		valueStrings = append(valueStrings, placeholders)
+		paramIndex += 8
+
 		valueArgs = append(valueArgs,
 			result.JobID, result.TaskID, result.URL, result.ResponseTime,
 			result.StatusCode, result.Error, result.CacheStatus,
@@ -247,10 +256,10 @@ func CleanupStuckJobs(ctx context.Context, db *sql.DB) error {
 
 	result, err := db.ExecContext(ctx, `
 		UPDATE jobs 
-		SET status = ?, 
-			completed_at = COALESCE(completed_at, ?),
+		SET status = $1, 
+			completed_at = COALESCE(completed_at, $2),
 			progress = 100.0
-		WHERE (status = ? OR status = ?)
+		WHERE (status = $3 OR status = $4)
 		AND total_tasks > 0 
 		AND total_tasks = completed_tasks + failed_tasks
 	`, JobStatusCompleted, time.Now(), JobStatusPending, JobStatusRunning)

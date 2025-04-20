@@ -106,11 +106,11 @@ func (jm *JobManager) StartJob(ctx context.Context, jobID string) error {
 	// Recover any tasks that were in progress when the server shut down
 	_, err = jm.db.ExecContext(ctx, `
 		UPDATE tasks 
-		SET status = ?,
+		SET status = $1,
 			started_at = NULL,
 			retry_count = retry_count + 1
-		WHERE job_id = ? 
-		AND status = ?
+		WHERE job_id = $2 
+		AND status = $3
 	`, TaskStatusPending, jobID, TaskStatusRunning)
 
 	if err != nil {
@@ -120,8 +120,8 @@ func (jm *JobManager) StartJob(ctx context.Context, jobID string) error {
 
 	_, err = jm.db.ExecContext(ctx, `
 		UPDATE jobs
-		SET status = ?, started_at = ?
-		WHERE id = ?
+		SET status = $1, started_at = $2
+		WHERE id = $3
 	`, job.Status, job.StartedAt, job.ID)
 
 	if err != nil {
@@ -167,8 +167,8 @@ func (jm *JobManager) CancelJob(ctx context.Context, jobID string) error {
 
 	_, err = jm.db.ExecContext(ctx, `
 		UPDATE jobs
-		SET status = ?, completed_at = ?
-		WHERE id = ?
+		SET status = $1, completed_at = $2
+		WHERE id = $3
 	`, job.Status, job.CompletedAt, job.ID)
 
 	if err != nil {
@@ -183,8 +183,8 @@ func (jm *JobManager) CancelJob(ctx context.Context, jobID string) error {
 	// Cancel pending tasks
 	_, err = jm.db.ExecContext(ctx, `
 		UPDATE tasks
-		SET status = ?
-		WHERE job_id = ? AND status = ?
+		SET status = $1
+		WHERE job_id = $2 AND status = $3
 	`, TaskStatusSkipped, job.ID, TaskStatusPending)
 
 	if err != nil {
@@ -258,8 +258,8 @@ func (jm *JobManager) processSitemap(ctx context.Context, jobID, domain string, 
 		// Update job with error
 		if _, updateErr := jm.db.ExecContext(ctx, `
 			UPDATE jobs
-			SET error_message = ?
-			WHERE id = ?
+			SET error_message = $1
+			WHERE id = $2
 		`, fmt.Sprintf("Failed to discover sitemaps: %v", err), jobID); updateErr != nil {
 			log.Error().Err(updateErr).Str("job_id", jobID).Msg("Failed to update job with error message")
 		}
@@ -298,8 +298,8 @@ func (jm *JobManager) processSitemap(ctx context.Context, jobID, domain string, 
 		// Update job with warning
 		if _, updateErr := jm.db.ExecContext(ctx, `
 			UPDATE jobs
-			SET error_message = ?
-			WHERE id = ?
+			SET error_message = $1
+			WHERE id = $2
 		`, "No URLs found in sitemap", jobID); updateErr != nil {
 			log.Error().Err(updateErr).Str("job_id", jobID).Msg("Failed to update job with warning message")
 		}

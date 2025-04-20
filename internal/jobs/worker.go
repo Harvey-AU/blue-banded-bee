@@ -278,7 +278,7 @@ func EnqueueURLs(ctx context.Context, db *sql.DB, jobID string, urls []string, s
 	err := ExecuteInQueue(ctx, func(tx *sql.Tx) error {
 		// First verify the job exists and is in a valid state
 		var status string
-		err := tx.QueryRowContext(ctx, "SELECT status FROM jobs WHERE id = ?", jobID).Scan(&status)
+		err := tx.QueryRowContext(ctx, "SELECT status FROM jobs WHERE id = $1", jobID).Scan(&status)
 		if err != nil {
 			return fmt.Errorf("failed to verify job: %w", err)
 		}
@@ -290,8 +290,8 @@ func EnqueueURLs(ctx context.Context, db *sql.DB, jobID string, urls []string, s
 		// Update total tasks count
 		_, err = tx.ExecContext(ctx, `
 			UPDATE jobs 
-			SET total_tasks = total_tasks + ?
-			WHERE id = ?
+			SET total_tasks = total_tasks + $1
+			WHERE id = $2
 		`, len(urls), jobID)
 		return err
 	})
@@ -315,7 +315,7 @@ func EnqueueURLs(ctx context.Context, db *sql.DB, jobID string, urls []string, s
 			// Get domain_id for this job
 			var domainID int
 			if err := tx.QueryRowContext(ctx,
-				`SELECT domain_id FROM jobs WHERE id = ?`, jobID).Scan(&domainID); err != nil {
+				`SELECT domain_id FROM jobs WHERE id = $1`, jobID).Scan(&domainID); err != nil {
 				return fmt.Errorf("failed to get domain_id for job: %w", err)
 			}
 
@@ -336,7 +336,7 @@ func EnqueueURLs(ctx context.Context, db *sql.DB, jobID string, urls []string, s
 
 				// Insert page if it doesn't exist
 				if _, err := tx.ExecContext(ctx,
-					`INSERT INTO pages(domain_id, path) VALUES(?, ?) ON CONFLICT(domain_id, path) DO NOTHING`,
+					`INSERT INTO pages(domain_id, path) VALUES($1, $2) ON CONFLICT(domain_id, path) DO NOTHING`,
 					domainID, path); err != nil {
 					return fmt.Errorf("failed to insert page: %w", err)
 				}
@@ -344,7 +344,7 @@ func EnqueueURLs(ctx context.Context, db *sql.DB, jobID string, urls []string, s
 				// Get page_id
 				var pageID int
 				if err := tx.QueryRowContext(ctx,
-					`SELECT id FROM pages WHERE domain_id = ? AND path = ?`,
+					`SELECT id FROM pages WHERE domain_id = $1 AND path = $2`,
 					domainID, path).Scan(&pageID); err != nil {
 					return fmt.Errorf("failed to get page_id: %w", err)
 				}
@@ -352,7 +352,7 @@ func EnqueueURLs(ctx context.Context, db *sql.DB, jobID string, urls []string, s
 				// Insert task with page_id
 				if _, err := tx.ExecContext(ctx, `
 					INSERT INTO tasks(id, job_id, page_id, status, depth, created_at, retry_count, source_type, source_url)
-					VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+					VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
 					uuid.New().String(), jobID, pageID, TaskStatusPending, depth, time.Now(), 0, sourceType, sourceURL); err != nil {
 					return fmt.Errorf("failed to insert task: %w", err)
 				}
@@ -366,8 +366,8 @@ func EnqueueURLs(ctx context.Context, db *sql.DB, jobID string, urls []string, s
 			adjustErr := ExecuteInQueue(ctx, func(tx *sql.Tx) error {
 				_, err := tx.ExecContext(ctx, `
 					UPDATE jobs 
-					SET total_tasks = total_tasks - ?
-					WHERE id = ?`,
+					SET total_tasks = total_tasks - $1
+					WHERE id = $2`,
 					len(batch), jobID)
 				return err
 			})
@@ -409,7 +409,7 @@ func (wp *WorkerPool) checkForPendingTasks(ctx context.Context) error {
 	// Query for jobs with pending tasks
 	rows, err := wp.db.QueryContext(ctx, `
 		SELECT DISTINCT job_id FROM tasks 
-		WHERE status = ? 
+		WHERE status = $1 
 		LIMIT 100
 	`, TaskStatusPending)
 
@@ -439,8 +439,8 @@ func (wp *WorkerPool) checkForPendingTasks(ctx context.Context) error {
 			// Update job status if needed
 			_, err := wp.db.ExecContext(ctx, `
 				UPDATE jobs
-				SET status = ?, started_at = CASE WHEN started_at IS NULL THEN ? ELSE started_at END
-				WHERE id = ? AND status = ?
+				SET status = $1, started_at = CASE WHEN started_at IS NULL THEN $2 ELSE started_at END
+				WHERE id = $3 AND status = $4
 			`, JobStatusRunning, time.Now(), jobID, JobStatusPending)
 
 			if err != nil {
@@ -462,8 +462,8 @@ func (wp *WorkerPool) recoverStaleTasks(ctx context.Context) error {
 			SELECT t.id, t.job_id, t.page_id, p.path, t.retry_count 
 			FROM tasks t
 			JOIN pages p ON t.page_id = p.id
-			WHERE status = ? 
-			AND started_at < ?
+			WHERE status = $1 
+			AND started_at < $2
 		`, TaskStatusRunning, staleTime)
 
 		if err != nil {
@@ -484,19 +484,19 @@ func (wp *WorkerPool) recoverStaleTasks(ctx context.Context) error {
 				// Mark as failed if max retries exceeded
 				_, err = tx.ExecContext(ctx, `
 					UPDATE tasks 
-					SET status = ?,
-						error = ?,
-						completed_at = ?
-					WHERE id = ?
+					SET status = $1,
+						error = $2,
+						completed_at = $3
+					WHERE id = $4
 				`, TaskStatusFailed, "Max retries exceeded", time.Now(), taskID)
 			} else {
 				// Reset to pending for retry
 				_, err = tx.ExecContext(ctx, `
 					UPDATE tasks 
-					SET status = ?,
+					SET status = $1,
 						started_at = NULL,
 						retry_count = retry_count + 1
-					WHERE id = ?
+					WHERE id = $2
 				`, TaskStatusPending, taskID)
 			}
 
@@ -615,10 +615,10 @@ func (wp *WorkerPool) flushBatches(ctx context.Context) {
 			taskUpdateStart := time.Now()
 			stmt, err := tx.PrepareContext(ctx, `
 				UPDATE tasks
-				SET status = ?, 
-					completed_at = ?,
-					error = ? -- Only include error (for failure reason)
-				WHERE id = ?
+				SET status = $1, 
+					completed_at = $2,
+					error = $3 -- Only include error (for failure reason)
+				WHERE id = $4
 			`)
 			if err != nil {
 				return err
@@ -657,7 +657,7 @@ func (wp *WorkerPool) flushBatches(ctx context.Context) {
 					if err := tx.QueryRowContext(ctx, `
 						SELECT d.name FROM domains d
 						JOIN jobs j ON j.domain_id = d.id
-						WHERE j.id = ?`, task.JobID).Scan(&domainName); err != nil {
+						WHERE j.id = $1`, task.JobID).Scan(&domainName); err != nil {
 						log.Error().Err(err).Str("job_id", task.JobID).Msg("Failed to get domain name")
 						continue
 					}
@@ -696,11 +696,11 @@ func (wp *WorkerPool) flushBatches(ctx context.Context) {
 				_, err := tx.ExecContext(ctx, `
 					UPDATE jobs
 					SET 
-						completed_tasks = completed_tasks + ?,
-						failed_tasks = failed_tasks + ?,
+						completed_tasks = completed_tasks + $1,
+						failed_tasks = failed_tasks + $2,
 						progress = CAST(100.0 * (completed_tasks + failed_tasks) / 
 								  CASE WHEN total_tasks = 0 THEN 1 ELSE total_tasks END AS FLOAT)
-					WHERE id = ?
+					WHERE id = $3
 				`,
 					jobCounts[jobID].completed, jobCounts[jobID].failed, jobID)
 
@@ -714,7 +714,7 @@ func (wp *WorkerPool) flushBatches(ctx context.Context) {
 				var total, completed, failed int
 				err := tx.QueryRowContext(ctx, `
 					SELECT total_tasks, completed_tasks, failed_tasks 
-					FROM jobs WHERE id = ?
+					FROM jobs WHERE id = $1
 				`, jobID).Scan(&total, &completed, &failed)
 
 				if err != nil {
@@ -725,10 +725,10 @@ func (wp *WorkerPool) flushBatches(ctx context.Context) {
 				if total > 0 && completed+failed >= total {
 					_, err = tx.ExecContext(ctx, `
 						UPDATE jobs SET
-							status = ?,
-							completed_at = ?,
+							status = $1,
+							completed_at = $2,
 							progress = 100.0
-						WHERE id = ? AND status = ?
+						WHERE id = $3 AND status = $4
 					`, string(JobStatusCompleted), time.Now(), jobID, string(JobStatusRunning))
 
 					if err != nil {
@@ -797,13 +797,13 @@ func GetNextPendingTask(ctx context.Context, db *sql.DB, jobID string) (*Task, e
 		t.created_at, t.retry_count, t.source_type, t.source_url
 		FROM tasks t
 		JOIN pages p ON t.page_id = p.id
-		WHERE t.status = 'pending' AND t.job_id = ?
+		WHERE t.status = $1 AND t.job_id = $2
 		ORDER BY t.created_at ASC
 		LIMIT 1
 	`
 
 	var task Task
-	err := db.QueryRowContext(ctx, query, jobID).Scan(
+	err := db.QueryRowContext(ctx, query, TaskStatusPending, jobID).Scan(
 		&task.ID, &task.JobID, &task.PageID, &task.Path, &task.Status,
 		&task.Depth, &task.CreatedAt, &task.RetryCount,
 		&task.SourceType, &task.SourceURL,
@@ -816,9 +816,9 @@ func GetNextPendingTask(ctx context.Context, db *sql.DB, jobID string) (*Task, e
 	now := time.Now()
 	_, err = db.ExecContext(ctx, `
 		UPDATE tasks
-		SET status = 'running', started_at = ?
-		WHERE id = ?
-	`, now, task.ID)
+		SET status = $1, started_at = $2
+		WHERE id = $3
+	`, TaskStatusRunning, now, task.ID)
 
 	if err != nil {
 		return nil, err

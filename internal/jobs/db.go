@@ -184,7 +184,7 @@ func CreateJob(db *sql.DB, options *JobOptions) (*Job, error) {
 				id, domain, status, progress, total_tasks, completed_tasks, failed_tasks,
 				created_at, concurrency, find_links, include_paths, exclude_paths,
 				required_workers
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
 			job.ID, job.Domain, string(job.Status), job.Progress,
 			job.TotalTasks, job.CompletedTasks, job.FailedTasks,
 			job.CreatedAt, job.Concurrency, job.FindLinks,
@@ -211,7 +211,7 @@ func CreateTask(ctx context.Context, db *sql.DB, task *Task) error {
 			INSERT INTO tasks (
 				id, job_id, page_id, status, depth, path, created_at, started_at, completed_at,
 				retry_count, error, source_type, source_url
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
 		`,
 			task.ID, task.JobID, task.PageID, task.Status, task.Depth, task.Path, task.CreatedAt,
 			task.StartedAt, task.CompletedAt, task.RetryCount, task.Error, task.SourceType, task.SourceURL,
@@ -247,7 +247,7 @@ func GetJob(ctx context.Context, db *sql.DB, jobID string) (*Job, error) {
 				created_at, started_at, completed_at, concurrency, find_links,
 				include_paths, exclude_paths, error_message, required_workers
 			FROM jobs
-			WHERE id = ?
+			WHERE id = $1
 		`, jobID).Scan(
 			&job.ID, &job.Domain, &job.Status, &job.Progress, &job.TotalTasks, &job.CompletedTasks,
 			&job.FailedTasks, &job.CreatedAt, &startedAt, &completedAt, &job.Concurrency,
@@ -316,17 +316,17 @@ func UpdateTaskStatus(ctx context.Context, db *sql.DB, task *Task) error {
 			task.StartedAt = now
 			_, err = db.ExecContext(ctx, `
 				UPDATE tasks 
-				SET status = ?, started_at = ?
-				WHERE id = ?
+				SET status = $1, started_at = $2
+				WHERE id = $3
 			`, string(task.Status), task.StartedAt, task.ID)
 
 		} else if task.Status == TaskStatusCompleted || task.Status == TaskStatusFailed {
 			task.CompletedAt = now
 			_, err = db.ExecContext(ctx, `
 				UPDATE tasks 
-				SET status = ?, completed_at = ?, 
-					error = ?, retry_count = ?
-				WHERE id = ?
+				SET status = $1, completed_at = $2, 
+					error = $3, retry_count = $4
+				WHERE id = $5
 			`,
 				string(task.Status), task.CompletedAt,
 				task.Error, task.RetryCount, task.ID)
@@ -335,15 +335,15 @@ func UpdateTaskStatus(ctx context.Context, db *sql.DB, task *Task) error {
 			// Add explicit handling for skipped tasks
 			_, err = db.ExecContext(ctx, `
 				UPDATE tasks 
-				SET status = ?
-				WHERE id = ?
+				SET status = $1
+				WHERE id = $2
 			`, string(task.Status), task.ID)
 		} else {
 			// Generic update for any other status
 			_, err = db.ExecContext(ctx, `
 				UPDATE tasks 
-				SET status = ?
-				WHERE id = ?
+				SET status = $1
+				WHERE id = $2
 			`, string(task.Status), task.ID)
 		}
 
@@ -375,7 +375,7 @@ func ListJobs(ctx context.Context, db *sql.DB, limit, offset int) ([]*Job, error
 			include_paths, exclude_paths, error_message
 		FROM jobs
 		ORDER BY created_at DESC
-		LIMIT ? OFFSET ?
+		LIMIT $1 OFFSET $2
 	`, limit, offset)
 
 	if err != nil {
