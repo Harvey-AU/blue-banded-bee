@@ -127,8 +127,10 @@ func updateJobProgressTx(ctx context.Context, tx *sql.Tx, jobID string) error {
 
 	// Get recent URLs (last 5 completed tasks)
 	rows, err := tx.QueryContext(ctx, `
-		SELECT url FROM tasks 
-		WHERE job_id = ? AND (status = ? OR status = ?)
+		SELECT p.path
+		  FROM tasks t
+		  JOIN pages p ON t.page_id = p.id
+		 WHERE t.job_id = ? AND (t.status = ? OR t.status = ?)
 		ORDER BY completed_at DESC LIMIT 5
 	`, jobID, TaskStatusCompleted, TaskStatusFailed)
 	if err != nil {
@@ -239,10 +241,11 @@ func GetNextPendingTaskTx(ctx context.Context, tx *sql.Tx, jobID string) (*Task,
 	// Get the complete task details
 	row = tx.QueryRowContext(ctx, `
 		SELECT 
-			id, job_id, url, status, depth, created_at, started_at, completed_at,
+			t.id, t.job_id, t.page_id, p.path, t.status, t.depth, t.created_at, t.started_at, t.completed_at,
 			retry_count, error, source_type, source_url
-		FROM tasks 
-		WHERE id = ?
+		FROM tasks t
+		JOIN pages p ON t.page_id = p.id
+		WHERE t.id = ?
 	`, taskID)
 
 	task := &Task{}
@@ -250,7 +253,7 @@ func GetNextPendingTaskTx(ctx context.Context, tx *sql.Tx, jobID string) (*Task,
 	var errorMsg, sourceURL sql.NullString
 
 	err = row.Scan(
-		&task.ID, &task.JobID, &task.URL, &task.Status, &task.Depth, &task.CreatedAt,
+		&task.ID, &task.JobID, &task.PageID, &task.Path, &task.Status, &task.Depth, &task.CreatedAt,
 		&startedAt, &completedAt, &task.RetryCount, &errorMsg,
 		&task.SourceType, &sourceURL,
 	)

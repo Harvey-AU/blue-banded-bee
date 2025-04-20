@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"strconv"
@@ -198,12 +199,20 @@ func main() {
 		// Define current time for consistent timestamps
 		now := time.Now()
 
-		// Create a job record FIRST
+		// Get or create domain lookup
+		domainID, err := pgDB.GetOrCreateDomain(r.Context(), domain)
+		if err != nil {
+			log.Error().Err(err).Str("domain", domain).Msg("Failed to get or create domain")
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+
+		// Create a job record FIRST with domain_id
 		_, err = pgDB.GetDB().ExecContext(r.Context(), `
-			INSERT INTO jobs (id, domain, status, progress, total_tasks, completed_tasks, 
+			INSERT INTO jobs (id, domain_id, status, progress, total_tasks, completed_tasks, 
 							failed_tasks, created_at, concurrency, find_links, max_depth)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-		`, jobID, domain, "pending", 0.0, len(allURLs), 0, 0, now, 5, false, 1)
+		`, jobID, domainID, "pending", 0.0, len(allURLs), 0, 0, now, 5, false, 1)
 
 		if err != nil {
 			log.Error().Err(err).Str("domain", domain).Msg("Failed to create job")
@@ -211,16 +220,27 @@ func main() {
 			return
 		}
 
-		// THEN add all URLs as tasks after job exists
-		for _, url := range allURLs {
+		// THEN add all URLs as tasks after job exists, using pages lookup
+		for _, urlStr := range allURLs {
 			taskID := uuid.New().String()
-			_, err := pgDB.GetDB().ExecContext(r.Context(), `
-				INSERT INTO tasks (id, job_id, url, status, depth, created_at, retry_count, source_type, source_url)
+			uParsed, err := url.Parse(urlStr)
+			if err != nil {
+				log.Error().Err(err).Str("url", urlStr).Msg("Failed to parse URL")
+				continue
+			}
+			path := uParsed.RequestURI()
+			pageID, err := pgDB.GetOrCreatePage(r.Context(), domainID, path)
+			if err != nil {
+				log.Error().Err(err).Str("path", path).Msg("Failed to get or create page")
+				continue
+			}
+			_, err = pgDB.GetDB().ExecContext(r.Context(), `
+				INSERT INTO tasks (id, job_id, page_id, status, depth, created_at, retry_count, source_type, source_url)
 				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-			`, taskID, jobID, url, "pending", 0, now, 0, "sitemap", baseURL)
+			`, taskID, jobID, pageID, "pending", 0, now, 0, "sitemap", baseURL)
 
 			if err != nil {
-				log.Error().Err(err).Str("url", url).Msg("Failed to add task")
+				log.Error().Err(err).Str("task_id", taskID).Msg("Failed to insert task")
 				// Continue with other tasks despite error
 			}
 		}

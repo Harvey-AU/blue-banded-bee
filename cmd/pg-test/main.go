@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"net/url"
 	"os"
 	"time"
 
@@ -63,7 +64,35 @@ func main() {
 		"https://example.com/page3",
 	}
 
-	err = queue.EnqueueTasks(ctx, jobID, urls, "test", "", 0)
+	// First, get or create domain
+	domainID, err := database.GetOrCreateDomain(ctx, "example.com")
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to get or create domain")
+	}
+
+	// Create pages and collect page IDs
+	pageIDs := make([]int, 0, len(urls))
+	paths := make([]string, 0, len(urls))
+
+	for _, urlStr := range urls {
+		parsedURL, err := url.Parse(urlStr)
+		if err != nil {
+			log.Error().Err(err).Str("url", urlStr).Msg("Failed to parse URL")
+			continue
+		}
+
+		path := parsedURL.RequestURI()
+		pageID, err := database.GetOrCreatePage(ctx, domainID, path)
+		if err != nil {
+			log.Error().Err(err).Str("path", path).Msg("Failed to get or create page")
+			continue
+		}
+
+		pageIDs = append(pageIDs, pageID)
+		paths = append(paths, path)
+	}
+
+	err = queue.EnqueueTasks(ctx, jobID, pageIDs, paths, "test", "", 0)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to enqueue tasks")
 	}
@@ -82,7 +111,8 @@ func main() {
 
 	log.Info().
 		Str("task_id", task.ID).
-		Str("url", task.URL).
+		Int("page_id", task.PageID).
+		Str("path", task.Path).
 		Msg("Successfully retrieved task")
 
 	// Mark task as completed

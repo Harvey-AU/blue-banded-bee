@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"net/url"
 	"runtime/debug"
 	"strings"
 	"sync"
@@ -277,7 +278,8 @@ func (wp *WorkerPool) processTask(ctx context.Context, task *Task, workerID int,
 	log.Debug().
 		Int("worker_id", workerID).
 		Str("task_id", taskID).
-		Str("url", task.URL).
+		Int("page_id", task.PageID).
+		Str("path", task.Path).
 		Time("task_picked", taskStart).
 		Msg("⏱️ TIMING: Task picked for processing")
 
@@ -291,13 +293,25 @@ func (wp *WorkerPool) processTask(ctx context.Context, task *Task, workerID int,
 
 	// Use the worker's crawler instead of wp.crawler
 	crawlStart := time.Now()
-	result, err := workerCrawler.WarmURL(ctx, task.URL)
+	// Get domain name from job's domain_id
+	var domainName string
+	err := wp.db.QueryRowContext(ctx, `
+		SELECT d.name FROM domains d
+		JOIN jobs j ON j.domain_id = d.id
+		WHERE j.id = ?`, task.JobID).Scan(&domainName)
+	if err != nil {
+		return fmt.Errorf("failed to get domain name: %w", err)
+	}
+
+	// Construct full URL from domain and path
+	fullURL := fmt.Sprintf("https://%s%s", domainName, task.Path)
+	result, err := workerCrawler.WarmURL(ctx, fullURL)
 	crawlDuration := time.Since(crawlStart)
 
 	log.Debug().
 		Int("worker_id", workerID).
 		Str("task_id", taskID).
-		Str("url", task.URL).
+		Str("url", fullURL).
 		Dur("crawl_duration_ms", crawlDuration).
 		Time("crawl_completed", time.Now()).
 		Msg("⏱️ TIMING: URL crawling completed")
@@ -454,34 +468,53 @@ func EnqueueURLs(ctx context.Context, db *sql.DB, jobID string, urls []string, s
 		}
 
 		err := ExecuteInQueue(ctx, func(tx *sql.Tx) error {
-			// Prepare a single statement with multiple value sets
-			valueStrings := make([]string, 0, len(batch))
-			valueArgs := make([]interface{}, 0, len(batch)*9)
-			now := time.Now()
+			// Get domain_id for this job
+			var domainID int
+			if err := tx.QueryRowContext(ctx,
+				`SELECT domain_id FROM jobs WHERE id = ?`, jobID).Scan(&domainID); err != nil {
+				return fmt.Errorf("failed to get domain_id for job: %w", err)
+			}
 
-			for _, url := range batch {
-				// Validate URL before adding
-				if url == "" {
+			// Process each URL individually
+			for _, urlStr := range batch {
+				if urlStr == "" {
 					continue
 				}
-				taskID := uuid.New().String()
-				valueStrings = append(valueStrings, "(?, ?, ?, ?, ?, ?, ?, ?, ?)")
-				valueArgs = append(valueArgs,
-					taskID, jobID, url, TaskStatusPending, depth, now, 0, sourceType, sourceURL)
+
+				// Parse URL to get path
+				parsedURL, err := url.Parse(urlStr)
+				if err != nil {
+					log.Error().Err(err).Str("url", urlStr).Msg("Failed to parse URL, skipping")
+					continue
+				}
+
+				path := parsedURL.RequestURI()
+
+				// Insert page if it doesn't exist
+				if _, err := tx.ExecContext(ctx,
+					`INSERT INTO pages(domain_id, path) VALUES(?, ?) ON CONFLICT(domain_id, path) DO NOTHING`,
+					domainID, path); err != nil {
+					return fmt.Errorf("failed to insert page: %w", err)
+				}
+
+				// Get page_id
+				var pageID int
+				if err := tx.QueryRowContext(ctx,
+					`SELECT id FROM pages WHERE domain_id = ? AND path = ?`,
+					domainID, path).Scan(&pageID); err != nil {
+					return fmt.Errorf("failed to get page_id: %w", err)
+				}
+
+				// Insert task with page_id
+				if _, err := tx.ExecContext(ctx, `
+					INSERT INTO tasks(id, job_id, page_id, status, depth, created_at, retry_count, source_type, source_url)
+					VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+					uuid.New().String(), jobID, pageID, TaskStatusPending, depth, time.Now(), 0, sourceType, sourceURL); err != nil {
+					return fmt.Errorf("failed to insert task: %w", err)
+				}
 			}
 
-			if len(valueStrings) == 0 {
-				return nil // Skip if no valid URLs in batch
-			}
-
-			stmt := fmt.Sprintf(`
-				INSERT INTO tasks (
-					id, job_id, url, status, depth, created_at, retry_count,
-					source_type, source_url
-				) VALUES %s`, strings.Join(valueStrings, ","))
-
-			_, err := tx.ExecContext(ctx, stmt, valueArgs...)
-			return err
+			return nil
 		})
 
 		if err != nil {
@@ -582,8 +615,9 @@ func (wp *WorkerPool) recoverStaleTasks(ctx context.Context) error {
 
 		// Get stale tasks
 		rows, err := tx.QueryContext(ctx, `
-			SELECT id, job_id, url, retry_count 
-			FROM tasks 
+			SELECT t.id, t.job_id, t.page_id, p.path, t.retry_count 
+			FROM tasks t
+			JOIN pages p ON t.page_id = p.id
 			WHERE status = ? 
 			AND started_at < ?
 		`, TaskStatusRunning, staleTime)
@@ -594,9 +628,11 @@ func (wp *WorkerPool) recoverStaleTasks(ctx context.Context) error {
 		defer rows.Close()
 
 		for rows.Next() {
-			var taskID, jobID, url string
+			var taskID, jobID string
+			var pageID int
+			var path string
 			var retryCount int
-			if err := rows.Scan(&taskID, &jobID, &url, &retryCount); err != nil {
+			if err := rows.Scan(&taskID, &jobID, &pageID, &path, &retryCount); err != nil {
 				continue
 			}
 
@@ -804,11 +840,24 @@ func (wp *WorkerPool) flushBatches(ctx context.Context) {
 				// Convert Task objects to CrawlResultData
 				crawlResults := make([]CrawlResultData, 0, len(completedTasks))
 				for _, task := range completedTasks {
+					// Get domain name from job's domain_id
+					var domainName string
+					if err := tx.QueryRowContext(ctx, `
+						SELECT d.name FROM domains d
+						JOIN jobs j ON j.domain_id = d.id
+						WHERE j.id = ?`, task.JobID).Scan(&domainName); err != nil {
+						log.Error().Err(err).Str("job_id", task.JobID).Msg("Failed to get domain name")
+						continue
+					}
+
+					// Construct full URL from domain and path
+					fullURL := fmt.Sprintf("https://%s%s", domainName, task.Path)
+
 					// Use the task's result data that we stored earlier
 					crawlResults = append(crawlResults, CrawlResultData{
 						JobID:        task.JobID,
 						TaskID:       task.ID,
-						URL:          task.URL,
+						URL:          fullURL,
 						ResponseTime: task.ResponseTime,
 						StatusCode:   task.StatusCode,
 						Error:        task.Error,
@@ -953,4 +1002,40 @@ func (wp *WorkerPool) StartCleanupMonitor(ctx context.Context) {
 		}
 	}()
 	log.Info().Msg("Job cleanup monitor started")
+}
+
+func GetNextPendingTask(ctx context.Context, db *sql.DB, jobID string) (*Task, error) {
+	query := `
+		SELECT t.id, t.job_id, t.page_id, p.path, t.status, t.depth,
+		t.created_at, t.retry_count, t.source_type, t.source_url
+		FROM tasks t
+		JOIN pages p ON t.page_id = p.id
+		WHERE t.status = 'pending' AND t.job_id = ?
+		ORDER BY t.created_at ASC
+		LIMIT 1
+	`
+
+	var task Task
+	err := db.QueryRowContext(ctx, query, jobID).Scan(
+		&task.ID, &task.JobID, &task.PageID, &task.Path, &task.Status,
+		&task.Depth, &task.CreatedAt, &task.RetryCount,
+		&task.SourceType, &task.SourceURL,
+	)
+
+	if err != nil {
+		return nil, err
+	}
+
+	now := time.Now()
+	_, err = db.ExecContext(ctx, `
+		UPDATE tasks
+		SET status = 'running', started_at = ?
+		WHERE id = ?
+	`, now, task.ID)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &task, nil
 }
