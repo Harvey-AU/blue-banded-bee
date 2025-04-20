@@ -39,7 +39,7 @@ Current development stage: Stage 3 - PostgreSQL Migration & Performance Optimiza
 - ⭕ Stage 5: Billing & Subscriptions
 - ⭕ Stage 6: Webflow Integration & Launch
 
-See our [detailed roadmap](docs/Roadmap.md) for more information.
+See our [detailed roadmap](./Roadmap.md) for more information.
 
 ## Tech Stack
 
@@ -52,13 +52,13 @@ See our [detailed roadmap](docs/Roadmap.md) for more information.
 
 ## Documentation
 
-Our documentation is maintained in the `docs/` directory:
+Our documentation is organized under `docs/`:
 
-- [API Reference](docs/api.md) - API endpoints and usage
-- [Development Guide](docs/development.md) - Setup and local development
-- [Deployment Guide](docs/deployment.md) - Deployment instructions
-- [Technical Concepts](docs/concepts.md) - Core concepts and design
-- [Architecture](docs/architecture.md) - System architecture
+- [API Reference](docs/reference/api-reference.md) - API endpoints and usage
+- [Development Guide](docs/guides/development.md) - Setup and local development
+- [Deployment Guide](docs/guides/deployment.md) - Deployment instructions
+- [Core Concepts](docs/architecture/mental-model.md) - Core concepts and design
+- [Implementation Details](docs/architecture/implementation-details.md) - System architecture
 
 ## Security
 

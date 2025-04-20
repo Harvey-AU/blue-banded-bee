@@ -1,4 +1,4 @@
-# Important Notes for Next Developer
+# Roadmap
 
 - We've just moved to postgres and also using supabase (after briefly using postgres in Fly)
 - The main-archive.go.bak contains the original logic/setup for the app pre-postgres
@@ -8,9 +8,9 @@
 - Before proceeding with furthur functionality/etc, we want to finalise the data schema to allow for separatation of simple tables with references: site (for each domain), page (for each page being crawled), results (To store actual results), tasks to only have task status in them.
 - We need to implement a more robust worker pool using PostgreSQL's row-level locking
 
-## Stage 0: Project Setup & Infrastructure (6-10 hrs) ✅
+## Stage 0: Project Setup & Infrastructure (6-10 hrs) 
 
-### Development Environment Setup (2-3 hrs) ✅
+### Development Environment Setup (2-3 hrs) 
 
 - [x] Initialise GitHub repository
 - [x] Set up branch protection
@@ -19,7 +19,7 @@
 - [x] Set up local development environment
 - [x] Add initial documentation
 
-### Go Project Structure (2-3 hrs) ✅
+### Go Project Structure (2-3 hrs) 
 
 - [x] Initialise Go project
 - [x] Set up dependency management
@@ -27,7 +27,7 @@
 - [x] Add basic configs
 - [x] Set up testing framework
 
-### Production Infrastructure Setup (2-4 hrs) ✅
+### Production Infrastructure Setup (2-4 hrs) 
 
 - [x] Set up dev/prod environments
 - [x] Configure environment variables
@@ -42,9 +42,9 @@
 - [x] Test production deployment
 - [x] Initial Sentry.io connection
 
-## Stage 1: Core Setup & Basic Crawling (15-25 hrs) ✅
+## Stage 1: Core Setup & Basic Crawling (15-25 hrs) 
 
-### Core API Implementation (3-5 hrs) ✅
+### Core API Implementation (3-5 hrs) 
 
 - [x] Initialise Go project structure and dependencies
 - [x] Set up basic API endpoints
@@ -55,7 +55,7 @@
 - [x] Add graceful shutdown handling
 - [x] Implement configuration validation
 
-### Enhance Crawler Results (8-12 hrs) ✅
+### Enhance Crawler Results (8-12 hrs) 
 
 - [x] Set up Colly crawler configuration
 - [x] Implement concurrent crawling logic
@@ -67,7 +67,7 @@
 - [x] Add crawler-specific error tracking
 - [x] Set up crawler performance monitoring
 
-### Set up Turso for storing results (4-8 hrs) ✅
+### Set up Turso for storing results (4-8 hrs) 
 
 - [x] Design database schema
 - [x] Set up Turso connection and config
@@ -77,9 +77,9 @@
 - [x] Add database performance monitoring
 - [x] Set up query error tracking
 
-## Stage 2: Multi-domain Support & Job Queue Architecture ✅
+## Stage 2: Multi-domain Support & Job Queue Architecture 
 
-### Job Queue Architecture ✅
+### Job Queue Architecture 
 
 - [x] Design job and task data structures
 - [x] Implement persistent job storage in database
@@ -88,30 +88,30 @@
 - [x] Implement database retry logic for job operations to handle transient errors
 - [x] Enhance error reporting and monitoring
 
-### Sitemap Integration (2-3 hrs) ✅
+### Sitemap Integration (2-3 hrs) 
 
 - [x] Implement sitemap.xml parser
 - [x] Add URL filtering based on path patterns
 - [x] Handle sitemap index files
 - [x] Process multiple sitemaps
 
-### Link Discovery & Crawling (2-3 hrs) 🟡
+### Link Discovery & Crawling (2-3 hrs) 
 
 - [x] Extract links from crawled pages
 - [x] Filter links to stay within target domain
 - [x] Add depth control for crawling
 - [ ] Queue discovered links for processing
 
-### Job Management API (1-2 hrs) ✅
+### Job Management API (1-2 hrs) 
 
 - [x] Create job endpoints (create/list/get/cancel)
 - [x] Add progress calculation and reporting
 - [x] Store recent crawled pages in job history
 - [x] Implement multi-domain support
 
-## Stage 3: Deployment & Monitoring (8-12 hrs) 🟡
+## Stage 3: Deployment & Monitoring (8-12 hrs) 
 
-### Fly.io Production Setup (4-6 hrs) ✅
+### Fly.io Production Setup (4-6 hrs) 
 
 - [x] Set up production environment on Fly.io
 - [x] Deploy and test rate limiting in production
@@ -120,7 +120,7 @@
 - [x] Implement monitoring alerts
 - [ ] Configure backup strategies
 
-### Performance Optimization (4-6 hrs) ✅
+### Performance Optimization (4-6 hrs) 
 
 - [x] Implement caching layer
 - [x] Optimize database queries
@@ -128,9 +128,9 @@
 - [x] Add performance monitoring
 - [x] Made decision to switch to postgres at this point
 
-### PostgreSQL Migration (10-15 hrs) 🔄
+### PostgreSQL Migration (10-15 hrs) 
 
-#### PostgreSQL Setup and Infrastructure (2-3 hrs) ✅
+#### PostgreSQL Setup and Infrastructure (2-3 hrs) 
 
 - [x] Set up PostgreSQL on Fly.io
   - [x] Create database instance
@@ -138,7 +138,7 @@
   - [ ] Set up backup schedule
   - [x] Configure security settings
 
-#### Database Layer Replacement (3-4 hrs) ✅
+#### Database Layer Replacement (3-4 hrs) 
 
 - [x] Implement PostgreSQL schema
   - [x] Convert SQLite schema to PostgreSQL syntax
@@ -149,7 +149,7 @@
   - [x] Add health checks and monitoring
   - [x] Implement efficient error handling
 
-#### Task Queue and Worker Redesign (4-5 hrs) 🟡
+#### Task Queue and Worker Redesign (4-5 hrs) 
 
 - [x] Implement PostgreSQL-based task queue
   - [x] Use row-level locking with SELECT FOR UPDATE SKIP LOCKED
@@ -185,7 +185,7 @@
   - [ ] Remove unused metrics tracking
   - [ ] Add relevant PostgreSQL metrics
 
-#### Final Transition (1-2 hrs) 🟡
+#### Final Transition (1-2 hrs) 
 
 - [x] Update core endpoints to use new implementation
 - [ ] Remove SQLite-specific code
@@ -273,21 +273,21 @@
 
 ### What We've Accomplished
 
-- ✅ Successfully migrated from SQLite/Turso to PostgreSQL for core functionality
-- ✅ Set up PostgreSQL database on Fly.io with proper connection settings
-- ✅ Implemented schema design optimized for PostgreSQL with proper indexes
-- ✅ Created basic queue implementation with row-level locking (FOR UPDATE SKIP LOCKED)
-- ✅ Implemented core APIs to work with PostgreSQL (/health, /pg-health, /test-crawl, /recent-crawls)
-- ✅ Deployed and verified working on Fly.io production environment
+- Successfully migrated from SQLite/Turso to PostgreSQL for core functionality
+- Set up PostgreSQL database on Fly.io with proper connection settings
+- Implemented schema design optimized for PostgreSQL with proper indexes
+- Created basic queue implementation with row-level locking (FOR UPDATE SKIP LOCKED)
+- Implemented core APIs to work with PostgreSQL (/health, /pg-health, /test-crawl, /recent-crawls)
+- Deployed and verified working on Fly.io production environment
 
 ### Current State
 
-- 🟡 We now have a working basic implementation with PostgreSQL that can:
+- We now have a working basic implementation with PostgreSQL that can:
   - Store and retrieve crawl results
   - Handle database errors properly
   - Connect to production PostgreSQL instance
   - Reset database schema when needed
-- 🟡 The implementation provides the foundation for the full worker/queue system
+- The implementation provides the foundation for the full worker/queue system
 
 ### Next Steps (in priority order)
 
