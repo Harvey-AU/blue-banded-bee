@@ -85,7 +85,8 @@ func (c *Crawler) WarmURL(ctx context.Context, targetURL string) (*CrawlResult, 
 	client := &http.Client{Timeout: c.config.DefaultTimeout}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, targetURL, nil)
 	if err != nil {
-		res.Error = err.Error(); res.ResponseTime = time.Since(start).Milliseconds()
+		res.Error = err.Error()
+		res.ResponseTime = time.Since(start).Milliseconds()
 		return res, err
 	}
 	resp, err := client.Do(req)
