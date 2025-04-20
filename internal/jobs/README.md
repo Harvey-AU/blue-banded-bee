@@ -12,10 +12,35 @@ This package implements a robust job queue system for the crawler with the follo
 
 ## Database Schema
 
-The system uses two main tables:
+The system uses a normalized database schema with reference tables:
 
-- **jobs**: Stores job metadata, status, and progress
-- **tasks**: Stores individual URLs to crawl and their results
+- **domains**: Stores unique domain names with integer primary keys
+- **pages**: Stores page paths with references to their respective domains
+- **jobs**: Stores job metadata, status, and progress with references to domains
+- **tasks**: Stores individual crawl tasks with references to pages
+
+## URL Processing
+
+Instead of storing complete URLs in the tasks table, the system now:
+
+1. Stores domain names in the `domains` table
+2. Stores page paths in the `pages` table
+3. References these tables from `jobs` and `tasks`
+4. Reconstructs full URLs when processing tasks by joining domain names and paths
+
+This approach improves data integrity and reduces redundancy by storing domain names and page paths only once.
+
+## PostgreSQL Compatibility
+
+All SQL queries use PostgreSQL-style numbered parameters:
+
+```go
+// Correct parameter style for PostgreSQL
+tx.ExecContext(ctx, `UPDATE tasks SET status = $1 WHERE id = $2`, status, id)
+
+// Batch operations use incrementing parameter numbers
+placeholders := fmt.Sprintf("($%d, $%d, $%d)", paramIndex, paramIndex+1, paramIndex+2)
+```
 
 ## Reliability Features
 
