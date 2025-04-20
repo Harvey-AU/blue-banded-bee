@@ -8,7 +8,7 @@
 - Before proceeding with furthur functionality/etc, we want to finalise the data schema to allow for separatation of simple tables with references: site (for each domain), page (for each page being crawled), results (To store actual results), tasks to only have task status in them.
 - We need to implement a more robust worker pool using PostgreSQL's row-level locking
 
-## Stage 0: Project Setup & Infrastructure (6-10 hrs) 
+## ✅ Stage 0: Project Setup & Infrastructure (6-10 hrs) 
 
 ### Development Environment Setup (2-3 hrs) 
 
@@ -42,7 +42,7 @@
 - [x] Test production deployment
 - [x] Initial Sentry.io connection
 
-## Stage 1: Core Setup & Basic Crawling (15-25 hrs) 
+## ✅ Stage 1: Core Setup & Basic Crawling (15-25 hrs) 
 
 ### Core API Implementation (3-5 hrs) 
 
@@ -77,7 +77,7 @@
 - [x] Add database performance monitoring
 - [x] Set up query error tracking
 
-## Stage 2: Multi-domain Support & Job Queue Architecture 
+## 🚧 Stage 2: Multi-domain Support & Job Queue Architecture 
 
 ### Job Queue Architecture 
 
@@ -101,6 +101,7 @@
 - [x] Filter links to stay within target domain
 - [x] Add depth control for crawling
 - [ ] Queue discovered links for processing
+- [ ] Wire DB `depth` column into enqueue logic for per-task depth control
 
 ### Job Management API (1-2 hrs) 
 
@@ -109,7 +110,7 @@
 - [x] Store recent crawled pages in job history
 - [x] Implement multi-domain support
 
-## Stage 3: Deployment & Monitoring (8-12 hrs) 
+## 🚧 Stage 3: Deployment & Monitoring (8-12 hrs) 
 
 ### Fly.io Production Setup (4-6 hrs) 
 
@@ -192,7 +193,7 @@
 - [ ] Clean up dependencies and imports
 - [ ] Update configuration and documentation
 
-## Stage 4: Auth & User Management (10-16 hrs)
+## ⚪ Stage 4: Auth & User Management (10-16 hrs)
 
 ### Implement Clerk authentication (4-6 hrs)
 
@@ -217,7 +218,7 @@
 - [ ] Implement usage notifications
 - [ ] Add basic reporting functions
 
-## Stage 5: Billing & Subscriptions (8-12 hrs)
+## ⚪ Stage 5: Billing & Subscriptions (8-12 hrs)
 
 ### Implement Paddle integration (4-6 hrs)
 
@@ -241,7 +242,7 @@
 - [ ] Set up usage warnings
 - [ ] Implement grace period
 
-## Stage 6: Webflow Integration & Launch (8-16 hrs)
+## ⚪ Stage 6: Webflow Integration & Launch (8-16 hrs)
 
 ### Build Webflow frontend interface (4-8 hrs)
 

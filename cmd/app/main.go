@@ -153,10 +153,10 @@ func main() {
 
 		// Optional: limit total pages/tasks via max_pages param
 		maxPages := 0
-		if maxStr := r.URL.Query().Get("max_pages"); maxStr != "" {
+		if maxStr := r.URL.Query().Get("max"); maxStr != "" {
 			parsed, err := strconv.Atoi(maxStr)
 			if err != nil || parsed < 1 {
-				http.Error(w, "Invalid max_pages parameter", http.StatusBadRequest)
+				http.Error(w, "Invalid max parameter", http.StatusBadRequest)
 				return
 			}
 			maxPages = parsed
@@ -190,7 +190,7 @@ func main() {
 			allURLs = append(allURLs, urls...)
 		}
 
-		// Trim URLs list if max_pages specified
+		// Trim URLs list if max specified
 		if maxPages > 0 && len(allURLs) > maxPages {
 			allURLs = allURLs[:maxPages]
 		}
