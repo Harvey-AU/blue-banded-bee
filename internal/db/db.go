@@ -22,20 +22,6 @@ type Config struct {
 	ConnectionString string
 }
 
-// CrawlResult represents a stored crawl result
-type CrawlResult struct {
-	ID           int64     `json:"id"`
-	JobID        string    `json:"job_id,omitempty"`
-	TaskID       string    `json:"task_id,omitempty"`
-	URL          string    `json:"url"`
-	ResponseTime int64     `json:"response_time_ms"`
-	StatusCode   int       `json:"status_code"`
-	Error        string    `json:"error,omitempty"`
-	CacheStatus  string    `json:"cache_status,omitempty"`
-	ContentType  string    `json:"content_type,omitempty"`
-	CreatedAt    time.Time `json:"created_at"`
-}
-
 // New creates a new PostgreSQL database connection
 func New(config *Config) (*DB, error) {
 	client, err := sql.Open("postgres", config.ConnectionString)
@@ -108,7 +94,6 @@ func setupSchema(db *sql.DB) error {
 	// Create tasks table
 	_, err = db.Exec(`
 		CREATE TABLE IF NOT EXISTS tasks (
-		
 			id TEXT PRIMARY KEY,
 			job_id TEXT NOT NULL,
 			url TEXT NOT NULL,
@@ -130,25 +115,6 @@ func setupSchema(db *sql.DB) error {
 	`)
 	if err != nil {
 		return fmt.Errorf("failed to create tasks table: %w", err)
-	}
-
-	// Create crawl_results table
-	_, err = db.Exec(`
-		CREATE TABLE IF NOT EXISTS crawl_results (
-			id SERIAL PRIMARY KEY,
-			job_id TEXT,
-			task_id TEXT,
-			url TEXT NOT NULL,
-			response_time BIGINT NOT NULL,
-			status_code INTEGER,
-			error TEXT,
-			cache_status TEXT,
-			content_type TEXT,
-			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-		)
-	`)
-	if err != nil {
-		return fmt.Errorf("failed to create crawl_results table: %w", err)
 	}
 
 	// Create indexes
@@ -181,79 +147,12 @@ func (db *DB) GetDB() *sql.DB {
 	return db.client
 }
 
-// StoreCrawlResult stores a new crawl result in the database
-func (db *DB) StoreCrawlResult(ctx context.Context, result *CrawlResult) error {
-	log.Debug().
-		Str("url", result.URL).
-		Int64("response_time", result.ResponseTime).
-		Int("status_code", result.StatusCode).
-		Msg("Storing crawl result")
-
-	_, err := db.client.ExecContext(ctx, `
-		INSERT INTO crawl_results (job_id, task_id, url, response_time, status_code, error, cache_status, content_type)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-	`, result.JobID, result.TaskID, result.URL, result.ResponseTime,
-		result.StatusCode, result.Error, result.CacheStatus, result.ContentType)
-
-	if err != nil {
-		log.Error().Err(err).
-			Str("url", result.URL).
-			Int64("response_time", result.ResponseTime).
-			Int("status_code", result.StatusCode).
-			Msg("Failed to store crawl result")
-		return err
-	}
-
-	log.Info().
-		Str("url", result.URL).
-		Msg("Successfully stored crawl result")
-
-	return nil
-}
-
-// GetRecentResults retrieves the most recent crawl results
-func (db *DB) GetRecentResults(ctx context.Context, limit int) ([]CrawlResult, error) {
-	rows, err := db.client.QueryContext(ctx, `
-		SELECT id, job_id, task_id, url, response_time, status_code, error, cache_status, content_type, created_at
-		FROM crawl_results
-		ORDER BY created_at DESC
-		LIMIT $1
-	`, limit)
-
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var results []CrawlResult
-	for rows.Next() {
-		var r CrawlResult
-		err := rows.Scan(&r.ID, &r.JobID, &r.TaskID, &r.URL, &r.ResponseTime, &r.StatusCode,
-			&r.Error, &r.CacheStatus, &r.ContentType, &r.CreatedAt)
-		if err != nil {
-			return nil, err
-		}
-		results = append(results, r)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-
-	return results, nil
-}
-
 // ResetSchema resets the database schema
 func (db *DB) ResetSchema() error {
 	log.Warn().Msg("Resetting PostgreSQL schema")
 
 	// Drop tables in reverse order to respect foreign keys
-	_, err := db.client.Exec(`DROP TABLE IF EXISTS crawl_results`)
-	if err != nil {
-		return err
-	}
-
-	_, err = db.client.Exec(`DROP TABLE IF EXISTS tasks`)
+	_, err := db.client.Exec(`DROP TABLE IF EXISTS tasks`)
 	if err != nil {
 		return err
 	}

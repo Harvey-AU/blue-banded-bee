@@ -127,59 +127,6 @@ func main() {
 		})
 	})
 
-	http.HandleFunc("/recent-crawls", func(w http.ResponseWriter, r *http.Request) {
-		limit := 10
-		if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
-			if parsed, err := strconv.Atoi(limitStr); err == nil && parsed > 0 {
-				limit = parsed
-			}
-		}
-
-		results, err := pgDB.GetRecentResults(r.Context(), limit)
-		if err != nil {
-			log.Error().Err(err).Msg("Failed to get recent results")
-			w.WriteHeader(http.StatusInternalServerError)
-			json.NewEncoder(w).Encode(map[string]string{
-				"error": "Failed to get recent results",
-			})
-			return
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(results)
-	})
-
-	http.HandleFunc("/test-crawl", func(w http.ResponseWriter, r *http.Request) {
-		url := r.URL.Query().Get("url")
-		if url == "" {
-			url = "https://www.example.com"
-		}
-
-		result, err := cr.WarmURL(r.Context(), url)
-		if err != nil {
-			log.Error().Err(err).Str("url", url).Msg("Failed to crawl URL")
-			w.WriteHeader(http.StatusInternalServerError)
-			json.NewEncoder(w).Encode(map[string]string{
-				"error": err.Error(),
-			})
-			return
-		}
-
-		// Store the result
-		pgDB.StoreCrawlResult(r.Context(), &db.CrawlResult{
-			URL:          result.URL,
-			ResponseTime: result.ResponseTime,
-			StatusCode:   result.StatusCode,
-			Error:        result.Error,
-			CacheStatus:  result.CacheStatus,
-			ContentType:  result.ContentType,
-			CreatedAt:    time.Now(),
-		})
-
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(result)
-	})
-
 	// Add a reset-db endpoint
 	http.HandleFunc("/reset-db", func(w http.ResponseWriter, r *http.Request) {
 		log.Warn().Msg("Database reset requested")
@@ -196,7 +143,6 @@ func main() {
 		})
 	})
 
-	// Add this endpoint
 	http.HandleFunc("/site", func(w http.ResponseWriter, r *http.Request) {
 		// Get domain from query parameters
 		domain := r.URL.Query().Get("domain")
