@@ -40,7 +40,7 @@ air
 ### Start Without Hot Reloading
 
 ```bash
-go run src/main.go
+go run ./cmd/app/main.go
 ```
 
 ## Testing
