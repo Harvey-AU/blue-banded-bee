@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/Harvey-AU/blue-banded-bee/internal/crawler"
+	"github.com/Harvey-AU/blue-banded-bee/internal/db" // Import db package
 	"github.com/getsentry/sentry-go"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
@@ -295,27 +296,9 @@ func (wp *WorkerPool) processNextTask(ctx context.Context) error {
 					log.Error().Err(updErr).Str("task_id", task.ID).Msg("Failed to mark task as completed")
 				}
 			}
-			// recalc job metrics and finalize job if done
-			var totalTasks, compCount, failCount int
-			if err := wp.db.QueryRowContext(ctx, `
-				SELECT total_tasks, 
-					   (SELECT COUNT(*) FROM tasks WHERE job_id = $1 AND status = $2),
-					   (SELECT COUNT(*) FROM tasks WHERE job_id = $1 AND status = $3)
-				FROM jobs WHERE id = $1`, task.JobID, TaskStatusCompleted, TaskStatusFailed).Scan(&totalTasks, &compCount, &failCount); err == nil {
-				// update metrics
-				_, _ = wp.db.ExecContext(ctx, `
-					UPDATE jobs SET completed_tasks = $2, failed_tasks = $3,
-						progress = CASE WHEN total_tasks > 0 THEN ($2::float / total_tasks * 100) ELSE 100 END
-					WHERE id = $1`, task.JobID, compCount, failCount)
-				// finalize if all tasks accounted
-				if compCount+failCount >= totalTasks {
-					final := JobStatusCompleted
-					if failCount > 0 {
-						final = JobStatusFailed
-					}
-					_, _ = wp.db.ExecContext(ctx, `UPDATE jobs SET status = $1, completed_at = $2 WHERE id = $3`, final, now, task.JobID)
-					wp.RemoveJob(task.JobID)
-				}
+			// update job progress via DbQueue helper
+			if err := db.NewDbQueue(wp.db).UpdateJobProgress(ctx, task.JobID); err != nil {
+				log.Error().Err(err).Str("job_id", task.JobID).Msg("Failed to update job progress via helper")
 			}
 			return nil
 		}
