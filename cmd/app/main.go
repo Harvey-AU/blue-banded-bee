@@ -360,6 +360,19 @@ func setupLogging(config *Config) {
 	// Use console writer in development
 	if config.Env == "development" {
 		log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: time.RFC3339})
+	} else {
+		// In production, use a more verbose JSON format that works well with Fly.io logs
+		log.Logger = zerolog.New(os.Stdout).
+			With().
+			Timestamp().
+			Str("service", "blue-banded-bee").
+			Logger()
+		
+		// Set a more verbose log level in production to help with debugging
+		if level > zerolog.DebugLevel {
+			log.Info().Msgf("Setting log level to debug instead of %s for better visibility", level.String())
+			zerolog.SetGlobalLevel(zerolog.DebugLevel)
+		}
 	}
 }
 
