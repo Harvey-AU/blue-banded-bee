@@ -92,18 +92,6 @@ The cache warmer proactively visits URLs to ensure content is cached and readily
 
 ### Schema
 
-```sql
-CREATE TABLE crawl_results (
-    id SERIAL PRIMARY KEY,
-    url TEXT NOT NULL,
-    response_time INTEGER NOT NULL,
-    status_code INTEGER,
-    error TEXT,
-    cache_status TEXT,
-    content_type TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-);
-
 CREATE TABLE jobs (
     id TEXT PRIMARY KEY,
     domain TEXT NOT NULL,
