@@ -451,6 +451,7 @@ func (wp *WorkerPool) checkForPendingTasks(ctx context.Context) error {
 	defer rows.Close()
 
 	jobsFound := 0
+	foundIDs := make([]string, 0, 100)
 	// For each job with pending tasks, add it to the worker pool
 	for rows.Next() {
 		jobsFound++
@@ -459,6 +460,7 @@ func (wp *WorkerPool) checkForPendingTasks(ctx context.Context) error {
 			log.Error().Err(err).Msg("Failed to scan job ID")
 			continue
 		}
+		foundIDs = append(foundIDs, jobID)
 
 		// Check if already in our active jobs
 		wp.jobsMutex.RLock()
@@ -492,6 +494,23 @@ func (wp *WorkerPool) checkForPendingTasks(ctx context.Context) error {
 		log.Debug().Msg("No jobs with pending tasks found")
 	} else {
 		log.Debug().Int("count", jobsFound).Msg("Found jobs with pending tasks")
+	}
+
+	foundSet := make(map[string]struct{}, len(foundIDs))
+	for _, id := range foundIDs {
+		foundSet[id] = struct{}{}
+	}
+	var toRemove []string
+	wp.jobsMutex.RLock()
+	for jobID := range wp.jobs {
+		if _, ok := foundSet[jobID]; !ok {
+			toRemove = append(toRemove, jobID)
+		}
+	}
+	wp.jobsMutex.RUnlock()
+	for _, id := range toRemove {
+		log.Info().Str("job_id", id).Msg("Job has no pending tasks, removing from worker pool")
+		wp.RemoveJob(id)
 	}
 
 	return rows.Err()
