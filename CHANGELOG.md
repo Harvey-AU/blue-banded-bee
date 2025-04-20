@@ -28,6 +28,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Correctly set job and task completion timestamps (`CompletedAt`) when tasks and jobs complete.
 - Fixed "append result never used" warnings in database operations
 - Resolved unused import warnings and other code quality issues
+- Fixed SQL parameter placeholders to use PostgreSQL-style numbered parameters (`$1`, `$2`, etc.) instead of MySQL/SQLite-style (`?`)
+- Fixed task processing issues after database reset by ensuring consistent parameter style in all SQL queries
+- Corrected parameter count mismatch in batch insert operations
 
 ## [0.2.0] - 2025-04-20
 
