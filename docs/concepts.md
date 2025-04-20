@@ -94,21 +94,58 @@ The cache warmer proactively visits URLs to ensure content is cached and readily
 
 ```sql
 CREATE TABLE crawl_results (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id SERIAL PRIMARY KEY,
     url TEXT NOT NULL,
     response_time INTEGER NOT NULL,
     status_code INTEGER,
     error TEXT,
     cache_status TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-)
+    content_type TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE jobs (
+    id TEXT PRIMARY KEY,
+    domain TEXT NOT NULL,
+    status TEXT NOT NULL,
+    progress REAL DEFAULT 0.0,
+    total_tasks INTEGER DEFAULT 0,
+    completed_tasks INTEGER DEFAULT 0,
+    failed_tasks INTEGER DEFAULT 0,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    started_at TIMESTAMP WITH TIME ZONE,
+    completed_at TIMESTAMP WITH TIME ZONE,
+    concurrency INTEGER DEFAULT 1,
+    find_links BOOLEAN DEFAULT FALSE,
+    max_depth INTEGER DEFAULT 0
+);
+
+CREATE TABLE tasks (
+    id TEXT PRIMARY KEY,
+    job_id TEXT REFERENCES jobs(id),
+    url TEXT NOT NULL,
+    status TEXT NOT NULL,
+    depth INTEGER DEFAULT 0,
+    source_type TEXT,
+    source_url TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    started_at TIMESTAMP WITH TIME ZONE,
+    completed_at TIMESTAMP WITH TIME ZONE,
+    status_code INTEGER,
+    response_time INTEGER,
+    cache_status TEXT,
+    content_type TEXT,
+    error TEXT
+);
 ```
 
 ### Connection Management
 
-- Connection pooling
-- Maximum 10 open connections
+- Connection pooling with a configurable pool size
+- Maximum 25 open connections
+- Maximum 10 idle connections
 - 5-minute connection lifetime
+- 2-minute idle connection timeout
 - Automatic reconnection
 
 ## Error Handling

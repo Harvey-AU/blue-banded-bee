@@ -1,4 +1,4 @@
-package postgres
+package db
 
 import (
 	"context"
@@ -191,9 +191,20 @@ func (q *DbQueue) EnqueueURLs(ctx context.Context, jobID string, urls []string, 
 	})
 }
 
+// EnqueueTasks is an alias for EnqueueURLs to maintain compatibility with existing code
+func (q *DbQueue) EnqueueTasks(ctx context.Context, jobID string, urls []string, sourceType string, sourceURL string, depth int) error {
+	return q.EnqueueURLs(ctx, jobID, urls, sourceType, sourceURL, depth)
+}
+
 // GetQueue returns a database queue for the DB
 func (db *DB) GetQueue() *DbQueue {
 	return NewDbQueue(db.client)
+}
+
+// NewTaskQueue creates a task queue using the provided database connection
+// It's an alias for NewDbQueue to maintain compatibility with existing code
+func NewTaskQueue(db *sql.DB) *DbQueue {
+	return NewDbQueue(db)
 }
 
 // CompleteTask marks a task as completed

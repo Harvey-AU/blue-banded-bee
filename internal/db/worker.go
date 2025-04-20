@@ -1,4 +1,4 @@
-package postgres
+package db
 
 import (
 	"context"
@@ -32,7 +32,7 @@ func NewWorkerPool(db *DB, crawler *crawler.Crawler, workerCount int) *WorkerPoo
 
 // Start begins processing tasks with the worker pool
 func (wp *WorkerPool) Start(ctx context.Context) {
-	log.Info().Int("workers", wp.workerCount).Msg("Starting PostgreSQL worker pool")
+	log.Info().Int("workers", wp.workerCount).Msg("Starting worker pool")
 
 	wp.wg.Add(wp.workerCount)
 	for i := 0; i < wp.workerCount; i++ {
@@ -42,10 +42,10 @@ func (wp *WorkerPool) Start(ctx context.Context) {
 
 // Stop gracefully shuts down the worker pool
 func (wp *WorkerPool) Stop() {
-	log.Debug().Msg("Stopping PostgreSQL worker pool")
+	log.Debug().Msg("Stopping worker pool")
 	close(wp.stopCh)
 	wp.wg.Wait()
-	log.Debug().Msg("PostgreSQL worker pool stopped")
+	log.Debug().Msg("Worker pool stopped")
 }
 
 // worker continuously processes tasks
