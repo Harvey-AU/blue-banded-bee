@@ -5,13 +5,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Harvey-AU/blue-banded-bee/src/crawler"
+	"github.com/Harvey-AU/blue-banded-bee/internal/crawler"
 	"github.com/rs/zerolog/log"
 )
 
 // WorkerPool manages a pool of workers that process tasks using PostgreSQL queue
 type WorkerPool struct {
-	queue        *TaskQueue
+	queue        *DbQueue
 	crawler      *crawler.Crawler
 	workerCount  int
 	stopCh       chan struct{}
@@ -22,7 +22,7 @@ type WorkerPool struct {
 // NewWorkerPool creates a new worker pool with PostgreSQL task queue
 func NewWorkerPool(db *DB, crawler *crawler.Crawler, workerCount int) *WorkerPool {
 	return &WorkerPool{
-		queue:        NewTaskQueue(db.client),
+		queue:        NewDbQueue(db.client),
 		crawler:      crawler,
 		workerCount:  workerCount,
 		stopCh:       make(chan struct{}),

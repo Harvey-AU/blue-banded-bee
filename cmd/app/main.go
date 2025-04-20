@@ -12,8 +12,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/Harvey-AU/blue-banded-bee/src/crawler"
-	"github.com/Harvey-AU/blue-banded-bee/src/db/postgres"
+	"github.com/Harvey-AU/blue-banded-bee/internal/crawler"
+	"github.com/Harvey-AU/blue-banded-bee/internal/db/postgres"
 	"github.com/google/uuid"
 	"github.com/joho/godotenv"
 	"github.com/rs/zerolog"
