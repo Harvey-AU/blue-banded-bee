@@ -65,11 +65,37 @@ func InitFromEnv() (*DB, error) {
 
 // setupSchema creates the necessary tables in PostgreSQL
 func setupSchema(db *sql.DB) error {
-	// Create jobs table
+	// Create domains lookup table
 	_, err := db.Exec(`
+		CREATE TABLE IF NOT EXISTS domains (
+			id SERIAL PRIMARY KEY,
+			name TEXT UNIQUE NOT NULL,
+			created_at TIMESTAMP NOT NULL DEFAULT NOW()
+		)
+	`)
+	if err != nil {
+		return fmt.Errorf("failed to create domains table: %w", err)
+	}
+
+	// Create pages lookup table
+	_, err = db.Exec(`
+		CREATE TABLE IF NOT EXISTS pages (
+			id SERIAL PRIMARY KEY,
+			domain_id INTEGER NOT NULL REFERENCES domains(id),
+			path TEXT NOT NULL,
+			created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+			UNIQUE(domain_id, path)
+		)
+	`)
+	if err != nil {
+		return fmt.Errorf("failed to create pages table: %w", err)
+	}
+
+	// Create jobs table
+	_, err = db.Exec(`
 		CREATE TABLE IF NOT EXISTS jobs (
 			id TEXT PRIMARY KEY,
-			domain TEXT NOT NULL,
+			domain_id INTEGER NOT NULL REFERENCES domains(id),
 			status TEXT NOT NULL,
 			progress REAL NOT NULL,
 			total_tasks INTEGER NOT NULL,
@@ -96,7 +122,7 @@ func setupSchema(db *sql.DB) error {
 		CREATE TABLE IF NOT EXISTS tasks (
 			id TEXT PRIMARY KEY,
 			job_id TEXT NOT NULL,
-			url TEXT NOT NULL,
+			page_id INTEGER NOT NULL REFERENCES pages(id),
 			status TEXT NOT NULL,
 			depth INTEGER NOT NULL,
 			created_at TIMESTAMP NOT NULL,
@@ -162,6 +188,16 @@ func (db *DB) ResetSchema() error {
 		return err
 	}
 
+	_, err = db.client.Exec(`DROP TABLE IF EXISTS pages`)
+	if err != nil {
+		return err
+	}
+
+	_, err = db.client.Exec(`DROP TABLE IF EXISTS domains`)
+	if err != nil {
+		return err
+	}
+
 	// Recreate schema
 	return setupSchema(db.client)
 }
@@ -198,4 +234,30 @@ func (db *DB) QueryWithMetrics(ctx context.Context, query string, args ...interf
 	}
 
 	return rows, err
+}
+
+// GetOrCreateDomain returns the id for a domain name, inserting it if necessary
+func (db *DB) GetOrCreateDomain(ctx context.Context, name string) (int, error) {
+	var id int
+	// insert or ignore
+	if _, err := db.client.ExecContext(ctx,
+		`INSERT INTO domains(name) VALUES($1) ON CONFLICT (name) DO NOTHING`, name); err != nil {
+		return 0, err
+	}
+	// select id
+	err := db.client.QueryRowContext(ctx, `SELECT id FROM domains WHERE name=$1`, name).Scan(&id)
+	return id, err
+}
+
+// GetOrCreatePage returns the id for a page path under a domain, inserting it if necessary
+func (db *DB) GetOrCreatePage(ctx context.Context, domainID int, path string) (int, error) {
+	var id int
+	if _, err := db.client.ExecContext(ctx,
+		`INSERT INTO pages(domain_id, path) VALUES($1,$2) ON CONFLICT (domain_id,path) DO NOTHING`,
+		domainID, path); err != nil {
+		return 0, err
+	}
+	err := db.client.QueryRowContext(ctx,
+		`SELECT id FROM pages WHERE domain_id=$1 AND path=$2`, domainID, path).Scan(&id)
+	return id, err
 }
