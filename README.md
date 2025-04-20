@@ -22,7 +22,7 @@ cp .env.example .env
 # Edit .env with your credentials
 
 # Run the service
-go run src/main.go
+go run ./cmd/app/main.go
 ```
 
 ## Development Status
