@@ -6,8 +6,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/Harvey-AU/blue-banded-bee/src/crawler"
-	"github.com/Harvey-AU/blue-banded-bee/src/jobs"
+	"github.com/Harvey-AU/blue-banded-bee/internal/crawler"
+	"github.com/Harvey-AU/blue-banded-bee/internal/jobs"
 	"github.com/joho/godotenv"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"

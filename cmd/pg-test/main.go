@@ -5,7 +5,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/Harvey-AU/blue-banded-bee/src/db/postgres"
+	"github.com/Harvey-AU/blue-banded-bee/internal/db/postgres"
 	"github.com/google/uuid"
 	"github.com/joho/godotenv"
 	"github.com/rs/zerolog"

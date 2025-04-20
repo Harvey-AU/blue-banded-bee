@@ -1,6 +1,6 @@
 # Blue Banded Bee
 
-Automatically warm Webflow site caches (and other websites) after publishing to improve initial page load times.
+Automatically warm site caches (especially built for [Webflow](https://www.webflow.com)) after publishing to improve initial page load times. 
 
 ## Features
 
