@@ -6,27 +6,13 @@
 
 curl "http://localhost:8080/site?domain=teamharvey.co"
 curl "https://blue-banded-bee.fly.dev/site?domain=teamharvey.co"
+curl "http://localhost:8080/site?domain=teamharvey.co&max=100"
+curl "https://blue-banded-bee.fly.dev/site?domain=teamharvey.co&max=100"
 
-curl "http://localhost:8080/test-crawl?url=https://teamharvey.co"
-curl "https://blue-banded-bee.fly.dev/test-crawl?url=https://teamharvey.co"
+### Check crawl job status
 
-curl "http://localhost:8080/job_status?id=job_123abc"
-curl "https://blue-banded-bee.fly.dev/job_status?id=job_123abc"
-
-curl "http://localhost:8080/cancel_job?id=job_123abc"
-curl "https://blue-banded-bee.fly.dev/cancel_job?id=job_123abc"
-
-curl "http://localhost:8080/jobs?limit=20&offset=0"
-curl "https://blue-banded-bee.fly.dev/jobs?limit=20&offset=0"
-
-curl "http://localhost:8080/task?id=task_123"
-curl "https://blue-banded-bee.fly.dev/task?id=task_123"
-
-curl "http://localhost:8080/job_tasks?job_id=job_123abc&limit=20&offset=0"
-curl "https://blue-banded-bee.fly.dev/job_tasks?job_id=job_123abc&limit=20&offset=0"
-
-curl "http://localhost:8080/retry_task?id=task_123"
-curl "https://blue-banded-bee.fly.dev/retry_task?id=task_123"
+curl "http://localhost:8080/job-status?job_id=job_123abc"
+curl "https://blue-banded-bee.fly.dev/job-status?job_id=job_123abc"
 
 ## Job Management
 
@@ -54,7 +40,7 @@ Creates a new crawling job.
 ### Get Job Status
 
 ```http
-GET /api/v1/jobs/{jobId}
+GET /api/v1/job-status/{jobId}
 ```
 
 Returns job status and progress.
@@ -84,14 +70,6 @@ POST /api/v1/jobs/{jobId}/cancel
 ```
 
 Cancels an active job.
-
-### List Jobs
-
-```http
-GET /api/v1/jobs
-```
-
-Lists all jobs with pagination.
 
 ## Task Management
 
@@ -141,250 +119,4 @@ All endpoints return standard error responses:
     "details": {}
   }
 }
-```
-
-````
-
-```markdown:docs/deployment.md
-# Deployment Guide
-
-## Prerequisites
-- Fly.io account
-- Turso database
-- Sentry.io account
-- Environment variables configured
-
-## Configuration
-
-### Worker Pool Settings
-```env
-WORKER_POOL_SIZE=5
-WORKER_TIMEOUT=300
-RECOVERY_INTERVAL=60
-MAX_RETRIES=3
-````
-
-### Rate Limiting
-
-```env
-RATE_LIMIT_PER_SECOND=10
-RATE_LIMIT_BURST=20
-```
-
-### Database Configuration
-
-```env
-PGHOST=localhost
-PGPORT=5432
-PGDATABASE=postgres
-PGUSER=postgres
-PGPASSWORD=your_password
-PGSSLMODE=disable
-```
-
-## Deployment Steps
-
-1. **Initial Setup**
-
-   ```bash
-   flyctl launch
-   flyctl secrets set
-   ```
-
-2. **Database Migration**
-
-   ```bash
-   flyctl ssh console
-   ./migrate up
-   ```
-
-3. **Deploy Application**
-   ```bash
-   flyctl deploy
-   ```
-
-## Scaling
-
-### Worker Pool Scaling
-
-- Minimum: 3 workers
-- Recommended: 5 workers
-- Scale based on queue size
-
-### Memory Requirements
-
-- Base: 512MB
-- Per Worker: ~100MB
-- Recommended: 1GB minimum
-
-## Monitoring
-
-### Health Checks
-
-- Endpoint: `/health`
-- Interval: 30s
-- Timeout: 5s
-
-### Metrics
-
-- Response times
-- Cache hit rates
-- Error rates
-- Queue depth
-
-### Alerts
-
-- Worker pool health
-- Database connectivity
-- High error rates
-- Queue backlog
-
-## Maintenance
-
-### Database
-
-- Regular VACUUM
-- Index optimization
-- Connection pool management
-
-### Logs
-
-- Retention: 7 days
-- Error tracking in Sentry
-- Performance monitoring
-
-````
-
-```markdown:docs/development.md
-# Development Guide
-
-## Setup
-
-### Prerequisites
-- Go 1.21+
-- Docker
-- Make
-
-### Local Environment
-1. Clone repository
-2. Copy `.env.example` to `.env`
-3. Configure local environment
-4. Run development server
-
-## Development Server
-
-### Start Local Server
-```bash
-make dev
-````
-
-### Run Tests
-
-```bash
-make test
-```
-
-## Worker Pool Development
-
-### Local Testing
-
-```bash
-# Start worker pool
-make worker
-
-# Monitor tasks
-make monitor
-```
-
-### Debug Configuration
-
-```go
-// worker/config.go
-debug: true
-logLevel: "debug"
-recoveryInterval: "10s"
-```
-
-### Testing Scenarios
-
-#### Recovery Testing
-
-1. Start worker pool
-2. Create test job
-3. Simulate failures
-4. Verify recovery
-
-#### Performance Testing
-
-1. Configure test job
-2. Monitor metrics
-3. Analyze results
-
-## Database
-
-### Local Database
-
-```bash
-make db-setup
-make db-migrate
-```
-
-### Test Data
-
-```bash
-make db-seed
-```
-
-## Testing
-
-### Unit Tests
-
-```bash
-make test-unit
-```
-
-### Integration Tests
-
-```bash
-make test-integration
-```
-
-### Load Tests
-
-```bash
-make test-load
-```
-
-## Debugging
-
-### Logs
-
-- Development: stdout
-- Structured logging
-- Debug level available
-
-### Metrics
-
-- Prometheus format
-- Grafana dashboards
-- Custom metrics
-
-## Code Style
-
-### Formatting
-
-```bash
-make fmt
-```
-
-### Linting
-
-```bash
-make lint
-```
-
-### Pre-commit Hooks
-
-```bash
-make install-hooks
 ```

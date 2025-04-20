@@ -5,7 +5,17 @@ All notable changes to the Blue Banded Bee project will be documented in this fi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.3.0] – 2025-04-21
+
+### Removed
+- Removed legacy `crawl_results` table and associated code.
+
+### Changed
+- Restructured documentation under `docs/` directory.
+- Added limit to site crawl to control no of pages to crawl.
+- 
+### Fixed
+- Correctly set job and task completion timestamps (`CompletedAt`) when tasks and jobs complete.
 
 ## [0.2.0] - 2025-04-20
 
