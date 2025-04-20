@@ -233,9 +233,9 @@ func main() {
 				continue
 			}
 			_, err = pgDB.GetDB().ExecContext(r.Context(), `
-				INSERT INTO tasks (id, job_id, page_id, status, depth, created_at, retry_count, source_type, source_url)
-				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-			`, taskID, jobID, pageID, "pending", 0, now, 0, "sitemap", baseURL)
+				INSERT INTO tasks (id, job_id, page_id, path, status, depth, created_at, retry_count, source_type, source_url)
+				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+			`, taskID, jobID, pageID, path, "pending", 0, now, 0, "sitemap", baseURL)
 
 			if err != nil {
 				log.Error().Err(err).Str("task_id", taskID).Msg("Failed to insert task")
