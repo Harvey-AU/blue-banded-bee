@@ -5,7 +5,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/Harvey-AU/blue-banded-bee/src/db/postgres"
+	"github.com/Harvey-AU/blue-banded-bee/internal/db"
 	"github.com/google/uuid"
 	"github.com/joho/godotenv"
 	"github.com/rs/zerolog"
@@ -26,11 +26,11 @@ func main() {
 	log.Info().Msg("Testing PostgreSQL connection")
 
 	// Initialize PostgreSQL
-	db, err := postgres.InitFromEnv()
+	database, err := db.InitFromEnv()
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to connect to PostgreSQL")
 	}
-	defer db.Close()
+	defer database.Close()
 
 	log.Info().Msg("Successfully connected to PostgreSQL")
 
@@ -40,7 +40,7 @@ func main() {
 	now := time.Now()
 
 	// Insert test job
-	_, err = db.GetDB().ExecContext(ctx, `
+	_, err = database.GetDB().ExecContext(ctx, `
 		INSERT INTO jobs (
 			id, domain, status, progress, total_tasks, completed_tasks, 
 			failed_tasks, created_at, concurrency, find_links, include_paths, exclude_paths
@@ -54,7 +54,7 @@ func main() {
 	log.Info().Str("job_id", jobID).Msg("Created test job")
 
 	// Create task queue
-	queue := postgres.NewTaskQueue(db.GetDB())
+	queue := db.NewTaskQueue(database.GetDB())
 
 	// Insert test tasks
 	urls := []string{
@@ -100,7 +100,7 @@ func main() {
 
 	// Check job progress updated
 	var progress float64
-	err = db.GetDB().QueryRowContext(ctx,
+	err = database.GetDB().QueryRowContext(ctx,
 		"SELECT progress FROM jobs WHERE id = $1", jobID).Scan(&progress)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to check job progress")
@@ -109,12 +109,12 @@ func main() {
 	log.Info().Float64("progress", progress).Msg("Job progress updated")
 
 	// Clean up test data
-	_, err = db.GetDB().ExecContext(ctx, "DELETE FROM tasks WHERE job_id = $1", jobID)
+	_, err = database.GetDB().ExecContext(ctx, "DELETE FROM tasks WHERE job_id = $1", jobID)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to clean up tasks")
 	}
 
-	_, err = db.GetDB().ExecContext(ctx, "DELETE FROM jobs WHERE id = $1", jobID)
+	_, err = database.GetDB().ExecContext(ctx, "DELETE FROM jobs WHERE id = $1", jobID)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to clean up job")
 	}

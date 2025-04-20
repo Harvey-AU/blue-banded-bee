@@ -9,6 +9,7 @@
 # Build
 /build/
 /dist/
+*.exe
 
 # IDE
 .idea/
