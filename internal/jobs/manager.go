@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/Harvey-AU/blue-banded-bee/src/crawler"
+	"github.com/Harvey-AU/blue-banded-bee/internal/crawler"
 	"github.com/getsentry/sentry-go"
 	"github.com/rs/zerolog/log"
 )

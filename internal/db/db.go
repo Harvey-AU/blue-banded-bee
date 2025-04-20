@@ -1,4 +1,4 @@
-package postgres
+package db
 
 import (
 	"context"
@@ -60,6 +60,21 @@ func New(config *Config) (*DB, error) {
 	}
 
 	return &DB{client: client}, nil
+}
+
+// InitFromEnv creates a PostgreSQL connection using environment variables
+func InitFromEnv() (*DB, error) {
+	// Get connection string from environment variables
+	connectionString := os.Getenv("DATABASE_URL")
+	if connectionString == "" {
+		return nil, errors.New("DATABASE_URL environment variable is required")
+	}
+
+	config := &Config{
+		ConnectionString: connectionString,
+	}
+
+	return New(config)
 }
 
 // setupSchema creates the necessary tables in PostgreSQL
@@ -250,52 +265,6 @@ func (db *DB) ResetSchema() error {
 
 	// Recreate schema
 	return setupSchema(db.client)
-}
-
-// InitFromEnv initializes a PostgreSQL DB from environment variables
-func InitFromEnv() (*DB, error) {
-	// Get connection string from environment
-	connString := getConnectionString()
-	if connString == "" {
-		return nil, errors.New("missing PostgreSQL connection information")
-	}
-
-	config := &Config{
-		ConnectionString: connString,
-	}
-
-	return New(config)
-}
-
-// getConnectionString builds a connection string from environment variables
-func getConnectionString() string {
-	// First check for complete connection string
-	connString := os.Getenv("DATABASE_URL")
-	if connString != "" {
-		return connString
-	}
-
-	// Otherwise build from components
-	host := os.Getenv("PGHOST")
-	port := os.Getenv("PGPORT")
-	if port == "" {
-		port = "5432"
-	}
-	user := os.Getenv("PGUSER")
-	password := os.Getenv("PGPASSWORD")
-	dbname := os.Getenv("PGDATABASE")
-	sslmode := os.Getenv("PGSSLMODE")
-	if sslmode == "" {
-		sslmode = "require" // Default to require SSL
-	}
-
-	// Check if we have required components
-	if host == "" || user == "" || password == "" || dbname == "" {
-		return ""
-	}
-
-	return fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
-		host, port, user, password, dbname, sslmode)
 }
 
 // ExecWithMetrics executes a SQL statement with metrics tracking
