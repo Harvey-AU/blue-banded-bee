@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Harvey-AU/blue-banded-bee/src/common"
+	"github.com/Harvey-AU/blue-banded-bee/internal/common"
 	"github.com/getsentry/sentry-go"
 	"github.com/rs/zerolog"
 	_ "github.com/tursodatabase/libsql-client-go/libsql"

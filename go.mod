@@ -4,6 +4,8 @@ go 1.24
 
 toolchain go1.24.2
 
+replace github.com/Harvey-AU/blue-banded-bee => .
+
 require (
 	github.com/getsentry/sentry-go v0.31.1
 	github.com/gocolly/colly/v2 v2.1.0
