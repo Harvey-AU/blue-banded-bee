@@ -16,7 +16,9 @@ import (
 
 // Initialize random seed
 func init() {
-	rand.Seed(time.Now().UnixNano())
+	// As of Go 1.20, rand.Seed is deprecated and no longer needed
+	// The global random number generator is now automatically seeded
+	// For specific seeded sequences, use rand.New(rand.NewSource(seed))
 }
 
 // Initialize database schema for jobs and tasks
@@ -51,9 +53,10 @@ func InitSchema(db *sql.DB) error {
 		CREATE TABLE IF NOT EXISTS tasks (
 			id TEXT PRIMARY KEY,
 			job_id TEXT NOT NULL,
-			url TEXT NOT NULL,
+			page_id INTEGER NOT NULL,
 			status TEXT NOT NULL,
 			depth INTEGER NOT NULL,
+			path TEXT NOT NULL,
 			created_at DATETIME NOT NULL,
 			started_at DATETIME,
 			completed_at DATETIME,
@@ -200,16 +203,17 @@ func CreateTask(ctx context.Context, db *sql.DB, task *Task) error {
 	defer span.Finish()
 
 	span.SetTag("job_id", task.JobID)
-	span.SetTag("url", task.URL)
+	span.SetTag("page_id", fmt.Sprintf("%d", task.PageID))
+	span.SetTag("path", task.Path)
 
 	err := retryDB(func() error {
 		_, err := db.ExecContext(ctx, `
 			INSERT INTO tasks (
-				id, job_id, url, status, depth, created_at, started_at, completed_at,
+				id, job_id, page_id, status, depth, path, created_at, started_at, completed_at,
 				retry_count, error, source_type, source_url
 			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		`,
-			task.ID, task.JobID, task.URL, task.Status, task.Depth, task.CreatedAt,
+			task.ID, task.JobID, task.PageID, task.Status, task.Depth, task.Path, task.CreatedAt,
 			task.StartedAt, task.CompletedAt, task.RetryCount, task.Error, task.SourceType, task.SourceURL,
 		)
 		return err
@@ -291,18 +295,7 @@ func GetJob(ctx context.Context, db *sql.DB, jobID string) (*Job, error) {
 	return &job, nil
 }
 
-// GetNextPendingTask gets and claims the next pending task
-func GetNextPendingTask(ctx context.Context, db *sql.DB, jobID string) (*Task, error) {
-	var task *Task
-
-	err := ExecuteInQueue(ctx, func(tx *sql.Tx) error {
-		var err error
-		task, err = GetNextPendingTaskTx(ctx, tx, jobID)
-		return err
-	})
-
-	return task, err
-}
+// NOTE: GetNextPendingTask function moved to worker.go to avoid duplication
 
 // UpdateTaskStatus updates a task's status and result data
 func UpdateTaskStatus(ctx context.Context, db *sql.DB, task *Task) error {
@@ -365,113 +358,6 @@ func UpdateTaskStatus(ctx context.Context, db *sql.DB, task *Task) error {
 		span.SetData("error.message", err.Error())
 	}
 	return err
-}
-
-// updateJobProgress updates a job's progress based on completed and failed tasks
-func updateJobProgress(ctx context.Context, db *sql.DB, jobID string) error {
-	span := sentry.StartSpan(ctx, "jobs.update_job_progress")
-	defer span.Finish()
-
-	span.SetTag("job_id", jobID)
-
-	return retryDB(func() error {
-		// Begin transaction
-		tx, err := db.BeginTx(ctx, nil)
-		if err != nil {
-			return err
-		}
-		defer tx.Rollback()
-
-		// Get current task counts
-		var total, completed, failed int
-		var recentURLs []string
-
-		// Count tasks by status
-		err = tx.QueryRowContext(ctx, `
-			SELECT COUNT(*) FROM tasks WHERE job_id = ?
-		`, jobID).Scan(&total)
-		if err != nil {
-			return err
-		}
-
-		err = tx.QueryRowContext(ctx, `
-			SELECT COUNT(*) FROM tasks WHERE job_id = ? AND status = ?
-		`, jobID, TaskStatusCompleted).Scan(&completed)
-		if err != nil {
-			return err
-		}
-
-		err = tx.QueryRowContext(ctx, `
-			SELECT COUNT(*) FROM tasks WHERE job_id = ? AND status = ?
-		`, jobID, TaskStatusFailed).Scan(&failed)
-		if err != nil {
-			return err
-		}
-
-		// Get recent URLs (last 5 completed tasks)
-		rows, err := tx.QueryContext(ctx, `
-			SELECT url FROM tasks 
-			WHERE job_id = ? AND (status = ? OR status = ?)
-			ORDER BY completed_at DESC LIMIT 5
-		`, jobID, TaskStatusCompleted, TaskStatusFailed)
-		if err != nil {
-			return err
-		}
-		defer rows.Close()
-
-		for rows.Next() {
-			var url string
-			if err := rows.Scan(&url); err != nil {
-				return err
-			}
-			recentURLs = append(recentURLs, url)
-		}
-
-		// Calculate progress (avoid division by zero)
-		var progress float64
-		if total > 0 {
-			progress = float64(completed+failed) / float64(total) * 100
-		}
-
-		// Update job status - using the correct column name from schema
-		_, err = tx.ExecContext(ctx, `
-			UPDATE jobs SET
-				progress = ?,
-				total_tasks = ?,
-				completed_tasks = ?,
-				failed_tasks = ?
-			WHERE id = ?
-		`, progress, total, completed, failed, jobID)
-		if err != nil {
-			return err
-		}
-
-		// Add this query to double-check that no pending/running tasks remain
-		var pendingCount int
-		err = tx.QueryRowContext(ctx, `
-			SELECT COUNT(*) FROM tasks 
-			WHERE job_id = ? AND status NOT IN (?, ?, ?)
-		`, jobID, TaskStatusCompleted, TaskStatusFailed, TaskStatusSkipped).Scan(&pendingCount)
-
-		if err != nil {
-			return err
-		}
-
-		// Only mark job as completed if there are truly no pending tasks left
-		if pendingCount == 0 && total > 0 {
-			_, err = tx.ExecContext(ctx, `
-				UPDATE jobs SET
-					status = ?,
-					completed_at = ?
-				WHERE id = ? AND status = ?
-			`, JobStatusCompleted, time.Now(), jobID, JobStatusRunning)
-			if err != nil {
-				return err
-			}
-		}
-
-		return tx.Commit()
-	})
 }
 
 // ListJobs retrieves a list of jobs with pagination
