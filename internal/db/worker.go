@@ -2,11 +2,17 @@ package db
 
 import (
 	"context"
+	"math/rand"
 	"sync"
 	"time"
 
 	"github.com/Harvey-AU/blue-banded-bee/internal/crawler"
 	"github.com/rs/zerolog/log"
+)
+
+const (
+	jitterMin = 200 * time.Millisecond
+	jitterMax = 800 * time.Millisecond
 )
 
 // WorkerPool manages a pool of workers that process tasks using PostgreSQL queue
@@ -17,16 +23,19 @@ type WorkerPool struct {
 	stopCh       chan struct{}
 	wg           sync.WaitGroup
 	taskInterval time.Duration
+	rand         *rand.Rand
 }
 
 // NewWorkerPool creates a new worker pool with PostgreSQL task queue
 func NewWorkerPool(db *DB, crawler *crawler.Crawler, workerCount int) *WorkerPool {
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	return &WorkerPool{
 		queue:        NewDbQueue(db.client),
 		crawler:      crawler,
 		workerCount:  workerCount,
 		stopCh:       make(chan struct{}),
 		taskInterval: 100 * time.Millisecond,
+		rand:         r,
 	}
 }
 
@@ -70,11 +79,14 @@ func (wp *WorkerPool) worker(ctx context.Context, workerID int) {
 					Int("worker_id", workerID).
 					Msg("Error processing task")
 
-				// Sleep to avoid hammering the database on errors
-				time.Sleep(wp.taskInterval * 10)
+				// Random delay between 200ms and 800ms
+				sleepMin := jitterMin * time.Millisecond
+				sleepMax := jitterMax * time.Millisecond
+				jitter := time.Duration(wp.rand.Int63n(int64(sleepMax-sleepMin))) + sleepMin
+				time.Sleep(jitter)
 			} else {
-				// If no task available or successful, sleep briefly to prevent CPU spinning
-				time.Sleep(wp.taskInterval)
+
+				time.Sleep(1000)
 			}
 		}
 	}

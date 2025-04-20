@@ -209,8 +209,8 @@ func NewTaskQueue(db *sql.DB) *DbQueue {
 
 // CompleteTask marks a task as completed
 func (q *DbQueue) CompleteTask(ctx context.Context, task *Task) error {
-	return q.Execute(ctx, func(tx *sql.Tx) error {
-		// Update task
+	// Update task status in a transaction
+	if err := q.Execute(ctx, func(tx *sql.Tx) error {
 		task.Status = "completed"
 		task.CompletedAt = time.Now()
 		_, err := tx.ExecContext(ctx, `
@@ -220,17 +220,15 @@ func (q *DbQueue) CompleteTask(ctx context.Context, task *Task) error {
 			WHERE id = $7
 		`, task.Status, task.CompletedAt, task.StatusCode,
 			task.ResponseTime, task.CacheStatus, task.ContentType, task.ID)
-		if err != nil {
-			return err
-		}
-
-		// Update job progress if this is part of a job
-		if task.JobID != "" {
-			return q.updateJobProgress(ctx, task.JobID)
-		}
-
-		return nil
-	})
+		return err
+	}); err != nil {
+		return err
+	}
+	// Update job progress after task update
+	if task.JobID != "" {
+		return q.updateJobProgress(ctx, task.JobID)
+	}
+	return nil
 }
 
 // FailTask marks a task as failed
