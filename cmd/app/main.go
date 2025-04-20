@@ -55,7 +55,7 @@ func main() {
 
 	log.Info().Msg("Connected to PostgreSQL database")
 
-	// Initialize crawler
+	// Initialise crawler
 	crawlerConfig := crawler.DefaultConfig()
 	cr := crawler.New(crawlerConfig)
 
@@ -313,7 +313,7 @@ func main() {
 
 	// Create a new HTTP server
 	server := &http.Server{
-		Addr:    ":" + config.Port,
+		Addr: ":" + config.Port,
 		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ip := getClientIP(r)
 			if !limiter.getLimiter(ip).Allow() {
