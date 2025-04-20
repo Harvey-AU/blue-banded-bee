@@ -284,6 +284,15 @@ func (wp *WorkerPool) processNextTask(ctx context.Context) error {
 				if updErr != nil {
 					log.Error().Err(updErr).Str("task_id", task.ID).Msg("Failed to mark task as failed")
 				}
+				// update job failure count and progress
+				_, jobErr := wp.db.ExecContext(ctx, `
+					UPDATE jobs
+					SET failed_tasks = failed_tasks + 1,
+						progress = CASE WHEN total_tasks > 0 THEN completed_tasks::float / total_tasks * 100 ELSE 100 END
+					WHERE id = $1`, task.JobID)
+				if jobErr != nil {
+					log.Error().Err(jobErr).Str("job_id", task.JobID).Msg("Failed to update job failure count")
+				}
 			} else {
 				// mark as completed with metrics
 				_, updErr := wp.db.ExecContext(ctx, `
@@ -293,6 +302,34 @@ func (wp *WorkerPool) processNextTask(ctx context.Context) error {
 					TaskStatusCompleted, now, result.StatusCode, result.ResponseTime, result.CacheStatus, result.ContentType, task.ID)
 				if updErr != nil {
 					log.Error().Err(updErr).Str("task_id", task.ID).Msg("Failed to mark task as completed")
+				}
+				// update job completion count and progress
+				_, jobErr2 := wp.db.ExecContext(ctx, `
+					UPDATE jobs
+					SET completed_tasks = completed_tasks + 1,
+						progress = CASE WHEN total_tasks > 0 THEN (completed_tasks + 1)::float / total_tasks * 100 ELSE 100 END
+					WHERE id = $1`, task.JobID)
+				if jobErr2 != nil {
+					log.Error().Err(jobErr2).Str("job_id", task.JobID).Msg("Failed to update job completion count")
+				}
+				// finalize job if all tasks processed
+				var total, compCount, failCount int
+				if err := wp.db.QueryRowContext(ctx, `
+					SELECT total_tasks, completed_tasks, failed_tasks
+					FROM jobs WHERE id = $1`, task.JobID).Scan(&total, &compCount, &failCount); err == nil {
+					if compCount+failCount >= total {
+						finalStatus := JobStatusCompleted
+						if failCount > 0 {
+							finalStatus = JobStatusFailed
+						}
+						_, finErr := wp.db.ExecContext(ctx, `
+							UPDATE jobs
+							SET status = $1, completed_at = $2
+							WHERE id = $3`, finalStatus, now, task.JobID)
+						if finErr != nil {
+							log.Error().Err(finErr).Str("job_id", task.JobID).Msg("Failed to finalize job status")
+						}
+					}
 				}
 			}
 			return nil
@@ -333,8 +370,8 @@ func EnqueueURLs(ctx context.Context, db *sql.DB, jobID string, urls []string, s
 		_, err = tx.ExecContext(ctx, `
 			UPDATE jobs 
 			SET total_tasks = total_tasks + $1
-			WHERE id = $2
-		`, len(urls), jobID)
+			WHERE id = $2`,
+			len(urls), jobID)
 		return err
 	})
 	if err != nil {
