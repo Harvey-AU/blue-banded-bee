@@ -227,7 +227,7 @@ func (q *DbQueue) CompleteTask(ctx context.Context, task *Task) error {
 	}
 	// Update job progress after task update
 	if task.JobID != "" {
-		return q.updateJobProgress(ctx, task.JobID)
+		return q.UpdateJobProgress(ctx, task.JobID)
 	}
 	return nil
 }
@@ -253,11 +253,11 @@ func (q *DbQueue) FailTask(ctx context.Context, task *Task, err error) error {
 	}
 
 	// Update job progress
-	return q.updateJobProgress(ctx, task.JobID)
+	return q.UpdateJobProgress(ctx, task.JobID)
 }
 
-// updateJobProgress updates a job's progress based on task completion
-func (q *DbQueue) updateJobProgress(ctx context.Context, jobID string) error {
+// UpdateJobProgress updates a job's progress based on task completion
+func (q *DbQueue) UpdateJobProgress(ctx context.Context, jobID string) error {
 	// Start a transaction
 	tx, err := q.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -265,42 +265,26 @@ func (q *DbQueue) updateJobProgress(ctx context.Context, jobID string) error {
 	}
 	defer tx.Rollback()
 
-	// Get task counts
-	var total, completed, failed int
-	err = tx.QueryRowContext(ctx, `
-		SELECT COUNT(*) 
-		FROM tasks 
-		WHERE job_id = $1
-	`, jobID).Scan(&total)
-	if err != nil {
-		return fmt.Errorf("failed to get total tasks: %w", err)
+	// Get counts: use jobs.total_tasks and task statuses
+	var totalTasks, compCount, failCount int
+	if err := tx.QueryRowContext(ctx, `
+		SELECT j.total_tasks,
+			   COUNT(*) FILTER (WHERE t.status = 'completed'),
+			   COUNT(*) FILTER (WHERE t.status = 'failed')
+		FROM jobs j
+		LEFT JOIN tasks t ON t.job_id = j.id
+		WHERE j.id = $1
+		GROUP BY j.total_tasks
+	`, jobID).Scan(&totalTasks, &compCount, &failCount); err != nil {
+		return fmt.Errorf("failed to get job counts: %w", err)
 	}
 
-	err = tx.QueryRowContext(ctx, `
-		SELECT COUNT(*) 
-		FROM tasks 
-		WHERE job_id = $1 AND status = 'completed'
-	`, jobID).Scan(&completed)
-	if err != nil {
-		return fmt.Errorf("failed to get completed tasks: %w", err)
-	}
-
-	err = tx.QueryRowContext(ctx, `
-		SELECT COUNT(*) 
-		FROM tasks 
-		WHERE job_id = $1 AND status = 'failed'
-	`, jobID).Scan(&failed)
-	if err != nil {
-		return fmt.Errorf("failed to get failed tasks: %w", err)
-	}
-
-	// Calculate progress - explicitly cast to float64
+	// Calculate progress percentage
 	var progress float64 = 0.0
-	if total > 0 {
-		progress = float64(completed+failed) / float64(total) * 100.0
+	if totalTasks > 0 {
+		progress = float64(compCount+failCount) / float64(totalTasks) * 100.0
 	}
 
-	// Update job - ensure progress is explicitly typed as REAL
 	_, err = tx.ExecContext(ctx, `
 		UPDATE jobs
 		SET 
@@ -316,7 +300,8 @@ func (q *DbQueue) updateJobProgress(ctx context.Context, jobID string) error {
 				ELSE completed_at
 			END
 		WHERE id = $4
-	`, progress, completed, failed, jobID)
+	`, progress, compCount, failCount, jobID)
+
 	if err != nil {
 		return fmt.Errorf("failed to update job progress: %w", err)
 	}
