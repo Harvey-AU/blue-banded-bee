@@ -205,6 +205,17 @@ func main() {
 			return
 		}
 
+		// Optional: limit total pages/tasks via max_pages param
+		maxPages := 0
+		if maxStr := r.URL.Query().Get("max_pages"); maxStr != "" {
+			parsed, err := strconv.Atoi(maxStr)
+			if err != nil || parsed < 1 {
+				http.Error(w, "Invalid max_pages parameter", http.StatusBadRequest)
+				return
+			}
+			maxPages = parsed
+		}
+
 		// Process sitemap for the domain
 		baseURL := domain
 		if !strings.HasPrefix(baseURL, "http") {
@@ -231,6 +242,11 @@ func main() {
 				continue
 			}
 			allURLs = append(allURLs, urls...)
+		}
+
+		// Trim URLs list if max_pages specified
+		if maxPages > 0 && len(allURLs) > maxPages {
+			allURLs = allURLs[:maxPages]
 		}
 
 		// Define current time for consistent timestamps
