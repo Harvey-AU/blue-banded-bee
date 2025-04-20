@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/url"
 	"runtime/debug"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -187,13 +186,7 @@ func (wp *WorkerPool) RemoveJob(jobID string) {
 func (wp *WorkerPool) worker(ctx context.Context, workerID int) {
 	defer wp.wg.Done()
 
-	// Create a dedicated crawler for this worker
-	workerConfig := crawler.DefaultConfig()
-	workerConfig.MaxConcurrency = 1
-	workerConfig.RateLimit = 5
-	workerCrawler := crawler.New(workerConfig, fmt.Sprintf("%d", workerID))
-
-	// Add a counter for consecutive errors to implement exponential backoff
+	// Track consecutive errors for exponential backoff
 	consecutiveErrors := 0
 	maxSleep := 10 * time.Second
 
@@ -213,7 +206,7 @@ func (wp *WorkerPool) worker(ctx context.Context, workerID int) {
 				return
 			}
 
-			if err := wp.processNextTask(ctx, workerID, workerCrawler); err != nil {
+			if err := wp.processNextTask(ctx); err != nil {
 				consecutiveErrors++
 				sleepTime := time.Duration(100*(1<<uint(min(consecutiveErrors, 6)))) * time.Millisecond
 				if sleepTime > maxSleep {
@@ -234,7 +227,7 @@ func (wp *WorkerPool) worker(ctx context.Context, workerID int) {
 }
 
 // processNextTask processes the next available task from any active job
-func (wp *WorkerPool) processNextTask(ctx context.Context, workerID int, workerCrawler *crawler.Crawler) error {
+func (wp *WorkerPool) processNextTask(ctx context.Context) error {
 	// Get the list of active jobs
 	wp.jobsMutex.RLock()
 	activeJobs := make([]string, 0, len(wp.jobs))
@@ -259,163 +252,14 @@ func (wp *WorkerPool) processNextTask(ctx context.Context, workerID int, workerC
 			return err // Return actual errors
 		}
 		if task != nil {
-			// Process the task...
+			// Task is already marked as running by GetNextPendingTask
+			// Actual processing is done elsewhere
 			return nil
 		}
 	}
 
 	// No tasks found in any job
 	time.Sleep(100 * time.Millisecond)
-	return nil
-}
-
-// processTask processes a single task using the crawler
-func (wp *WorkerPool) processTask(ctx context.Context, task *Task, workerID int, workerCrawler *crawler.Crawler) error {
-	// Record start time
-	taskStart := time.Now()
-	taskID := task.ID
-
-	log.Debug().
-		Int("worker_id", workerID).
-		Str("task_id", taskID).
-		Int("page_id", task.PageID).
-		Str("path", task.Path).
-		Time("task_picked", taskStart).
-		Msg("⏱️ TIMING: Task picked for processing")
-
-	// Only create spans for errors, not for every task
-	var span *sentry.Span
-	defer func() {
-		if span != nil {
-			span.Finish()
-		}
-	}()
-
-	// Use the worker's crawler instead of wp.crawler
-	crawlStart := time.Now()
-	// Get domain name from job's domain_id
-	var domainName string
-	err := wp.db.QueryRowContext(ctx, `
-		SELECT d.name FROM domains d
-		JOIN jobs j ON j.domain_id = d.id
-		WHERE j.id = ?`, task.JobID).Scan(&domainName)
-	if err != nil {
-		return fmt.Errorf("failed to get domain name: %w", err)
-	}
-
-	// Construct full URL from domain and path
-	fullURL := fmt.Sprintf("https://%s%s", domainName, task.Path)
-	result, err := workerCrawler.WarmURL(ctx, fullURL)
-	crawlDuration := time.Since(crawlStart)
-
-	log.Debug().
-		Int("worker_id", workerID).
-		Str("task_id", taskID).
-		Str("url", fullURL).
-		Dur("crawl_duration_ms", crawlDuration).
-		Time("crawl_completed", time.Now()).
-		Msg("⏱️ TIMING: URL crawling completed")
-
-	if err != nil {
-		// Check if error is retryable (timeout)
-		isTimeout := strings.Contains(err.Error(), "context deadline exceeded") ||
-			strings.Contains(err.Error(), "Client.Timeout exceeded")
-
-		if isTimeout && task.RetryCount < MaxTaskRetries {
-			// Increment retry count and set back to pending
-			task.RetryCount++
-			task.Status = TaskStatusPending
-			task.Error = err.Error()
-
-			dbUpdateStart := time.Now()
-			log.Debug().
-				Int("worker_id", workerID).
-				Str("task_id", taskID).
-				Time("db_update_start", dbUpdateStart).
-				Msg("⏱️ TIMING: Starting DB update for failed task")
-
-			if err := UpdateTaskStatus(ctx, wp.db, task); err != nil {
-				log.Error().Err(err).Str("task_id", task.ID).Msg("Failed to update task for retry")
-				return err // Return error to prevent task from being lost
-			}
-
-			log.Debug().
-				Int("worker_id", workerID).
-				Str("task_id", taskID).
-				Dur("db_update_duration_ms", time.Since(dbUpdateStart)).
-				Time("db_update_completed", time.Now()).
-				Msg("⏱️ TIMING: DB update completed for failed task")
-
-			return nil // Return nil to allow retry
-		}
-
-		// If not retryable or max retries exceeded, mark as failed
-		task.Status = TaskStatusFailed
-		task.Error = err.Error()
-		if err := UpdateTaskStatus(ctx, wp.db, task); err != nil {
-			log.Error().Err(err).Str("task_id", task.ID).Msg("Failed to update task status")
-		}
-		return err
-	}
-
-	// Update task with the result data
-	task.Status = TaskStatusCompleted
-	// Store the crawler result data in the task
-	task.StatusCode = result.StatusCode
-	task.ResponseTime = result.ResponseTime
-	task.CacheStatus = result.CacheStatus
-	task.ContentType = result.ContentType
-
-	// Only keep high-level error message in tasks table
-	if result.Error != "" {
-		task.Error = "Failed: " + result.Error[:min(20, len(result.Error))] + "..."
-	}
-
-	// All detailed result data will go to crawl_results only
-
-	// Record start time for batch logging
-	dbUpdateStart := time.Now()
-	log.Debug().
-		Int("worker_id", workerID).
-		Str("task_id", taskID).
-		Time("db_batch_queued", dbUpdateStart).
-		Msg("⏱️ TIMING: Task queued for batch DB update")
-
-	wp.taskBatch.mu.Lock()
-	// Add task to batch
-	wp.taskBatch.tasks = append(wp.taskBatch.tasks, task)
-
-	// Update job counters
-	counts, exists := wp.taskBatch.jobCounts[task.JobID]
-	if !exists {
-		counts = struct{ completed, failed int }{0, 0}
-	}
-
-	if task.Status == TaskStatusCompleted {
-		counts.completed++
-	} else if task.Status == TaskStatusFailed {
-		counts.failed++
-	}
-	wp.taskBatch.jobCounts[task.JobID] = counts
-
-	// If batch is large enough, trigger immediate flush
-	shouldFlush := len(wp.taskBatch.tasks) >= 50
-	batchSize := len(wp.taskBatch.tasks)
-	wp.taskBatch.mu.Unlock()
-
-	// Log batch queuing information
-	log.Debug().
-		Int("worker_id", workerID).
-		Str("task_id", taskID).
-		Int("current_batch_size", batchSize).
-		Bool("triggering_flush", shouldFlush).
-		Dur("task_processing_duration_ms", time.Since(taskStart)).
-		Msg("⏱️ TIMING: Task added to batch queue")
-
-	if shouldFlush {
-		go wp.flushBatches(ctx)
-	}
-
 	return nil
 }
 
@@ -523,8 +367,8 @@ func EnqueueURLs(ctx context.Context, db *sql.DB, jobID string, urls []string, s
 				_, err := tx.ExecContext(ctx, `
 					UPDATE jobs 
 					SET total_tasks = total_tasks - ?
-					WHERE id = ?
-				`, len(batch), jobID)
+					WHERE id = ?`,
+					len(batch), jobID)
 				return err
 			})
 			if adjustErr != nil {
@@ -688,27 +532,6 @@ func (wp *WorkerPool) recoveryMonitor(ctx context.Context) {
 	}
 }
 
-// processJob processes a single job
-func (wp *WorkerPool) processJob(job *Job) {
-	if wp.stopping.Load() {
-		return // Don't start new jobs during shutdown
-	}
-
-	wp.activeJobs.Add(1)
-	defer wp.activeJobs.Done()
-
-	// ... rest of your existing job processing logic ...
-}
-
-func (wp *WorkerPool) updateFailedTaskCount(ctx context.Context, jobID string) error {
-	_, err := wp.db.ExecContext(ctx, `
-		UPDATE jobs 
-		SET failed_tasks = failed_tasks + 1
-		WHERE id = ?
-	`, jobID)
-	return err
-}
-
 // scaleWorkers increases the worker pool size to the target number
 func (wp *WorkerPool) scaleWorkers(ctx context.Context, targetWorkers int) {
 	defer func() {
@@ -743,17 +566,6 @@ func (wp *WorkerPool) scaleWorkers(ctx context.Context, targetWorkers int) {
 	}
 
 	wp.currentWorkers = targetWorkers
-}
-
-// Add a method to gracefully terminate excess workers
-func (wp *WorkerPool) terminateExcessWorkers() {
-	wp.workersMutex.Lock()
-	defer wp.workersMutex.Unlock()
-
-	// Note: The check for shouldExit in the worker method will handle this
-	log.Debug().
-		Int("current_workers", wp.currentWorkers).
-		Msg("Worker count adjusted, excess workers will exit on next task attempt")
 }
 
 // Batch processor goroutine
@@ -879,7 +691,7 @@ func (wp *WorkerPool) flushBatches(ctx context.Context) {
 		// 3. Update job counters once per job
 		if len(jobCounts) > 0 {
 			jobUpdateStart := time.Now()
-			for jobID, counts := range jobCounts {
+			for jobID := range jobCounts {
 				// Use a simpler update without the complex CASE expressions
 				_, err := tx.ExecContext(ctx, `
 					UPDATE jobs
@@ -890,7 +702,7 @@ func (wp *WorkerPool) flushBatches(ctx context.Context) {
 								  CASE WHEN total_tasks = 0 THEN 1 ELSE total_tasks END AS FLOAT)
 					WHERE id = ?
 				`,
-					counts.completed, counts.failed, jobID)
+					jobCounts[jobID].completed, jobCounts[jobID].failed, jobID)
 
 				if err != nil {
 					return err
@@ -898,7 +710,7 @@ func (wp *WorkerPool) flushBatches(ctx context.Context) {
 			}
 
 			// After updating counters, check if we need to mark the job as completed
-			for jobID, _ := range jobCounts {
+			for jobID := range jobCounts {
 				var total, completed, failed int
 				err := tx.QueryRowContext(ctx, `
 					SELECT total_tasks, completed_tasks, failed_tasks 
@@ -953,31 +765,6 @@ func (wp *WorkerPool) flushBatches(ctx context.Context) {
 	if err != nil {
 		log.Error().Err(err).Int("task_count", len(tasks)).Msg("Failed to process task batch")
 	}
-}
-
-// Helper functions for batch operations
-func batchUpdateTasks(ctx context.Context, tx *sql.Tx, tasks []*Task) error {
-	stmt, err := tx.PrepareContext(ctx, `
-		UPDATE tasks
-		SET status = ?, started_at = ?, completed_at = ?,
-			error = ?, retry_count = ?
-		WHERE id = ?
-	`)
-	if err != nil {
-		return err
-	}
-	defer stmt.Close()
-
-	for _, task := range tasks {
-		_, err := stmt.ExecContext(ctx,
-			task.Status, task.StartedAt, task.CompletedAt,
-			task.Error, task.RetryCount, task.ID)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
 }
 
 // Add new method to start the cleanup monitor

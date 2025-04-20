@@ -34,7 +34,7 @@ Current development stage: Stage 3 - PostgreSQL Migration & Performance Optimiza
 - ✅ Stage 0: Project Setup & Infrastructure
 - ✅ Stage 1: Core Setup & Basic Crawling
 - ✅ Stage 2: Multi-domain Support & Job Queue Architecture
-- 🟡 Stage 3: PostgreSQL Migration & Performance Optimization
+- 🟡 Stage 3: PostgreSQL Migration & Performance Optimisation
 - ⭕ Stage 4: Auth & User Management
 - ⭕ Stage 5: Billing & Subscriptions
 - ⭕ Stage 6: Webflow Integration & Launch
