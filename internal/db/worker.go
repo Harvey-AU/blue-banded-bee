@@ -2,6 +2,8 @@ package db
 
 import (
 	"context"
+	"database/sql"
+	"fmt"
 	"math/rand"
 	"sync"
 	"time"
@@ -24,18 +26,20 @@ type WorkerPool struct {
 	wg           sync.WaitGroup
 	taskInterval time.Duration
 	rand         *rand.Rand
+	db           *sql.DB
 }
 
 // NewWorkerPool creates a new worker pool with PostgreSQL task queue
-func NewWorkerPool(db *DB, crawler *crawler.Crawler, workerCount int) *WorkerPool {
+func NewWorkerPool(db *sql.DB, crawler *crawler.Crawler, workerCount int) *WorkerPool {
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	return &WorkerPool{
-		queue:        NewDbQueue(db.client),
+		queue:        NewDbQueue(db),
 		crawler:      crawler,
 		workerCount:  workerCount,
 		stopCh:       make(chan struct{}),
 		taskInterval: 100 * time.Millisecond,
 		rand:         r,
+		db:           db,
 	}
 }
 
@@ -108,11 +112,23 @@ func (wp *WorkerPool) processNextTask(ctx context.Context, workerID int) error {
 	log.Debug().
 		Int("worker_id", workerID).
 		Str("task_id", task.ID).
-		Str("url", task.URL).
+		Int("page_id", task.PageID).
+		Str("path", task.Path).
 		Msg("Processing task")
 
 	// Process the task
-	result, err := wp.crawler.WarmURL(ctx, task.URL)
+	var domainName string
+	err = wp.db.QueryRowContext(ctx, `
+		SELECT d.name FROM domains d
+		JOIN jobs j ON j.domain_id = d.id
+		WHERE j.id = ?`, task.JobID).Scan(&domainName)
+	if err != nil {
+		return fmt.Errorf("failed to get domain name: %w", err)
+	}
+
+	// Construct full URL from domain and path
+	fullURL := fmt.Sprintf("https://%s%s", domainName, task.Path)
+	result, err := wp.crawler.WarmURL(ctx, fullURL)
 
 	// Record result data
 	if result != nil {
@@ -128,7 +144,7 @@ func (wp *WorkerPool) processNextTask(ctx context.Context, workerID int) error {
 			Err(err).
 			Int("worker_id", workerID).
 			Str("task_id", task.ID).
-			Str("url", task.URL).
+			Str("url", fullURL).
 			Msg("Task failed")
 
 		task.Error = err.Error()

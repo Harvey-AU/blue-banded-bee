@@ -58,7 +58,8 @@ type Job struct {
 type Task struct {
 	ID          string     `json:"id"`
 	JobID       string     `json:"job_id"`
-	URL         string     `json:"url"`
+	PageID      int        `json:"page_id"`
+	Path        string     `json:"path"`
 	Status      TaskStatus `json:"status"`
 	Depth       int        `json:"depth"`
 	CreatedAt   time.Time  `json:"created_at"`
@@ -70,7 +71,7 @@ type Task struct {
 	// Source information
 	SourceType string `json:"source_type"`          // "sitemap", "link", "manual"
 	SourceURL  string `json:"source_url,omitempty"` // URL where this was discovered (for links)
-	
+
 	// Result data
 	StatusCode   int    `json:"status_code,omitempty"`
 	ResponseTime int64  `json:"response_time,omitempty"`
