@@ -61,7 +61,7 @@ func main() {
 	cr := crawler.New(crawlerConfig)
 
 	// Create a worker pool for task processing
-	workerPool := db.NewWorkerPool(pgDB, cr, 5) // 5 concurrent workers
+	workerPool := db.NewWorkerPool(pgDB.GetDB(), cr, 5) // 5 concurrent workers
 	workerPool.Start(context.Background())
 	defer workerPool.Stop()
 
@@ -70,31 +70,29 @@ func main() {
 		ticker := time.NewTicker(5 * time.Second)
 		defer ticker.Stop()
 
-		for {
-			select {
-			case <-ticker.C:
-				// Check for jobs that should be marked complete
-				rows, err := pgDB.GetDB().Query(`
-					UPDATE jobs 
-					SET status = 'completed', completed_at = NOW()
-					WHERE (completed_tasks + failed_tasks) >= total_tasks 
-					  AND status = 'running'
-					RETURNING id
-				`)
-				if err != nil {
-					log.Error().Err(err).Msg("Failed to update completed jobs")
-					continue
-				}
-
-				// Log completed jobs
-				for rows.Next() {
-					var jobID string
-					if err := rows.Scan(&jobID); err == nil {
-						log.Info().Str("job_id", jobID).Msg("Job marked as completed")
-					}
-				}
-				rows.Close()
+		// Use for-range instead of for-select for better readability
+		for range ticker.C {
+			// Check for jobs that should be marked complete
+			rows, err := pgDB.GetDB().Query(`
+				UPDATE jobs 
+				SET status = 'completed', completed_at = NOW()
+				WHERE (completed_tasks + failed_tasks) >= total_tasks 
+				  AND status = 'running'
+				RETURNING id
+			`)
+			if err != nil {
+				log.Error().Err(err).Msg("Failed to update completed jobs")
+				continue
 			}
+
+			// Log completed jobs
+			for rows.Next() {
+				var jobID string
+				if err := rows.Scan(&jobID); err == nil {
+					log.Info().Str("job_id", jobID).Msg("Job marked as completed")
+				}
+			}
+			rows.Close()
 		}
 	}()
 

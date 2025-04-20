@@ -256,12 +256,13 @@ func (jm *JobManager) processSitemap(ctx context.Context, jobID, domain string, 
 			Msg("Failed to discover sitemaps")
 
 		// Update job with error
-		_, err = jm.db.ExecContext(ctx, `
+		if _, updateErr := jm.db.ExecContext(ctx, `
 			UPDATE jobs
 			SET error_message = ?
 			WHERE id = ?
-		`, fmt.Sprintf("Failed to discover sitemaps: %v", err), jobID)
-
+		`, fmt.Sprintf("Failed to discover sitemaps: %v", err), jobID); updateErr != nil {
+			log.Error().Err(updateErr).Str("job_id", jobID).Msg("Failed to update job with error message")
+		}
 		return
 	}
 
@@ -295,11 +296,13 @@ func (jm *JobManager) processSitemap(ctx context.Context, jobID, domain string, 
 			Msg("No URLs found in sitemap")
 
 		// Update job with warning
-		_, err = jm.db.ExecContext(ctx, `
+		if _, updateErr := jm.db.ExecContext(ctx, `
 			UPDATE jobs
 			SET error_message = ?
 			WHERE id = ?
-		`, "No URLs found in sitemap", jobID)
+		`, "No URLs found in sitemap", jobID); updateErr != nil {
+			log.Error().Err(updateErr).Str("job_id", jobID).Msg("Failed to update job with warning message")
+		}
 	}
 
 	// Start the job if it's in pending state
@@ -312,24 +315,4 @@ func (jm *JobManager) processSitemap(ctx context.Context, jobID, domain string, 
 				Msg("Failed to start job after processing sitemap")
 		}
 	}
-}
-
-func (jm *JobManager) updateJobStatus(ctx context.Context, job *Job) error {
-	// If all tasks are either completed or permanently failed
-	if job.CompletedTasks+job.FailedTasks == job.TotalTasks {
-		job.Status = JobStatusCompleted
-		job.CompletedAt = time.Now()
-		job.Progress = 100.0
-
-		// Update the database
-		_, err := jm.db.ExecContext(ctx, `
-			UPDATE jobs 
-			SET status = ?, completed_at = ?, progress = ?, 
-				completed_tasks = ?, failed_tasks = ?
-			WHERE id = ?
-		`, job.Status, job.CompletedAt, job.Progress,
-			job.CompletedTasks, job.FailedTasks, job.ID)
-		return err
-	}
-	return nil
 }

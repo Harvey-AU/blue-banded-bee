@@ -7,15 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.3.0] – 2025-04-21
 
+### Added
+- New `domains` and `pages` reference tables for improved data integrity
+- Helper methods for domain and page management
+- Added depth control for crawling with per-task depth configuration
+
 ### Removed
 - Removed legacy `crawl_results` table and associated code.
+- Removed unused functions and methods to improve code maintainability
+- Eliminated deprecated code including outdated `rand.Seed` usage
 
 ### Changed
 - Restructured documentation under `docs/` directory.
 - Added limit to site crawl to control no of pages to crawl.
-- 
+- Modified `jobs` table to reference domains by ID instead of storing domain names directly
+- Updated `tasks` table to use page references instead of storing full URLs
+- Refactored URL handling throughout the codebase to work with the new reference system
+
 ### Fixed
 - Correctly set job and task completion timestamps (`CompletedAt`) when tasks and jobs complete.
+- Fixed "append result never used" warnings in database operations
+- Resolved unused import warnings and other code quality issues
 
 ## [0.2.0] - 2025-04-20
 

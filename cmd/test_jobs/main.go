@@ -58,7 +58,7 @@ func main() {
 	crawler := crawler.New(nil)
 
 	// Create worker pool
-	workerPool := db.NewWorkerPool(database, crawler, 3)
+	workerPool := db.NewWorkerPool(database.GetDB(), crawler, 3)
 	workerPool.Start(context.Background())
 	defer workerPool.Stop()
 
@@ -66,14 +66,14 @@ func main() {
 
 	// Create a test job
 	jobManager := jobs.NewJobManager(database.GetDB(), crawler, nil)
-	
+
 	// Set up job options
 	jobOptions := &jobs.JobOptions{
 		Domain:      "example.com",
 		Concurrency: 2,
 		FindLinks:   true,
 		MaxDepth:    1,
-		StartURLs:   []string{
+		StartURLs: []string{
 			"https://example.com",
 			"https://example.com/about",
 			"https://example.com/contact",
@@ -98,13 +98,13 @@ func main() {
 	// Monitor job progress
 	for {
 		time.Sleep(1 * time.Second)
-		
+
 		job, err := jobManager.GetJobStatus(context.Background(), job.ID)
 		if err != nil {
 			log.Error().Err(err).Msg("Failed to get job status")
 			continue
 		}
-		
+
 		log.Info().
 			Str("status", string(job.Status)).
 			Float64("progress", job.Progress).
@@ -112,12 +112,12 @@ func main() {
 			Int("failed", job.FailedTasks).
 			Int("total", job.TotalTasks).
 			Msg("Job progress")
-			
+
 		if job.Status == jobs.JobStatusCompleted || job.Status == jobs.JobStatusFailed {
 			log.Info().Str("final_status", string(job.Status)).Msg("Job finished")
 			break
 		}
-		
+
 		if job.Status == jobs.JobStatusRunning && job.Progress >= 100.0 {
 			log.Info().Msg("Job complete")
 			break
