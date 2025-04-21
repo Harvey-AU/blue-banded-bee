@@ -92,6 +92,26 @@ func New(config *Config) (*DB, error) {
 
 // InitFromEnv creates a PostgreSQL connection using environment variables
 func InitFromEnv() (*DB, error) {
+	// If DATABASE_URL is provided, use it directly
+	if url := os.Getenv("DATABASE_URL"); url != "" {
+		client, err := sql.Open("postgres", url)
+		if err != nil {
+			return nil, fmt.Errorf("failed to connect to PostgreSQL via DATABASE_URL: %w", err)
+		}
+		client.SetMaxOpenConns(25)
+		client.SetMaxIdleConns(10)
+		client.SetConnMaxLifetime(5 * time.Minute)
+		// Verify connection
+		if err := client.Ping(); err != nil {
+			return nil, fmt.Errorf("failed to ping PostgreSQL via DATABASE_URL: %w", err)
+		}
+		// Initialise schema
+		if err := setupSchema(client); err != nil {
+			return nil, fmt.Errorf("failed to setup schema: %w", err)
+		}
+		return &DB{client: client, config: nil}, nil
+	}
+
 	config := &Config{
 		Host:         os.Getenv("POSTGRES_HOST"),
 		Port:         os.Getenv("POSTGRES_PORT"),
