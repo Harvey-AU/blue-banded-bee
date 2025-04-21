@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -12,8 +11,7 @@ import (
 
 // DbQueue is a PostgreSQL implementation of a job queue
 type DbQueue struct {
-	db        *sql.DB
-	workersMu sync.Mutex
+	db *sql.DB
 }
 
 // NewDbQueue creates a PostgreSQL job queue

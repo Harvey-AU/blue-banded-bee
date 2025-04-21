@@ -15,11 +15,7 @@
 Required environment variables:
 
 ```bash
-APP_ENV=production
-PORT=8080
-LOG_LEVEL=info
-# PostgreSQL environment variables are automatically set by Fly.io
-SENTRY_DSN=your_sentry_dsn
+DATABASE_URL=postgresql://postgres:[YOUR-PASSWORD]@db.gpzjtbgtdjxnacdfujvx.supabase.co:5432/postgres
 ```
 
 ## Configuration
@@ -34,12 +30,7 @@ DEBUG=true          # Enable debug logging
 LOG_LEVEL=debug     # debug, info, warn, or error
 
 # Database (Development)
-PGHOST=localhost
-PGPORT=5432
-PGDATABASE=postgres
-PGUSER=postgres
-PGPASSWORD=your_password
-PGSSLMODE=disable
+DATABASE_URL=postgresql://postgres:[YOUR-PASSWORD]@db.[DB-ID].supabase.co:5432/postgres
 
 # Error Tracking
 SENTRY_DSN=your_sentry_dsn
@@ -117,7 +108,7 @@ SENTRY_DSN=your_sentry_dsn
    - Regular backups
    - Connection encryption
    - Access control
-   - Query optimization
+   - Query optimisation
 
 3. Monitoring
    - Error tracking
