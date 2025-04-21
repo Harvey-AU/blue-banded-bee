@@ -68,7 +68,7 @@ func (q *DbQueue) Stop() {
 
 	select {
 	case <-done:
-		log.Debug().Msg("Queue stopped gracefully")
+		log.Info().Msg("Queue stopped gracefully")
 	case <-time.After(5 * time.Second):
 		log.Warn().Msg("Queue stop timed out")
 	}
