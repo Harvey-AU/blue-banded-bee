@@ -3,37 +3,79 @@ package db
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"fmt"
 	"os"
 	"time"
 
 	_ "github.com/lib/pq"
+
 	"github.com/rs/zerolog/log"
 )
 
 // DB represents a PostgreSQL database connection
 type DB struct {
 	client *sql.DB
+	config *Config
 }
 
 // Config holds PostgreSQL connection configuration
 type Config struct {
-	ConnectionString string
+	Host         string        // Database host
+	Port         string        // Database port
+	User         string        // Database user
+	Password     string        // Database password
+	Database     string        // Database name
+	SSLMode      string        // SSL mode (disable, require, verify-ca, verify-full)
+	MaxIdleConns int           // Maximum number of idle connections
+	MaxOpenConns int           // Maximum number of open connections
+	MaxLifetime  time.Duration // Maximum lifetime of a connection
+}
+
+// ConnectionString returns the PostgreSQL connection string
+func (c *Config) ConnectionString() string {
+	return fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
+		c.Host, c.Port, c.User, c.Password, c.Database, c.SSLMode)
 }
 
 // New creates a new PostgreSQL database connection
 func New(config *Config) (*DB, error) {
-	client, err := sql.Open("postgres", config.ConnectionString)
+	// Validate required fields
+	if config.Host == "" {
+		return nil, fmt.Errorf("database host is required")
+	}
+	if config.Port == "" {
+		return nil, fmt.Errorf("database port is required")
+	}
+	if config.User == "" {
+		return nil, fmt.Errorf("database user is required")
+	}
+	if config.Database == "" {
+		return nil, fmt.Errorf("database name is required")
+	}
+
+	// Set defaults for optional fields
+	if config.SSLMode == "" {
+		config.SSLMode = "disable"
+	}
+	if config.MaxIdleConns == 0 {
+		config.MaxIdleConns = 10
+	}
+	if config.MaxOpenConns == 0 {
+		config.MaxOpenConns = 25
+	}
+	if config.MaxLifetime == 0 {
+		config.MaxLifetime = 5 * time.Minute
+	}
+
+	client, err := sql.Open("postgres", config.ConnectionString())
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to PostgreSQL: %w", err)
 	}
 
 	// Configure connection pool
-	client.SetMaxOpenConns(25)
-	client.SetMaxIdleConns(10)
-	client.SetConnMaxLifetime(5 * time.Minute)
-	client.SetConnMaxIdleTime(2 * time.Minute)
+	client.SetMaxOpenConns(config.MaxOpenConns)
+	client.SetMaxIdleConns(config.MaxIdleConns)
+	client.SetConnMaxLifetime(config.MaxLifetime)
 
 	// Test connection
 	if err := client.Ping(); err != nil {
@@ -45,22 +87,64 @@ func New(config *Config) (*DB, error) {
 		return nil, fmt.Errorf("failed to setup schema: %w", err)
 	}
 
-	return &DB{client: client}, nil
+	return &DB{client: client, config: config}, nil
 }
 
 // InitFromEnv creates a PostgreSQL connection using environment variables
 func InitFromEnv() (*DB, error) {
-	// Get connection string from environment variables
-	connectionString := os.Getenv("DATABASE_URL")
-	if connectionString == "" {
-		return nil, errors.New("DATABASE_URL environment variable is required")
+	// If DATABASE_URL is provided, use it directly
+	if url := os.Getenv("DATABASE_URL"); url != "" {
+		client, err := sql.Open("postgres", url)
+		if err != nil {
+			return nil, fmt.Errorf("failed to connect to PostgreSQL via DATABASE_URL: %w", err)
+		}
+		client.SetMaxOpenConns(25)
+		client.SetMaxIdleConns(10)
+		client.SetConnMaxLifetime(5 * time.Minute)
+		// Verify connection
+		if err := client.Ping(); err != nil {
+			return nil, fmt.Errorf("failed to ping PostgreSQL via DATABASE_URL: %w", err)
+		}
+		// Initialise schema
+		if err := setupSchema(client); err != nil {
+			return nil, fmt.Errorf("failed to setup schema: %w", err)
+		}
+		return &DB{client: client, config: nil}, nil
 	}
 
 	config := &Config{
-		ConnectionString: connectionString,
+		Host:         os.Getenv("POSTGRES_HOST"),
+		Port:         os.Getenv("POSTGRES_PORT"),
+		User:         os.Getenv("POSTGRES_USER"),
+		Password:     os.Getenv("POSTGRES_PASSWORD"),
+		Database:     os.Getenv("POSTGRES_DB"),
+		SSLMode:      os.Getenv("POSTGRES_SSL_MODE"),
+		MaxIdleConns: 10,
+		MaxOpenConns: 25,
+		MaxLifetime:  5 * time.Minute,
 	}
 
-	return New(config)
+	// Use defaults if not set
+	if config.Host == "" {
+		config.Host = "localhost"
+	}
+	if config.Port == "" {
+		config.Port = "5432"
+	}
+	if config.User == "" {
+		config.User = "postgres"
+	}
+	if config.Database == "" {
+		config.Database = "blue_banded_bee"
+	}
+
+	// Create the database connection
+	db, err := New(config)
+	if err != nil {
+		return nil, err
+	}
+
+	return db, nil
 }
 
 // setupSchema creates the necessary tables in PostgreSQL
@@ -172,6 +256,11 @@ func (db *DB) Close() error {
 // GetDB returns the underlying database connection
 func (db *DB) GetDB() *sql.DB {
 	return db.client
+}
+
+// GetConfig returns the database configuration
+func (db *DB) GetConfig() *Config {
+	return db.config
 }
 
 // ResetSchema resets the database schema
