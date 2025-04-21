@@ -9,7 +9,6 @@ primary_region = 'syd'
 [build]
 
 [env]
-  LOG_LEVEL = "debug"
   APP_ENV = "production"
 
 [http_service]
@@ -18,7 +17,6 @@ primary_region = 'syd'
   auto_stop_machines = 'stop'
   auto_start_machines = true
   min_machines_running = 1
-  processes = ['app']
 
   [[http_service.checks]]
     grace_period = "30s"
@@ -29,6 +27,9 @@ primary_region = 'syd'
     timeout = "10s"
     [http_service.checks.headers]
       Content-Type = "text/plain"
+
+[processes]
+  app = "./main --log-level=info"
 
 [[vm]]
   memory = '1gb'
