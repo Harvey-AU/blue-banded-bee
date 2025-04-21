@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Multiple version updates may occur on the same date, each with its own version number.
 Each version represents a distinct set of changes, even if released on the same day.
 
+## [0.3.2] – 2025-04-21
+
+### Changed
+
+- Improved database configuration management with validation for required fields
+- Enhanced worker pool notification system with more robust connection handling
+- Simplified notification handling in worker pool with better error recovery
+- Fixed linting issues in worker pool implementation
+
 ## [0.3.1] – 2025-04-21
 
 ### Changed
