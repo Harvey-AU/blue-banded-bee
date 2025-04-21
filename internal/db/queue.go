@@ -195,11 +195,6 @@ func (q *DbQueue) EnqueueTasks(ctx context.Context, jobID string, pageIDs []int,
 	return q.EnqueueURLs(ctx, jobID, pageIDs, paths, sourceType, sourceURL, depth)
 }
 
-// GetQueue returns a database queue for the DB
-func (db *DB) GetQueue() *DbQueue {
-	return NewDbQueue(db.client)
-}
-
 // NewTaskQueue creates a task queue using the provided database connection
 // It's an alias for NewDbQueue to maintain compatibility with existing code
 func NewTaskQueue(db *sql.DB) *DbQueue {
