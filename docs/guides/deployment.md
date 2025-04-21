@@ -117,7 +117,7 @@ SENTRY_DSN=your_sentry_dsn
    - Regular backups
    - Connection encryption
    - Access control
-   - Query optimization
+   - Query optimisation
 
 3. Monitoring
    - Error tracking
