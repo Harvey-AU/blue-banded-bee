@@ -18,6 +18,11 @@ type DB struct {
 	config *Config
 }
 
+// GetConfig returns the original DB connection settings
+func (d *DB) GetConfig() *Config {
+	return d.config
+}
+
 // Config holds PostgreSQL connection configuration
 type Config struct {
 	Host         string        // Database host
@@ -256,11 +261,6 @@ func (db *DB) Close() error {
 // GetDB returns the underlying database connection
 func (db *DB) GetDB() *sql.DB {
 	return db.client
-}
-
-// GetConfig returns the database configuration
-func (db *DB) GetConfig() *Config {
-	return db.config
 }
 
 // ResetSchema resets the database schema
