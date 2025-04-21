@@ -34,10 +34,17 @@ type Config struct {
 	MaxIdleConns int           // Maximum number of idle connections
 	MaxOpenConns int           // Maximum number of open connections
 	MaxLifetime  time.Duration // Maximum lifetime of a connection
+	DatabaseURL  string        // Original DATABASE_URL if used
 }
 
 // ConnectionString returns the PostgreSQL connection string
 func (c *Config) ConnectionString() string {
+	// If we have a DatabaseURL, use it directly
+	if c.DatabaseURL != "" {
+		return c.DatabaseURL
+	}
+	
+	// Otherwise use the individual components
 	return fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
 		c.Host, c.Port, c.User, c.Password, c.Database, c.SSLMode)
 }
@@ -114,7 +121,14 @@ func InitFromEnv() (*DB, error) {
 		if err := setupSchema(client); err != nil {
 			return nil, fmt.Errorf("failed to setup schema: %w", err)
 		}
-		return &DB{client: client, config: &Config{}}, nil
+		
+		// Create a config that stores the original DATABASE_URL
+		config := &Config{
+			// Set this special field for DATABASE_URL
+			DatabaseURL: url,
+		}
+		
+		return &DB{client: client, config: config}, nil
 	}
 
 	config := &Config{
