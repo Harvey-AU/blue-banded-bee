@@ -243,7 +243,7 @@ func (wp *WorkerPool) processNextTask(ctx context.Context) error {
 
 	// If no active jobs, sleep and return
 	if len(activeJobs) == 0 {
-		log.Debug().Msg("No active jobs in worker pool")
+		log.Info().Msg("No active jobs in worker pool")
 		time.Sleep(100 * time.Millisecond)
 		return nil
 	}
@@ -305,7 +305,7 @@ func (wp *WorkerPool) processNextTask(ctx context.Context) error {
 	}
 
 	// No tasks found in any job
-	log.Debug().Msg("No pending tasks found in any active job")
+	log.Info().Msg("No pending tasks found in any active job")
 	time.Sleep(100 * time.Millisecond)
 	return nil
 }
@@ -411,7 +411,7 @@ func EnqueueURLs(ctx context.Context, db *sql.DB, jobID string, urls []string, s
 func (wp *WorkerPool) StartTaskMonitor(ctx context.Context) {
 	log.Info().Msg("Starting task monitor to check for pending tasks")
 	go func() {
-		ticker := time.NewTicker(5 * time.Second)
+		ticker := time.NewTicker(30 * time.Second)
 		defer ticker.Stop()
 
 		for {
