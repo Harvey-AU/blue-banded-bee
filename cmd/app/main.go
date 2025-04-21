@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"net"
 	"net/http"
@@ -29,7 +30,6 @@ import (
 type Config struct {
 	Port      string // HTTP port to listen on
 	Env       string // Environment (development/production)
-	LogLevel  string // Logging level
 	SentryDSN string // Sentry DSN for error tracking
 }
 
@@ -41,9 +41,18 @@ func main() {
 	config := &Config{
 		Port:      getEnvWithDefault("PORT", "8080"),
 		Env:       getEnvWithDefault("APP_ENV", "development"),
-		LogLevel:  getEnvWithDefault("LOG_LEVEL", "info"),
 		SentryDSN: os.Getenv("SENTRY_DSN"),
 	}
+
+	// Configure log level via CLI flag (default 'warn')
+	logLevel := flag.String("log-level", "warn", "log level: debug, info, warn, error")
+	flag.Parse()
+	lvl, err := zerolog.ParseLevel(*logLevel)
+	if err != nil {
+		log.Warn().Err(err).Str("logLevel", *logLevel).Msg("invalid log level, defaulting to warn")
+		lvl = zerolog.WarnLevel
+	}
+	zerolog.SetGlobalLevel(lvl)
 
 	// Setup logging
 	setupLogging(config)
@@ -353,7 +362,7 @@ func setupLogging(config *Config) {
 	// Configure log level
 	level, err := zerolog.ParseLevel(config.LogLevel)
 	if err != nil {
-		level = zerolog.InfoLevel
+		level = zerolog.WarnLevel
 	}
 	zerolog.SetGlobalLevel(level)
 
@@ -367,12 +376,6 @@ func setupLogging(config *Config) {
 			Timestamp().
 			Str("service", "blue-banded-bee").
 			Logger()
-		
-		// Set a more verbose log level in production to help with debugging
-		if level > zerolog.DebugLevel {
-			log.Info().Msgf("Setting log level to debug instead of %s for better visibility", level.String())
-			zerolog.SetGlobalLevel(zerolog.DebugLevel)
-		}
 	}
 }
 
