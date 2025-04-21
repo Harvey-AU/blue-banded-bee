@@ -31,6 +31,7 @@ type Config struct {
 	Port      string // HTTP port to listen on
 	Env       string // Environment (development/production)
 	SentryDSN string // Sentry DSN for error tracking
+	LogLevel  string // Log level (debug, info, warn, error)
 }
 
 func main() {
@@ -47,15 +48,9 @@ func main() {
 	// Configure log level via CLI flag (default 'warn')
 	logLevel := flag.String("log-level", "warn", "log level: debug, info, warn, error")
 	flag.Parse()
-	lvl, err := zerolog.ParseLevel(*logLevel)
-	if err != nil {
-		log.Warn().Err(err).Str("logLevel", *logLevel).Msg("invalid log level, defaulting to warn")
-		lvl = zerolog.WarnLevel
-	}
-	zerolog.SetGlobalLevel(lvl)
 
-	// Setup logging
-	setupLogging(config)
+	config.LogLevel = *logLevel // Set log level from CLI flag
+	setupLogging(config)        // Initialise logging with CLI flag value
 
 	// Connect to PostgreSQL
 	pgDB, err := db.InitFromEnv()
