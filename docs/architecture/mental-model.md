@@ -168,7 +168,7 @@ error TEXT
    - Tracks HIT/MISS ratios
    - Records response times
 
-2. Performance Optimization
+2. Performance Optimisation
    - Concurrent crawling
    - Connection pooling
    - Rate limiting for stability
