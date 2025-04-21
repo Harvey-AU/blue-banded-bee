@@ -114,7 +114,7 @@ func InitFromEnv() (*DB, error) {
 		if err := setupSchema(client); err != nil {
 			return nil, fmt.Errorf("failed to setup schema: %w", err)
 		}
-		return &DB{client: client, config: nil}, nil
+		return &DB{client: client, config: &Config{}}, nil
 	}
 
 	config := &Config{
