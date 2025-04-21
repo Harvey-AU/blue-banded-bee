@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"math"
 	"net/url"
 	"runtime/debug"
 	"sync"
@@ -11,15 +12,16 @@ import (
 	"time"
 
 	"github.com/Harvey-AU/blue-banded-bee/internal/crawler"
-	"github.com/Harvey-AU/blue-banded-bee/internal/db" // Import db package
-	"github.com/getsentry/sentry-go"
+	"github.com/Harvey-AU/blue-banded-bee/internal/db"
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 	"github.com/rs/zerolog/log"
 )
 
 // WorkerPool manages a pool of workers that process crawl tasks
 type WorkerPool struct {
 	db               *sql.DB
+	dbConfig         *db.Config
 	crawler          *crawler.Crawler
 	numWorkers       int
 	jobs             map[string]bool
@@ -31,11 +33,12 @@ type WorkerPool struct {
 	activeJobs       sync.WaitGroup
 	baseWorkerCount  int
 	currentWorkers   int
-	jobRequirements  map[string]int // Track worker requirements per job
-	workersMutex     sync.RWMutex   // Protect scaling operations
+	jobRequirements  map[string]int
+	workersMutex     sync.RWMutex
 	taskBatch        *TaskBatch
 	batchTimer       *time.Ticker
 	cleanupInterval  time.Duration
+	notifyCh         chan struct{}
 }
 
 // TaskBatch holds groups of tasks for batch processing
@@ -49,9 +52,24 @@ type TaskBatch struct {
 }
 
 // NewWorkerPool creates a new worker pool
-func NewWorkerPool(db *sql.DB, crawler *crawler.Crawler, numWorkers int) *WorkerPool {
+func NewWorkerPool(db *sql.DB, crawler *crawler.Crawler, numWorkers int, dbConfig *db.Config) *WorkerPool {
+	// Validate inputs
+	if db == nil {
+		panic("database connection is required")
+	}
+	if crawler == nil {
+		panic("crawler is required")
+	}
+	if numWorkers < 1 {
+		panic("numWorkers must be at least 1")
+	}
+	if dbConfig == nil {
+		panic("database configuration is required")
+	}
+
 	wp := &WorkerPool{
 		db:              db,
+		dbConfig:        dbConfig,
 		crawler:         crawler,
 		numWorkers:      numWorkers,
 		baseWorkerCount: numWorkers,
@@ -60,6 +78,7 @@ func NewWorkerPool(db *sql.DB, crawler *crawler.Crawler, numWorkers int) *Worker
 		jobRequirements: make(map[string]int),
 
 		stopCh:           make(chan struct{}),
+		notifyCh:         make(chan struct{}, 1), // Buffer of 1 to prevent blocking
 		recoveryInterval: 1 * time.Minute,
 		taskBatch: &TaskBatch{
 			tasks:     make([]*Task, 0, 50),
@@ -72,6 +91,10 @@ func NewWorkerPool(db *sql.DB, crawler *crawler.Crawler, numWorkers int) *Worker
 	// Start the batch processor
 	wp.wg.Add(1)
 	go wp.processBatches(context.Background())
+
+	// Start the notification listener
+	wp.wg.Add(1)
+	go wp.listenForNotifications(context.Background())
 
 	return wp
 }
@@ -189,9 +212,10 @@ func (wp *WorkerPool) worker(ctx context.Context, workerID int) {
 
 	log.Info().Int("worker_id", workerID).Msg("Starting worker")
 
-	// Track consecutive errors for exponential backoff
-	consecutiveErrors := 0
-	maxSleep := 10 * time.Second
+	// Track consecutive no-task counts for backoff
+	consecutiveNoTasks := 0
+	maxSleep := 30 * time.Second
+	baseSleep := 200 * time.Millisecond // Faster processing when active
 
 	for {
 		select {
@@ -201,6 +225,9 @@ func (wp *WorkerPool) worker(ctx context.Context, workerID int) {
 		case <-ctx.Done():
 			log.Debug().Int("worker_id", workerID).Msg("Worker context cancelled")
 			return
+		case <-wp.notifyCh:
+			// Reset backoff when notified of new tasks
+			consecutiveNoTasks = 0
 		default:
 			// Check if this worker should exit (we've scaled down)
 			wp.workersMutex.RLock()
@@ -212,20 +239,36 @@ func (wp *WorkerPool) worker(ctx context.Context, workerID int) {
 			}
 
 			if err := wp.processNextTask(ctx); err != nil {
-				consecutiveErrors++
-				sleepTime := time.Duration(100*(1<<uint(min(consecutiveErrors, 6)))) * time.Millisecond
-				if sleepTime > maxSleep {
-					sleepTime = maxSleep
-				}
+				if err == sql.ErrNoRows {
+					consecutiveNoTasks++
+					// Only log occasionally during quiet periods
+					if consecutiveNoTasks == 1 || consecutiveNoTasks%10 == 0 {
+						log.Debug().Msg("Waiting for new tasks")
+					}
+					// Exponential backoff with a maximum
+					sleepTime := time.Duration(float64(baseSleep) * math.Pow(1.5, float64(min(consecutiveNoTasks, 10))))
+					if sleepTime > maxSleep {
+						sleepTime = maxSleep
+					}
 
-				if err != sql.ErrNoRows {
+					// Wait for either the backoff duration or a notification
+					select {
+					case <-time.After(sleepTime):
+					case <-wp.notifyCh:
+						consecutiveNoTasks = 0
+					case <-wp.stopCh:
+						return
+					case <-ctx.Done():
+						return
+					}
+				} else {
 					log.Error().Err(err).Int("worker_id", workerID).Msg("Failed to process task")
+					time.Sleep(baseSleep)
 				}
-				time.Sleep(sleepTime)
 			} else {
-				consecutiveErrors = 0
-				// Always sleep a little between tasks (reduce lock contention)
-				time.Sleep(200 * time.Millisecond)
+				consecutiveNoTasks = 0
+				// Quick sleep between tasks when active
+				time.Sleep(baseSleep)
 			}
 		}
 	}
@@ -241,24 +284,15 @@ func (wp *WorkerPool) processNextTask(ctx context.Context) error {
 	}
 	wp.jobsMutex.RUnlock()
 
-	// If no active jobs, sleep and return
+	// If no active jobs, return immediately
 	if len(activeJobs) == 0 {
-		log.Info().Msg("No active jobs in worker pool")
-		time.Sleep(100 * time.Millisecond)
-		return nil
+		return sql.ErrNoRows
 	}
-
-	log.Debug().
-		Int("active_job_count", len(activeJobs)).
-		Strs("job_ids", activeJobs).
-		Msg("Checking for pending tasks in active jobs")
 
 	// Try to get a task from each active job
 	for _, jobID := range activeJobs {
-		log.Debug().Str("job_id", jobID).Msg("Attempting to get next pending task")
 		task, err := GetNextPendingTask(ctx, wp.db, jobID)
 		if err == sql.ErrNoRows {
-			log.Debug().Str("job_id", jobID).Msg("No pending tasks found for job")
 			continue // Try next job
 		}
 		if err != nil {
@@ -305,18 +339,16 @@ func (wp *WorkerPool) processNextTask(ctx context.Context) error {
 	}
 
 	// No tasks found in any job
-	log.Info().Msg("No pending tasks found in any active job")
-	time.Sleep(100 * time.Millisecond)
-	return nil
+	return sql.ErrNoRows
 }
 
 // EnqueueURLs adds multiple URLs as tasks for a job
 func EnqueueURLs(ctx context.Context, db *sql.DB, jobID string, urls []string, sourceType string, sourceURL string, depth int) error {
-	span := sentry.StartSpan(ctx, "jobs.enqueue_urls")
-	defer span.Finish()
-
-	span.SetTag("job_id", jobID)
-	span.SetData("url_count", len(urls))
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback()
 
 	// Increase batch size for better performance
 	const batchSize = 500
@@ -396,12 +428,21 @@ func EnqueueURLs(ctx context.Context, db *sql.DB, jobID string, urls []string, s
 				}
 			}
 
+			// Notify listeners of new tasks
+			if _, err := tx.ExecContext(ctx, `SELECT pg_notify('new_tasks', $1)`, jobID); err != nil {
+				return fmt.Errorf("failed to notify of new tasks: %w", err)
+			}
+
 			return nil
 		})
 
 		if err != nil {
 			return fmt.Errorf("failed to insert task batch: %w", err)
 		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
 	return nil
@@ -849,4 +890,61 @@ func (wp *WorkerPool) processTask(ctx context.Context, task *Task) (*crawler.Cra
 	}
 	log.Info().Int("status_code", result.StatusCode).Str("task_id", task.ID).Msg("Crawler completed")
 	return result, nil
+}
+
+// listenForNotifications sets up PostgreSQL LISTEN/NOTIFY
+func (wp *WorkerPool) listenForNotifications(ctx context.Context) {
+	defer wp.wg.Done()
+
+	// Define notification handler
+	eventCallback := func(_ *pq.Notification) {
+		// Notify workers of new tasks (non-blocking)
+		select {
+		case wp.notifyCh <- struct{}{}:
+		default:
+			// Channel already has notification pending
+		}
+	}
+
+	// Configure listener with simple error handling
+	listener := pq.NewListener(wp.dbConfig.ConnectionString(),
+		10*time.Second, // Min reconnect interval
+		time.Minute,    // Max reconnect interval
+		func(ev pq.ListenerEventType, err error) {
+			if err != nil {
+				log.Error().Err(err).Msg("Database notification error")
+			}
+		})
+
+	err := listener.Listen("new_tasks")
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to start listening for notifications")
+		return
+	}
+
+	// Ensure listener is closed when we're done
+	defer listener.Close()
+
+ListenLoop:
+	for {
+		select {
+		case <-wp.stopCh:
+			return
+		case <-ctx.Done():
+			return
+		case n := <-listener.Notify:
+			if n == nil {
+				// Connection lost, break inner loop to reconnect
+				log.Warn().Msg("Database connection lost")
+				break ListenLoop
+			}
+			eventCallback(n)
+		case <-time.After(90 * time.Second):
+			// Check connection is alive
+			if err := listener.Ping(); err != nil {
+				log.Error().Err(err).Msg("Database connection lost")
+				break ListenLoop
+			}
+		}
+	}
 }

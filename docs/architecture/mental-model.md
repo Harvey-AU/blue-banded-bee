@@ -93,39 +93,40 @@ The cache warmer proactively visits URLs to ensure content is cached and readily
 ### Schema
 
 CREATE TABLE jobs (
-    id TEXT PRIMARY KEY,
-    domain TEXT NOT NULL,
-    status TEXT NOT NULL,
-    progress REAL DEFAULT 0.0,
-    total_tasks INTEGER DEFAULT 0,
-    completed_tasks INTEGER DEFAULT 0,
-    failed_tasks INTEGER DEFAULT 0,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    started_at TIMESTAMP WITH TIME ZONE,
-    completed_at TIMESTAMP WITH TIME ZONE,
-    concurrency INTEGER DEFAULT 1,
-    find_links BOOLEAN DEFAULT FALSE,
-    max_depth INTEGER DEFAULT 0
+id TEXT PRIMARY KEY,
+domain TEXT NOT NULL,
+status TEXT NOT NULL,
+progress REAL DEFAULT 0.0,
+total_tasks INTEGER DEFAULT 0,
+completed_tasks INTEGER DEFAULT 0,
+failed_tasks INTEGER DEFAULT 0,
+created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+started_at TIMESTAMP WITH TIME ZONE,
+completed_at TIMESTAMP WITH TIME ZONE,
+concurrency INTEGER DEFAULT 1,
+find_links BOOLEAN DEFAULT FALSE,
+max_depth INTEGER DEFAULT 0
 );
 
 CREATE TABLE tasks (
-    id TEXT PRIMARY KEY,
-    job_id TEXT REFERENCES jobs(id),
-    url TEXT NOT NULL,
-    status TEXT NOT NULL,
-    depth INTEGER DEFAULT 0,
-    source_type TEXT,
-    source_url TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    started_at TIMESTAMP WITH TIME ZONE,
-    completed_at TIMESTAMP WITH TIME ZONE,
-    status_code INTEGER,
-    response_time INTEGER,
-    cache_status TEXT,
-    content_type TEXT,
-    error TEXT
+id TEXT PRIMARY KEY,
+job_id TEXT REFERENCES jobs(id),
+url TEXT NOT NULL,
+status TEXT NOT NULL,
+depth INTEGER DEFAULT 0,
+source_type TEXT,
+source_url TEXT,
+created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+started_at TIMESTAMP WITH TIME ZONE,
+completed_at TIMESTAMP WITH TIME ZONE,
+status_code INTEGER,
+response_time INTEGER,
+cache_status TEXT,
+content_type TEXT,
+error TEXT
 );
-```
+
+````
 
 ### Connection Management
 
@@ -152,7 +153,7 @@ CREATE TABLE tasks (
      "error": "Error description",
      "status_code": 400
    }
-   ```
+````
 
 3. Logging and Monitoring
    - Structured logging with zerolog
@@ -167,7 +168,7 @@ CREATE TABLE tasks (
    - Tracks HIT/MISS ratios
    - Records response times
 
-2. Performance Optimization
+2. Performance Optimisation
    - Concurrent crawling
    - Connection pooling
    - Rate limiting for stability
