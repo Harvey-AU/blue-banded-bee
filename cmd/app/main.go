@@ -62,7 +62,7 @@ func main() {
 	cr := crawler.New(crawlerConfig)
 
 	// Create a worker pool for task processing
-	workerPool := jobs.NewWorkerPool(pgDB.GetDB(), cr, 5) // 5 concurrent workers
+	workerPool := jobs.NewWorkerPool(pgDB.GetDB(), cr, 5, pgDB.GetConfig()) // 5 concurrent workers
 	workerPool.Start(context.Background())
 	defer workerPool.Stop()
 
