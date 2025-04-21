@@ -1,4 +1,4 @@
-# Session Initialization – Blue Banded Bee
+# Session Initialisation – Blue Banded Bee
 
 I’m working on **Blue Banded Bee** (a Webflow cache‑warmer). Use this guide to start each session. Please write in British (Australian) English, not American :)
 
@@ -8,7 +8,7 @@ I’m working on **Blue Banded Bee** (a Webflow cache‑warmer). Use this guide 
 - **Project Overview & Quick Start**: [README.md](./README.md)
 - **Codebase Structure**: [docs/reference/codebase-structure.md](./docs/reference/codebase-structure.md)
 - **Changelog & Releases**: [CHANGELOG.md](./CHANGELOG.md)
-- **Upcoming Tasks & Priorities**: [docs/Roadmap.md](./docs/Roadmap.md)
+- **Upcoming Tasks & Priorities**: [ROADMAP.md](./ROADMAP.md)
 - **API Reference**: [docs/api.md](./docs/api.md)
 - **Architecture & Design**: [docs/architecture.md](./docs/architecture.md)
 - **Core Concepts**: [docs/concepts.md](./docs/concepts.md)
@@ -19,7 +19,7 @@ I’m working on **Blue Banded Bee** (a Webflow cache‑warmer). Use this guide 
 ## 1. Current Status & Priorities
 
 1. **Recent changes/releases**: see [CHANGELOG.md](./CHANGELOG.md)
-2. **Next up**: see [docs/Roadmap.md](./docs/Roadmap.md)
+2. **Next up**: see [ROADMAP.md](./ROADMAP.md)
 
 ## 2. Main Implementation Directories
 
@@ -74,12 +74,12 @@ I’m working on **Blue Banded Bee** (a Webflow cache‑warmer). Use this guide 
 ### E. Knowledge Persistence
 
 - Immediately document any discovered issues or bugs in `docs/gotchas.md`.
-- Log learned optimizations or improvements in `docs/implementation_details.md`.
+- Log learned optimisations or improvements in `docs/implementation_details.md`.
 - Record all edge cases and their solutions.
 - Update `docs/mental_model.md` with new architectural insights.
 - Maintain session-persistent memory of:
   - Discovered bugs and their fixes
-  - Performance optimizations
+  - Performance optimisations
   - Edge cases and solutions
   - Implementation insights
 
@@ -88,7 +88,7 @@ I’m working on **Blue Banded Bee** (a Webflow cache‑warmer). Use this guide 
 1. Check if similar issues were previously addressed.
 2. Review documented solutions and learnings.
 3. Apply accumulated knowledge to prevent repeated issues.
-4. Build upon previous optimizations.
+4. Build upon previous optimisations.
 
 **After resolving issues:**
 

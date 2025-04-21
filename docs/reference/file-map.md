@@ -1,4 +1,4 @@
-# Blue Banded Bee File Map
+
 
 ```
 blue-banded-bee/
