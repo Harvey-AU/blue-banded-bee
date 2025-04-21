@@ -1,10 +1,12 @@
 # Session Initialization – Blue Banded Bee
 
-I’m working on **Blue Banded Bee** (a Webflow cache‑warmer). Use this guide to start each session.
+I’m working on **Blue Banded Bee** (a Webflow cache‑warmer). Use this guide to start each session. Please write in British (Australian) English, not American :)
 
 ## Key Documents
 
+- **File Map**: [docs/reference/file-map.md](./docs/reference/file-map.md)
 - **Project Overview & Quick Start**: [README.md](./README.md)
+- **Codebase Structure**: [docs/reference/codebase-structure.md](./docs/reference/codebase-structure.md)
 - **Changelog & Releases**: [CHANGELOG.md](./CHANGELOG.md)
 - **Upcoming Tasks & Priorities**: [docs/Roadmap.md](./docs/Roadmap.md)
 - **API Reference**: [docs/api.md](./docs/api.md)
@@ -51,16 +53,20 @@ I’m working on **Blue Banded Bee** (a Webflow cache‑warmer). Use this guide 
   - `implementation_details.md` for technical changes
   - `gotchas.md` for edge cases or warnings
   - `quick_reference.md` for updated parameters or configs
+  - `docs/reference/file-map.md` for file structure
+  - `docs/reference/codebase-structure.md` for code structure
 
 ### D. Change Management
 
 **Before implementing changes:**
+
 1. Review relevant documentation.
 2. Propose changes with clear rationale.
 3. Highlight potential impacts.
 4. Get explicit approval for functionality changes.
 
 **After implementing changes:**
+
 1. Update relevant documentation.
 2. Add new learnings and examples.
 3. Verify documentation consistency.
@@ -78,12 +84,14 @@ I’m working on **Blue Banded Bee** (a Webflow cache‑warmer). Use this guide 
   - Implementation insights
 
 **Before suggesting solutions:**
+
 1. Check if similar issues were previously addressed.
 2. Review documented solutions and learnings.
 3. Apply accumulated knowledge to prevent repeated issues.
 4. Build upon previous optimizations.
 
 **After resolving issues:**
+
 1. Document the root cause.
 2. Record the solution and rationale.
 3. Update relevant documentation.

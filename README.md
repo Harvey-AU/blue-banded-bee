@@ -27,7 +27,7 @@ go run ./cmd/app/main.go
 
 ## Development Status
 
-Current development stage: Stage 3 - PostgreSQL Migration & Performance Optimization
+Current development stage: Stage 3 - PostgreSQL Migration & Performance Optimisation
 
 ### Project Stages
 
@@ -39,7 +39,7 @@ Current development stage: Stage 3 - PostgreSQL Migration & Performance Optimiza
 - ⭕ Stage 5: Billing & Subscriptions
 - ⭕ Stage 6: Webflow Integration & Launch
 
-See our [detailed roadmap](./Roadmap.md) for more information.
+See our [detailed roadmap](ROADMAP.md) for more information.
 
 ## Tech Stack
 
@@ -54,6 +54,7 @@ See our [detailed roadmap](./Roadmap.md) for more information.
 
 Our documentation is organized under `docs/`:
 
+- [Codebase Structure](docs/reference/codebase-structure.md) - Overview of the codebase structure
 - [API Reference](docs/reference/api-reference.md) - API endpoints and usage
 - [Development Guide](docs/guides/development.md) - Setup and local development
 - [Deployment Guide](docs/guides/deployment.md) - Deployment instructions
