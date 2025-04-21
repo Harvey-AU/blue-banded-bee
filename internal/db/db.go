@@ -9,6 +9,7 @@ import (
 
 	_ "github.com/lib/pq"
 
+	"github.com/Harvey-AU/blue-banded-bee/internal/common"
 	"github.com/rs/zerolog/log"
 )
 
@@ -16,6 +17,7 @@ import (
 type DB struct {
 	client *sql.DB
 	config *Config
+	queue  *common.DbQueue
 }
 
 // GetConfig returns the original DB connection settings
@@ -264,6 +266,28 @@ func setupSchema(db *sql.DB) error {
 		return fmt.Errorf("failed to create task status/created_at index: %w", err)
 	}
 
+	// Enable Row-Level Security for all tables
+	tables := []string{"domains", "pages", "jobs", "tasks"}
+	for _, table := range tables {
+		// Enable RLS on the table
+		_, err = db.Exec(fmt.Sprintf("ALTER TABLE %s ENABLE ROW LEVEL SECURITY", table))
+		if err != nil {
+			return fmt.Errorf("failed to enable RLS on %s table: %w", table, err)
+		}
+
+		// Create a default policy that allows all operations for now
+		// This can be refined later with more specific policies
+		_, err = db.Exec(fmt.Sprintf(`
+			CREATE POLICY all_access ON %s
+			FOR ALL
+			TO PUBLIC
+			USING (true)
+		`, table))
+		if err != nil {
+			return fmt.Errorf("failed to create RLS policy on %s table: %w", table, err)
+		}
+	}
+
 	return nil
 }
 
@@ -364,4 +388,13 @@ func (db *DB) GetOrCreatePage(ctx context.Context, domainID int, path string) (i
 	err := db.client.QueryRowContext(ctx,
 		`SELECT id FROM pages WHERE domain_id=$1 AND path=$2`, domainID, path).Scan(&id)
 	return id, err
+}
+
+// GetQueue returns the database queue for serialized operations
+func (db *DB) GetQueue() *common.DbQueue {
+	// Create the queue on first access if needed
+	if db.queue == nil {
+		db.queue = common.NewDbQueue(db.client)
+	}
+	return db.queue
 }

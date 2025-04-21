@@ -14,6 +14,11 @@ curl "https://blue-banded-bee.fly.dev/site?domain=teamharvey.co&max=100"
 curl "http://localhost:8080/job-status?job_id=job_123abc"
 curl "https://blue-banded-bee.fly.dev/job-status?job_id=job_123abc"
 
+### Reset DB schema
+
+curl "http://localhost:8080/reset-db"
+curl "https://blue-banded-bee.fly.dev/reset-db"
+
 ## Job Management
 
 ### Create Job
