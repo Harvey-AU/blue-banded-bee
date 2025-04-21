@@ -61,6 +61,9 @@ func main() {
 
 	log.Info().Msg("Connected to PostgreSQL database")
 
+	// Set DB instance for queue operations
+	jobs.SetDBInstance(pgDB)
+
 	// Initialise crawler
 	crawlerConfig := crawler.DefaultConfig()
 	cr := crawler.New(crawlerConfig)
