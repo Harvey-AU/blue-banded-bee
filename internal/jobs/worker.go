@@ -836,9 +836,10 @@ func (wp *WorkerPool) StartCleanupMonitor(ctx context.Context) {
 func GetNextPendingTask(ctx context.Context, db *sql.DB, jobID string) (*Task, error) {
 	query := `
 		SELECT t.id, t.job_id, t.page_id, p.path, t.status, t.depth,
-		t.created_at, t.retry_count, t.source_type, t.source_url
+		t.created_at, t.retry_count, t.source_type, t.source_url, j.find_links
 		FROM tasks t
 		JOIN pages p ON t.page_id = p.id
+		JOIN jobs j ON t.job_id = j.id
 		WHERE t.status = $1 AND t.job_id = $2
 		ORDER BY t.created_at ASC
 		LIMIT 1
@@ -848,7 +849,7 @@ func GetNextPendingTask(ctx context.Context, db *sql.DB, jobID string) (*Task, e
 	err := db.QueryRowContext(ctx, query, TaskStatusPending, jobID).Scan(
 		&task.ID, &task.JobID, &task.PageID, &task.Path, &task.Status,
 		&task.Depth, &task.CreatedAt, &task.RetryCount,
-		&task.SourceType, &task.SourceURL,
+		&task.SourceType, &task.SourceURL, &task.FindLinks,
 	)
 
 	if err != nil {
@@ -890,7 +891,7 @@ func (wp *WorkerPool) processTask(ctx context.Context, task *Task) (*crawler.Cra
 	log.Info().Int("status_code", result.StatusCode).Str("task_id", task.ID).Msg("Crawler completed")
 
 	// Enqueue discovered links if FindLinks enabled
-	if wp.crawler.Config().FindLinks {
+	if task.FindLinks {
 		filtered := make([]string, 0, len(result.Links))
 		for _, link := range result.Links {
 			p, err := url.Parse(link)
