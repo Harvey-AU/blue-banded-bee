@@ -19,6 +19,7 @@ type Config struct {
 	DatabaseURL    string        // Database connection URL
 	AuthToken      string        // Database authentication token
 	SentryDSN      string        // Sentry DSN for error tracking
+	FindLinks      bool          // Whether to extract links (e.g. PDFs/docs) from pages
 }
 
 // DefaultConfig returns a Config instance with default values
@@ -31,5 +32,6 @@ func DefaultConfig() *Config {
 		RetryAttempts:  3,
 		RetryDelay:     500 * time.Millisecond,
 		SkipCachedURLs: false, // Default to crawling all URLs
+		FindLinks:      false,
 	}
 }

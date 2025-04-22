@@ -8,6 +8,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Multiple version updates may occur on the same date, each with its own version number.
 Each version represents a distinct set of changes, even if released on the same day.
 
+## [0.3.3] – 2025-04-22
+
+### Added
+
+- Added `sitemap_tasks` and `found_tasks` columns to the `jobs` table and corresponding fields in the Job struct
+- Enqueued discovered links (same-domain pages and document URLs) via link extraction in the worker pool
+
+### Changed
+
+- `processTask` now filters `result.Links` to include only same-site pages and docs (`.pdf`, `.doc`, `.docx`) and enqueues them
+- Updated `setupSchema` to include new columns with `ALTER TABLE IF NOT EXISTS`
+- Exposed `Crawler.Config()` method to allow workers to read the `FindLinks` flag
+
+### Documentation
+
+- Updated `docs/architecture/jobs.md` to document new task counters and link-extraction behaviour
+
 ## [0.3.2] – 2025-04-21
 
 ### Changed

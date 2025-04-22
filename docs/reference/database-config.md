@@ -9,6 +9,7 @@ The application uses a normalized database schema with reference tables to impro
 ### Core Tables
 
 **domains**: Stores unique domain names with integer primary keys
+
 ```sql
 CREATE TABLE IF NOT EXISTS domains (
     id INTEGER PRIMARY KEY,
@@ -17,6 +18,7 @@ CREATE TABLE IF NOT EXISTS domains (
 ```
 
 **pages**: Stores page paths with references to their respective domains
+
 ```sql
 CREATE TABLE IF NOT EXISTS pages (
     id INTEGER PRIMARY KEY,
@@ -26,17 +28,22 @@ CREATE TABLE IF NOT EXISTS pages (
 )
 ```
 
-**jobs**: Stores crawl jobs with references to domains
+**jobs**: Stores crawl jobs with references to domains and task counters
+
 ```sql
 CREATE TABLE IF NOT EXISTS jobs (
     id TEXT PRIMARY KEY,
     domain_id INTEGER NOT NULL REFERENCES domains(id),
     status TEXT NOT NULL,
+    sitemap_tasks INTEGER NOT NULL DEFAULT 0,
+    found_tasks INTEGER NOT NULL DEFAULT 0,
+    total_tasks INTEGER NOT NULL DEFAULT 0
     -- other fields omitted for brevity
 )
 ```
 
 **tasks**: Stores individual URL crawl tasks with references to pages
+
 ```sql
 CREATE TABLE IF NOT EXISTS tasks (
     id TEXT PRIMARY KEY,
@@ -53,6 +60,14 @@ CREATE TABLE IF NOT EXISTS tasks (
 1. All SQL queries use PostgreSQL-style numbered parameters (`$1`, `$2`, etc.) instead of MySQL/SQLite-style (`?`).
 2. When processing tasks, the full URL is reconstructed by joining the domain name from the `domains` table with the path from the `tasks` table.
 3. The reference structure ensures data integrity and reduces redundancy by storing domain names and page paths only once.
+4. Use `ALTER TABLE IF NOT EXISTS` to add new task counter columns if missing:
+
+```sql
+ALTER TABLE jobs
+  ADD COLUMN IF NOT EXISTS sitemap_tasks INTEGER NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS found_tasks INTEGER NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS total_tasks INTEGER NOT NULL DEFAULT 0;
+```
 
 ## Connection Pool Settings
 
@@ -134,3 +149,4 @@ result, err := tx.ExecContext(ctx, `
         NOW()
     FROM unnest($5::text[]) AS url
 `, jobID, depth, sourceType, sourceURL, pq.Array(urls))
+```
