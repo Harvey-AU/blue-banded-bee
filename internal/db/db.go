@@ -223,7 +223,8 @@ func setupSchema(db *sql.DB) error {
 	// Ensure new columns exist in existing table
 	_, _ = db.Exec(`ALTER TABLE jobs ADD COLUMN IF NOT EXISTS sitemap_tasks INTEGER NOT NULL DEFAULT 0`)
 	_, _ = db.Exec(`ALTER TABLE jobs ADD COLUMN IF NOT EXISTS found_tasks INTEGER NOT NULL DEFAULT 0`)
-
+	_, _ = db.Exec(`ALTER TABLE jobs ADD COLUMN IF NOT EXISTS total_tasks INTEGER NOT NULL DEFAULT 0`)
+	
 	// Create tasks table
 	_, err = db.Exec(`
 		CREATE TABLE IF NOT EXISTS tasks (
@@ -280,7 +281,7 @@ func setupSchema(db *sql.DB) error {
 		// Create a default policy that allows all operations for now
 		// This can be refined later with more specific policies
 		_, err = db.Exec(fmt.Sprintf(`
-			CREATE POLICY all_access ON %s
+			CREATE POLICY IF NOT EXISTS all_access ON %s
 			FOR ALL
 			TO PUBLIC
 			USING (true)
