@@ -77,6 +77,9 @@ type Task struct {
 	ResponseTime int64  `json:"response_time,omitempty"`
 	CacheStatus  string `json:"cache_status,omitempty"`
 	ContentType  string `json:"content_type,omitempty"`
+	
+	// Job configuration that affects processing
+	FindLinks bool `json:"-"` // Not stored in DB, just used during processing
 }
 
 // JobOptions defines configuration options for a crawl job
