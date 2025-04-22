@@ -286,18 +286,6 @@ func setupSchema(db *sql.DB) error {
 		if err != nil {
 			return fmt.Errorf("failed to enable RLS on %s table: %w", table, err)
 		}
-
-		// Create a default policy that allows all operations for now
-		// This can be refined later with more specific policies
-		_, err = db.Exec(fmt.Sprintf(`
-			CREATE POLICY IF NOT EXISTS all_access ON %s
-			FOR ALL
-			TO PUBLIC
-			USING (true)
-		`, table))
-		if err != nil {
-			return fmt.Errorf("failed to create RLS policy on %s table: %w", table, err)
-		}
 	}
 
 	return nil
