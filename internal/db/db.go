@@ -252,6 +252,15 @@ func setupSchema(db *sql.DB) error {
 		return fmt.Errorf("failed to create tasks table: %w", err)
 	}
 
+	// Add a unique constraint to prevent duplicate tasks for same page in a job
+	_, err = db.Exec(`
+		CREATE UNIQUE INDEX IF NOT EXISTS idx_tasks_job_page_unique 
+		ON tasks(job_id, page_id)
+	`)
+	if err != nil {
+		return fmt.Errorf("failed to create unique index on tasks: %w", err)
+	}
+
 	// Create indexes
 	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_tasks_job_id ON tasks(job_id)`)
 	if err != nil {
