@@ -1,4 +1,4 @@
-# Contributing to Cache Warmer
+# Contributing to Blue Banded Bee
 
 ## Development Setup
 

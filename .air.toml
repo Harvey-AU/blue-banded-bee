@@ -3,12 +3,12 @@ tmp_dir = "tmp"
 
 [build]
 # Windows configuration:
-cmd = "go build -o ./tmp/main.exe ./src"
-bin = "tmp/main.exe" 
+# cmd = "go build -o ./tmp/main.exe ./src"
+# bin = "tmp/main.exe" 
 
 # Mac/Linux configuration (comment above, uncomment below when on Mac/Linux):
-# cmd = "go build -o ./tmp/main ./src"
-# bin = "tmp/main"
+cmd = "go build -o ./tmp/main ./cmd/app"
+bin = "tmp/main"
 
 include_ext = ["go", "env"]
 exclude_dir = ["tmp", "vendor", "testdata"]

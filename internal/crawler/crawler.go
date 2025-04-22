@@ -1,13 +1,17 @@
 package crawler
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
+
+	"golang.org/x/net/html"
 
 	"github.com/gocolly/colly/v2"
 	"github.com/rs/zerolog/log"
@@ -57,6 +61,19 @@ func New(config *Config, id ...string) *Crawler {
 			Msg("Crawler sending request")
 	})
 
+	// Conditionally register link extractor if enabled
+	if config.FindLinks {
+		c.OnHTML("a[href]", func(e *colly.HTMLElement) {
+			href := e.Attr("href")
+			// Normalize URL (absolute)
+			u := e.Request.AbsoluteURL(href)
+			// Append to result.Links via context
+			if r, ok := e.Request.Ctx.GetAny("result").(*CrawlResult); ok {
+				r.Links = append(r.Links, u)
+			}
+		})
+	}
+
 	return &Crawler{
 		config: config,
 		colly:  c,
@@ -82,6 +99,13 @@ func (c *Crawler) WarmURL(ctx context.Context, targetURL string) (*CrawlResult, 
 	}
 	start := time.Now()
 	res := &CrawlResult{URL: targetURL, Timestamp: start.Unix()}
+	// Seed result into collector context so OnHTML callback appends to res.Links
+	if c.config.FindLinks {
+		ctxColly := colly.NewContext()
+		ctxColly.Put("result", res)
+		c.colly.Request("GET", targetURL, nil, ctxColly, nil)
+		c.colly.Wait()
+	}
 	client := &http.Client{Timeout: c.config.DefaultTimeout}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, targetURL, nil)
 	if err != nil {
@@ -96,13 +120,34 @@ func (c *Crawler) WarmURL(ctx context.Context, targetURL string) (*CrawlResult, 
 		return res, err
 	}
 	defer resp.Body.Close()
+	// read body for link extraction
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		res.Error = err.Error()
+		return res, err
+	}
 	res.StatusCode = resp.StatusCode
 	res.CacheStatus = resp.Header.Get("CF-Cache-Status")
 	res.ContentType = resp.Header.Get("Content-Type")
+	if c.config.FindLinks {
+		res.Links = extractLinks(bodyBytes, targetURL)
+	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		err := fmt.Errorf("unexpected status code: %d", resp.StatusCode)
-		res.Error = err.Error()
-		return res, err
+		switch {
+		case resp.StatusCode == 404:
+			res.Error = "HTTP 404: Page not found"
+		case resp.StatusCode == 403:
+			res.Error = "HTTP 403: Access forbidden"
+		case resp.StatusCode == 401:
+			res.Error = "HTTP 401: Authentication required"
+		case resp.StatusCode == 429:
+			res.Error = "HTTP 429: Too many requests - rate limited"
+		case resp.StatusCode >= 500 && resp.StatusCode < 600:
+			res.Error = fmt.Sprintf("HTTP %d: Server error", resp.StatusCode)
+		default:
+			res.Error = fmt.Sprintf("HTTP %d: Non-successful status code", resp.StatusCode)
+		}
+		return res, nil
 	}
 	return res, nil
 }
@@ -279,4 +324,41 @@ func (c *Crawler) CreateHTTPClient(timeout time.Duration) *http.Client {
 			ForceAttemptHTTP2:   true,
 		},
 	}
+}
+
+// extractLinks parses HTML body and returns all anchor hrefs as absolute URLs
+func extractLinks(body []byte, base string) []string {
+	var links []string
+	baseURL, err := url.Parse(base)
+	if err != nil {
+		return links
+	}
+	doc, err := html.Parse(bytes.NewReader(body))
+	if err != nil {
+		return links
+	}
+	var f func(*html.Node)
+	f = func(n *html.Node) {
+		if n.Type == html.ElementNode && n.Data == "a" {
+			for _, attr := range n.Attr {
+				if attr.Key == "href" {
+					u, err := url.Parse(attr.Val)
+					if err == nil {
+						abs := baseURL.ResolveReference(u)
+						links = append(links, abs.String())
+					}
+				}
+			}
+		}
+		for c := n.FirstChild; c != nil; c = c.NextSibling {
+			f(c)
+		}
+	}
+	f(doc)
+	return links
+}
+
+// Config returns the Crawler's configuration.
+func (c *Crawler) Config() *Config {
+	return c.config
 }

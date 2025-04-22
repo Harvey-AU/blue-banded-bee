@@ -7,13 +7,13 @@ import (
 	"math"
 	"net/url"
 	"runtime/debug"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/Harvey-AU/blue-banded-bee/internal/crawler"
 	"github.com/Harvey-AU/blue-banded-bee/internal/db"
-	"github.com/google/uuid"
 	"github.com/lib/pq"
 	"github.com/rs/zerolog/log"
 )
@@ -374,12 +374,14 @@ func EnqueueURLs(ctx context.Context, db *sql.DB, jobID string, urls []string, s
 			if status != string(JobStatusPending) && status != string(JobStatusRunning) {
 				return fmt.Errorf("job is in invalid state: %s", status)
 			}
-			// Atomically increment total_tasks for this batch
-			if _, err := tx.ExecContext(ctx, `
-				UPDATE jobs
-				SET total_tasks = total_tasks + $1
-				WHERE id = $2`, len(batch), jobID); err != nil {
-				return fmt.Errorf("failed to update total tasks: %w", err)
+			// Increment sitemap_tasks or found_tasks and total_tasks
+			column := "found_tasks"
+			if sourceType == "sitemap" {
+				column = "sitemap_tasks"
+			}
+			query := fmt.Sprintf(`UPDATE jobs SET %s = %s + $1, total_tasks = total_tasks + $1 WHERE id = $2`, column, column)
+			if _, err := tx.ExecContext(ctx, query, len(batch), jobID); err != nil {
+				return fmt.Errorf("failed to update task counts: %w", err)
 			}
 
 			// Get domain_id for this job
@@ -419,11 +421,8 @@ func EnqueueURLs(ctx context.Context, db *sql.DB, jobID string, urls []string, s
 					return fmt.Errorf("failed to get page_id: %w", err)
 				}
 
-				// Insert task with page_id
-				if _, err := tx.ExecContext(ctx, `
-					INSERT INTO tasks(id, job_id, page_id, status, depth, created_at, retry_count, source_type, source_url)
-					VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-					uuid.New().String(), jobID, pageID, TaskStatusPending, depth, time.Now(), 0, sourceType, sourceURL); err != nil {
+				// Create task for each URL
+				if _, err := tx.ExecContext(ctx, `INSERT INTO tasks (job_id, page_id, path, status, depth, source_type, source_url) VALUES ($1, $2, $3, $4, $5, $6, $7)`, jobID, pageID, path, string(TaskStatusPending), depth, sourceType, sourceURL); err != nil {
 					return fmt.Errorf("failed to insert task: %w", err)
 				}
 			}
@@ -889,6 +888,29 @@ func (wp *WorkerPool) processTask(ctx context.Context, task *Task) (*crawler.Cra
 		return result, fmt.Errorf("crawler error: %w", err)
 	}
 	log.Info().Int("status_code", result.StatusCode).Str("task_id", task.ID).Msg("Crawler completed")
+
+	// Enqueue discovered links if FindLinks enabled
+	if wp.crawler.Config().FindLinks {
+		filtered := make([]string, 0, len(result.Links))
+		for _, link := range result.Links {
+			p, err := url.Parse(link)
+			if err != nil {
+				continue
+			}
+			lower := strings.ToLower(p.Path)
+			isDoc := strings.HasSuffix(lower, ".pdf") || strings.HasSuffix(lower, ".doc") || strings.HasSuffix(lower, ".docx")
+			if p.Hostname() == domainName || isDoc {
+				filtered = append(filtered, link)
+			}
+		}
+		if len(filtered) > 0 {
+			src := fmt.Sprintf("https://%s%s", domainName, task.Path)
+			if err := EnqueueURLs(ctx, wp.db, task.JobID, filtered, "link", src, task.Depth+1); err != nil {
+				log.Error().Err(err).Str("job_id", task.JobID).Msg("Failed to enqueue discovered links")
+			}
+		}
+	}
+
 	return result, nil
 }
 

@@ -9,6 +9,9 @@ curl "https://blue-banded-bee.fly.dev/site?domain=teamharvey.co"
 curl "http://localhost:8080/site?domain=teamharvey.co&max=100"
 curl "https://blue-banded-bee.fly.dev/site?domain=teamharvey.co&max=100"
 
+curl "http://localhost:8080/site?domain=teamharvey.co&find_links=true"
+curl "https://blue-banded-bee.fly.dev/site?domain=teamharvey.co&find_links=true"
+
 ### Check crawl job status
 
 curl "http://localhost:8080/job-status?job_id=job_123abc"
