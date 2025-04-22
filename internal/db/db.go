@@ -203,24 +203,26 @@ func setupSchema(db *sql.DB) error {
 			domain_id INTEGER NOT NULL REFERENCES domains(id),
 			status TEXT NOT NULL,
 			progress REAL NOT NULL,
-			total_tasks INTEGER NOT NULL,
-			completed_tasks INTEGER NOT NULL,
-			failed_tasks INTEGER NOT NULL,
+			sitemap_tasks INTEGER NOT NULL DEFAULT 0,
+			found_tasks INTEGER NOT NULL DEFAULT 0,
+			total_tasks INTEGER NOT NULL DEFAULT 0,
+			completed_tasks INTEGER NOT NULL DEFAULT 0,
+			failed_tasks INTEGER NOT NULL DEFAULT 0,
 			created_at TIMESTAMP NOT NULL,
 			started_at TIMESTAMP,
 			completed_at TIMESTAMP,
 			concurrency INTEGER NOT NULL,
 			find_links BOOLEAN NOT NULL,
-			include_paths JSONB,
-			exclude_paths JSONB,
-			required_workers INTEGER DEFAULT 0,
-			error_message TEXT,
-			max_depth INTEGER DEFAULT 1
+			max_depth INTEGER NOT NULL
 		)
 	`)
 	if err != nil {
 		return fmt.Errorf("failed to create jobs table: %w", err)
 	}
+
+	// Ensure new columns exist in existing table
+	_, _ = db.Exec(`ALTER TABLE jobs ADD COLUMN IF NOT EXISTS sitemap_tasks INTEGER NOT NULL DEFAULT 0`)
+	_, _ = db.Exec(`ALTER TABLE jobs ADD COLUMN IF NOT EXISTS found_tasks INTEGER NOT NULL DEFAULT 0`)
 
 	// Create tasks table
 	_, err = db.Exec(`

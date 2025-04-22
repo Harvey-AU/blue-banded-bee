@@ -45,12 +45,13 @@ func main() {
 		SentryDSN: os.Getenv("SENTRY_DSN"),
 	}
 
-	// Configure log level via CLI flag (default 'warn')
+	// CLI flags
 	logLevel := flag.String("log-level", "warn", "log level: debug, info, warn, error")
+	findLinks := flag.Bool("find-links", false, "extract hyperlinks (including PDFs/docs)")
 	flag.Parse()
 
-	config.LogLevel = *logLevel // Set log level from CLI flag
-	setupLogging(config)        // Initialise logging with CLI flag value
+	config.LogLevel = *logLevel
+	setupLogging(config)
 
 	// Connect to PostgreSQL
 	pgDB, err := db.InitFromEnv()
@@ -64,8 +65,9 @@ func main() {
 	// Set DB instance for queue operations
 	jobs.SetDBInstance(pgDB)
 
-	// Initialise crawler
+	// Initialise crawler with link-extraction toggle
 	crawlerConfig := crawler.DefaultConfig()
+	crawlerConfig.FindLinks = *findLinks
 	cr := crawler.New(crawlerConfig)
 
 	// Create a worker pool for task processing
@@ -169,6 +171,17 @@ func main() {
 			maxPages = parsed
 		}
 
+		// Optional: toggle link extraction via find_links param
+		findLinks := false
+		if flStr := r.URL.Query().Get("find_links"); flStr != "" {
+			v, err := strconv.ParseBool(flStr)
+			if err != nil {
+				http.Error(w, "Invalid find_links parameter", http.StatusBadRequest)
+				return
+			}
+			findLinks = v
+		}
+
 		// Process sitemap for the domain
 		baseURL := domain
 		if !strings.HasPrefix(baseURL, "http") {
@@ -218,7 +231,7 @@ func main() {
 			INSERT INTO jobs (id, domain_id, status, progress, total_tasks, completed_tasks, 
 							failed_tasks, created_at, concurrency, find_links, max_depth)
 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-		`, jobID, domainID, "pending", 0.0, len(allURLs), 0, 0, now, 5, false, 1)
+		`, jobID, domainID, "pending", 0.0, len(allURLs), 0, 0, now, 5, findLinks, 1)
 
 		if err != nil {
 			log.Error().Err(err).Str("domain", domain).Msg("Failed to create job")

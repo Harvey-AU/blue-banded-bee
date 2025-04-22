@@ -16,7 +16,10 @@ The system uses a normalized database schema with reference tables:
 
 - **domains**: Stores unique domain names with integer primary keys
 - **pages**: Stores page paths with references to their respective domains
-- **jobs**: Stores job metadata, status, and progress with references to domains
+- **jobs**: Stores job metadata, status, and progress with references to domains, and tracks separate task counts:
+  - `sitemap_tasks`: Number of tasks seeded from sitemaps
+  - `found_tasks`: Number of tasks discovered via link extraction
+  - `total_tasks`: Combined task count (`sitemap_tasks` + `found_tasks`)
 - **tasks**: Stores individual crawl tasks with references to pages
 
 ## URL Processing
