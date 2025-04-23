@@ -872,24 +872,37 @@ func GetNextPendingTask(ctx context.Context, db *sql.DB, jobID string) (*Task, e
 
 // processTask processes an individual task
 func (wp *WorkerPool) processTask(ctx context.Context, task *Task) (*crawler.CrawlResult, error) {
-	// get domain name for URL reconstruction
+	// Get both domain name and findLinks setting in a single query
 	var domainName string
+	var findLinks bool
+	
 	if err := wp.db.QueryRowContext(ctx, `
-		SELECT d.name FROM tasks t
+		SELECT d.name, j.find_links FROM tasks t
 		JOIN pages p ON t.page_id = p.id
 		JOIN domains d ON p.domain_id = d.id
-		WHERE t.id = $1`, task.ID).Scan(&domainName); err != nil {
-		return nil, fmt.Errorf("failed to get domain for task %s: %w", task.ID, err)
+		JOIN jobs j ON t.job_id = j.id
+		WHERE t.id = $1`, task.ID).Scan(&domainName, &findLinks); err != nil {
+		return nil, fmt.Errorf("failed to get domain and settings for task %s: %w", task.ID, err)
 	}
+	
 	urlStr := fmt.Sprintf("https://%s%s", domainName, task.Path)
 	log.Info().Str("url", urlStr).Str("task_id", task.ID).Msg("Starting URL warm")
-	result, err := wp.crawler.WarmURL(ctx, urlStr)
+	
+	// Set the FindLinks flag on the task
+	task.FindLinks = findLinks
+	
+	// Create a job-specific crawler with the correct FindLinks setting
+	crawlerConfig := *wp.crawler.Config() // Copy the base config
+	crawlerConfig.FindLinks = findLinks   // Apply the job's FindLinks setting
+	taskCrawler := crawler.New(&crawlerConfig)
+	
+	result, err := taskCrawler.WarmURL(ctx, urlStr)
 	if err != nil {
 		log.Error().Err(err).Str("task_id", task.ID).Msg("Crawler failed")
 		return result, fmt.Errorf("crawler error: %w", err)
 	}
 	log.Info().Int("status_code", result.StatusCode).Str("task_id", task.ID).Msg("Crawler completed")
-
+	
 	// Enqueue discovered links if FindLinks enabled
 	if task.FindLinks {
 		filtered := make([]string, 0, len(result.Links))
@@ -911,7 +924,7 @@ func (wp *WorkerPool) processTask(ctx context.Context, task *Task) (*crawler.Cra
 			}
 		}
 	}
-
+	
 	return result, nil
 }
 
