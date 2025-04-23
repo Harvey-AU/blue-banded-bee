@@ -7,6 +7,7 @@ import (
 	"math"
 	"net/url"
 	"runtime/debug"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -914,25 +915,98 @@ func (wp *WorkerPool) processTask(ctx context.Context, task *Task) (*crawler.Cra
 		Str("content_type", result.ContentType).
 		Msg("Crawler completed")
 	
-	// Additional logs at the start of link filtering:
-	if task.FindLinks {
+	// Process discovered links if find_links is enabled
+	if task.FindLinks && len(result.Links) > 0 {
 		log.Debug().
 			Str("task_id", task.ID).
 			Int("links_before_filtering", len(result.Links)).
 			Bool("find_links_enabled", findLinks).
 			Msg("Starting link filtering")
 		
-		// Then continue with current filtering logic
+		// Filter links based on requirements:
+		// 1. Same domain/subdomain links OR
+		// 2. Document links (PDF, DOC, DOCX) from any domain
+		var filtered []string
 		
-		// After filtering:
+		for _, link := range result.Links {
+			linkURL, err := url.Parse(link)
+			if err != nil {
+				log.Debug().Err(err).Str("link", link).Msg("Failed to parse discovered link URL")
+				continue
+			}
+
+			// Check if it's a document link (from any domain)
+			isDocument := isDocumentLink(linkURL.Path)
+			
+			// Check if it's on the same domain or subdomain
+			isSameDomain := isSameOrSubDomain(linkURL.Hostname(), domainName)
+			
+			// Add the link if it matches our criteria
+			if isDocument || isSameDomain {
+				filtered = append(filtered, link)
+			}
+		}
+		
 		log.Debug().
 			Str("task_id", task.ID).
 			Int("links_after_filtering", len(filtered)).
 			Str("domain_name", domainName).
 			Msg("Link filtering completed")
+			
+		// Enqueue filtered links
+		if len(filtered) > 0 {
+			// Enqueue the filtered links
+			if err := EnqueueURLs(
+				ctx,
+				wp.db,
+				task.JobID,
+				filtered,
+				"link", // source_type is "link" for discovered links
+				urlStr, // source_url is the URL where these links were found
+				task.Depth, // Maintain the same depth
+			); err != nil {
+				log.Error().
+					Err(err).
+					Str("task_id", task.ID).
+					Int("link_count", len(filtered)).
+					Msg("Failed to enqueue discovered links")
+			} else {
+				log.Info().
+					Str("task_id", task.ID).
+					Int("link_count", len(filtered)).
+					Msg("Successfully enqueued discovered links")
+			}
+		}
 	}
 	
 	return result, nil
+}
+
+// Helper function to check if a hostname is the same domain or a subdomain of the target domain
+func isSameOrSubDomain(hostname, targetDomain string) bool {
+	// Direct match
+	if hostname == targetDomain {
+		return true
+	}
+	
+	// Check if hostname ends with .targetDomain
+	if strings.HasSuffix(hostname, "."+targetDomain) {
+		return true
+	}
+	
+	return false
+}
+
+// Helper function to check if a URL points to a document
+func isDocumentLink(path string) bool {
+	lower := strings.ToLower(path)
+	return strings.HasSuffix(lower, ".pdf") ||
+		strings.HasSuffix(lower, ".doc") ||
+		strings.HasSuffix(lower, ".docx") ||
+		strings.HasSuffix(lower, ".xls") ||
+		strings.HasSuffix(lower, ".xlsx") ||
+		strings.HasSuffix(lower, ".ppt") ||
+		strings.HasSuffix(lower, ".pptx")
 }
 
 // listenForNotifications sets up PostgreSQL LISTEN/NOTIFY

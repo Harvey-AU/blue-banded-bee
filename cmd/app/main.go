@@ -4,10 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"flag"
-	"fmt"
 	"net"
 	"net/http"
-	"net/url"
 	"os"
 	"os/signal"
 	"strconv"
@@ -19,7 +17,6 @@ import (
 	"github.com/Harvey-AU/blue-banded-bee/internal/crawler"
 	"github.com/Harvey-AU/blue-banded-bee/internal/db"
 	"github.com/Harvey-AU/blue-banded-bee/internal/jobs"
-	"github.com/google/uuid"
 	"github.com/joho/godotenv"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -74,6 +71,8 @@ func main() {
 	workerPool := jobs.NewWorkerPool(pgDB.GetDB(), cr, 5, pgDB.GetConfig()) // 5 concurrent workers
 	workerPool.Start(context.Background())
 	defer workerPool.Stop()
+
+	jobsManager := jobs.NewJobManager(pgDB.GetDB(), cr, workerPool)
 
 	// Start a goroutine to monitor job completion
 	go func() {
@@ -153,14 +152,12 @@ func main() {
 	})
 
 	http.HandleFunc("/site", func(w http.ResponseWriter, r *http.Request) {
-		// Get domain from query parameters
 		domain := r.URL.Query().Get("domain")
 		if domain == "" {
 			http.Error(w, "Domain parameter is required", http.StatusBadRequest)
 			return
 		}
 
-		// Optional: limit total pages/tasks via max_pages param
 		maxPages := 0
 		if maxStr := r.URL.Query().Get("max"); maxStr != "" {
 			parsed, err := strconv.Atoi(maxStr)
@@ -171,7 +168,6 @@ func main() {
 			maxPages = parsed
 		}
 
-		// Optional: toggle link extraction via find_links param
 		findLinks := false
 		if flStr := r.URL.Query().Get("find_links"); flStr != "" {
 			v, err := strconv.ParseBool(flStr)
@@ -182,103 +178,24 @@ func main() {
 			findLinks = v
 		}
 
-		// Process sitemap for the domain
-		baseURL := domain
-		if !strings.HasPrefix(baseURL, "http") {
-			baseURL = fmt.Sprintf("https://%s", domain)
+		opts := &jobs.JobOptions{
+			Domain:      domain,
+			UseSitemap:  true,
+			Concurrency: 5,
+			FindLinks:   findLinks,
+			MaxDepth:    maxPages,
 		}
-
-		// Discover sitemaps
-		sitemaps, err := cr.DiscoverSitemaps(r.Context(), domain)
-		if err != nil {
-			log.Error().Err(err).Str("domain", domain).Msg("Failed to discover sitemaps")
-			http.Error(w, "Failed to discover sitemaps", http.StatusInternalServerError)
-			return
-		}
-
-		// Create a job ID
-		jobID := uuid.New().String()
-
-		// Process all URLs from sitemaps
-		var allURLs []string
-		for _, sitemapURL := range sitemaps {
-			urls, err := cr.ParseSitemap(r.Context(), sitemapURL)
-			if err != nil {
-				log.Error().Err(err).Str("sitemap", sitemapURL).Msg("Failed to parse sitemap")
-				continue
-			}
-			allURLs = append(allURLs, urls...)
-		}
-
-		// Trim URLs list if max specified
-		if maxPages > 0 && len(allURLs) > maxPages {
-			allURLs = allURLs[:maxPages]
-		}
-
-		// Define current time for consistent timestamps
-		now := time.Now()
-
-		// Get or create domain lookup
-		domainID, err := pgDB.GetOrCreateDomain(r.Context(), domain)
-		if err != nil {
-			log.Error().Err(err).Str("domain", domain).Msg("Failed to get or create domain")
-			http.Error(w, "Internal server error", http.StatusInternalServerError)
-			return
-		}
-
-		// Create a job record FIRST with domain_id
-		_, err = pgDB.GetDB().ExecContext(r.Context(), `
-			INSERT INTO jobs (id, domain_id, status, progress, total_tasks, completed_tasks, 
-							failed_tasks, created_at, concurrency, find_links, max_depth)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-		`, jobID, domainID, "pending", 0.0, len(allURLs), 0, 0, now, 5, findLinks, 1)
-
+		job, err := jobsManager.CreateJob(r.Context(), opts)
 		if err != nil {
 			log.Error().Err(err).Str("domain", domain).Msg("Failed to create job")
 			http.Error(w, "Failed to create job", http.StatusInternalServerError)
 			return
 		}
 
-		// THEN add all URLs as tasks after job exists, using pages lookup
-		for _, urlStr := range allURLs {
-			taskID := uuid.New().String()
-			uParsed, err := url.Parse(urlStr)
-			if err != nil {
-				log.Error().Err(err).Str("url", urlStr).Msg("Failed to parse URL")
-				continue
-			}
-			path := uParsed.RequestURI()
-			pageID, err := pgDB.GetOrCreatePage(r.Context(), domainID, path)
-			if err != nil {
-				log.Error().Err(err).Str("path", path).Msg("Failed to get or create page")
-				continue
-			}
-			_, err = pgDB.GetDB().ExecContext(r.Context(), `
-				INSERT INTO tasks (id, job_id, page_id, path, status, depth, created_at, retry_count, source_type, source_url)
-				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-			`, taskID, jobID, pageID, path, "pending", 0, now, 0, "sitemap", baseURL)
-
-			if err != nil {
-				log.Error().Err(err).Str("task_id", taskID).Msg("Failed to insert task")
-				// Continue with other tasks despite error
-			}
-		}
-
-		// Update job status to running
-		_, err = pgDB.GetDB().ExecContext(r.Context(), `
-			UPDATE jobs SET status = 'running', started_at = $1 WHERE id = $2
-		`, time.Now(), jobID)
-		if err != nil {
-			log.Error().Err(err).Str("job_id", jobID).Msg("Failed to update job status")
-		}
-
-		// Return success
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"status":     "OK",
-			"job_id":     jobID,
-			"urls_added": len(allURLs),
-			"message":    "Sitemap crawl started",
+		json.NewEncoder(w).Encode(map[string]string{
+			"status": "OK",
+			"job_id": job.ID,
 		})
 	})
 
