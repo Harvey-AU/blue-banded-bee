@@ -185,6 +185,13 @@
   - [ ] Implement proper metrics exposure
   - [ ] Remove unused metrics tracking
   - [ ] Add relevant PostgreSQL metrics
+- [ ] Remove depth functionality
+  - [ ] Remove `depth` column from `tasks` table
+  - [ ] Remove `max_depth` column from `jobs` table
+  - [ ] Update `EnqueueURLs` function to remove depth parameter
+  - [ ] Update type definitions to remove depth fields
+  - [ ] Remove depth-related logic from link discovery process
+  - [ ] Update documentation to remove depth references
 
 #### Final Transition (1-2 hrs)
 
