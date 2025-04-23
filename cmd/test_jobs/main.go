@@ -58,7 +58,7 @@ func main() {
 	crawler := crawler.New(nil)
 
 	// Create worker pool
-	workerPool := db.NewWorkerPool(database.GetDB(), crawler, 3)
+	workerPool := jobs.NewWorkerPool(database.GetDB(), crawler, 3, database.GetConfig())
 	workerPool.Start(context.Background())
 	defer workerPool.Stop()
 

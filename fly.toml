@@ -30,7 +30,7 @@ primary_region = 'syd'
       Content-Type = "text/plain"
 
 [processes]
-  app = "./main --log-level=info"
+  app = "./main --log-level=debug"
 
 [[vm]]
   memory = '1gb'
