@@ -1,6 +1,6 @@
 # Session Initialisation – Blue Banded Bee
 
-I’m working on **Blue Banded Bee** (a Webflow cache‑warmer). Use this guide to start each session. Please write in British (Australian) English, not American :)
+I'm working on **Blue Banded Bee** (a Webflow cache‑warmer). Use this guide to start each session. Please write in British (Australian) English, not American :)
 
 ## Key Documents
 
@@ -98,3 +98,19 @@ I’m working on **Blue Banded Bee** (a Webflow cache‑warmer). Use this guide 
 4. Add prevention strategies to `docs/gotchas.md`.
 
 Based on current status (CHANGELOG & Roadmap), suggest the scope of this working session (what to work on next).
+
+### F. Code Investigation Workflow
+
+WORKFLOW SEQUENCE:
+
+1. First, locate and read relevant configuration files before doing anything else
+2. Second, check actual code implementation of related functionality
+3. Only after steps 1-2, formulate a response based on evidence
+4. When debugging, always show what you found in the relevant files first
+
+- Always examine relevant configuration and source files before proposing solutions
+- Provide evidence from the codebase to support all recommendations
+- Reference specific files and line numbers when suggesting changes
+- Present the simplest, most direct solution first based on existing patterns
+- Verify claims against the actual codebase rather than making assumptions
+- When configuration options exist, look for where they're already defined
