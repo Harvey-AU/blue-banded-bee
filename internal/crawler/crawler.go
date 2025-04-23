@@ -63,13 +63,32 @@ func New(config *Config, id ...string) *Crawler {
 
 	// Conditionally register link extractor if enabled
 	if config.FindLinks {
+		log.Debug().
+			Bool("find_links", config.FindLinks).
+			Msg("Registering Colly link extractor")
+		
 		c.OnHTML("a[href]", func(e *colly.HTMLElement) {
 			href := e.Attr("href")
 			// Normalize URL (absolute)
 			u := e.Request.AbsoluteURL(href)
+			
+			log.Debug().
+				Str("href", href).
+				Str("absolute_url", u).
+				Str("from_url", e.Request.URL.String()).
+				Msg("Colly found link")
+				
 			// Append to result.Links via context
 			if r, ok := e.Request.Ctx.GetAny("result").(*CrawlResult); ok {
 				r.Links = append(r.Links, u)
+				log.Debug().
+					Str("url", e.Request.URL.String()).
+					Int("links_count", len(r.Links)).
+					Msg("Added link to result")
+			} else {
+				log.Warn().
+					Str("url", e.Request.URL.String()).
+					Msg("Could not get result from Colly context")
 			}
 		})
 	}
@@ -101,10 +120,21 @@ func (c *Crawler) WarmURL(ctx context.Context, targetURL string) (*CrawlResult, 
 	res := &CrawlResult{URL: targetURL, Timestamp: start.Unix()}
 	// Seed result into collector context so OnHTML callback appends to res.Links
 	if c.config.FindLinks {
+		log.Debug().
+			Str("url", targetURL).
+			Bool("find_links", c.config.FindLinks).
+			Msg("Starting Colly link extraction")
+		
 		ctxColly := colly.NewContext()
 		ctxColly.Put("result", res)
+		
 		c.colly.Request("GET", targetURL, nil, ctxColly, nil)
 		c.colly.Wait()
+		
+		log.Debug().
+			Str("url", targetURL).
+			Int("colly_links_found", len(res.Links)).
+			Msg("Colly link extraction completed")
 	}
 	client := &http.Client{Timeout: c.config.DefaultTimeout}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, targetURL, nil)
@@ -331,10 +361,18 @@ func extractLinks(body []byte, base string) []string {
 	var links []string
 	baseURL, err := url.Parse(base)
 	if err != nil {
+		log.Error().
+			Err(err).
+			Str("base_url", base).
+			Msg("Failed to parse base URL for link extraction")
 		return links
 	}
 	doc, err := html.Parse(bytes.NewReader(body))
 	if err != nil {
+		log.Error().
+			Err(err).
+			Str("base_url", base).
+			Msg("Failed to parse HTML for link extraction")
 		return links
 	}
 	var f func(*html.Node)
@@ -346,6 +384,19 @@ func extractLinks(body []byte, base string) []string {
 					if err == nil {
 						abs := baseURL.ResolveReference(u)
 						links = append(links, abs.String())
+						
+						// Log every 10th link to avoid excessive logging
+						if len(links) % 10 == 0 {
+							log.Debug().
+								Str("base_url", base).
+								Int("links_found", len(links)).
+								Msg("Extracting links from HTML")
+						}
+					} else {
+						log.Debug().
+							Err(err).
+							Str("href", attr.Val).
+							Msg("Failed to parse link URL")
 					}
 				}
 			}
@@ -355,6 +406,12 @@ func extractLinks(body []byte, base string) []string {
 		}
 	}
 	f(doc)
+	
+	log.Debug().
+		Str("base_url", base).
+		Int("total_links_found", len(links)).
+		Msg("HTML link extraction completed")
+		
 	return links
 }
 
