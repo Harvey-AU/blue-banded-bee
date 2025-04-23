@@ -7,7 +7,6 @@ import (
 	"math"
 	"net/url"
 	"runtime/debug"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -344,6 +343,13 @@ func (wp *WorkerPool) processNextTask(ctx context.Context) error {
 
 // EnqueueURLs adds multiple URLs as tasks for a job
 func EnqueueURLs(ctx context.Context, db *sql.DB, jobID string, urls []string, sourceType string, sourceURL string, depth int) error {
+	log.Debug().
+		Str("job_id", jobID).
+		Str("source_type", sourceType).
+		Int("url_count", len(urls)).
+		Int("depth", depth).
+		Msg("EnqueueURLs called")
+
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
@@ -901,28 +907,29 @@ func (wp *WorkerPool) processTask(ctx context.Context, task *Task) (*crawler.Cra
 		log.Error().Err(err).Str("task_id", task.ID).Msg("Crawler failed")
 		return result, fmt.Errorf("crawler error: %w", err)
 	}
-	log.Info().Int("status_code", result.StatusCode).Str("task_id", task.ID).Msg("Crawler completed")
+	log.Info().
+		Int("status_code", result.StatusCode).
+		Str("task_id", task.ID).
+		Int("links_found", len(result.Links)).
+		Str("content_type", result.ContentType).
+		Msg("Crawler completed")
 	
-	// Enqueue discovered links if FindLinks enabled
+	// Additional logs at the start of link filtering:
 	if task.FindLinks {
-		filtered := make([]string, 0, len(result.Links))
-		for _, link := range result.Links {
-			p, err := url.Parse(link)
-			if err != nil {
-				continue
-			}
-			lower := strings.ToLower(p.Path)
-			isDoc := strings.HasSuffix(lower, ".pdf") || strings.HasSuffix(lower, ".doc") || strings.HasSuffix(lower, ".docx")
-			if p.Hostname() == domainName || isDoc {
-				filtered = append(filtered, link)
-			}
-		}
-		if len(filtered) > 0 {
-			src := fmt.Sprintf("https://%s%s", domainName, task.Path)
-			if err := EnqueueURLs(ctx, wp.db, task.JobID, filtered, "link", src, task.Depth+1); err != nil {
-				log.Error().Err(err).Str("job_id", task.JobID).Msg("Failed to enqueue discovered links")
-			}
-		}
+		log.Debug().
+			Str("task_id", task.ID).
+			Int("links_before_filtering", len(result.Links)).
+			Bool("find_links_enabled", findLinks).
+			Msg("Starting link filtering")
+		
+		// Then continue with current filtering logic
+		
+		// After filtering:
+		log.Debug().
+			Str("task_id", task.ID).
+			Int("links_after_filtering", len(filtered)).
+			Str("domain_name", domainName).
+			Msg("Link filtering completed")
 	}
 	
 	return result, nil
