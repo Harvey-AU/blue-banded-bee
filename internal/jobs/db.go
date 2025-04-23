@@ -161,9 +161,26 @@ func retryDB(operation func() error) error {
 
 // CreateJob inserts a new job into the database
 func CreateJob(db *sql.DB, options *JobOptions) (*Job, error) {
+	// Start a transaction for atomicity
+	tx, err := db.Begin()
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+	
+	// Get or create domain ID
+	var domainID int
+	err = tx.QueryRow(`
+		INSERT INTO domains(name) VALUES($1) 
+		ON CONFLICT (name) DO UPDATE SET name=EXCLUDED.name 
+		RETURNING id`, options.Domain).Scan(&domainID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get or create domain: %w", err)
+	}
+	
 	job := &Job{
 		ID:              uuid.New().String(),
-		Domain:          options.Domain,
+		Domain:          options.Domain,  // Keep domain name for API responses
 		Status:          JobStatusPending,
 		Progress:        0,
 		TotalTasks:      0,
@@ -178,23 +195,28 @@ func CreateJob(db *sql.DB, options *JobOptions) (*Job, error) {
 		RequiredWorkers: options.RequiredWorkers,
 	}
 
-	err := retryDB(func() error {
-		_, err := db.Exec(
-			`INSERT INTO jobs (
-				id, domain, status, progress, total_tasks, completed_tasks, failed_tasks,
-				created_at, concurrency, find_links, include_paths, exclude_paths,
-				required_workers
-			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
-			job.ID, job.Domain, string(job.Status), job.Progress,
-			job.TotalTasks, job.CompletedTasks, job.FailedTasks,
-			job.CreatedAt, job.Concurrency, job.FindLinks,
-			serialize(job.IncludePaths), serialize(job.ExcludePaths),
-			job.RequiredWorkers,
-		)
-		return err
-	})
+	// Use domain_id instead of domain in the INSERT
+	_, err = tx.Exec(
+		`INSERT INTO jobs (
+			id, domain_id, status, progress, total_tasks, completed_tasks, failed_tasks,
+			created_at, concurrency, find_links, include_paths, exclude_paths,
+			required_workers, max_depth
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
+		job.ID, domainID, string(job.Status), job.Progress,
+		job.TotalTasks, job.CompletedTasks, job.FailedTasks,
+		job.CreatedAt, job.Concurrency, job.FindLinks,
+		serialize(job.IncludePaths), serialize(job.ExcludePaths),
+		job.RequiredWorkers, job.MaxDepth,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to insert job: %w", err)
+	}
+	
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("failed to commit transaction: %w", err)
+	}
 
-	return job, err
+	return job, nil
 }
 
 // CreateTask inserts a new task into the database
@@ -243,11 +265,12 @@ func GetJob(ctx context.Context, db *sql.DB, jobID string) (*Job, error) {
 	err := retryDB(func() error {
 		err := db.QueryRowContext(ctx, `
 			SELECT 
-				id, domain, status, progress, total_tasks, completed_tasks, failed_tasks,
-				created_at, started_at, completed_at, concurrency, find_links,
-				include_paths, exclude_paths, error_message, required_workers
-			FROM jobs
-			WHERE id = $1
+				j.id, d.name, j.status, j.progress, j.total_tasks, j.completed_tasks, j.failed_tasks,
+				j.created_at, j.started_at, j.completed_at, j.concurrency, j.find_links,
+				j.include_paths, j.exclude_paths, j.error_message, j.required_workers
+			FROM jobs j
+			JOIN domains d ON j.domain_id = d.id
+			WHERE j.id = $1
 		`, jobID).Scan(
 			&job.ID, &job.Domain, &job.Status, &job.Progress, &job.TotalTasks, &job.CompletedTasks,
 			&job.FailedTasks, &job.CreatedAt, &startedAt, &completedAt, &job.Concurrency,
@@ -365,19 +388,16 @@ func ListJobs(ctx context.Context, db *sql.DB, limit, offset int) ([]*Job, error
 	span := sentry.StartSpan(ctx, "jobs.list_jobs")
 	defer span.Finish()
 
-	span.SetData("limit", limit)
-	span.SetData("offset", offset)
-
 	rows, err := db.QueryContext(ctx, `
 		SELECT 
-			id, domain, status, progress, total_tasks, completed_tasks, failed_tasks,
-			created_at, started_at, completed_at, concurrency, find_links,
-			include_paths, exclude_paths, error_message
-		FROM jobs
-		ORDER BY created_at DESC
+			j.id, d.name, j.status, j.progress, j.total_tasks, j.completed_tasks, j.failed_tasks,
+			j.created_at, j.started_at, j.completed_at, j.concurrency, j.find_links
+		FROM jobs j
+		JOIN domains d ON j.domain_id = d.id
+		ORDER BY j.created_at DESC
 		LIMIT $1 OFFSET $2
 	`, limit, offset)
-
+	
 	if err != nil {
 		span.SetTag("error", "true")
 		span.SetData("error.message", err.Error())
@@ -388,52 +408,36 @@ func ListJobs(ctx context.Context, db *sql.DB, limit, offset int) ([]*Job, error
 	var jobs []*Job
 	for rows.Next() {
 		var job Job
-		var includePaths, excludePaths []byte
 		var startedAt, completedAt sql.NullTime
-
+		
 		err := rows.Scan(
 			&job.ID, &job.Domain, &job.Status, &job.Progress, &job.TotalTasks, &job.CompletedTasks,
 			&job.FailedTasks, &job.CreatedAt, &startedAt, &completedAt, &job.Concurrency,
-			&job.FindLinks, &includePaths, &excludePaths, &job.ErrorMessage,
+			&job.FindLinks,
 		)
-
+		
 		if err != nil {
 			span.SetTag("error", "true")
 			span.SetData("error.message", err.Error())
-			return nil, fmt.Errorf("failed to scan job: %w", err)
+			return nil, fmt.Errorf("failed to scan job row: %w", err)
 		}
-
-		// Parse arrays from JSON
-		if len(includePaths) > 0 {
-			err = json.Unmarshal(includePaths, &job.IncludePaths)
-			if err != nil {
-				return nil, fmt.Errorf("failed to unmarshal include paths: %w", err)
-			}
-		}
-
-		if len(excludePaths) > 0 {
-			err = json.Unmarshal(excludePaths, &job.ExcludePaths)
-			if err != nil {
-				return nil, fmt.Errorf("failed to unmarshal exclude paths: %w", err)
-			}
-		}
-
-		// Handle nullable times
+		
 		if startedAt.Valid {
 			job.StartedAt = startedAt.Time
 		}
+		
 		if completedAt.Valid {
 			job.CompletedAt = completedAt.Time
 		}
-
+		
 		jobs = append(jobs, &job)
 	}
-
+	
 	if err := rows.Err(); err != nil {
 		span.SetTag("error", "true")
 		span.SetData("error.message", err.Error())
-		return nil, fmt.Errorf("error iterating jobs: %w", err)
+		return nil, fmt.Errorf("error iterating job rows: %w", err)
 	}
-
+	
 	return jobs, nil
 }
