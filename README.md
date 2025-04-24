@@ -72,7 +72,7 @@ MIT License - See [LICENSE](LICENSE) for details.
 
 ## Contact
 
-- Website: [Team Harvey](https://www.teamharvey.co)
+- Website: [Harvey](https://www.teamharvey.co)
 - Support: [hello@teamharvey.co](mailto:hello@teamharvey.co)
 
 For bug reports, please open an issue on GitHub.
