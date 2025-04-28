@@ -43,7 +43,7 @@ func (jm *JobManager) CreateJob(ctx context.Context, options *JobOptions) (*Job,
 		return nil, fmt.Errorf("failed to create job: %w", err)
 	}
 
-	log.Debug().
+	log.Info().
 		Str("job_id", job.ID).
 		Str("domain", job.Domain).
 		Bool("use_sitemap", options.UseSitemap).
@@ -123,6 +123,7 @@ func (jm *JobManager) StartJob(ctx context.Context, jobID string) error {
 	}
 
 	// Add job to worker pool for processing
+	// TODO: Provide worker count per job, to allow for higher volume / priority jobs
 	jm.workerPool.AddJob(job.ID, nil)
 
 	log.Debug().
@@ -276,7 +277,7 @@ func (jm *JobManager) processSitemap(ctx context.Context, jobID, domain string, 
 			return
 		}
 
-		log.Debug().
+		log.Info().
 			Str("job_id", jobID).
 			Str("domain", domain).
 			Int("url_count", len(urls)).

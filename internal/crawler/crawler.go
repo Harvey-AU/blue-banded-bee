@@ -102,40 +102,32 @@ func New(config *Config, id ...string) *Crawler {
 
 // WarmURL performs a crawl of the specified URL and returns the result.
 // It respects context cancellation, enforces timeout, and treats non-2xx statuses as errors.
-func (c *Crawler) WarmURL(ctx context.Context, targetURL string) (*CrawlResult, error) {
+func (c *Crawler) WarmURL(ctx context.Context, targetURL string, findLinks bool) (*CrawlResult, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+
 	parsed, err := url.Parse(targetURL)
 	if err != nil {
 		res := &CrawlResult{URL: targetURL, Timestamp: time.Now().Unix(), Error: err.Error()}
 		return res, err
 	}
+
 	if parsed.Scheme == "" || parsed.Host == "" {
 		err := fmt.Errorf("invalid URL format: %s", targetURL)
 		res := &CrawlResult{URL: targetURL, Timestamp: time.Now().Unix(), Error: err.Error()}
 		return res, err
 	}
+
 	start := time.Now()
 	res := &CrawlResult{URL: targetURL, Timestamp: start.Unix()}
-	// Seed result into collector context so OnHTML callback appends to res.Links
-	if c.config.FindLinks {
-		log.Debug().
-			Str("url", targetURL).
-			Bool("find_links", c.config.FindLinks).
-			Msg("Starting Colly link extraction")
 
-		ctxColly := colly.NewContext()
-		ctxColly.Put("result", res)
+	log.Debug().
+		Str("url", targetURL).
+		Bool("find_links", findLinks).
+		Msg("Starting URL warming")
 
-		c.colly.Request("GET", targetURL, nil, ctxColly, nil)
-		c.colly.Wait()
-
-		log.Debug().
-			Str("url", targetURL).
-			Int("colly_links_found", len(res.Links)).
-			Msg("Colly link extraction completed")
-	}
+	// Single HTTP request for both cache warming and link extraction
 	client := &http.Client{Timeout: c.config.DefaultTimeout}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, targetURL, nil)
 	if err != nil {
@@ -143,46 +135,98 @@ func (c *Crawler) WarmURL(ctx context.Context, targetURL string) (*CrawlResult, 
 		res.ResponseTime = time.Since(start).Milliseconds()
 		return res, err
 	}
+
+	// Set a specific User-Agent to identify our crawler
+	req.Header.Set("User-Agent", "Blue-Banded-Bee-Cache-Warmer/1.0")
+
 	resp, err := client.Do(req)
 	res.ResponseTime = time.Since(start).Milliseconds()
 	if err != nil {
+		log.Error().
+			Err(err).
+			Str("url", targetURL).
+			Dur("duration_ms", time.Duration(res.ResponseTime)*time.Millisecond).
+			Msg("URL warming failed")
 		res.Error = err.Error()
 		return res, err
 	}
+
 	defer resp.Body.Close()
-	// read body for link extraction
+
 	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
-		res.Error = err.Error()
+		log.Error().
+			Err(err).
+			Str("url", targetURL).
+			Msg("Failed to read response body")
+		res.Error = fmt.Sprintf("failed to read response body: %s", err.Error())
 		return res, err
 	}
+
 	res.StatusCode = resp.StatusCode
-	res.CacheStatus = resp.Header.Get("CF-Cache-Status")
-	res.ContentType = resp.Header.Get("Content-Type")
-	if c.config.FindLinks {
-		res.Links = extractLinks(bodyBytes, targetURL)
+
+	// Check for cache status headers from different CDNs
+	// Cloudflare
+	if cacheStatus := resp.Header.Get("CF-Cache-Status"); cacheStatus != "" {
+		res.CacheStatus = cacheStatus
 	}
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		switch {
-		case resp.StatusCode == 404:
-			res.Error = "HTTP 404: Page not found"
-		case resp.StatusCode == 403:
-			res.Error = "HTTP 403: Access forbidden"
-		case resp.StatusCode == 401:
-			res.Error = "HTTP 401: Authentication required"
-		case resp.StatusCode == 429:
-			res.Error = "HTTP 429: Too many requests - rate limited"
-		case resp.StatusCode >= 500 && resp.StatusCode < 600:
-			res.Error = fmt.Sprintf("HTTP %d: Server error", resp.StatusCode)
-		default:
-			res.Error = fmt.Sprintf("HTTP %d: Non-successful status code", resp.StatusCode)
+	// Fastly
+	if cacheStatus := resp.Header.Get("X-Cache"); cacheStatus != "" && res.CacheStatus == "" {
+		res.CacheStatus = cacheStatus
+	}
+	// Akamai
+	if cacheStatus := resp.Header.Get("X-Cache-Remote"); cacheStatus != "" && res.CacheStatus == "" {
+		res.CacheStatus = cacheStatus
+	}
+	// Vercel
+	if cacheStatus := resp.Header.Get("x-vercel-cache"); cacheStatus != "" && res.CacheStatus == "" {
+		res.CacheStatus = cacheStatus
+	}
+	// Standard Cache-Status header (newer standardized approach)
+	if cacheStatus := resp.Header.Get("Cache-Status"); cacheStatus != "" && res.CacheStatus == "" {
+		res.CacheStatus = cacheStatus
+	}
+	// Varnish (the presence of X-Varnish indicates it was processed by Varnish)
+	if varnishID := resp.Header.Get("X-Varnish"); varnishID != "" && res.CacheStatus == "" {
+		if strings.Contains(varnishID, " ") {
+			res.CacheStatus = "HIT" // Multiple IDs indicate a cache hit
+		} else {
+			res.CacheStatus = "MISS" // Single ID indicates a cache miss
 		}
-		return res, nil
 	}
+
+	res.ContentType = resp.Header.Get("Content-Type")
+
+	// Extract links only if requested
+	if findLinks {
+		res.Links = extractLinks(bodyBytes, targetURL)
+		log.Debug().
+			Str("url", targetURL).
+			Int("links_found", len(res.Links)).
+			Msg("Link extraction completed")
+	}
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		res.Error = fmt.Sprintf("non-success status code: %d", resp.StatusCode)
+		log.Warn().
+			Int("status", resp.StatusCode).
+			Str("url", targetURL).
+			Dur("duration_ms", time.Duration(res.ResponseTime)*time.Millisecond).
+			Msg("URL warming returned non-success status")
+	} else {
+		log.Debug().
+			Int("status", resp.StatusCode).
+			Str("url", targetURL).
+			Str("cache_status", res.CacheStatus).
+			Dur("duration_ms", time.Duration(res.ResponseTime)*time.Millisecond).
+			Msg("URL warming completed successfully")
+	}
+
 	return res, nil
 }
 
 // Helper function to determine if we should retry based on the error or status code
+// TODO: UPdate WarmUrl to use this and handle reponse type below. Incorporate into WarmUrl or call these functions
 func shouldRetry(err error, statusCode int) bool {
 	// Retry on network errors
 	if err != nil {
