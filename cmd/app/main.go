@@ -66,7 +66,8 @@ func main() {
 	cr := crawler.New(crawlerConfig)
 
 	// Create a worker pool for task processing
-	workerPool := jobs.NewWorkerPool(pgDB.GetDB(), cr, 5, pgDB.GetConfig()) // 5 concurrent workers
+	var jobWorkers int = 5
+	workerPool := jobs.NewWorkerPool(pgDB.GetDB(), cr, jobWorkers, pgDB.GetConfig())
 	workerPool.Start(context.Background())
 	defer workerPool.Stop()
 
@@ -134,6 +135,7 @@ func main() {
 	})
 
 	// Add a reset-db endpoint
+	// TODO: Remove this after core testing, or add auth
 	http.HandleFunc("/reset-db", func(w http.ResponseWriter, r *http.Request) {
 		log.Warn().Msg("Database reset requested")
 
@@ -156,6 +158,7 @@ func main() {
 			return
 		}
 
+		// Limit number of pages to be crawled
 		maxPages := 0
 		if maxStr := r.URL.Query().Get("max"); maxStr != "" {
 			parsed, err := strconv.Atoi(maxStr)
@@ -166,6 +169,7 @@ func main() {
 			maxPages = parsed
 		}
 
+		// Extract hyperlinks (including PDFs/docs)
 		findLinks := false
 		if flStr := r.URL.Query().Get("find_links"); flStr != "" {
 			v, err := strconv.ParseBool(flStr)
@@ -176,12 +180,34 @@ func main() {
 			findLinks = v
 		}
 
+		// Override sitemap default flag
+		useSitemap := true
+		if sitemapStr := r.URL.Query().Get("sitemap"); sitemapStr != "" {
+			v, err := strconv.ParseBool(sitemapStr)
+			if err != nil {
+				http.Error(w, "Invalid sitemap parameter", http.StatusBadRequest)
+				return
+			}
+			useSitemap = v
+		}
+
+		// Override concurrency default flag
+		jobConcurrency := 5
+		if concurrencyStr := r.URL.Query().Get("concurrency"); concurrencyStr != "" {
+			v, err := strconv.Atoi(concurrencyStr)
+			if err != nil {
+				http.Error(w, "Invalid concurrency parameter", http.StatusBadRequest)
+				return
+			}
+			jobConcurrency = v
+		}
+
 		opts := &jobs.JobOptions{
 			Domain:      domain,
-			UseSitemap:  true,
-			Concurrency: 5,
+			UseSitemap:  useSitemap,
+			Concurrency: jobConcurrency,
 			FindLinks:   findLinks,
-			MaxDepth:    maxPages,
+			MaxPages:    maxPages,
 		}
 		job, err := jobsManager.CreateJob(r.Context(), opts)
 		if err != nil {
