@@ -44,7 +44,6 @@ func main() {
 
 	// CLI flags
 	logLevel := flag.String("log-level", "warn", "log level: debug, info, warn, error")
-	findLinks := flag.Bool("find-links", false, "extract hyperlinks (including PDFs/docs)")
 	flag.Parse()
 
 	config.LogLevel = *logLevel
@@ -62,9 +61,8 @@ func main() {
 	// Set DB instance for queue operations
 	jobs.SetDBInstance(pgDB)
 
-	// Initialise crawler with link-extraction toggle
+	// Initialise crawler
 	crawlerConfig := crawler.DefaultConfig()
-	crawlerConfig.FindLinks = *findLinks
 	cr := crawler.New(crawlerConfig)
 
 	// Create a worker pool for task processing

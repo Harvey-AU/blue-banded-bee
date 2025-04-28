@@ -1,7 +1,6 @@
 package db
 
 import (
-	"context"
 	"database/sql"
 	"fmt"
 	"os"
@@ -45,7 +44,7 @@ func (c *Config) ConnectionString() string {
 	if c.DatabaseURL != "" {
 		return c.DatabaseURL
 	}
-	
+
 	// Otherwise use the individual components
 	return fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
 		c.Host, c.Port, c.User, c.Password, c.Database, c.SSLMode)
@@ -123,13 +122,13 @@ func InitFromEnv() (*DB, error) {
 		if err := setupSchema(client); err != nil {
 			return nil, fmt.Errorf("failed to setup schema: %w", err)
 		}
-		
+
 		// Create a config that stores the original DATABASE_URL
 		config := &Config{
 			// Set this special field for DATABASE_URL
 			DatabaseURL: url,
 		}
-		
+
 		return &DB{client: client, config: config}, nil
 	}
 
@@ -220,11 +219,6 @@ func setupSchema(db *sql.DB) error {
 		return fmt.Errorf("failed to create jobs table: %w", err)
 	}
 
-	// Ensure new columns exist in existing table
-	_, _ = db.Exec(`ALTER TABLE jobs ADD COLUMN IF NOT EXISTS sitemap_tasks INTEGER NOT NULL DEFAULT 0`)
-	_, _ = db.Exec(`ALTER TABLE jobs ADD COLUMN IF NOT EXISTS found_tasks INTEGER NOT NULL DEFAULT 0`)
-	_, _ = db.Exec(`ALTER TABLE jobs ADD COLUMN IF NOT EXISTS total_tasks INTEGER NOT NULL DEFAULT 0`)
-	
 	// Create tasks table
 	_, err = db.Exec(`
 		CREATE TABLE IF NOT EXISTS tasks (
@@ -328,66 +322,6 @@ func (db *DB) ResetSchema() error {
 
 	// Recreate schema
 	return setupSchema(db.client)
-}
-
-// ExecWithMetrics executes a SQL statement with metrics tracking
-func (db *DB) ExecWithMetrics(ctx context.Context, query string, args ...interface{}) (sql.Result, error) {
-	startTime := time.Now()
-	result, err := db.client.ExecContext(ctx, query, args...)
-	duration := time.Since(startTime)
-
-	// Log slow operations
-	if duration > 1000*time.Millisecond {
-		log.Warn().
-			Str("query", query).
-			Dur("duration", duration).
-			Msg("Slow database operation detected")
-	}
-
-	return result, err
-}
-
-// QueryWithMetrics executes a SQL query with metrics tracking
-func (db *DB) QueryWithMetrics(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error) {
-	startTime := time.Now()
-	rows, err := db.client.QueryContext(ctx, query, args...)
-	duration := time.Since(startTime)
-
-	// Log slow queries
-	if duration > 1000*time.Millisecond {
-		log.Warn().
-			Str("query", query).
-			Dur("duration", duration).
-			Msg("Slow database query detected")
-	}
-
-	return rows, err
-}
-
-// GetOrCreateDomain returns the id for a domain name, inserting it if necessary
-func (db *DB) GetOrCreateDomain(ctx context.Context, name string) (int, error) {
-	var id int
-	// insert or ignore
-	if _, err := db.client.ExecContext(ctx,
-		`INSERT INTO domains(name) VALUES($1) ON CONFLICT (name) DO NOTHING`, name); err != nil {
-		return 0, err
-	}
-	// select id
-	err := db.client.QueryRowContext(ctx, `SELECT id FROM domains WHERE name=$1`, name).Scan(&id)
-	return id, err
-}
-
-// GetOrCreatePage returns the id for a page path under a domain, inserting it if necessary
-func (db *DB) GetOrCreatePage(ctx context.Context, domainID int, path string) (int, error) {
-	var id int
-	if _, err := db.client.ExecContext(ctx,
-		`INSERT INTO pages(domain_id, path) VALUES($1,$2) ON CONFLICT (domain_id,path) DO NOTHING`,
-		domainID, path); err != nil {
-		return 0, err
-	}
-	err := db.client.QueryRowContext(ctx,
-		`SELECT id FROM pages WHERE domain_id=$1 AND path=$2`, domainID, path).Scan(&id)
-	return id, err
 }
 
 // GetQueue returns the database queue for serialized operations

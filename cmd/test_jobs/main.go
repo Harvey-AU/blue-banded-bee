@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/Harvey-AU/blue-banded-bee/internal/crawler"
@@ -58,11 +59,12 @@ func main() {
 	crawler := crawler.New(nil)
 
 	// Create worker pool
-	workerPool := jobs.NewWorkerPool(database.GetDB(), crawler, 3, database.GetConfig())
+	var jobWorkers int = 3
+	workerPool := jobs.NewWorkerPool(database.GetDB(), crawler, jobWorkers, database.GetConfig())
 	workerPool.Start(context.Background())
 	defer workerPool.Stop()
 
-	log.Info().Msg("Worker pool started with 3 workers")
+	log.Info().Msg("Worker pool started with " + strconv.Itoa(jobWorkers) + " workers")
 
 	// Create a test job
 	jobManager := jobs.NewJobManager(database.GetDB(), crawler, nil)
