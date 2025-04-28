@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"flag"
 	"net"
 	"net/http"
 	"os"
@@ -40,13 +39,9 @@ func main() {
 		Port:      getEnvWithDefault("PORT", "8080"),
 		Env:       getEnvWithDefault("APP_ENV", "development"),
 		SentryDSN: os.Getenv("SENTRY_DSN"),
+		LogLevel:  getEnvWithDefault("LOG_LEVEL", "info"),
 	}
 
-	// CLI flags
-	logLevel := flag.String("log-level", "warn", "log level: debug, info, warn, error")
-	flag.Parse()
-
-	config.LogLevel = *logLevel
 	setupLogging(config)
 
 	// Connect to PostgreSQL
