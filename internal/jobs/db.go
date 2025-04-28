@@ -203,7 +203,7 @@ func CreateJob(db *sql.DB, options *JobOptions) (*Job, error) {
 			created_at, concurrency, find_links, include_paths, exclude_paths,
 			required_workers, max_pages,
 			found_tasks, sitemap_tasks
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`,
 		job.ID, domainID, string(job.Status), job.Progress,
 		job.TotalTasks, job.CompletedTasks, job.FailedTasks,
 		job.CreatedAt, job.Concurrency, job.FindLinks,
