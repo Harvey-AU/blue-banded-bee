@@ -218,8 +218,13 @@ func main() {
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]string{
-			"status": "OK",
-			"job_id": job.ID,
+			"status":      "OK",
+			"job_id":      job.ID,
+			"domain":      job.Domain,
+			"use_sitemap": strconv.FormatBool(useSitemap),
+			"concurrency": strconv.Itoa(jobConcurrency),
+			"find_links":  strconv.FormatBool(findLinks),
+			"max_pages":   strconv.Itoa(maxPages),
 		})
 	})
 

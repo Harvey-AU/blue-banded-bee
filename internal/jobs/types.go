@@ -8,12 +8,13 @@ import (
 type JobStatus string
 
 const (
-	JobStatusPending   JobStatus = "pending"
-	JobStatusRunning   JobStatus = "running"
-	JobStatusPaused    JobStatus = "paused"
-	JobStatusCompleted JobStatus = "completed"
-	JobStatusFailed    JobStatus = "failed"
-	JobStatusCancelled JobStatus = "cancelled"
+	JobStatusPending      JobStatus = "pending"
+	JobStatusInitialising JobStatus = "initializing"
+	JobStatusRunning      JobStatus = "running"
+	JobStatusPaused       JobStatus = "paused"
+	JobStatusCompleted    JobStatus = "completed"
+	JobStatusFailed       JobStatus = "failed"
+	JobStatusCancelled    JobStatus = "cancelled"
 )
 
 // TaskStatus represents the current status of a task
@@ -42,6 +43,8 @@ type Job struct {
 	TotalTasks      int       `json:"total_tasks"`
 	CompletedTasks  int       `json:"completed_tasks"`
 	FailedTasks     int       `json:"failed_tasks"`
+	FoundTasks      int       `json:"found_tasks"`
+	SitemapTasks    int       `json:"sitemap_tasks"`
 	CreatedAt       time.Time `json:"created_at"`
 	StartedAt       time.Time `json:"started_at,omitempty"`
 	CompletedAt     time.Time `json:"completed_at,omitempty"`
@@ -60,6 +63,7 @@ type Task struct {
 	JobID       string     `json:"job_id"`
 	PageID      int        `json:"page_id"`
 	Path        string     `json:"path"`
+	DomainName  string     `json:"domain_name"`
 	Status      TaskStatus `json:"status"`
 	Depth       int        `json:"depth"`
 	CreatedAt   time.Time  `json:"created_at"`

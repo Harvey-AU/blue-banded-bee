@@ -245,24 +245,3 @@ func (c *Crawler) FilterURLs(urls []string, includePaths, excludePaths []string)
 
 	return filtered
 }
-
-// Add a validateURL helper:
-func validateURL(rawURL string) (string, error) {
-	parsed, err := url.Parse(rawURL)
-	if err != nil {
-		return "", err
-	}
-
-	// Validate scheme and host
-	if parsed.Scheme != "http" && parsed.Scheme != "https" {
-		return "", fmt.Errorf("invalid URL scheme: %s", parsed.Scheme)
-	}
-
-	if parsed.Host == "" {
-		return "", fmt.Errorf("missing host in URL")
-	}
-
-	return rawURL, nil
-}
-
-// Then use it for each URL before adding to the results
