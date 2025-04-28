@@ -212,7 +212,10 @@ func setupSchema(db *sql.DB) error {
 			completed_at TIMESTAMP,
 			concurrency INTEGER NOT NULL,
 			find_links BOOLEAN NOT NULL,
-			max_pages INTEGER NOT NULL
+			max_pages INTEGER NOT NULL,
+			include_paths TEXT,
+			exclude_paths TEXT,
+			required_workers INTEGER DEFAULT 0
 		)
 	`)
 	if err != nil {
