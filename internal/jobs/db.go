@@ -219,6 +219,13 @@ func CreateJob(db *sql.DB, options *JobOptions) (*Job, error) {
 		return nil, fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
+	log.Info().
+		Str("job_id", job.ID).
+		Str("domain", job.Domain).
+		Bool("find_links", job.FindLinks).
+		Int("max_pages", job.MaxPages).
+		Msg("Created new job")
+
 	return job, nil
 }
 
