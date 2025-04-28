@@ -1,6 +1,5 @@
+# File map
 
-
-```
 blue-banded-bee/
 ├── .env
 ├── .air.toml
@@ -20,10 +19,6 @@ blue-banded-bee/
 │   ├── app/
 │   │   ├── main.go
 │   │   └── main_test.go
-│   │
-│   ├── pg-test/
-│   │   └── main.go
-│   │
 │   └── test_jobs/
 │       └── main.go
 │
@@ -77,4 +72,3 @@ blue-banded-bee/
     │
     └── workflows/
         └── fly-deploy.yml
-```

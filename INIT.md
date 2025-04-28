@@ -25,7 +25,6 @@ I'm working on **Blue Banded Bee** (a Webflow cache‑warmer). Use this guide to
 
 - `cmd/app` – Go service entrypoint
 - `internal` – Crawler, monitors, DB models, business logic
-- `cmd/pg-test` – PostgreSQL integration tests
 - `cmd/test_jobs` – Job‑queue smoke tests
 
 ## 3. Standards & Workflow
