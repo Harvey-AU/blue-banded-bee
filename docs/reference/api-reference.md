@@ -39,7 +39,7 @@ Creates a new crawling job.
   "domain": "teamharvey.co",
   "urls": ["https://teamharvey.co/page1", "..."],
   "options": {
-    "maxDepth": 2,
+    "max_pages": 2,
     "concurrency": 5
   }
 }

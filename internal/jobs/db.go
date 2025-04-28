@@ -167,7 +167,7 @@ func CreateJob(db *sql.DB, options *JobOptions) (*Job, error) {
 		return nil, fmt.Errorf("failed to begin transaction: %w", err)
 	}
 	defer tx.Rollback()
-	
+
 	// Get or create domain ID
 	var domainID int
 	err = tx.QueryRow(`
@@ -177,10 +177,10 @@ func CreateJob(db *sql.DB, options *JobOptions) (*Job, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to get or create domain: %w", err)
 	}
-	
+
 	job := &Job{
 		ID:              uuid.New().String(),
-		Domain:          options.Domain,  // Keep domain name for API responses
+		Domain:          options.Domain, // Keep domain name for API responses
 		Status:          JobStatusPending,
 		Progress:        0,
 		TotalTasks:      0,
@@ -189,7 +189,7 @@ func CreateJob(db *sql.DB, options *JobOptions) (*Job, error) {
 		CreatedAt:       time.Now(),
 		Concurrency:     options.Concurrency,
 		FindLinks:       options.FindLinks,
-		MaxDepth:        options.MaxDepth,
+		MaxPages:        options.MaxPages,
 		IncludePaths:    options.IncludePaths,
 		ExcludePaths:    options.ExcludePaths,
 		RequiredWorkers: options.RequiredWorkers,
@@ -200,18 +200,18 @@ func CreateJob(db *sql.DB, options *JobOptions) (*Job, error) {
 		`INSERT INTO jobs (
 			id, domain_id, status, progress, total_tasks, completed_tasks, failed_tasks,
 			created_at, concurrency, find_links, include_paths, exclude_paths,
-			required_workers, max_depth
+			required_workers, max_pages
 		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
 		job.ID, domainID, string(job.Status), job.Progress,
 		job.TotalTasks, job.CompletedTasks, job.FailedTasks,
 		job.CreatedAt, job.Concurrency, job.FindLinks,
 		serialize(job.IncludePaths), serialize(job.ExcludePaths),
-		job.RequiredWorkers, job.MaxDepth,
+		job.RequiredWorkers, job.MaxPages,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to insert job: %w", err)
 	}
-	
+
 	if err := tx.Commit(); err != nil {
 		return nil, fmt.Errorf("failed to commit transaction: %w", err)
 	}
@@ -397,7 +397,7 @@ func ListJobs(ctx context.Context, db *sql.DB, limit, offset int) ([]*Job, error
 		ORDER BY j.created_at DESC
 		LIMIT $1 OFFSET $2
 	`, limit, offset)
-	
+
 	if err != nil {
 		span.SetTag("error", "true")
 		span.SetData("error.message", err.Error())
@@ -409,35 +409,35 @@ func ListJobs(ctx context.Context, db *sql.DB, limit, offset int) ([]*Job, error
 	for rows.Next() {
 		var job Job
 		var startedAt, completedAt sql.NullTime
-		
+
 		err := rows.Scan(
 			&job.ID, &job.Domain, &job.Status, &job.Progress, &job.TotalTasks, &job.CompletedTasks,
 			&job.FailedTasks, &job.CreatedAt, &startedAt, &completedAt, &job.Concurrency,
 			&job.FindLinks,
 		)
-		
+
 		if err != nil {
 			span.SetTag("error", "true")
 			span.SetData("error.message", err.Error())
 			return nil, fmt.Errorf("failed to scan job row: %w", err)
 		}
-		
+
 		if startedAt.Valid {
 			job.StartedAt = startedAt.Time
 		}
-		
+
 		if completedAt.Valid {
 			job.CompletedAt = completedAt.Time
 		}
-		
+
 		jobs = append(jobs, &job)
 	}
-	
+
 	if err := rows.Err(); err != nil {
 		span.SetTag("error", "true")
 		span.SetData("error.message", err.Error())
 		return nil, fmt.Errorf("error iterating job rows: %w", err)
 	}
-	
+
 	return jobs, nil
 }
