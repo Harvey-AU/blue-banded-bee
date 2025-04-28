@@ -74,7 +74,7 @@ func main() {
 		Domain:      "example.com",
 		Concurrency: 2,
 		FindLinks:   true,
-		MaxDepth:    1,
+		MaxPages:    10,
 		StartURLs: []string{
 			"https://example.com",
 			"https://example.com/about",

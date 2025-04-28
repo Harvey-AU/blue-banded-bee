@@ -48,7 +48,7 @@ func (jm *JobManager) CreateJob(ctx context.Context, options *JobOptions) (*Job,
 		Str("domain", job.Domain).
 		Bool("use_sitemap", options.UseSitemap).
 		Bool("find_links", options.FindLinks).
-		Int("max_depth", options.MaxDepth).
+		Int("max_pages", options.MaxPages).
 		Msg("Created new job")
 
 	// Add initial URLs to process

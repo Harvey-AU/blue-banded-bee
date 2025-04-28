@@ -47,7 +47,7 @@ type Job struct {
 	CompletedAt     time.Time `json:"completed_at,omitempty"`
 	Concurrency     int       `json:"concurrency"`
 	FindLinks       bool      `json:"find_links"`
-	MaxDepth        int       `json:"max_depth"`
+	MaxPages        int       `json:"max_pages"`
 	IncludePaths    []string  `json:"include_paths,omitempty"`
 	ExcludePaths    []string  `json:"exclude_paths,omitempty"`
 	RequiredWorkers int       `json:"required_workers"`
@@ -77,7 +77,7 @@ type Task struct {
 	ResponseTime int64  `json:"response_time,omitempty"`
 	CacheStatus  string `json:"cache_status,omitempty"`
 	ContentType  string `json:"content_type,omitempty"`
-	
+
 	// Job configuration that affects processing
 	FindLinks bool `json:"-"` // Not stored in DB, just used during processing
 }
@@ -89,7 +89,7 @@ type JobOptions struct {
 	UseSitemap      bool     `json:"use_sitemap"`
 	Concurrency     int      `json:"concurrency"`
 	FindLinks       bool     `json:"find_links"`
-	MaxDepth        int      `json:"max_depth"`
+	MaxPages        int      `json:"max_pages"`
 	IncludePaths    []string `json:"include_paths,omitempty"`
 	ExcludePaths    []string `json:"exclude_paths,omitempty"`
 	RequiredWorkers int      `json:"required_workers"`
