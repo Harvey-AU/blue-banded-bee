@@ -85,7 +85,6 @@ type Task struct {
 // JobOptions defines configuration options for a crawl job
 type JobOptions struct {
 	Domain          string   `json:"domain"`
-	StartURLs       []string `json:"start_urls,omitempty"`
 	UseSitemap      bool     `json:"use_sitemap"`
 	Concurrency     int      `json:"concurrency"`
 	FindLinks       bool     `json:"find_links"`
