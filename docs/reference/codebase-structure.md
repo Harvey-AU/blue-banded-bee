@@ -11,7 +11,6 @@ This document provides a comprehensive overview of the Blue Banded Bee codebase 
     - [Main Directories](#main-directories)
   - [CMD](#cmd)
     - [cmd/app](#cmdapp)
-    - [cmd/pg-test](#cmdpg-test)
     - [cmd/test\_jobs](#cmdtest_jobs)
   - [INTERNAL](#internal)
     - [internal/common](#internalcommon)
@@ -63,13 +62,6 @@ This is the main application entry point for the Blue Banded Bee service.
   - `getClientIP()` - Extracts client IP from requests
 
 - `main_test.go` - Tests for the main application
-
-### cmd/pg-test
-
-PostgreSQL integration test utility.
-
-- `main.go` - Test utility for PostgreSQL database integration
-  - Tests database operations and schema
 
 ### cmd/test_jobs
 
