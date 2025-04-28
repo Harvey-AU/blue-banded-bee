@@ -51,15 +51,7 @@ func (jm *JobManager) CreateJob(ctx context.Context, options *JobOptions) (*Job,
 		Int("max_pages", options.MaxPages).
 		Msg("Created new job")
 
-	// Add initial URLs to process
-	if len(options.StartURLs) > 0 {
-		// Add explicitly provided URLs
-		if err := EnqueueURLs(ctx, jm.db, job.ID, options.StartURLs, "manual", "", 0); err != nil {
-			span.SetTag("error", "true")
-			span.SetData("error.message", err.Error())
-			log.Error().Err(err).Msg("Failed to enqueue start URLs")
-		}
-	} else if options.UseSitemap {
+	if options.UseSitemap {
 		// Fetch and process sitemap in a separate goroutine
 		go jm.processSitemap(context.Background(), job.ID, options.Domain, options.IncludePaths, options.ExcludePaths)
 	} else {

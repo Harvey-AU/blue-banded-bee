@@ -75,11 +75,7 @@ func main() {
 		Concurrency: 2,
 		FindLinks:   true,
 		MaxPages:    10,
-		StartURLs: []string{
-			"https://example.com",
-			"https://example.com/about",
-			"https://example.com/contact",
-		},
+		UseSitemap:  true,
 	}
 
 	// Submit the job to the queue
