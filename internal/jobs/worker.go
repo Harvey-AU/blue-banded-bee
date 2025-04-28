@@ -306,6 +306,7 @@ func (wp *WorkerPool) processNextTask(ctx context.Context) error {
 				Int("page_id", task.PageID).
 				Str("path", task.Path).
 				Msg("Found and claimed pending task")
+
 			// Process the task
 			result, err := wp.processTask(ctx, task)
 			now := time.Now()
@@ -843,10 +844,11 @@ func (wp *WorkerPool) StartCleanupMonitor(ctx context.Context) {
 func GetNextPendingTask(ctx context.Context, db *sql.DB, jobID string) (*Task, error) {
 	query := `
 		SELECT t.id, t.job_id, t.page_id, p.path, t.status, t.depth,
-		t.created_at, t.retry_count, t.source_type, t.source_url, j.find_links
+		t.created_at, t.retry_count, t.source_type, t.source_url, j.find_links, d.name
 		FROM tasks t
 		JOIN pages p ON t.page_id = p.id
 		JOIN jobs j ON t.job_id = j.id
+		JOIN domains d ON p.domain_id = d.id
 		WHERE t.status = $1 AND t.job_id = $2
 		ORDER BY t.created_at ASC
 		LIMIT 1
@@ -880,30 +882,10 @@ func GetNextPendingTask(ctx context.Context, db *sql.DB, jobID string) (*Task, e
 // processTask processes an individual task
 func (wp *WorkerPool) processTask(ctx context.Context, task *Task) (*crawler.CrawlResult, error) {
 	// Get both domain name and findLinks setting in a single query
-	var domainName string
-	var findLinks bool
-	
-	if err := wp.db.QueryRowContext(ctx, `
-		SELECT d.name, j.find_links FROM tasks t
-		JOIN pages p ON t.page_id = p.id
-		JOIN domains d ON p.domain_id = d.id
-		JOIN jobs j ON t.job_id = j.id
-		WHERE t.id = $1`, task.ID).Scan(&domainName, &findLinks); err != nil {
-		return nil, fmt.Errorf("failed to get domain and settings for task %s: %w", task.ID, err)
-	}
-	
-	urlStr := fmt.Sprintf("https://%s%s", domainName, task.Path)
+	urlStr := fmt.Sprintf("https://%s%s", task.DomainName, task.Path)
 	log.Info().Str("url", urlStr).Str("task_id", task.ID).Msg("Starting URL warm")
-	
-	// Set the FindLinks flag on the task
-	task.FindLinks = findLinks
-	
-	// Create a job-specific crawler with the correct FindLinks setting
-	crawlerConfig := *wp.crawler.Config() // Copy the base config
-	crawlerConfig.FindLinks = findLinks   // Apply the job's FindLinks setting
-	taskCrawler := crawler.New(&crawlerConfig)
-	
-	result, err := taskCrawler.WarmURL(ctx, urlStr)
+
+	result, err := wp.crawler.WarmURL(ctx, urlStr, task.FindLinks)
 	if err != nil {
 		log.Error().Err(err).Str("task_id", task.ID).Msg("Crawler failed")
 		return result, fmt.Errorf("crawler error: %w", err)
@@ -914,20 +896,20 @@ func (wp *WorkerPool) processTask(ctx context.Context, task *Task) (*crawler.Cra
 		Int("links_found", len(result.Links)).
 		Str("content_type", result.ContentType).
 		Msg("Crawler completed")
-	
+
 	// Process discovered links if find_links is enabled
 	if task.FindLinks && len(result.Links) > 0 {
 		log.Debug().
 			Str("task_id", task.ID).
 			Int("links_before_filtering", len(result.Links)).
-			Bool("find_links_enabled", findLinks).
+			Bool("find_links_enabled", task.FindLinks).
 			Msg("Starting link filtering")
-		
+
 		// Filter links based on requirements:
 		// 1. Same domain/subdomain links OR
 		// 2. Document links (PDF, DOC, DOCX) from any domain
 		var filtered []string
-		
+
 		for _, link := range result.Links {
 			linkURL, err := url.Parse(link)
 			if err != nil {
@@ -937,22 +919,22 @@ func (wp *WorkerPool) processTask(ctx context.Context, task *Task) (*crawler.Cra
 
 			// Check if it's a document link (from any domain)
 			isDocument := isDocumentLink(linkURL.Path)
-			
+
 			// Check if it's on the same domain or subdomain
-			isSameDomain := isSameOrSubDomain(linkURL.Hostname(), domainName)
-			
+			isSameDomain := isSameOrSubDomain(linkURL.Hostname(), task.DomainName)
+
 			// Add the link if it matches our criteria
 			if isDocument || isSameDomain {
 				filtered = append(filtered, link)
 			}
 		}
-		
+
 		log.Debug().
 			Str("task_id", task.ID).
 			Int("links_after_filtering", len(filtered)).
-			Str("domain_name", domainName).
+			Str("domain_name", task.DomainName).
 			Msg("Link filtering completed")
-			
+
 		// Enqueue filtered links
 		if len(filtered) > 0 {
 			// Enqueue the filtered links
@@ -961,8 +943,8 @@ func (wp *WorkerPool) processTask(ctx context.Context, task *Task) (*crawler.Cra
 				wp.db,
 				task.JobID,
 				filtered,
-				"link", // source_type is "link" for discovered links
-				urlStr, // source_url is the URL where these links were found
+				"link",     // source_type is "link" for discovered links
+				urlStr,     // source_url is the URL where these links were found
 				task.Depth, // Maintain the same depth
 			); err != nil {
 				log.Error().
@@ -978,7 +960,7 @@ func (wp *WorkerPool) processTask(ctx context.Context, task *Task) (*crawler.Cra
 			}
 		}
 	}
-	
+
 	return result, nil
 }
 
@@ -988,12 +970,12 @@ func isSameOrSubDomain(hostname, targetDomain string) bool {
 	if hostname == targetDomain {
 		return true
 	}
-	
+
 	// Check if hostname ends with .targetDomain
 	if strings.HasSuffix(hostname, "."+targetDomain) {
 		return true
 	}
-	
+
 	return false
 }
 

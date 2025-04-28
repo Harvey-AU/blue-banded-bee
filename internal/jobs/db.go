@@ -180,11 +180,13 @@ func CreateJob(db *sql.DB, options *JobOptions) (*Job, error) {
 
 	job := &Job{
 		ID:              uuid.New().String(),
-		Domain:          options.Domain, // Keep domain name for API responses
+		Domain:          options.Domain,
 		Status:          JobStatusPending,
 		Progress:        0,
 		TotalTasks:      0,
 		CompletedTasks:  0,
+		FoundTasks:      0,
+		SitemapTasks:    0,
 		FailedTasks:     0,
 		CreatedAt:       time.Now(),
 		Concurrency:     options.Concurrency,
@@ -195,18 +197,19 @@ func CreateJob(db *sql.DB, options *JobOptions) (*Job, error) {
 		RequiredWorkers: options.RequiredWorkers,
 	}
 
-	// Use domain_id instead of domain in the INSERT
 	_, err = tx.Exec(
 		`INSERT INTO jobs (
 			id, domain_id, status, progress, total_tasks, completed_tasks, failed_tasks,
 			created_at, concurrency, find_links, include_paths, exclude_paths,
-			required_workers, max_pages
+			required_workers, max_pages,
+			found_tasks, sitemap_tasks
 		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
 		job.ID, domainID, string(job.Status), job.Progress,
 		job.TotalTasks, job.CompletedTasks, job.FailedTasks,
 		job.CreatedAt, job.Concurrency, job.FindLinks,
 		serialize(job.IncludePaths), serialize(job.ExcludePaths),
 		job.RequiredWorkers, job.MaxPages,
+		job.FoundTasks, job.SitemapTasks,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to insert job: %w", err)

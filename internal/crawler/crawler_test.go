@@ -18,7 +18,7 @@ func TestWarmURL(t *testing.T) {
 	defer ts.Close()
 
 	crawler := New(nil)
-	result, err := crawler.WarmURL(context.Background(), ts.URL)
+	result, err := crawler.WarmURL(context.Background(), ts.URL, false)
 	if err != nil {
 		t.Errorf("Expected no error, got %v", err)
 	}
@@ -35,7 +35,7 @@ func TestWarmURL(t *testing.T) {
 func TestWarmURLError(t *testing.T) {
 	crawler := New(nil)
 	// Use a malformed URL instead
-	result, err := crawler.WarmURL(context.Background(), "not-a-valid-url")
+	result, err := crawler.WarmURL(context.Background(), "not-a-valid-url", false)
 
 	if err == nil {
 		t.Error("Expected error for invalid URL, got nil")
@@ -65,7 +65,7 @@ func TestWarmURLWithDifferentStatuses(t *testing.T) {
 			defer ts.Close()
 
 			crawler := New(nil)
-			result, err := crawler.WarmURL(context.Background(), ts.URL)
+			result, err := crawler.WarmURL(context.Background(), ts.URL, false)
 
 			if (err != nil) != tt.wantError {
 				t.Errorf("WarmURL() error = %v, wantError %v", err, tt.wantError)
@@ -80,7 +80,7 @@ func TestWarmURLWithDifferentStatuses(t *testing.T) {
 func TestWarmURLContextCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	crawler := New(nil)
-	
+
 	// Create a test server that delays
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		time.Sleep(100 * time.Millisecond)
@@ -92,7 +92,7 @@ func TestWarmURLContextCancellation(t *testing.T) {
 	cancel()
 
 	// Should fail due to cancelled context
-	_, err := crawler.WarmURL(ctx, ts.URL)
+	_, err := crawler.WarmURL(ctx, ts.URL, false)
 	if err == nil {
 		t.Error("Expected error due to cancelled context, got nil")
 	}
@@ -101,16 +101,16 @@ func TestWarmURLContextCancellation(t *testing.T) {
 func TestWarmURLWithTimeout(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
-	
+
 	crawler := New(nil)
-	
+
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		time.Sleep(100 * time.Millisecond)
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer ts.Close()
 
-	_, err := crawler.WarmURL(ctx, ts.URL)
+	_, err := crawler.WarmURL(ctx, ts.URL, false)
 	if err == nil {
 		t.Error("Expected timeout error, got nil")
 	}
