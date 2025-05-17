@@ -201,6 +201,13 @@ func (c *Crawler) ParseSitemap(ctx context.Context, sitemapURL string) ([]string
 
 		// Process each sitemap in the index
 		for _, childSitemapURL := range sitemapURLs {
+			// Validate and normalize the child sitemap URL
+			childSitemapURL = validateURL(childSitemapURL)
+			if childSitemapURL == "" {
+				log.Warn().Str("url", childSitemapURL).Msg("Invalid child sitemap URL, skipping")
+				continue
+			}
+			
 			childURLs, err := c.ParseSitemap(ctx, childSitemapURL)
 			if err != nil {
 				log.Warn().Err(err).Str("url", childSitemapURL).Msg("Failed to parse child sitemap")
@@ -211,11 +218,23 @@ func (c *Crawler) ParseSitemap(ctx context.Context, sitemapURL string) ([]string
 	} else {
 		// It's a regular sitemap
 		extractedURLs := extractURLsFromXML(content, "<url>", "</url>", "<loc>", "</loc>")
+		
+		// Validate and normalize all extracted URLs
+		var validURLs []string
+		for _, extractedURL := range extractedURLs {
+			validURL := validateURL(extractedURL)
+			if validURL != "" {
+				validURLs = append(validURLs, validURL)
+			} else {
+				log.Debug().Str("invalid_url", extractedURL).Msg("Skipping invalid URL from sitemap")
+			}
+		}
+		
 		log.Debug().
 			Str("sitemap_url", sitemapURL).
-			Int("url_count", len(extractedURLs)).
-			Msg("Extracted URLs from regular sitemap")
-		urls = append(urls, extractedURLs...)
+			Int("url_count", len(validURLs)).
+			Msg("Extracted valid URLs from regular sitemap")
+		urls = append(urls, validURLs...)
 	}
 
 	log.Debug().
@@ -224,6 +243,44 @@ func (c *Crawler) ParseSitemap(ctx context.Context, sitemapURL string) ([]string
 		Msg("Finished parsing sitemap")
 
 	return urls, nil
+}
+
+// validateURL ensures a URL is properly formatted with a scheme
+func validateURL(rawURL string) string {
+	// Clean up the URL by trimming spaces
+	rawURL = strings.TrimSpace(rawURL)
+	
+	// Skip empty URLs
+	if rawURL == "" {
+		return ""
+	}
+	
+	// Check if URL already has a scheme
+	if !strings.HasPrefix(rawURL, "http://") && !strings.HasPrefix(rawURL, "https://") {
+		// Add https:// prefix if missing
+		rawURL = "https://" + rawURL
+	}
+	
+	// Validate URL format
+	parsedURL, err := url.Parse(rawURL)
+	if err != nil || parsedURL.Scheme == "" || parsedURL.Host == "" {
+		log.Debug().Str("url", rawURL).Err(err).Msg("Invalid URL format")
+		return ""
+	}
+	
+	// Ensure no duplicate schemes (like https://http://example.com)
+	hostPart := parsedURL.Host
+	if strings.Contains(hostPart, "://") {
+		log.Debug().Str("url", rawURL).Msg("URL contains embedded scheme in host part, fixing")
+		// Extract the domain part after the embedded scheme
+		parts := strings.SplitN(hostPart, "://", 2)
+		if len(parts) == 2 {
+			parsedURL.Host = parts[1]
+			rawURL = parsedURL.String()
+		}
+	}
+	
+	return rawURL
 }
 
 // Helper function to extract URLs from XML content
