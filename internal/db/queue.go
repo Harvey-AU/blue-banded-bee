@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/getsentry/sentry-go"
 	"github.com/google/uuid"
+	"github.com/rs/zerolog/log"
 )
 
 // DbQueue is a PostgreSQL implementation of a job queue
@@ -66,8 +68,8 @@ type Task struct {
 	ContentType  string
 }
 
-// GetNextPendingTask gets a pending task using row-level locking
-func (q *DbQueue) GetNextPendingTask(ctx context.Context, jobID string) (*Task, error) {
+// GetNextTask gets a pending task using row-level locking
+func (q *DbQueue) GetNextTask(ctx context.Context, jobID string) (*Task, error) {
 	var task Task
 
 	err := q.Execute(ctx, func(tx *sql.Tx) error {
@@ -202,51 +204,20 @@ func NewTaskQueue(db *sql.DB) *DbQueue {
 }
 
 // CompleteTask marks a task as completed
+// This is now a thin wrapper around UpdateTaskStatus for backward compatibility
 func (q *DbQueue) CompleteTask(ctx context.Context, task *Task) error {
-	// Update task status in a transaction
-	if err := q.Execute(ctx, func(tx *sql.Tx) error {
-		task.Status = "completed"
-		task.CompletedAt = time.Now()
-		_, err := tx.ExecContext(ctx, `
-			UPDATE tasks 
-			SET status = $1, completed_at = $2, status_code = $3, 
-				response_time = $4, cache_status = $5, content_type = $6
-			WHERE id = $7
-		`, task.Status, task.CompletedAt, task.StatusCode,
-			task.ResponseTime, task.CacheStatus, task.ContentType, task.ID)
-		return err
-	}); err != nil {
-		return err
-	}
-	// Update job progress after task update
-	if task.JobID != "" {
-		return q.UpdateJobProgress(ctx, task.JobID)
-	}
-	return nil
+	task.Status = "completed"
+	return q.UpdateTaskStatus(ctx, task)
 }
 
 // FailTask marks a task as failed
+// This is now a thin wrapper around UpdateTaskStatus for backward compatibility
 func (q *DbQueue) FailTask(ctx context.Context, task *Task, err error) error {
-	errMsg := ""
+	task.Status = "failed"
 	if err != nil {
-		errMsg = err.Error()
+		task.Error = err.Error()
 	}
-
-	_, dbErr := q.db.ExecContext(ctx, `
-		UPDATE tasks
-		SET 
-			status = 'failed', 
-			completed_at = $1,
-			error = $2
-		WHERE id = $3
-	`, time.Now(), errMsg, task.ID)
-
-	if dbErr != nil {
-		return fmt.Errorf("failed to mark task as failed: %w", dbErr)
-	}
-
-	// Update job progress
-	return q.UpdateJobProgress(ctx, task.JobID)
+	return q.UpdateTaskStatus(ctx, task)
 }
 
 // UpdateJobProgress updates a job's progress based on task completion
@@ -302,7 +273,127 @@ func (q *DbQueue) UpdateJobProgress(ctx context.Context, jobID string) error {
 	return tx.Commit()
 }
 
-// GetNextTask is an alias for GetNextPendingTask for compatibility
-func (q *DbQueue) GetNextTask(ctx context.Context) (*Task, error) {
-	return q.GetNextPendingTask(ctx, "")
+// GetNextPendingTask is an alias for GetNextTask for backward compatibility
+func (q *DbQueue) GetNextPendingTask(ctx context.Context, jobID string) (*Task, error) {
+	return q.GetNextTask(ctx, jobID)
+}
+
+// CleanupStuckJobs finds and fixes jobs that are stuck in pending/running state
+// despite having all their tasks completed
+func (q *DbQueue) CleanupStuckJobs(ctx context.Context) error {
+	span := sentry.StartSpan(ctx, "db.cleanup_stuck_jobs")
+	defer span.Finish()
+
+	// Define status constants for job states
+	const (
+		JobStatusCompleted = "completed"
+		JobStatusPending   = "pending"
+		JobStatusRunning   = "running"
+	)
+
+	result, err := q.db.ExecContext(ctx, `
+		UPDATE jobs 
+		SET status = $1, 
+			completed_at = COALESCE(completed_at, $2),
+			progress = 100.0
+		WHERE (status = $3 OR status = $4)
+		AND total_tasks > 0 
+		AND total_tasks = completed_tasks + failed_tasks
+	`, JobStatusCompleted, time.Now(), JobStatusPending, JobStatusRunning)
+
+	if err != nil {
+		span.SetTag("error", "true")
+		span.SetData("error.message", err.Error())
+		return fmt.Errorf("failed to cleanup stuck jobs: %w", err)
+	}
+
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected > 0 {
+		log.Info().
+			Int64("jobs_fixed", rowsAffected).
+			Msg("Fixed stuck jobs")
+	}
+
+	return nil
+}
+
+// UpdateTaskStatus updates a task's status and associated metadata in a single function
+// This provides a unified way to handle various task state transitions
+func (q *DbQueue) UpdateTaskStatus(ctx context.Context, task *Task) error {
+	if task == nil {
+		return fmt.Errorf("cannot update nil task")
+	}
+
+	now := time.Now()
+
+	// Set appropriate timestamps based on status if not already set
+	if task.Status == "running" && task.StartedAt.IsZero() {
+		task.StartedAt = now
+	}
+	if (task.Status == "completed" || task.Status == "failed") && task.CompletedAt.IsZero() {
+		task.CompletedAt = now
+	}
+
+	// Update task in a transaction
+	err := q.Execute(ctx, func(tx *sql.Tx) error {
+		var err error
+
+		// Use different update logic based on status
+		switch task.Status {
+		case "running":
+			_, err = tx.ExecContext(ctx, `
+				UPDATE tasks 
+				SET status = $1, started_at = $2
+				WHERE id = $3
+			`, task.Status, task.StartedAt, task.ID)
+
+		case "completed":
+			_, err = tx.ExecContext(ctx, `
+				UPDATE tasks 
+				SET status = $1, completed_at = $2, status_code = $3, 
+					response_time = $4, cache_status = $5, content_type = $6
+				WHERE id = $7
+			`, task.Status, task.CompletedAt, task.StatusCode,
+				task.ResponseTime, task.CacheStatus, task.ContentType, task.ID)
+
+		case "failed":
+			_, err = tx.ExecContext(ctx, `
+				UPDATE tasks 
+				SET status = $1, completed_at = $2, error = $3, retry_count = $4
+				WHERE id = $5
+			`, task.Status, task.CompletedAt, task.Error, task.RetryCount, task.ID)
+
+		case "skipped":
+			_, err = tx.ExecContext(ctx, `
+				UPDATE tasks 
+				SET status = $1
+				WHERE id = $2
+			`, task.Status, task.ID)
+
+		default:
+			// Generic status update
+			_, err = tx.ExecContext(ctx, `
+				UPDATE tasks 
+				SET status = $1
+				WHERE id = $2
+			`, task.Status, task.ID)
+		}
+
+		if err != nil {
+			return fmt.Errorf("failed to update task status: %w", err)
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return err
+	}
+
+	// Update job progress if needed
+	if task.Status == "completed" || task.Status == "failed" {
+		return q.UpdateJobProgress(ctx, task.JobID)
+	}
+
+	return nil
 }

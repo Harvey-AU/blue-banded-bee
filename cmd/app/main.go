@@ -53,20 +53,20 @@ func main() {
 
 	log.Info().Msg("Connected to PostgreSQL database")
 
-	// Set DB instance for queue operations
-	jobs.SetDBInstance(pgDB)
-
 	// Initialise crawler
 	crawlerConfig := crawler.DefaultConfig()
 	cr := crawler.New(crawlerConfig)
 
+	// Create database queue for operations
+	dbQueue := db.NewDbQueue(pgDB.GetDB())
+	
 	// Create a worker pool for task processing
 	var jobWorkers int = 5
-	workerPool := jobs.NewWorkerPool(pgDB.GetDB(), cr, jobWorkers, pgDB.GetConfig())
+	workerPool := jobs.NewWorkerPool(pgDB.GetDB(), dbQueue, cr, jobWorkers, pgDB.GetConfig())
 	workerPool.Start(context.Background())
 	defer workerPool.Stop()
 
-	jobsManager := jobs.NewJobManager(pgDB.GetDB(), cr, workerPool)
+	jobsManager := jobs.NewJobManager(pgDB.GetDB(), dbQueue, cr, workerPool)
 
 	// Start a goroutine to monitor job completion
 	go func() {

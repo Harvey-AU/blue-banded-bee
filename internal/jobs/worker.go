@@ -14,6 +14,7 @@ import (
 
 	"github.com/Harvey-AU/blue-banded-bee/internal/crawler"
 	"github.com/Harvey-AU/blue-banded-bee/internal/db"
+	"github.com/getsentry/sentry-go"
 	"github.com/lib/pq"
 	"github.com/rs/zerolog/log"
 )
@@ -21,6 +22,7 @@ import (
 // WorkerPool manages a pool of workers that process crawl tasks
 type WorkerPool struct {
 	db               *sql.DB
+	dbQueue          *db.DbQueue
 	dbConfig         *db.Config
 	crawler          *crawler.Crawler
 	numWorkers       int
@@ -52,10 +54,13 @@ type TaskBatch struct {
 }
 
 // NewWorkerPool creates a new worker pool
-func NewWorkerPool(db *sql.DB, crawler *crawler.Crawler, numWorkers int, dbConfig *db.Config) *WorkerPool {
+func NewWorkerPool(db *sql.DB, dbQueue *db.DbQueue, crawler *crawler.Crawler, numWorkers int, dbConfig *db.Config) *WorkerPool {
 	// Validate inputs
 	if db == nil {
 		panic("database connection is required")
+	}
+	if dbQueue == nil {
+		panic("database queue is required")
 	}
 	if crawler == nil {
 		panic("crawler is required")
@@ -69,6 +74,7 @@ func NewWorkerPool(db *sql.DB, crawler *crawler.Crawler, numWorkers int, dbConfi
 
 	wp := &WorkerPool{
 		db:              db,
+		dbQueue:         dbQueue,
 		dbConfig:        dbConfig,
 		crawler:         crawler,
 		numWorkers:      numWorkers,
@@ -113,7 +119,7 @@ func (wp *WorkerPool) Start(ctx context.Context) {
 	go wp.recoveryMonitor(ctx)
 
 	// Run initial cleanup
-	if err := CleanupStuckJobs(ctx, wp.db); err != nil {
+	if err := wp.CleanupStuckJobs(ctx); err != nil {
 		log.Error().Err(err).Msg("Failed to perform initial job cleanup")
 	}
 
@@ -291,7 +297,7 @@ func (wp *WorkerPool) processNextTask(ctx context.Context) error {
 
 	// Try to get a task from each active job
 	for _, jobID := range activeJobs {
-		task, err := GetNextPendingTask(ctx, wp.db, jobID)
+		task, err := wp.dbQueue.GetNextTask(ctx, jobID)
 		if err == sql.ErrNoRows {
 			continue // Try next job
 		}
@@ -307,32 +313,65 @@ func (wp *WorkerPool) processNextTask(ctx context.Context) error {
 				Str("path", task.Path).
 				Msg("Found and claimed pending task")
 
+			// Convert db.Task to jobs.Task for processing
+			jobsTask := &Task{
+				ID:         task.ID,
+				JobID:      task.JobID,
+				PageID:     task.PageID,
+				Path:       task.Path,
+				Status:     TaskStatus(task.Status),
+				Depth:      task.Depth,
+				CreatedAt:  task.CreatedAt,
+				StartedAt:  task.StartedAt, 
+				RetryCount: task.RetryCount,
+				SourceType: task.SourceType,
+				SourceURL:  task.SourceURL,
+			}
+			
+			// Need to fetch additional info from the database
+			var domainName string
+			var findLinks bool
+			err := wp.db.QueryRowContext(ctx, `
+				SELECT d.name, j.find_links 
+				FROM domains d
+				JOIN jobs j ON j.domain_id = d.id
+				WHERE j.id = $1
+			`, task.JobID).Scan(&domainName, &findLinks)
+			
+			if err != nil {
+				log.Error().Err(err).Str("job_id", task.JobID).Msg("Failed to get domain name and find_links setting")
+			} else {
+				jobsTask.DomainName = domainName
+				jobsTask.FindLinks = findLinks
+			}
+			
 			// Process the task
-			result, err := wp.processTask(ctx, task)
+			result, err := wp.processTask(ctx, jobsTask)
 			now := time.Now()
 			if err != nil {
 				// mark as failed
-				_, updErr := wp.db.ExecContext(ctx, `
-					UPDATE tasks
-					SET status = $1, completed_at = $2, error = $3
-					WHERE id = $4`,
-					TaskStatusFailed, now, err.Error(), task.ID)
+				task.Status = string(TaskStatusFailed)
+				task.CompletedAt = now
+				task.Error = err.Error()
+				updErr := wp.dbQueue.UpdateTaskStatus(ctx, task)
 				if updErr != nil {
 					log.Error().Err(updErr).Str("task_id", task.ID).Msg("Failed to mark task as failed")
 				}
 			} else {
 				// mark as completed with metrics
-				_, updErr := wp.db.ExecContext(ctx, `
-					UPDATE tasks
-					SET status = $1, completed_at = $2, status_code = $3, response_time = $4, cache_status = $5, content_type = $6
-					WHERE id = $7`,
-					TaskStatusCompleted, now, result.StatusCode, result.ResponseTime, result.CacheStatus, result.ContentType, task.ID)
+				task.Status = string(TaskStatusCompleted)
+				task.CompletedAt = now
+				task.StatusCode = result.StatusCode
+				task.ResponseTime = result.ResponseTime
+				task.CacheStatus = result.CacheStatus
+				task.ContentType = result.ContentType
+				updErr := wp.dbQueue.UpdateTaskStatus(ctx, task)
 				if updErr != nil {
 					log.Error().Err(updErr).Str("task_id", task.ID).Msg("Failed to mark task as completed")
 				}
 			}
-			// update job progress via DbQueue helper
-			if err := db.NewDbQueue(wp.db).UpdateJobProgress(ctx, task.JobID); err != nil {
+			// update job progress
+			if err := wp.dbQueue.UpdateJobProgress(ctx, task.JobID); err != nil {
 				log.Error().Err(err).Str("job_id", task.JobID).Msg("Failed to update job progress via helper")
 			}
 			return nil
@@ -344,115 +383,16 @@ func (wp *WorkerPool) processNextTask(ctx context.Context) error {
 }
 
 // EnqueueURLs adds multiple URLs as tasks for a job
-func EnqueueURLs(ctx context.Context, db *sql.DB, jobID string, urls []string, sourceType string, sourceURL string, depth int) error {
+// Legacy wrapper that delegates to dbQueue.EnqueueURLs
+func (wp *WorkerPool) EnqueueURLs(ctx context.Context, jobID string, pageIDs []int, urls []string, sourceType string, sourceURL string, depth int) error {
 	log.Debug().
 		Str("job_id", jobID).
 		Str("source_type", sourceType).
 		Int("url_count", len(urls)).
 		Int("depth", depth).
 		Msg("EnqueueURLs called")
-
-	tx, err := db.BeginTx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("failed to begin transaction: %w", err)
-	}
-	defer tx.Rollback()
-
-	// Increase batch size for better performance
-	const batchSize = 500
-
-	// Process URLs in larger batches
-	for i := 0; i < len(urls); i += batchSize {
-		end := i + batchSize
-		if end > len(urls) {
-			end = len(urls)
-		}
-
-		batch := urls[i:end]
-		if len(batch) == 0 {
-			continue
-		}
-
-		err := ExecuteInQueue(ctx, func(tx *sql.Tx) error {
-			// Verify job is still pending/running
-			var status string
-			if err := tx.QueryRowContext(ctx, "SELECT status FROM jobs WHERE id = $1", jobID).Scan(&status); err != nil {
-				return fmt.Errorf("failed to verify job: %w", err)
-			}
-			if status != string(JobStatusPending) && status != string(JobStatusRunning) {
-				return fmt.Errorf("job is in invalid state: %s", status)
-			}
-			// Increment sitemap_tasks or found_tasks and total_tasks
-			column := "found_tasks"
-			if sourceType == "sitemap" {
-				column = "sitemap_tasks"
-			}
-			query := fmt.Sprintf(`UPDATE jobs SET %s = %s + $1, total_tasks = total_tasks + $1 WHERE id = $2`, column, column)
-			if _, err := tx.ExecContext(ctx, query, len(batch), jobID); err != nil {
-				return fmt.Errorf("failed to update task counts: %w", err)
-			}
-
-			// Get domain_id for this job
-			var domainID int
-			if err := tx.QueryRowContext(ctx,
-				`SELECT domain_id FROM jobs WHERE id = $1`, jobID).Scan(&domainID); err != nil {
-				return fmt.Errorf("failed to get domain_id for job: %w", err)
-			}
-
-			// Process each URL individually
-			for _, urlStr := range batch {
-				if urlStr == "" {
-					continue
-				}
-
-				// Parse URL to get path
-				parsedURL, err := url.Parse(urlStr)
-				if err != nil {
-					log.Error().Err(err).Str("url", urlStr).Msg("Failed to parse URL, skipping")
-					continue
-				}
-
-				path := parsedURL.RequestURI()
-
-				// Insert page if it doesn't exist
-				if _, err := tx.ExecContext(ctx,
-					`INSERT INTO pages(domain_id, path) VALUES($1, $2) ON CONFLICT(domain_id, path) DO NOTHING`,
-					domainID, path); err != nil {
-					return fmt.Errorf("failed to insert page: %w", err)
-				}
-
-				// Get page_id
-				var pageID int
-				if err := tx.QueryRowContext(ctx,
-					`SELECT id FROM pages WHERE domain_id = $1 AND path = $2`,
-					domainID, path).Scan(&pageID); err != nil {
-					return fmt.Errorf("failed to get page_id: %w", err)
-				}
-
-				// Create task for each URL
-				if _, err := tx.ExecContext(ctx, `INSERT INTO tasks (job_id, page_id, path, status, depth, source_type, source_url) VALUES ($1, $2, $3, $4, $5, $6, $7)`, jobID, pageID, path, string(TaskStatusPending), depth, sourceType, sourceURL); err != nil {
-					return fmt.Errorf("failed to insert task: %w", err)
-				}
-			}
-
-			// Notify listeners of new tasks
-			if _, err := tx.ExecContext(ctx, `SELECT pg_notify('new_tasks', $1)`, jobID); err != nil {
-				return fmt.Errorf("failed to notify of new tasks: %w", err)
-			}
-
-			return nil
-		})
-
-		if err != nil {
-			return fmt.Errorf("failed to insert task batch: %w", err)
-		}
-	}
-
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("failed to commit transaction: %w", err)
-	}
-
-	return nil
+	
+	return wp.dbQueue.EnqueueURLs(ctx, jobID, pageIDs, urls, sourceType, sourceURL, depth)
 }
 
 // StartTaskMonitor starts a background process that monitors for pending tasks
@@ -566,7 +506,7 @@ func (wp *WorkerPool) checkForPendingTasks(ctx context.Context) error {
 
 // recoverStaleTasks checks for and resets stale tasks
 func (wp *WorkerPool) recoverStaleTasks(ctx context.Context) error {
-	return ExecuteInQueue(ctx, func(tx *sql.Tx) error {
+	return wp.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
 		staleTime := time.Now().Add(-TaskStaleTimeout)
 
 		// Get stale tasks
@@ -721,7 +661,7 @@ func (wp *WorkerPool) flushBatches(ctx context.Context) {
 		Msg("⏱️ TIMING: Starting batch DB update")
 
 	// Execute everything in ONE queue operation instead of separate ones
-	err := ExecuteInQueue(ctx, func(tx *sql.Tx) error {
+	err := wp.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
 		// 1. Update all tasks in a single statement with CASE
 		if len(tasks) > 0 {
 			taskUpdateStart := time.Now()
@@ -832,13 +772,45 @@ func (wp *WorkerPool) StartCleanupMonitor(ctx context.Context) {
 			case <-wp.stopCh:
 				return
 			case <-ticker.C:
-				if err := CleanupStuckJobs(ctx, wp.db); err != nil {
+				if err := wp.CleanupStuckJobs(ctx); err != nil {
 					log.Error().Err(err).Msg("Failed to cleanup stuck jobs")
 				}
 			}
 		}
 	}()
 	log.Info().Msg("Job cleanup monitor started")
+}
+
+// CleanupStuckJobs finds and fixes jobs that are stuck in pending/running state
+// despite having all their tasks completed
+func (wp *WorkerPool) CleanupStuckJobs(ctx context.Context) error {
+	span := sentry.StartSpan(ctx, "jobs.cleanup_stuck_jobs")
+	defer span.Finish()
+
+	result, err := wp.db.ExecContext(ctx, `
+		UPDATE jobs 
+		SET status = $1, 
+			completed_at = COALESCE(completed_at, $2),
+			progress = 100.0
+		WHERE (status = $3 OR status = $4)
+		AND total_tasks > 0 
+		AND total_tasks = completed_tasks + failed_tasks
+	`, JobStatusCompleted, time.Now(), JobStatusPending, JobStatusRunning)
+
+	if err != nil {
+		span.SetTag("error", "true")
+		span.SetData("error.message", err.Error())
+		return fmt.Errorf("failed to cleanup stuck jobs: %w", err)
+	}
+
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected > 0 {
+		log.Info().
+			Int64("jobs_fixed", rowsAffected).
+			Msg("Fixed stuck jobs")
+	}
+
+	return nil
 }
 
 func GetNextPendingTask(ctx context.Context, db *sql.DB, jobID string) (*Task, error) {
@@ -938,10 +910,11 @@ func (wp *WorkerPool) processTask(ctx context.Context, task *Task) (*crawler.Cra
 		// Enqueue filtered links
 		if len(filtered) > 0 {
 			// Enqueue the filtered links
-			if err := EnqueueURLs(
+			var pageIDs []int // Empty as dbQueue will handle this
+			if err := wp.EnqueueURLs(
 				ctx,
-				wp.db,
 				task.JobID,
+				pageIDs,
 				filtered,
 				"link",     // source_type is "link" for discovered links
 				urlStr,     // source_url is the URL where these links were found
@@ -992,6 +965,80 @@ func isDocumentLink(path string) bool {
 }
 
 // listenForNotifications sets up PostgreSQL LISTEN/NOTIFY
+
+// filterTasksByStatus returns tasks with a specific status
+func filterTasksByStatus(tasks []*Task, status TaskStatus) []*Task {
+	if len(tasks) == 0 {
+		return nil
+	}
+
+	result := make([]*Task, 0, len(tasks))
+	for _, task := range tasks {
+		if task.Status == status {
+			result = append(result, task)
+		}
+	}
+
+	return result
+}
+
+// batchInsertCrawlResults inserts multiple crawl results in a single transaction
+func batchInsertCrawlResults(ctx context.Context, tx *sql.Tx, results []CrawlResultData) error {
+	if len(results) == 0 {
+		return nil
+	}
+
+	valueStrings := make([]string, 0, len(results))
+	valueArgs := make([]interface{}, 0, len(results)*8)
+
+	// Track parameter index for PostgreSQL-style numbered parameters
+	paramIndex := 1
+
+	for _, result := range results {
+		// Create PostgreSQL-style parameter placeholders
+		placeholders := fmt.Sprintf("($%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d)",
+			paramIndex, paramIndex+1, paramIndex+2, paramIndex+3,
+			paramIndex+4, paramIndex+5, paramIndex+6, paramIndex+7)
+		valueStrings = append(valueStrings, placeholders)
+		paramIndex += 8
+
+		valueArgs = append(valueArgs,
+			result.JobID, result.TaskID, result.URL, result.ResponseTime,
+			result.StatusCode, result.Error, result.CacheStatus,
+			result.ContentType)
+	}
+
+	query := fmt.Sprintf(`
+		INSERT INTO crawl_results 
+		(job_id, task_id, url, response_time, status_code, error, cache_status, content_type)
+		VALUES %s
+	`, strings.Join(valueStrings, ","))
+
+	startTime := time.Now()
+	result, err := tx.ExecContext(ctx, query, valueArgs...)
+	duration := time.Since(startTime)
+
+	log.Debug().
+		Int("count", len(results)).
+		Dur("duration_ms", duration).
+		Msg("Batch inserted crawl results")
+
+	if err != nil {
+		log.Error().
+			Err(err).
+			Int("task_count", len(results)).
+			Msg("Failed to batch insert crawl results")
+		return fmt.Errorf("failed to batch insert crawl results: %w", err)
+	}
+
+	rowsAffected, _ := result.RowsAffected()
+	log.Debug().
+		Int64("rows_affected", rowsAffected).
+		Msg("Job update result")
+
+	return nil
+}
+
 func (wp *WorkerPool) listenForNotifications(ctx context.Context) {
 	defer wp.wg.Done()
 
