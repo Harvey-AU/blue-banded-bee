@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/Harvey-AU/blue-banded-bee/internal/crawler"
@@ -47,10 +48,14 @@ func (jm *JobManager) CreateJob(ctx context.Context, options *JobOptions) (*Job,
 
 	span.SetTag("domain", options.Domain)
 
+	// Normalize domain to ensure consistent handling of www. prefix and http/https
+	normalizedDomain := strings.TrimPrefix(strings.TrimPrefix(strings.TrimPrefix(options.Domain, "http://"), "https://"), "www.")
+	normalizedDomain = strings.TrimSuffix(normalizedDomain, "/")
+	
 	// Create a new job object
 	job := &Job{
 		ID:              uuid.New().String(),
-		Domain:          options.Domain,
+		Domain:          normalizedDomain, // Use normalized domain
 		Status:          JobStatusPending,
 		Progress:        0,
 		TotalTasks:      0,
@@ -380,8 +385,43 @@ func (jm *JobManager) processSitemap(ctx context.Context, jobID, domain string, 
 	sitemapCrawler := crawler.New(crawlerConfig)
 
 	// Discover sitemaps for the domain
-	baseURL := fmt.Sprintf("https://%s", domain)
-	urls, err := sitemapCrawler.DiscoverSitemaps(ctx, baseURL)
+	// Note: Only pass the domain, not the full URL with https://
+	// as DiscoverSitemaps already adds the https:// prefix
+	sitemaps, err := sitemapCrawler.DiscoverSitemaps(ctx, domain)
+	
+	// Log discovered sitemaps
+	log.Info().
+		Str("job_id", jobID).
+		Str("domain", domain).
+		Int("sitemap_count", len(sitemaps)).
+		Msg("Sitemaps discovered")
+		
+	// Process each sitemap to extract URLs
+	var urls []string
+	for _, sitemapURL := range sitemaps {
+		log.Info().
+			Str("job_id", jobID).
+			Str("sitemap_url", sitemapURL).
+			Msg("Processing sitemap")
+			
+		sitemapURLs, err := sitemapCrawler.ParseSitemap(ctx, sitemapURL)
+		if err != nil {
+			log.Warn().
+				Err(err).
+				Str("job_id", jobID).
+				Str("sitemap_url", sitemapURL).
+				Msg("Error parsing sitemap")
+			continue
+		}
+		
+		log.Info().
+			Str("job_id", jobID).
+			Str("sitemap_url", sitemapURL).
+			Int("url_count", len(sitemapURLs)).
+			Msg("Parsed URLs from sitemap")
+			
+		urls = append(urls, sitemapURLs...)
+	}
 	if err != nil {
 		span.SetTag("error", "true")
 		span.SetData("error.message", err.Error())
@@ -418,6 +458,7 @@ func (jm *JobManager) processSitemap(ctx context.Context, jobID, domain string, 
 		for i := range pageIDs {
 			pageIDs[i] = i + 1 // Temporary placeholder
 		}
+		baseURL := fmt.Sprintf("https://%s", domain) // Create baseURL here for proper reference
 		if err := jm.dbQueue.EnqueueURLs(ctx, jobID, pageIDs, urls, "sitemap", baseURL, 0); err != nil {
 			span.SetTag("error", "true")
 			span.SetData("error.message", err.Error())
