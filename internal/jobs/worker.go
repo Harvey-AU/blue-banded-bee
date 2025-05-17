@@ -853,8 +853,26 @@ func GetNextPendingTask(ctx context.Context, db *sql.DB, jobID string) (*Task, e
 
 // processTask processes an individual task
 func (wp *WorkerPool) processTask(ctx context.Context, task *Task) (*crawler.CrawlResult, error) {
-	// Get both domain name and findLinks setting in a single query
-	urlStr := fmt.Sprintf("https://%s%s", task.DomainName, task.Path)
+	// Construct a proper URL for processing
+	var urlStr string
+	
+	// Check if path is already a full URL
+	if strings.HasPrefix(task.Path, "http://") || strings.HasPrefix(task.Path, "https://") {
+		urlStr = task.Path
+	} else if task.DomainName != "" {
+		// If we have a domain name, construct the URL properly
+		if strings.HasPrefix(task.Path, "/") {
+			// The path starts with a slash, so it's a path relative to domain root
+			urlStr = fmt.Sprintf("https://%s%s", task.DomainName, task.Path)
+		} else {
+			// Add both slash and domain
+			urlStr = fmt.Sprintf("https://%s/%s", task.DomainName, task.Path)
+		}
+	} else {
+		// Fallback case - assume path is a full URL but missing protocol
+		urlStr = "https://" + task.Path
+	}
+	
 	log.Info().Str("url", urlStr).Str("task_id", task.ID).Msg("Starting URL warm")
 
 	result, err := wp.crawler.WarmURL(ctx, urlStr, task.FindLinks)
@@ -909,16 +927,41 @@ func (wp *WorkerPool) processTask(ctx context.Context, task *Task) (*crawler.Cra
 
 		// Enqueue filtered links
 		if len(filtered) > 0 {
-			// Enqueue the filtered links
-			var pageIDs []int // Empty as dbQueue will handle this
+			// Get domain ID for this job
+			var domainID int
+			err := wp.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
+				return tx.QueryRowContext(ctx, `
+					SELECT domain_id FROM jobs WHERE id = $1
+				`, task.JobID).Scan(&domainID)
+			})
+			if err != nil {
+				log.Error().
+					Err(err).
+					Str("job_id", task.JobID).
+					Msg("Failed to get domain ID for discovered links")
+				return result, nil
+			}
+			
+			// Create page records for discovered links
+			pageIDs, paths, err := wp.createPageRecords(ctx, domainID, filtered)
+			if err != nil {
+				log.Error().
+					Err(err).
+					Str("task_id", task.ID).
+					Int("link_count", len(filtered)).
+					Msg("Failed to create page records for links")
+				return result, nil
+			}
+			
+			// Enqueue the filtered links with proper page IDs
 			if err := wp.EnqueueURLs(
 				ctx,
 				task.JobID,
 				pageIDs,
-				filtered,
+				paths,
 				"link",     // source_type is "link" for discovered links
 				urlStr,     // source_url is the URL where these links were found
-				task.Depth, // Maintain the same depth
+				task.Depth+1, // Increment depth for discovered links
 			); err != nil {
 				log.Error().
 					Err(err).
@@ -962,6 +1005,103 @@ func isDocumentLink(path string) bool {
 		strings.HasSuffix(lower, ".xlsx") ||
 		strings.HasSuffix(lower, ".ppt") ||
 		strings.HasSuffix(lower, ".pptx")
+}
+
+// createPageRecords creates page records for a list of URLs and returns their IDs and paths
+// This is used for handling discovered links in the worker
+func (wp *WorkerPool) createPageRecords(ctx context.Context, domainID int, urls []string) ([]int, []string, error) {
+	span := sentry.StartSpan(ctx, "worker.create_page_records")
+	defer span.Finish()
+
+	span.SetTag("domain_id", fmt.Sprintf("%d", domainID))
+	span.SetTag("url_count", fmt.Sprintf("%d", len(urls)))
+
+	if len(urls) == 0 {
+		return []int{}, []string{}, nil
+	}
+
+	pageIDs := make([]int, 0, len(urls))
+	paths := make([]string, 0, len(urls))
+
+	// Get domain name from the database
+	var domainName string
+	err := wp.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
+		return tx.QueryRowContext(ctx, `
+			SELECT name FROM domains WHERE id = $1
+		`, domainID).Scan(&domainName)
+	})
+	if err != nil {
+		span.SetTag("error", "true")
+		span.SetData("error.message", err.Error())
+		return nil, nil, fmt.Errorf("failed to get domain name: %w", err)
+	}
+
+	// Extract paths from URLs
+	for _, url := range urls {
+		// Parse URL to extract the path
+		log.Debug().Str("original_url", url).Msg("Processing URL")
+
+		// Remove any protocol and domain to get just the path
+		path := url
+		// Strip common prefixes
+		path = strings.TrimPrefix(path, "http://")
+		path = strings.TrimPrefix(path, "https://")
+		path = strings.TrimPrefix(path, "www.")
+		
+		// Find the first slash after the domain name
+		domainEnd := strings.Index(path, "/")
+		if domainEnd != -1 {
+			// Extract just the path part
+			path = path[domainEnd:]
+		} else {
+			// If no path found, use root path
+			path = "/"
+		}
+
+		// Add paths to our result array
+		paths = append(paths, path)
+		log.Debug().Str("extracted_path", path).Msg("Extracted path from URL")
+	}
+
+	// Insert pages into database in a transaction
+	err = wp.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
+		// Prepare statement for bulk insertion
+		stmt, err := tx.PrepareContext(ctx, `
+			INSERT INTO pages (domain_id, path)
+			VALUES ($1, $2)
+			ON CONFLICT (domain_id, path) DO UPDATE SET path = EXCLUDED.path
+			RETURNING id
+		`)
+		if err != nil {
+			return fmt.Errorf("failed to prepare page insert statement: %w", err)
+		}
+		defer stmt.Close()
+
+		// Insert each page and collect the IDs
+		for _, path := range paths {
+			var pageID int
+			err := stmt.QueryRowContext(ctx, domainID, path).Scan(&pageID)
+			if err != nil {
+				return fmt.Errorf("failed to insert page record: %w", err)
+			}
+			pageIDs = append(pageIDs, pageID)
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		span.SetTag("error", "true")
+		span.SetData("error.message", err.Error())
+		return nil, nil, fmt.Errorf("failed to create page records: %w", err)
+	}
+
+	log.Debug().
+		Int("domain_id", domainID).
+		Int("page_count", len(pageIDs)).
+		Msg("Created page records")
+
+	return pageIDs, paths, nil
 }
 
 // listenForNotifications sets up PostgreSQL LISTEN/NOTIFY

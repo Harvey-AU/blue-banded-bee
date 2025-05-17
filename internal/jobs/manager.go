@@ -121,24 +121,54 @@ func (jm *JobManager) CreateJob(ctx context.Context, options *JobOptions) (*Job,
 		// Fetch and process sitemap in a separate goroutine
 		go jm.processSitemap(context.Background(), job.ID, normalizedDomain, options.IncludePaths, options.ExcludePaths)
 	} else {
-		// Add domain root URL as a fallback
-		rootURL := fmt.Sprintf("https://%s", normalizedDomain)
+		// Prepare for manual root URL creation
+		rootPath := "/"
 		
 		// Create a page record for the root URL
-		pageIDs, paths, err := jm.createPageRecords(ctx, domainID, []string{rootURL})
+		err := jm.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
+			var pageID int
+			err := tx.QueryRowContext(ctx, `
+				INSERT INTO pages (domain_id, path)
+				VALUES ($1, $2)
+				ON CONFLICT (domain_id, path) DO UPDATE SET path = EXCLUDED.path
+				RETURNING id
+			`, domainID, rootPath).Scan(&pageID)
+			
+			if err != nil {
+				return fmt.Errorf("failed to create page record for root path: %w", err)
+			}
+			
+			// Enqueue the root URL with its page ID
+			_, err = tx.ExecContext(ctx, `
+				INSERT INTO tasks (
+					id, job_id, page_id, path, status, depth, created_at, retry_count,
+					source_type, source_url
+				) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+			`, uuid.New().String(), job.ID, pageID, rootPath, "pending", 0, time.Now(), 0, "manual", "")
+			
+			if err != nil {
+				return fmt.Errorf("failed to enqueue task for root path: %w", err)
+			}
+			
+			// Update job's total task count
+			_, err = tx.ExecContext(ctx, `
+				UPDATE jobs
+				SET total_tasks = total_tasks + 1
+				WHERE id = $1
+			`, job.ID)
+			
+			return err
+		})
+		
 		if err != nil {
 			span.SetTag("error", "true")
 			span.SetData("error.message", err.Error())
-			log.Error().Err(err).Msg("Failed to create page record for root URL")
-			// Continue anyway with the job creation, even though the root URL enqueue failed
-			return job, nil
-		}
-		
-		// Enqueue the root URL with its page ID
-		if err := jm.dbQueue.EnqueueURLs(ctx, job.ID, pageIDs, paths, "manual", "", 0); err != nil {
-			span.SetTag("error", "true")
-			span.SetData("error.message", err.Error())
-			log.Error().Err(err).Msg("Failed to enqueue root URL")
+			log.Error().Err(err).Msg("Failed to create and enqueue root URL")
+		} else {
+			log.Info().
+				Str("job_id", job.ID).
+				Str("domain", normalizedDomain).
+				Msg("Added root URL to job queue")
 		}
 	}
 
@@ -391,16 +421,48 @@ func (jm *JobManager) createPageRecords(ctx context.Context, domainID int, urls 
 	pageIDs := make([]int, 0, len(urls))
 	paths := make([]string, 0, len(urls))
 
+	// Get domain name from the database
+	var domainName string
+	err := jm.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
+		return tx.QueryRowContext(ctx, `
+			SELECT name FROM domains WHERE id = $1
+		`, domainID).Scan(&domainName)
+	})
+	if err != nil {
+		span.SetTag("error", "true")
+		span.SetData("error.message", err.Error())
+		return nil, nil, fmt.Errorf("failed to get domain name: %w", err)
+	}
+
 	// Extract paths from URLs
 	for _, url := range urls {
-		// Remove domain and protocol to get the path
+		// Parse URL to extract the path
+		log.Debug().Str("original_url", url).Msg("Processing URL")
+
+		// Remove any protocol and domain to get just the path
 		path := url
+		// Strip common prefixes
+		path = strings.TrimPrefix(path, "http://")
+		path = strings.TrimPrefix(path, "https://")
+		path = strings.TrimPrefix(path, "www.")
+		
+		// Find the first slash after the domain name
+		domainEnd := strings.Index(path, "/")
+		if domainEnd != -1 {
+			// Extract just the path part
+			path = path[domainEnd:]
+		} else {
+			// If no path found, use root path
+			path = "/"
+		}
+
 		// Add paths to our result array
 		paths = append(paths, path)
+		log.Debug().Str("extracted_path", path).Msg("Extracted path from URL")
 	}
 
 	// Insert pages into database in a transaction
-	err := jm.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
+	err = jm.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
 		// Prepare statement for bulk insertion
 		stmt, err := tx.PrepareContext(ctx, `
 			INSERT INTO pages (domain_id, path)
@@ -526,6 +588,16 @@ func (jm *JobManager) processSitemap(ctx context.Context, jobID, domain string, 
 
 	// Add URLs to the job queue
 	if len(urls) > 0 {
+		// Log URLs for debugging
+		for i, url := range urls {
+			log.Debug().
+				Str("job_id", jobID).
+				Str("domain", domain).
+				Int("index", i).
+				Str("url", url).
+				Msg("URL from sitemap")
+		}
+		
 		// Get domain ID from the job
 		var domainID int
 		err := jm.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
@@ -557,7 +629,7 @@ func (jm *JobManager) processSitemap(ctx context.Context, jobID, domain string, 
 			return
 		}
 
-		// Enqueue the URLs with their page IDs
+		// Enqueue the URLs with their page IDs and just paths (not full URLs)
 		baseURL := fmt.Sprintf("https://%s", domain)
 		if err := jm.dbQueue.EnqueueURLs(ctx, jobID, pageIDs, paths, "sitemap", baseURL, 0); err != nil {
 			span.SetTag("error", "true")
