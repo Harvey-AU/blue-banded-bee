@@ -2,8 +2,11 @@ package db
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
+	"math/rand"
 	"os"
+	"strings"
 	"time"
 
 	_ "github.com/lib/pq"
@@ -334,4 +337,73 @@ func (db *DB) GetQueue() *common.DbQueue {
 		db.queue = common.NewDbQueue(db.client)
 	}
 	return db.queue
+}
+
+// Serialize converts data to JSON string representation
+func Serialize(v interface{}) string {
+	data, err := json.Marshal(v)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to serialize data")
+		return "{}"
+	}
+	return string(data)
+}
+
+/**
+ * Database Retry Logic
+ *
+ * This function implements exponential backoff with jitter to gracefully handle
+ * transient database errors like connection issues or deadlocks.
+ *
+ * The retryDB function:
+ * 1. Attempts the database operation
+ * 2. If the operation fails with a retryable error, it waits and retries
+ *    with increasing backoff periods
+ * 3. A small random jitter is added to prevent retry storms
+ * 4. It gives up after a maximum number of retries
+ *
+ * This mechanism significantly improves reliability when multiple workers are
+ * simultaneously accessing the database.
+ */
+
+// retryDB executes a database operation with exponential backoff retry
+func retryDB(operation func() error) error {
+	var lastErr error
+	retries := 5
+	backoff := 200 * time.Millisecond
+
+	for attempt := 0; attempt <= retries; attempt++ {
+		if attempt > 0 {
+			time.Sleep(backoff * time.Duration(1<<uint(attempt-1)))
+		}
+		err := operation()
+		if err == nil {
+			return nil
+		}
+
+		// Check if error is a database lock error or connection issue
+		if strings.Contains(err.Error(), "database is locked") ||
+			strings.Contains(err.Error(), "busy") ||
+			strings.Contains(err.Error(), "connection reset") {
+			// Calculate backoff with jitter
+			backoff := backoff * time.Duration(1<<uint(attempt))
+			jitter := time.Duration(rand.Int63n(int64(backoff) / 2))
+			sleepTime := backoff + jitter
+
+			log.Warn().
+				Err(err).
+				Int("attempt", attempt+1).
+				Dur("backoff", sleepTime).
+				Msg("Database error, retrying operation")
+
+			time.Sleep(sleepTime)
+			continue
+		}
+
+		// Not a retryable error
+		lastErr = err
+		break
+	}
+
+	return lastErr
 }
