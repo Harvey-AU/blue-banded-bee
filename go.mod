@@ -1,10 +1,10 @@
 module github.com/Harvey-AU/blue-banded-bee
 
-go 1.24
+go 1.23.0
 
 toolchain go1.24.2
 
-replace github.com/Harvey-AU/blue-banded-bee => .
+replace github.com/Harvey-AU/blue-banded-bee => ./
 
 require (
 	github.com/getsentry/sentry-go v0.32.0

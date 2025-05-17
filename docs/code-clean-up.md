@@ -77,22 +77,22 @@ internal/
 [x] 2.1. Move GetJob function from db.go to manager.go
 [x] 2.2. Update JobManager to accept DbQueue in constructor
 [x] 2.3. Update all JobManager methods to use dbQueue instead of direct SQL
-[ ] 2.4. Test that job creation and management still work
+[x] 2.4. Test that job creation and management still work (basic compilation)
 
 ### Phase 3: Update Worker
 
-[ ] 3.1. Add dbQueue field to WorkerPool struct
-[ ] 3.2. Update WorkerPool constructor to accept dbQueue
-[ ] 3.3. Replace EnqueueURLs calls with dbQueue.EnqueueURLs
-[ ] 3.4. Update processNextTask to use dbQueue.GetNextTask
-[ ] 3.5. Update task status updates to use dbQueue.UpdateTaskStatus
-[ ] 3.6. Replace ExecuteInQueue calls with direct dbQueue.Execute
+[x] 3.1. Add dbQueue field to WorkerPool struct
+[x] 3.2. Update WorkerPool constructor to accept dbQueue
+[x] 3.3. Replace EnqueueURLs calls with dbQueue.EnqueueURLs
+[x] 3.4. Update processNextTask to use dbQueue.GetNextTask
+[x] 3.5. Update task status updates to use dbQueue.UpdateTaskStatus
+[x] 3.6. Replace ExecuteInQueue calls with direct dbQueue.Execute
 
 ### Phase 4: Remove Redundant Code
 
-[ ] 4.1. Remove jobs/db.go after confirming all functions are moved
-[ ] 4.2. Remove jobs/queue_helpers.go after all functionality is moved
-[ ] 4.3. Remove SetDBInstance and related global state
+[x] 4.1. Remove jobs/db.go after confirming all functions are moved
+[x] 4.2. Remove jobs/queue_helpers.go after all functionality is moved
+[x] 4.3. Remove SetDBInstance and related global state
 
 ### Phase 5: Testing
 
