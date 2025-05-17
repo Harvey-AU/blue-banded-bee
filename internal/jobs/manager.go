@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Harvey-AU/blue-banded-bee/internal/crawler"
@@ -29,15 +30,20 @@ type JobManager struct {
 	crawler *crawler.Crawler
 
 	workerPool *WorkerPool
+	
+	// Map to track which pages have been processed for each job
+	processedPages map[string]struct{} // Key format: "jobID_pageID"
+	pagesMutex     sync.RWMutex        // Mutex for thread-safe access
 }
 
 // NewJobManager creates a new job manager
 func NewJobManager(db *sql.DB, dbQueue DbQueueProvider, crawler *crawler.Crawler, workerPool *WorkerPool) *JobManager {
 	return &JobManager{
-		db:         db,
-		dbQueue:    dbQueue,
-		crawler:    crawler,
-		workerPool: workerPool,
+		db:             db,
+		dbQueue:        dbQueue,
+		crawler:        crawler,
+		workerPool:     workerPool,
+		processedPages: make(map[string]struct{}),
 	}
 }
 
@@ -137,6 +143,9 @@ func (jm *JobManager) CreateJob(ctx context.Context, options *JobOptions) (*Job,
 			if err != nil {
 				return fmt.Errorf("failed to create page record for root path: %w", err)
 			}
+			
+			// Mark this page as processed for this job
+			jm.markPageProcessed(job.ID, pageID)
 			
 			// Enqueue the root URL with its page ID
 			_, err = tx.ExecContext(ctx, `
@@ -248,6 +257,92 @@ func (jm *JobManager) StartJob(ctx context.Context, jobID string) error {
 	return nil
 }
 
+// Helper method to check if a page has been processed for a job
+func (jm *JobManager) isPageProcessed(jobID string, pageID int) bool {
+	key := fmt.Sprintf("%s_%d", jobID, pageID)
+	jm.pagesMutex.RLock()
+	defer jm.pagesMutex.RUnlock()
+	_, exists := jm.processedPages[key]
+	return exists
+}
+
+// Helper method to mark a page as processed for a job
+func (jm *JobManager) markPageProcessed(jobID string, pageID int) {
+	key := fmt.Sprintf("%s_%d", jobID, pageID)
+	jm.pagesMutex.Lock()
+	defer jm.pagesMutex.Unlock()
+	jm.processedPages[key] = struct{}{}
+}
+
+// Helper method to mark multiple pages as processed for a job
+func (jm *JobManager) markPagesProcessed(jobID string, pageIDs []int) {
+	jm.pagesMutex.Lock()
+	defer jm.pagesMutex.Unlock()
+	for _, pageID := range pageIDs {
+		key := fmt.Sprintf("%s_%d", jobID, pageID)
+		jm.processedPages[key] = struct{}{}
+	}
+}
+
+// Helper method to clear processed pages for a job (when job is completed or canceled)
+func (jm *JobManager) clearProcessedPages(jobID string) {
+	jm.pagesMutex.Lock()
+	defer jm.pagesMutex.Unlock()
+	
+	// Find all keys that start with this job ID
+	prefix := jobID + "_"
+	for key := range jm.processedPages {
+		if strings.HasPrefix(key, prefix) {
+			delete(jm.processedPages, key)
+		}
+	}
+}
+
+// EnqueueJobURLs is a wrapper around dbQueue.EnqueueURLs that adds duplicate detection
+func (jm *JobManager) EnqueueJobURLs(ctx context.Context, jobID string, pageIDs []int, paths []string, sourceType string, sourceURL string, depth int) error {
+	span := sentry.StartSpan(ctx, "manager.enqueue_job_urls")
+	defer span.Finish()
+	
+	span.SetTag("job_id", jobID)
+	span.SetTag("url_count", fmt.Sprintf("%d", len(pageIDs)))
+	
+	if len(pageIDs) == 0 {
+		return nil
+	}
+	
+	// Filter out pages that have already been processed
+	var filteredPageIDs []int
+	var filteredPaths []string
+	
+	for i, pageID := range pageIDs {
+		if !jm.isPageProcessed(jobID, pageID) {
+			filteredPageIDs = append(filteredPageIDs, pageID)
+			filteredPaths = append(filteredPaths, paths[i])
+			// Mark this page as processed
+			jm.markPageProcessed(jobID, pageID)
+		}
+	}
+	
+	// If all pages were already processed, just return success
+	if len(filteredPageIDs) == 0 {
+		log.Debug().
+			Str("job_id", jobID).
+			Int("skipped_urls", len(pageIDs)).
+			Msg("All URLs already processed, skipping")
+		return nil
+	}
+	
+	log.Debug().
+		Str("job_id", jobID).
+		Int("total_urls", len(pageIDs)).
+		Int("new_urls", len(filteredPageIDs)).
+		Int("skipped_urls", len(pageIDs) - len(filteredPageIDs)).
+		Msg("Enqueueing filtered URLs")
+	
+	// Use the filtered lists to enqueue only new pages
+	return jm.dbQueue.EnqueueURLs(ctx, jobID, filteredPageIDs, filteredPaths, sourceType, sourceURL, depth)
+}
+
 // CancelJob cancels a running job
 func (jm *JobManager) CancelJob(ctx context.Context, jobID string) error {
 	span := sentry.StartSpan(ctx, "manager.cancel_job")
@@ -303,6 +398,9 @@ func (jm *JobManager) CancelJob(ctx context.Context, jobID string) error {
 
 	// Remove job from worker pool
 	jm.workerPool.RemoveJob(job.ID)
+	
+	// Clear processed pages for this job
+	jm.clearProcessedPages(job.ID)
 
 	log.Debug().
 		Str("job_id", job.ID).
@@ -628,10 +726,13 @@ func (jm *JobManager) processSitemap(ctx context.Context, jobID, domain string, 
 				Msg("Failed to create page records")
 			return
 		}
+		
+		// Mark all these pages as processed for this job
+		jm.markPagesProcessed(jobID, pageIDs)
 
-		// Enqueue the URLs with their page IDs and just paths (not full URLs)
+		// Use our new wrapper function that checks for duplicates
 		baseURL := fmt.Sprintf("https://%s", domain)
-		if err := jm.dbQueue.EnqueueURLs(ctx, jobID, pageIDs, paths, "sitemap", baseURL, 0); err != nil {
+		if err := jm.EnqueueJobURLs(ctx, jobID, pageIDs, paths, "sitemap", baseURL, 0); err != nil {
 			span.SetTag("error", "true")
 			span.SetData("error.message", err.Error())
 			log.Error().

@@ -41,6 +41,7 @@ type WorkerPool struct {
 	batchTimer       *time.Ticker
 	cleanupInterval  time.Duration
 	notifyCh         chan struct{}
+	jobManager       *JobManager // Reference to JobManager for duplicate checking
 }
 
 // TaskBatch holds groups of tasks for batch processing
@@ -392,6 +393,12 @@ func (wp *WorkerPool) EnqueueURLs(ctx context.Context, jobID string, pageIDs []i
 		Int("depth", depth).
 		Msg("EnqueueURLs called")
 	
+	// Check if we have a job manager to use for duplicate checking
+	// If not, fall back to direct dbQueue usage
+	if wp.jobManager != nil {
+		return wp.jobManager.EnqueueJobURLs(ctx, jobID, pageIDs, urls, sourceType, sourceURL, depth)
+	}
+	
 	return wp.dbQueue.EnqueueURLs(ctx, jobID, pageIDs, urls, sourceType, sourceURL, depth)
 }
 
@@ -502,6 +509,11 @@ func (wp *WorkerPool) checkForPendingTasks(ctx context.Context) error {
 	}
 
 	return rows.Err()
+}
+
+// SetJobManager sets the JobManager reference for duplicate task checking
+func (wp *WorkerPool) SetJobManager(jm *JobManager) {
+	wp.jobManager = jm
 }
 
 // recoverStaleTasks checks for and resets stale tasks
