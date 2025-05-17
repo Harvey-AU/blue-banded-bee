@@ -63,10 +63,16 @@ func main() {
 	// Create a worker pool for task processing
 	var jobWorkers int = 5
 	workerPool := jobs.NewWorkerPool(pgDB.GetDB(), dbQueue, cr, jobWorkers, pgDB.GetConfig())
+	
+	// Create job manager first
+	jobsManager := jobs.NewJobManager(pgDB.GetDB(), dbQueue, cr, workerPool)
+	
+	// Set the job manager in the worker pool for duplicate checking
+	workerPool.SetJobManager(jobsManager)
+	
+	// Start the worker pool now that it's fully configured
 	workerPool.Start(context.Background())
 	defer workerPool.Stop()
-
-	jobsManager := jobs.NewJobManager(pgDB.GetDB(), dbQueue, cr, workerPool)
 
 	// Start a goroutine to monitor job completion
 	go func() {

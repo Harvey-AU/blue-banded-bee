@@ -6,8 +6,10 @@
 - Successfully deployed to Fly.io with verified functionality
 - Local development environment established with PostgreSQL
 - Currently processing jobs, tasks and recording results
-- Database schema needs finalisation to separate into cleaner tables: site (for domains), page (for URLs), results (for crawl data), and tasks (for status tracking)
-- Implementing a more robust worker pool using PostgreSQL's row-level locking
+- Worker pool using PostgreSQL's row-level locking implemented
+- Enhanced sitemap processing with improved URL handling and normalization
+- Improved link discovery and URL validation across the codebase
+- Completed major code refactoring to improve architecture and maintainability
 
 ## ✅ Stage 0: Project Setup & Infrastructure (6-10 hrs)
 
@@ -95,14 +97,16 @@
 - [x] Add URL filtering based on path patterns
 - [x] Handle sitemap index files
 - [x] Process multiple sitemaps
+- [x] Implement robust URL normalization in sitemap processing
+- [x] Add improved error handling for malformed URLs
 
 ### Link Discovery & Crawling (2-3 hrs)
 
 - [x] Extract links from crawled pages
 - [x] Filter links to stay within target domain
 - [x] Basic link discovery logic
-- [ ] Queue discovered links for processing
-- [ ] *(Deprecated - to be removed per code cleanup plan)* Legacy depth controls
+- [x] Queue discovered links for processing
+- [x] *(Deprecated - to be removed per code cleanup plan)* Legacy depth controls
 
 ### Job Management API (1-2 hrs)
 
@@ -160,12 +164,36 @@
 
 - [x] Implement PostgreSQL-based task queue
   - [x] Use row-level locking with SELECT FOR UPDATE SKIP LOCKED
-  - [ ] Optimize for concurrent access
+  - [x] Optimize for concurrent access
   - [ ] Add task prioritization
-- [ ] Redesign worker pool
-  - [ ] Create single global worker pool
-  - [ ] Implement optimized task acquisition
+- [x] Redesign worker pool
+  - [x] Create single global worker pool
+  - [x] Implement optimized task acquisition
   - [ ] Add proper worker scaling
+
+#### URL Processing Improvements (2-3 hrs)
+
+- [x] Enhanced sitemap processing
+  - [x] Implement robust URL normalization
+  - [x] Add support for relative URLs in sitemaps
+  - [x] Improve error handling for malformed URLs
+- [x] Improve URL validation
+  - [x] Better handling of URL variations
+  - [x] Consistent URL formatting throughout the codebase
+
+#### Code Refactoring (2-3 hrs)
+
+- [x] Eliminate duplicate code
+  - [x] Move database operations to a unified interface
+  - [x] Consolidate similar functions into single implementations
+  - [x] Move functions to appropriate packages
+- [x] Remove global state
+  - [x] Implement proper dependency injection
+  - [x] Replace global DB instance with passed parameters
+  - [x] Improve transaction management with DbQueue
+- [x] Standardize naming conventions
+  - [x] Use consistent function names across packages
+  - [x] Clarify responsibilities between packages
 
 #### Batch Processing Implementation (2-3 hrs)
 
@@ -176,13 +204,13 @@
 
 #### Code Cleanup (2-3 hrs)
 
-- [ ] Remove redundant worker pool creation
-  - [ ] Eliminate duplicate worker pools in API handlers
-  - [ ] Ensure single global worker pool is used consistently
-- [ ] Simplify middleware stack
-  - [ ] Reduce excessive transaction monitoring
-  - [ ] Optimize Sentry integrations
-  - [ ] Remove unnecessary wrapping functions
+- [x] Remove redundant worker pool creation
+  - [x] Eliminate duplicate worker pools in API handlers
+  - [x] Ensure single global worker pool is used consistently
+- [x] Simplify middleware stack
+  - [x] Reduce excessive transaction monitoring
+  - [x] Optimize Sentry integrations
+  - [x] Remove unnecessary wrapping functions
 - [ ] Clean up API endpoints
   - [ ] Consolidate or remove debug/test endpoints
   - [ ] Simplify endpoint implementations
@@ -194,16 +222,16 @@
 - [ ] Remove depth functionality
   - [ ] Remove `depth` column from `tasks` table
   - [x] Remove `max_depth` column from `jobs` table
-  - [ ] Update `EnqueueURLs` function to remove depth parameter
+  - [x] Update `EnqueueURLs` function to remove depth parameter
   - [ ] Update type definitions to remove depth fields
-  - [ ] Remove depth-related logic from link discovery process
+  - [x] Remove depth-related logic from link discovery process
   - [ ] Update documentation to remove depth references
 
 #### Final Transition (1-2 hrs)
 
 - [x] Update core endpoints to use new implementation
-- [ ] Remove SQLite-specific code
-- [ ] Clean up dependencies and imports
+- [x] Remove SQLite-specific code
+- [x] Clean up dependencies and imports
 - [ ] Update configuration and documentation
 
 ## ⚪ Stage 4: Auth & User Management (2-3 weeks)
@@ -300,17 +328,34 @@ Detailed plan available in [docs/webflow-integration-plan.md](./docs/webflow-int
 - Set up PostgreSQL database on Fly.io with proper connection settings
 - Implemented schema design optimized for PostgreSQL with proper indexes
 - Created basic queue implementation with row-level locking (FOR UPDATE SKIP LOCKED)
-- Implemented core APIs to work with PostgreSQL (/health, /pg-health, /test-crawl, /recent-crawls)
+- Implemented core APIs to work with PostgreSQL
 - Deployed and verified working on Fly.io production environment
+- Enhanced sitemap processing with improved URL handling and normalization
+- Implemented robust error handling for malformed URLs
+- Improved link discovery and URL validation across the codebase
+- Completed major code refactoring to improve architecture and maintainability:
+  - Eliminated duplicate code across the codebase
+  - Removed global state in favor of proper dependency injection
+  - Standardized function naming conventions
+  - Clarified responsibilities between packages
+  - Moved database operations to a unified interface
+  - Improved transaction management with DbQueue
 
 ### Current State
 
-- We now have a working basic implementation with PostgreSQL that can:
+- We now have a working implementation with PostgreSQL that can:
   - Store and retrieve crawl results
   - Handle database errors properly
   - Connect to production PostgreSQL instance
+  - Process sitemaps efficiently with robust URL handling
+  - Discover and queue additional URLs from pages
   - Reset database schema when needed
-- The implementation provides the foundation for the full worker/queue system
+- The worker/queue system is functioning but still needs optimization
+- The codebase is now better organized with:
+  - Clearer separation of concerns between packages
+  - Standardized naming conventions
+  - Improved error handling
+  - Less redundancy and duplication
 
 ## Implementation Priorities
 
@@ -322,10 +367,10 @@ Listed below are the immediate priorities in order of importance. Each task incl
    - ✓ Dependent on: PostgreSQL setup (completed)
    - Impact: Protects against data loss and ensures business continuity
 
-2. **Improve URL Handling and Sitemap Processing** (High - affects core functionality)
-   - Implement robust domain normalization (http/https, www prefix, trailing slashes)
-   - Enhance sitemap discovery and processing
-   - Improve logging and error handling
+2. **Complete URL Processing Enhancements** (High - affects core functionality)
+   - ✓ Implement robust domain normalization (http/https, www prefix, trailing slashes)
+   - ✓ Enhance sitemap discovery and processing
+   - ✓ Improve logging and error handling
    - ✓ Dependent on: Working crawler (completed)
    - Impact: Improves reliability and successful crawl rate
 
@@ -351,8 +396,8 @@ Listed below are the immediate priorities in order of importance. Each task incl
    - Impact: Reduces database load and improves performance
 
 6. **Code Cleanup** (Medium)
-   - Remove redundant worker pool creation
-   - Simplify middleware stack
+   - ✓ Remove redundant worker pool creation
+   - ✓ Simplify middleware stack
    - Standardize error handling
    - Remove legacy code (including depth functionality)
    - ✓ Dependent on: Stabilised core functionality
@@ -375,7 +420,7 @@ Listed in order of priority with mitigation strategies:
 - [ ] **Database security & backups** - Critical to prevent data loss
   - Mitigation: Implement automated backup schedule and periodic recovery testing
   
-- [ ] **URL processing reliability** - Core functionality affected by recent fixes
+- [x] **URL processing reliability** - Core functionality affected by recent fixes
   - Mitigation: Thorough testing of URL normalisation and sitemap processing
 
 ### Short-term (Next 1-2 Sprints)

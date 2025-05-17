@@ -8,6 +8,9 @@ Automatically warm site caches (especially built for [Webflow](https://www.webfl
 - 🔒 Built-in rate limiting and security features
 - 📝 Comprehensive logging and error tracking
 - 🗄️ Persistent storage with PostgreSQL database
+- 🌐 Intelligent sitemap processing and URL discovery
+- 🔄 Automatic link extraction to discover and warm additional pages
+- 🧩 Clean architecture with proper dependency injection
 
 ## Quick Start
 
@@ -34,11 +37,24 @@ Current development stage: Stage 3 - PostgreSQL Migration & Performance Optimisa
 - ✅ Stage 1: Core Setup & Basic Crawling
 - ✅ Stage 2: Multi-domain Support & Job Queue Architecture
 - 🟡 Stage 3: PostgreSQL Migration & Performance Optimisation
+  - ✅ Database migration to PostgreSQL completed
+  - ✅ Enhanced sitemap processing implemented
+  - ✅ Improved URL handling and normalization
+  - ✅ Major code refactoring and architecture improvements
+  - 🚧 Worker pool optimization in progress
+  - 🚧 Batch processing implementation pending
 - ⭕ Stage 4: Auth & User Management
 - ⭕ Stage 5: Billing & Subscriptions
 - ⭕ Stage 6: Webflow Integration & Launch
 
-See our [detailed roadmap](./ROADMAP.md) for more information.
+See our [detailed roadmap](./Roadmap.md) for more information.
+
+## Recent Improvements
+
+- **Code Refactoring**: Complete reorganization of the codebase with improved architecture, reduced duplication, and better separation of concerns.
+- **URL Processing**: Enhanced sitemap processing with better URL normalization and error handling for malformed URLs.
+- **PostgreSQL Integration**: Fully migrated from SQLite to PostgreSQL with optimized schema and queries.
+- **Worker Pool**: Improved worker pool implementation with PostgreSQL's row-level locking for efficient task processing.
 
 ## Tech Stack
 
@@ -54,7 +70,7 @@ See our [detailed roadmap](./ROADMAP.md) for more information.
 Our documentation is organized under `docs/`:
 
 - [Codebase Structure](docs/reference/codebase-structure.md) - Overview of the codebase structure
-- [File Map](/docs/reference/file-map) - List of files in project
+- [File Map](docs/reference/file-map.md) - List of files in project
 - [API Reference](docs/reference/api-reference.md) - API endpoints and usage
 - [Development Guide](docs/guides/development.md) - Setup and local development
 - [Deployment Guide](docs/guides/deployment.md) - Deployment instructions
