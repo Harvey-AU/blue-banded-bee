@@ -13,8 +13,29 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+// normalizeDomain removes http/https prefix and www. from domain
+func normalizeDomain(domain string) string {
+	// Remove http:// or https:// prefix if present
+	domain = strings.TrimPrefix(domain, "http://")
+	domain = strings.TrimPrefix(domain, "https://")
+	
+	// Remove www. prefix if present
+	domain = strings.TrimPrefix(domain, "www.")
+	
+	// Remove trailing slash if present
+	domain = strings.TrimSuffix(domain, "/")
+	
+	return domain
+}
+
 // DiscoverSitemaps attempts to find sitemaps for a domain by checking common locations
 func (c *Crawler) DiscoverSitemaps(ctx context.Context, domain string) ([]string, error) {
+	// Normalize the domain first to handle different input formats
+	normalizedDomain := normalizeDomain(domain)
+	log.Debug().
+		Str("original_domain", domain).
+		Str("normalized_domain", normalizedDomain).
+		Msg("Starting sitemap discovery with normalized domain")
 	// Create a client with shorter timeout and redirect handling
 	client := &http.Client{
 		Timeout: 5 * time.Second,
@@ -27,7 +48,7 @@ func (c *Crawler) DiscoverSitemaps(ctx context.Context, domain string) ([]string
 	}
 
 	// Check robots.txt first as it's the most authoritative source
-	robotsURL := "https://" + domain + "/robots.txt"
+	robotsURL := "https://" + normalizedDomain + "/robots.txt"
 	var foundSitemaps []string
 
 	// Try robots.txt first
@@ -53,26 +74,42 @@ func (c *Crawler) DiscoverSitemaps(ctx context.Context, domain string) ([]string
 		}
 	}
 
+	// Log if sitemaps were found in robots.txt
+	if len(foundSitemaps) > 0 {
+		log.Debug().
+			Strs("sitemaps", foundSitemaps).
+			Msg("Sitemaps found in robots.txt")
+	} else {
+		log.Debug().Msg("No sitemaps found in robots.txt")
+	}
+
 	// If no sitemaps found in robots.txt, check common locations
 	if len(foundSitemaps) == 0 {
 		commonPaths := []string{
-			"https://" + domain + "/sitemap.xml",
-			"https://" + domain + "/sitemap_index.xml",
+			"https://" + normalizedDomain + "/sitemap.xml",
+			"https://" + normalizedDomain + "/sitemap_index.xml",
 		}
 
 		// Check common locations concurrently with a timeout
 		for _, sitemapURL := range commonPaths {
+			log.Debug().Str("checking_sitemap_url", sitemapURL).Msg("Checking common sitemap location")
 			req, err := http.NewRequestWithContext(ctx, "HEAD", sitemapURL, nil)
 			if err != nil {
+				log.Debug().Err(err).Str("url", sitemapURL).Msg("Error creating request for sitemap")
 				continue
 			}
 
 			resp, err := client.Do(req)
-			if err == nil {
-				resp.Body.Close()
-				if resp.StatusCode == http.StatusOK {
-					foundSitemaps = append(foundSitemaps, sitemapURL)
-				}
+			if err != nil {
+				log.Debug().Err(err).Str("url", sitemapURL).Msg("Error fetching sitemap")
+				continue
+			}
+			
+			resp.Body.Close()
+			log.Debug().Str("url", sitemapURL).Int("status", resp.StatusCode).Msg("Sitemap check response")
+			if resp.StatusCode == http.StatusOK {
+				foundSitemaps = append(foundSitemaps, sitemapURL)
+				log.Debug().Str("url", sitemapURL).Msg("Found sitemap at common location")
 			}
 		}
 	}
@@ -85,6 +122,18 @@ func (c *Crawler) DiscoverSitemaps(ctx context.Context, domain string) ([]string
 			seen[sitemap] = true
 			uniqueSitemaps = append(uniqueSitemaps, sitemap)
 		}
+	}
+
+	// Log final result
+	if len(uniqueSitemaps) > 0 {
+		log.Debug().
+			Strs("sitemaps", uniqueSitemaps).
+			Int("count", len(uniqueSitemaps)).
+			Msg("Found sitemaps for domain")
+	} else {
+		log.Debug().
+			Str("domain", domain).
+			Msg("No sitemaps found for domain")
 	}
 
 	return uniqueSitemaps, nil
@@ -138,6 +187,13 @@ func (c *Crawler) ParseSitemap(ctx context.Context, sitemapURL string) ([]string
 
 	content := string(body)
 
+	// Log the content for debugging
+	log.Debug().
+		Str("url", sitemapURL).
+		Int("content_length", len(content)).
+		Str("content_sample", content[:min(100, len(content))]).
+		Msg("Sitemap content received")
+
 	// Check if it's a sitemap index
 	if strings.Contains(content, "<sitemapindex") {
 		// Extract sitemap URLs
@@ -155,8 +211,17 @@ func (c *Crawler) ParseSitemap(ctx context.Context, sitemapURL string) ([]string
 	} else {
 		// It's a regular sitemap
 		extractedURLs := extractURLsFromXML(content, "<url>", "</url>", "<loc>", "</loc>")
+		log.Debug().
+			Str("sitemap_url", sitemapURL).
+			Int("url_count", len(extractedURLs)).
+			Msg("Extracted URLs from regular sitemap")
 		urls = append(urls, extractedURLs...)
 	}
+
+	log.Debug().
+		Str("sitemap_url", sitemapURL).
+		Int("total_url_count", len(urls)).
+		Msg("Finished parsing sitemap")
 
 	return urls, nil
 }
@@ -205,6 +270,14 @@ func extractURLsFromXML(content, startTag, endTag, locStartTag, locEndTag string
 	}
 
 	return urls
+}
+
+// min returns the smaller of a and b
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 // FilterURLs filters URLs based on include/exclude patterns
