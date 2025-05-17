@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Initialisation
 
-Before beginning any work on this project, please first read and understand the complete initialization guide:
+Before beginning any work on this project, please first read and understand the complete initialisation guide:
 
 [INIT.md](./INIT.md)
 
@@ -65,9 +65,9 @@ Blue Banded Bee is a web cache warming service built in Go, primarily focused on
 
 2. **Database Layer (PostgreSQL)**
 
-   - Uses a normalized schema with reference tables
+   - Uses a normalised schema with reference tables
    - Employs row-level locking with FOR UPDATE SKIP LOCKED
-   - Optimized connection pooling (25 max open, 10 max idle)
+   - Optimised connection pooling (25 max open, 10 max idle)
 
 3. **Crawler System**
 
