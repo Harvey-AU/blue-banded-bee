@@ -8,6 +8,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Multiple version updates may occur on the same date, each with its own version number.
 Each version represents a distinct set of changes, even if released on the same day.
 
+## [0.3.5] – 2025-05-17
+
+### Changed
+- Major code refactoring to improve architecture and maintainability:
+  - Eliminated duplicate code across the codebase
+  - Removed global state in favor of proper dependency injection
+  - Standardized function naming conventions
+  - Clarified responsibilities between packages
+  - Moved database operations to a unified interface
+  - Improved transaction management with DbQueue
+
+### Removed
+- Removed redundant files and functions:
+  - Eliminated `jobs/db.go` (moved functions to other packages)
+  - Removed `jobs/queue_helpers.go` (consolidated functionality)
+  - Removed global state management with `SetDBInstance`
+  - Eliminated duplicate SQL operations
+
+## [0.3.4] – 2025-05-17
+
+### Added
+- Enhanced sitemap crawling with improved URL handling
+- Added URL normalization in sitemap processing
+- Implemented robust error handling for URL processing
+- Added better detection and correction of malformed URLs
+
+### Fixed
+- Fixed sitemap URL discovery and processing issues
+- Improved relative URL handling in crawler
+- Resolved issues with URL encoding/decoding in sitemap parser
+- Fixed task queue URL processing in worker pool
+
+### Changed
+- Enhanced worker pool to better handle URL variations
+- Updated job manager to properly normalize URLs before processing
+- Improved URL validation logic in task processing
+
 ## [0.3.3] – 2025-04-22
 
 ### Added
