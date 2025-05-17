@@ -1,12 +1,13 @@
 # Roadmap
 
-- We've just moved to postgres and also using supabase (after briefly using postgres in Fly)
-- The main-archive.go.bak contains the original logic/setup for the app pre-postgres
-- We've successfully deployed to Fly.io and verified functionality
-- Local development works with PostgreSQL running on localhost
-- It is running jobs, tasks and recording results
-- Before proceeding with furthur functionality/etc, we want to finalise the data schema to allow for separatation of simple tables with references: site (for each domain), page (for each page being crawled), results (To store actual results), tasks to only have task status in them.
-- We need to implement a more robust worker pool using PostgreSQL's row-level locking
+## Current Status Overview
+
+- PostgreSQL migration completed (now using Supabase after briefly using Postgres in Fly)
+- Successfully deployed to Fly.io with verified functionality
+- Local development environment established with PostgreSQL
+- Currently processing jobs, tasks and recording results
+- Database schema needs finalisation to separate into cleaner tables: site (for domains), page (for URLs), results (for crawl data), and tasks (for status tracking)
+- Implementing a more robust worker pool using PostgreSQL's row-level locking
 
 ## ✅ Stage 0: Project Setup & Infrastructure (6-10 hrs)
 
@@ -77,7 +78,7 @@
 - [x] Add database performance monitoring
 - [x] Set up query error tracking
 
-## 🚧 Stage 2: Multi-domain Support & Job Queue Architecture
+## ✅ Stage 2: Multi-domain Support & Job Queue Architecture
 
 ### Job Queue Architecture
 
@@ -99,9 +100,9 @@
 
 - [x] Extract links from crawled pages
 - [x] Filter links to stay within target domain
-- [x] Add depth control for crawling
+- [x] Basic link discovery logic
 - [ ] Queue discovered links for processing
-- [ ] Wire DB `depth` column into enqueue logic for per-task depth control
+- [ ] *(Deprecated - to be removed per code cleanup plan)* Legacy depth controls
 
 ### Job Management API (1-2 hrs)
 
@@ -110,7 +111,7 @@
 - [x] Store recent crawled pages in job history
 - [x] Implement multi-domain support
 
-## 🚧 Stage 3: Deployment & Monitoring (8-12 hrs)
+## 🚧 Stage 3: PostgreSQL Migration & Performance Optimisation (3-4 weeks)
 
 ### Fly.io Production Setup (4-6 hrs)
 
@@ -136,8 +137,13 @@
 - [x] Set up PostgreSQL on Fly.io
   - [x] Create database instance
   - [x] Configure connection settings
-  - [ ] Set up backup schedule
   - [x] Configure security settings
+  
+#### Critical Database Management (Priority)
+
+- [ ] Set up backup schedule and automated recovery testing
+- [ ] Implement data retention policies
+- [ ] Create monitoring for database health
 
 #### Database Layer Replacement (3-4 hrs)
 
@@ -200,9 +206,9 @@
 - [ ] Clean up dependencies and imports
 - [ ] Update configuration and documentation
 
-## ⚪ Stage 4: Auth & User Management (10-16 hrs)
+## ⚪ Stage 4: Auth & User Management (2-3 weeks)
 
-### Implement Clerk authentication (4-6 hrs)
+### Implement Clerk authentication (3-5 days)
 
 - [ ] Set up Clerk project configuration
 - [ ] Implement auth middleware
@@ -210,14 +216,14 @@
 - [ ] Set up user session handling
 - [ ] Implement auth error handling
 
-### Connect user data to PostgreSQL (2-4 hrs)
+### Connect user data to PostgreSQL (2-3 days)
 
 - [ ] Design user data schema
 - [ ] Implement user profile storage
 - [ ] Add user preferences handling
 - [ ] Set up user data sync with Clerk
 
-### Set up basic usage tracking (4-6 hrs)
+### Set up basic usage tracking (2-3 days)
 
 - [ ] Implement usage counters
 - [ ] Add usage limits checking
@@ -225,9 +231,9 @@
 - [ ] Implement usage notifications
 - [ ] Add basic reporting functions
 
-## ⚪ Stage 5: Billing & Subscriptions (8-12 hrs)
+## ⚪ Stage 5: Billing & Subscriptions (2-3 weeks)
 
-### Implement Paddle integration (4-6 hrs)
+### Implement Paddle integration (3-5 days)
 
 - [ ] Set up Paddle account and config
 - [ ] Implement subscription webhooks
@@ -235,45 +241,54 @@
 - [ ] Set up subscription plans
 - [ ] Implement checkout process
 
-### Connect subscription status to user accounts (2-3 hrs)
+### Connect subscription status to user accounts (2-3 days)
 
 - [ ] Link subscriptions to users
 - [ ] Handle subscription updates
 - [ ] Implement plan changes
 - [ ] Add subscription status checks
 
-### Add usage limits/tracking (2-3 hrs)
+### Add usage limits/tracking (2-3 days)
 
 - [ ] Implement plan-based limits
 - [ ] Add upgrade prompts
 - [ ] Set up usage warnings
 - [ ] Implement grace period
 
-## ⚪ Stage 6: Webflow Integration & Launch (8-16 hrs)
+## ⚪ Stage 6: Webflow Integration & Launch
 
-### Build Webflow frontend interface (4-8 hrs)
+Detailed plan available in [docs/webflow-integration-plan.md](./docs/webflow-integration-plan.md)
 
-- [ ] Design API integration points
-- [ ] Create user dashboard
-- [ ] Implement results display
-- [ ] Add usage statistics display
-- [ ] Create settings interface
+### Webflow App Registration (2-3 weeks)
 
-### Connect to backend APIs (3-5 hrs)
+- [ ] Register as a Webflow developer
+- [ ] Create a Data Client App with OAuth support
+- [ ] Set up proper scopes and permissions
+- [ ] Implement secure authentication flow
 
-- [ ] Implement API calls
-- [ ] Add error handling
-- [ ] Set up response handling
-- [ ] Implement loading states
-- [ ] Add retry logic
+### Automatic Trigger & Scheduling (3-4 weeks)
 
-### Set up monitoring (GA) (1-3 hrs)
+- [ ] Implement webhook subscription for the `site_publish` event
+- [ ] Build secure endpoint to receive webhook POST requests
+- [ ] Verify webhook signatures using `x-webflow-signature` headers
+- [ ] Create configuration UI for scheduling options
+- [ ] Implement cron-like scheduler for recurring runs
 
-- [ ] Configure GA tracking
-- [ ] Add custom events
-- [ ] Set up conversion tracking
-- [ ] Implement error tracking
-- [ ] Create basic dashboards
+### Designer Extension UI (3-4 weeks)
+
+- [ ] Develop Designer Extension with progress indicators
+- [ ] Create error reporting interface
+- [ ] Implement real-time updates via WebSocket or polling
+- [ ] Build configuration panel for scheduler settings
+- [ ] Add authentication between extension and server
+
+### Launch & Documentation (1-2 weeks)
+
+- [ ] Complete marketplace submission process
+- [ ] Create user documentation and help resources
+- [ ] Set up support channels
+- [ ] Implement analytics for usage tracking
+- [ ] Create onboarding flow for new users
 
 ---
 
@@ -297,47 +312,95 @@
   - Reset database schema when needed
 - The implementation provides the foundation for the full worker/queue system
 
-### Next Steps (in priority order)
+## Implementation Priorities
 
-1. Implement the full worker pool with PostgreSQL:
+Listed below are the immediate priorities in order of importance. Each task includes its dependencies and expected impact.
 
+1. **Database Security & Resilience** (Critical)
+   - Set up proper backup schedule and recovery tests
+   - Implement monitoring for database health
+   - ✓ Dependent on: PostgreSQL setup (completed)
+   - Impact: Protects against data loss and ensures business continuity
+
+2. **Improve URL Handling and Sitemap Processing** (High - affects core functionality)
+   - Implement robust domain normalization (http/https, www prefix, trailing slashes)
+   - Enhance sitemap discovery and processing
+   - Improve logging and error handling
+   - ✓ Dependent on: Working crawler (completed)
+   - Impact: Improves reliability and successful crawl rate
+
+3. **Optimise Worker Pool with PostgreSQL** (High)
    - Create optimized task processing with batching
    - Implement proper concurrency control
    - Add database connection pooling optimisation
+   - ✓ Dependent on: PostgreSQL migration (completed)
+   - Impact: Improves system performance and scalability
 
-2. Add job management functionality:
+4. **Enhance Job Management** (Medium)
+   - Ensure reliable create/cancel/status operations
+   - Improve task status tracking
+   - Enhance progress calculation accuracy
+   - ✓ Dependent on: Worker pool optimisation
+   - Impact: Improves user experience and reliability
 
-   - Implement create/list/get/cancel operations for jobs
-   - Implement task status tracking
-   - Add progress calculation
-
-3. Implement efficient batch processing:
-
+5. **Implement Efficient Batch Processing** (Medium)
    - Use bulk inserts for storing results
    - Add configurable batch sizes
    - Implement proper error handling
+   - ✓ Dependent on: Worker pool optimisation
+   - Impact: Reduces database load and improves performance
 
-4. Clean up code by:
+6. **Code Cleanup** (Medium)
+   - Remove redundant worker pool creation
+   - Simplify middleware stack
+   - Standardize error handling
+   - Remove legacy code (including depth functionality)
+   - ✓ Dependent on: Stabilised core functionality
+   - Impact: Improves maintainability and reduces technical debt
 
-   - Removing redundant worker pool creation
-   - Simplifying middleware stack
-   - Standardizing error handling
-   - Removing SQLite-specific code
-
-5. Run performance tests:
+7. **Performance Testing** (Medium)
    - Test with high concurrency
    - Measure database performance
-   - Verify scaling behavior
+   - Verify scaling behaviour
+   - ✓ Dependent on: All optimisations above
+   - Impact: Validates improvements and identifies bottlenecks
 
 ---
 
-## Key Risk Areas:
+## Key Risk Areas
 
-- [ ] Production performance under high concurrency
-- [ ] PostgreSQL connection pooling optimisation
-- [ ] Worker pool scaling
-- [ ] Batch processing error handling
-- [ ] Deployment stability on Fly.io
-- [ ] Auth integration complexity
-- [ ] Paddle webhook handling
-- [ ] Webflow API limitations
+Listed in order of priority with mitigation strategies:
+
+### Immediate (Current Sprint)
+- [ ] **Database security & backups** - Critical to prevent data loss
+  - Mitigation: Implement automated backup schedule and periodic recovery testing
+  
+- [ ] **URL processing reliability** - Core functionality affected by recent fixes
+  - Mitigation: Thorough testing of URL normalisation and sitemap processing
+
+### Short-term (Next 1-2 Sprints)
+- [ ] **Production performance under high concurrency**
+  - Mitigation: Performance testing and optimisation of worker pool
+  
+- [ ] **PostgreSQL connection pooling optimisation**
+  - Mitigation: Implement proper connection management with monitoring
+
+- [ ] **Worker pool scaling**
+  - Mitigation: Design adaptive scaling based on queue depth
+
+### Medium-term (Future Sprints)
+- [ ] **Deployment stability on Fly.io**
+  - Mitigation: Implement proper health checks and rollback procedures
+  
+- [ ] **Auth integration complexity**
+  - Mitigation: Plan for phased implementation with thorough testing
+
+- [ ] **Batch processing error handling**
+  - Mitigation: Design proper retry mechanisms and monitoring
+
+### Long-term (Future Stages)
+- [ ] **Paddle webhook handling**
+  - Mitigation: Thorough testing of all subscription scenarios
+  
+- [ ] **Webflow API limitations**
+  - Mitigation: Early research and prototyping of Webflow integration
