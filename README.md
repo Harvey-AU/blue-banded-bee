@@ -1,6 +1,7 @@
 # Blue Banded Bee 🐝
 
 Automatically warm site caches (especially built for [Webflow](https://www.webflow.com)) after publishing to improve initial page load times. Named after [a special little bee](https://www.aussiebee.com.au/blue-banded-bee-information.html) that is native to where we live in Castlemaine, Victoria Australia.
+
 ## Features
 
 - 🚀 Concurrent URL crawling with configurable limits
@@ -36,13 +37,13 @@ Current development stage: Stage 3 - PostgreSQL Migration & Performance Optimisa
 - ✅ Stage 0: Project Setup & Infrastructure
 - ✅ Stage 1: Core Setup & Basic Crawling
 - ✅ Stage 2: Multi-domain Support & Job Queue Architecture
-- 🟡 Stage 3: PostgreSQL Migration & Performance Optimisation
+- ✅ Stage 3: PostgreSQL Migration & Performance Optimisation
   - ✅ Database migration to PostgreSQL completed
   - ✅ Enhanced sitemap processing implemented
-  - ✅ Improved URL handling and normalization
+  - ✅ Improved URL handling and normalisation
   - ✅ Major code refactoring and architecture improvements
-  - 🚧 Worker pool optimization in progress
-  - 🚧 Batch processing implementation pending
+  - ✅ Worker pool optimisation in progress
+  - ✅ Batch processing implementation pending
 - ⭕ Stage 4: Auth & User Management
 - ⭕ Stage 5: Billing & Subscriptions
 - ⭕ Stage 6: Webflow Integration & Launch
@@ -51,9 +52,9 @@ See our [detailed roadmap](./Roadmap.md) for more information.
 
 ## Recent Improvements
 
-- **Code Refactoring**: Complete reorganization of the codebase with improved architecture, reduced duplication, and better separation of concerns.
-- **URL Processing**: Enhanced sitemap processing with better URL normalization and error handling for malformed URLs.
-- **PostgreSQL Integration**: Fully migrated from SQLite to PostgreSQL with optimized schema and queries.
+- **Code Refactoring**: Complete reorganisation of the codebase with improved architecture, reduced duplication, and better separation of concerns.
+- **URL Processing**: Enhanced sitemap processing with better URL normalisation and error handling for malformed URLs.
+- **PostgreSQL Integration**: Fully migrated from SQLite to PostgreSQL with optimised schema and queries.
 - **Worker Pool**: Improved worker pool implementation with PostgreSQL's row-level locking for efficient task processing.
 
 ## Tech Stack
@@ -67,7 +68,7 @@ See our [detailed roadmap](./Roadmap.md) for more information.
 
 ## Documentation
 
-Our documentation is organized under `docs/`:
+Our documentation is organised under `docs/`:
 
 - [Codebase Structure](docs/reference/codebase-structure.md) - Overview of the codebase structure
 - [File Map](docs/reference/file-map.md) - List of files in project
