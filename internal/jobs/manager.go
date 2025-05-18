@@ -159,14 +159,22 @@ func (jm *JobManager) CreateJob(ctx context.Context, options *JobOptions) (*Job,
 				return fmt.Errorf("failed to enqueue task for root path: %w", err)
 			}
 			
-			// Update job's total task count
+			// Update job's total task count and found_tasks count (for root URL)
 			_, err = tx.ExecContext(ctx, `
 				UPDATE jobs
-				SET total_tasks = total_tasks + 1
+				SET total_tasks = total_tasks + 1,
+				    found_tasks = found_tasks + 1
 				WHERE id = $1
 			`, job.ID)
 			
-			return err
+			if err != nil {
+				return err
+			}
+			
+			// Only mark this page as processed after successful task creation
+			jm.markPageProcessed(job.ID, pageID)
+			
+			return nil
 		})
 		
 		if err != nil {
@@ -337,6 +345,32 @@ func (jm *JobManager) EnqueueJobURLs(ctx context.Context, jobID string, pageIDs 
 	
 	// Only mark pages as processed if the enqueue was successful
 	if err == nil {
+		// If these are found links (not from sitemap), update the found_tasks counter
+		if sourceType != "sitemap" && len(filteredPageIDs) > 0 {
+			updateErr := jm.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
+				_, err := tx.ExecContext(ctx, `
+					UPDATE jobs
+					SET found_tasks = found_tasks + $1
+					WHERE id = $2
+				`, len(filteredPageIDs), jobID)
+				if err != nil {
+					return err
+				}
+				
+				// Only mark this page as processed after successful task creation
+				jm.markPageProcessed(job.ID, pageID)
+				
+				return nil
+			})
+			if updateErr != nil {
+				log.Error().
+					Err(updateErr).
+					Str("job_id", jobID).
+					Msg("Failed to update found task count")
+			}
+		}
+		
+		// Mark all successfully enqueued pages as processed
 		for _, pageID := range filteredPageIDs {
 			jm.markPageProcessed(jobID, pageID)
 		}
@@ -437,7 +471,8 @@ func (jm *JobManager) GetJob(ctx context.Context, jobID string) (*Job, error) {
 			SELECT 
 				j.id, d.name, j.status, j.progress, j.total_tasks, j.completed_tasks, j.failed_tasks,
 				j.created_at, j.started_at, j.completed_at, j.concurrency, j.find_links,
-				j.include_paths, j.exclude_paths, j.error_message, j.required_workers
+				j.include_paths, j.exclude_paths, j.error_message, j.required_workers,
+				j.found_tasks, j.sitemap_tasks
 			FROM jobs j
 			JOIN domains d ON j.domain_id = d.id
 			WHERE j.id = $1
@@ -445,6 +480,7 @@ func (jm *JobManager) GetJob(ctx context.Context, jobID string) (*Job, error) {
 			&job.ID, &job.Domain, &job.Status, &job.Progress, &job.TotalTasks, &job.CompletedTasks,
 			&job.FailedTasks, &job.CreatedAt, &startedAt, &completedAt, &job.Concurrency,
 			&job.FindLinks, &includePaths, &excludePaths, &errorMessage, &job.RequiredWorkers,
+			&job.FoundTasks, &job.SitemapTasks,
 		)
 		return err
 	})
@@ -733,6 +769,22 @@ func (jm *JobManager) processSitemap(ctx context.Context, jobID, domain string, 
 				Str("domain", domain).
 				Msg("Failed to create page records")
 			return
+		}
+		
+		// Update sitemap task count in the job
+		err = jm.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
+			_, err := tx.ExecContext(ctx, `
+				UPDATE jobs
+				SET sitemap_tasks = sitemap_tasks + $1
+				WHERE id = $2
+			`, len(pageIDs), jobID)
+			return err
+		})
+		if err != nil {
+			log.Error().
+				Err(err).
+				Str("job_id", jobID).
+				Msg("Failed to update sitemap task count")
 		}
 		
 		// Use our wrapper function that checks for duplicates
