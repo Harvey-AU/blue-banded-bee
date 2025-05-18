@@ -321,7 +321,6 @@ func (wp *WorkerPool) processNextTask(ctx context.Context) error {
 				PageID:     task.PageID,
 				Path:       task.Path,
 				Status:     TaskStatus(task.Status),
-				Depth:      task.Depth,
 				CreatedAt:  task.CreatedAt,
 				StartedAt:  task.StartedAt, 
 				RetryCount: task.RetryCount,
@@ -385,21 +384,20 @@ func (wp *WorkerPool) processNextTask(ctx context.Context) error {
 
 // EnqueueURLs adds multiple URLs as tasks for a job
 // Legacy wrapper that delegates to dbQueue.EnqueueURLs
-func (wp *WorkerPool) EnqueueURLs(ctx context.Context, jobID string, pageIDs []int, urls []string, sourceType string, sourceURL string, depth int) error {
+func (wp *WorkerPool) EnqueueURLs(ctx context.Context, jobID string, pageIDs []int, urls []string, sourceType string, sourceURL string) error {
 	log.Debug().
 		Str("job_id", jobID).
 		Str("source_type", sourceType).
 		Int("url_count", len(urls)).
-		Int("depth", depth).
 		Msg("EnqueueURLs called")
 	
 	// Check if we have a job manager to use for duplicate checking
 	// If not, fall back to direct dbQueue usage
 	if wp.jobManager != nil {
-		return wp.jobManager.EnqueueJobURLs(ctx, jobID, pageIDs, urls, sourceType, sourceURL, depth)
+		return wp.jobManager.EnqueueJobURLs(ctx, jobID, pageIDs, urls, sourceType, sourceURL)
 	}
 	
-	return wp.dbQueue.EnqueueURLs(ctx, jobID, pageIDs, urls, sourceType, sourceURL, depth)
+	return wp.dbQueue.EnqueueURLs(ctx, jobID, pageIDs, urls, sourceType, sourceURL)
 }
 
 // StartTaskMonitor starts a background process that monitors for pending tasks
@@ -827,7 +825,7 @@ func (wp *WorkerPool) CleanupStuckJobs(ctx context.Context) error {
 
 func GetNextPendingTask(ctx context.Context, db *sql.DB, jobID string) (*Task, error) {
 	query := `
-		SELECT t.id, t.job_id, t.page_id, p.path, t.status, t.depth,
+		SELECT t.id, t.job_id, t.page_id, p.path, t.status,
 		t.created_at, t.retry_count, t.source_type, t.source_url, j.find_links, d.name
 		FROM tasks t
 		JOIN pages p ON t.page_id = p.id
@@ -973,7 +971,6 @@ func (wp *WorkerPool) processTask(ctx context.Context, task *Task) (*crawler.Cra
 				paths,
 				"link",     // source_type is "link" for discovered links
 				urlStr,     // source_url is the URL where these links were found
-				task.Depth+1, // Increment depth for discovered links
 			); err != nil {
 				log.Error().
 					Err(err).

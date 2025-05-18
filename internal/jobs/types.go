@@ -65,7 +65,6 @@ type Task struct {
 	Path        string     `json:"path"`
 	DomainName  string     `json:"domain_name"`
 	Status      TaskStatus `json:"status"`
-	Depth       int        `json:"depth"`
 	CreatedAt   time.Time  `json:"created_at"`
 	StartedAt   time.Time  `json:"started_at,omitempty"`
 	CompletedAt time.Time  `json:"completed_at,omitempty"`

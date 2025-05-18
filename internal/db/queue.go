@@ -52,7 +52,6 @@ type Task struct {
 	PageID      int
 	Path        string
 	Status      string
-	Depth       int
 	CreatedAt   time.Time
 	StartedAt   time.Time
 	CompletedAt time.Time
@@ -76,7 +75,7 @@ func (q *DbQueue) GetNextTask(ctx context.Context, jobID string) (*Task, error) 
 		// Query for a pending task with FOR UPDATE SKIP LOCKED
 		// This allows concurrent workers to each get different tasks
 		query := `
-			SELECT id, job_id, page_id, path, depth, created_at, retry_count, source_type, source_url 
+			SELECT id, job_id, page_id, path, created_at, retry_count, source_type, source_url 
 			FROM tasks 
 			WHERE status = 'pending'
 		`
@@ -105,7 +104,7 @@ func (q *DbQueue) GetNextTask(ctx context.Context, jobID string) (*Task, error) 
 
 		err := row.Scan(
 			&task.ID, &task.JobID, &task.PageID, &task.Path,
-			&task.Depth, &task.CreatedAt, &task.RetryCount, &task.SourceType, &task.SourceURL,
+			&task.CreatedAt, &task.RetryCount, &task.SourceType, &task.SourceURL,
 		)
 
 		if err == sql.ErrNoRows {
@@ -144,7 +143,7 @@ func (q *DbQueue) GetNextTask(ctx context.Context, jobID string) (*Task, error) 
 }
 
 // EnqueueURLs adds multiple URLs as tasks for a job
-func (q *DbQueue) EnqueueURLs(ctx context.Context, jobID string, pageIDs []int, paths []string, sourceType string, sourceURL string, depth int) error {
+func (q *DbQueue) EnqueueURLs(ctx context.Context, jobID string, pageIDs []int, paths []string, sourceType string, sourceURL string) error {
 	if len(pageIDs) == 0 {
 		return nil
 	}
@@ -163,9 +162,9 @@ func (q *DbQueue) EnqueueURLs(ctx context.Context, jobID string, pageIDs []int, 
 		// Prepare statement for batch insert
 		stmt, err := tx.PrepareContext(ctx, `
 			INSERT INTO tasks (
-				id, job_id, page_id, path, status, depth, created_at, retry_count,
+				id, job_id, page_id, path, status, created_at, retry_count,
 				source_type, source_url
-			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		`)
 		if err != nil {
 			return fmt.Errorf("failed to prepare statement: %w", err)
@@ -181,7 +180,7 @@ func (q *DbQueue) EnqueueURLs(ctx context.Context, jobID string, pageIDs []int, 
 
 			taskID := uuid.New().String()
 			_, err = stmt.ExecContext(ctx,
-				taskID, jobID, pageID, paths[i], "pending", depth, now, 0, sourceType, sourceURL)
+				taskID, jobID, pageID, paths[i], "pending", now, 0, sourceType, sourceURL)
 
 			if err != nil {
 				return fmt.Errorf("failed to insert task: %w", err)
@@ -193,8 +192,9 @@ func (q *DbQueue) EnqueueURLs(ctx context.Context, jobID string, pageIDs []int, 
 }
 
 // EnqueueTasks is an alias for EnqueueURLs to maintain compatibility with existing code
-func (q *DbQueue) EnqueueTasks(ctx context.Context, jobID string, pageIDs []int, paths []string, sourceType string, sourceURL string, depth int) error {
-	return q.EnqueueURLs(ctx, jobID, pageIDs, paths, sourceType, sourceURL, depth)
+func (q *DbQueue) EnqueueTasks(ctx context.Context, jobID string, pageIDs []int, paths []string, sourceType string, sourceURL string, _ int) error {
+	// The last parameter (depth) is ignored as we've removed this functionality
+	return q.EnqueueURLs(ctx, jobID, pageIDs, paths, sourceType, sourceURL)
 }
 
 // NewTaskQueue creates a task queue using the provided database connection

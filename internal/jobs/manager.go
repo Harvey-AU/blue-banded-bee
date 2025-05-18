@@ -19,7 +19,7 @@ import (
 // DbQueueProvider defines the interface for database operations
 type DbQueueProvider interface {
 	Execute(ctx context.Context, fn func(*sql.Tx) error) error
-	EnqueueURLs(ctx context.Context, jobID string, pageIDs []int, paths []string, sourceType string, sourceURL string, depth int) error
+	EnqueueURLs(ctx context.Context, jobID string, pageIDs []int, paths []string, sourceType string, sourceURL string) error
 	CleanupStuckJobs(ctx context.Context) error
 }
 
@@ -150,10 +150,10 @@ func (jm *JobManager) CreateJob(ctx context.Context, options *JobOptions) (*Job,
 			// Enqueue the root URL with its page ID
 			_, err = tx.ExecContext(ctx, `
 				INSERT INTO tasks (
-					id, job_id, page_id, path, status, depth, created_at, retry_count,
+					id, job_id, page_id, path, status, created_at, retry_count,
 					source_type, source_url
-				) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-			`, uuid.New().String(), job.ID, pageID, rootPath, "pending", 0, time.Now(), 0, "manual", "")
+				) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+			`, uuid.New().String(), job.ID, pageID, rootPath, "pending", time.Now(), 0, "manual", "")
 			
 			if err != nil {
 				return fmt.Errorf("failed to enqueue task for root path: %w", err)
@@ -301,7 +301,7 @@ func (jm *JobManager) clearProcessedPages(jobID string) {
 }
 
 // EnqueueJobURLs is a wrapper around dbQueue.EnqueueURLs that adds duplicate detection
-func (jm *JobManager) EnqueueJobURLs(ctx context.Context, jobID string, pageIDs []int, paths []string, sourceType string, sourceURL string, depth int) error {
+func (jm *JobManager) EnqueueJobURLs(ctx context.Context, jobID string, pageIDs []int, paths []string, sourceType string, sourceURL string) error {
 	span := sentry.StartSpan(ctx, "manager.enqueue_job_urls")
 	defer span.Finish()
 	
@@ -341,7 +341,7 @@ func (jm *JobManager) EnqueueJobURLs(ctx context.Context, jobID string, pageIDs 
 		Msg("Enqueueing filtered URLs")
 	
 	// Use the filtered lists to enqueue only new pages
-	err := jm.dbQueue.EnqueueURLs(ctx, jobID, filteredPageIDs, filteredPaths, sourceType, sourceURL, depth)
+	err := jm.dbQueue.EnqueueURLs(ctx, jobID, filteredPageIDs, filteredPaths, sourceType, sourceURL)
 	
 	// Only mark pages as processed if the enqueue was successful
 	if err == nil {
@@ -353,14 +353,7 @@ func (jm *JobManager) EnqueueJobURLs(ctx context.Context, jobID string, pageIDs 
 					SET found_tasks = found_tasks + $1
 					WHERE id = $2
 				`, len(filteredPageIDs), jobID)
-				if err != nil {
-					return err
-				}
-				
-				// Only mark this page as processed after successful task creation
-				jm.markPageProcessed(job.ID, pageID)
-				
-				return nil
+				return err
 			})
 			if updateErr != nil {
 				log.Error().
@@ -789,7 +782,7 @@ func (jm *JobManager) processSitemap(ctx context.Context, jobID, domain string, 
 		
 		// Use our wrapper function that checks for duplicates
 		baseURL := fmt.Sprintf("https://%s", domain)
-		if err := jm.EnqueueJobURLs(ctx, jobID, pageIDs, paths, "sitemap", baseURL, 0); err != nil {
+		if err := jm.EnqueueJobURLs(ctx, jobID, pageIDs, paths, "sitemap", baseURL); err != nil {
 			span.SetTag("error", "true")
 			span.SetData("error.message", err.Error())
 			log.Error().
