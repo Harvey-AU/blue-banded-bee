@@ -145,7 +145,7 @@ func (jm *JobManager) CreateJob(ctx context.Context, options *JobOptions) (*Job,
 			}
 			
 			// Mark this page as processed for this job
-			jm.markPageProcessed(job.ID, pageID)
+			// Will mark as processed after task creation succeeds
 			
 			// Enqueue the root URL with its page ID
 			_, err = tx.ExecContext(ctx, `
@@ -274,15 +274,9 @@ func (jm *JobManager) markPageProcessed(jobID string, pageID int) {
 	jm.processedPages[key] = struct{}{}
 }
 
-// Helper method to mark multiple pages as processed for a job
-func (jm *JobManager) markPagesProcessed(jobID string, pageIDs []int) {
-	jm.pagesMutex.Lock()
-	defer jm.pagesMutex.Unlock()
-	for _, pageID := range pageIDs {
-		key := fmt.Sprintf("%s_%d", jobID, pageID)
-		jm.processedPages[key] = struct{}{}
-	}
-}
+// Note: This method was previously used to mark multiple pages as processed
+// but has been replaced by marking individual pages after successful task creation
+// in the EnqueueJobURLs function. Kept as documentation.
 
 // Helper method to clear processed pages for a job (when job is completed or canceled)
 func (jm *JobManager) clearProcessedPages(jobID string) {
@@ -318,8 +312,7 @@ func (jm *JobManager) EnqueueJobURLs(ctx context.Context, jobID string, pageIDs 
 		if !jm.isPageProcessed(jobID, pageID) {
 			filteredPageIDs = append(filteredPageIDs, pageID)
 			filteredPaths = append(filteredPaths, paths[i])
-			// Mark this page as processed
-			jm.markPageProcessed(jobID, pageID)
+			// Don't mark as processed yet - we'll do that after successful enqueue
 		}
 	}
 	
@@ -340,7 +333,22 @@ func (jm *JobManager) EnqueueJobURLs(ctx context.Context, jobID string, pageIDs 
 		Msg("Enqueueing filtered URLs")
 	
 	// Use the filtered lists to enqueue only new pages
-	return jm.dbQueue.EnqueueURLs(ctx, jobID, filteredPageIDs, filteredPaths, sourceType, sourceURL, depth)
+	err := jm.dbQueue.EnqueueURLs(ctx, jobID, filteredPageIDs, filteredPaths, sourceType, sourceURL, depth)
+	
+	// Only mark pages as processed if the enqueue was successful
+	if err == nil {
+		for _, pageID := range filteredPageIDs {
+			jm.markPageProcessed(jobID, pageID)
+		}
+	} else {
+		log.Error().
+			Err(err).
+			Str("job_id", jobID).
+			Int("url_count", len(filteredPageIDs)).
+			Msg("Failed to enqueue URLs, not marking pages as processed")
+	}
+	
+	return err
 }
 
 // CancelJob cancels a running job
@@ -727,10 +735,7 @@ func (jm *JobManager) processSitemap(ctx context.Context, jobID, domain string, 
 			return
 		}
 		
-		// Mark all these pages as processed for this job
-		jm.markPagesProcessed(jobID, pageIDs)
-
-		// Use our new wrapper function that checks for duplicates
+		// Use our wrapper function that checks for duplicates
 		baseURL := fmt.Sprintf("https://%s", domain)
 		if err := jm.EnqueueJobURLs(ctx, jobID, pageIDs, paths, "sitemap", baseURL, 0); err != nil {
 			span.SetTag("error", "true")
