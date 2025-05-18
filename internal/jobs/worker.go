@@ -839,7 +839,7 @@ func GetNextPendingTask(ctx context.Context, db *sql.DB, jobID string) (*Task, e
 	var task Task
 	err := db.QueryRowContext(ctx, query, TaskStatusPending, jobID).Scan(
 		&task.ID, &task.JobID, &task.PageID, &task.Path, &task.Status,
-		&task.Depth, &task.CreatedAt, &task.RetryCount,
+		&task.CreatedAt, &task.RetryCount,
 		&task.SourceType, &task.SourceURL, &task.FindLinks,
 	)
 

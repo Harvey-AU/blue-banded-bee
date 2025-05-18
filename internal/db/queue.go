@@ -192,8 +192,7 @@ func (q *DbQueue) EnqueueURLs(ctx context.Context, jobID string, pageIDs []int, 
 }
 
 // EnqueueTasks is an alias for EnqueueURLs to maintain compatibility with existing code
-func (q *DbQueue) EnqueueTasks(ctx context.Context, jobID string, pageIDs []int, paths []string, sourceType string, sourceURL string, _ int) error {
-	// The last parameter (depth) is ignored as we've removed this functionality
+func (q *DbQueue) EnqueueTasks(ctx context.Context, jobID string, pageIDs []int, paths []string, sourceType string, sourceURL string, _ int) error {	
 	return q.EnqueueURLs(ctx, jobID, pageIDs, paths, sourceType, sourceURL)
 }
 
