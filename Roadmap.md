@@ -12,9 +12,9 @@
 - Completed major code refactoring to improve architecture and maintainability
 - Removed unnecessary depth functionality from the codebase
 
-## ✅ Stage 0: Project Setup & Infrastructure (6-10 hrs)
+## ✅ Stage 0: Project Setup & Infrastructure
 
-### Development Environment Setup (2-3 hrs)
+### Development Environment Setup
 
 - [x] Initialise GitHub repository
 - [x] Set up branch protection
@@ -23,7 +23,7 @@
 - [x] Set up local development environment
 - [x] Add initial documentation
 
-### Go Project Structure (2-3 hrs)
+### Go Project Structure
 
 - [x] Initialise Go project
 - [x] Set up dependency management
@@ -31,7 +31,7 @@
 - [x] Add basic configs
 - [x] Set up testing framework
 
-### Production Infrastructure Setup (2-4 hrs)
+### Production Infrastructure Setup
 
 - [x] Set up dev/prod environments
 - [x] Configure environment variables
@@ -46,9 +46,9 @@
 - [x] Test production deployment
 - [x] Initial Sentry.io connection
 
-## ✅ Stage 1: Core Setup & Basic Crawling (15-25 hrs)
+## ✅ Stage 1: Core Setup & Basic Crawling
 
-### Core API Implementation (3-5 hrs)
+### Core API Implementation
 
 - [x] Initialise Go project structure and dependencies
 - [x] Set up basic API endpoints
@@ -59,7 +59,7 @@
 - [x] Add graceful shutdown handling
 - [x] Implement configuration validation
 
-### Enhance Crawler Results (8-12 hrs)
+### Enhance Crawler Results
 
 - [x] Set up Colly crawler configuration
 - [x] Implement concurrent crawling logic
@@ -71,7 +71,7 @@
 - [x] Add crawler-specific error tracking
 - [x] Set up crawler performance monitoring
 
-### Set up Turso for storing results (4-8 hrs)
+### Set up Turso for storing results
 
 - [x] Design database schema
 - [x] Set up Turso connection and config
@@ -92,7 +92,7 @@
 - [x] Implement database retry logic for job operations to handle transient errors
 - [x] Enhance error reporting and monitoring
 
-### Sitemap Integration (2-3 hrs)
+### Sitemap Integration
 
 - [x] Implement sitemap.xml parser
 - [x] Add URL filtering based on path patterns
@@ -101,23 +101,23 @@
 - [x] Implement robust URL normalisation in sitemap processing
 - [x] Add improved error handling for malformed URLs
 
-### Link Discovery & Crawling (2-3 hrs)
+### Link Discovery & Crawling
 
 - [x] Extract links from crawled pages
 - [x] Filter links to stay within target domain
 - [x] Basic link discovery logic
 - [x] Queue discovered links for processing
 
-### Job Management API (1-2 hrs)
+### Job Management API
 
 - [x] Create job endpoints (create/list/get/cancel)
 - [x] Add progress calculation and reporting
 - [x] Store recent crawled pages in job history
 - [x] Implement multi-domain support
 
-## 🚧 Stage 3: PostgreSQL Migration & Performance Optimisation (3-4 weeks)
+## 🚧 Stage 3: PostgreSQL Migration & Performance Optimisation
 
-### Fly.io Production Setup (4-6 hrs)
+### Fly.io Production Setup
 
 - [x] Set up production environment on Fly.io
 - [x] Deploy and test rate limiting in production
@@ -126,7 +126,7 @@
 - [x] Implement monitoring alerts
 - [ ] Configure backup strategies
 
-### Performance Optimisation (4-6 hrs)
+### Performance Optimisation
 
 - [x] Implement caching layer
 - [x] Optimise database queries
@@ -134,9 +134,9 @@
 - [x] Add performance monitoring
 - [x] Made decision to switch to postgres at this point
 
-### PostgreSQL Migration (10-15 hrs)
+### PostgreSQL Migration
 
-#### PostgreSQL Setup and Infrastructure (2-3 hrs)
+#### PostgreSQL Setup and Infrastructure
 
 - [x] Set up PostgreSQL on Fly.io
   - [x] Create database instance
@@ -149,7 +149,7 @@
 - [ ] Implement data retention policies
 - [ ] Create monitoring for database health
 
-#### Database Layer Replacement (3-4 hrs)
+#### Database Layer Replacement
 
 - [x] Implement PostgreSQL schema
   - [x] Convert SQLite schema to PostgreSQL syntax
@@ -160,7 +160,7 @@
   - [x] Add health checks and monitoring
   - [x] Implement efficient error handling
 
-#### Task Queue and Worker Redesign (4-5 hrs)
+#### Task Queue and Worker Redesign
 
 - [x] Implement PostgreSQL-based task queue
   - [x] Use row-level locking with SELECT FOR UPDATE SKIP LOCKED
@@ -172,7 +172,7 @@
   - [x] Implement optimised task acquisition
   - [ ] Add proper worker scaling
 
-#### URL Processing Improvements (2-3 hrs)
+#### URL Processing Improvements
 
 - [x] Enhanced sitemap processing
   - [x] Implement robust URL normalisation
@@ -182,7 +182,7 @@
   - [x] Better handling of URL variations
   - [x] Consistent URL formatting throughout the codebase
 
-#### Code Refactoring (2-3 hrs)
+#### Code Refactoring
 
 - [x] Eliminate duplicate code
   - [x] Move database operations to a unified interface
@@ -196,7 +196,7 @@
   - [x] Use consistent function names across packages
   - [x] Clarify responsibilities between packages
 
-#### Code Cleanup (2-3 hrs)
+#### Code Cleanup
 
 - [x] Remove redundant worker pool creation
   - [x] Eliminate duplicate worker pools in API handlers
@@ -221,31 +221,31 @@
   - [x] Remove depth-related logic from link discovery process
   - [x] Update documentation to remove depth references
 
-#### Final Transition (1-2 hrs)
+#### Final Transition
 
 - [x] Update core endpoints to use new implementation
 - [x] Remove SQLite-specific code
 - [x] Clean up dependencies and imports
 - [x] Update configuration and documentation
 
-## ⚪ Stage 4: Auth & User Management (2-3 weeks)
+## ⚪ Stage 4: Auth & User Management
 
-### Implement Clerk authentication (3-5 days)
+### Implement Supabase Authentication
 
-- [ ] Set up Clerk project configuration
-- [ ] Implement auth middleware
-- [ ] Add social login providers
+- [ ] Configure Supabase Auth settings
+- [ ] Implement JWT validation middleware in Go
+- [ ] Add social login providers configuration
 - [ ] Set up user session handling
 - [ ] Implement auth error handling
 
-### Connect user data to PostgreSQL (2-3 days)
+### Connect user data to PostgreSQL
 
-- [ ] Design user data schema
+- [ ] Design user data schema with Row Level Security
 - [ ] Implement user profile storage
 - [ ] Add user preferences handling
-- [ ] Set up user data sync with Clerk
+- [ ] Configure PostgreSQL policies for data access
 
-### Set up basic usage tracking (2-3 days)
+### Set up basic usage tracking
 
 - [ ] Implement usage counters
 - [ ] Add usage limits checking
@@ -253,9 +253,9 @@
 - [ ] Implement usage notifications
 - [ ] Add basic reporting functions
 
-## ⚪ Stage 5: Billing & Subscriptions (2-3 weeks)
+## ⚪ Stage 5: Billing & Subscriptions
 
-### Implement Paddle integration (3-5 days)
+### Implement Paddle integration
 
 - [ ] Set up Paddle account and config
 - [ ] Implement subscription webhooks
@@ -263,14 +263,14 @@
 - [ ] Set up subscription plans
 - [ ] Implement checkout process
 
-### Connect subscription status to user accounts (2-3 days)
+### Connect subscription status to user accounts
 
 - [ ] Link subscriptions to users
 - [ ] Handle subscription updates
 - [ ] Implement plan changes
 - [ ] Add subscription status checks
 
-### Add usage limits/tracking (2-3 days)
+### Add usage limits/tracking
 
 - [ ] Implement plan-based limits
 - [ ] Add upgrade prompts
@@ -281,14 +281,14 @@
 
 Detailed plan available in [docs/webflow-integration-plan.md](./docs/webflow-integration-plan.md)
 
-### Webflow App Registration (2-3 weeks)
+### Webflow App Registration
 
 - [ ] Register as a Webflow developer
 - [ ] Create a Data Client App with OAuth support
 - [ ] Set up proper scopes and permissions
-- [ ] Implement secure authentication flow
+- [ ] Implement secure authentication flow with Supabase Auth
 
-### Automatic Trigger & Scheduling (3-4 weeks)
+### Automatic Trigger & Scheduling
 
 - [ ] Implement webhook subscription for the `site_publish` event
 - [ ] Build secure endpoint to receive webhook POST requests
@@ -296,15 +296,15 @@ Detailed plan available in [docs/webflow-integration-plan.md](./docs/webflow-int
 - [ ] Create configuration UI for scheduling options
 - [ ] Implement cron-like scheduler for recurring runs
 
-### Designer Extension UI (3-4 weeks)
+### Designer Extension UI
 
 - [ ] Develop Designer Extension with progress indicators
 - [ ] Create error reporting interface
 - [ ] Implement real-time updates via WebSocket or polling
 - [ ] Build configuration panel for scheduler settings
-- [ ] Add authentication between extension and server
+- [ ] Implement Supabase Auth JWT validation for extension-server communication
 
-### Launch & Documentation (1-2 weeks)
+### Launch & Documentation
 
 - [ ] Complete marketplace submission process
 - [ ] Create user documentation and help resources
@@ -330,6 +330,17 @@ Rough idea here: [docs/task-prioritisation.md](./docs/task-prioritisation.md) - 
 
 - [ ] Prioritisation of tasks by heirarchy in page
 - [ ] Prioritisation of tasks at job level
+
+### Supabase Advanced Integration
+
+Detailed plan available in [docs/supabase-integration-strategy.md](./docs/supabase-integration-strategy.md)
+
+- [ ] Implement PostgreSQL functions for core operations (task acquisition, job progress)
+- [ ] Create database triggers for automated state management
+- [ ] Set up Supabase Realtime for job/task monitoring
+- [ ] Implement Row Level Security policies for multi-tenant usage
+- [ ] Create Edge Functions for webhook handling and scheduled tasks
+- [ ] Optimise database interactions with native PostgreSQL features
 
 ---
 
