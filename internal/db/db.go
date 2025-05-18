@@ -233,7 +233,6 @@ func setupSchema(db *sql.DB) error {
 			page_id INTEGER NOT NULL REFERENCES pages(id),
 			path TEXT NOT NULL,
 			status TEXT NOT NULL,
-			depth INTEGER NOT NULL,
 			created_at TIMESTAMP NOT NULL,
 			started_at TIMESTAMP,
 			completed_at TIMESTAMP,

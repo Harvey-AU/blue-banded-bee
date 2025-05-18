@@ -9,7 +9,8 @@
       "Bash(go vet:*)",
       "Bash(rm:*)",
       "Bash(cat:*)",
-      "Bash(sed:*)"
+      "Bash(sed:*)",
+      "Bash(awk:*)"
     ],
     "deny": []
   }
