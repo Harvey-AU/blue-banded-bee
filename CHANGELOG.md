@@ -8,6 +8,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Multiple version updates may occur on the same date, each with its own version number.
 Each version represents a distinct set of changes, even if released on the same day.
 
+## [0.3.7] – 2025-05-18
+
+### Removed
+- Removed depth functionality from the codebase:
+  - Removed depth column from tasks table schema
+  - Removed depth parameter from all EnqueueURLs functions
+  - Updated code to not use depth in task processing
+  - Modified database queries to exclude the depth field
+  - Simplified code by removing unused functionality
+
+## [0.3.6] – 2025-05-18
+
+### Fixed
+- Fixed job counter updates for `sitemap_tasks` and `found_tasks` columns:
+  - Added missing functionality to update sitemap counter when sitemap URLs are processed
+  - Implemented incrementing of found task counter for URLs discovered during crawling
+  - Fixed duplicate processing issue by moving the page processing mark after successful task creation
+  - Updated job query to properly return counter values
+- Improved task creation reliability by ensuring pages are only marked as processed after successful DB operations
+
 ## [0.3.5] – 2025-05-17
 
 ### Changed
