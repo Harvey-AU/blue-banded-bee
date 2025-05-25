@@ -49,6 +49,10 @@ Each version represents a distinct set of changes, even if released on the same 
   - Improved cleanup of stuck jobs where all tasks are complete but job status is still running
   - Better handling of stale task recovery with proper timeout detection
   - Enhanced logging throughout the recovery and monitoring processes
+- **URL Normalisation**: Advanced link processing to eliminate duplicate pages
+  - Automatic anchor fragment stripping (`/page#section1` → `/page`)
+  - Trailing slash normalisation (`/events-news/` → `/events-news`)
+  - Ensures consistent URL handling and prevents duplicate crawling of identical pages
 
 ### Technical Details
 - Dashboard uses date-only pickers with proper timezone handling for accurate time grouping
