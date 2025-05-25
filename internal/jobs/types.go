@@ -97,14 +97,3 @@ type JobOptions struct {
 	RequiredWorkers int      `json:"required_workers"`
 }
 
-// Create a separate CrawlResult struct for batch operations
-type CrawlResultData struct {
-	JobID        string
-	TaskID       string
-	URL          string
-	ResponseTime int64
-	StatusCode   int
-	Error        string
-	CacheStatus  string
-	ContentType  string
-}

@@ -229,7 +229,7 @@
 
 ### 🔴 API-First Architecture Development
 
-Detailed plan available in [docs/multi-interface-architecture.md](./docs/multi-interface-architecture.md)
+Detailed plan available in [docs/multi-interface-architecture.md](docs/architecture/multi-interface-architecture.md)
 
 - [ ] Design comprehensive API for all interfaces
   - [ ] Define standard response format
@@ -264,7 +264,7 @@ Detailed plan available in [docs/multi-interface-architecture.md](./docs/multi-i
 
 ### 🔴 Simple Organisation Sharing
 
-Detailed plan available in [docs/organisation-model.md](./docs/organisation-model.md)
+Detailed plan available in [docs/organisation-model.md](docs/plans/organisation-model.md)
 
 - [ ] Auto-create organisation when user signs up
 - [ ] Implement member invitation system
@@ -273,7 +273,7 @@ Detailed plan available in [docs/organisation-model.md](./docs/organisation-mode
 
 ### 🔴 MVP Interface Development
 
-Detailed plan available in [docs/ui-architecture.md](./docs/ui-architecture.md)
+Detailed plan available in [docs/ui-architecture.md](docs/plans/ui-architecture.md)
 
 - [ ] Create simple Webflow marketing page
   - [ ] Design minimal home page with product explanation
@@ -336,7 +336,7 @@ Detailed plan available in [docs/ui-architecture.md](./docs/ui-architecture.md)
 
 ## ⚪ Stage 6: Multi-Interface Expansion & Launch
 
-Detailed plan available in [docs/webflow-integration-plan.md](./docs/webflow-integration-plan.md) and [docs/multi-interface-architecture.md](./docs/multi-interface-architecture.md)
+Detailed plan available in [docs/webflow-integration-plan.md](docs/plans/webflow-integration-plan.md) and [docs/multi-interface-architecture.md](docs/architecture/multi-interface-architecture.md)
 
 ### 🔴 Complete API Client Libraries
 
@@ -389,12 +389,12 @@ Detailed plan available in [docs/webflow-integration-plan.md](./docs/webflow-int
 
 ### 🔴 Clean up
 
-- [ ] [docs/api-cleanup.md](./docs/api-cleanup.md)
+- [ ] [docs/api-cleanup.md](docs/plans/api-cleanup.md)
 - [ ] Database backup/recovery
 
 ### 🔴 Task prioritisation
 
-Rough idea here: [docs/task-prioritisation.md](./docs/task-prioritisation.md) - don't follow this precisely.
+Rough idea here: [docs/task-prioritisation.md](docs/plans/task-prioritisation.md) - don't follow this precisely.
 
 - [ ] Prioritisation of tasks by hierarchy in page
 - [ ] Prioritisation of tasks at job level
