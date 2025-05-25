@@ -12,9 +12,9 @@
 - Completed major code refactoring to improve architecture and maintainability
 - Removed unnecessary depth functionality from the codebase
 
-## ✅ Stage 0: Project Setup & Infrastructure (6-10 hrs)
+## ✅ Stage 0: Project Setup & Infrastructure
 
-### Development Environment Setup (2-3 hrs)
+### ✅ Development Environment Setup
 
 - [x] Initialise GitHub repository
 - [x] Set up branch protection
@@ -23,7 +23,7 @@
 - [x] Set up local development environment
 - [x] Add initial documentation
 
-### Go Project Structure (2-3 hrs)
+### ✅ Go Project Structure
 
 - [x] Initialise Go project
 - [x] Set up dependency management
@@ -31,7 +31,7 @@
 - [x] Add basic configs
 - [x] Set up testing framework
 
-### Production Infrastructure Setup (2-4 hrs)
+### ✅ Production Infrastructure Setup
 
 - [x] Set up dev/prod environments
 - [x] Configure environment variables
@@ -46,9 +46,9 @@
 - [x] Test production deployment
 - [x] Initial Sentry.io connection
 
-## ✅ Stage 1: Core Setup & Basic Crawling (15-25 hrs)
+## ✅ Stage 1: Core Setup & Basic Crawling
 
-### Core API Implementation (3-5 hrs)
+### ✅ Core API Implementation
 
 - [x] Initialise Go project structure and dependencies
 - [x] Set up basic API endpoints
@@ -59,7 +59,7 @@
 - [x] Add graceful shutdown handling
 - [x] Implement configuration validation
 
-### Enhance Crawler Results (8-12 hrs)
+### ✅ Enhance Crawler Results
 
 - [x] Set up Colly crawler configuration
 - [x] Implement concurrent crawling logic
@@ -71,7 +71,7 @@
 - [x] Add crawler-specific error tracking
 - [x] Set up crawler performance monitoring
 
-### Set up Turso for storing results (4-8 hrs)
+### ✅ Set up Turso for storing results
 
 - [x] Design database schema
 - [x] Set up Turso connection and config
@@ -83,7 +83,7 @@
 
 ## ✅ Stage 2: Multi-domain Support & Job Queue Architecture
 
-### Job Queue Architecture
+### ✅ Job Queue Architecture
 
 - [x] Design job and task data structures
 - [x] Implement persistent job storage in database
@@ -92,7 +92,7 @@
 - [x] Implement database retry logic for job operations to handle transient errors
 - [x] Enhance error reporting and monitoring
 
-### Sitemap Integration (2-3 hrs)
+### ✅ Sitemap Integration
 
 - [x] Implement sitemap.xml parser
 - [x] Add URL filtering based on path patterns
@@ -101,23 +101,23 @@
 - [x] Implement robust URL normalisation in sitemap processing
 - [x] Add improved error handling for malformed URLs
 
-### Link Discovery & Crawling (2-3 hrs)
+### ✅ Link Discovery & Crawling
 
 - [x] Extract links from crawled pages
 - [x] Filter links to stay within target domain
 - [x] Basic link discovery logic
 - [x] Queue discovered links for processing
 
-### Job Management API (1-2 hrs)
+### ✅ Job Management API
 
 - [x] Create job endpoints (create/list/get/cancel)
 - [x] Add progress calculation and reporting
 - [x] Store recent crawled pages in job history
 - [x] Implement multi-domain support
 
-## 🚧 Stage 3: PostgreSQL Migration & Performance Optimisation (3-4 weeks)
+## 🚧 Stage 3: PostgreSQL Migration & Performance Optimisation
 
-### Fly.io Production Setup (4-6 hrs)
+### 🔄 Fly.io Production Setup
 
 - [x] Set up production environment on Fly.io
 - [x] Deploy and test rate limiting in production
@@ -126,7 +126,7 @@
 - [x] Implement monitoring alerts
 - [ ] Configure backup strategies
 
-### Performance Optimisation (4-6 hrs)
+### ✅ Performance Optimisation
 
 - [x] Implement caching layer
 - [x] Optimise database queries
@@ -134,22 +134,22 @@
 - [x] Add performance monitoring
 - [x] Made decision to switch to postgres at this point
 
-### PostgreSQL Migration (10-15 hrs)
+### 🔄 PostgreSQL Migration
 
-#### PostgreSQL Setup and Infrastructure (2-3 hrs)
+#### ✅ PostgreSQL Setup and Infrastructure
 
 - [x] Set up PostgreSQL on Fly.io
   - [x] Create database instance
   - [x] Configure connection settings
   - [x] Configure security settings
 
-#### Critical Database Management (Priority)
+#### 🔴 Critical Database Management (Priority)
 
 - [ ] Set up backup schedule and automated recovery testing
 - [ ] Implement data retention policies
 - [ ] Create monitoring for database health
 
-#### Database Layer Replacement (3-4 hrs)
+#### ✅ Database Layer Replacement
 
 - [x] Implement PostgreSQL schema
   - [x] Convert SQLite schema to PostgreSQL syntax
@@ -160,19 +160,17 @@
   - [x] Add health checks and monitoring
   - [x] Implement efficient error handling
 
-#### Task Queue and Worker Redesign (4-5 hrs)
+#### 🔄 Task Queue and Worker Redesign
 
 - [x] Implement PostgreSQL-based task queue
   - [x] Use row-level locking with SELECT FOR UPDATE SKIP LOCKED
   - [x] Optimise for concurrent access
   - [x] Plan task prioritisation implementation (docs created)
-  - [ ] Implement task prioritisation
 - [x] Redesign worker pool
   - [x] Create single global worker pool
   - [x] Implement optimised task acquisition
-  - [ ] Add proper worker scaling
 
-#### URL Processing Improvements (2-3 hrs)
+#### ✅ URL Processing Improvements
 
 - [x] Enhanced sitemap processing
   - [x] Implement robust URL normalisation
@@ -182,7 +180,7 @@
   - [x] Better handling of URL variations
   - [x] Consistent URL formatting throughout the codebase
 
-#### Code Refactoring (2-3 hrs)
+#### ✅ Code Refactoring
 
 - [x] Eliminate duplicate code
   - [x] Move database operations to a unified interface
@@ -196,7 +194,7 @@
   - [x] Use consistent function names across packages
   - [x] Clarify responsibilities between packages
 
-#### Code Cleanup (2-3 hrs)
+#### ✅ Code Cleanup
 
 - [x] Remove redundant worker pool creation
   - [x] Eliminate duplicate worker pools in API handlers
@@ -221,41 +219,84 @@
   - [x] Remove depth-related logic from link discovery process
   - [x] Update documentation to remove depth references
 
-#### Final Transition (1-2 hrs)
+#### ✅ Final Transition
 
 - [x] Update core endpoints to use new implementation
 - [x] Remove SQLite-specific code
 - [x] Clean up dependencies and imports
 - [x] Update configuration and documentation
 
-## ⚪ Stage 4: Auth & User Management (2-3 weeks)
+### 🔴 API-First Architecture Development
 
-### Implement Clerk authentication (3-5 days)
+Detailed plan available in [docs/multi-interface-architecture.md](./docs/multi-interface-architecture.md)
 
-- [ ] Set up Clerk project configuration
-- [ ] Implement auth middleware
-- [ ] Add social login providers
+- [ ] Design comprehensive API for all interfaces
+  - [ ] Define standard response format
+  - [ ] Document API with OpenAPI specification
+  - [ ] Design interface-agnostic endpoints
+  - [ ] Create webhook system for notifications
+- [ ] Implement multi-interface authentication foundations
+  - [ ] Design JWT-based authentication structure
+  - [ ] Create API key system for integrations
+  - [ ] Plan OAuth support foundation
+- [ ] Develop API client library core
+  - [ ] Create core JavaScript client for API interaction
+  - [ ] Implement basic authentication handling
+  - [ ] Design extensible client architecture
+
+## ⚪ Stage 4: Core Authentication & MVP Interface
+
+### 🔴 Implement Supabase Authentication
+
+- [ ] Configure Supabase Auth settings
+- [ ] Implement JWT validation middleware in Go
+- [ ] Add social login providers configuration
 - [ ] Set up user session handling
 - [ ] Implement auth error handling
 
-### Connect user data to PostgreSQL (2-3 days)
+### 🔴 Connect user data to PostgreSQL
 
-- [ ] Design user data schema
+- [ ] Design user data schema with Row Level Security
 - [ ] Implement user profile storage
 - [ ] Add user preferences handling
-- [ ] Set up user data sync with Clerk
+- [ ] Configure PostgreSQL policies for data access
 
-### Set up basic usage tracking (2-3 days)
+### 🔴 Simple Organisation Sharing
+
+Detailed plan available in [docs/organisation-model.md](./docs/organisation-model.md)
+
+- [ ] Auto-create organisation when user signs up
+- [ ] Implement member invitation system
+- [ ] Create shared access to all jobs/tasks/reports within organisation
+- [ ] Implement organisation-level usage tracking
+
+### 🔴 MVP Interface Development
+
+Detailed plan available in [docs/ui-architecture.md](./docs/ui-architecture.md)
+
+- [ ] Create simple Webflow marketing page
+  - [ ] Design minimal home page with product explanation
+  - [ ] Set up basic navigation structure
+  - [ ] Implement call-to-action for early access
+- [ ] Develop proof-of-concept web application
+  - [ ] Create component-based architecture with HTML Custom Elements
+  - [ ] Build minimal dashboard for job management
+  - [ ] Implement basic job creation form
+  - [ ] Create simple job results view with core metrics
+- [ ] Integrate Supabase Auth with interface
+  - [ ] Implement login/signup functionality
+  - [ ] Create session management
+  - [ ] Set up secure authentication flow
+
+### 🔴 Set up basic usage tracking
 
 - [ ] Implement usage counters
-- [ ] Add usage limits checking
-- [ ] Set up usage reset schedule
-- [ ] Implement usage notifications
-- [ ] Add basic reporting functions
+- [ ] Add basic limits
+- [ ] Set up usage reporting functionality
 
-## ⚪ Stage 5: Billing & Subscriptions (2-3 weeks)
+## ⚪ Stage 5: Billing & Expanded Interface
 
-### Implement Paddle integration (3-5 days)
+### 🔴 Implement Paddle integration
 
 - [ ] Set up Paddle account and config
 - [ ] Implement subscription webhooks
@@ -263,32 +304,58 @@
 - [ ] Set up subscription plans
 - [ ] Implement checkout process
 
-### Connect subscription status to user accounts (2-3 days)
+### 🔴 Connect subscription status to organisations
 
-- [ ] Link subscriptions to users
+- [ ] Link subscriptions to organisations
 - [ ] Handle subscription updates
 - [ ] Implement plan changes
 - [ ] Add subscription status checks
+- [ ] Implement simple organisation-level usage quotas
 
-### Add usage limits/tracking (2-3 days)
+### 🔴 Complete User Interface Development
 
-- [ ] Implement plan-based limits
-- [ ] Add upgrade prompts
-- [ ] Set up usage warnings
-- [ ] Implement grace period
+- [ ] Expand Webflow site for full marketing
+  - [ ] Design and build complete marketing pages (features, pricing, etc.)
+  - [ ] Enhance dashboard layout and user account pages
+  - [ ] Implement Webflow Memberships integration
+- [ ] Develop simple organisation interface
+  - [ ] Add member invitation and management
+  - [ ] Create organisation dashboard with shared resources
+  - [ ] Add organisation-level reporting
+- [ ] Enhance embedded JavaScript application
+  - [ ] Expand job creation interface with advanced options
+  - [ ] Create comprehensive job results visualization
+  - [ ] Implement account settings and profile management
+  - [ ] Develop notification system for completed jobs
+- [ ] Add usage limits/tracking
+  - [ ] Implement plan-based limits
+  - [ ] Add upgrade prompts
+  - [ ] Set up usage warnings
+  - [ ] Implement grace period
 
-## ⚪ Stage 6: Webflow Integration & Launch
+## ⚪ Stage 6: Multi-Interface Expansion & Launch
 
-Detailed plan available in [docs/webflow-integration-plan.md](./docs/webflow-integration-plan.md)
+Detailed plan available in [docs/webflow-integration-plan.md](./docs/webflow-integration-plan.md) and [docs/multi-interface-architecture.md](./docs/multi-interface-architecture.md)
 
-### Webflow App Registration (2-3 weeks)
+### 🔴 Complete API Client Libraries
+
+- [ ] Extend API client library for multiple interfaces
+  - [ ] Enhance core JavaScript client
+  - [ ] Create interface-specific adapters
+  - [ ] Implement advanced authentication handling
+
+### 🔴 Webflow Designer Extension
 
 - [ ] Register as a Webflow developer
 - [ ] Create a Data Client App with OAuth support
 - [ ] Set up proper scopes and permissions
-- [ ] Implement secure authentication flow
+- [ ] Develop Designer Extension with progress indicators
+- [ ] Create error reporting interface
+- [ ] Implement real-time updates via API client library
+- [ ] Build configuration panel for scheduler settings
+- [ ] Implement OAuth authentication for extension-server communication
 
-### Automatic Trigger & Scheduling (3-4 weeks)
+### 🔴 Automatic Trigger & Scheduling
 
 - [ ] Implement webhook subscription for the `site_publish` event
 - [ ] Build secure endpoint to receive webhook POST requests
@@ -296,15 +363,15 @@ Detailed plan available in [docs/webflow-integration-plan.md](./docs/webflow-int
 - [ ] Create configuration UI for scheduling options
 - [ ] Implement cron-like scheduler for recurring runs
 
-### Designer Extension UI (3-4 weeks)
+### 🔴 Slack Integration
 
-- [ ] Develop Designer Extension with progress indicators
-- [ ] Create error reporting interface
-- [ ] Implement real-time updates via WebSocket or polling
-- [ ] Build configuration panel for scheduler settings
-- [ ] Add authentication between extension and server
+- [ ] Create Slack app and configure commands
+- [ ] Implement API key authentication for Slack integration
+- [ ] Develop interactive message components
+- [ ] Set up webhook notifications for job events
+- [ ] Create documentation for Slack app installation
 
-### Launch & Documentation (1-2 weeks)
+### 🔴 Launch & Documentation
 
 - [ ] Complete marketplace submission process
 - [ ] Create user documentation and help resources
@@ -312,24 +379,35 @@ Detailed plan available in [docs/webflow-integration-plan.md](./docs/webflow-int
 - [ ] Implement analytics for usage tracking
 - [ ] Create onboarding flow for new users
 
-## ⚪ Stage 7: Feature refinment & scaling
+## ⚪ Stage 7: Feature Refinement & Scaling
 
-### Features
+### 🔴 Features
 
 - [ ] Enable 'Don't treat query strings as unique URLs'
-- [ ] Remove #anchor links as 'new page found' in find_links funtionality
+- [ ] Remove #anchor links as 'new page found' in find_links functionality
 
-### Clean up
+### 🔴 Clean up
 
 - [ ] [docs/api-cleanup.md](./docs/api-cleanup.md)
 - [ ] Database backup/recovery
 
-### Task prioritisation
+### 🔴 Task prioritisation
 
 Rough idea here: [docs/task-prioritisation.md](./docs/task-prioritisation.md) - don't follow this precisely.
 
-- [ ] Prioritisation of tasks by heirarchy in page
+- [ ] Prioritisation of tasks by hierarchy in page
 - [ ] Prioritisation of tasks at job level
+
+### 🔴 Supabase Advanced Integration
+
+Detailed plan available in [docs/supabase-integration-strategy.md](./docs/supabase-integration-strategy.md)
+
+- [ ] Implement PostgreSQL functions for core operations (task acquisition, job progress)
+- [ ] Create database triggers for automated state management
+- [ ] Set up Supabase Realtime for job/task monitoring
+- [ ] Implement Row Level Security policies for multi-tenant usage
+- [ ] Create Edge Functions for webhook handling and scheduled tasks
+- [ ] Optimise database interactions with native PostgreSQL features
 
 ---
 

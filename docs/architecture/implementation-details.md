@@ -72,6 +72,8 @@ Blue Banded Bee is built with a worker pool architecture for efficient URL crawl
 - Request validation
 - Error handling and sanitization
 - Secure configuration management
+- JWT-based authentication with Supabase Auth
+- Row Level Security for database access control
 
 ## Deployment Architecture
 

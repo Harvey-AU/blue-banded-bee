@@ -52,7 +52,7 @@ I've been working in CSS, HTML, JS & Python for many years, but am just a hack. 
 - [ ] 5.3 Interfaces
 - [ ] 5.4 Polymorphism via interfaces
 
-### 6. Packages & Code Organization
+### 6. Packages & Code Organisation
 
 - [ ] 6.1 Folder-to-package mapping
 - [ ] 6.2 Exported vs unexported names
