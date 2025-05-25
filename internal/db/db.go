@@ -72,13 +72,13 @@ func New(config *Config) (*DB, error) {
 		config.SSLMode = "disable"
 	}
 	if config.MaxIdleConns == 0 {
-		config.MaxIdleConns = 10
+		config.MaxIdleConns = 15
 	}
 	if config.MaxOpenConns == 0 {
-		config.MaxOpenConns = 25
+		config.MaxOpenConns = 35
 	}
 	if config.MaxLifetime == 0 {
-		config.MaxLifetime = 5 * time.Minute
+		config.MaxLifetime = 30 * time.Minute
 	}
 
 	client, err := sql.Open("postgres", config.ConnectionString())

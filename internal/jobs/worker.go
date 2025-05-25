@@ -125,6 +125,11 @@ func (wp *WorkerPool) Start(ctx context.Context) {
 		log.Error().Err(err).Msg("Failed to perform initial job cleanup")
 	}
 
+	// Recover jobs that were running before restart
+	if err := wp.recoverRunningJobs(ctx); err != nil {
+		log.Error().Err(err).Msg("Failed to recover running jobs on startup")
+	}
+
 	// Start monitors
 	wp.StartTaskMonitor(ctx)
 	wp.StartCleanupMonitor(ctx)
@@ -572,6 +577,82 @@ func (wp *WorkerPool) recoverStaleTasks(ctx context.Context) error {
 
 		return rows.Err()
 	})
+}
+
+// recoverRunningJobs finds jobs that were in 'running' state when the server shut down
+// and resets their 'running' tasks to 'pending', then adds them to the worker pool
+func (wp *WorkerPool) recoverRunningJobs(ctx context.Context) error {
+	log.Info().Msg("Recovering jobs that were running before restart")
+	
+	// Find jobs with 'running' status that have 'running' tasks
+	rows, err := wp.db.QueryContext(ctx, `
+		SELECT DISTINCT j.id
+		FROM jobs j
+		JOIN tasks t ON j.id = t.job_id
+		WHERE j.status = $1
+		AND t.status = $2
+	`, JobStatusRunning, TaskStatusRunning)
+	
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to query for running jobs with running tasks")
+		return err
+	}
+	defer rows.Close()
+	
+	var recoveredJobs []string
+	for rows.Next() {
+		var jobID string
+		if err := rows.Scan(&jobID); err != nil {
+			log.Error().Err(err).Msg("Failed to scan job ID during recovery")
+			continue
+		}
+		
+		// Reset running tasks to pending for this job
+		err := wp.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
+			result, err := tx.ExecContext(ctx, `
+				UPDATE tasks 
+				SET status = $1,
+					started_at = NULL,
+					retry_count = retry_count + 1
+				WHERE job_id = $2 
+				AND status = $3
+			`, TaskStatusPending, jobID, TaskStatusRunning)
+			
+			if err != nil {
+				return err
+			}
+			
+			rowsAffected, _ := result.RowsAffected()
+			log.Info().
+				Str("job_id", jobID).
+				Int64("tasks_reset", rowsAffected).
+				Msg("Reset running tasks to pending")
+			
+			return nil
+		})
+		
+		if err != nil {
+			log.Error().Err(err).Str("job_id", jobID).Msg("Failed to reset running tasks")
+			continue
+		}
+		
+		// Add job back to worker pool
+		wp.AddJob(jobID, nil)
+		recoveredJobs = append(recoveredJobs, jobID)
+		
+		log.Info().Str("job_id", jobID).Msg("Recovered running job and added to worker pool")
+	}
+	
+	if len(recoveredJobs) > 0 {
+		log.Info().
+			Int("count", len(recoveredJobs)).
+			Strs("job_ids", recoveredJobs).
+			Msg("Successfully recovered running jobs from restart")
+	} else {
+		log.Debug().Msg("No running jobs found to recover")
+	}
+	
+	return rows.Err()
 }
 
 // recoveryMonitor periodically checks for and recovers stale tasks
