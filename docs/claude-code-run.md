@@ -6,6 +6,9 @@
 # Navigate to your project directory
 cd C:\Users\User\Documents\GitHub\blue-banded-bee
 
+# Start ubuntu
+wsl
+
 # Run Claude Code
 claude
 ```
