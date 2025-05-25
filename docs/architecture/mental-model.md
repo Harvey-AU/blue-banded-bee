@@ -7,6 +7,7 @@
 - **Job**: A collection of URLs to be crawled from a single domain
 - **Task**: Individual URL processing unit within a job
 - **Worker**: Process that executes tasks concurrently
+- **User**: Entity that owns jobs and has authenticated access via Supabase Auth
 
 ### Task Processing
 
@@ -159,6 +160,12 @@ error TEXT
    - Structured logging with zerolog
    - Sentry integration for error tracking
    - Performance metrics collection
+
+4. Authentication and Authorization
+   - JWT-based authentication with Supabase Auth
+   - Role-based access control
+   - PostgreSQL Row Level Security (RLS) for data protection
+   - Secure token validation middleware
 
 ## Caching Strategy
 

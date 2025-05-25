@@ -12,6 +12,7 @@ Automatically warm site caches (especially built for [Webflow](https://www.webfl
 - 🌐 Intelligent sitemap processing and URL discovery
 - 🔄 Automatic link extraction to discover and warm additional pages
 - 🧩 Clean architecture with proper dependency injection
+- 🔐 Secure authentication via Supabase Auth with JWT
 
 ## Quick Start
 
@@ -64,6 +65,7 @@ See our [detailed roadmap](./Roadmap.md) for more information.
 - Hosting: Fly.io
 - Error Tracking: Sentry
 - Cache Layer: Cloudflare
+- Authentication: Supabase Auth
 - Documentation: Obsidian
 
 ## Documentation
@@ -77,6 +79,7 @@ Our documentation is organised under `docs/`:
 - [Deployment Guide](docs/guides/deployment.md) - Deployment instructions
 - [Core Concepts](docs/architecture/mental-model.md) - Core concepts and design
 - [Implementation Details](docs/architecture/implementation-details.md) - System architecture
+- [Auth Integration](docs/reference/auth-integration.md) - Authentication implementation
 
 ## Security
 
