@@ -8,6 +8,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Multiple version updates may occur on the same date, each with its own version number.
 Each version represents a distinct set of changes, even if released on the same day.
 
+## [0.3.8] – 2025-05-25
+
+### Fixed
+- **Critical Production Fix**: Resolved database schema mismatch causing task insertion failures
+  - Fixed INSERT statement parameter count mismatch in `/internal/db/queue.go`
+  - Corrected VALUES clause to match 9 fields with 9 placeholders (`$1` through `$9`)
+  - Eliminated `pq: null value in column "depth" of relation "tasks" violates not-null constraint` error
+- Fixed compilation issues in test utilities:
+  - Updated `cmd/test_jobs/main.go` to use correct function signatures for `NewWorkerPool` and `NewJobManager`
+  - Added proper `dbQueue` parameter initialization following production code patterns
+
+### Technical Details
+- The production database retained the deprecated `depth` column from v0.3.6, but the code was updated in v0.3.7 to remove depth functionality
+- Database schema reset was required to align production database with current code expectations
+- Task queue now successfully processes jobs without depth-related constraint violations
+
 ## [0.3.7] – 2025-05-18
 
 ### Removed
