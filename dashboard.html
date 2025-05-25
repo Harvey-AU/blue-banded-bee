@@ -314,25 +314,62 @@
         const { data: tasks, error } = await query.limit(50000);
 
         console.log('Completed tasks:', { tasks, error, count: tasks?.length, dateFrom, dateTo, groupBy: groupByValue });
+        
+        // Debug: Show first few tasks if we have them
+        if (tasks && tasks.length > 0) {
+          console.log('Sample tasks:', tasks.slice(0, 3));
+        }
+        
+        // Debug: Check if we have tasks with different statuses
+        const { data: allTaskStatuses } = await supabase
+          .from("tasks")
+          .select("status")
+          .limit(10);
+        console.log('Task statuses sample:', allTaskStatuses);
 
         if (!tasks || tasks.length === 0) {
-          console.log('No completed tasks found, showing placeholder');
+          console.log('No completed tasks found, trying job progress fallback');
+          
+          // Fallback: Show job progress over time instead
+          const { data: jobs } = await supabase.from("job_list").select("created_at, progress_percent, completed_tasks, total_tasks").order("created_at", { ascending: true }).limit(20);
+          console.log('Fallback jobs data:', jobs);
+          
           const ctx = document.getElementById("progressChart").getContext("2d");
           if (progressChart) {
             progressChart.destroy();
           }
-          progressChart = new Chart(ctx, {
-            type: "line",
-            data: {
-              labels: ['Waiting for completed tasks...'],
-              datasets: [{
-                label: "Tasks Completed",
-                data: [0],
-                borderColor: "#4caf50",
-                backgroundColor: "rgba(76, 175, 80, 0.1)",
-              }],
-            },
-          });
+          
+          if (jobs && jobs.length > 0) {
+            progressChart = new Chart(ctx, {
+              type: "bar",
+              data: {
+                labels: jobs.map(j => formatDate(j.created_at)),
+                datasets: [{
+                  label: "Tasks Completed per Job",
+                  data: jobs.map(j => j.completed_tasks || 0),
+                  backgroundColor: "rgba(76, 175, 80, 0.7)",
+                  borderColor: "#4caf50",
+                  borderWidth: 1,
+                }],
+              },
+              options: {
+                responsive: true,
+                scales: { y: { beginAtZero: true } },
+              },
+            });
+          } else {
+            progressChart = new Chart(ctx, {
+              type: "bar",
+              data: {
+                labels: ['No Data'],
+                datasets: [{
+                  label: "Tasks Completed",
+                  data: [0],
+                  backgroundColor: "rgba(76, 175, 80, 0.7)",
+                }],
+              },
+            });
+          }
           return;
         }
 
