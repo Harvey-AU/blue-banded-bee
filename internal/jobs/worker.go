@@ -923,13 +923,24 @@ func (wp *WorkerPool) processTask(ctx context.Context, task *Task) (*crawler.Cra
 				continue
 			}
 
-			// At this point, it's same domain, so add it
-			filtered = append(filtered, link)
+			// Strip anchor fragments before adding (page.html#section1 -> page.html)
+			linkURL.Fragment = ""
+			
+			// Normalise trailing slashes (/events-news/ -> /events-news)
+			if linkURL.Path != "/" && strings.HasSuffix(linkURL.Path, "/") {
+				linkURL.Path = strings.TrimSuffix(linkURL.Path, "/")
+			}
+			
+			cleanLink := linkURL.String()
+			
+			// At this point, it's same domain, so add it (without fragment or trailing slash)
+			filtered = append(filtered, cleanLink)
 			log.Debug().
-				Str("link", link).
+				Str("original_link", link).
+				Str("clean_link", cleanLink).
 				Str("link_hostname", linkURL.Hostname()).
 				Str("job_domain", task.DomainName).
-				Msg("Added same-domain link")
+				Msg("Added same-domain link (stripped anchors)")
 		}
 
 		log.Debug().
