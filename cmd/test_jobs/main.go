@@ -58,16 +58,19 @@ func main() {
 	// Set up crawler
 	crawler := crawler.New(nil)
 
+	// Create database queue for operations
+	dbQueue := db.NewDbQueue(database.GetDB())
+
 	// Create worker pool
 	var jobWorkers int = 3
-	workerPool := jobs.NewWorkerPool(database.GetDB(), crawler, jobWorkers, database.GetConfig())
+	workerPool := jobs.NewWorkerPool(database.GetDB(), dbQueue, crawler, jobWorkers, database.GetConfig())
 	workerPool.Start(context.Background())
 	defer workerPool.Stop()
 
 	log.Info().Msg("Worker pool started with " + strconv.Itoa(jobWorkers) + " workers")
 
 	// Create a test job
-	jobManager := jobs.NewJobManager(database.GetDB(), crawler, nil)
+	jobManager := jobs.NewJobManager(database.GetDB(), dbQueue, crawler, workerPool)
 
 	// Set up job options
 	jobOptions := &jobs.JobOptions{
