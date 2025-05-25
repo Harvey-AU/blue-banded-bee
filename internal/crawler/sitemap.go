@@ -10,28 +10,15 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Harvey-AU/blue-banded-bee/internal/util"
 	"github.com/rs/zerolog/log"
 )
 
-// normalizeDomain removes http/https prefix and www. from domain
-func normalizeDomain(domain string) string {
-	// Remove http:// or https:// prefix if present
-	domain = strings.TrimPrefix(domain, "http://")
-	domain = strings.TrimPrefix(domain, "https://")
-	
-	// Remove www. prefix if present
-	domain = strings.TrimPrefix(domain, "www.")
-	
-	// Remove trailing slash if present
-	domain = strings.TrimSuffix(domain, "/")
-	
-	return domain
-}
 
 // DiscoverSitemaps attempts to find sitemaps for a domain by checking common locations
 func (c *Crawler) DiscoverSitemaps(ctx context.Context, domain string) ([]string, error) {
 	// Normalize the domain first to handle different input formats
-	normalizedDomain := normalizeDomain(domain)
+	normalizedDomain := util.NormalizeDomain(domain)
 	log.Debug().
 		Str("original_domain", domain).
 		Str("normalized_domain", normalizedDomain).
@@ -202,7 +189,7 @@ func (c *Crawler) ParseSitemap(ctx context.Context, sitemapURL string) ([]string
 		// Process each sitemap in the index
 		for _, childSitemapURL := range sitemapURLs {
 			// Validate and normalize the child sitemap URL
-			childSitemapURL = validateURL(childSitemapURL)
+			childSitemapURL = util.NormalizeURL(childSitemapURL)
 			if childSitemapURL == "" {
 				log.Warn().Str("url", childSitemapURL).Msg("Invalid child sitemap URL, skipping")
 				continue
@@ -222,7 +209,7 @@ func (c *Crawler) ParseSitemap(ctx context.Context, sitemapURL string) ([]string
 		// Validate and normalize all extracted URLs
 		var validURLs []string
 		for _, extractedURL := range extractedURLs {
-			validURL := validateURL(extractedURL)
+			validURL := util.NormalizeURL(extractedURL)
 			if validURL != "" {
 				validURLs = append(validURLs, validURL)
 			} else {
@@ -245,43 +232,6 @@ func (c *Crawler) ParseSitemap(ctx context.Context, sitemapURL string) ([]string
 	return urls, nil
 }
 
-// validateURL ensures a URL is properly formatted with a scheme
-func validateURL(rawURL string) string {
-	// Clean up the URL by trimming spaces
-	rawURL = strings.TrimSpace(rawURL)
-	
-	// Skip empty URLs
-	if rawURL == "" {
-		return ""
-	}
-	
-	// Check if URL already has a scheme
-	if !strings.HasPrefix(rawURL, "http://") && !strings.HasPrefix(rawURL, "https://") {
-		// Add https:// prefix if missing
-		rawURL = "https://" + rawURL
-	}
-	
-	// Validate URL format
-	parsedURL, err := url.Parse(rawURL)
-	if err != nil || parsedURL.Scheme == "" || parsedURL.Host == "" {
-		log.Debug().Str("url", rawURL).Err(err).Msg("Invalid URL format")
-		return ""
-	}
-	
-	// Ensure no duplicate schemes (like https://http://example.com)
-	hostPart := parsedURL.Host
-	if strings.Contains(hostPart, "://") {
-		log.Debug().Str("url", rawURL).Msg("URL contains embedded scheme in host part, fixing")
-		// Extract the domain part after the embedded scheme
-		parts := strings.SplitN(hostPart, "://", 2)
-		if len(parts) == 2 {
-			parsedURL.Host = parts[1]
-			rawURL = parsedURL.String()
-		}
-	}
-	
-	return rawURL
-}
 
 // Helper function to extract URLs from XML content
 func extractURLsFromXML(content, startTag, endTag, locStartTag, locEndTag string) []string {

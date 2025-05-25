@@ -3,7 +3,6 @@ package crawler
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -225,140 +224,8 @@ func (c *Crawler) WarmURL(ctx context.Context, targetURL string, findLinks bool)
 	return res, nil
 }
 
-// Helper function to determine if we should retry based on the error or status code
-// TODO: UPdate WarmUrl to use this and handle reponse type below. Incorporate into WarmUrl or call these functions
-func shouldRetry(err error, statusCode int) bool {
-	// Retry on network errors
-	if err != nil {
-		return true
-	}
 
-	// Retry on 5xx server errors
-	if statusCode >= 500 && statusCode < 600 {
-		return true
-	}
 
-	// Retry on 429 Too Many Requests
-	if statusCode == 429 {
-		return true
-	}
-
-	return false
-}
-
-// Add this function to crawler.go to improve error handling for different response types
-func (c *Crawler) handleResponseType(result *CrawlResult, response *colly.Response) {
-	// Get content type from headers
-	contentType := response.Headers.Get("Content-Type")
-
-	// Set content type for metrics
-	result.ContentType = contentType
-
-	// Check status code
-	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		switch {
-		case response.StatusCode == 404:
-			result.Error = "HTTP 404: Page not found"
-		case response.StatusCode == 403:
-			result.Error = "HTTP 403: Access forbidden"
-		case response.StatusCode == 401:
-			result.Error = "HTTP 401: Authentication required"
-		case response.StatusCode == 429:
-			result.Error = "HTTP 429: Too many requests - rate limited"
-		case response.StatusCode >= 500 && response.StatusCode < 600:
-			result.Error = fmt.Sprintf("HTTP %d: Server error", response.StatusCode)
-		default:
-			result.Error = fmt.Sprintf("HTTP %d: Non-successful status code", response.StatusCode)
-		}
-		return
-	}
-
-	// For 200-level responses, check for specific content types
-	switch {
-	case strings.Contains(contentType, "text/html"):
-		// HTML content - check for specific patterns
-		if len(response.Body) < 100 {
-			// Very small HTML response might indicate an error page
-			result.Warning = "Warning: Unusually small HTML response"
-		}
-
-		// Check for common error patterns in the body
-		bodyStr := string(response.Body)
-		if strings.Contains(bodyStr, "<title>404") ||
-			strings.Contains(bodyStr, "not found") ||
-			strings.Contains(bodyStr, "page doesn't exist") {
-			result.Warning = "Warning: Page content suggests a 404 despite 200 status code"
-		}
-
-	case strings.Contains(contentType, "application/json"):
-		// JSON content - validate it's proper JSON
-		var jsonObj map[string]interface{}
-		if err := json.Unmarshal(response.Body, &jsonObj); err != nil {
-			result.Warning = "Warning: Invalid JSON response"
-		}
-
-		// Check for error fields in the JSON
-		if errorMsg, ok := jsonObj["error"].(string); ok {
-			result.Warning = fmt.Sprintf("Warning: JSON contains error field: %s", errorMsg)
-		}
-
-	case strings.Contains(contentType, "text/plain"):
-		// Plain text - check for obvious error messages
-		bodyStr := string(response.Body)
-		if strings.Contains(strings.ToLower(bodyStr), "error") ||
-			strings.Contains(strings.ToLower(bodyStr), "not found") {
-			result.Warning = "Warning: Text appears to contain error message"
-		}
-	}
-
-	// Check for very small response sizes that might indicate an error
-	if len(response.Body) == 0 {
-		result.Warning = "Warning: Empty response body"
-	}
-}
-
-// Add this function to crawler.go to validate cache status
-func (c *Crawler) validateCacheStatus(result *CrawlResult) {
-	// Don't validate if there was an error
-	if result.Error != "" {
-		return
-	}
-
-	// Check the cache status
-	switch result.CacheStatus {
-	case "HIT":
-		// Successful cache hit
-		log.Debug().
-			Str("url", result.URL).
-			Msg("Cache hit confirmed")
-
-	case "MISS":
-		// Cache miss - this might be expected for the first request
-		log.Debug().
-			Str("url", result.URL).
-			Msg("Cache miss detected")
-
-	case "EXPIRED":
-		// The cached resource was expired
-		result.Warning = "Cache expired - resource needed revalidation"
-
-	case "BYPASS":
-		// Cache was bypassed
-		result.Warning = "Cache was bypassed - check cache headers"
-
-	case "DYNAMIC":
-		// Content was dynamically generated
-		result.Warning = "Content served dynamically - not cacheable"
-
-	case "":
-		// No cache status header found
-		result.Warning = "No cache status header found - CDN might not be enabled"
-
-	default:
-		// Unknown cache status
-		result.Warning = fmt.Sprintf("Unknown cache status: %s", result.CacheStatus)
-	}
-}
 
 func (c *Crawler) CheckCacheStatus(ctx context.Context, targetURL string) (string, error) {
 	req, err := http.NewRequestWithContext(ctx, "HEAD", targetURL, nil)

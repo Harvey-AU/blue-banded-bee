@@ -14,6 +14,7 @@ import (
 
 	"github.com/Harvey-AU/blue-banded-bee/internal/crawler"
 	"github.com/Harvey-AU/blue-banded-bee/internal/db"
+	"github.com/Harvey-AU/blue-banded-bee/internal/util"
 	"github.com/getsentry/sentry-go"
 	"github.com/lib/pq"
 	"github.com/rs/zerolog/log"
@@ -706,49 +707,6 @@ func (wp *WorkerPool) flushBatches(ctx context.Context) {
 				Msg("⏱️ TIMING: Completed batch task updates")
 		}
 
-		// 2. Batch insert all crawl results
-		if len(tasks) > 0 {
-			resultInsertStart := time.Now()
-			completedTasks := filterTasksByStatus(tasks, TaskStatusCompleted)
-			if len(completedTasks) > 0 {
-				// Convert Task objects to CrawlResultData
-				crawlResults := make([]CrawlResultData, 0, len(completedTasks))
-				for _, task := range completedTasks {
-					// Get domain name from job's domain_id
-					var domainName string
-					if err := tx.QueryRowContext(ctx, `
-						SELECT d.name FROM domains d
-						JOIN jobs j ON j.domain_id = d.id
-						WHERE j.id = $1`, task.JobID).Scan(&domainName); err != nil {
-						log.Error().Err(err).Str("job_id", task.JobID).Msg("Failed to get domain name")
-						continue
-					}
-
-					// Construct full URL from domain and path
-					fullURL := fmt.Sprintf("https://%s%s", domainName, task.Path)
-
-					// Use the task's result data that we stored earlier
-					crawlResults = append(crawlResults, CrawlResultData{
-						JobID:        task.JobID,
-						TaskID:       task.ID,
-						URL:          fullURL,
-						ResponseTime: task.ResponseTime,
-						StatusCode:   task.StatusCode,
-						Error:        task.Error,
-						CacheStatus:  task.CacheStatus,
-						ContentType:  task.ContentType,
-					})
-				}
-
-				if err := batchInsertCrawlResults(ctx, tx, crawlResults); err != nil {
-					return err
-				}
-			}
-			log.Debug().
-				Dur("result_insert_duration_ms", time.Since(resultInsertStart)).
-				Int("completed_task_count", len(completedTasks)).
-				Msg("⏱️ TIMING: Completed batch result inserts")
-		}
 
 		return nil
 	})
@@ -823,43 +781,6 @@ func (wp *WorkerPool) CleanupStuckJobs(ctx context.Context) error {
 	return nil
 }
 
-func GetNextPendingTask(ctx context.Context, db *sql.DB, jobID string) (*Task, error) {
-	query := `
-		SELECT t.id, t.job_id, t.page_id, p.path, t.status,
-		t.created_at, t.retry_count, t.source_type, t.source_url, j.find_links, d.name
-		FROM tasks t
-		JOIN pages p ON t.page_id = p.id
-		JOIN jobs j ON t.job_id = j.id
-		JOIN domains d ON p.domain_id = d.id
-		WHERE t.status = $1 AND t.job_id = $2
-		ORDER BY t.created_at ASC
-		LIMIT 1
-	`
-
-	var task Task
-	err := db.QueryRowContext(ctx, query, TaskStatusPending, jobID).Scan(
-		&task.ID, &task.JobID, &task.PageID, &task.Path, &task.Status,
-		&task.CreatedAt, &task.RetryCount,
-		&task.SourceType, &task.SourceURL, &task.FindLinks,
-	)
-
-	if err != nil {
-		return nil, err
-	}
-
-	now := time.Now()
-	_, err = db.ExecContext(ctx, `
-		UPDATE tasks
-		SET status = $1, started_at = $2
-		WHERE id = $3
-	`, TaskStatusRunning, now, task.ID)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return &task, nil
-}
 
 // processTask processes an individual task
 func (wp *WorkerPool) processTask(ctx context.Context, task *Task) (*crawler.CrawlResult, error) {
@@ -868,19 +789,13 @@ func (wp *WorkerPool) processTask(ctx context.Context, task *Task) (*crawler.Cra
 	
 	// Check if path is already a full URL
 	if strings.HasPrefix(task.Path, "http://") || strings.HasPrefix(task.Path, "https://") {
-		urlStr = task.Path
+		urlStr = util.NormalizeURL(task.Path)
 	} else if task.DomainName != "" {
-		// If we have a domain name, construct the URL properly
-		if strings.HasPrefix(task.Path, "/") {
-			// The path starts with a slash, so it's a path relative to domain root
-			urlStr = fmt.Sprintf("https://%s%s", task.DomainName, task.Path)
-		} else {
-			// Add both slash and domain
-			urlStr = fmt.Sprintf("https://%s/%s", task.DomainName, task.Path)
-		}
+		// Use centralized URL construction
+		urlStr = util.ConstructURL(task.DomainName, task.Path)
 	} else {
 		// Fallback case - assume path is a full URL but missing protocol
-		urlStr = "https://" + task.Path
+		urlStr = util.NormalizeURL(task.Path)
 	}
 	
 	log.Info().Str("url", urlStr).Str("task_id", task.ID).Msg("Starting URL warm")
@@ -953,7 +868,7 @@ func (wp *WorkerPool) processTask(ctx context.Context, task *Task) (*crawler.Cra
 			}
 			
 			// Create page records for discovered links
-			pageIDs, paths, err := wp.createPageRecords(ctx, domainID, filtered)
+			pageIDs, paths, err := db.CreatePageRecords(ctx, wp.dbQueue, domainID, filtered)
 			if err != nil {
 				log.Error().
 					Err(err).
@@ -1016,177 +931,10 @@ func isDocumentLink(path string) bool {
 		strings.HasSuffix(lower, ".pptx")
 }
 
-// createPageRecords creates page records for a list of URLs and returns their IDs and paths
-// This is used for handling discovered links in the worker
-func (wp *WorkerPool) createPageRecords(ctx context.Context, domainID int, urls []string) ([]int, []string, error) {
-	span := sentry.StartSpan(ctx, "worker.create_page_records")
-	defer span.Finish()
-
-	span.SetTag("domain_id", fmt.Sprintf("%d", domainID))
-	span.SetTag("url_count", fmt.Sprintf("%d", len(urls)))
-
-	if len(urls) == 0 {
-		return []int{}, []string{}, nil
-	}
-
-	pageIDs := make([]int, 0, len(urls))
-	paths := make([]string, 0, len(urls))
-
-	// Get domain name from the database
-	var domainName string
-	err := wp.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
-		return tx.QueryRowContext(ctx, `
-			SELECT name FROM domains WHERE id = $1
-		`, domainID).Scan(&domainName)
-	})
-	if err != nil {
-		span.SetTag("error", "true")
-		span.SetData("error.message", err.Error())
-		return nil, nil, fmt.Errorf("failed to get domain name: %w", err)
-	}
-
-	// Extract paths from URLs
-	for _, url := range urls {
-		// Parse URL to extract the path
-		log.Debug().Str("original_url", url).Msg("Processing URL")
-
-		// Remove any protocol and domain to get just the path
-		path := url
-		// Strip common prefixes
-		path = strings.TrimPrefix(path, "http://")
-		path = strings.TrimPrefix(path, "https://")
-		path = strings.TrimPrefix(path, "www.")
-		
-		// Find the first slash after the domain name
-		domainEnd := strings.Index(path, "/")
-		if domainEnd != -1 {
-			// Extract just the path part
-			path = path[domainEnd:]
-		} else {
-			// If no path found, use root path
-			path = "/"
-		}
-
-		// Add paths to our result array
-		paths = append(paths, path)
-		log.Debug().Str("extracted_path", path).Msg("Extracted path from URL")
-	}
-
-	// Insert pages into database in a transaction
-	err = wp.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
-		// Prepare statement for bulk insertion
-		stmt, err := tx.PrepareContext(ctx, `
-			INSERT INTO pages (domain_id, path)
-			VALUES ($1, $2)
-			ON CONFLICT (domain_id, path) DO UPDATE SET path = EXCLUDED.path
-			RETURNING id
-		`)
-		if err != nil {
-			return fmt.Errorf("failed to prepare page insert statement: %w", err)
-		}
-		defer stmt.Close()
-
-		// Insert each page and collect the IDs
-		for _, path := range paths {
-			var pageID int
-			err := stmt.QueryRowContext(ctx, domainID, path).Scan(&pageID)
-			if err != nil {
-				return fmt.Errorf("failed to insert page record: %w", err)
-			}
-			pageIDs = append(pageIDs, pageID)
-		}
-
-		return nil
-	})
-
-	if err != nil {
-		span.SetTag("error", "true")
-		span.SetData("error.message", err.Error())
-		return nil, nil, fmt.Errorf("failed to create page records: %w", err)
-	}
-
-	log.Debug().
-		Int("domain_id", domainID).
-		Int("page_count", len(pageIDs)).
-		Msg("Created page records")
-
-	return pageIDs, paths, nil
-}
 
 // listenForNotifications sets up PostgreSQL LISTEN/NOTIFY
 
-// filterTasksByStatus returns tasks with a specific status
-func filterTasksByStatus(tasks []*Task, status TaskStatus) []*Task {
-	if len(tasks) == 0 {
-		return nil
-	}
 
-	result := make([]*Task, 0, len(tasks))
-	for _, task := range tasks {
-		if task.Status == status {
-			result = append(result, task)
-		}
-	}
-
-	return result
-}
-
-// batchInsertCrawlResults inserts multiple crawl results in a single transaction
-func batchInsertCrawlResults(ctx context.Context, tx *sql.Tx, results []CrawlResultData) error {
-	if len(results) == 0 {
-		return nil
-	}
-
-	valueStrings := make([]string, 0, len(results))
-	valueArgs := make([]interface{}, 0, len(results)*8)
-
-	// Track parameter index for PostgreSQL-style numbered parameters
-	paramIndex := 1
-
-	for _, result := range results {
-		// Create PostgreSQL-style parameter placeholders
-		placeholders := fmt.Sprintf("($%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d)",
-			paramIndex, paramIndex+1, paramIndex+2, paramIndex+3,
-			paramIndex+4, paramIndex+5, paramIndex+6, paramIndex+7)
-		valueStrings = append(valueStrings, placeholders)
-		paramIndex += 8
-
-		valueArgs = append(valueArgs,
-			result.JobID, result.TaskID, result.URL, result.ResponseTime,
-			result.StatusCode, result.Error, result.CacheStatus,
-			result.ContentType)
-	}
-
-	query := fmt.Sprintf(`
-		INSERT INTO crawl_results 
-		(job_id, task_id, url, response_time, status_code, error, cache_status, content_type)
-		VALUES %s
-	`, strings.Join(valueStrings, ","))
-
-	startTime := time.Now()
-	result, err := tx.ExecContext(ctx, query, valueArgs...)
-	duration := time.Since(startTime)
-
-	log.Debug().
-		Int("count", len(results)).
-		Dur("duration_ms", duration).
-		Msg("Batch inserted crawl results")
-
-	if err != nil {
-		log.Error().
-			Err(err).
-			Int("task_count", len(results)).
-			Msg("Failed to batch insert crawl results")
-		return fmt.Errorf("failed to batch insert crawl results: %w", err)
-	}
-
-	rowsAffected, _ := result.RowsAffected()
-	log.Debug().
-		Int64("rows_affected", rowsAffected).
-		Msg("Job update result")
-
-	return nil
-}
 
 func (wp *WorkerPool) listenForNotifications(ctx context.Context) {
 	defer wp.wg.Done()

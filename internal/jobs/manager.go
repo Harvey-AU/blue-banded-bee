@@ -11,6 +11,7 @@ import (
 
 	"github.com/Harvey-AU/blue-banded-bee/internal/crawler"
 	"github.com/Harvey-AU/blue-banded-bee/internal/db"
+	"github.com/Harvey-AU/blue-banded-bee/internal/util"
 	"github.com/getsentry/sentry-go"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
@@ -55,8 +56,7 @@ func (jm *JobManager) CreateJob(ctx context.Context, options *JobOptions) (*Job,
 	span.SetTag("domain", options.Domain)
 
 	// Normalize domain to ensure consistent handling of www. prefix and http/https
-	normalizedDomain := strings.TrimPrefix(strings.TrimPrefix(strings.TrimPrefix(options.Domain, "http://"), "https://"), "www.")
-	normalizedDomain = strings.TrimSuffix(normalizedDomain, "/")
+	normalizedDomain := util.NormalizeDomain(options.Domain)
 	
 	// Create a new job object
 	job := &Job{
@@ -541,101 +541,6 @@ func (jm *JobManager) GetJobStatus(ctx context.Context, jobID string) (*Job, err
 	return job, nil
 }
 
-// createPageRecords creates page records for a list of URLs and returns their IDs and paths
-func (jm *JobManager) createPageRecords(ctx context.Context, domainID int, urls []string) ([]int, []string, error) {
-	span := sentry.StartSpan(ctx, "manager.create_page_records")
-	defer span.Finish()
-
-	span.SetTag("domain_id", fmt.Sprintf("%d", domainID))
-	span.SetTag("url_count", fmt.Sprintf("%d", len(urls)))
-
-	if len(urls) == 0 {
-		return []int{}, []string{}, nil
-	}
-
-	pageIDs := make([]int, 0, len(urls))
-	paths := make([]string, 0, len(urls))
-
-	// Get domain name from the database
-	var domainName string
-	err := jm.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
-		return tx.QueryRowContext(ctx, `
-			SELECT name FROM domains WHERE id = $1
-		`, domainID).Scan(&domainName)
-	})
-	if err != nil {
-		span.SetTag("error", "true")
-		span.SetData("error.message", err.Error())
-		return nil, nil, fmt.Errorf("failed to get domain name: %w", err)
-	}
-
-	// Extract paths from URLs
-	for _, url := range urls {
-		// Parse URL to extract the path
-		log.Debug().Str("original_url", url).Msg("Processing URL")
-
-		// Remove any protocol and domain to get just the path
-		path := url
-		// Strip common prefixes
-		path = strings.TrimPrefix(path, "http://")
-		path = strings.TrimPrefix(path, "https://")
-		path = strings.TrimPrefix(path, "www.")
-		
-		// Find the first slash after the domain name
-		domainEnd := strings.Index(path, "/")
-		if domainEnd != -1 {
-			// Extract just the path part
-			path = path[domainEnd:]
-		} else {
-			// If no path found, use root path
-			path = "/"
-		}
-
-		// Add paths to our result array
-		paths = append(paths, path)
-		log.Debug().Str("extracted_path", path).Msg("Extracted path from URL")
-	}
-
-	// Insert pages into database in a transaction
-	err = jm.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
-		// Prepare statement for bulk insertion
-		stmt, err := tx.PrepareContext(ctx, `
-			INSERT INTO pages (domain_id, path)
-			VALUES ($1, $2)
-			ON CONFLICT (domain_id, path) DO UPDATE SET path = EXCLUDED.path
-			RETURNING id
-		`)
-		if err != nil {
-			return fmt.Errorf("failed to prepare page insert statement: %w", err)
-		}
-		defer stmt.Close()
-
-		// Insert each page and collect the IDs
-		for _, path := range paths {
-			var pageID int
-			err := stmt.QueryRowContext(ctx, domainID, path).Scan(&pageID)
-			if err != nil {
-				return fmt.Errorf("failed to insert page record: %w", err)
-			}
-			pageIDs = append(pageIDs, pageID)
-		}
-
-		return nil
-	})
-
-	if err != nil {
-		span.SetTag("error", "true")
-		span.SetData("error.message", err.Error())
-		return nil, nil, fmt.Errorf("failed to create page records: %w", err)
-	}
-
-	log.Debug().
-		Int("domain_id", domainID).
-		Int("page_count", len(pageIDs)).
-		Msg("Created page records")
-
-	return pageIDs, paths, nil
-}
 
 // processSitemap fetches and processes a sitemap for a domain
 func (jm *JobManager) processSitemap(ctx context.Context, jobID, domain string, includePaths, excludePaths []string) {
@@ -752,7 +657,7 @@ func (jm *JobManager) processSitemap(ctx context.Context, jobID, domain string, 
 		}
 
 		// Create page records and get their IDs
-		pageIDs, paths, err := jm.createPageRecords(ctx, domainID, urls)
+		pageIDs, paths, err := db.CreatePageRecords(ctx, jm.dbQueue, domainID, urls)
 		if err != nil {
 			span.SetTag("error", "true")
 			span.SetData("error.message", err.Error())
