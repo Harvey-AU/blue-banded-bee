@@ -11,7 +11,6 @@ import (
 
 	_ "github.com/lib/pq"
 
-	"github.com/Harvey-AU/blue-banded-bee/internal/common"
 	"github.com/rs/zerolog/log"
 )
 
@@ -19,7 +18,6 @@ import (
 type DB struct {
 	client *sql.DB
 	config *Config
-	queue  *common.DbQueue
 }
 
 // GetConfig returns the original DB connection settings
@@ -329,14 +327,6 @@ func (db *DB) ResetSchema() error {
 	return setupSchema(db.client)
 }
 
-// GetQueue returns the database queue for serialized operations
-func (db *DB) GetQueue() *common.DbQueue {
-	// Create the queue on first access if needed
-	if db.queue == nil {
-		db.queue = common.NewDbQueue(db.client)
-	}
-	return db.queue
-}
 
 // Serialize converts data to JSON string representation
 func Serialize(v interface{}) string {

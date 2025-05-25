@@ -191,16 +191,7 @@ func (q *DbQueue) EnqueueURLs(ctx context.Context, jobID string, pageIDs []int, 
 	})
 }
 
-// EnqueueTasks is an alias for EnqueueURLs to maintain compatibility with existing code
-func (q *DbQueue) EnqueueTasks(ctx context.Context, jobID string, pageIDs []int, paths []string, sourceType string, sourceURL string, _ int) error {	
-	return q.EnqueueURLs(ctx, jobID, pageIDs, paths, sourceType, sourceURL)
-}
 
-// NewTaskQueue creates a task queue using the provided database connection
-// It's an alias for NewDbQueue to maintain compatibility with existing code
-func NewTaskQueue(db *sql.DB) *DbQueue {
-	return NewDbQueue(db)
-}
 
 // CompleteTask marks a task as completed
 // This is now a thin wrapper around UpdateTaskStatus for backward compatibility
@@ -272,10 +263,6 @@ func (q *DbQueue) UpdateJobProgress(ctx context.Context, jobID string) error {
 	return tx.Commit()
 }
 
-// GetNextPendingTask is an alias for GetNextTask for backward compatibility
-func (q *DbQueue) GetNextPendingTask(ctx context.Context, jobID string) (*Task, error) {
-	return q.GetNextTask(ctx, jobID)
-}
 
 // CleanupStuckJobs finds and fixes jobs that are stuck in pending/running state
 // despite having all their tasks completed
