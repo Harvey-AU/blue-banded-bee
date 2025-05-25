@@ -302,29 +302,54 @@ func (db *DB) GetDB() *sql.DB {
 func (db *DB) ResetSchema() error {
 	log.Warn().Msg("Resetting PostgreSQL schema")
 
+	// First drop any views that depend on the tables
+	log.Debug().Msg("Dropping views")
+	views := []string{"job_list", "job_dashboard", "job_status_summary", "task_status_summary"}
+	for _, view := range views {
+		_, err := db.client.Exec(fmt.Sprintf(`DROP VIEW IF EXISTS %s CASCADE`, view))
+		if err != nil {
+			log.Warn().Err(err).Str("view", view).Msg("Failed to drop view (may not exist)")
+			// Don't return error for views, as they may not exist
+		} else {
+			log.Debug().Str("view", view).Msg("Successfully dropped view")
+		}
+	}
+
 	// Drop tables in reverse order to respect foreign keys
-	_, err := db.client.Exec(`DROP TABLE IF EXISTS tasks`)
-	if err != nil {
-		return err
+	// Use CASCADE to handle any remaining dependencies
+	tables := []string{"tasks", "jobs", "pages", "domains"}
+	
+	for _, table := range tables {
+		log.Debug().Str("table", table).Msg("Dropping table")
+		_, err := db.client.Exec(fmt.Sprintf(`DROP TABLE IF EXISTS %s CASCADE`, table))
+		if err != nil {
+			log.Error().Err(err).Str("table", table).Msg("Failed to drop table")
+			return fmt.Errorf("failed to drop table %s: %w", table, err)
+		}
+		log.Debug().Str("table", table).Msg("Successfully dropped table")
 	}
 
-	_, err = db.client.Exec(`DROP TABLE IF EXISTS jobs`)
-	if err != nil {
-		return err
+	// Also drop any sequences that might exist
+	log.Debug().Msg("Dropping sequences")
+	sequences := []string{"domains_id_seq", "pages_id_seq"}
+	for _, seq := range sequences {
+		_, err := db.client.Exec(fmt.Sprintf(`DROP SEQUENCE IF EXISTS %s CASCADE`, seq))
+		if err != nil {
+			log.Warn().Err(err).Str("sequence", seq).Msg("Failed to drop sequence (may not exist)")
+			// Don't return error for sequences, as they may not exist
+		}
 	}
 
-	_, err = db.client.Exec(`DROP TABLE IF EXISTS pages`)
-	if err != nil {
-		return err
-	}
-
-	_, err = db.client.Exec(`DROP TABLE IF EXISTS domains`)
-	if err != nil {
-		return err
-	}
-
+	log.Debug().Msg("Recreating schema")
 	// Recreate schema
-	return setupSchema(db.client)
+	err := setupSchema(db.client)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to recreate schema")
+		return fmt.Errorf("failed to recreate schema: %w", err)
+	}
+	
+	log.Info().Msg("Successfully reset database schema")
+	return nil
 }
 
 
