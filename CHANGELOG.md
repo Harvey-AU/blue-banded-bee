@@ -8,6 +8,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Multiple version updates may occur on the same date, each with its own version number.
 Each version represents a distinct set of changes, even if released on the same day.
 
+## [0.3.9] – 2025-05-25
+
+### Added
+- **Startup Recovery System**: Automatic recovery for jobs interrupted by server restarts
+  - Jobs with 'running' status and 'running' tasks are automatically detected on startup
+  - Tasks are reset from 'running' to 'pending' and jobs are added back to worker pool
+  - Eliminates need for manual intervention when jobs are stuck after restarts
+- **Smart Link Filtering**: Enhanced crawler to extract only visible, user-clickable links
+  - Filters out hidden elements (display:none, visibility:hidden, screen-reader-only)
+  - Skips non-navigation links (javascript:, mailto:, empty hrefs)
+  - Rejects links without visible text content (unless they have aria-labels)
+  - Prevents extraction of framework-generated or accessibility-only links
+- **Live Dashboard**: Real-time job monitoring dashboard with Supabase integration
+  - Auto-refresh every 10 seconds with date range filtering
+  - Smart time grouping (minute/hour/6-hour/day based on selected range)
+  - Bar charts showing task completion over time with local timezone support
+  - Comprehensive debugging and fallback displays for data access issues
+
+### Fixed
+- **Domain Filtering**: Improved same-domain detection to handle www prefix variations
+  - `www.test.com` and `test.com` now correctly recognized as same domain
+  - Enhanced subdomain detection works with both normalized and original domains
+  - Prevents false rejection of internal links due to www prefix mismatches
+- **External Link Rejection**: Strict filtering to prevent crawling external domains
+  - All external domain links are now properly rejected with detailed logging
+  - Eliminates failed crawls from external links being treated as relative URLs
+  - Maintains focus on target domain while preventing scope creep
+- **Database Reset**: Enhanced schema reset to handle views and dependencies
+  - Properly drops views (job_list, job_dashboard) before dropping tables
+  - Uses CASCADE to handle remaining dependencies automatically
+  - Added comprehensive error logging and sequence cleanup
+
+### Enhanced
+- **Database Connection Resilience**: Improved connection pool settings and retry logic
+  - Updated connection pool: MaxOpenConns (25→35), MaxIdleConns (10→15), MaxLifetime (5min→30min)
+  - Added automatic retry logic with exponential backoff for transient connection failures
+  - Enhanced error detection for connection-related issues (bad connection, unexpected parse, etc.)
+- **Worker Recovery**: Enhanced task monitoring and job completion detection
+  - Improved cleanup of stuck jobs where all tasks are complete but job status is still running
+  - Better handling of stale task recovery with proper timeout detection
+  - Enhanced logging throughout the recovery and monitoring processes
+
+### Technical Details
+- Dashboard uses date-only pickers with proper timezone handling for accurate time grouping
+- Link filtering integrates with Colly's HTML element processing for efficient visibility detection
+- Domain comparison uses normalized hostname matching with comprehensive subdomain support
+- Database retry logic specifically targets PostgreSQL connection issues with appropriate backoff strategies
+
 ## [0.3.8] – 2025-05-25
 
 ### Fixed
