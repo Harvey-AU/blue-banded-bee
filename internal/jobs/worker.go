@@ -902,8 +902,7 @@ func (wp *WorkerPool) processTask(ctx context.Context, task *Task) (*crawler.Cra
 			Msg("Starting link filtering")
 
 		// Filter links based on requirements:
-		// 1. Same domain/subdomain links OR
-		// 2. Document links (PDF, DOC, DOCX) from any domain
+		// 1. Only same domain/subdomain links (no external domains)
 		var filtered []string
 
 		for _, link := range result.Links {
@@ -913,16 +912,24 @@ func (wp *WorkerPool) processTask(ctx context.Context, task *Task) (*crawler.Cra
 				continue
 			}
 
-			// Check if it's a document link (from any domain)
-			isDocument := isDocumentLink(linkURL.Path)
-
-			// Check if it's on the same domain or subdomain
+			// Only process links from the same domain or subdomains
 			isSameDomain := isSameOrSubDomain(linkURL.Hostname(), task.DomainName)
-
-			// Add the link if it matches our criteria
-			if isDocument || isSameDomain {
-				filtered = append(filtered, link)
+			if !isSameDomain {
+				log.Debug().
+					Str("link", link).
+					Str("link_hostname", linkURL.Hostname()).
+					Str("job_domain", task.DomainName).
+					Msg("Skipping external domain link")
+				continue
 			}
+
+			// At this point, it's same domain, so add it
+			filtered = append(filtered, link)
+			log.Debug().
+				Str("link", link).
+				Str("link_hostname", linkURL.Hostname()).
+				Str("job_domain", task.DomainName).
+				Msg("Added same-domain link")
 		}
 
 		log.Debug().
@@ -986,14 +993,33 @@ func (wp *WorkerPool) processTask(ctx context.Context, task *Task) (*crawler.Cra
 }
 
 // Helper function to check if a hostname is the same domain or a subdomain of the target domain
+// Handles www prefix variations (www.test.com vs test.com)
 func isSameOrSubDomain(hostname, targetDomain string) bool {
-	// Direct match
+	// Normalize both domains by removing www prefix
+	hostname = strings.ToLower(hostname)
+	targetDomain = strings.ToLower(targetDomain)
+	
+	// Remove www. prefix if present
+	normalizedHostname := strings.TrimPrefix(hostname, "www.")
+	normalizedTarget := strings.TrimPrefix(targetDomain, "www.")
+	
+	// Direct match (after normalization)
+	if normalizedHostname == normalizedTarget {
+		return true
+	}
+	
+	// Original direct match (before normalization)
 	if hostname == targetDomain {
 		return true
 	}
 
-	// Check if hostname ends with .targetDomain
+	// Check if hostname ends with .targetDomain (subdomain check)
 	if strings.HasSuffix(hostname, "."+targetDomain) {
+		return true
+	}
+	
+	// Check if hostname ends with .normalizedTarget (subdomain check without www)
+	if strings.HasSuffix(hostname, "."+normalizedTarget) {
 		return true
 	}
 
