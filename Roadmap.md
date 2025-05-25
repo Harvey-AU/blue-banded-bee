@@ -5,12 +5,13 @@
 - PostgreSQL migration completed (now using Supabase after briefly using Postgres in Fly)
 - Successfully deployed to Fly.io with verified functionality
 - Local development environment established with PostgreSQL
-- Currently processing jobs, tasks and recording results
-- Worker pool using PostgreSQL's row-level locking implemented
+- **Production system fully operational** - processing jobs, tasks and recording results successfully
+- Worker pool using PostgreSQL's row-level locking implemented and stable
 - Enhanced sitemap processing with improved URL handling and normalisation
 - Improved link discovery and URL validation across the codebase
 - Completed major code refactoring to improve architecture and maintainability
 - Removed unnecessary depth functionality from the codebase
+- **Fixed critical production database schema mismatch** (v0.3.8) - task insertion now working properly
 
 ## ✅ Stage 0: Project Setup & Infrastructure
 
