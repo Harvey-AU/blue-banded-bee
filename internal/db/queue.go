@@ -167,12 +167,39 @@ func (q *DbQueue) EnqueueURLs(ctx context.Context, jobID string, pageIDs []int, 
 	}
 
 	return q.Execute(ctx, func(tx *sql.Tx) error {
-		// Update job's total task count
-		_, err := tx.ExecContext(ctx, `
+		// Get job's max_pages setting and current task counts
+		var maxPages int
+		var currentTaskCount int
+		err := tx.QueryRowContext(ctx, `
+			SELECT max_pages, 
+				   COALESCE((SELECT COUNT(*) FROM tasks WHERE job_id = $1 AND status != 'skipped'), 0)
+			FROM jobs WHERE id = $1
+		`, jobID).Scan(&maxPages, &currentTaskCount)
+		if err != nil {
+			return fmt.Errorf("failed to get job max_pages and task count: %w", err)
+		}
+
+		// Count how many tasks will be pending vs skipped
+		pendingCount := 0
+		skippedCount := 0
+		for i := range pageIDs {
+			if pageIDs[i] == 0 {
+				continue
+			}
+			if maxPages == 0 || currentTaskCount+pendingCount < maxPages {
+				pendingCount++
+			} else {
+				skippedCount++
+			}
+		}
+
+		// Update job's total task count and skipped count
+		_, err = tx.ExecContext(ctx, `
 			UPDATE jobs
-			SET total_tasks = total_tasks + $1
-			WHERE id = $2
-		`, len(pageIDs), jobID)
+			SET total_tasks = total_tasks + $1,
+				skipped_tasks = skipped_tasks + $2
+			WHERE id = $3
+		`, len(pageIDs), skippedCount, jobID)
 		if err != nil {
 			return fmt.Errorf("failed to update job total tasks: %w", err)
 		}
@@ -189,16 +216,26 @@ func (q *DbQueue) EnqueueURLs(ctx context.Context, jobID string, pageIDs []int, 
 		}
 		defer stmt.Close()
 
-		// Insert each task
+		// Insert each task with appropriate status
 		now := time.Now()
+		processedCount := 0
 		for i, pageID := range pageIDs {
 			if pageID == 0 {
 				continue
 			}
 
+			// Determine status based on max_pages limit
+			var status string
+			if maxPages == 0 || currentTaskCount+processedCount < maxPages {
+				status = "pending"
+				processedCount++
+			} else {
+				status = "skipped"
+			}
+
 			taskID := uuid.New().String()
 			_, err = stmt.ExecContext(ctx,
-				taskID, jobID, pageID, paths[i], "pending", now, 0, sourceType, sourceURL)
+				taskID, jobID, pageID, paths[i], status, now, 0, sourceType, sourceURL)
 
 			if err != nil {
 				return fmt.Errorf("failed to insert task: %w", err)

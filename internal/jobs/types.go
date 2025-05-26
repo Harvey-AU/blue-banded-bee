@@ -43,6 +43,7 @@ type Job struct {
 	TotalTasks      int       `json:"total_tasks"`
 	CompletedTasks  int       `json:"completed_tasks"`
 	FailedTasks     int       `json:"failed_tasks"`
+	SkippedTasks    int       `json:"skipped_tasks"`
 	FoundTasks      int       `json:"found_tasks"`
 	SitemapTasks    int       `json:"sitemap_tasks"`
 	CreatedAt       time.Time `json:"created_at"`
