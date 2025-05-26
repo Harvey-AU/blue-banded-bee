@@ -4,7 +4,7 @@ This document lists all the configuration variables for the PostgreSQL database 
 
 ## Database Schema
 
-The application uses a normalized database schema with reference tables to improve data integrity and reduce redundancy.
+The application uses a normalised database schema with reference tables to improve data integrity and reduce redundancy.
 
 ### Core Tables
 

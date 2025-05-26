@@ -12,7 +12,7 @@ This package implements a robust job queue system for the crawler with the follo
 
 ## Database Schema
 
-The system uses a normalized database schema with reference tables:
+The system uses a normalised database schema with reference tables:
 
 - **domains**: Stores unique domain names with integer primary keys
 - **pages**: Stores page paths with references to their respective domains

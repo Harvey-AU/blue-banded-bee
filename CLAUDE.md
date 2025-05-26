@@ -65,7 +65,7 @@ Blue Banded Bee is a web cache warming service built in Go, primarily focused on
 
 2. **Database Schema**
 
-   - Normalized schema with domain, page, job, and task tables
+   - Normalised schema with domain, page, job, and task tables
    - Tasks reference domains and pages for efficient storage
    - PostgreSQL-specific features like FOR UPDATE SKIP LOCKED
 
