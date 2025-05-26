@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-**Note:** Please write in British (Australian) English, not American English.
+**VERY IMPORTANT:** Please write in British (Australian) English, not American English.
 
 ## Project Initialisation
 
