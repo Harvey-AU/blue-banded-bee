@@ -448,6 +448,9 @@ func main() {
 		json.NewEncoder(w).Encode(sessionInfo)
 	})
 
+	// Serve static files (HTML, CSS, JS, etc.)
+	http.Handle("/", http.FileServer(http.Dir("./")))
+
 	// Create a new HTTP server
 	server := &http.Server{
 		Addr: ":" + config.Port,
