@@ -30,6 +30,13 @@ Each version represents a distinct set of changes, even if released on the same 
   - Progress percentage calculation excludes skipped tasks from denominator
   - Job completion logic updated to account for skipped tasks
 
+### Changed
+
+- **Link Discovery Default**: Changed default behaviour to enable link discovery by default
+  - `find_links` now defaults to `true` (was previously `false`)
+  - Use `find_links=false` to disable link discovery and only crawl sitemap URLs
+  - More intuitive API behaviour for comprehensive cache warming
+
 ### Fixed
 
 - **Job Completion Logic**: Fixed job completion detection for jobs with limits
