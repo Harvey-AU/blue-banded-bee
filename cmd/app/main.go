@@ -85,7 +85,7 @@ func main() {
 			rows, err := pgDB.GetDB().Query(`
 				UPDATE jobs 
 				SET status = 'completed', completed_at = NOW()
-				WHERE (completed_tasks + failed_tasks) >= total_tasks 
+				WHERE (completed_tasks + failed_tasks) >= (total_tasks - COALESCE(skipped_tasks, 0))
 				  AND status = 'running'
 				RETURNING id
 			`)
@@ -236,12 +236,12 @@ func main() {
 			return
 		}
 
-		var total, completed, failed int
+		var total, completed, failed, skipped int
 		var status string
 		err := pgDB.GetDB().QueryRowContext(r.Context(), `
-			SELECT total_tasks, completed_tasks, failed_tasks, status 
+			SELECT total_tasks, completed_tasks, failed_tasks, skipped_tasks, status 
 			FROM jobs WHERE id = $1
-		`, jobID).Scan(&total, &completed, &failed, &status)
+		`, jobID).Scan(&total, &completed, &failed, &skipped, &status)
 
 		if err != nil {
 			http.Error(w, "Job not found", http.StatusNotFound)
@@ -255,7 +255,8 @@ func main() {
 			"total":     total,
 			"completed": completed,
 			"failed":    failed,
-			"progress":  float64(completed+failed) / float64(total) * 100,
+			"skipped":   skipped,
+			"progress":  float64(completed+failed) / float64(total-skipped) * 100,
 		})
 	})
 

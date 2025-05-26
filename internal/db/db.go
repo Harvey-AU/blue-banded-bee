@@ -208,6 +208,7 @@ func setupSchema(db *sql.DB) error {
 			total_tasks INTEGER NOT NULL DEFAULT 0,
 			completed_tasks INTEGER NOT NULL DEFAULT 0,
 			failed_tasks INTEGER NOT NULL DEFAULT 0,
+			skipped_tasks INTEGER NOT NULL DEFAULT 0,
 			created_at TIMESTAMP NOT NULL,
 			started_at TIMESTAMP,
 			completed_at TIMESTAMP,
@@ -221,6 +222,14 @@ func setupSchema(db *sql.DB) error {
 	`)
 	if err != nil {
 		return fmt.Errorf("failed to create jobs table: %w", err)
+	}
+
+	// Add skipped_tasks column if it doesn't exist (for existing databases)
+	_, err = db.Exec(`
+		ALTER TABLE jobs ADD COLUMN IF NOT EXISTS skipped_tasks INTEGER DEFAULT 0
+	`)
+	if err != nil {
+		return fmt.Errorf("failed to add skipped_tasks column: %w", err)
 	}
 
 	// Create tasks table
@@ -377,6 +386,7 @@ func setupProgressTriggers(db *sql.DB) error {
 		    total_tasks INTEGER;
 		    completed_count INTEGER;
 		    failed_count INTEGER;
+		    skipped_count INTEGER;
 		    new_progress REAL;
 		BEGIN
 		    -- Determine which job to update
@@ -391,17 +401,18 @@ func setupProgressTriggers(db *sql.DB) error {
 		    FROM jobs j
 		    WHERE j.id = job_id_to_update;
 		    
-		    -- Count completed and failed tasks
+		    -- Count completed, failed, and skipped tasks
 		    SELECT 
 		        COUNT(*) FILTER (WHERE status = 'completed'),
-		        COUNT(*) FILTER (WHERE status = 'failed')
-		    INTO completed_count, failed_count
+		        COUNT(*) FILTER (WHERE status = 'failed'),
+		        COUNT(*) FILTER (WHERE status = 'skipped')
+		    INTO completed_count, failed_count, skipped_count
 		    FROM tasks
 		    WHERE job_id = job_id_to_update;
 		    
-		    -- Calculate progress percentage
-		    IF total_tasks > 0 THEN
-		        new_progress = (completed_count + failed_count)::REAL / total_tasks::REAL * 100.0;
+		    -- Calculate progress percentage (only count completed + failed, not skipped)
+		    IF total_tasks > 0 AND (total_tasks - skipped_count) > 0 THEN
+		        new_progress = (completed_count + failed_count)::REAL / (total_tasks - skipped_count)::REAL * 100.0;
 		    ELSE
 		        new_progress = 0.0;
 		    END IF;
@@ -411,6 +422,7 @@ func setupProgressTriggers(db *sql.DB) error {
 		    SET 
 		        completed_tasks = completed_count,
 		        failed_tasks = failed_count,
+		        skipped_tasks = skipped_count,
 		        progress = new_progress,
 		        status = CASE 
 		            WHEN new_progress >= 100.0 THEN 'completed'

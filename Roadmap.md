@@ -144,12 +144,6 @@
   - [x] Configure connection settings
   - [x] Configure security settings
 
-#### 🔴 Critical Database Management (Priority)
-
-- [ ] Set up backup schedule and automated recovery testing
-- [ ] Implement data retention policies
-- [ ] Create monitoring for database health
-
 #### ✅ Database Layer Replacement
 
 - [x] Implement PostgreSQL schema
@@ -355,6 +349,12 @@ Detailed plan available in [docs/webflow-integration-plan.md](docs/plans/webflow
 - [ ] Implement real-time updates via API client library
 - [ ] Build configuration panel for scheduler settings
 - [ ] Implement OAuth authentication for extension-server communication
+
+#### 🔴 Critical Database Management (Priority)
+
+- [ ] Set up backup schedule and automated recovery testing
+- [ ] Implement data retention policies
+- [ ] Create monitoring for database health
 
 ### 🔴 Automatic Trigger & Scheduling
 
