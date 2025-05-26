@@ -14,10 +14,6 @@ All work should follow the guidelines, workflow, and standards outlined in INIT.
 
 ## Quick Commands
 
-### Development
-
-I will run Air in parallel to identify build issues, do not attempt to run go or modify go mod.
-
 ### Debugging
 
 ```bash
@@ -113,6 +109,8 @@ Blue Banded Bee is a web cache warming service built in Go, primarily focused on
 
 - Review relevant documentation before proposing or making changes
 - Consider documentation the source of truth for design decisions
+- When building new functionality, propose architecture within the codebase and database for my review before proceeding.
+- Always check if existing documentation has a technical outline for the requested task.
 
 ### Preserve Functionality
 
