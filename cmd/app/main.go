@@ -13,6 +13,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Harvey-AU/blue-banded-bee/internal/auth"
 	"github.com/Harvey-AU/blue-banded-bee/internal/crawler"
 	"github.com/Harvey-AU/blue-banded-bee/internal/db"
 	"github.com/Harvey-AU/blue-banded-bee/internal/jobs"
@@ -152,7 +153,22 @@ func main() {
 		})
 	})
 
-	http.HandleFunc("/site", func(w http.ResponseWriter, r *http.Request) {
+	http.Handle("/site", auth.AuthMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Extract user information from context
+		userClaims, ok := auth.GetUserFromContext(r.Context())
+		if !ok {
+			http.Error(w, "User information not found", http.StatusUnauthorized)
+			return
+		}
+
+		// Get user from database to get organisation_id
+		user, err := pgDB.GetUser(userClaims.UserID)
+		if err != nil {
+			log.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get user from database")
+			http.Error(w, "User not found", http.StatusUnauthorized)
+			return
+		}
+
 		domain := r.URL.Query().Get("domain")
 		if domain == "" {
 			http.Error(w, "Domain parameter is required", http.StatusBadRequest)
@@ -204,11 +220,13 @@ func main() {
 		}
 
 		opts := &jobs.JobOptions{
-			Domain:      domain,
-			UseSitemap:  useSitemap,
-			Concurrency: jobConcurrency,
-			FindLinks:   findLinks,
-			MaxPages:    maxPages,
+			Domain:         domain,
+			UserID:         &user.ID,
+			OrganisationID: user.OrganisationID,
+			UseSitemap:     useSitemap,
+			Concurrency:    jobConcurrency,
+			FindLinks:      findLinks,
+			MaxPages:       maxPages,
 		}
 		job, err := jobsManager.CreateJob(r.Context(), opts)
 		if err != nil {
@@ -227,9 +245,24 @@ func main() {
 			"find_links":  strconv.FormatBool(findLinks),
 			"max_pages":   strconv.Itoa(maxPages),
 		})
-	})
+	})))
 
-	http.HandleFunc("/job-status", func(w http.ResponseWriter, r *http.Request) {
+	http.Handle("/job-status", auth.AuthMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Extract user information from context
+		userClaims, ok := auth.GetUserFromContext(r.Context())
+		if !ok {
+			http.Error(w, "User information not found", http.StatusUnauthorized)
+			return
+		}
+
+		// Get user from database to get organisation_id
+		user, err := pgDB.GetUser(userClaims.UserID)
+		if err != nil {
+			log.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get user from database")
+			http.Error(w, "User not found", http.StatusUnauthorized)
+			return
+		}
+
 		jobID := r.URL.Query().Get("job_id")
 		if jobID == "" {
 			http.Error(w, "job_id parameter required", http.StatusBadRequest)
@@ -238,10 +271,11 @@ func main() {
 
 		var total, completed, failed, skipped int
 		var status string
-		err := pgDB.GetDB().QueryRowContext(r.Context(), `
+		// Use organisation-based query to respect RLS
+		err = pgDB.GetDB().QueryRowContext(r.Context(), `
 			SELECT total_tasks, completed_tasks, failed_tasks, skipped_tasks, status 
-			FROM jobs WHERE id = $1
-		`, jobID).Scan(&total, &completed, &failed, &skipped, &status)
+			FROM jobs WHERE id = $1 AND organisation_id = $2
+		`, jobID, user.OrganisationID).Scan(&total, &completed, &failed, &skipped, &status)
 
 		if err != nil {
 			http.Error(w, "Job not found", http.StatusNotFound)
@@ -258,6 +292,160 @@ func main() {
 			"skipped":   skipped,
 			"progress":  float64(completed+failed) / float64(total-skipped) * 100,
 		})
+	})))
+
+	// User registration endpoint
+	http.HandleFunc("/api/auth/register", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		var reqBody struct {
+			UserID    string  `json:"user_id"`
+			Email     string  `json:"email"`
+			FullName  *string `json:"full_name,omitempty"`
+			OrgName   *string `json:"org_name,omitempty"`
+		}
+
+		if err := json.NewDecoder(r.Body).Decode(&reqBody); err != nil {
+			http.Error(w, "Invalid JSON", http.StatusBadRequest)
+			return
+		}
+
+		if reqBody.UserID == "" || reqBody.Email == "" {
+			http.Error(w, "user_id and email are required", http.StatusBadRequest)
+			return
+		}
+
+		// Default organisation name to user's email domain if not provided
+		orgName := "Personal Organisation"
+		if reqBody.OrgName != nil && *reqBody.OrgName != "" {
+			orgName = *reqBody.OrgName
+		} else {
+			// Extract domain from email for organisation name
+			if emailParts := strings.Split(reqBody.Email, "@"); len(emailParts) == 2 {
+				domain := emailParts[1]
+				domainName := strings.Split(domain, ".")[0]
+				// Capitalise first letter manually to avoid deprecated strings.Title
+				if len(domainName) > 0 {
+					orgName = strings.ToUpper(domainName[:1]) + domainName[1:] + " Organisation"
+				}
+			}
+		}
+
+		// Create user with organisation atomically
+		user, org, err := pgDB.CreateUserWithOrganisation(reqBody.UserID, reqBody.Email, reqBody.FullName, orgName)
+		if err != nil {
+			log.Error().Err(err).Str("user_id", reqBody.UserID).Msg("Failed to create user with organisation")
+			http.Error(w, "Failed to create user", http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": true,
+			"user": map[string]interface{}{
+				"id":              user.ID,
+				"email":           user.Email,
+				"full_name":       user.FullName,
+				"organisation_id": user.OrganisationID,
+				"created_at":      user.CreatedAt,
+			},
+			"organisation": map[string]interface{}{
+				"id":         org.ID,
+				"name":       org.Name,
+				"created_at": org.CreatedAt,
+			},
+		})
+	})
+
+	// User profile endpoint
+	http.Handle("/api/auth/profile", auth.AuthMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		// Extract user information from context
+		userClaims, ok := auth.GetUserFromContext(r.Context())
+		if !ok {
+			http.Error(w, "User information not found", http.StatusUnauthorized)
+			return
+		}
+
+		// Use authenticated user's ID (ignore any user_id parameter for security)
+		user, err := pgDB.GetUser(userClaims.UserID)
+		if err != nil {
+			if strings.Contains(err.Error(), "not found") {
+				http.Error(w, "User not found", http.StatusNotFound)
+				return
+			}
+			log.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get user")
+			http.Error(w, "Failed to get user", http.StatusInternalServerError)
+			return
+		}
+
+		// Get organisation if user has one
+		var organisation *db.Organisation
+		if user.OrganisationID != nil {
+			org, err := pgDB.GetOrganisation(*user.OrganisationID)
+			if err != nil {
+				log.Warn().Err(err).Str("organisation_id", *user.OrganisationID).Msg("Failed to get organisation")
+			} else {
+				organisation = org
+			}
+		}
+
+		response := map[string]interface{}{
+			"user": map[string]interface{}{
+				"id":              user.ID,
+				"email":           user.Email,
+				"full_name":       user.FullName,
+				"organisation_id": user.OrganisationID,
+				"created_at":      user.CreatedAt,
+				"updated_at":      user.UpdatedAt,
+			},
+		}
+
+		if organisation != nil {
+			response["organisation"] = map[string]interface{}{
+				"id":         organisation.ID,
+				"name":       organisation.Name,
+				"created_at": organisation.CreatedAt,
+				"updated_at": organisation.UpdatedAt,
+			}
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(response)
+	})))
+
+	// Session validation endpoint
+	http.HandleFunc("/api/auth/session", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		var reqBody struct {
+			Token string `json:"token"`
+		}
+
+		if err := json.NewDecoder(r.Body).Decode(&reqBody); err != nil {
+			http.Error(w, "Invalid JSON", http.StatusBadRequest)
+			return
+		}
+
+		if reqBody.Token == "" {
+			http.Error(w, "token is required", http.StatusBadRequest)
+			return
+		}
+
+		sessionInfo := auth.ValidateSession(reqBody.Token)
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(sessionInfo)
 	})
 
 	// Create a new HTTP server

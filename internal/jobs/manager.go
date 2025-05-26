@@ -62,6 +62,8 @@ func (jm *JobManager) CreateJob(ctx context.Context, options *JobOptions) (*Job,
 	job := &Job{
 		ID:              uuid.New().String(),
 		Domain:          normalisedDomain, // Use normalised domain
+		UserID:          options.UserID,
+		OrganisationID:  options.OrganisationID,
 		Status:          JobStatusPending,
 		Progress:        0,
 		TotalTasks:      0,
@@ -94,12 +96,12 @@ func (jm *JobManager) CreateJob(ctx context.Context, options *JobOptions) (*Job,
 		// Insert the job
 		_, err = tx.Exec(
 			`INSERT INTO jobs (
-				id, domain_id, status, progress, total_tasks, completed_tasks, failed_tasks, skipped_tasks,
+				id, domain_id, user_id, organisation_id, status, progress, total_tasks, completed_tasks, failed_tasks, skipped_tasks,
 				created_at, concurrency, find_links, include_paths, exclude_paths,
 				required_workers, max_pages,
 				found_tasks, sitemap_tasks
-			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`,
-			job.ID, domainID, string(job.Status), job.Progress,
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)`,
+			job.ID, domainID, job.UserID, job.OrganisationID, string(job.Status), job.Progress,
 			job.TotalTasks, job.CompletedTasks, job.FailedTasks, job.SkippedTasks,
 			job.CreatedAt, job.Concurrency, job.FindLinks,
 			db.Serialize(job.IncludePaths), db.Serialize(job.ExcludePaths),

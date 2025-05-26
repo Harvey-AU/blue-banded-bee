@@ -38,6 +38,8 @@ const (
 type Job struct {
 	ID              string    `json:"id"`
 	Domain          string    `json:"domain"`
+	UserID          *string   `json:"user_id,omitempty"`
+	OrganisationID  *string   `json:"organisation_id,omitempty"`
 	Status          JobStatus `json:"status"`
 	Progress        float64   `json:"progress"`
 	TotalTasks      int       `json:"total_tasks"`
@@ -89,6 +91,8 @@ type Task struct {
 // JobOptions defines configuration options for a crawl job
 type JobOptions struct {
 	Domain          string   `json:"domain"`
+	UserID          *string  `json:"user_id,omitempty"`
+	OrganisationID  *string  `json:"organisation_id,omitempty"`
 	UseSitemap      bool     `json:"use_sitemap"`
 	Concurrency     int      `json:"concurrency"`
 	FindLinks       bool     `json:"find_links"`

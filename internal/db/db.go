@@ -170,8 +170,37 @@ func InitFromEnv() (*DB, error) {
 
 // setupSchema creates the necessary tables in PostgreSQL
 func setupSchema(db *sql.DB) error {
-	// Create domains lookup table
+	// Create organisations table first (referenced by users and jobs)
 	_, err := db.Exec(`
+		CREATE TABLE IF NOT EXISTS organisations (
+			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			name TEXT NOT NULL,
+			created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+			updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+		)
+	`)
+	if err != nil {
+		return fmt.Errorf("failed to create organisations table: %w", err)
+	}
+
+	// Create users table (extends Supabase auth.users)
+	_, err = db.Exec(`
+		CREATE TABLE IF NOT EXISTS users (
+			id UUID PRIMARY KEY,
+			email TEXT NOT NULL,
+			full_name TEXT,
+			organisation_id UUID REFERENCES organisations(id),
+			created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+			updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+			UNIQUE(email)
+		)
+	`)
+	if err != nil {
+		return fmt.Errorf("failed to create users table: %w", err)
+	}
+
+	// Create domains lookup table
+	_, err = db.Exec(`
 		CREATE TABLE IF NOT EXISTS domains (
 			id SERIAL PRIMARY KEY,
 			name TEXT UNIQUE NOT NULL,
@@ -201,6 +230,8 @@ func setupSchema(db *sql.DB) error {
 		CREATE TABLE IF NOT EXISTS jobs (
 			id TEXT PRIMARY KEY,
 			domain_id INTEGER NOT NULL REFERENCES domains(id),
+			user_id UUID REFERENCES users(id),
+			organisation_id UUID REFERENCES organisations(id),
 			status TEXT NOT NULL,
 			progress REAL NOT NULL,
 			sitemap_tasks INTEGER NOT NULL DEFAULT 0,
@@ -230,6 +261,21 @@ func setupSchema(db *sql.DB) error {
 	`)
 	if err != nil {
 		return fmt.Errorf("failed to add skipped_tasks column: %w", err)
+	}
+
+	// Add user_id and organisation_id columns if they don't exist (for existing databases)
+	_, err = db.Exec(`
+		ALTER TABLE jobs ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES users(id)
+	`)
+	if err != nil {
+		return fmt.Errorf("failed to add user_id column: %w", err)
+	}
+
+	_, err = db.Exec(`
+		ALTER TABLE jobs ADD COLUMN IF NOT EXISTS organisation_id UUID REFERENCES organisations(id)
+	`)
+	if err != nil {
+		return fmt.Errorf("failed to add organisation_id column: %w", err)
 	}
 
 	// Create tasks table
@@ -285,13 +331,19 @@ func setupSchema(db *sql.DB) error {
 	}
 
 	// Enable Row-Level Security for all tables
-	tables := []string{"domains", "pages", "jobs", "tasks"}
+	tables := []string{"organisations", "users", "domains", "pages", "jobs", "tasks"}
 	for _, table := range tables {
 		// Enable RLS on the table
 		_, err = db.Exec(fmt.Sprintf("ALTER TABLE %s ENABLE ROW LEVEL SECURITY", table))
 		if err != nil {
 			return fmt.Errorf("failed to enable RLS on %s table: %w", table, err)
 		}
+	}
+
+	// Set up Row Level Security policies
+	err = setupRLSPolicies(db)
+	if err != nil {
+		return fmt.Errorf("failed to setup RLS policies: %w", err)
 	}
 
 	// Create database triggers for automatic timestamp and progress management
@@ -454,6 +506,65 @@ func setupProgressTriggers(db *sql.DB) error {
 	`)
 	if err != nil {
 		return fmt.Errorf("failed to create job progress trigger: %w", err)
+	}
+
+	return nil
+}
+
+// setupRLSPolicies creates Row Level Security policies for user data access
+func setupRLSPolicies(db *sql.DB) error {
+	// Create policy for users table - users can only access their own data
+	_, err := db.Exec(`
+		DROP POLICY IF EXISTS "Users can access own data" ON users;
+		CREATE POLICY "Users can access own data" ON users
+		FOR ALL USING (auth.uid() = id);
+	`)
+	if err != nil {
+		return fmt.Errorf("failed to create users RLS policy: %w", err)
+	}
+
+	// Create policy for organisations table - users can access their organisation
+	_, err = db.Exec(`
+		DROP POLICY IF EXISTS "Users can access own organisation" ON organisations;
+		CREATE POLICY "Users can access own organisation" ON organisations
+		FOR ALL USING (
+			id IN (
+				SELECT organisation_id FROM users WHERE id = auth.uid()
+			)
+		);
+	`)
+	if err != nil {
+		return fmt.Errorf("failed to create organisations RLS policy: %w", err)
+	}
+
+	// Create policy for jobs table - organisation members can access shared jobs
+	_, err = db.Exec(`
+		DROP POLICY IF EXISTS "Organisation members can access jobs" ON jobs;
+		CREATE POLICY "Organisation members can access jobs" ON jobs
+		FOR ALL USING (
+			organisation_id IN (
+				SELECT organisation_id FROM users WHERE id = auth.uid()
+			)
+		);
+	`)
+	if err != nil {
+		return fmt.Errorf("failed to create jobs RLS policy: %w", err)
+	}
+
+	// Create policy for tasks table - organisation members can access tasks for their jobs
+	_, err = db.Exec(`
+		DROP POLICY IF EXISTS "Organisation members can access tasks" ON tasks;
+		CREATE POLICY "Organisation members can access tasks" ON tasks
+		FOR ALL USING (
+			job_id IN (
+				SELECT id FROM jobs WHERE organisation_id IN (
+					SELECT organisation_id FROM users WHERE id = auth.uid()
+				)
+			)
+		);
+	`)
+	if err != nil {
+		return fmt.Errorf("failed to create tasks RLS policy: %w", err)
 	}
 
 	return nil
