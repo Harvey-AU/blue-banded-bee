@@ -171,7 +171,7 @@ func main() {
 		}
 
 		// Extract hyperlinks (including PDFs/docs)
-		findLinks := false
+		findLinks := true
 		if flStr := r.URL.Query().Get("find_links"); flStr != "" {
 			v, err := strconv.ParseBool(flStr)
 			if err != nil {
