@@ -94,13 +94,13 @@ func (jm *JobManager) CreateJob(ctx context.Context, options *JobOptions) (*Job,
 		// Insert the job
 		_, err = tx.Exec(
 			`INSERT INTO jobs (
-				id, domain_id, status, progress, total_tasks, completed_tasks, failed_tasks,
+				id, domain_id, status, progress, total_tasks, completed_tasks, failed_tasks, skipped_tasks,
 				created_at, concurrency, find_links, include_paths, exclude_paths,
 				required_workers, max_pages,
 				found_tasks, sitemap_tasks
-			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`,
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`,
 			job.ID, domainID, string(job.Status), job.Progress,
-			job.TotalTasks, job.CompletedTasks, job.FailedTasks,
+			job.TotalTasks, job.CompletedTasks, job.FailedTasks, job.SkippedTasks,
 			job.CreatedAt, job.Concurrency, job.FindLinks,
 			db.Serialize(job.IncludePaths), db.Serialize(job.ExcludePaths),
 			job.RequiredWorkers, job.MaxPages,
@@ -457,7 +457,7 @@ func (jm *JobManager) GetJob(ctx context.Context, jobID string) (*Job, error) {
 		// Query for job with domain join
 		err := tx.QueryRowContext(ctx, `
 			SELECT 
-				j.id, d.name, j.status, j.progress, j.total_tasks, j.completed_tasks, j.failed_tasks,
+				j.id, d.name, j.status, j.progress, j.total_tasks, j.completed_tasks, j.failed_tasks, j.skipped_tasks,
 				j.created_at, j.started_at, j.completed_at, j.concurrency, j.find_links,
 				j.include_paths, j.exclude_paths, j.error_message, j.required_workers,
 				j.found_tasks, j.sitemap_tasks
@@ -466,7 +466,7 @@ func (jm *JobManager) GetJob(ctx context.Context, jobID string) (*Job, error) {
 			WHERE j.id = $1
 		`, jobID).Scan(
 			&job.ID, &job.Domain, &job.Status, &job.Progress, &job.TotalTasks, &job.CompletedTasks,
-			&job.FailedTasks, &job.CreatedAt, &startedAt, &completedAt, &job.Concurrency,
+			&job.FailedTasks, &job.SkippedTasks, &job.CreatedAt, &startedAt, &completedAt, &job.Concurrency,
 			&job.FindLinks, &includePaths, &excludePaths, &errorMessage, &job.RequiredWorkers,
 			&job.FoundTasks, &job.SitemapTasks,
 		)

@@ -8,6 +8,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Multiple version updates may occur on the same date, each with its own version number.
 Each version represents a distinct set of changes, even if released on the same day.
 
+## [0.3.11] – 2025-05-26
+
+### Added
+- **MaxPages Functionality**: Implemented page limit controls for jobs
+  - `max` query parameter now limits number of pages processed per job
+  - Tasks beyond limit automatically set to 'skipped' status during creation
+  - Added `skipped_tasks` column to jobs table and Job struct
+  - Progress calculation excludes skipped tasks: `(completed + failed) / (total - skipped) * 100`
+  - API responses include skipped count for full visibility
+
+### Enhanced
+- **Smart Task Status Management**: Tasks receive appropriate status at creation time
+  - First N tasks (up to max_pages) get 'pending' status
+  - Remaining tasks automatically get 'skipped' status  
+  - Eliminates need for post-creation status updates
+- **Database Triggers**: Updated progress calculation triggers to handle skipped tasks
+  - Automatic counting of completed, failed, and skipped tasks
+  - Progress percentage calculation excludes skipped tasks from denominator
+  - Job completion logic updated to account for skipped tasks
+
+### Fixed
+- **Job Completion Logic**: Fixed job completion detection for jobs with limits
+  - Updated completion checker: `(completed + failed) >= (total - skipped)`
+  - Added safety check for division by zero in progress calculations
+  - Prevents jobs from being stuck with remaining skipped tasks
+
+### Technical Details
+- MaxPages limit of 0 means unlimited processing (default behaviour)
+- Task status determined during `EnqueueURLs` based on current task count vs max_pages
+- Database schema migration adds `skipped_tasks INTEGER DEFAULT 0` column
+- Backward compatible with existing jobs (skipped_tasks defaults to 0)
+
 ## [0.3.10] – 2025-05-26
 
 ### Added
