@@ -7,8 +7,8 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// NormalizeDomain removes http/https prefix and www. from domain
-func NormalizeDomain(domain string) string {
+// NormaliseDomain removes http/https prefix and www. from domain
+func NormaliseDomain(domain string) string {
 	// Remove http:// or https:// prefix if present
 	domain = strings.TrimPrefix(domain, "http://")
 	domain = strings.TrimPrefix(domain, "https://")
@@ -22,8 +22,8 @@ func NormalizeDomain(domain string) string {
 	return domain
 }
 
-// NormalizeURL ensures a URL has proper https:// scheme and validates format
-func NormalizeURL(rawURL string) string {
+// NormaliseURL ensures a URL has proper https:// scheme and validates format
+func NormaliseURL(rawURL string) string {
 	// Clean up the URL by trimming spaces
 	rawURL = strings.TrimSpace(rawURL)
 	
@@ -88,8 +88,8 @@ func ExtractPathFromURL(fullURL string) string {
 
 // ConstructURL builds a proper URL from domain and path components
 func ConstructURL(domain, path string) string {
-	// Normalize the domain
-	normalizedDomain := NormalizeDomain(domain)
+	// Normalise the domain
+	normalisedDomain := NormaliseDomain(domain)
 	
 	// Ensure path starts with /
 	if !strings.HasPrefix(path, "/") {
@@ -97,5 +97,5 @@ func ConstructURL(domain, path string) string {
 	}
 	
 	// Construct the full URL
-	return "https://" + normalizedDomain + path
+	return "https://" + normalisedDomain + path
 }

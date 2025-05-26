@@ -55,13 +55,13 @@ func (jm *JobManager) CreateJob(ctx context.Context, options *JobOptions) (*Job,
 
 	span.SetTag("domain", options.Domain)
 
-	// Normalize domain to ensure consistent handling of www. prefix and http/https
-	normalizedDomain := util.NormalizeDomain(options.Domain)
+	// Normalise domain to ensure consistent handling of www. prefix and http/https
+	normalisedDomain := util.NormaliseDomain(options.Domain)
 	
 	// Create a new job object
 	job := &Job{
 		ID:              uuid.New().String(),
-		Domain:          normalizedDomain, // Use normalized domain
+		Domain:          normalisedDomain, // Use normalised domain
 		Status:          JobStatusPending,
 		Progress:        0,
 		TotalTasks:      0,
@@ -86,7 +86,7 @@ func (jm *JobManager) CreateJob(ctx context.Context, options *JobOptions) (*Job,
 		err := tx.QueryRow(`
 			INSERT INTO domains(name) VALUES($1) 
 			ON CONFLICT (name) DO UPDATE SET name=EXCLUDED.name 
-			RETURNING id`, normalizedDomain).Scan(&domainID)
+			RETURNING id`, normalisedDomain).Scan(&domainID)
 		if err != nil {
 			return fmt.Errorf("failed to get or create domain: %w", err)
 		}
@@ -125,7 +125,7 @@ func (jm *JobManager) CreateJob(ctx context.Context, options *JobOptions) (*Job,
 
 	if options.UseSitemap {
 		// Fetch and process sitemap in a separate goroutine
-		go jm.processSitemap(context.Background(), job.ID, normalizedDomain, options.IncludePaths, options.ExcludePaths)
+		go jm.processSitemap(context.Background(), job.ID, normalisedDomain, options.IncludePaths, options.ExcludePaths)
 	} else {
 		// Prepare for manual root URL creation
 		rootPath := "/"
@@ -184,7 +184,7 @@ func (jm *JobManager) CreateJob(ctx context.Context, options *JobOptions) (*Job,
 		} else {
 			log.Info().
 				Str("job_id", job.ID).
-				Str("domain", normalizedDomain).
+				Str("domain", normalisedDomain).
 				Msg("Added root URL to job queue")
 		}
 	}

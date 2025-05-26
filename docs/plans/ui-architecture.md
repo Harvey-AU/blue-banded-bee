@@ -7,6 +7,7 @@ For detailed data flow and communication architecture, see [UI Data Flow](./ui-d
 ## Overview
 
 The Blue Banded Bee interface consists of two core parts:
+
 1. **Marketing Website**: Built entirely in Webflow
 2. **Application Interface**: JavaScript application embedded within Webflow pages
 
@@ -43,11 +44,12 @@ The UI will be built using HTML Custom Elements (Web Components) which provide:
 - Cross-framework compatibility
 
 Example component structure:
+
 ```javascript
 class JobDashboard extends HTMLElement {
   constructor() {
     super();
-    this.attachShadow({ mode: 'open' });
+    this.attachShadow({ mode: "open" });
     // Initialize component
   }
 
@@ -59,10 +61,10 @@ class JobDashboard extends HTMLElement {
 
   async fetchJobs() {
     // Fetch jobs from API
-    const response = await fetch('/api/jobs', {
+    const response = await fetch("/api/jobs", {
       headers: {
-        'Authorization': `Bearer ${this.getAuthToken()}`
-      }
+        Authorization: `Bearer ${this.getAuthToken()}`,
+      },
     });
     this.jobs = await response.json();
     this.render();
@@ -86,7 +88,7 @@ class JobDashboard extends HTMLElement {
   // Additional methods...
 }
 
-customElements.define('job-dashboard', JobDashboard);
+customElements.define("job-dashboard", JobDashboard);
 ```
 
 ### Webflow Integration
@@ -99,6 +101,7 @@ The application will be integrated into Webflow using these methods:
 4. **Component Initialization**: Initialize components based on page context
 
 Example Webflow integration:
+
 ```html
 <!-- In Webflow Custom Code element -->
 <div id="app-container">
@@ -117,12 +120,14 @@ Example Webflow integration:
 ### User Flows
 
 #### Dashboard Experience
+
 1. User logs in through Webflow Memberships
 2. Dashboard loads with overview of user's jobs
 3. Real-time updates show job progress
-4. Interactive visualizations display cache performance
+4. Interactive visualisations display cache performance
 
 #### Job Creation
+
 1. User navigates to "New Job" section
 2. Enters domain and configuration options
 3. Submits job which is sent to API
@@ -133,18 +138,20 @@ Example Webflow integration:
 1. **Dashboard**: Overview of all jobs and account status
 2. **Job Creator**: Interface for creating and configuring new jobs
 3. **Job Monitor**: Real-time status and progress of running jobs
-4. **Results Viewer**: Visualizations of completed job data
+4. **Results Viewer**: visualisations of completed job data
 5. **Account Manager**: User profile and subscription management
-6. **Usage Stats**: Visualization of usage metrics and limits
+6. **Usage Stats**: visualisation of usage metrics and limits
 
 ## Responsive Design
 
 The application will be fully responsive, adapting to:
+
 - Desktop screens (primary workspace)
 - Tablet devices (monitoring on the go)
 - Mobile phones (quick status checks)
 
 Responsive strategy:
+
 - Fluid layouts using CSS grid and flexbox
 - Component-specific media queries within Shadow DOM
 - Touch-friendly controls for mobile devices
@@ -167,6 +174,7 @@ Responsive strategy:
 ## Future Extensibility
 
 The component-based architecture allows for:
+
 1. Progressive enhancement with new features
 2. Easy replacement of individual components
 3. Potential migration path to a full SPA if needed
