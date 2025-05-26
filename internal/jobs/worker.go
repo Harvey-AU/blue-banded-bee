@@ -870,13 +870,13 @@ func (wp *WorkerPool) processTask(ctx context.Context, task *Task) (*crawler.Cra
 	
 	// Check if path is already a full URL
 	if strings.HasPrefix(task.Path, "http://") || strings.HasPrefix(task.Path, "https://") {
-		urlStr = util.NormalizeURL(task.Path)
+		urlStr = util.NormaliseURL(task.Path)
 	} else if task.DomainName != "" {
 		// Use centralized URL construction
 		urlStr = util.ConstructURL(task.DomainName, task.Path)
 	} else {
 		// Fallback case - assume path is a full URL but missing protocol
-		urlStr = util.NormalizeURL(task.Path)
+		urlStr = util.NormaliseURL(task.Path)
 	}
 	
 	log.Info().Str("url", urlStr).Str("task_id", task.ID).Msg("Starting URL warm")
@@ -1006,16 +1006,16 @@ func (wp *WorkerPool) processTask(ctx context.Context, task *Task) (*crawler.Cra
 // Helper function to check if a hostname is the same domain or a subdomain of the target domain
 // Handles www prefix variations (www.test.com vs test.com)
 func isSameOrSubDomain(hostname, targetDomain string) bool {
-	// Normalize both domains by removing www prefix
+	// Normalise both domains by removing www prefix
 	hostname = strings.ToLower(hostname)
 	targetDomain = strings.ToLower(targetDomain)
 	
 	// Remove www. prefix if present
-	normalizedHostname := strings.TrimPrefix(hostname, "www.")
-	normalizedTarget := strings.TrimPrefix(targetDomain, "www.")
+	normalisedHostname := strings.TrimPrefix(hostname, "www.")
+	normalisedTarget := strings.TrimPrefix(targetDomain, "www.")
 	
 	// Direct match (after normalization)
-	if normalizedHostname == normalizedTarget {
+	if normalisedHostname == normalisedTarget {
 		return true
 	}
 	
@@ -1029,8 +1029,8 @@ func isSameOrSubDomain(hostname, targetDomain string) bool {
 		return true
 	}
 	
-	// Check if hostname ends with .normalizedTarget (subdomain check without www)
-	if strings.HasSuffix(hostname, "."+normalizedTarget) {
+	// Check if hostname ends with .normalisedTarget (subdomain check without www)
+	if strings.HasSuffix(hostname, "."+normalisedTarget) {
 		return true
 	}
 

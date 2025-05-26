@@ -76,7 +76,7 @@ func New(config *Config, id ...string) *Crawler {
 			}
 
 			href := e.Attr("href")
-			// Normalize URL (absolute)
+			// Normalise URL (absolute)
 			u := e.Request.AbsoluteURL(href)
 
 			log.Debug().

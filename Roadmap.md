@@ -319,7 +319,7 @@ Detailed plan available in [docs/ui-architecture.md](docs/plans/ui-architecture.
   - [ ] Add organisation-level reporting
 - [ ] Enhance embedded JavaScript application
   - [ ] Expand job creation interface with advanced options
-  - [ ] Create comprehensive job results visualization
+  - [ ] Create comprehensive job results visualisation
   - [ ] Implement account settings and profile management
   - [ ] Develop notification system for completed jobs
 - [ ] Add usage limits/tracking

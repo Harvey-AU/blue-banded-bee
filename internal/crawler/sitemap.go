@@ -17,12 +17,12 @@ import (
 
 // DiscoverSitemaps attempts to find sitemaps for a domain by checking common locations
 func (c *Crawler) DiscoverSitemaps(ctx context.Context, domain string) ([]string, error) {
-	// Normalize the domain first to handle different input formats
-	normalizedDomain := util.NormalizeDomain(domain)
+	// Normalise the domain first to handle different input formats
+	normalisedDomain := util.NormaliseDomain(domain)
 	log.Debug().
 		Str("original_domain", domain).
-		Str("normalized_domain", normalizedDomain).
-		Msg("Starting sitemap discovery with normalized domain")
+		Str("normalised_domain", normalisedDomain).
+		Msg("Starting sitemap discovery with normalised domain")
 	// Create a client with shorter timeout and redirect handling
 	client := &http.Client{
 		Timeout: 5 * time.Second,
@@ -35,7 +35,7 @@ func (c *Crawler) DiscoverSitemaps(ctx context.Context, domain string) ([]string
 	}
 
 	// Check robots.txt first as it's the most authoritative source
-	robotsURL := "https://" + normalizedDomain + "/robots.txt"
+	robotsURL := "https://" + normalisedDomain + "/robots.txt"
 	var foundSitemaps []string
 
 	// Try robots.txt first
@@ -73,8 +73,8 @@ func (c *Crawler) DiscoverSitemaps(ctx context.Context, domain string) ([]string
 	// If no sitemaps found in robots.txt, check common locations
 	if len(foundSitemaps) == 0 {
 		commonPaths := []string{
-			"https://" + normalizedDomain + "/sitemap.xml",
-			"https://" + normalizedDomain + "/sitemap_index.xml",
+			"https://" + normalisedDomain + "/sitemap.xml",
+			"https://" + normalisedDomain + "/sitemap_index.xml",
 		}
 
 		// Check common locations concurrently with a timeout
@@ -188,8 +188,8 @@ func (c *Crawler) ParseSitemap(ctx context.Context, sitemapURL string) ([]string
 
 		// Process each sitemap in the index
 		for _, childSitemapURL := range sitemapURLs {
-			// Validate and normalize the child sitemap URL
-			childSitemapURL = util.NormalizeURL(childSitemapURL)
+			// Validate and normalise the child sitemap URL
+			childSitemapURL = util.NormaliseURL(childSitemapURL)
 			if childSitemapURL == "" {
 				log.Warn().Str("url", childSitemapURL).Msg("Invalid child sitemap URL, skipping")
 				continue
@@ -206,10 +206,10 @@ func (c *Crawler) ParseSitemap(ctx context.Context, sitemapURL string) ([]string
 		// It's a regular sitemap
 		extractedURLs := extractURLsFromXML(content, "<url>", "</url>", "<loc>", "</loc>")
 		
-		// Validate and normalize all extracted URLs
+		// Validate and normalise all extracted URLs
 		var validURLs []string
 		for _, extractedURL := range extractedURLs {
-			validURL := util.NormalizeURL(extractedURL)
+			validURL := util.NormaliseURL(extractedURL)
 			if validURL != "" {
 				validURLs = append(validURLs, validURL)
 			} else {
