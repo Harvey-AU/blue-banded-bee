@@ -241,28 +241,30 @@ Detailed plan available in [docs/multi-interface-architecture.md](docs/architect
 
 ## ⚪ Stage 4: Core Authentication & MVP Interface
 
-### 🔴 Implement Supabase Authentication
+### ✅ Implement Supabase Authentication
 
-- [ ] Configure Supabase Auth settings
-- [ ] Implement JWT validation middleware in Go
-- [ ] Add social login providers configuration
-- [ ] Set up user session handling
-- [ ] Implement auth error handling
+- [x] Configure Supabase Auth settings
+- [x] Implement JWT validation middleware in Go
+- [x] Add social login providers configuration (8 providers)
+- [x] Set up user session handling
+- [x] Implement auth error handling
+- [x] Create user registration with auto-organisation creation
 
-### 🔴 Connect user data to PostgreSQL
+### ✅ Connect user data to PostgreSQL
 
-- [ ] Design user data schema with Row Level Security
-- [ ] Implement user profile storage
-- [ ] Add user preferences handling
-- [ ] Configure PostgreSQL policies for data access
+- [x] Design user data schema with Row Level Security
+- [x] Implement user profile storage
+- [x] Add user preferences handling
+- [x] Configure PostgreSQL policies for data access
+- [x] Create database operations for users and organisations
 
-### 🔴 Simple Organisation Sharing
+### ✅ Simple Organisation Sharing
 
 Detailed plan available in [docs/organisation-model.md](docs/plans/organisation-model.md)
 
-- [ ] Auto-create organisation when user signs up
+- [x] Auto-create organisation when user signs up
+- [x] Create shared access to all jobs/tasks/reports within organisation
 - [ ] Implement member invitation system
-- [ ] Create shared access to all jobs/tasks/reports within organisation
 - [ ] Implement organisation-level usage tracking
 
 ### 🔴 MVP Interface Development
@@ -386,6 +388,15 @@ Detailed plan available in [docs/webflow-integration-plan.md](docs/plans/webflow
 
 - [ ] Enable 'Don't treat query strings as unique URLs'
 - [ ] Remove #anchor links as 'new page found' in find_links functionality
+
+### 🔴 Security & Audit Enhancements
+
+- [ ] **Login IP tracking** - Record IP addresses for all authentication events
+- [ ] **Session limits** - Implement concurrent session limits per user account
+- [ ] **Active job limits** - Prevent organisations from overwhelming system with excessive jobs
+- [ ] **Audit logging system** - Track login history, account changes, password resets
+- [ ] **Suspicious activity detection** - Monitor for unusual access patterns
+- [ ] **Compliance features** - GDPR data export, account deletion audit trails
 
 ### 🔴 Clean up
 

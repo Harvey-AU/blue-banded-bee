@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Blue Banded Bee - Login Test</title>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    <style>
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        max-width: 500px;
+        margin: 50px auto;
+        padding: 20px;
+        background: #f8f9fa;
+      }
+      .container {
+        background: white;
+        padding: 30px;
+        border-radius: 12px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      }
+      .login-btn {
+        display: block;
+        width: 100%;
+        padding: 15px;
+        margin: 10px 0;
+        border: none;
+        border-radius: 8px;
+        font-size: 16px;
+        font-weight: 600;
+        cursor: pointer;
+        text-decoration: none;
+        text-align: center;
+        transition: all 0.2s;
+      }
+      .google {
+        background: #4285f4;
+        color: white;
+      }
+      .facebook {
+        background: #1877f2;
+        color: white;
+      }
+      .slack {
+        background: #4a154b;
+        color: white;
+      }
+      .email {
+        background: #28a745;
+        color: white;
+      }
+      .logout {
+        background: #dc3545;
+        color: white;
+      }
+      .login-btn:hover {
+        transform: translateY(-1px);
+        opacity: 0.9;
+      }
+      .user-info {
+        background: #e8f5e8;
+        padding: 20px;
+        border-radius: 8px;
+        margin: 20px 0;
+      }
+      .hidden {
+        display: none;
+      }
+      .test-api {
+        background: #17a2b8;
+        color: white;
+        margin-top: 10px;
+      }
+      .result {
+        background: #f8f9fa;
+        padding: 15px;
+        border-radius: 8px;
+        margin: 10px 0;
+        border-left: 4px solid #007bff;
+        font-family: monospace;
+        font-size: 14px;
+        white-space: pre-wrap;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>🐝 Blue Banded Bee - Login Test</h1>
+      <p>Test your social login providers and API endpoints.</p>
+
+      <!-- Login Section -->
+      <div id="login-section">
+        <h3>Choose Login Method:</h3>
+        <button class="login-btn google" onclick="loginWith('google')">Continue with Google</button>
+        <button class="login-btn facebook" onclick="loginWith('facebook')">Continue with Facebook</button>
+        <button class="login-btn slack" onclick="loginWith('slack')">Continue with Slack</button>
+        <button class="login-btn email" onclick="showEmailForm()">Continue with Email</button>
+
+        <!-- Email Form (hidden by default) -->
+        <div id="email-form" class="hidden" style="margin-top: 20px">
+          <input
+            type="email"
+            id="email-input"
+            placeholder="Enter your email"
+            style="width: 100%; padding: 10px; margin: 5px 0; border: 1px solid #ddd; border-radius: 5px"
+          />
+          <input
+            type="password"
+            id="password-input"
+            placeholder="Enter your password"
+            style="width: 100%; padding: 10px; margin: 5px 0; border: 1px solid #ddd; border-radius: 5px"
+          />
+          <button class="login-btn email" onclick="emailLogin()">Sign In</button>
+          <button class="login-btn" onclick="emailSignUp()" style="background: #6c757d">Sign Up</button>
+        </div>
+      </div>
+
+      <!-- User Info Section (hidden by default) -->
+      <div id="user-section" class="hidden">
+        <div class="user-info">
+          <h3>✅ Logged In Successfully!</h3>
+          <div id="user-details"></div>
+        </div>
+
+        <h3>Test API Endpoints:</h3>
+        <button class="login-btn test-api" onclick="testRegisterAPI()">Test Registration API</button>
+        <button class="login-btn test-api" onclick="testProfileAPI()">Test Profile API</button>
+        <button class="login-btn test-api" onclick="testSessionAPI()">Test Session API</button>
+        <button class="login-btn test-api" onclick="testJobCreation()">Test Job Creation (Protected)</button>
+
+        <div id="api-results"></div>
+
+        <button class="login-btn logout" onclick="logout()">Logout</button>
+      </div>
+    </div>
+
+    <script>
+      const SUPABASE_URL = "https://gpzjtbgtdjxnacdfujvx.supabase.co";
+      const SUPABASE_ANON_KEY =
+        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdwemp0Ymd0ZGp4bmFjZGZ1anZ4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDUwNjYxNjMsImV4cCI6MjA2MDY0MjE2M30.eJjM2-3X8oXsFex_lQKvFkP1-_yLMHsueIn7_hCF6YI";
+
+      const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+      // Check if user is already logged in
+      checkUser();
+
+      async function checkUser() {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        if (user) {
+          showUserInfo(user);
+        }
+      }
+
+      async function loginWith(provider) {
+        const { data, error } = await supabase.auth.signInWithOAuth({
+          provider: provider,
+          options: {
+            redirectTo: window.location.href,
+          },
+        });
+
+        if (error) {
+          alert("Login error: " + error.message);
+        }
+      }
+
+      function showEmailForm() {
+        document.getElementById("email-form").classList.remove("hidden");
+      }
+
+      async function emailLogin() {
+        const email = document.getElementById("email-input").value;
+        const password = document.getElementById("password-input").value;
+
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+
+        if (error) {
+          alert("Login error: " + error.message);
+        } else {
+          showUserInfo(data.user);
+        }
+      }
+
+      async function emailSignUp() {
+        const email = document.getElementById("email-input").value;
+        const password = document.getElementById("password-input").value;
+
+        const { data, error } = await supabase.auth.signUp({
+          email,
+          password,
+        });
+
+        if (error) {
+          alert("Sign up error: " + error.message);
+        } else {
+          alert("Check your email for verification link!");
+        }
+      }
+
+      function showUserInfo(user) {
+        document.getElementById("login-section").classList.add("hidden");
+        document.getElementById("user-section").classList.remove("hidden");
+
+        document.getElementById("user-details").innerHTML = `
+                <strong>User ID:</strong> ${user.id}<br>
+                <strong>Email:</strong> ${user.email}<br>
+                <strong>Provider:</strong> ${user.app_metadata?.provider || "email"}<br>
+                <strong>Created:</strong> ${new Date(user.created_at).toLocaleString()}
+            `;
+      }
+
+      async function logout() {
+        const { error } = await supabase.auth.signOut();
+        if (!error) {
+          document.getElementById("login-section").classList.remove("hidden");
+          document.getElementById("user-section").classList.add("hidden");
+          document.getElementById("api-results").innerHTML = "";
+        }
+      }
+
+      // API Testing Functions
+      async function testRegisterAPI() {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+
+        const response = await fetch("/api/auth/register", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            user_id: user.id,
+            email: user.email,
+            full_name: user.user_metadata?.full_name || user.email.split("@")[0],
+            org_name: "Test Organization",
+          }),
+        });
+
+        const result = await response.json();
+        showResult("Registration API", result);
+      }
+
+      async function testProfileAPI() {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+
+        const response = await fetch("/api/auth/profile", {
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        });
+
+        const result = await response.json();
+        showResult("Profile API", result);
+      }
+
+      async function testSessionAPI() {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+
+        const response = await fetch("/api/auth/session", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            token: session.access_token,
+          }),
+        });
+
+        const result = await response.json();
+        showResult("Session API", result);
+      }
+
+      async function testJobCreation() {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+
+        const response = await fetch("/site?domain=example.com&concurrency=2&find_links=true&max=5", {
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        });
+
+        const result = await response.json();
+        showResult("Job Creation API", result);
+      }
+
+      function showResult(title, result) {
+        const resultsDiv = document.getElementById("api-results");
+        const resultElement = document.createElement("div");
+        resultElement.className = "result";
+        resultElement.innerHTML = `<strong>${title}:</strong>\n${JSON.stringify(result, null, 2)}`;
+        resultsDiv.appendChild(resultElement);
+      }
+    </script>
+  </body>
+</html>
