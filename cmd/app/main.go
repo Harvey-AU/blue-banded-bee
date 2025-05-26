@@ -448,8 +448,10 @@ func main() {
 		json.NewEncoder(w).Encode(sessionInfo)
 	})
 
-	// Serve static files (HTML, CSS, JS, etc.)
-	http.Handle("/", http.FileServer(http.Dir("./")))
+	// Serve the test login page specifically
+	http.HandleFunc("/test-login.html", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, "test-login.html")
+	})
 
 	// Create a new HTTP server
 	server := &http.Server{
