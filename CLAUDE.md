@@ -16,32 +16,7 @@ All work should follow the guidelines, workflow, and standards outlined in INIT.
 
 ### Development
 
-```bash
-# Run the service with hot reloading
-air
-
-# Run the service without hot reloading
-go run ./cmd/app/main.go
-
-# Build the Docker container
-docker build -t blue-banded-bee .
-
-# Run the Docker container
-docker run -p 8080:8080 --env-file .env blue-banded-bee
-```
-
-### Testing
-
-```bash
-# Run all tests
-go test ./... -v
-
-# Run integration tests
-RUN_INTEGRATION_TESTS=true go test ./... -v
-
-# Check test coverage
-go test ./... -cover
-```
+I will run Air in parallel to identify build issues, do not attempt to run go or modify go mod.
 
 ### Debugging
 

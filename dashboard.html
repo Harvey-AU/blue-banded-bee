@@ -123,20 +123,36 @@
     <div class="dashboard">
       <div class="header">
         <h1>🐝 Blue Banded Bee Dashboard</h1>
-        <div style="display: flex; align-items: center; gap: 15px; margin-top: 15px; flex-wrap: wrap;">
-          <label>From:</label>
-          <input type="date" id="dateFrom" />
-          <label>To:</label>
-          <input type="date" id="dateTo" />
+        <div style="display: flex; align-items: center; gap: 15px; margin-top: 15px; flex-wrap: wrap">
+          <label>Date Range:</label>
+          <select id="dateRange" onchange="handleDateRangeChange()">
+            <option value="today">Today</option>
+            <option value="last24hrs">Last 24 Hours</option>
+            <option value="yesterday">Yesterday</option>
+            <option value="last7">Last 7 Days</option>
+            <option value="last28">Last 28 Days</option>
+            <option value="last90">Last 90 Days</option>
+            <option value="all">All Time</option>
+            <option value="custom">Custom Range</option>
+          </select>
+
+          <div id="customDateInputs" style="display: none; gap: 10px; align-items: center">
+            <label>From:</label>
+            <input type="date" id="dateFrom" onchange="loadDashboard()" />
+            <label>To:</label>
+            <input type="date" id="dateTo" onchange="loadDashboard()" />
+          </div>
+
           <label>Group by:</label>
-          <select id="groupBy">
+          <select id="groupBy" onchange="loadDashboard()">
             <option value="auto">Auto</option>
             <option value="minute">Per Minute</option>
             <option value="hour">Per Hour</option>
             <option value="6hour">Per 6 Hours</option>
             <option value="day">Per Day</option>
           </select>
-          <button class="refresh-btn" onclick="loadDashboard()">Refresh</button>
+
+          <span id="groupByIndicator" style="font-size: 12px; color: #666; font-style: italic"></span>
         </div>
       </div>
 
@@ -191,13 +207,32 @@
       }
 
       async function loadStats() {
-        const { data: jobs } = await supabase.from("job_list").select("*");
+        // Get date range from inputs for filtering
+        const dateFrom = document.getElementById("dateFrom").value;
+        const dateTo = document.getElementById("dateTo").value;
+
+        let query = supabase.from("jobs").select("status");
+
+        // Apply date filters using precise timestamps if available
+        const dateFromElement = document.getElementById("dateFrom");
+        const dateToElement = document.getElementById("dateTo");
+
+        if (dateFrom) {
+          const fromTimestamp = dateFromElement.dataset.fullDate || dateFrom + "T00:00:00";
+          query = query.gte("created_at", new Date(fromTimestamp).toISOString());
+        }
+        if (dateTo) {
+          const toTimestamp = dateToElement.dataset.fullDate || dateTo + "T23:59:59.999";
+          query = query.lte("created_at", new Date(toTimestamp).toISOString());
+        }
+
+        const { data: jobs } = await query;
 
         const stats = {
-          total: jobs.length,
-          running: jobs.filter((j) => j.status === "running").length,
-          completed: jobs.filter((j) => j.status === "completed").length,
-          failed: jobs.filter((j) => j.status === "failed").length,
+          total: jobs?.length || 0,
+          running: jobs?.filter((j) => j.status === "running").length || 0,
+          completed: jobs?.filter((j) => j.status === "completed").length || 0,
+          failed: jobs?.filter((j) => j.status === "failed").length || 0,
         };
 
         document.getElementById("stats").innerHTML = `
@@ -221,14 +256,63 @@
       }
 
       async function loadJobs() {
-        const { data: jobs } = await supabase.from("job_list").select("*").limit(20);
+        // Get date range from inputs for filtering
+        const dateFrom = document.getElementById("dateFrom").value;
+        const dateTo = document.getElementById("dateTo").value;
+
+        // Query jobs with domain info
+        let query = supabase
+          .from("jobs")
+          .select(
+            `
+            id, status, progress, sitemap_tasks, found_tasks, total_tasks, 
+            completed_tasks, failed_tasks, created_at, started_at, completed_at,
+            domains!jobs_domain_id_fkey(name)
+          `
+          )
+          .order("created_at", { ascending: false })
+          .limit(20);
+
+        // Apply date filters using precise timestamps if available
+        const dateFromElement = document.getElementById("dateFrom");
+        const dateToElement = document.getElementById("dateTo");
+
+        if (dateFrom) {
+          const fromTimestamp = dateFromElement.dataset.fullDate || dateFrom + "T00:00:00";
+          query = query.gte("created_at", new Date(fromTimestamp).toISOString());
+        }
+        if (dateTo) {
+          const toTimestamp = dateToElement.dataset.fullDate || dateTo + "T23:59:59.999";
+          query = query.lte("created_at", new Date(toTimestamp).toISOString());
+        }
+
+        const { data: jobs, error } = await query;
+
+        if (error) {
+          console.error("Error loading jobs:", error);
+          return;
+        }
+
+        // Debug timezone handling
+        if (jobs && jobs.length > 0) {
+          const testDate = new Date(jobs[0].created_at + "Z");
+          console.log("Timezone conversion test:", {
+            created_at_raw: jobs[0].created_at,
+            user_timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            created_utc: new Date(jobs[0].created_at + "Z").toISOString(),
+            created_local_default: new Date(jobs[0].created_at + "Z").toLocaleString(),
+            created_local_au: new Date(jobs[0].created_at + "Z").toLocaleString("en-AU"),
+            formatDate_result: formatDate(jobs[0].created_at),
+            timezone_offset_hours: testDate.getTimezoneOffset() / -60,
+          });
+        }
 
         const tbody = document.getElementById("jobsTable");
-        tbody.innerHTML = jobs
+        tbody.innerHTML = (jobs || [])
           .map(
             (job) => `
                 <tr>
-                    <td>${job.domain}</td>
+                    <td>${job.domains?.name || "Unknown"}</td>
                     <td><span class="status ${job.status}">${job.status}</span></td>
                     <td>${job.sitemap_tasks || 0}</td>
                     <td>${job.found_tasks || 0}</td>
@@ -237,11 +321,11 @@
                     <td>${job.failed_tasks || 0}</td>
                     <td>
                         <div class="progress-bar">
-                            <div class="progress-fill" style="width: ${job.progress_percent || 0}%"></div>
+                            <div class="progress-fill" style="width: ${job.progress || 0}%"></div>
                         </div>
-                        ${Math.round(job.progress_percent || 0)}%
+                        ${Math.round(job.progress || 0)}%
                     </td>
-                    <td>${job.avg_seconds_per_task ? Math.round(job.avg_seconds_per_task) + "s" : "-"}</td>
+                    <td>-</td>
                     <td>${job.started_at ? formatDate(job.started_at) : "-"}</td>
                     <td>${job.completed_at ? formatDate(job.completed_at) : "-"}</td>
                 </tr>
@@ -252,34 +336,53 @@
 
       async function loadChart() {
         // First try to get any tasks to see if we have access
-        const { data: allTasks, error: accessError } = await supabase
-          .from("tasks")
-          .select("id, status, completed_at")
-          .limit(5);
+        const { data: allTasks, error: accessError } = await supabase.from("tasks").select("id, status, completed_at").limit(5);
 
-        console.log('Access test:', { allTasks, accessError, count: allTasks?.length });
+        console.log("Access test:", { allTasks, accessError, count: allTasks?.length, actualData: allTasks });
+
+        // If we can access tasks but none found, check if any tasks exist at all
+        if (allTasks && allTasks.length === 0) {
+          const { data: anyTasks, error: tasksError } = await supabase.from("tasks").select("id, created_at, status").limit(5);
+          console.log("Any tasks in database:", { anyTasks, tasksError });
+
+          const { data: anyJobs, error: jobsError } = await supabase.from("jobs").select("id, created_at, status").limit(5);
+          console.log("Any jobs in database:", { anyJobs, jobsError });
+
+          // Check if RLS is blocking us
+          const { data: countTasks, error: countError } = await supabase.from("tasks").select("*", { count: "exact", head: true });
+          console.log("Tasks count (might be blocked by RLS):", { count: countTasks, countError });
+        }
 
         // If we can't access tasks table, show job progress instead
         if (accessError || !allTasks) {
-          console.log('Cannot access tasks table, showing job progress instead');
-          const { data: jobs } = await supabase.from("job_list").select("*").order("created_at", { ascending: true }).limit(20);
-          
+          console.log("Cannot access tasks table, showing job progress instead");
+          // Clear grouping indicator since we're showing job data instead
+          updateGroupingIndicator("day", false);
+
+          const { data: jobs } = await supabase
+            .from("jobs")
+            .select("created_at, progress, completed_tasks, total_tasks")
+            .order("created_at", { ascending: true })
+            .limit(20);
+
           const ctx = document.getElementById("progressChart").getContext("2d");
           if (progressChart) {
             progressChart.destroy();
           }
-          
+
           progressChart = new Chart(ctx, {
             type: "line",
             data: {
-              labels: jobs?.map(j => formatDate(j.created_at)) || ['No Data'],
-              datasets: [{
-                label: "Job Progress (%)",
-                data: jobs?.map(j => j.progress_percent || 0) || [0],
-                borderColor: "#1976d2",
-                backgroundColor: "rgba(25, 118, 210, 0.1)",
-                fill: true,
-              }],
+              labels: jobs?.map((j) => formatDate(j.created_at)) || ["No Data"],
+              datasets: [
+                {
+                  label: "Job Progress (%)",
+                  data: jobs?.map((j) => j.progress || 0) || [0],
+                  borderColor: "#1976d2",
+                  backgroundColor: "rgba(25, 118, 210, 0.1)",
+                  fill: true,
+                },
+              ],
             },
             options: {
               responsive: true,
@@ -290,67 +393,111 @@
         }
 
         // Get date range and grouping from inputs
-        const dateFrom = document.getElementById('dateFrom').value;
-        const dateTo = document.getElementById('dateTo').value;
-        const groupByValue = document.getElementById('groupBy').value;
-        
+        const dateFrom = document.getElementById("dateFrom").value;
+        const dateTo = document.getElementById("dateTo").value;
+        const groupByValue = document.getElementById("groupBy").value;
+
         let query = supabase
           .from("tasks")
           .select("completed_at")
           .eq("status", "completed")
           .not("completed_at", "is", null)
           .order("completed_at", { ascending: true });
-          
-        // Apply date filters if set (convert to full day ranges in local timezone)
+
+        // Apply date filters using precise timestamps if available
+        const dateFromElement = document.getElementById("dateFrom");
+        const dateToElement = document.getElementById("dateTo");
+
         if (dateFrom) {
-          const startOfDay = new Date(dateFrom + 'T00:00:00');
-          query = query.gte('completed_at', startOfDay.toISOString());
+          const fromTimestamp = dateFromElement.dataset.fullDate || dateFrom + "T00:00:00";
+          query = query.gte("completed_at", new Date(fromTimestamp).toISOString());
         }
         if (dateTo) {
-          const endOfDay = new Date(dateTo + 'T23:59:59.999');
-          query = query.lte('completed_at', endOfDay.toISOString());
+          const toTimestamp = dateToElement.dataset.fullDate || dateTo + "T23:59:59.999";
+          query = query.lte("completed_at", new Date(toTimestamp).toISOString());
         }
-        
+
         const { data: tasks, error } = await query.limit(50000);
 
-        console.log('Completed tasks:', { tasks, error, count: tasks?.length, dateFrom, dateTo, groupBy: groupByValue });
-        
+        console.log("Completed tasks query:", {
+          count: tasks?.length,
+          error,
+          dateFrom,
+          dateTo,
+          groupBy: groupByValue,
+          queryRange: dateFrom && dateTo ? `${dateFrom} to ${dateTo}` : "no date filter",
+          actualTasks: tasks,
+        });
+
         // Debug: Show first few tasks if we have them
         if (tasks && tasks.length > 0) {
-          console.log('Sample tasks:', tasks.slice(0, 3));
+          console.log("Sample tasks:", tasks.slice(0, 3));
         }
-        
+
         // Debug: Check if we have tasks with different statuses
-        const { data: allTaskStatuses } = await supabase
-          .from("tasks")
-          .select("status")
-          .limit(10);
-        console.log('Task statuses sample:', allTaskStatuses);
+        const { data: allTaskStatuses } = await supabase.from("tasks").select("status").limit(10);
+        console.log("Task statuses sample:", allTaskStatuses);
 
         if (!tasks || tasks.length === 0) {
-          console.log('No completed tasks found, trying job progress fallback');
-          
+          console.log("No completed tasks found for date range, trying job progress fallback");
+
+          // Clear grouping indicator since we're showing job data instead
+          updateGroupingIndicator("day", false);
+
+          // Check if we have any tasks at all by querying without date filter
+          const { data: allTimeTasks } = await supabase
+            .from("tasks")
+            .select("completed_at")
+            .eq("status", "completed")
+            .not("completed_at", "is", null)
+            .order("completed_at", { ascending: false })
+            .limit(1);
+
+          if (allTimeTasks && allTimeTasks.length > 0) {
+            const latestTask = new Date(allTimeTasks[0].completed_at);
+            console.log("Latest completed task found:", latestTask.toLocaleString());
+            console.log('Suggestion: Try expanding date range or use "All Time" view');
+          }
+
           // Fallback: Show job progress over time instead
-          const { data: jobs } = await supabase.from("job_list").select("created_at, progress_percent, completed_tasks, total_tasks").order("created_at", { ascending: true }).limit(20);
-          console.log('Fallback jobs data:', jobs);
-          
+          let jobQuery = supabase
+            .from("jobs")
+            .select("created_at, progress, completed_tasks, total_tasks")
+            .order("created_at", { ascending: true })
+            .limit(20);
+
+          // Apply same date filters to jobs
+          if (dateFrom) {
+            const startOfDay = new Date(dateFrom + "T00:00:00");
+            jobQuery = jobQuery.gte("created_at", startOfDay.toISOString());
+          }
+          if (dateTo) {
+            const endOfDay = new Date(dateTo + "T23:59:59.999");
+            jobQuery = jobQuery.lte("created_at", endOfDay.toISOString());
+          }
+
+          const { data: jobs } = await jobQuery;
+          console.log("Fallback jobs data:", jobs);
+
           const ctx = document.getElementById("progressChart").getContext("2d");
           if (progressChart) {
             progressChart.destroy();
           }
-          
+
           if (jobs && jobs.length > 0) {
             progressChart = new Chart(ctx, {
               type: "bar",
               data: {
-                labels: jobs.map(j => formatDate(j.created_at)),
-                datasets: [{
-                  label: "Tasks Completed per Job",
-                  data: jobs.map(j => j.completed_tasks || 0),
-                  backgroundColor: "rgba(76, 175, 80, 0.7)",
-                  borderColor: "#4caf50",
-                  borderWidth: 1,
-                }],
+                labels: jobs.map((j) => formatDate(j.created_at)),
+                datasets: [
+                  {
+                    label: "Tasks Completed per Job",
+                    data: jobs.map((j) => j.completed_tasks || 0),
+                    backgroundColor: "rgba(76, 175, 80, 0.7)",
+                    borderColor: "#4caf50",
+                    borderWidth: 1,
+                  },
+                ],
               },
               options: {
                 responsive: true,
@@ -361,12 +508,14 @@
             progressChart = new Chart(ctx, {
               type: "bar",
               data: {
-                labels: ['No Data'],
-                datasets: [{
-                  label: "Tasks Completed",
-                  data: [0],
-                  backgroundColor: "rgba(76, 175, 80, 0.7)",
-                }],
+                labels: ["No Data"],
+                datasets: [
+                  {
+                    label: "Tasks Completed",
+                    data: [0],
+                    backgroundColor: "rgba(76, 175, 80, 0.7)",
+                  },
+                ],
               },
             });
           }
@@ -374,60 +523,98 @@
         }
 
         // Determine date range and grouping strategy
-        const startDate = dateFrom ? new Date(dateFrom) : new Date(Math.min(...tasks.map(t => new Date(t.completed_at))));
-        const endDate = dateTo ? new Date(dateTo) : new Date(Math.max(...tasks.map(t => new Date(t.completed_at))));
+        const startDate = dateFrom ? new Date(dateFrom) : new Date(Math.min(...tasks.map((t) => new Date(t.completed_at))));
+        const endDate = dateTo ? new Date(dateTo) : new Date(Math.max(...tasks.map((t) => new Date(t.completed_at))));
         const rangeDays = (endDate - startDate) / (1000 * 60 * 60 * 24);
-        
+
         // Determine grouping method
         let grouping;
-        if (groupByValue === 'auto') {
-          if (rangeDays <= 1) grouping = 'minute';
-          else if (rangeDays <= 5) grouping = 'hour';
-          else if (rangeDays <= 30) grouping = '6hour';
-          else grouping = 'day';
+        if (groupByValue === "auto") {
+          if (rangeDays <= 1) grouping = "minute";
+          else if (rangeDays <= 5) grouping = "hour";
+          else if (rangeDays <= 30) grouping = "6hour";
+          else grouping = "day";
         } else {
           grouping = groupByValue;
         }
-        
+
+        // Update the grouping indicator and dropdown
+        updateGroupingIndicator(grouping, groupByValue === "auto");
+        if (groupByValue === "auto") {
+          document.getElementById("groupBy").value = grouping;
+        }
+
         // Define grouping functions
         function getTimeKey(date, groupType) {
           const d = new Date(date);
           switch (groupType) {
-            case 'minute':
-              return d.toISOString().slice(0, 16) + ':00.000Z'; // YYYY-MM-DDTHH:MM:00.000Z
-            case 'hour':
-              return d.toISOString().slice(0, 13) + ':00:00.000Z'; // YYYY-MM-DDTHH:00:00.000Z
-            case '6hour':
+            case "minute":
+              return d.toISOString().slice(0, 16) + ":00.000Z"; // YYYY-MM-DDTHH:MM:00.000Z
+            case "hour":
+              return d.toISOString().slice(0, 13) + ":00:00.000Z"; // YYYY-MM-DDTHH:00:00.000Z
+            case "6hour":
               const hour6 = Math.floor(d.getUTCHours() / 6) * 6;
-              return d.toISOString().slice(0, 11) + String(hour6).padStart(2, '0') + ':00:00.000Z';
-            case 'day':
-              return d.toISOString().slice(0, 10) + 'T00:00:00.000Z'; // YYYY-MM-DDTHH:00:00.000Z
+              return d.toISOString().slice(0, 11) + String(hour6).padStart(2, "0") + ":00:00.000Z";
+            case "day":
+              return d.toISOString().slice(0, 10) + "T00:00:00.000Z"; // YYYY-MM-DDTHH:00:00.000Z
             default:
-              return d.toISOString().slice(0, 16) + ':00.000Z';
+              return d.toISOString().slice(0, 16) + ":00.000Z";
           }
         }
-        
+
         function formatTimeLabel(timeKey, groupType) {
           const d = new Date(timeKey);
           switch (groupType) {
-            case 'minute':
-              return d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', hour12: true});
-            case 'hour':
-              return d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', hour12: true});
-            case '6hour':
-              return d.toLocaleDateString([], {month: 'short', day: 'numeric'}) + ' ' + 
-                     d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', hour12: true});
-            case 'day':
-              return d.toLocaleDateString([], {month: 'short', day: 'numeric'});
+            case "minute":
+              return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: true });
+            case "hour":
+              return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: true });
+            case "6hour":
+              return (
+                d.toLocaleDateString([], { month: "short", day: "numeric" }) +
+                " " +
+                d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: true })
+              );
+            case "day":
+              return d.toLocaleDateString([], { month: "short", day: "numeric" });
             default:
               return d.toLocaleString();
           }
         }
-        
+
         function getGroupLabel(groupType) {
-          return 'Tasks Completed';
+          return "Tasks Completed";
         }
-        
+
+        // Generate complete time series with all increments
+        function generateTimeLabels(start, end, groupType) {
+          const labels = [];
+          let current = new Date(getTimeKey(start, groupType));
+          const endTime = new Date(getTimeKey(end, groupType));
+
+          while (current <= endTime) {
+            labels.push(current.toISOString());
+
+            // Increment based on grouping
+            switch (groupType) {
+              case "minute":
+                current.setMinutes(current.getMinutes() + 1);
+                break;
+              case "hour":
+                current.setHours(current.getHours() + 1);
+                break;
+              case "6hour":
+                current.setHours(current.getHours() + 6);
+                break;
+              case "day":
+                current.setDate(current.getDate() + 1);
+                break;
+            }
+          }
+
+          return labels;
+        }
+
         // Group tasks by time period
         const timeBuckets = {};
         tasks.forEach((task) => {
@@ -437,9 +624,21 @@
           timeBuckets[key] = (timeBuckets[key] || 0) + 1;
         });
 
-        // Convert to arrays for Chart.js
-        const labels = Object.keys(timeBuckets).sort();
-        const data = labels.map((label) => timeBuckets[label]);
+        // Generate complete time series
+        const allLabels = generateTimeLabels(startDate, endDate, grouping);
+        const data = allLabels.map((label) => timeBuckets[label] || 0);
+        const labels = allLabels;
+        
+        console.log('Chart generation debug:', {
+          grouping,
+          startDate,
+          endDate,
+          taskCount: tasks.length,
+          timeBucketsKeys: Object.keys(timeBuckets),
+          allLabelsCount: allLabels.length,
+          dataPoints: data,
+          firstFewLabels: allLabels.slice(0, 5)
+        });
 
         const ctx = document.getElementById("progressChart").getContext("2d");
 
@@ -465,7 +664,7 @@
             responsive: true,
             interaction: {
               intersect: false,
-              mode: 'index',
+              mode: "index",
             },
             scales: {
               y: {
@@ -474,9 +673,9 @@
               x: {
                 display: true,
                 ticks: {
-                  maxTicksLimit: 20
-                }
-              }
+                  maxTicksLimit: 20,
+                },
+              },
             },
           },
         });
@@ -490,25 +689,105 @@
       }
 
       function formatDate(dateStr) {
-        return new Date(dateStr).toLocaleString();
+        if (!dateStr) return "-";
+        // Database stores UTC timestamps, convert to user's local timezone for display
+        const date = new Date(dateStr + (dateStr.includes("Z") ? "" : "Z")); // Ensure UTC parsing
+        // Use the working default conversion (which correctly shows 26/05/2025, 09:17:10)
+        return date.toLocaleString();
       }
 
-      // Initialize date pickers with default range (today)
-      function initializeDatePickers() {
-        const today = new Date();
-        const todayStr = today.getFullYear() + '-' + 
-          String(today.getMonth() + 1).padStart(2, '0') + '-' + 
-          String(today.getDate()).padStart(2, '0');
-        
-        document.getElementById('dateFrom').value = todayStr;
-        document.getElementById('dateTo').value = todayStr;
+      // Initialize date range to today
+      function initializeDateRange() {
+        // Default to today
+        document.getElementById("dateRange").value = "today";
+        handleDateRangeChange();
+      }
+
+      // Handle date range selection changes
+      function handleDateRangeChange() {
+        const dateRange = document.getElementById("dateRange").value;
+        const customInputs = document.getElementById("customDateInputs");
+        const dateFrom = document.getElementById("dateFrom");
+        const dateTo = document.getElementById("dateTo");
+
+        if (dateRange === "custom") {
+          customInputs.style.display = "flex";
+          // Don't auto-load until user sets custom dates
+        } else {
+          customInputs.style.display = "none";
+
+          const today = new Date();
+          let fromDate, toDate;
+
+          switch (dateRange) {
+            case "today":
+              // Today from 00:00 to 23:59
+              fromDate = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+              toDate = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59);
+              break;
+            case "last24hrs":
+              // Last 24 hours from now
+              toDate = new Date(); // Current time
+              fromDate = new Date(toDate.getTime() - 24 * 60 * 60 * 1000);
+              break;
+            case "yesterday":
+              const yesterday = new Date(today);
+              yesterday.setDate(yesterday.getDate() - 1);
+              fromDate = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate());
+              toDate = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate(), 23, 59, 59);
+              break;
+            case "last7":
+              toDate = new Date(); // Current time
+              fromDate = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 6);
+              break;
+            case "last28":
+              toDate = new Date(); // Current time
+              fromDate = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 27);
+              break;
+            case "last90":
+              toDate = new Date(); // Current time
+              fromDate = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 89);
+              break;
+            case "all":
+              fromDate = toDate = null;
+              break;
+          }
+
+          // Set the hidden date inputs (used by existing query logic)
+          if (fromDate && toDate) {
+            // Store full timestamp for precise filtering
+            dateFrom.dataset.fullDate = fromDate.toISOString();
+            dateTo.dataset.fullDate = toDate.toISOString();
+            // Display values for form compatibility
+            dateFrom.value = formatDateForInput(fromDate);
+            dateTo.value = formatDateForInput(toDate);
+          } else {
+            dateFrom.value = "";
+            dateTo.value = "";
+            dateFrom.dataset.fullDate = "";
+            dateTo.dataset.fullDate = "";
+          }
+
+          loadDashboard();
+        }
+      }
+
+      // Format date for input field (YYYY-MM-DD)
+      function formatDateForInput(date) {
+        return date.getFullYear() + "-" + String(date.getMonth() + 1).padStart(2, "0") + "-" + String(date.getDate()).padStart(2, "0");
+      }
+
+      // Update the grouping indicator to show what's actually being applied
+      function updateGroupingIndicator(actualGrouping, isAuto) {
+        const indicator = document.getElementById("groupByIndicator");
+        indicator.textContent = "";
       }
 
       // Auto-refresh every 10 seconds for live monitoring
       setInterval(loadDashboard, 10000);
 
       // Initial setup
-      initializeDatePickers();
+      initializeDateRange();
       loadDashboard();
     </script>
   </body>
