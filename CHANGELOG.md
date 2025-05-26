@@ -8,6 +8,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Multiple version updates may occur on the same date, each with its own version number.
 Each version represents a distinct set of changes, even if released on the same day.
 
+## [0.3.10] – 2025-05-26
+
+### Added
+- **Database-Driven Architecture**: Moved critical business logic to PostgreSQL triggers for improved reliability
+  - Automatic job progress calculation (`progress`, `completed_tasks`, `failed_tasks`) via database triggers
+  - Auto-generated timestamps (`started_at`, `completed_at`) based on task completion status
+  - Eliminates race conditions and ensures data consistency across concurrent workers
+- **Enhanced Dashboard UX**: Comprehensive date range and filtering improvements
+  - Smart date range presets: Today, Last 24 Hours, Yesterday, Last 7/28/90 Days, All Time, Custom
+  - Automatic timezone conversion from UTC database timestamps to user's local timezone
+  - Complete time series charts with all increments (shows empty periods for accurate visualization)
+  - Dynamic group-by selection that auto-updates based on date range scope
+
+### Fixed
+- **Timezone Consistency**: Resolved incorrect timestamp display in dashboard
+  - Standardized all database timestamps to use UTC (`time.Now().UTC()` in Go, `NOW()` in PostgreSQL)
+  - Fixed dashboard date formatting to properly convert UTC to user's local timezone
+  - Corrected date picker logic to handle precise timestamp filtering instead of date-only ranges
+- **Dashboard Data Access**: Fixed Row Level Security (RLS) blocking dashboard queries
+  - Added anonymous read policies for `domains`, `pages`, `jobs`, and `tasks` tables
+  - Enables dashboard functionality while maintaining security framework for future auth
+
+### Enhanced
+- **Simplified Go Code**: Removed complex manual progress calculation logic
+  - `UpdateJobProgress()` function now handled entirely by database triggers
+  - Eliminated manual timestamp management in job start/completion workflows
+  - Reduced code complexity while improving reliability through database-enforced consistency
+- **Chart Visualization**: Improved dashboard charts with complete time coverage
+  - Charts now display all time increments for selected range (e.g., all 24 hours for "Today")
+  - Fixed grouping logic to automatically select appropriate time granularity
+  - Enhanced debugging output for troubleshooting data visualization issues
+
+### Technical Details
+- Database triggers automatically fire on task status changes (`INSERT`, `UPDATE`, `DELETE` on tasks table)
+- Progress calculation uses PostgreSQL aggregate functions for atomic updates
+- Timezone handling leverages JavaScript's native `Intl.DateTimeFormat()` for accurate local conversion
+- Chart time series generation creates complete axis labels even for periods with zero activity
+
 ## [0.3.9] – 2025-05-25
 
 ### Added

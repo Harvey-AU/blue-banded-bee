@@ -285,6 +285,165 @@ func setupSchema(db *sql.DB) error {
 		}
 	}
 
+	// Create database triggers for automatic timestamp and progress management
+	err = setupTimestampTriggers(db)
+	if err != nil {
+		return fmt.Errorf("failed to setup timestamp triggers: %w", err)
+	}
+
+	err = setupProgressTriggers(db)
+	if err != nil {
+		return fmt.Errorf("failed to setup progress triggers: %w", err)
+	}
+
+	return nil
+}
+
+// setupTimestampTriggers creates database triggers for automatic timestamp management
+func setupTimestampTriggers(db *sql.DB) error {
+	// Function to automatically set started_at when first task completes
+	_, err := db.Exec(`
+		CREATE OR REPLACE FUNCTION set_job_started_at()
+		RETURNS TRIGGER AS $$
+		BEGIN
+		  -- Only set started_at if it's currently NULL and completed_tasks > 0
+		  -- Handle both INSERT and UPDATE operations
+		  IF NEW.completed_tasks > 0 AND (TG_OP = 'INSERT' OR OLD.started_at IS NULL) AND NEW.started_at IS NULL THEN
+		    NEW.started_at = NOW();
+		  END IF;
+		  
+		  RETURN NEW;
+		END;
+		$$ LANGUAGE plpgsql;
+	`)
+	if err != nil {
+		return fmt.Errorf("failed to create set_job_started_at function: %w", err)
+	}
+
+	// Function to automatically set completed_at when job reaches 100%
+	_, err = db.Exec(`
+		CREATE OR REPLACE FUNCTION set_job_completed_at()
+		RETURNS TRIGGER AS $$
+		BEGIN
+		  -- Set completed_at when progress reaches 100% and it's not already set
+		  -- Handle both INSERT and UPDATE operations
+		  IF NEW.progress >= 100.0 AND (TG_OP = 'INSERT' OR OLD.completed_at IS NULL) AND NEW.completed_at IS NULL THEN
+		    NEW.completed_at = NOW();
+		  END IF;
+		  
+		  RETURN NEW;
+		END;
+		$$ LANGUAGE plpgsql;
+	`)
+	if err != nil {
+		return fmt.Errorf("failed to create set_job_completed_at function: %w", err)
+	}
+
+	// Create trigger for started_at (INSERT OR UPDATE)
+	_, err = db.Exec(`
+		DROP TRIGGER IF EXISTS trigger_set_job_started ON jobs;
+		CREATE TRIGGER trigger_set_job_started
+		  BEFORE INSERT OR UPDATE ON jobs
+		  FOR EACH ROW
+		  EXECUTE FUNCTION set_job_started_at();
+	`)
+	if err != nil {
+		return fmt.Errorf("failed to create started_at trigger: %w", err)
+	}
+
+	// Create trigger for completed_at (INSERT OR UPDATE)
+	_, err = db.Exec(`
+		DROP TRIGGER IF EXISTS trigger_set_job_completed ON jobs;
+		CREATE TRIGGER trigger_set_job_completed
+		  BEFORE INSERT OR UPDATE ON jobs
+		  FOR EACH ROW
+		  EXECUTE FUNCTION set_job_completed_at();
+	`)
+	if err != nil {
+		return fmt.Errorf("failed to create completed_at trigger: %w", err)
+	}
+
+	return nil
+}
+
+// setupProgressTriggers creates database triggers for automatic progress calculation
+func setupProgressTriggers(db *sql.DB) error {
+	// Function to automatically calculate job progress when tasks change
+	_, err := db.Exec(`
+		CREATE OR REPLACE FUNCTION update_job_progress()
+		RETURNS TRIGGER AS $$
+		DECLARE
+		    job_id_to_update TEXT;
+		    total_tasks INTEGER;
+		    completed_count INTEGER;
+		    failed_count INTEGER;
+		    new_progress REAL;
+		BEGIN
+		    -- Determine which job to update
+		    IF TG_OP = 'DELETE' THEN
+		        job_id_to_update = OLD.job_id;
+		    ELSE
+		        job_id_to_update = NEW.job_id;
+		    END IF;
+		    
+		    -- Get the total tasks for this job
+		    SELECT j.total_tasks INTO total_tasks
+		    FROM jobs j
+		    WHERE j.id = job_id_to_update;
+		    
+		    -- Count completed and failed tasks
+		    SELECT 
+		        COUNT(*) FILTER (WHERE status = 'completed'),
+		        COUNT(*) FILTER (WHERE status = 'failed')
+		    INTO completed_count, failed_count
+		    FROM tasks
+		    WHERE job_id = job_id_to_update;
+		    
+		    -- Calculate progress percentage
+		    IF total_tasks > 0 THEN
+		        new_progress = (completed_count + failed_count)::REAL / total_tasks::REAL * 100.0;
+		    ELSE
+		        new_progress = 0.0;
+		    END IF;
+		    
+		    -- Update the job with new counts and progress
+		    UPDATE jobs
+		    SET 
+		        completed_tasks = completed_count,
+		        failed_tasks = failed_count,
+		        progress = new_progress,
+		        status = CASE 
+		            WHEN new_progress >= 100.0 THEN 'completed'
+		            WHEN completed_count > 0 OR failed_count > 0 THEN 'running'
+		            ELSE status
+		        END
+		    WHERE id = job_id_to_update;
+		    
+		    -- Return the appropriate record based on operation
+		    IF TG_OP = 'DELETE' THEN
+		        RETURN OLD;
+		    ELSE
+		        RETURN NEW;
+		    END IF;
+		END;
+		$$ LANGUAGE plpgsql;
+	`)
+	if err != nil {
+		return fmt.Errorf("failed to create update_job_progress function: %w", err)
+	}
+
+	// Create trigger on tasks table to update job progress
+	_, err = db.Exec(`
+		DROP TRIGGER IF EXISTS trigger_update_job_progress ON tasks;
+		CREATE TRIGGER trigger_update_job_progress
+		  AFTER INSERT OR UPDATE OR DELETE ON tasks
+		  FOR EACH ROW
+		  EXECUTE FUNCTION update_job_progress();
+	`)
+	if err != nil {
+		return fmt.Errorf("failed to create job progress trigger: %w", err)
+	}
+
 	return nil
 }
 

@@ -69,7 +69,7 @@ func (jm *JobManager) CreateJob(ctx context.Context, options *JobOptions) (*Job,
 		FoundTasks:      0,
 		SitemapTasks:    0,
 		FailedTasks:     0,
-		CreatedAt:       time.Now(),
+		CreatedAt:       time.Now().UTC(),
 		Concurrency:     options.Concurrency,
 		FindLinks:       options.FindLinks,
 		MaxPages:        options.MaxPages,
@@ -153,7 +153,7 @@ func (jm *JobManager) CreateJob(ctx context.Context, options *JobOptions) (*Job,
 					id, job_id, page_id, path, status, created_at, retry_count,
 					source_type, source_url
 				) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-			`, uuid.New().String(), job.ID, pageID, rootPath, "pending", time.Now(), 0, "manual", "")
+			`, uuid.New().String(), job.ID, pageID, rootPath, "pending", time.Now().UTC(), 0, "manual", "")
 			
 			if err != nil {
 				return fmt.Errorf("failed to enqueue task for root path: %w", err)
@@ -215,11 +215,6 @@ func (jm *JobManager) StartJob(ctx context.Context, jobID string) error {
 	// Update job status to running (even if it was already running)
 	job.Status = JobStatusRunning
 
-	// Only update started_at if it wasn't already set
-	if job.StartedAt.IsZero() {
-		job.StartedAt = time.Now()
-	}
-
 	// Use dbQueue for transaction safety
 	err = jm.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
 		// Recover any tasks that were in progress when the server shut down
@@ -237,12 +232,12 @@ func (jm *JobManager) StartJob(ctx context.Context, jobID string) error {
 			// Don't return error, continue with job start
 		}
 
-		// Update job status
+		// Update job status - started_at will be set by Supabase trigger when tasks complete
 		_, err = tx.ExecContext(ctx, `
 			UPDATE jobs
-			SET status = $1, started_at = $2
-			WHERE id = $3
-		`, job.Status, job.StartedAt, job.ID)
+			SET status = $1
+			WHERE id = $2
+		`, job.Status, job.ID)
 
 		return err
 	})
@@ -400,7 +395,7 @@ func (jm *JobManager) CancelJob(ctx context.Context, jobID string) error {
 
 	// Update job status to cancelled
 	job.Status = JobStatusCancelled
-	job.CompletedAt = time.Now()
+	job.CompletedAt = time.Now().UTC()
 
 	// Use dbQueue for transaction safety
 	err = jm.dbQueue.Execute(ctx, func(tx *sql.Tx) error {

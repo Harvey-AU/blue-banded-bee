@@ -228,57 +228,12 @@ func (q *DbQueue) FailTask(ctx context.Context, task *Task, err error) error {
 	return q.UpdateTaskStatus(ctx, task)
 }
 
-// UpdateJobProgress updates a job's progress based on task completion
+// UpdateJobProgress is now handled automatically by database triggers
+// This function is kept for backward compatibility but does nothing
 func (q *DbQueue) UpdateJobProgress(ctx context.Context, jobID string) error {
-	// Start a transaction
-	tx, err := q.db.BeginTx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("failed to begin transaction: %w", err)
-	}
-	defer tx.Rollback()
-
-	// Get counts: use jobs.total_tasks and task statuses
-	var totalTasks, compCount, failCount int
-	if err := tx.QueryRowContext(ctx, `
-		SELECT j.total_tasks,
-			   COUNT(*) FILTER (WHERE t.status = 'completed'),
-			   COUNT(*) FILTER (WHERE t.status = 'failed')
-		FROM jobs j
-		LEFT JOIN tasks t ON t.job_id = j.id
-		WHERE j.id = $1
-		GROUP BY j.total_tasks
-	`, jobID).Scan(&totalTasks, &compCount, &failCount); err != nil {
-		return fmt.Errorf("failed to get job counts: %w", err)
-	}
-
-	// Calculate progress percentage
-	var progress float64 = 0.0
-	if totalTasks > 0 {
-		progress = float64(compCount+failCount) / float64(totalTasks) * 100.0
-	}
-
-	_, err = tx.ExecContext(ctx, `
-		UPDATE jobs
-		SET 
-			progress = $1::REAL,
-			completed_tasks = $2,
-			failed_tasks = $3,
-			status = CASE 
-				WHEN $1::REAL >= 100.0 THEN 'completed'
-				ELSE status
-			END,
-			completed_at = CASE 
-				WHEN $1::REAL >= 100.0 THEN NOW()
-				ELSE completed_at
-			END
-		WHERE id = $4
-	`, progress, compCount, failCount, jobID)
-
-	if err != nil {
-		return fmt.Errorf("failed to update job progress: %w", err)
-	}
-
-	return tx.Commit()
+	// Progress is now automatically updated by database triggers
+	// when task status changes, so this function is no longer needed
+	return nil
 }
 
 
@@ -394,10 +349,7 @@ func (q *DbQueue) UpdateTaskStatus(ctx context.Context, task *Task) error {
 		return err
 	}
 
-	// Update job progress if needed
-	if task.Status == "completed" || task.Status == "failed" {
-		return q.UpdateJobProgress(ctx, task.JobID)
-	}
-
+	// Job progress is now automatically updated by database triggers
+	// No need to manually call UpdateJobProgress
 	return nil
 }
