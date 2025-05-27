@@ -278,6 +278,14 @@ func setupSchema(db *sql.DB) error {
 		return fmt.Errorf("failed to add organisation_id column: %w", err)
 	}
 
+	// Add error_message column if it doesn't exist (for existing databases)
+	_, err = db.Exec(`
+		ALTER TABLE jobs ADD COLUMN IF NOT EXISTS error_message TEXT
+	`)
+	if err != nil {
+		return fmt.Errorf("failed to add error_message column: %w", err)
+	}
+
 	// Create tasks table
 	_, err = db.Exec(`
 		CREATE TABLE IF NOT EXISTS tasks (
