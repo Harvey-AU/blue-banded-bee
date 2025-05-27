@@ -12,6 +12,7 @@
 - Completed major code refactoring to improve architecture and maintainability
 - Removed unnecessary depth functionality from the codebase
 - **Fixed critical production database schema mismatch** (v0.3.8) - task insertion now working properly
+- **Complete Supabase Authentication System** (v0.4.0) - Multi-tenant auth with 8 social providers, custom domain, protected endpoints
 
 ## ✅ Stage 0: Project Setup & Infrastructure
 
@@ -245,10 +246,12 @@ Detailed plan available in [docs/multi-interface-architecture.md](docs/architect
 
 - [x] Configure Supabase Auth settings
 - [x] Implement JWT validation middleware in Go
-- [x] Add social login providers configuration (8 providers)
-- [x] Set up user session handling
-- [x] Implement auth error handling
+- [x] Add social login providers configuration (Google, Facebook, Slack, GitHub, Microsoft, Figma, LinkedIn + Email)
+- [x] Set up user session handling and token validation
+- [x] Implement comprehensive auth error handling
 - [x] Create user registration with auto-organisation creation
+- [x] Configure custom domain authentication (auth.bluebandedbee.co)
+- [x] Implement account linking for multiple auth providers per user
 
 ### ✅ Connect user data to PostgreSQL
 
@@ -266,6 +269,7 @@ Detailed plan available in [docs/organisation-model.md](docs/plans/organisation-
 - [x] Create shared access to all jobs/tasks/reports within organisation
 - [ ] Implement member invitation system
 - [ ] Implement organisation-level usage tracking
+- [ ] **Test and refine multi-provider account linking** - Verify whether same email across different auth providers (Google, Facebook, etc.) creates linked accounts or separate users. Important for user experience but not urgent.
 
 ### 🔴 MVP Interface Development
 

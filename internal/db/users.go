@@ -251,7 +251,34 @@ func (db *DB) GetOrganisationMembers(organisationID string) ([]*User, error) {
 }
 
 // CreateUserWithOrganisation creates a new user and organisation atomically
+// If user already exists, returns the existing user and their organisation
 func (db *DB) CreateUserWithOrganisation(userID, email string, fullName *string, orgName string) (*User, *Organisation, error) {
+	// First check if user already exists
+	existingUser, err := db.GetUser(userID)
+	if err == nil {
+		// User exists, get their organisation
+		if existingUser.OrganisationID != nil {
+			org, err := db.GetOrganisation(*existingUser.OrganisationID)
+			if err != nil {
+				log.Warn().Err(err).Str("organisation_id", *existingUser.OrganisationID).Msg("Failed to get existing user's organisation")
+				// Return user without organisation rather than failing
+				return existingUser, nil, nil
+			}
+			log.Info().
+				Str("user_id", userID).
+				Str("email", email).
+				Msg("User already exists, returning existing user and organisation")
+			return existingUser, org, nil
+		}
+		// User exists but has no organisation - this shouldn't happen but handle gracefully
+		log.Info().
+			Str("user_id", userID).
+			Str("email", email).
+			Msg("User already exists but has no organisation")
+		return existingUser, nil, nil
+	}
+
+	// User doesn't exist, create new user and organisation
 	// Start a transaction for atomic operation
 	tx, err := db.client.Begin()
 	if err != nil {
