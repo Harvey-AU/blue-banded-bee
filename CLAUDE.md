@@ -130,3 +130,12 @@ Blue Banded Bee is a web cache warming service built in Go, primarily focused on
 2. Second, check actual code implementation of related functionality
 3. Only after steps 1-2, formulate a response based on evidence
 4. When debugging, always show findings from relevant files first
+
+### Git and Version Control Policy
+
+**CRITICAL: Never perform git commits or pushes**
+
+- Never use `git commit`, `git push`, or any git commands that modify the repository state
+- Never add, stage, or commit files without explicit user permission
+- The user handles all git operations and version control decisions
+- Focus on code changes and let the user manage commits and deployments

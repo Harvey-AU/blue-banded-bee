@@ -8,6 +8,84 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Multiple version updates may occur on the same date, each with its own version number.
 Each version represents a distinct set of changes, even if released on the same day.
 
+## [0.4.1] – 2025-05-27
+
+### Fixed
+
+- **Database Schema Issues**: Resolved critical production database errors
+  - Added missing `error_message` column to jobs table to prevent database insertion failures
+  - Fixed duplicate user creation constraint violations with idempotent user registration
+  - `CreateUserWithOrganisation` now handles existing users gracefully instead of failing
+- **User Registration Flow**: Enhanced authentication reliability
+  - Multiple login attempts with same user ID no longer cause database constraint violations
+  - Existing users are returned with their organisations rather than attempting duplicate creation
+  - Improved error handling and logging for user creation scenarios
+
+### Enhanced
+
+- **Development Workflow**: Added git policy documentation to prevent accidental commits
+- **Project Planning**: Added multi-provider account linking testing to roadmap for future investigation
+
+### Technical Details
+
+- Database migration adds `error_message TEXT` column to jobs table with `ALTER TABLE IF NOT EXISTS`
+- User creation now checks for existing users before attempting INSERT operations
+- Transaction rollback properly handles failed user creation attempts
+- All database fixes are backward compatible with existing installations
+
+## [0.4.0] – 2025-05-27
+
+### Added
+
+- **Complete Supabase Authentication System**: Full multi-tenant authentication with social login support
+  - JWT validation middleware with structured error handling and token validation
+  - Support for 8 social login providers: Google, Facebook, Slack, GitHub, Microsoft, Figma, LinkedIn + Email/Password
+  - Custom domain authentication using `auth.bluebandedbee.co` for professional OAuth flows
+  - User and organisation management with automatic organisation creation on signup
+  - Row Level Security (RLS) policies for secure multi-tenant data access
+- **Protected API Endpoints**: All job creation and user data endpoints now require authentication
+  - `/site` endpoint (job creation) now requires valid JWT token and links jobs to users/organisations
+  - `/job-status` endpoint protected with organisation-scoped access control
+  - `/api/auth/profile` endpoint for authenticated user profile access
+  - User registration API with automatic organisation linking
+- **Database Schema Extensions**: Enhanced schema to support multi-tenant architecture
+  - Added `users` and `organisations` tables with foreign key relationships
+  - Added `user_id` and `organisation_id` columns to `jobs` table
+  - Implemented Row Level Security on all user-related tables
+  - Database migration logic for existing installations
+
+### Enhanced
+
+- **Authentication Flow**: Complete OAuth integration with account linking support
+  - Flexible email-based account linking with UUID-based permanent user identity
+  - Session management with token expiry detection and refresh warnings
+  - Structured error responses for authentication failures
+  - Support for multiple auth providers per user account
+- **Multi-tenant Job Management**: Jobs are now scoped to organisations with shared access
+  - All organisation members can view and manage all jobs within their organisation
+  - Jobs automatically linked to creator's user ID and organisation ID
+  - Database queries respect organisation boundaries through RLS policies
+
+### Security
+
+- **Comprehensive Authentication Security**: Production-ready security features
+  - JWT token validation with proper error handling and logging
+  - Authentication service configuration validation
+  - Standardised error responses that don't leak sensitive information
+  - Row Level Security policies prevent cross-organisation data access
+- **Protected Endpoints**: All sensitive operations require valid authentication
+  - Job creation requires authentication and organisation membership
+  - Job status queries limited to organisation members
+  - User profile access restricted to authenticated user's own data
+
+### Technical Details
+
+- Custom domain setup eliminates unprofessional Supabase URLs in OAuth flows
+- Database migration handles existing installations with `ALTER TABLE IF NOT EXISTS`
+- JWT middleware supports both required and optional authentication scenarios
+- Account linking strategy preserves user choice while preventing duplicate accounts
+- All authentication endpoints follow RESTful conventions with proper HTTP status codes
+
 ## [0.3.11] – 2025-05-26
 
 ### Added
