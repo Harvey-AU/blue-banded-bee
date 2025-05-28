@@ -128,6 +128,58 @@
         <button class="login-btn test-api" onclick="testSessionAPI()">Test Session API</button>
         <button class="login-btn test-api" onclick="testJobCreation()">Test Job Creation (Protected)</button>
 
+        <h3>Submit Cache Warming Job:</h3>
+        <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 15px 0;">
+          <div style="margin-bottom: 10px;">
+            <label style="display: block; margin-bottom: 5px; font-weight: 600;">Domain:</label>
+            <input
+              type="text"
+              id="job-domain"
+              placeholder="example.com"
+              style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px;"
+            />
+          </div>
+          
+          <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+            <div style="flex: 1;">
+              <label style="display: block; margin-bottom: 5px; font-weight: 600;">Max Pages:</label>
+              <input
+                type="number"
+                id="job-max-pages"
+                placeholder="10"
+                min="1"
+                style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px;"
+              />
+            </div>
+            <div style="flex: 1;">
+              <label style="display: block; margin-bottom: 5px; font-weight: 600;">Concurrency:</label>
+              <input
+                type="number"
+                id="job-concurrency"
+                placeholder="5"
+                min="1"
+                max="10"
+                style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 5px;"
+              />
+            </div>
+          </div>
+
+          <div style="display: flex; gap: 20px; margin-bottom: 15px;">
+            <label style="display: flex; align-items: center; gap: 5px;">
+              <input type="checkbox" id="job-sitemap" checked style="margin: 0;">
+              Use Sitemap
+            </label>
+            <label style="display: flex; align-items: center; gap: 5px;">
+              <input type="checkbox" id="job-find-links" checked style="margin: 0;">
+              Find Links
+            </label>
+          </div>
+
+          <button class="login-btn" onclick="submitCacheJob()" style="background: #ff6b35; color: white;">
+            🚀 Start Cache Warming Job
+          </button>
+        </div>
+
         <div id="api-results"></div>
 
         <button class="login-btn logout" onclick="logout()">Logout</button>
@@ -293,6 +345,56 @@
 
         const result = await response.json();
         showResult("Job Creation API", result);
+      }
+
+      async function submitCacheJob() {
+        const domain = document.getElementById("job-domain").value.trim();
+        if (!domain) {
+          alert("Please enter a domain");
+          return;
+        }
+
+        const maxPages = document.getElementById("job-max-pages").value || 0;
+        const concurrency = document.getElementById("job-concurrency").value || 5;
+        const useSitemap = document.getElementById("job-sitemap").checked;
+        const findLinks = document.getElementById("job-find-links").checked;
+
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+
+        const params = new URLSearchParams({
+          domain: domain,
+          concurrency: concurrency,
+          find_links: findLinks,
+          sitemap: useSitemap
+        });
+
+        if (maxPages > 0) {
+          params.append('max', maxPages);
+        }
+
+        try {
+          const response = await fetch(`/site?${params.toString()}`, {
+            headers: {
+              Authorization: `Bearer ${session.access_token}`,
+            },
+          });
+
+          const result = await response.json();
+          
+          if (response.ok) {
+            showResult(`✅ Job Started for ${domain}`, result);
+            // Clear the form
+            document.getElementById("job-domain").value = "";
+            document.getElementById("job-max-pages").value = "";
+            document.getElementById("job-concurrency").value = "";
+          } else {
+            showResult("❌ Job Creation Failed", result);
+          }
+        } catch (error) {
+          showResult("❌ Network Error", { error: error.message });
+        }
       }
 
       function showResult(title, result) {
