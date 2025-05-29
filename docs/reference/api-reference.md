@@ -1,130 +1,785 @@
-# API Reference
+# API Design - Blue Banded Bee
 
-## Simple list of endpoints
+## Overview
 
-### Create a crawl job by scanning sitemap
+This document defines the comprehensive API design for Blue Banded Bee's multi-interface architecture. The API follows RESTful principles with consistent response formats to support web applications, Slack integrations, Webflow extensions, and future interfaces.
 
-curl "http://localhost:8080/site?domain=teamharvey.co"
-curl "https://blue-banded-bee.fly.dev/site?domain=teamharvey.co"
-curl "http://localhost:8080/site?domain=teamharvey.co&max=100"
-curl "https://blue-banded-bee.fly.dev/site?domain=teamharvey.co&max=100"
+## Current Status
 
-curl "http://localhost:8080/site?domain=teamharvey.co&find_links=true"
-curl "https://blue-banded-bee.fly.dev/site?domain=teamharvey.co&find_links=true"
+✅ **Existing Endpoints:**
+- `/health` - Service health check
+- `/pg-health` - PostgreSQL health check  
+- `/site` - Create crawl job (authenticated)
+- `/job-status` - Get job progress (authenticated)
+- `/api/auth/register` - User registration
+- `/api/auth/profile` - User profile (authenticated)
+- `/api/auth/session` - Session validation
+- `/reset-db` - Database reset (development only)
 
-### Check crawl job status
+🔄 **Needs Implementation:**
+- Standardised response format
+- Complete CRUD operations for jobs
+- Task management endpoints
+- Organisation management
+- API key management
+- Webhook system
+- Error handling standardisation
 
-curl "http://localhost:8080/job-status?job_id=job_123abc"
-curl "https://blue-banded-bee.fly.dev/job-status?job_id=job_123abc"
+## API Structure
 
-### Reset DB schema
-
-curl "http://localhost:8080/reset-db"
-curl "https://blue-banded-bee.fly.dev/reset-db"
-
-## Job Management
-
-### Create Job
-
-```http
-POST /api/v1/jobs
+### Base URL
+```
+Production: https://blue-banded-bee.fly.dev
+Development: http://localhost:8080
 ```
 
-Creates a new crawling job.
+### Versioning
+All API endpoints are versioned under `/api/v1/` to ensure backward compatibility.
 
-**Request Body:**
+## Authentication
 
+### Methods Supported
+
+1. **JWT Bearer Token** (Primary)
+   ```
+   Authorization: Bearer <jwt_token>
+   ```
+   - Used by web applications
+   - Tokens issued by Supabase Auth
+   - Short expiry with refresh capability
+
+2. **API Key** (For Integrations)
+   ```
+   Authorization: Bearer <api_key>
+   X-API-Key: <api_key>
+   ```
+   - Used by Slack, CLI tools, and integrations
+   - Long-lived keys with scoped permissions
+   - Managed through user dashboard
+
+### Protected Resources
+All endpoints under `/api/v1/` require authentication except:
+- `/api/v1/health`
+- `/api/v1/auth/*` (registration, session validation)
+
+## Standard Response Format
+
+### Success Response
 ```json
 {
-  "domain": "teamharvey.co",
-  "urls": ["https://teamharvey.co/page1", "..."],
+  "status": "success",
+  "data": {
+    // Response data varies by endpoint
+  },
+  "meta": {
+    "timestamp": "2023-05-18T12:34:56Z",
+    "version": "1.0.0",
+    "request_id": "req_123abc"
+  }
+}
+```
+
+### Error Response
+```json
+{
+  "status": "error",
+  "error": {
+    "code": "invalid_request",
+    "message": "Invalid job configuration",
+    "details": {
+      "field": "max_pages",
+      "issue": "Must be a positive integer"
+    }
+  },
+  "meta": {
+    "timestamp": "2023-05-18T12:34:56Z",
+    "version": "1.0.0",
+    "request_id": "req_123abc"
+  }
+}
+```
+
+### HTTP Status Codes
+- `200` - Success
+- `201` - Created
+- `400` - Bad Request
+- `401` - Unauthorized
+- `403` - Forbidden
+- `404` - Not Found
+- `409` - Conflict
+- `422` - Unprocessable Entity
+- `429` - Too Many Requests
+- `500` - Internal Server Error
+
+## Core Resources
+
+### Jobs
+
+#### Create Job
+```http
+POST /api/v1/jobs
+Content-Type: application/json
+Authorization: Bearer <token>
+
+{
+  "domain": "example.com",
   "options": {
-    "max_pages": 2,
+    "use_sitemap": true,
+    "find_links": true,
+    "max_pages": 100,
     "concurrency": 5
   }
 }
 ```
 
-### Get Job Status
-
-```http
-GET /api/v1/job-status/{jobId}
-```
-
-Returns job status and progress.
-
-**Response:**
-
+**Response (201):**
 ```json
 {
-  "id": "job_123",
-  "status": "running",
-  "progress": {
-    "total": 100,
-    "completed": 45,
-    "failed": 2
+  "status": "success",
+  "data": {
+    "id": "job_123abc",
+    "domain": "example.com",
+    "status": "created",
+    "organisation_id": "org_456def",
+    "options": {
+      "use_sitemap": true,
+      "find_links": true,
+      "max_pages": 100,
+      "concurrency": 5
+    },
+    "created_at": "2023-05-18T12:34:56Z"
   },
-  "stats": {
-    "avgResponseTime": 250,
-    "cacheHitRate": 0.75
+  "meta": {
+    "timestamp": "2023-05-18T12:34:56Z",
+    "version": "1.0.0"
   }
 }
 ```
 
-### Cancel Job
-
+#### List Jobs
 ```http
-POST /api/v1/jobs/{jobId}/cancel
+GET /api/v1/jobs?page=1&limit=20&status=running
+Authorization: Bearer <token>
 ```
 
-Cancels an active job.
-
-## Task Management
-
-### Get Task Details
-
-```http
-GET /api/v1/tasks/{taskId}
+**Response (200):**
+```json
+{
+  "status": "success",
+  "data": {
+    "jobs": [
+      {
+        "id": "job_123abc",
+        "domain": "example.com",
+        "status": "running",
+        "progress": {
+          "total_tasks": 150,
+          "completed_tasks": 45,
+          "failed_tasks": 2,
+          "skipped_tasks": 0,
+          "percentage": 31.33
+        },
+        "created_at": "2023-05-18T12:34:56Z",
+        "updated_at": "2023-05-18T12:45:12Z"
+      }
+    ],
+    "pagination": {
+      "page": 1,
+      "limit": 20,
+      "total": 1,
+      "has_next": false
+    }
+  },
+  "meta": {
+    "timestamp": "2023-05-18T12:34:56Z",
+    "version": "1.0.0"
+  }
+}
 ```
 
-Returns detailed task information.
-
-### Retry Task
-
+#### Get Job
 ```http
-POST /api/v1/tasks/{taskId}/retry
+GET /api/v1/jobs/{job_id}
+Authorization: Bearer <token>
 ```
 
-Retries a failed task.
-
-## Monitoring
-
-### Health Check
-
-```http
-GET /health
+**Response (200):**
+```json
+{
+  "status": "success",
+  "data": {
+    "id": "job_123abc",
+    "domain": "example.com",
+    "status": "running",
+    "organisation_id": "org_456def",
+    "progress": {
+      "total_tasks": 150,
+      "completed_tasks": 45,
+      "failed_tasks": 2,
+      "skipped_tasks": 0,
+      "percentage": 31.33
+    },
+    "stats": {
+      "avg_response_time": 234,
+      "cache_hit_ratio": 0.85,
+      "total_bytes": 2048576
+    },
+    "options": {
+      "use_sitemap": true,
+      "find_links": true,
+      "max_pages": 100,
+      "concurrency": 5
+    },
+    "created_at": "2023-05-18T12:34:56Z",
+    "updated_at": "2023-05-18T12:45:12Z",
+    "started_at": "2023-05-18T12:35:01Z",
+    "completed_at": null
+  },
+  "meta": {
+    "timestamp": "2023-05-18T12:34:56Z",
+    "version": "1.0.0"
+  }
+}
 ```
 
-Returns service health status.
-
-### Metrics
-
+#### Cancel Job
 ```http
-GET /api/v1/metrics
+POST /api/v1/jobs/{job_id}/cancel
+Authorization: Bearer <token>
 ```
 
-Returns system metrics and statistics.
+**Response (200):**
+```json
+{
+  "status": "success",
+  "data": {
+    "id": "job_123abc",
+    "status": "cancelled",
+    "cancelled_at": "2023-05-18T12:50:00Z"
+  },
+  "meta": {
+    "timestamp": "2023-05-18T12:50:00Z",
+    "version": "1.0.0"
+  }
+}
+```
 
-## Error Responses
+### Tasks
 
-All endpoints return standard error responses:
+#### List Tasks for Job
+```http
+GET /api/v1/jobs/{job_id}/tasks?page=1&limit=50&status=failed&status_code=404&min_response_time=5000
+Authorization: Bearer <token>
+```
+
+**Query Parameters:**
+- `page` - Page number (default: 1)
+- `limit` - Results per page (default: 50, max: 100)
+- `status` - Filter by task status: `pending`, `running`, `completed`, `failed`
+- `status_code` - Filter by HTTP status code: `200`, `404`, `500`, etc.
+- `min_response_time` - Minimum response time in milliseconds
+- `max_response_time` - Maximum response time in milliseconds
+- `cache_status` - Filter by cache status: `hit`, `miss`, `error`
+- `has_error` - Filter tasks with/without errors: `true`, `false`
+- `sort` - Sort order: `created_at`, `response_time`, `status_code` (add `-` for desc)
+
+**Pagination Strategy:**
+- **Default**: 50 results per page (good balance of data vs performance)
+- **Maximum**: 100 results per page (prevents overwhelming responses)
+- **Large datasets**: Use filtering to reduce total results before pagination
+- **Export option**: For bulk data access, use the export endpoint instead
+
+**Response (200):**
+```json
+{
+  "status": "success",
+  "data": {
+    "tasks": [
+      {
+        "id": "task_789xyz",
+        "job_id": "job_123abc",
+        "url": "https://example.com/page1",
+        "status": "failed",
+        "status_code": 404,
+        "response_time": null,
+        "cache_status": "miss",
+        "content_length": 0,
+        "content_type": null,
+        "error_message": "Page not found",
+        "attempts": 3,
+        "discovered_from": "sitemap",
+        "redirect_url": null,
+        "created_at": "2023-05-18T12:35:01Z",
+        "updated_at": "2023-05-18T12:40:15Z",
+        "completed_at": "2023-05-18T12:40:15Z"
+      }
+    ],
+    "pagination": {
+      "page": 1,
+      "limit": 50,
+      "total": 2,
+      "total_pages": 1,
+      "has_next": false,
+      "has_prev": false,
+      "next_page": null,
+      "prev_page": null
+    },
+    "summary": {
+      "total_tasks": 150,
+      "by_status": {
+        "completed": 145,
+        "failed": 5,
+        "pending": 0,
+        "running": 0
+      },
+      "by_status_code": {
+        "200": 145,
+        "404": 3,
+        "500": 2
+      },
+      "performance": {
+        "avg_response_time": 234,
+        "median_response_time": 198,
+        "slow_pages_count": 12,
+        "fast_pages_count": 133
+      }
+    }
+  },
+  "meta": {
+    "timestamp": "2023-05-18T12:34:56Z",
+    "version": "1.0.0"
+  }
+}
+```
+
+#### Get Task Results Summary
+```http
+GET /api/v1/jobs/{job_id}/results
+Authorization: Bearer <token>
+```
+
+**Response (200):**
+```json
+{
+  "status": "success",
+  "data": {
+    "job_id": "job_123abc",
+    "summary": {
+      "total_pages": 150,
+      "successful_pages": 145,
+      "failed_pages": 5,
+      "avg_response_time": 234,
+      "total_bytes_transferred": 15728640
+    },
+    "issues": {
+      "not_found_pages": [
+        {
+          "url": "https://example.com/missing-page",
+          "status_code": 404,
+          "discovered_from": "link_crawl"
+        }
+      ],
+      "slow_pages": [
+        {
+          "url": "https://example.com/slow-page",
+          "response_time": 8500,
+          "status_code": 200
+        }
+      ],
+      "server_errors": [
+        {
+          "url": "https://example.com/error-page",
+          "status_code": 500,
+          "error_message": "Internal server error"
+        }
+      ],
+      "redirects": [
+        {
+          "url": "https://example.com/old-page",
+          "redirect_url": "https://example.com/new-page",
+          "status_code": 301
+        }
+      ]
+    },
+    "performance_breakdown": {
+      "under_1s": 120,
+      "1s_to_3s": 25,
+      "3s_to_5s": 3,
+      "over_5s": 2
+    },
+    "cache_analysis": {
+      "cache_hits": 120,
+      "cache_misses": 25,
+      "cache_errors": 5,
+      "hit_ratio": 0.8
+    }
+  },
+  "meta": {
+    "timestamp": "2023-05-18T12:34:56Z",
+    "version": "1.0.0"
+  }
+}
+```
+
+#### Export Task Results
+```http
+GET /api/v1/jobs/{job_id}/export?format=csv&include=url,status_code,response_time,cache_status
+Authorization: Bearer <token>
+```
+
+**Query Parameters:**
+- `format` - Export format: `csv`, `json`, `xlsx`
+- `include` - Fields to include (comma-separated)
+- `filter` - Same filter options as task listing
+
+**Response (200):**
+```
+Content-Type: text/csv
+Content-Disposition: attachment; filename="job_123abc_results.csv"
+
+url,status_code,response_time,cache_status,error_message
+https://example.com/page1,200,234,hit,
+https://example.com/page2,404,0,miss,Page not found
+https://example.com/page3,500,1200,error,Internal server error
+```
+
+#### Retry Failed Tasks
+```http
+POST /api/v1/jobs/{job_id}/tasks/retry
+Authorization: Bearer <token>
+
+{
+  "task_ids": ["task_789xyz", "task_101abc"]
+}
+```
+
+### Authentication & Users
+
+#### Get Current User Profile
+```http
+GET /api/v1/auth/profile
+Authorization: Bearer <token>
+```
+
+**Response (200):**
+```json
+{
+  "status": "success",
+  "data": {
+    "user": {
+      "id": "user_123",
+      "email": "user@example.com",
+      "full_name": "John Doe",
+      "organisation_id": "org_456def",
+      "created_at": "2023-05-18T10:00:00Z"
+    },
+    "organisation": {
+      "id": "org_456def",
+      "name": "Example Organisation",
+      "created_at": "2023-05-18T10:00:00Z"
+    }
+  },
+  "meta": {
+    "timestamp": "2023-05-18T12:34:56Z",
+    "version": "1.0.0"
+  }
+}
+```
+
+### API Keys
+
+#### List API Keys
+```http
+GET /api/v1/auth/api-keys
+Authorization: Bearer <token>
+```
+
+**Response (200):**
+```json
+{
+  "status": "success",
+  "data": {
+    "api_keys": [
+      {
+        "id": "key_123abc",
+        "name": "Slack Integration",
+        "prefix": "sk_live_...",
+        "scopes": ["jobs:read", "jobs:create"],
+        "last_used": "2023-05-18T10:30:00Z",
+        "created_at": "2023-05-15T14:00:00Z"
+      }
+    ]
+  },
+  "meta": {
+    "timestamp": "2023-05-18T12:34:56Z",
+    "version": "1.0.0"
+  }
+}
+```
+
+#### Create API Key
+```http
+POST /api/v1/auth/api-keys
+Authorization: Bearer <token>
+
+{
+  "name": "Slack Integration",
+  "scopes": ["jobs:read", "jobs:create"]
+}
+```
+
+**Response (201):**
+```json
+{
+  "status": "success",
+  "data": {
+    "id": "key_123abc",
+    "name": "Slack Integration",
+    "key": "sk_live_abcd1234...",
+    "scopes": ["jobs:read", "jobs:create"],
+    "created_at": "2023-05-18T12:34:56Z"
+  },
+  "meta": {
+    "timestamp": "2023-05-18T12:34:56Z",
+    "version": "1.0.0"
+  }
+}
+```
+
+#### Revoke API Key
+```http
+DELETE /api/v1/auth/api-keys/{key_id}
+Authorization: Bearer <token>
+```
+
+### Organisations
+
+#### Get Organisation Details
+```http
+GET /api/v1/organisations/current
+Authorization: Bearer <token>
+```
+
+**Response (200):**
+```json
+{
+  "status": "success",
+  "data": {
+    "id": "org_456def",
+    "name": "Example Organisation",
+    "members": [
+      {
+        "id": "user_123",
+        "email": "user@example.com",
+        "full_name": "John Doe",
+        "role": "owner",
+        "joined_at": "2023-05-18T10:00:00Z"
+      }
+    ],
+    "usage": {
+      "jobs_this_month": 15,
+      "pages_crawled_this_month": 2500
+    },
+    "created_at": "2023-05-18T10:00:00Z"
+  },
+  "meta": {
+    "timestamp": "2023-05-18T12:34:56Z",
+    "version": "1.0.0"
+  }
+}
+```
+
+### System Endpoints
+
+#### Health Check
+```http
+GET /api/v1/health
+```
+
+**Response (200):**
+```json
+{
+  "status": "success",
+  "data": {
+    "service": "healthy",
+    "database": "healthy",
+    "version": "1.0.0",
+    "uptime": "72h15m30s"
+  },
+  "meta": {
+    "timestamp": "2023-05-18T12:34:56Z",
+    "version": "1.0.0"
+  }
+}
+```
+
+## Error Handling
+
+### Standard Error Codes
+
+- `invalid_request` - Malformed request or missing required fields
+- `authentication_required` - Missing or invalid authentication
+- `permission_denied` - Insufficient permissions for operation
+- `resource_not_found` - Requested resource doesn't exist
+- `rate_limit_exceeded` - Too many requests
+- `validation_failed` - Request data fails validation
+- `server_error` - Internal server error
+- `service_unavailable` - Service temporarily unavailable
+
+### Field Validation Errors
+
+For validation errors, the `details` object contains field-specific error information:
 
 ```json
 {
+  "status": "error",
   "error": {
-    "code": "ERROR_CODE",
-    "message": "Human readable message",
-    "details": {}
+    "code": "validation_failed",
+    "message": "Request validation failed",
+    "details": {
+      "domain": "Invalid domain format",
+      "max_pages": "Must be between 1 and 1000"
+    }
+  },
+  "meta": {
+    "timestamp": "2023-05-18T12:34:56Z",
+    "version": "1.0.0"
   }
 }
 ```
+
+## Rate Limiting
+
+### Current Implementation
+- **IP-based**: 5 requests per second per IP
+- **Burst capacity**: 5 requests
+
+### Planned Enhancement
+- **User-based**: Different limits per authentication method
+- **Endpoint-specific**: Different limits for different operations
+- **Organisation-based**: Limits based on subscription tier
+
+### Rate Limit Headers
+```
+X-RateLimit-Limit: 1000
+X-RateLimit-Remaining: 999
+X-RateLimit-Reset: 1684412345
+X-RateLimit-Retry-After: 30
+```
+
+## Webhook System (Planned)
+
+### Webhook Registration
+```http
+POST /api/v1/webhooks
+Authorization: Bearer <token>
+
+{
+  "url": "https://example.com/webhooks/blue-banded-bee",
+  "events": ["job.completed", "job.failed"],
+  "secret": "webhook_secret_123"
+}
+```
+
+### Webhook Events
+
+#### Job Completed
+```json
+{
+  "event": "job.completed",
+  "timestamp": "2023-05-18T12:34:56Z",
+  "data": {
+    "job_id": "job_123abc",
+    "domain": "example.com",
+    "status": "completed",
+    "total_tasks": 150,
+    "completed_tasks": 150,
+    "stats": {
+      "avg_response_time": 234,
+      "cache_hit_ratio": 0.85
+    }
+  },
+  "signature": "sha256=..."
+}
+```
+
+## Interface-Specific Considerations
+
+### Slack Integration
+- **Simplified responses**: Key information only
+- **Interactive elements**: Buttons for common actions
+- **Status updates**: Regular progress notifications
+
+### Webflow Extension
+- **Minimal payload**: Only essential data
+- **Real-time updates**: WebSocket connection for progress
+- **Site-specific defaults**: Remember settings per Webflow site
+
+### CLI Tool
+- **Bulk operations**: Support for multiple jobs
+- **Detailed output**: Complete information for debugging
+- **Local caching**: Store frequently accessed data
+
+## Implementation Priority
+
+### Phase 1: Standardise Existing (Current Task)
+1. ✅ Update response format for existing endpoints
+2. ✅ Add proper error handling
+3. ✅ Implement standard authentication checks
+4. ✅ Add request ID tracking
+
+### Phase 2: Complete CRUD Operations
+1. Implement missing job management endpoints
+2. Add task management endpoints  
+3. Create API key management
+4. Add organisation endpoints
+
+### Phase 3: Integration Features
+1. Webhook system implementation
+2. Advanced authentication (scoped API keys)
+3. Rate limiting enhancements
+4. Real-time updates via WebSockets
+
+### Phase 4: Interface-Specific Optimisations
+1. Slack-specific endpoints
+2. Webflow extension optimisations
+3. CLI tool bulk operations
+4. Mobile app considerations
+
+## Security Considerations
+
+### Authentication Security
+- JWT tokens with short expiry (15 minutes)
+- API keys with scoped permissions
+- Secure storage requirements documented
+- Regular key rotation encouraged
+
+### Request Security
+- CORS properly configured
+- Content Security Policy implemented
+- Input validation on all endpoints
+- SQL injection prevention
+- XSS protection headers
+
+### Data Privacy
+- Organisation-level data isolation
+- Row Level Security in PostgreSQL
+- Audit logging for sensitive operations
+- GDPR compliance features
+
+## Monitoring & Observability
+
+### Metrics to Track
+- Request latency by endpoint
+- Error rate by endpoint and error type
+- Authentication failure rate
+- Rate limit hit rate
+- Job completion rate and time
+
+### Logging
+- Structured JSON logs
+- Request ID correlation
+- Error context preservation
+- Performance metrics
+
+This API design provides a solid foundation for all current and future interfaces while maintaining consistency, security, and scalability.
