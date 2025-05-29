@@ -199,10 +199,11 @@
   - [x] Reduce excessive transaction monitoring
   - [x] Optimise Sentry integrations
   - [x] Remove unnecessary wrapping functions
-- [x] Clean up API endpoints (plan created)
+- [x] Clean up API endpoints
   - [x] Document endpoints to consolidate or remove
-  - [x] Plan endpoint implementation simplification
+  - [x] Plan endpoint implementation simplification  
   - [x] Standardise error handling approach
+  - [x] Implementation plan completed in [docs/plans/api-cleanup.md](docs/plans/api-cleanup.md)
 - [x] Fix metrics collection (plan created)
   - [x] Document metrics to expose
   - [x] Plan for unused metrics tracking removal
@@ -414,7 +415,7 @@ Detailed plan available in [docs/webflow-integration-plan.md](docs/plans/webflow
 
 ### 🔴 Clean up
 
-- [ ] [docs/api-cleanup.md](docs/plans/api-cleanup.md)
+- [x] [docs/api-cleanup.md](docs/plans/api-cleanup.md) - Planning completed
 - [ ] Database backup/recovery
 
 ### 🔴 Task prioritisation

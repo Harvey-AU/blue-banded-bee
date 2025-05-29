@@ -4,17 +4,36 @@ I'm working on **Blue Banded Bee** (a Webflow cache‑warmer). Use this guide to
 
 ## Key Documents
 
+### Core References
 - **File Map**: [docs/reference/file-map.md](./docs/reference/file-map.md)
 - **Project Overview & Quick Start**: [README.md](./README.md)
 - **Codebase Structure**: [docs/reference/codebase-structure.md](./docs/reference/codebase-structure.md)
 - **Changelog & Releases**: [CHANGELOG.md](./CHANGELOG.md)
 - **Upcoming Tasks & Priorities**: [ROADMAP.md](./ROADMAP.md)
-- **API Reference**: [docs/api.md](./docs/api.md)
-- **Architecture & Design**: [docs/architecture.md](./docs/architecture.md)
-- **Core Concepts**: [docs/concepts.md](./docs/concepts.md)
-- **Development Guide**: [docs/development.md](./docs/development.md)
-- **Deployment Guide**: [docs/deployment.md](./docs/deployment.md)
-- **Database Config**: [database-config.md](./database-config.md)
+
+### Technical Documentation
+- **API Reference**: [docs/reference/api-reference.md](./docs/reference/api-reference.md)
+- **Database Config**: [docs/reference/database-config.md](./docs/reference/database-config.md)
+
+### Architecture & Design
+- **Multi-Interface Architecture**: [docs/architecture/multi-interface-architecture.md](./docs/architecture/multi-interface-architecture.md)
+- **Implementation Details**: [docs/architecture/implementation-details.md](./docs/architecture/implementation-details.md)
+- **Mental Model**: [docs/architecture/mental-model.md](./docs/architecture/mental-model.md)
+- **Jobs & Task System**: [docs/architecture/jobs.md](./docs/architecture/jobs.md)
+- **Gotchas & Edge Cases**: [docs/architecture/gotchas.md](./docs/architecture/gotchas.md)
+
+### Development & Deployment
+- **Development Guide**: [docs/guides/development.md](./docs/guides/development.md)
+- **Deployment Guide**: [docs/guides/deployment.md](./docs/guides/deployment.md)
+- **Claude Code Setup**: [docs/guides/claude-code-setup.md](./docs/guides/claude-code-setup.md)
+
+### Implementation Plans
+- **API Cleanup**: [docs/plans/api-cleanup.md](./docs/plans/api-cleanup.md)
+- **UI Architecture**: [docs/plans/ui-architecture.md](./docs/plans/ui-architecture.md)
+- **Organisation Model**: [docs/plans/organisation-model.md](./docs/plans/organisation-model.md)
+- **Task Prioritisation**: [docs/plans/task-prioritisation.md](./docs/plans/task-prioritisation.md)
+- **Webflow Integration**: [docs/plans/webflow-integration-plan.md](./docs/plans/webflow-integration-plan.md)
+- **Supabase Integration**: [docs/plans/supabase-integration-strategy.md](./docs/plans/supabase-integration-strategy.md)
 
 ## 1. Current Status & Priorities
 
