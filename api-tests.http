@@ -1,0 +1,52 @@
+# Blue Banded Bee API Tests
+# Use this file with VS Code REST Client extension
+
+### Health Check (No Auth Required)
+GET http://localhost:8080/health
+
+### Database Health Check
+GET http://localhost:8080/health/db
+
+### Register New User (No Auth Required)
+POST http://localhost:8080/v1/auth/register
+Content-Type: application/json
+
+{
+  "user_id": "test-user-123",
+  "email": "test@example.com",
+  "full_name": "Test User",
+  "org_name": "Test Organisation"
+}
+
+### Validate Session (No Auth Required - but needs a token)
+POST http://localhost:8080/v1/auth/session
+Content-Type: application/json
+
+{
+  "token": "your_jwt_token_here"
+}
+
+### Get User Profile (Requires Auth)
+GET http://localhost:8080/v1/auth/profile
+Authorization: Bearer your_jwt_token_here
+
+### Create Job (Requires Auth)
+POST http://localhost:8080/v1/jobs
+Content-Type: application/json
+Authorization: Bearer your_jwt_token_here
+
+{
+  "domain": "example.com",
+  "use_sitemap": true,
+  "find_links": true,
+  "concurrency": 3,
+  "max_pages": 10
+}
+
+### Get Job Status (Requires Auth)
+GET http://localhost:8080/v1/jobs/job_id_here
+Authorization: Bearer your_jwt_token_here
+
+### List All Jobs (Requires Auth)
+GET http://localhost:8080/v1/jobs
+Authorization: Bearer your_jwt_token_here

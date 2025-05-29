@@ -40,9 +40,9 @@ This document outlines the API endpoints that need cleanup or consolidation to i
 | `/v1/job/status/:id` & `/v1/job/:id` | `/v1/jobs/:id`        | Consolidate to RESTful pattern |
 | `/health` & `/v1/ping`               | `/health`             | Keep one health check endpoint |
 
-## Implementation Plan
+## Implementation Plan ✅ (Completed)
 
-1. **Create Standard Error Handler**
+1. **✅ Create Standard Error Handler**
    - Implement a standard error response structure
    - Add proper HTTP status code mapping
    - Ensure all errors include request ID for tracing
@@ -71,34 +71,39 @@ func StandardErrorHandler(w http.ResponseWriter, err error, status int, code str
 }
 ```
 
-2. **Implement RESTful Endpoints**
+2. **✅ Implement RESTful Endpoints**
    - Replace current endpoints with proper RESTful design
    - Use appropriate HTTP methods (GET, POST, PUT, DELETE)
    - Document API consistently
+   - Remove legacy endpoints (no backward compatibility needed)
 
-## New API Structure
+## ✅ Implemented API Structure
 
 ```
 /health - Health check
-/metrics - Prometheus metrics endpoint (protected)
+/health/db - Database health check
 
 /v1/jobs
   GET / - List all jobs
   POST / - Create new job
   GET /:id - Get job details
-  PUT /:id - Update job
-  DELETE /:id - Cancel/delete job
+  PUT /:id - Update job (placeholder)
+  DELETE /:id - Cancel/delete job (placeholder)
 
-/v1/domains
-  GET / - List domains
-  GET /:id - Get domain details
-  GET /:id/stats - Get domain statistics
+/v1/auth
+  POST /register - User registration
+  POST /session - Session validation
+  GET /profile - User profile (authenticated)
 
-/v1/admin (protected)
-  GET /queue-stats - Queue statistics
-  POST /cleanup - Run cleanup job
-  POST /reset - Reset queue (admin only)
+/admin (protected)
+  POST /reset-db - Database reset (development only)
 ```
+
+**Next Phase:**
+- Task management: `/v1/jobs/:id/tasks`
+- API keys: `/v1/auth/api-keys`
+- Organisation management: `/v1/organisations`
+- Webhook system: `/v1/webhooks`
 
 ## Documentation Improvements
 

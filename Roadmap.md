@@ -13,6 +13,7 @@
 - Removed unnecessary depth functionality from the codebase
 - **Fixed critical production database schema mismatch** (v0.3.8) - task insertion now working properly
 - **Complete Supabase Authentication System** (v0.4.0) - Multi-tenant auth with 8 social providers, custom domain, protected endpoints
+- **RESTful API Infrastructure** (v0.4.2) - Complete API overhaul with standardised responses, middleware stack, `/v1/*` endpoints, request tracking, testing tools
 
 ## ✅ Stage 0: Project Setup & Infrastructure
 
@@ -251,17 +252,20 @@ Detailed plan available in [docs/organisation-model.md](docs/plans/organisation-
 - [x] Auto-create organisation when user signs up
 - [x] Create shared access to all jobs/tasks/reports within organisation
 
-### 🔴 API-First Architecture Development (High Priority)
+### ✅ API-First Architecture Development (High Priority)
 
-Detailed plan available in [docs/multi-interface-architecture.md](docs/architecture/multi-interface-architecture.md)
+Detailed plan available in [docs/multi-interface-architecture.md](docs/architecture/multi-interface-architecture.md) and [docs/reference/api-reference.md](docs/reference/api-reference.md)
 
-- [ ] Design comprehensive API for all interfaces
-  - [ ] Define standard response format
+- [x] Design comprehensive API for all interfaces
+  - [x] Define standard response format with request IDs and consistent error handling
+  - [x] Design interface-agnostic RESTful endpoints (`/v1/*` structure)
+  - [x] Implement comprehensive middleware stack (CORS, logging, rate limiting)
+  - [x] Create standardised error responses with proper HTTP status codes
   - [ ] Document API with OpenAPI specification
-  - [ ] Design interface-agnostic endpoints
   - [ ] Create webhook system for notifications
-- [ ] Implement multi-interface authentication foundations
-  - [ ] Design JWT-based authentication structure
+- [x] Implement multi-interface authentication foundations
+  - [x] Design JWT-based authentication structure with Supabase integration
+  - [x] Implement authentication middleware for protected endpoints
   - [ ] Create API key system for integrations
   - [ ] Plan OAuth support foundation
 - [ ] Develop API client library core
@@ -415,7 +419,7 @@ Detailed plan available in [docs/webflow-integration-plan.md](docs/plans/webflow
 
 ### 🔴 Clean up
 
-- [x] [docs/api-cleanup.md](docs/plans/api-cleanup.md) - Planning completed
+- [x] [docs/api-cleanup.md](docs/plans/api-cleanup.md) - Completed implementation
 - [ ] Database backup/recovery
 
 ### 🔴 Task prioritisation
