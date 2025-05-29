@@ -14,7 +14,10 @@
       "Bash(find:*)",
       "Bash(grep:*)",
       "Bash(rg:*)",
-      "Bash(mv:*)"
+      "Bash(mv:*)",
+      "mcp__ide__getDiagnostics",
+      "Bash(gtimeout:*)",
+      "Bash(go list:*)"
     ],
     "deny": []
   },
