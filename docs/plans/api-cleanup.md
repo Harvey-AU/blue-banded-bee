@@ -17,28 +17,28 @@ This document outlines the API endpoints that need cleanup or consolidation to i
 
 ### 1. Legacy/Debug Endpoints
 
-| Endpoint | Issue | Action |
-|----------|-------|--------|
-| `/debug/queue` | Debug endpoint that exposes internal queue state | Move to admin-only access or remove |
-| `/debug/vars` | Exposes runtime variables | Restrict access or remove |
-| `/test/crawler` | Test endpoint for crawler | Remove or move to test package |
-| `/v1/ping` | Duplicate of health check | Consolidate with `/health` |
+| Endpoint        | Issue                                            | Action                              |
+| --------------- | ------------------------------------------------ | ----------------------------------- |
+| `/debug/queue`  | Debug endpoint that exposes internal queue state | Move to admin-only access or remove |
+| `/debug/vars`   | Exposes runtime variables                        | Restrict access or remove           |
+| `/test/crawler` | Test endpoint for crawler                        | Remove or move to test package      |
+| `/v1/ping`      | Duplicate of health check                        | Consolidate with `/health`          |
 
 ### 2. Endpoints with Inconsistent Error Handling
 
-| Endpoint | Issue | Action |
-|----------|-------|--------|
-| `/v1/jobs` | Inconsistent error formats | Standardize error responses |
-| `/v1/site` | Missing proper status codes | Implement proper HTTP status codes |
-| `/v1/domains` | Mixed error formats | Use consistent error structure |
+| Endpoint      | Issue                       | Action                             |
+| ------------- | --------------------------- | ---------------------------------- |
+| `/v1/jobs`    | Inconsistent error formats  | Standardize error responses        |
+| `/v1/site`    | Missing proper status codes | Implement proper HTTP status codes |
+| `/v1/domains` | Mixed error formats         | Use consistent error structure     |
 
 ### 3. Endpoints to Consolidate
 
-| Original Endpoints | Consolidated Endpoint | Notes |
-|-------------------|----------------------|-------|
-| `/v1/job/create` & `/v1/site` | `/v1/jobs` | Use proper HTTP methods (POST) |
-| `/v1/job/status/:id` & `/v1/job/:id` | `/v1/jobs/:id` | Consolidate to RESTful pattern |
-| `/health` & `/v1/ping` | `/health` | Keep one health check endpoint |
+| Original Endpoints                   | Consolidated Endpoint | Notes                          |
+| ------------------------------------ | --------------------- | ------------------------------ |
+| `/v1/job/create` & `/v1/site`        | `/v1/jobs`            | Use proper HTTP methods (POST) |
+| `/v1/job/status/:id` & `/v1/job/:id` | `/v1/jobs/:id`        | Consolidate to RESTful pattern |
+| `/health` & `/v1/ping`               | `/health`             | Keep one health check endpoint |
 
 ## Implementation Plan
 
@@ -86,14 +86,14 @@ func StandardErrorHandler(w http.ResponseWriter, err error, status int, code str
   GET / - List all jobs
   POST / - Create new job
   GET /:id - Get job details
-  PUT /:id - Update job 
+  PUT /:id - Update job
   DELETE /:id - Cancel/delete job
-  
+
 /v1/domains
   GET / - List domains
   GET /:id - Get domain details
   GET /:id/stats - Get domain statistics
-  
+
 /v1/admin (protected)
   GET /queue-stats - Queue statistics
   POST /cleanup - Run cleanup job
@@ -116,6 +116,7 @@ Implement proper metrics exposure through a dedicated endpoint:
 ```
 
 Include:
+
 - Queue depths
 - Worker counts
 - Processing rates

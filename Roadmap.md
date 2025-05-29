@@ -117,16 +117,16 @@
 - [x] Store recent crawled pages in job history
 - [x] Implement multi-domain support
 
-## 🚧 Stage 3: PostgreSQL Migration & Performance Optimisation
+## ✅ Stage 3: PostgreSQL Migration & Performance Optimisation
 
-### 🔄 Fly.io Production Setup
+### ✅ Fly.io Production Setup
 
 - [x] Set up production environment on Fly.io
 - [x] Deploy and test rate limiting in production
 - [x] Configure auto-scaling rules
 - [x] Set up production logging
 - [x] Implement monitoring alerts
-- [ ] Configure backup strategies
+- [x] Configure backup strategies (Supabase handles automatically)
 
 ### ✅ Performance Optimisation
 
@@ -136,7 +136,7 @@
 - [x] Add performance monitoring
 - [x] Made decision to switch to postgres at this point
 
-### 🔄 PostgreSQL Migration
+### ✅ PostgreSQL Migration
 
 #### ✅ PostgreSQL Setup and Infrastructure
 
@@ -156,7 +156,7 @@
   - [x] Add health checks and monitoring
   - [x] Implement efficient error handling
 
-#### 🔄 Task Queue and Worker Redesign
+#### ✅ Task Queue and Worker Redesign
 
 - [x] Implement PostgreSQL-based task queue
   - [x] Use row-level locking with SELECT FOR UPDATE SKIP LOCKED
@@ -222,24 +222,6 @@
 - [x] Clean up dependencies and imports
 - [x] Update configuration and documentation
 
-### 🔴 API-First Architecture Development
-
-Detailed plan available in [docs/multi-interface-architecture.md](docs/architecture/multi-interface-architecture.md)
-
-- [ ] Design comprehensive API for all interfaces
-  - [ ] Define standard response format
-  - [ ] Document API with OpenAPI specification
-  - [ ] Design interface-agnostic endpoints
-  - [ ] Create webhook system for notifications
-- [ ] Implement multi-interface authentication foundations
-  - [ ] Design JWT-based authentication structure
-  - [ ] Create API key system for integrations
-  - [ ] Plan OAuth support foundation
-- [ ] Develop API client library core
-  - [ ] Create core JavaScript client for API interaction
-  - [ ] Implement basic authentication handling
-  - [ ] Design extensible client architecture
-
 ## ⚪ Stage 4: Core Authentication & MVP Interface
 
 ### ✅ Implement Supabase Authentication
@@ -267,27 +249,55 @@ Detailed plan available in [docs/organisation-model.md](docs/plans/organisation-
 
 - [x] Auto-create organisation when user signs up
 - [x] Create shared access to all jobs/tasks/reports within organisation
-- [ ] Implement member invitation system
-- [ ] Implement organisation-level usage tracking
-- [ ] **Test and refine multi-provider account linking** - Verify whether same email across different auth providers (Google, Facebook, etc.) creates linked accounts or separate users. Important for user experience but not urgent.
 
-### 🔴 MVP Interface Development
+### 🔴 API-First Architecture Development (High Priority)
+
+Detailed plan available in [docs/multi-interface-architecture.md](docs/architecture/multi-interface-architecture.md)
+
+- [ ] Design comprehensive API for all interfaces
+  - [ ] Define standard response format
+  - [ ] Document API with OpenAPI specification
+  - [ ] Design interface-agnostic endpoints
+  - [ ] Create webhook system for notifications
+- [ ] Implement multi-interface authentication foundations
+  - [ ] Design JWT-based authentication structure
+  - [ ] Create API key system for integrations
+  - [ ] Plan OAuth support foundation
+- [ ] Develop API client library core
+  - [ ] Create core JavaScript client for API interaction
+  - [ ] Implement basic authentication handling
+  - [ ] Design extensible client architecture
+
+### 🔴 MVP Interface Development (High Priority)
 
 Detailed plan available in [docs/ui-architecture.md](docs/plans/ui-architecture.md)
 
-- [ ] Create simple Webflow marketing page
-  - [ ] Design minimal home page with product explanation
-  - [ ] Set up basic navigation structure
-  - [ ] Implement call-to-action for early access
 - [ ] Develop proof-of-concept web application
   - [ ] Create component-based architecture with HTML Custom Elements
   - [ ] Build minimal dashboard for job management
   - [ ] Implement basic job creation form
   - [ ] Create simple job results view with core metrics
-- [ ] Integrate Supabase Auth with interface
+- [ ] Interface for creating jobs and getting job statuses in Slack and Webflow app
+  - [ ] Integrate Supabase Auth with interface
   - [ ] Implement login/signup functionality
   - [ ] Create session management
   - [ ] Set up secure authentication flow
+
+### 🔴 Marketing Interface (Medium Priority)
+
+- [ ] Create simple Webflow marketing page
+  - [ ] Design minimal home page with product explanation
+  - [ ] Set up basic navigation structure
+  - [ ] Implement call-to-action for early access
+
+### 🔴 Authentication Refinement (Low Priority)
+
+- [ ] **Test and refine multi-provider account linking** - Verify whether same email across different auth providers (Google, Facebook, etc.) creates linked accounts or separate users. Important for user experience but not urgent.
+
+### 🔴 Critical Infrastructure (Low Priority)
+
+- [ ] Set up database backup schedule and automated recovery testing - Essential for production safety
+- [ ] Implement member invitation system - Core functionality gap in organisation sharing
 
 ### 🔴 Set up basic usage tracking
 
