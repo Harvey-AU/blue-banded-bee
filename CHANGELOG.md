@@ -8,6 +8,66 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Multiple version updates may occur on the same date, each with its own version number.
 Each version represents a distinct set of changes, even if released on the same day.
 
+## [0.4.2] – 2025-05-29
+
+### Added
+
+- **RESTful API Architecture**: Complete API infrastructure overhaul with modern standards
+  - Implemented standardised error handling with request IDs and consistent HTTP status codes
+  - Created comprehensive middleware stack: CORS, request ID tracking, structured logging, rate limiting
+  - Built RESTful endpoint structure under `/v1/*` namespace for versioned API access
+  - Added proper authentication middleware integration with Supabase JWT validation
+- **API Response Standardisation**: Consistent response formats across all endpoints
+  - Success responses include `status`, `data`, `message`, and `request_id` fields
+  - Error responses provide structured error information with HTTP status codes and error codes
+  - Request ID tracking for distributed tracing and debugging support
+- **Enhanced Security**: Improved security posture with secured admin endpoints
+  - Moved debug endpoints to `/admin/*` namespace with environment variable protection
+  - Added CORS middleware for secure cross-origin requests
+  - Implemented rate limiting with proper IP detection and standardised error responses
+
+### Changed
+
+- **API Endpoint Structure**: Migrated from ad-hoc endpoints to RESTful design
+  - Job creation: `POST /v1/jobs` with JSON body instead of query parameters
+  - Job status: `GET /v1/jobs/:id` following RESTful conventions
+  - Authentication: Consolidated under `/v1/auth/*` namespace
+  - Health checks: Standardised `/health` and `/health/db` endpoints
+- **Error Handling**: Replaced inconsistent `http.Error()` calls with structured error responses
+  - All errors now include request IDs for tracing
+  - Consistent error codes: `BAD_REQUEST`, `UNAUTHORISED`, `NOT_FOUND`, etc.
+  - Proper HTTP status code usage throughout the API
+- **Code Organisation**: Refactored API logic into dedicated `internal/api` package
+  - Separated concerns: handlers, middleware, errors, responses, authentication
+  - Dependency injection pattern with clean handler structure
+  - Eliminated duplicate endpoint logic and inconsistent patterns
+
+### Removed
+
+- **Legacy Endpoints**: Removed unused endpoints since APIs are not yet published
+  - Removed `/site` and `/job-status` legacy endpoints and their handlers
+  - Cleaned up duplicate code paths and unused imports
+  - Simplified codebase by removing backward compatibility code
+
+### Enhanced
+
+- **Testing Infrastructure**: Created comprehensive API testing tools
+  - Updated test login page to use new `/v1/*` endpoints
+  - Added `api-tests.http` file for VS Code REST Client testing
+  - Created detailed API testing guide with authentication examples
+- **Documentation**: Updated API reference and implementation documentation
+  - Comprehensive API testing guide with practical examples
+  - Updated roadmap to reflect completed API infrastructure work
+  - Enhanced code documentation with clear separation of concerns
+
+### Technical Details
+
+- New `internal/api` package structure with clean separation of handlers, middleware, and utilities
+- Middleware stack processes requests in proper order: CORS → Request ID → Logging → Rate Limiting
+- JWT authentication middleware integrates seamlessly with Supabase token validation
+- Request ID generation uses timestamp + random bytes for unique request tracking
+- Error responses provide consistent structure while maintaining security (no information leakage)
+
 ## [0.4.1] – 2025-05-27
 
 ### Fixed

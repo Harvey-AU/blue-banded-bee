@@ -6,24 +6,29 @@ This document defines the comprehensive API design for Blue Banded Bee's multi-i
 
 ## Current Status
 
-✅ **Existing Endpoints:**
-- `/health` - Service health check
-- `/pg-health` - PostgreSQL health check  
-- `/site` - Create crawl job (authenticated)
-- `/job-status` - Get job progress (authenticated)
-- `/api/auth/register` - User registration
-- `/api/auth/profile` - User profile (authenticated)
-- `/api/auth/session` - Session validation
-- `/reset-db` - Database reset (development only)
+✅ **Core API Infrastructure Implemented:**
+- Standardised error handling with request IDs and proper HTTP status codes
+- RESTful API structure with consistent response formats
+- Comprehensive middleware stack (CORS, request ID, logging, rate limiting)
+- Authentication integration with Supabase JWT validation
 
-🔄 **Needs Implementation:**
-- Standardised response format
-- Complete CRUD operations for jobs
-- Task management endpoints
-- Organisation management
-- API key management
-- Webhook system
-- Error handling standardisation
+✅ **Current Endpoints:**
+- `/health` - Service health check
+- `/health/db` - PostgreSQL health check
+- `/v1/jobs` - RESTful job management (GET/POST)
+- `/v1/jobs/:id` - Individual job operations (GET/PUT/DELETE)
+- `/v1/auth/register` - User registration
+- `/v1/auth/profile` - User profile (authenticated)
+- `/v1/auth/session` - Session validation
+- `/admin/reset-db` - Admin database reset (secured)
+
+🔄 **Next Implementation Phase:**
+- Complete CRUD operations for jobs (cancel, retry)
+- Task management endpoints (`/v1/jobs/:id/tasks`)
+- API key management (`/v1/auth/api-keys`)
+- Organisation management (`/v1/organisations`)
+- Webhook system (`/v1/webhooks`)
+- Export functionality (`/v1/jobs/:id/export`)
 
 ## API Structure
 
@@ -722,11 +727,14 @@ Authorization: Bearer <token>
 
 ## Implementation Priority
 
-### Phase 1: Standardise Existing (Current Task)
+### Phase 1: Standardise Existing ✅ (Completed)
 1. ✅ Update response format for existing endpoints
-2. ✅ Add proper error handling
+2. ✅ Add proper error handling with consistent status codes
 3. ✅ Implement standard authentication checks
-4. ✅ Add request ID tracking
+4. ✅ Add request ID tracking and middleware stack
+5. ✅ Create RESTful API structure (`/v1/*` endpoints)
+6. ✅ Implement comprehensive middleware (CORS, logging, rate limiting)
+7. ✅ Secure debug endpoints and move to admin namespace
 
 ### Phase 2: Complete CRUD Operations
 1. Implement missing job management endpoints
