@@ -1,4 +1,4 @@
-# API Design - Blue Banded Bee
+# API Reference
 
 ## Overview
 
@@ -39,7 +39,7 @@ Development: http://localhost:8080
 ```
 
 ### Versioning
-All API endpoints are versioned under `/api/v1/` to ensure backward compatibility.
+All API endpoints are versioned under `/v1/` to ensure backward compatibility.
 
 ## Authentication
 
@@ -63,9 +63,9 @@ All API endpoints are versioned under `/api/v1/` to ensure backward compatibilit
    - Managed through user dashboard
 
 ### Protected Resources
-All endpoints under `/api/v1/` require authentication except:
-- `/api/v1/health`
-- `/api/v1/auth/*` (registration, session validation)
+All endpoints under `/v1/` require authentication except:
+- `/health`
+- `/v1/auth/*` (registration, session validation)
 
 ## Standard Response Format
 
@@ -122,7 +122,7 @@ All endpoints under `/api/v1/` require authentication except:
 
 #### Create Job
 ```http
-POST /api/v1/jobs
+POST /v1/jobs
 Content-Type: application/json
 Authorization: Bearer <token>
 
@@ -163,7 +163,7 @@ Authorization: Bearer <token>
 
 #### List Jobs
 ```http
-GET /api/v1/jobs?page=1&limit=20&status=running
+GET /v1/jobs?page=1&limit=20&status=running
 Authorization: Bearer <token>
 ```
 
@@ -204,7 +204,7 @@ Authorization: Bearer <token>
 
 #### Get Job
 ```http
-GET /api/v1/jobs/{job_id}
+GET /v1/jobs/{job_id}
 Authorization: Bearer <token>
 ```
 
@@ -249,7 +249,7 @@ Authorization: Bearer <token>
 
 #### Cancel Job
 ```http
-POST /api/v1/jobs/{job_id}/cancel
+POST /v1/jobs/{job_id}/cancel
 Authorization: Bearer <token>
 ```
 
@@ -273,7 +273,7 @@ Authorization: Bearer <token>
 
 #### List Tasks for Job
 ```http
-GET /api/v1/jobs/{job_id}/tasks?page=1&limit=50&status=failed&status_code=404&min_response_time=5000
+GET /v1/jobs/{job_id}/tasks?page=1&limit=50&status=failed&status_code=404&min_response_time=5000
 Authorization: Bearer <token>
 ```
 
@@ -359,7 +359,7 @@ Authorization: Bearer <token>
 
 #### Get Task Results Summary
 ```http
-GET /api/v1/jobs/{job_id}/results
+GET /v1/jobs/{job_id}/results
 Authorization: Bearer <token>
 ```
 
@@ -428,7 +428,7 @@ Authorization: Bearer <token>
 
 #### Export Task Results
 ```http
-GET /api/v1/jobs/{job_id}/export?format=csv&include=url,status_code,response_time,cache_status
+GET /v1/jobs/{job_id}/export?format=csv&include=url,status_code,response_time,cache_status
 Authorization: Bearer <token>
 ```
 
@@ -450,7 +450,7 @@ https://example.com/page3,500,1200,error,Internal server error
 
 #### Retry Failed Tasks
 ```http
-POST /api/v1/jobs/{job_id}/tasks/retry
+POST /v1/jobs/{job_id}/tasks/retry
 Authorization: Bearer <token>
 
 {
@@ -462,7 +462,7 @@ Authorization: Bearer <token>
 
 #### Get Current User Profile
 ```http
-GET /api/v1/auth/profile
+GET /v1/auth/profile
 Authorization: Bearer <token>
 ```
 
@@ -495,7 +495,7 @@ Authorization: Bearer <token>
 
 #### List API Keys
 ```http
-GET /api/v1/auth/api-keys
+GET /v1/auth/api-keys
 Authorization: Bearer <token>
 ```
 
@@ -524,7 +524,7 @@ Authorization: Bearer <token>
 
 #### Create API Key
 ```http
-POST /api/v1/auth/api-keys
+POST /v1/auth/api-keys
 Authorization: Bearer <token>
 
 {
@@ -553,7 +553,7 @@ Authorization: Bearer <token>
 
 #### Revoke API Key
 ```http
-DELETE /api/v1/auth/api-keys/{key_id}
+DELETE /v1/auth/api-keys/{key_id}
 Authorization: Bearer <token>
 ```
 
@@ -561,7 +561,7 @@ Authorization: Bearer <token>
 
 #### Get Organisation Details
 ```http
-GET /api/v1/organisations/current
+GET /v1/organisations/current
 Authorization: Bearer <token>
 ```
 
@@ -598,7 +598,7 @@ Authorization: Bearer <token>
 
 #### Health Check
 ```http
-GET /api/v1/health
+GET /health
 ```
 
 **Response (200):**
@@ -676,7 +676,7 @@ X-RateLimit-Retry-After: 30
 
 ### Webhook Registration
 ```http
-POST /api/v1/webhooks
+POST /v1/webhooks
 Authorization: Bearer <token>
 
 {

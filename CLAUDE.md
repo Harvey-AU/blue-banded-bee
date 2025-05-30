@@ -74,10 +74,12 @@ Blue Banded Bee is a web cache warming service built in Go, primarily focused on
 
 - `cmd/app/` - Main application entry point
 - `cmd/test_jobs/` - Job queue testing utility
-- `internal/common/` - Shared utilities
+- `internal/api/` - HTTP handlers and middleware
+- `internal/auth/` - Authentication logic
 - `internal/crawler/` - Web crawling functionality
 - `internal/db/` - Database access layer
 - `internal/jobs/` - Job queue and worker implementation
+- `internal/util/` - Shared utilities
 
 ## Development Notes
 

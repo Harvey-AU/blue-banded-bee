@@ -8,6 +8,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Multiple version updates may occur on the same date, each with its own version number.
 Each version represents a distinct set of changes, even if released on the same day.
 
+## [0.4.3] – 2025-05-30
+
+### Added
+
+- **Complete Sentry Integration**: Comprehensive error tracking and performance monitoring
+  - Properly initialised Sentry SDK in main.go with environment-aware configuration
+  - Added error capture (`sentry.CaptureException()`) for critical business logic failures
+  - Strategic error monitoring in job management, worker operations, and database transactions
+  - Performance span tracking already operational: job operations, database operations, sitemap processing
+  - Configured 10% trace sampling in production, 100% in development for optimal observability
+- **Comprehensive Documentation Consolidation**: Streamlined from 31 to 10 documentation files
+  - Created unified `ARCHITECTURE.md` combining system design, technical concepts, and component details
+  - Consolidated `DEVELOPMENT.md` merging setup, testing, debugging, and contribution guidelines
+  - Cleaned up `API.md` with consistent endpoint references and comprehensive documentation
+  - Created `DATABASE.md` covering PostgreSQL schema, queries, operations, and performance optimisation
+  - Consolidated future plans into 3 actionable documents: UI implementation, Webflow integration, scaling strategy
+
+### Changed
+
+- **Documentation Structure**: Complete reorganisation for maintainability and clarity
+  - Eliminated content overlap between architecture files (mental-model, implementation-details, jobs)
+  - Fixed content inconsistencies: corrected project stage references, removed deprecated depth column mentions
+  - Updated README.md with accurate Stage 4 status and enhanced documentation index with descriptions
+  - Improved CLAUDE.md with updated code organisation reflecting current package structure
+- **Error Monitoring Strategy**: Strategic approach to avoid over-logging while capturing critical issues
+  - Focus on infrastructure failures, data consistency issues, and critical business operations
+  - Avoided granular task-level logging while maintaining comprehensive system health monitoring
+  - Integration with existing performance spans for complete observability
+
+### Removed
+
+- **Redundant Documentation**: Eliminated 21 redundant files and outdated content
+  - Removed overlapping architecture files: mental-model.md, implementation-details.md, jobs.md
+  - Consolidated reference files: codebase-structure.md, file-map.md, auth-integration.md, database-config.md
+  - Cleaned up outdated plans: 8 completed or irrelevant planning documents
+  - Removed CONTRIBUTING.md (merged into DEVELOPMENT.md) and duplicate guide content
+
+### Fixed
+
+- **Documentation Accuracy**: Corrected stale and inconsistent information throughout
+  - Fixed project stage references (Stage 3 → Stage 4) in README.md
+  - Removed deprecated depth column references from database documentation
+  - Updated API endpoint paths to match current `/v1/*` structure
+  - Corrected outdated technology references (SQLite → PostgreSQL)
+
 ## [0.4.2] – 2025-05-29
 
 ### Added
