@@ -1,0 +1,284 @@
+# Blue Banded Bee Architecture
+
+## System Overview
+
+Blue Banded Bee is a web cache warming service built in Go, designed for Webflow sites and other web applications. It uses a worker pool architecture for efficient URL crawling and cache warming, with a focus on reliability, performance, and observability.
+
+## Core Components
+
+### Worker Pool System
+- **Concurrent Processing**: Multiple workers process tasks simultaneously using PostgreSQL's `FOR UPDATE SKIP LOCKED`
+- **Job Management**: Jobs are broken down into individual URL tasks and distributed across workers
+- **Recovery System**: Automatic recovery of stalled or failed tasks with exponential backoff
+- **Task Monitoring**: Real-time monitoring of task progress and status
+
+### Database Layer (PostgreSQL)
+- **Normalised Schema**: Separate tables for domains, pages, jobs, and tasks to reduce redundancy
+- **Row-Level Locking**: Uses `FOR UPDATE SKIP LOCKED` for efficient concurrent task acquisition
+- **Connection Pooling**: Optimised pool settings (25 max open, 10 max idle connections)
+- **Data Integrity**: Maintains job history, statistics, and task relationships
+
+### API Layer
+- **RESTful Design**: `/v1/*` endpoints with standardised responses and error handling
+- **Authentication**: JWT-based auth with Supabase Auth integration
+- **Middleware Stack**: CORS, logging, rate limiting, request tracking
+- **Request IDs**: Every request tracked with unique identifier
+
+### Crawler System
+- **Concurrent URL Processing**: Configurable concurrency with rate limiting
+- **Cache Validation**: Monitors cache status and performance metrics
+- **Response Tracking**: Records response times, status codes, and cache hits
+- **Link Discovery**: Optional extraction of additional URLs from crawled pages
+
+## Technical Concepts
+
+### Jobs and Tasks
+
+**Job**: A collection of URLs from a single domain to be crawled
+- Contains metadata: domain, user/organisation, concurrency settings
+- Tracks progress: total/completed/failed task counts
+- Has lifecycle: pending → running → completed/cancelled
+
+**Task**: Individual URL processing unit within a job
+- References a specific page within the job's domain
+- Tracks execution: status, timing, response metrics, errors
+- Can be: pending → running → completed/failed/skipped
+
+**Worker**: Process that executes tasks concurrently
+- Claims tasks atomically using database locking
+- Handles retries and error reporting
+- Updates task and job progress
+
+### Database Schema
+
+#### Normalised Structure
+```sql
+-- Domains table stores unique domain names
+CREATE TABLE domains (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) UNIQUE NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Pages table stores paths with domain references
+CREATE TABLE pages (
+    id SERIAL PRIMARY KEY,
+    domain_id INTEGER REFERENCES domains(id),
+    path TEXT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(domain_id, path)
+);
+
+-- Jobs table stores job metadata
+CREATE TABLE jobs (
+    id TEXT PRIMARY KEY,
+    domain_id INTEGER REFERENCES domains(id),
+    user_id TEXT,
+    organisation_id TEXT,
+    status TEXT NOT NULL,
+    progress REAL DEFAULT 0.0,
+    total_tasks INTEGER DEFAULT 0,
+    completed_tasks INTEGER DEFAULT 0,
+    failed_tasks INTEGER DEFAULT 0,
+    skipped_tasks INTEGER DEFAULT 0,
+    found_tasks INTEGER DEFAULT 0,
+    sitemap_tasks INTEGER DEFAULT 0,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    started_at TIMESTAMP WITH TIME ZONE,
+    completed_at TIMESTAMP WITH TIME ZONE,
+    concurrency INTEGER DEFAULT 1,
+    find_links BOOLEAN DEFAULT FALSE,
+    max_pages INTEGER DEFAULT 100,
+    include_paths TEXT,
+    exclude_paths TEXT,
+    required_workers INTEGER DEFAULT 1
+);
+
+-- Tasks table stores individual crawl tasks
+CREATE TABLE tasks (
+    id TEXT PRIMARY KEY,
+    job_id TEXT REFERENCES jobs(id),
+    domain_id INTEGER REFERENCES domains(id),
+    page_id INTEGER REFERENCES pages(id),
+    status TEXT NOT NULL,
+    source_type TEXT,
+    source_url TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    started_at TIMESTAMP WITH TIME ZONE,
+    completed_at TIMESTAMP WITH TIME ZONE,
+    status_code INTEGER,
+    response_time INTEGER,
+    cache_status TEXT,
+    content_type TEXT,
+    error TEXT,
+    retry_count INTEGER DEFAULT 0
+);
+```
+
+#### Key Design Decisions
+- **Domain/Page Normalisation**: Reduces storage and improves data integrity
+- **No Depth Tracking**: Removed in v0.3.8 as unnecessary complexity
+- **PostgreSQL Features**: Leverages `FOR UPDATE SKIP LOCKED` for lock-free task claiming
+- **Separate Task Counts**: Tracks `sitemap_tasks` vs `found_tasks` for analytics
+
+### Job Lifecycle
+
+1. **Job Creation**
+   - Validate domain and create domain/page records
+   - Insert job with pending status
+   - Optionally process sitemap or create root task
+
+2. **Job Start**
+   - Update status to running
+   - Reset any stalled tasks from previous runs
+   - Add job to worker pool for processing
+
+3. **Task Processing**
+   - Workers claim pending tasks atomically
+   - Crawl URLs with retry logic and rate limiting
+   - Store results and update task status
+   - Update job progress counters
+
+4. **Job Completion**
+   - Automatic detection when all tasks finished
+   - Calculate final statistics
+   - Mark job as completed with timestamp
+
+5. **Recovery & Cleanup**
+   - Periodic cleanup of stuck jobs
+   - Task recovery for server restarts
+   - Failed task retry with exponential backoff
+
+## Codebase Structure
+
+### Application Entry Points (`cmd/`)
+- `cmd/app/main.go` - Main service entry point with server setup
+- `cmd/test_jobs/main.go` - Job queue testing utility
+
+### Core Business Logic (`internal/`)
+
+#### API Layer (`internal/api/`)
+- `handlers.go` - HTTP route handlers and middleware
+- `auth.go` - JWT authentication and user validation
+- `jobs.go` - Job management endpoints
+- `response.go` - Standardised response formats
+- `errors.go` - Error handling and codes
+
+#### Database Layer (`internal/db/`)
+- `db.go` - PostgreSQL connection and setup
+- `queue.go` - Database queue operations and transactions
+- `pages.go` - Page and domain record management
+- `users.go` - User and organisation data
+- `health.go` - Database health monitoring
+
+#### Job System (`internal/jobs/`)
+- `manager.go` - Job lifecycle management (create, start, cancel)
+- `worker.go` - Worker pool and task processing
+- `types.go` - Job and task type definitions
+
+#### Crawler (`internal/crawler/`)
+- `crawler.go` - HTTP client and URL processing
+- `sitemap.go` - Sitemap parsing and URL extraction
+- `config.go` - Crawler configuration and rate limiting
+- `types.go` - Crawler response types
+
+#### Utilities (`internal/util/`)
+- `url.go` - URL normalisation and validation
+
+## System Monitoring
+
+### Sentry Integration Strategy
+
+Blue Banded Bee uses Sentry for both error tracking and performance monitoring with a strategic approach to avoid over-logging.
+
+#### Configuration
+```go
+sentry.Init(sentry.ClientOptions{
+    Dsn:              config.SentryDSN,
+    Environment:      config.Env,
+    TracesSampleRate: 0.1, // 10% in production, 100% in development
+    AttachStacktrace: true,
+    Debug:           config.Env == "development",
+})
+```
+
+#### Error Capture Strategy
+**Critical Business Logic Failures:**
+- Job creation, start, and cancellation failures
+- Worker startup failures and task status update failures  
+- Transaction failures and stuck job cleanup failures
+- Database connection and server startup/shutdown failures
+
+**Avoided**: Individual task processing errors, expected/handled errors, normal operational events
+
+#### Performance Monitoring Spans
+- `manager.create_job`, `manager.start_job`, `manager.cancel_job` - Job operations
+- `manager.get_job`, `manager.get_job_status` - Job queries
+- `manager.process_sitemap` - Sitemap processing
+- `db.cleanup_stuck_jobs`, `db.create_page_records` - Database operations
+
+### Health Monitoring
+- **Database Health**: Connection status and query performance
+- **Worker Status**: Active worker count and task processing rates
+- **Job Progress**: Real-time completion tracking and statistics
+- **API Performance**: Request timing and error rates
+
+## Security & Authentication
+
+### JWT Authentication
+- **Supabase Auth Integration**: Validates JWT tokens from Supabase
+- **User Context**: Extracts user and organisation IDs from tokens
+- **Protected Endpoints**: Requires authentication for job operations
+- **Row Level Security**: PostgreSQL RLS policies for data isolation
+
+### Rate Limiting
+- **IP-Based Limiting**: Token bucket algorithm (5 requests/second default)
+- **Client IP Detection**: Supports X-Forwarded-For headers for proxies
+- **Crawler Rate Limiting**: Configurable delays between URL requests
+- **Concurrency Controls**: Per-job worker limits
+
+### Request Security
+- **Input Validation**: URL and parameter sanitisation
+- **Error Sanitisation**: Prevents information leakage
+- **CORS Configuration**: Controlled cross-origin access
+- **Request Tracking**: Unique request IDs for audit trails
+
+## Deployment Architecture
+
+### Infrastructure
+- **Hosting**: Fly.io with auto-scaling
+- **Database**: PostgreSQL with connection pooling
+- **CDN**: Cloudflare for caching and protection
+- **Monitoring**: Sentry for errors and performance
+- **Authentication**: Supabase Auth with custom domain
+
+### Configuration
+- **Environment Variables**: Centralised configuration
+- **Database Migrations**: Schema versioning and updates
+- **Health Checks**: Application and database monitoring
+- **Graceful Shutdown**: Proper cleanup on termination
+
+### Scalability Considerations
+- **Worker Pool Scaling**: Configurable worker counts per job
+- **Database Connection Limits**: Optimised pooling settings
+- **Task Batching**: Efficient bulk operations
+- **Memory Management**: Controlled resource usage
+
+## Performance Optimisation
+
+### Database Optimisations
+- **Connection Pooling**: 25 max open, 10 max idle connections
+- **Query Optimisation**: Indexed queries and efficient joins
+- **Batch Operations**: Reduce individual database calls
+- **Lock-Free Task Claiming**: `FOR UPDATE SKIP LOCKED` prevents contention
+
+### Crawler Optimisations
+- **Concurrent Processing**: Multiple workers process URLs simultaneously
+- **Connection Reuse**: HTTP client connection pooling
+- **Rate Limiting**: Prevents overwhelming target servers
+- **Response Streaming**: Efficient memory usage for large responses
+
+### Memory Management
+- **Resource Cleanup**: Proper goroutine and connection cleanup
+- **Buffer Management**: Controlled memory allocation
+- **Garbage Collection**: Optimised for low-latency operations

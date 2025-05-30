@@ -29,6 +29,7 @@ func (q *DbQueue) Execute(ctx context.Context, fn func(*sql.Tx) error) error {
 	// Begin transaction
 	tx, err := q.db.BeginTx(ctx, nil)
 	if err != nil {
+		sentry.CaptureException(err)
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
 	defer tx.Rollback()
@@ -40,6 +41,7 @@ func (q *DbQueue) Execute(ctx context.Context, fn func(*sql.Tx) error) error {
 
 	// Commit the transaction
 	if err := tx.Commit(); err != nil {
+		sentry.CaptureException(err)
 		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
@@ -300,6 +302,7 @@ func (q *DbQueue) CleanupStuckJobs(ctx context.Context) error {
 	if err != nil {
 		span.SetTag("error", "true")
 		span.SetData("error.message", err.Error())
+		sentry.CaptureException(err)
 		return fmt.Errorf("failed to cleanup stuck jobs: %w", err)
 	}
 

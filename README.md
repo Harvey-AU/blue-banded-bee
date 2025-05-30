@@ -31,7 +31,7 @@ go run ./cmd/app/main.go
 
 ## Development Status
 
-Current development stage: Stage 3 - PostgreSQL Migration & Performance Optimisation
+Current development stage: Stage 4 - Core Authentication & MVP Interface (Nearly Complete)
 
 ### Project Stages
 
@@ -39,15 +39,13 @@ Current development stage: Stage 3 - PostgreSQL Migration & Performance Optimisa
 - ✅ Stage 1: Core Setup & Basic Crawling
 - ✅ Stage 2: Multi-domain Support & Job Queue Architecture
 - ✅ Stage 3: PostgreSQL Migration & Performance Optimisation
-  - ✅ Database migration to PostgreSQL completed
-  - ✅ Enhanced sitemap processing implemented
-  - ✅ Improved URL handling and normalisation
-  - ✅ Major code refactoring and architecture improvements
-  - ✅ Worker pool optimisation in progress
-  - ✅ Batch processing implementation pending
-- ⭕ Stage 4: Auth & User Management
-- ⭕ Stage 5: Billing & Subscriptions
-- ⭕ Stage 6: Webflow Integration & Launch
+- ✅ Stage 4: Core Authentication & MVP Interface
+  - ✅ Supabase authentication system implemented
+  - ✅ RESTful API infrastructure complete
+  - ✅ Multi-tenant organisation model
+  - 🔄 MVP web interface development (in progress)
+- 🔄 Stage 5: Billing & Subscriptions
+- 🔄 Stage 6: Multi-Interface Expansion & Launch
 
 See our [detailed roadmap](./Roadmap.md) for more information.
 
@@ -70,16 +68,22 @@ See our [detailed roadmap](./Roadmap.md) for more information.
 
 ## Documentation
 
-Our documentation is organised under `docs/`:
+### Core Documentation
 
-- [Codebase Structure](docs/reference/codebase-structure.md) - Overview of the codebase structure
-- [File Map](docs/reference/file-map.md) - List of files in project
-- [API Reference](docs/reference/api-reference.md) - API endpoints and usage
-- [Development Guide](docs/guides/development.md) - Setup and local development
-- [Deployment Guide](docs/guides/deployment.md) - Deployment instructions
-- [Core Concepts](docs/architecture/mental-model.md) - Core concepts and design
-- [Implementation Details](docs/architecture/implementation-details.md) - System architecture
-- [Auth Integration](docs/reference/auth-integration.md) - Authentication implementation
+- **[Architecture](docs/ARCHITECTURE.md)** - System design, components, worker pools, job lifecycle, and technical concepts
+- **[Development Guide](docs/DEVELOPMENT.md)** - Setup, local development, testing, debugging, and contributing guidelines
+- **[API Reference](docs/API.md)** - Complete REST API endpoints, authentication, and response formats
+- **[Database Reference](docs/DATABASE.md)** - PostgreSQL schema, queries, performance optimisation, and operations
+
+### Future Plans
+
+- **[UI Implementation](docs/plans/ui-implementation.md)** - Web interface development with Web Components
+- **[Webflow Integration](docs/plans/webflow-integration.md)** - Webflow marketplace and Designer extension strategy
+- **[Scaling Strategy](docs/plans/scaling-strategy.md)** - Dynamic worker scaling, priority systems, and performance optimisation
+
+### Project Status
+
+See **[Roadmap.md](./Roadmap.md)** for current development status and completed features.
 
 ## Security
 

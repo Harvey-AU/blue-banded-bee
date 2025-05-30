@@ -17,7 +17,8 @@
       "Bash(mv:*)",
       "mcp__ide__getDiagnostics",
       "Bash(gtimeout:*)",
-      "Bash(go list:*)"
+      "Bash(go list:*)",
+      "Bash(cp:*)"
     ],
     "deny": []
   },
