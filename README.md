@@ -1,6 +1,6 @@
 # Blue Banded Bee 🐝
 
-Automatically warm site caches (especially built for [Webflow](https://www.webflow.com)) after publishing to improve initial page load times. Named after [a special little bee](https://www.aussiebee.com.au/blue-banded-bee-information.html) that is native to where we live in Castlemaine, Victoria Australia.
+Automatically warm site caches (especially built for [Webflow](https://www.webflow.com)) after publishing to improve initial page load times. Named after [a special little bee](https://www.aussiebee.com.au/blue-banded-bee-information.html) native to where we live in Castlemaine, Victoria, Australia.
 
 ## Features
 
