@@ -45,6 +45,9 @@ func (h *Handler) SetupRoutes(mux *http.ServeMux) {
 
 	// Static files
 	mux.HandleFunc("/test-login.html", h.ServeTestLogin)
+	
+	// Web Components static files
+	mux.Handle("/js/", http.StripPrefix("/js/", http.FileServer(http.Dir("./web/dist/"))))
 }
 
 // HealthCheck handles basic health check requests

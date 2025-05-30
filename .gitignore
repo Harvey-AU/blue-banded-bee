@@ -28,3 +28,7 @@ logs/
 
 # Testing
 coverage/
+
+# Web Components - Node.js build dependencies
+web/node_modules/
+web/package-lock.json

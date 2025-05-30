@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Blue Banded Bee - Webflow Integration Example</title>
+    
+    <!-- This is what you'll add to your Webflow pages -->
+    <style>
+        /* Your Webflow styles go here */
+        .dashboard-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .jobs-grid {
+            display: grid;
+            gap: 20px;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        }
+        
+        .job-card {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 20px;
+            background: white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .job-card.template {
+            display: none;
+        }
+        
+        .job-domain {
+            margin: 0 0 10px 0;
+            font-size: 18px;
+            font-weight: 600;
+        }
+        
+        .job-status {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 500;
+            text-transform: uppercase;
+        }
+        
+        .job-status.running { background: #e3f2fd; color: #1976d2; }
+        .job-status.completed { background: #e8f5e8; color: #2e7d32; }
+        .job-status.failed { background: #ffebee; color: #d32f2f; }
+        
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #f0f0f0;
+            border-radius: 4px;
+            margin: 15px 0;
+            overflow: hidden;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #0066ff, #00b4d8);
+            transition: width 0.3s ease;
+        }
+        
+        .job-stats {
+            margin: 10px 0 0 0;
+            color: #666;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <!-- This is what you'll design in Webflow Designer -->
+    <div class="dashboard-container">
+        <h1>Your Cache Warming Jobs</h1>
+        
+        <div class="jobs-grid">
+            <!-- Template job card - Design this in Webflow -->
+            <div class="job-card template">
+                <h3 class="job-domain" data-bind="domain">example.com</h3>
+                <span class="job-status" data-bind="status">running</span>
+                
+                <div class="progress-bar">
+                    <div class="progress-fill" data-style-bind="width:progress.percentage%"></div>
+                </div>
+                
+                <p class="job-stats" data-bind="progress_text">Loading...</p>
+            </div>
+        </div>
+        
+        <!-- Add this via HTML Embed in Webflow -->
+        <bb-data-loader 
+            endpoint="/v1/jobs"
+            template=".job-card.template"
+            target=".jobs-grid"
+            auto-load="true"
+            require-auth="true"
+            refresh-interval="30">
+        </bb-data-loader>
+    </div>
+
+    <!-- 
+    ===========================================
+    ADD THESE SCRIPTS TO YOUR WEBFLOW PAGE HEAD
+    ===========================================
+    -->
+    
+    <!-- 1. Supabase for authentication -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
+    <!-- 2. Initialize Supabase with your credentials -->
+    <script>
+        window.supabase = window.supabase.createClient(
+            'https://ezyjufvaxepjhknqhcap.supabase.co',
+            'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV6eWp1ZnZheGVwamhrbnFoY2FwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzIwNjk0OTAsImV4cCI6MjA0NzY0NTQ5MH0.YDHPu4Y8QQkIo6e6WZp6EYw0yQl4mZLlnVx4X0N_Lzk'
+        );
+    </script>
+    
+    <!-- 3. Blue Banded Bee Components -->
+    <script src="https://blue-banded-bee.fly.dev/js/bb-components.min.js"></script>
+    
+    <!-- 
+    ===========================================
+    THAT'S IT! Your dashboard is now functional
+    ===========================================
+    -->
+</body>
+</html>

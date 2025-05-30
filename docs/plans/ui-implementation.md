@@ -2,7 +2,67 @@
 
 ## Overview
 
-Blue Banded Bee's user interface will be built as a JavaScript application embedded within Webflow pages, providing a seamless integration between marketing content and application functionality.
+Blue Banded Bee's user interface consists of multiple touchpoints that work together to provide a comprehensive cache warming experience. The main BBB website (built on Webflow) serves as the primary dashboard, while additional interfaces provide contextual access points.
+
+## User Journeys & Interface Architecture
+
+### 1. Webflow Designer Integration Journey
+**User Flow:**
+1. In Webflow Designer → Open BBB app/extension
+2. Connect to Webflow project → Site publishes → Cache warming triggered automatically
+3. User sees modal of cache warming status in Webflow Designer
+4. Optional: Slack thread notifications if configured
+5. Click to view summary report in BBB main site
+6. Access detailed reports on BBB main site
+
+**Interface Components:**
+- Webflow Designer Extension (modal/sidebar panels)
+- Progress indicators and real-time status
+- Quick links to BBB main site
+
+### 2. Direct BBB Website Journey  
+**User Flow:**
+1. Go to BBB website (Webflow-hosted) → Register/login
+2. Register site to be crawled → Configure job settings
+3. Summary results appear in dashboard → View summary reports
+4. Access detailed reports and analytics → Configure Slack notifications
+
+**Interface Components:**
+- Full dashboard built as Webflow site with embedded Web Components
+- Complete job management interface
+- Comprehensive reporting and analytics
+- User account and organisation management
+
+### 3. Slack Integration Journey
+**User Flow:**  
+1. Start job via Slack command → Thread created with initial stats
+2. Progress updates posted as thread replies → Job completion summary
+3. Click link to BBB main site for detailed reports
+
+**Interface Components:**
+- Slack bot with threaded conversations
+- Real-time progress updates in Slack
+- Links to BBB main site for detailed analysis
+
+## Architecture Clarification
+
+**BBB Main Website (Webflow + Web Components):**
+- Primary user interface and dashboard
+- Built on Webflow for marketing integration
+- Interactive features via embedded Web Components
+- Complete job management, reporting, and user account features
+
+**Webflow Designer Extension:**
+- Lightweight modal/panel interface within Webflow Designer
+- Real-time progress indicators during cache warming
+- Quick actions and settings
+- Links to BBB main site for comprehensive features
+
+**Shared Infrastructure:**
+- Both interfaces use the same API endpoints (`/v1/*`)
+- Consistent authentication via Supabase Auth
+- Real-time updates via Supabase Realtime
+- Same Web Components library for consistent UX
 
 ## Architecture
 

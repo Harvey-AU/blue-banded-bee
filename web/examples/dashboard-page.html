@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Blue Banded Bee</title>
+    <style>
+        /* This would be your Webflow-generated CSS */
+        .dashboard-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .dashboard-header {
+            margin-bottom: 30px;
+        }
+        
+        .jobs-grid {
+            display: grid;
+            gap: 20px;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        }
+        
+        .job-card {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 20px;
+            background: white;
+        }
+        
+        .job-card.template {
+            display: none;
+        }
+        
+        .job-domain {
+            margin: 0 0 10px 0;
+            font-size: 18px;
+            font-weight: 600;
+        }
+        
+        .job-status {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 500;
+            text-transform: uppercase;
+        }
+        
+        .job-status.running {
+            background: #e3f2fd;
+            color: #1976d2;
+        }
+        
+        .job-status.completed {
+            background: #e8f5e8;
+            color: #2e7d32;
+        }
+        
+        .job-status.failed {
+            background: #ffebee;
+            color: #d32f2f;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #f0f0f0;
+            border-radius: 4px;
+            margin: 15px 0;
+            overflow: hidden;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #0066ff, #00b4d8);
+            transition: width 0.3s ease;
+        }
+        
+        .job-stats {
+            margin: 10px 0 0 0;
+            color: #666;
+            font-size: 14px;
+        }
+        
+        .job-actions {
+            margin-top: 15px;
+            display: flex;
+            gap: 10px;
+        }
+        
+        .btn-small {
+            padding: 6px 12px;
+            font-size: 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            text-decoration: none;
+            color: #333;
+            background: white;
+        }
+        
+        .btn-small:hover {
+            background: #f8f9fa;
+        }
+    </style>
+</head>
+<body>
+    <!-- This is what you'd build in Webflow Designer -->
+    <div class="dashboard-container">
+        <div class="dashboard-header">
+            <h1>Your Cache Warming Jobs</h1>
+            <p>Monitor and manage your website cache warming jobs</p>
+        </div>
+        
+        <!-- Job Grid -->
+        <div class="jobs-grid">
+            <!-- Template job card (designed in Webflow) -->
+            <div class="job-card template">
+                <h3 class="job-domain" data-bind="domain">example.com</h3>
+                <span class="job-status" data-bind="status">running</span>
+                
+                <div class="progress-bar">
+                    <div class="progress-fill" data-style-bind="width:progress_percentage"></div>
+                </div>
+                
+                <p class="job-stats" data-bind="progress_text">45 of 100 pages complete</p>
+                
+                <div class="job-actions">
+                    <a href="#" class="btn-small" data-link="job-details">View Details</a>
+                    <button class="btn-small" data-link="cancel-job">Cancel</button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Data loader component -->
+        <bb-data-loader 
+            endpoint="/v1/jobs"
+            template=".job-card.template"
+            target=".jobs-grid"
+            auto-load="true"
+            require-auth="true"
+            refresh-interval="30">
+        </bb-data-loader>
+    </div>
+    
+    <!-- Load Blue Banded Bee components -->
+    <script src="../dist/bb-components.js"></script>
+</body>
+</html>
