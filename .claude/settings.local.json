@@ -18,7 +18,9 @@
       "mcp__ide__getDiagnostics",
       "Bash(gtimeout:*)",
       "Bash(go list:*)",
-      "Bash(cp:*)"
+      "Bash(cp:*)",
+      "Bash(mkdir:*)",
+      "Bash(npm run build:*)"
     ],
     "deny": []
   },
