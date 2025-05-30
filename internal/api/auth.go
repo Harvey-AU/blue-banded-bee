@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/Harvey-AU/blue-banded-bee/internal/auth"
+	"github.com/getsentry/sentry-go"
 	"github.com/rs/zerolog/log"
 )
 
@@ -77,6 +78,7 @@ func (h *Handler) AuthRegister(w http.ResponseWriter, r *http.Request) {
 	// Create user with organisation atomically
 	user, org, err := h.DB.CreateUserWithOrganisation(req.UserID, req.Email, req.FullName, orgName)
 	if err != nil {
+		sentry.CaptureException(err)
 		log.Error().Err(err).Str("user_id", req.UserID).Msg("Failed to create user with organisation")
 		InternalError(w, r, err)
 		return
@@ -145,6 +147,7 @@ func (h *Handler) AuthProfile(w http.ResponseWriter, r *http.Request) {
 			NotFound(w, r, "User not found")
 			return
 		}
+		sentry.CaptureException(err)
 		log.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get user")
 		InternalError(w, r, err)
 		return

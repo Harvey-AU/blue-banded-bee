@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/getsentry/sentry-go"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/rs/zerolog/log"
 )
@@ -47,17 +48,22 @@ func AuthMiddleware(next http.Handler) http.Handler {
 		if err != nil {
 			log.Warn().Err(err).Str("token_prefix", tokenString[:min(10, len(tokenString))]).Msg("JWT validation failed")
 			
-			// Determine specific error type
+			// Determine specific error type and capture critical errors in Sentry
 			errorMsg := "Invalid authentication token"
 			statusCode := http.StatusUnauthorized
 			
 			if strings.Contains(err.Error(), "expired") {
 				errorMsg = "Authentication token has expired"
+				// Don't capture expired tokens - this is normal user behavior
 			} else if strings.Contains(err.Error(), "signature") {
 				errorMsg = "Invalid token signature"
+				// Capture invalid signatures - potential security issue
+				sentry.CaptureException(err)
 			} else if strings.Contains(err.Error(), "SUPABASE_JWT_SECRET") {
 				errorMsg = "Authentication service misconfigured"
 				statusCode = http.StatusInternalServerError
+				// Capture service misconfigurations - critical system error
+				sentry.CaptureException(err)
 			}
 			
 			writeAuthError(w, errorMsg, statusCode)
