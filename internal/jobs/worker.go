@@ -122,11 +122,13 @@ func (wp *WorkerPool) Start(ctx context.Context) {
 
 	// Run initial cleanup
 	if err := wp.CleanupStuckJobs(ctx); err != nil {
+		sentry.CaptureException(err)
 		log.Error().Err(err).Msg("Failed to perform initial job cleanup")
 	}
 
 	// Recover jobs that were running before restart
 	if err := wp.recoverRunningJobs(ctx); err != nil {
+		sentry.CaptureException(err)
 		log.Error().Err(err).Msg("Failed to recover running jobs on startup")
 	}
 
@@ -361,6 +363,7 @@ func (wp *WorkerPool) processNextTask(ctx context.Context) error {
 				task.Error = err.Error()
 				updErr := wp.dbQueue.UpdateTaskStatus(ctx, task)
 				if updErr != nil {
+					sentry.CaptureException(updErr)
 					log.Error().Err(updErr).Str("task_id", task.ID).Msg("Failed to mark task as failed")
 				}
 			} else {
@@ -373,11 +376,13 @@ func (wp *WorkerPool) processNextTask(ctx context.Context) error {
 				task.ContentType = result.ContentType
 				updErr := wp.dbQueue.UpdateTaskStatus(ctx, task)
 				if updErr != nil {
+					sentry.CaptureException(updErr)
 					log.Error().Err(updErr).Str("task_id", task.ID).Msg("Failed to mark task as completed")
 				}
 			}
 			// update job progress
 			if err := wp.dbQueue.UpdateJobProgress(ctx, task.JobID); err != nil {
+				sentry.CaptureException(err)
 				log.Error().Err(err).Str("job_id", task.JobID).Msg("Failed to update job progress via helper")
 			}
 			return nil

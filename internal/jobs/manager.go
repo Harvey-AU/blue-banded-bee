@@ -114,6 +114,7 @@ func (jm *JobManager) CreateJob(ctx context.Context, options *JobOptions) (*Job,
 	if err != nil {
 		span.SetTag("error", "true")
 		span.SetData("error.message", err.Error())
+		sentry.CaptureException(err)
 		return nil, fmt.Errorf("failed to create job: %w", err)
 	}
 
@@ -206,6 +207,7 @@ func (jm *JobManager) StartJob(ctx context.Context, jobID string) error {
 	if err != nil {
 		span.SetTag("error", "true")
 		span.SetData("error.message", err.Error())
+		sentry.CaptureException(err)
 		return fmt.Errorf("failed to get job: %w", err)
 	}
 
@@ -247,6 +249,7 @@ func (jm *JobManager) StartJob(ctx context.Context, jobID string) error {
 	if err != nil {
 		span.SetTag("error", "true")
 		span.SetData("error.message", err.Error())
+		sentry.CaptureException(err)
 		return fmt.Errorf("failed to update job status: %w", err)
 	}
 
@@ -387,6 +390,7 @@ func (jm *JobManager) CancelJob(ctx context.Context, jobID string) error {
 	if err != nil {
 		span.SetTag("error", "true")
 		span.SetData("error.message", err.Error())
+		sentry.CaptureException(err)
 		return fmt.Errorf("failed to get job: %w", err)
 	}
 
@@ -425,6 +429,7 @@ func (jm *JobManager) CancelJob(ctx context.Context, jobID string) error {
 	if err != nil {
 		span.SetTag("error", "true")
 		span.SetData("error.message", err.Error())
+		sentry.CaptureException(err)
 		log.Error().Err(err).Str("job_id", job.ID).Msg("Failed to cancel job")
 	}
 

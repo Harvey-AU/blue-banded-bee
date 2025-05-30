@@ -15,6 +15,7 @@ import (
 	"github.com/Harvey-AU/blue-banded-bee/internal/crawler"
 	"github.com/Harvey-AU/blue-banded-bee/internal/db"
 	"github.com/Harvey-AU/blue-banded-bee/internal/jobs"
+	"github.com/getsentry/sentry-go"
 	"github.com/joho/godotenv"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -43,9 +44,35 @@ func main() {
 
 	setupLogging(config)
 
+	// Initialise Sentry for error tracking and performance monitoring
+	if config.SentryDSN != "" {
+		err := sentry.Init(sentry.ClientOptions{
+			Dsn:              config.SentryDSN,
+			Environment:      config.Env,
+			TracesSampleRate: func() float64 {
+				if config.Env == "production" {
+					return 0.1 // 10% sampling in production
+				}
+				return 1.0 // 100% sampling in development
+			}(),
+			AttachStacktrace: true,
+			Debug:           config.Env == "development",
+		})
+		if err != nil {
+			log.Warn().Err(err).Msg("Failed to initialise Sentry")
+		} else {
+			log.Info().Str("environment", config.Env).Msg("Sentry initialised successfully")
+			// Ensure Sentry flushes before application exits
+			defer sentry.Flush(2 * time.Second)
+		}
+	} else {
+		log.Warn().Msg("Sentry DSN not configured, error tracking disabled")
+	}
+
 	// Connect to PostgreSQL
 	pgDB, err := db.InitFromEnv()
 	if err != nil {
+		sentry.CaptureException(err)
 		log.Fatal().Err(err).Msg("Failed to connect to PostgreSQL database")
 	}
 	defer pgDB.Close()
@@ -89,6 +116,7 @@ func main() {
 				RETURNING id
 			`)
 			if err != nil {
+				sentry.CaptureException(err)
 				log.Error().Err(err).Msg("Failed to update completed jobs")
 				continue
 			}
@@ -158,6 +186,7 @@ func main() {
 
 		// Stop accepting new requests
 		if err := server.Shutdown(ctx); err != nil {
+			sentry.CaptureException(err)
 			log.Error().Err(err).Msg("Server forced to shutdown")
 		}
 
@@ -167,6 +196,7 @@ func main() {
 	// Start the server
 	log.Info().Str("port", config.Port).Msg("Starting server")
 	if err := server.ListenAndServe(); err != http.ErrServerClosed {
+		sentry.CaptureException(err)
 		log.Fatal().Err(err).Msg("Server error")
 	}
 
