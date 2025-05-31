@@ -207,7 +207,7 @@ export class BBAuthLogin extends BBBaseComponent {
   }
 
   handleSuccessfulLogin() {
-    const redirectUrl = this.getAttribute('redirect-url') || '/dashboard';
+    const redirectUrl = this.hasAttribute('redirect-url') ? this.getAttribute('redirect-url') : '/dashboard';
     
     this.dispatchCustomEvent('login-success', { 
       user: authManager.getUser(),
@@ -216,7 +216,7 @@ export class BBAuthLogin extends BBBaseComponent {
 
     // Redirect if not prevented by parent
     setTimeout(() => {
-      if (redirectUrl && redirectUrl !== window.location.pathname) {
+      if (redirectUrl && redirectUrl !== '' && redirectUrl !== window.location.pathname) {
         window.location.href = redirectUrl;
       }
     }, 100);
