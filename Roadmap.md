@@ -279,33 +279,37 @@ Detailed plan available in [docs/organisation-model.md](docs/plans/organisation-
   - [ ] Performance analytics and trend visualisation
   - [ ] Responsive design compatibility testing
 
-### 🔴 Webflow Designer Extension
+### 🔴 Webflow Integration
 
 - [ ] **Webflow Developer Registration**
-  - [ ] Register as a Webflow developer and create Data Client App
-  - [ ] Set up OAuth support with proper scopes and permissions
-- [ ] **Extension Development**
-  - [ ] Develop Designer Extension with progress indicators
-  - [ ] Create error reporting interface and configuration panel
-  - [ ] Implement real-time updates via API client library
-  - [ ] OAuth authentication for extension-server communication
+  - [ ] Register as Webflow developer for Apps and Designer Extensions
+  - [ ] Set up OAuth integration with Webflow's publishing webhooks
+- [ ] **Designer Extension (Post-Publish Modal)**
+  - [ ] Simple modal showing cache warming status after site publish
+  - [ ] High-level progress indicators and completion summary
+  - [ ] Link to main website for detailed job information
+  - [ ] Lightweight interface that can be easily dismissed
+- [ ] **Webflow App (Site Management)**
+  - [ ] Full site management interface within Webflow dashboard
+  - [ ] Webhook integration with Webflow's publishing events
+  - [ ] Automatic cache warming triggers on site publish
 
 ### 🔴 Slack Integration
 
 - [ ] **Slack Application Development**
-  - [ ] Create Slack app with slash commands and interactive components
-  - [ ] Implement API key authentication for Slack integration
-  - [ ] Develop job creation workflow via Slack commands
-  - [ ] Job status cards with progress bars and quick action buttons
-- [ ] **Notification & Collaboration**
-  - [ ] Webhook notifications for job completion events
-  - [ ] Real-time job progress updates in Slack threads
-  - [ ] Error notifications with troubleshooting links
-  - [ ] Team collaboration features (job sharing, mentions, threading)
-- [ ] **Documentation & Support**
-  - [ ] Slack app installation documentation
-  - [ ] In-app help commands and usage examples
-  - [ ] User onboarding flow within Slack
+  - [ ] Create Slack app with slash commands (`/bb warm example.com`)
+  - [ ] Integrate with existing Supabase Auth system (no separate API keys)
+  - [ ] Simple job creation workflow via slash commands
+- [ ] **Threading & Progress Updates**
+  - [ ] Create thread for each job with initial status
+  - [ ] Post progress updates as thread replies
+  - [ ] Final completion summary with link to main website
+  - [ ] Error notifications with basic troubleshooting info
+- [ ] **Commands & Help**
+  - [ ] `/bb warm [domain]` - Start cache warming job
+  - [ ] `/bb status [job-id]` - Get job status (optional)
+  - [ ] `/bb help` - Show available commands
+  - [ ] Simple installation and setup documentation
 
 ## ⚪ Stage 5: Subscriptions & Monetisation
 
