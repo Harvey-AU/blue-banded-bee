@@ -311,7 +311,14 @@ Detailed plan available in [docs/plans/ui-implementation.md](docs/plans/ui-imple
 - [ ] Add basic limits
 - [ ] Set up usage reporting functionality
 
-## ⚪ Stage 5: Billing & Expanded Interface
+## ⚪ Stage 5: Performance & Scaling
+
+### 🔴 Supabase Performance Integration
+
+- [ ] **Real-time Dashboard Updates** - Replace polling with WebSocket subscriptions for live job progress
+- [ ] **Database Functions for Analytics** - Move CPU-intensive queries from Go to PostgreSQL functions  
+- [ ] **File Storage Implementation** - Store crawler logs, sitemap caches, and error reports in Supabase Storage
+- [ ] **Enhanced Database Operations** - Optimise task acquisition and progress calculations with database-side logic
 
 ### 🔴 Implement Paddle integration
 
@@ -350,9 +357,14 @@ Detailed plan available in [docs/plans/ui-implementation.md](docs/plans/ui-imple
   - [ ] Set up usage warnings
   - [ ] Implement grace period
 
-## ⚪ Stage 6: Multi-Interface Expansion & Launch
+## ⚪ Stage 6: Multi-tenant & Teams
 
-Detailed plan available in [docs/webflow-integration-plan.md](docs/plans/webflow-integration-plan.md) and [docs/multi-interface-architecture.md](docs/architecture/multi-interface-architecture.md)
+### 🔴 Supabase Multi-tenant Integration
+
+- [ ] **Row Level Security Enhancement** - Replace Go auth middleware with database-level policies
+- [ ] **Organisation Data Isolation** - Automatic data filtering based on user's organisation  
+- [ ] **Scheduled Jobs via Database** - Cron-like functionality for recurring cache warming using database functions
+- [ ] **Team Collaboration Features** - Live presence indicators for multi-user organisations
 
 ### 🔴 Complete API Client Libraries
 
@@ -380,8 +392,9 @@ Detailed plan available in [docs/webflow-integration-plan.md](docs/plans/webflow
 
 ### 🔴 Automatic Trigger & Scheduling
 
+- [ ] **Supabase Edge Functions for Webhooks** - Handle Webflow publish events without exposing main API
 - [ ] Implement webhook subscription for the `site_publish` event
-- [ ] Build secure endpoint to receive webhook POST requests
+- [ ] Build secure endpoint to receive webhook POST requests via Edge Functions
 - [ ] Verify webhook signatures using `x-webflow-signature` headers
 - [ ] Create configuration UI for scheduling options
 - [ ] Implement cron-like scheduler for recurring runs

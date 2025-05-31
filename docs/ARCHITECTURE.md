@@ -251,6 +251,8 @@ sentry.Init(sentry.ClientOptions{
 - **CDN**: Cloudflare for caching and protection
 - **Monitoring**: Sentry for errors and performance
 - **Authentication**: Supabase Auth with custom domain
+- **Real-time**: Supabase Realtime for live job progress updates
+- **Storage**: Supabase Storage for logs and file assets
 
 ### Configuration
 - **Environment Variables**: Centralised configuration
@@ -282,3 +284,30 @@ sentry.Init(sentry.ClientOptions{
 - **Resource Cleanup**: Proper goroutine and connection cleanup
 - **Buffer Management**: Controlled memory allocation
 - **Garbage Collection**: Optimised for low-latency operations
+
+## Supabase Integration Strategy
+
+### Real-time Features (Stage 4+)
+- **Live Job Progress**: Replace polling with WebSocket subscriptions for instant updates
+- **Dashboard Updates**: Real-time status changes in Web Components without refresh
+- **Team Collaboration**: Live presence indicators for multi-user organisations
+
+### Database Functions (Stage 5)
+- **Complex Analytics**: Move CPU-intensive queries from Go to PostgreSQL functions
+- **Task Acquisition**: Optimise worker task claiming with database-side logic
+- **Progress Calculations**: Real-time progress updates via database triggers
+
+### Edge Functions (Stage 6+)
+- **Webhook Processing**: Handle Webflow publish events without exposing main API
+- **Scheduled Jobs**: Cron-like functionality for recurring cache warming
+- **Integration Endpoints**: Lightweight processing for third-party integrations
+
+### File Storage (Stage 5)
+- **Crawler Logs**: Store detailed crawling logs and error reports
+- **Sitemap Caching**: Cache parsed sitemaps for faster job processing
+- **Screenshots**: Optional page screenshots for debugging failed crawls
+
+### Row Level Security Enhancement (Stage 6)
+- **Multi-tenant Data Isolation**: Replace Go auth middleware with database-level policies
+- **Organisation Access**: Automatic data filtering based on user's organisation
+- **Audit Trails**: Database-enforced access logging and compliance
