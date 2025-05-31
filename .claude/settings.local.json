@@ -41,7 +41,8 @@
       "mcp__sentry__find_issues",
       "mcp__sentry__find_dsns",
       "WebFetch(domain:docs.anthropic.com)",
-      "WebFetch(domain:github.com)"
+      "WebFetch(domain:github.com)",
+      "mcp__playwright__browser_take_screenshot"
     ],
     "deny": []
   },

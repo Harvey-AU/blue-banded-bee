@@ -31,7 +31,6 @@ COPY --from=builder /app/test-login.html .
 COPY --from=builder /app/test-components.html .
 COPY --from=builder /app/test-data-components.html .
 COPY --from=builder /app/dashboard.html .
-COPY --from=builder /app/dashboard-new.html .
 COPY --from=builder /app/web/dist ./web/dist
 COPY --from=builder /app/web/examples ./web/examples
 
