@@ -1,21 +1,5 @@
 # Roadmap
 
-## Current Status Overview
-
-- PostgreSQL migration completed (now using Supabase after briefly using Postgres in Fly)
-- Successfully deployed to Fly.io with verified functionality
-- Local development environment established with PostgreSQL
-- **Production system fully operational** - processing jobs, tasks and recording results successfully
-- Worker pool using PostgreSQL's row-level locking implemented and stable
-- Enhanced sitemap processing with improved URL handling and normalisation
-- Improved link discovery and URL validation across the codebase
-- Completed major code refactoring to improve architecture and maintainability
-- Removed unnecessary depth functionality from the codebase
-- **Fixed critical production database schema mismatch** (v0.3.8) - task insertion now working properly
-- **Complete Supabase Authentication System** (v0.4.0) - Multi-tenant auth with 8 social providers, custom domain, protected endpoints
-- **RESTful API Infrastructure** (v0.4.2) - Complete API overhaul with standardised responses, middleware stack, `/v1/*` endpoints, request tracking, testing tools
-- **Web Components MVP Interface** (v0.5.0) - Production-ready frontend infrastructure with vanilla Web Components for Webflow integration
-
 ## ✅ Stage 0: Project Setup & Infrastructure
 
 ### ✅ Development Environment Setup
@@ -203,7 +187,7 @@
   - [x] Remove unnecessary wrapping functions
 - [x] Clean up API endpoints
   - [x] Document endpoints to consolidate or remove
-  - [x] Plan endpoint implementation simplification  
+  - [x] Plan endpoint implementation simplification
   - [x] Standardise error handling approach
   - [x] Implementation plan completed in [docs/plans/api-cleanup.md](docs/plans/api-cleanup.md)
 - [x] Fix metrics collection (plan created)
@@ -253,234 +237,174 @@ Detailed plan available in [docs/organisation-model.md](docs/plans/organisation-
 - [x] Auto-create organisation when user signs up
 - [x] Create shared access to all jobs/tasks/reports within organisation
 
-### ✅ API-First Architecture Development (High Priority)
+### ✅ API-First Architecture Development (Completed v0.4.2)
 
-Detailed plan available in [docs/multi-interface-architecture.md](docs/architecture/multi-interface-architecture.md) and [docs/reference/api-reference.md](docs/reference/api-reference.md)
-
-- [x] Design comprehensive API for all interfaces
-  - [x] Define standard response format with request IDs and consistent error handling
-  - [x] Design interface-agnostic RESTful endpoints (`/v1/*` structure)
-  - [x] Implement comprehensive middleware stack (CORS, logging, rate limiting)
-  - [x] Create standardised error responses with proper HTTP status codes
-  - [ ] Document API with OpenAPI specification
-  - [ ] Create webhook system for notifications
-- [x] Implement multi-interface authentication foundations
-  - [x] Design JWT-based authentication structure with Supabase integration
-  - [x] Implement authentication middleware for protected endpoints
-  - [ ] Create API key system for integrations
-  - [ ] Plan OAuth support foundation
-- [ ] Develop API client library core
-  - [ ] Create core JavaScript client for API interaction
-  - [ ] Implement basic authentication handling
-  - [ ] Design extensible client architecture
+- [x] **Comprehensive RESTful API Infrastructure**
+  - [x] Standardised response format with request IDs and consistent error handling
+  - [x] Interface-agnostic RESTful endpoints (`/v1/*` structure)
+  - [x] Comprehensive middleware stack (CORS, logging, rate limiting)
+  - [x] Proper HTTP status codes and structured error responses
+- [x] **Multi-Interface Authentication Foundations**
+  - [x] JWT-based authentication with Supabase integration
+  - [x] Authentication middleware for protected endpoints
 
 ### ✅ MVP Interface Development (Completed v0.5.2)
 
-Detailed plan available in [docs/plans/ui-implementation.md](docs/plans/ui-implementation.md)
-
-- [x] Develop Web Components infrastructure
-  - [x] Create component-based architecture with HTML Custom Elements
-  - [x] Build `bb-data-loader` core component for API integration
-  - [x] Implement `bb-auth-login` component with Supabase authentication
-  - [x] Create production build system with Rollup bundling
-- [x] Webflow Integration Foundation
-  - [x] Integrate Supabase Auth via CDN approach
-  - [x] Implement template + data slots pattern for Webflow compatibility
-  - [x] Create comprehensive integration examples and documentation
-  - [x] Set up static file serving from Go application
+- [x] **Production-Ready Web Components Infrastructure**
+  - [x] Component-based architecture with HTML Custom Elements
+  - [x] `bb-data-loader` core component for API integration
+  - [x] `bb-auth-login` component with Supabase authentication
+  - [x] Production build system with Rollup bundling
+- [x] **Webflow Integration Foundation**
+  - [x] Supabase Auth integration via CDN approach
+  - [x] Template + data slots pattern for Webflow compatibility
+  - [x] Comprehensive integration examples and documentation
+  - [x] Static file serving from Go application
 - [x] **Web Components Testing & Refinement**
   - [x] Comprehensive testing infrastructure with authentication state management
-  - [x] Fixed OAuth redirect behaviour for both test and production scenarios
-  - [x] Simplified component design with intuitive redirect-url attribute handling
-  - [x] Production-ready components verified in both logged-in and logged-out states
+  - [x] Fixed OAuth redirect behaviour for test and production scenarios
+  - [x] Intuitive redirect-url attribute handling
+  - [x] Production verification in both logged-in and logged-out states
 
-### 🔴 Marketing Interface (Medium Priority)
+### 🔴 Enhanced Dashboard & User Interface
 
-- [ ] Create simple Webflow marketing page
-  - [ ] Design minimal home page with product explanation
-  - [ ] Set up basic navigation structure
-  - [ ] Implement call-to-action for early access
-
-### 🔴 Authentication Refinement (Low Priority)
-
-- [ ] **Test and refine multi-provider account linking** - Verify whether same email across different auth providers (Google, Facebook, etc.) creates linked accounts or separate users. Important for user experience but not urgent.
-
-### 🔴 Critical Infrastructure (Low Priority)
-
-- [ ] Set up database backup schedule and automated recovery testing - Essential for production safety
-- [ ] Implement member invitation system - Core functionality gap in organisation sharing
-
-### 🔴 Set up basic usage tracking
-
-- [ ] Implement usage counters
-- [ ] Add basic limits
-- [ ] Set up usage reporting functionality
-
-## ⚪ Stage 5: Performance & Scaling
-
-### 🔴 Supabase Performance Integration
-
-- [ ] **Real-time Dashboard Updates** - Replace polling with WebSocket subscriptions for live job progress
-- [ ] **Database Functions for Analytics** - Move CPU-intensive queries from Go to PostgreSQL functions  
-- [ ] **File Storage Implementation** - Store crawler logs, sitemap caches, and error reports in Supabase Storage
-- [ ] **Enhanced Database Operations** - Optimise task acquisition and progress calculations with database-side logic
-
-### 🔴 Implement Paddle integration
-
-- [ ] Set up Paddle account and config
-- [ ] Implement subscription webhooks
-- [ ] Add payment flow integration
-- [ ] Set up subscription plans
-- [ ] Implement checkout process
-
-### 🔴 Connect subscription status to organisations
-
-- [ ] Link subscriptions to organisations
-- [ ] Handle subscription updates
-- [ ] Implement plan changes
-- [ ] Add subscription status checks
-- [ ] Implement simple organisation-level usage quotas
-
-### 🔴 Complete User Interface Development
-
-- [ ] Expand Webflow site for full marketing
-  - [ ] Design and build complete marketing pages (features, pricing, etc.)
-  - [ ] Enhance dashboard layout and user account pages
-  - [ ] Implement Webflow Memberships integration
-- [ ] Develop simple organisation interface
-  - [ ] Add member invitation and management
-  - [ ] Create organisation dashboard with shared resources
-  - [ ] Add organisation-level reporting
-- [ ] Enhance embedded JavaScript application
-  - [ ] Expand job creation interface with advanced options
-  - [ ] Create comprehensive job results visualisation
-  - [ ] Implement account settings and profile management
-  - [ ] Develop notification system for completed jobs
-- [ ] Add usage limits/tracking
-  - [ ] Implement plan-based limits
-  - [ ] Add upgrade prompts
-  - [ ] Set up usage warnings
-  - [ ] Implement grace period
-
-## ⚪ Stage 6: Multi-tenant & Teams
-
-### 🔴 Supabase Multi-tenant Integration
-
-- [ ] **Row Level Security Enhancement** - Replace Go auth middleware with database-level policies
-- [ ] **Organisation Data Isolation** - Automatic data filtering based on user's organisation  
-- [ ] **Scheduled Jobs via Database** - Cron-like functionality for recurring cache warming using database functions
-- [ ] **Team Collaboration Features** - Live presence indicators for multi-user organisations
-
-### 🔴 Complete API Client Libraries
-
-- [ ] Extend API client library for multiple interfaces
-  - [ ] Enhance core JavaScript client
-  - [ ] Create interface-specific adapters
-  - [ ] Implement advanced authentication handling
+- [ ] **Job Management Interfaces**
+  - [ ] Job summary dashboard with status overview cards and performance metrics
+  - [ ] Job list interface with search, filtering, and bulk operations
+  - [ ] Job detail views with live progress tracking and task breakdown
+  - [ ] Error analysis with categorised failure reasons and retry mechanisms
+- [ ] **User Experience & Analytics**
+  - [ ] Account settings and profile management
+  - [ ] Notification system for completed jobs
+  - [ ] Performance trends and domain-specific analytics
+  - [ ] Advanced job creation interface with configuration options
+- [ ] **Organisation Management**
+  - [ ] Member invitation and management system
+  - [ ] Organisation dashboard with shared resources
+  - [ ] Organisation-level reporting and analytics
+- [ ] **Usage Management & Limits**
+  - [ ] Plan-based usage limits and tracking
+  - [ ] Upgrade prompts and usage warnings
+  - [ ] Grace period implementation
 
 ### 🔴 Webflow Designer Extension
 
-- [ ] Register as a Webflow developer
-- [ ] Create a Data Client App with OAuth support
-- [ ] Set up proper scopes and permissions
-- [ ] Develop Designer Extension with progress indicators
-- [ ] Create error reporting interface
-- [ ] Implement real-time updates via API client library
-- [ ] Build configuration panel for scheduler settings
-- [ ] Implement OAuth authentication for extension-server communication
-
-#### 🔴 Critical Database Management (Priority)
-
-- [ ] Set up backup schedule and automated recovery testing
-- [ ] Implement data retention policies
-- [ ] Create monitoring for database health
-
-### 🔴 Automatic Trigger & Scheduling
-
-- [ ] **Supabase Edge Functions for Webhooks** - Handle Webflow publish events without exposing main API
-- [ ] Implement webhook subscription for the `site_publish` event
-- [ ] Build secure endpoint to receive webhook POST requests via Edge Functions
-- [ ] Verify webhook signatures using `x-webflow-signature` headers
-- [ ] Create configuration UI for scheduling options
-- [ ] Implement cron-like scheduler for recurring runs
+- [ ] **Webflow Developer Registration**
+  - [ ] Register as a Webflow developer and create Data Client App
+  - [ ] Set up OAuth support with proper scopes and permissions
+- [ ] **Extension Development**
+  - [ ] Develop Designer Extension with progress indicators
+  - [ ] Create error reporting interface and configuration panel
+  - [ ] Implement real-time updates via API client library
+  - [ ] OAuth authentication for extension-server communication
 
 ### 🔴 Slack Integration
 
-- [ ] Create Slack app and configure commands
-- [ ] Implement API key authentication for Slack integration
-- [ ] Develop interactive message components
-- [ ] Set up webhook notifications for job events
-- [ ] Create documentation for Slack app installation
+- [ ] **Slack Application Development**
+  - [ ] Create Slack app with slash commands and interactive components
+  - [ ] Implement API key authentication for Slack integration
+  - [ ] Develop job creation workflow via Slack commands
+  - [ ] Job status cards with progress bars and quick action buttons
+- [ ] **Notification & Collaboration**
+  - [ ] Webhook notifications for job completion events
+  - [ ] Real-time job progress updates in Slack threads
+  - [ ] Error notifications with troubleshooting links
+  - [ ] Team collaboration features (job sharing, mentions, threading)
+- [ ] **Documentation & Support**
+  - [ ] Slack app installation documentation
+  - [ ] In-app help commands and usage examples
+  - [ ] User onboarding flow within Slack
 
-### 🔴 Launch & Documentation
+## ⚪ Stage 5: Subscriptions & Monetisation
 
-- [ ] Complete marketplace submission process
-- [ ] Create user documentation and help resources
-- [ ] Set up support channels
-- [ ] Implement analytics for usage tracking
-- [ ] Create onboarding flow for new users
+### 🔴 Payment Infrastructure
 
-## ⚪ Stage 7: Feature Refinement & Scaling
+- [ ] **Paddle Integration**
+  - [ ] Set up Paddle account and configuration
+  - [ ] Implement subscription webhooks and payment flow
+  - [ ] Create subscription plans and checkout process
+- [ ] **Subscription Management**
+  - [ ] Link subscriptions to organisations
+  - [ ] Handle subscription updates and plan changes
+  - [ ] Add subscription status checks
+- [ ] **Usage Tracking & Quotas**
+  - [ ] Implement usage counters and basic limits
+  - [ ] Set up usage reporting functionality
+  - [ ] Implement organisation-level usage quotas
 
-### 🔴 Features
+## ⚪ Stage 6: Platform Optimisation & Advanced Features
 
-- [ ] Enable 'Don't treat query strings as unique URLs'
-- [ ] Remove #anchor links as 'new page found' in find_links functionality
+### 🔴 Supabase Platform Integration
 
-### 🔴 Security & Audit Enhancements
+- [ ] **Real-time Features**
+  - [ ] Replace polling with WebSocket subscriptions for live job progress
+  - [ ] Live presence indicators for multi-user organisations
+  - [ ] Real-time dashboard updates without page refresh
+- [ ] **Database Optimisation**
+  - [ ] Move CPU-intensive analytics queries to PostgreSQL functions
+  - [ ] Optimise task acquisition with database-side logic
+  - [ ] Enhance Row Level Security policies for multi-tenant usage
+- [ ] **File Storage & Edge Functions**
+  - [ ] Store crawler logs, sitemap caches, and error reports in Supabase Storage
+  - [ ] Create Edge Functions for webhook handling and scheduled tasks
+  - [ ] Handle Webflow publish events via Edge Functions
 
-- [ ] **Login IP tracking** - Record IP addresses for all authentication events
-- [ ] **Session limits** - Implement concurrent session limits per user account
-- [ ] **Active job limits** - Prevent organisations from overwhelming system with excessive jobs
-- [ ] **Audit logging system** - Track login history, account changes, password resets
-- [ ] **Suspicious activity detection** - Monitor for unusual access patterns
-- [ ] **Compliance features** - GDPR data export, account deletion audit trails
+### 🔴 API & Integration Enhancements
 
-### 🔴 Clean up
+- [ ] **API Client Libraries**
+  - [ ] Enhance core JavaScript client with advanced authentication
+  - [ ] Create interface-specific adapters
+  - [ ] Document API with OpenAPI specification
+- [ ] **Webhook System**
+  - [ ] Implement webhook subscription for `site_publish` events
+  - [ ] Verify webhook signatures using `x-webflow-signature` headers
+  - [ ] Create webhook system for job completion notifications
+- [ ] **API Key Management**
+  - [ ] Create API key system for integrations
+  - [ ] Implement scoped permissions for different interfaces
 
-- [x] [docs/api-cleanup.md](docs/plans/api-cleanup.md) - Completed implementation
-- [ ] Database backup/recovery
+### 🔴 Infrastructure & Operations
 
-### 🔴 Task prioritisation
+- [ ] **Database Management**
+  - [ ] Set up backup schedule and automated recovery testing
+  - [ ] Implement data retention policies
+  - [ ] Create comprehensive database health monitoring
+- [ ] **Scheduling & Automation**
+  - [ ] Create configuration UI for scheduling options
+  - [ ] Implement cron-like scheduler for recurring runs
+  - [ ] Automatic cache warming based on Webflow publish events
 
-Rough idea here: [docs/task-prioritisation.md](docs/plans/task-prioritisation.md) - don't follow this precisely.
+## ⚪ Stage 7: Feature Refinement & Launch Preparation
 
-- [ ] Prioritisation of tasks by hierarchy in page
-- [ ] Prioritisation of tasks at job level
+### 🔴 Advanced Crawler Features
 
-### 🔴 Supabase Advanced Integration
+- [ ] **Task Prioritisation**
+  - [ ] Prioritisation by page hierarchy and importance
+  - [ ] Job-level task prioritisation options
+- [ ] **URL Processing Enhancements**
+  - [ ] Option to treat query strings as same URL
+  - [ ] Remove anchor links from link discovery
+  - [ ] Path inclusion/exclusion rules
 
-Detailed plan available in [docs/supabase-integration-strategy.md](./docs/supabase-integration-strategy.md)
+### 🔴 Security & Compliance
 
-- [ ] Implement PostgreSQL functions for core operations (task acquisition, job progress)
-- [ ] Create database triggers for automated state management
-- [ ] Set up Supabase Realtime for job/task monitoring
-- [ ] Implement Row Level Security policies for multi-tenant usage
-- [ ] Create Edge Functions for webhook handling and scheduled tasks
-- [ ] Optimise database interactions with native PostgreSQL features
+- [ ] **Enhanced Authentication**
+  - [ ] Test and refine multi-provider account linking
+  - [ ] Member invitation system for organisations
+- [ ] **Audit & Security Features**
+  - [ ] Login IP tracking and session limits
+  - [ ] Active job limits per organisation
+  - [ ] Audit logging for account changes and access history
+  - [ ] GDPR compliance features (data export, deletion audit trails)
+  - [ ] Suspicious activity detection and monitoring
 
----
+### 🔴 Launch & Marketing
 
-## Key Risk Areas
-
-### Immediate (Current Sprint)
-
-- [ ] **Database security & backups** - Critical to prevent data loss
-  - Mitigation: Implement automated backup schedule and periodic recovery testing
-
-### Short-term (Next 1-2 Sprints)
-
-- [ ] **Production performance under high concurrency**
-- [ ] **PostgreSQL connection pooling optimisation**
-- [ ] **Worker pool scaling**
-
-### Medium-term (Future Sprints)
-
-- [ ] **Deployment stability on Fly.io**
-- [ ] **Auth integration complexity**
-- [ ] **Batch processing error handling**
-
-### Long-term (Future Stages)
-
-- [ ] **Paddle webhook handling**
-- [ ] **Webflow API limitations**
+- [ ] **Marketing Infrastructure**
+  - [ ] Simple Webflow marketing page with product explanation
+  - [ ] Basic navigation structure and call-to-action
+  - [ ] User documentation and help resources
+- [ ] **Launch Preparation**
+  - [ ] Complete marketplace submission process
+  - [ ] Set up support channels and user onboarding
+  - [ ] Implement usage analytics and tracking
