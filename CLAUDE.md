@@ -29,9 +29,17 @@ DEBUG=true
 LOG_LEVEL=debug
 ```
 
-### Web Components
+### Dashboard Development
 ```bash
-# Build Web Components after changes
+# Dashboard uses vanilla JavaScript (no build process required)
+# Located at: dashboard.html
+# Uses attribute-based event handling: bb-action="action-name"
+# API integration: /v1/dashboard/stats, /v1/jobs
+```
+
+### Web Components (Legacy)
+```bash
+# Web Components exist but dashboard uses vanilla JS
 cd web && npm run build
 
 # Test Web Components locally
