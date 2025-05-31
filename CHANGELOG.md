@@ -8,6 +8,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Multiple version updates may occur on the same date, each with its own version number.
 Each version represents a distinct set of changes, even if released on the same day.
 
+## [0.5.1] – 2025-05-31
+
+### Added
+
+- **Dashboard Route**: Added `/dashboard` endpoint to resolve OAuth redirect 404 errors
+  - Created dashboard page handler in Go API to serve `dashboard.html`
+  - Updated Dockerfile to include dashboard.html in container deployment
+  - Fixed authentication component redirect behaviour to prevent 404 errors after successful login
+
+### Enhanced
+
+- **Web Components Testing Infrastructure**: Comprehensive test page improvements
+  - Added `test-mode` attribute to `bb-auth-login` component to prevent automatic redirects during testing
+  - Created logout functionality for testing different authentication states
+  - Enhanced test page with authentication status display and manual controls
+  - Fixed redirect issues that prevented proper component testing
+
+### Fixed
+
+- **Authentication Component Redirect Logic**: Resolved automatic redirect problems
+  - Modified `bb-auth-login` component to respect `test-mode="true"` attribute
+  - Updated redirect logic to properly handle empty redirect URLs
+  - Fixed issue where authenticated users were immediately redirected away from test pages
+
+### Documentation
+
+- **Supabase Integration Strategy**: Updated architecture documentation with platform integration recommendations
+  - Added comprehensive Supabase feature mapping to development roadmap stages
+  - Enhanced Architecture.md with real-time features, database functions, and Edge Functions strategy
+  - Updated Roadmap.md to incorporate Supabase capabilities across Stage 5 (Performance & Scaling) and Stage 6 (Multi-tenant & Teams)
+- **Development Workflow**: Enhanced CLAUDE.md with comprehensive working style guidance
+  - Added communication preferences, git workflow, and tech stack leverage guidelines
+  - Documented build process awareness, testing strategy, and configuration management practices
+  - Created clear guidance for future AI sessions to work more productively
+
+### Technical Details
+
+- Dashboard route serves existing dashboard.html with corrected Supabase credentials
+- Test mode in authentication component prevents both initial redirect checks and post-login redirects
+- Web Components require rebuild (`npm run build`) when source files are modified
+- Git workflow updated to commit freely but only push when ready for production testing
+
 ## [0.5.0] – 2025-05-30
 
 ### Added
