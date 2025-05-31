@@ -30,17 +30,24 @@ class SimpleAuthManager {
   }
 
   async waitForSupabase() {
-    // Check if Supabase is already loaded
-    if (window.supabase) {
-      this.supabase = window.supabase;
+    // Check if Supabase is already loaded and client is created
+    if (window.supabase && typeof window.supabase.createClient === 'function') {
+      // Create the client with the correct credentials
+      this.supabase = window.supabase.createClient(
+        "https://auth.bluebandedbee.co",
+        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdwemp0Ymd0ZGp4bmFjZGZ1anZ4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDUwNjYxNjMsImV4cCI6MjA2MDY0MjE2M30.eJjM2-3X8oXsFex_lQKvFkP1-_yLMHsueIn7_hCF6YI"
+      );
       return;
     }
 
     // Wait for it to load
     return new Promise((resolve) => {
       const checkSupabase = () => {
-        if (window.supabase) {
-          this.supabase = window.supabase;
+        if (window.supabase && typeof window.supabase.createClient === 'function') {
+          this.supabase = window.supabase.createClient(
+            "https://auth.bluebandedbee.co",
+            "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdwemp0Ymd0ZGp4bmFjZGZ1anZ4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDUwNjYxNjMsImV4cCI6MjA2MDY0MjE2M30.eJjM2-3X8oXsFex_lQKvFkP1-_yLMHsueIn7_hCF6YI"
+          );
           resolve();
         } else {
           setTimeout(checkSupabase, 100);

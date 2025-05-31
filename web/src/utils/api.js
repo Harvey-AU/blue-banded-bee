@@ -23,7 +23,13 @@ class BBApi {
       ...options.headers
     };
 
-    if (this.token) {
+    // Get current token from auth manager if available
+    if (window.BBComponents?.authManager) {
+      const session = await window.BBComponents.authManager.getSession();
+      if (session?.access_token) {
+        headers.Authorization = `Bearer ${session.access_token}`;
+      }
+    } else if (this.token) {
       headers.Authorization = `Bearer ${this.token}`;
     }
 
