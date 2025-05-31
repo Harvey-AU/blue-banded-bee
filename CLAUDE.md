@@ -143,7 +143,8 @@ Blue Banded Bee is a web cache warming service built in Go, primarily focused on
 
 **Git operations are allowed and encouraged**
 
-- Use `git add`, `git commit`, and `git push` to deploy changes
+- Use `git add` and `git commit` freely to save progress
+- **Only `git push` when ready to test in production** - documentation-only changes don't warrant deployment
 - Keep commit messages simple: 5-6 words, no AI generation references
 - Deploy via GitHub Actions (push to GitHub, not direct `fly deploy`)
 - Use the established commit message format without Claude attribution
@@ -174,3 +175,25 @@ Blue Banded Bee is a web cache warming service built in Go, primarily focused on
 - **Address actual problems** rather than creating workarounds
 - **Use incremental solutions** that can be understood step-by-step
 - **Question existing code** when working on related features - don't assume everything is necessary
+
+### Development Workflow Awareness
+
+**Build Process:**
+- When modifying Web Components, always run `npm run build` in `/web` directory before committing
+- Stage both `web/src/` and `web/dist/` files when committing component changes
+- Web Components require rebuilt dist files to function in production
+
+**Testing Strategy:**
+- Test functionality in both logged-in and logged-out states
+- Use `test-mode` attributes to prevent unwanted redirects during component testing
+- Create comprehensive test scenarios (component loading, authentication, mock data)
+
+**Configuration Management:**
+- Follow "single source of truth" patterns for credentials and config
+- Check multiple files when updating shared configuration (e.g., Supabase credentials)
+- Look for documentation files like `web/SUPABASE-CONFIG.md` that define correct values
+
+**Architecture Documentation:**
+- When proposing platform integrations, map them to specific roadmap stages
+- Update architecture docs proactively when making technical recommendations
+- Consider platform strengths: Go/Fly.io for performance-critical tasks, Supabase for real-time/auth/storage
