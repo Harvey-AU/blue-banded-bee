@@ -102,7 +102,7 @@ go run ./cmd/test_jobs/main.go
 - Never remove or modify existing functionality without explicit permission
 - When working on adjacent/related features, question if existing code is necessary/valuable
 - Propose changes in an additive manner unless removal is justified
-- Maintain backward compatibility unless explicitly directed otherwise
+- Clean up old versions - avoid creating multiple versions of files (e.g. dashboard.html, dashboard-new.html, dashboard-improved.html) to prevent state confusion
 
 ### Documentation Maintenance
 
@@ -177,14 +177,14 @@ go run ./cmd/test_jobs/main.go
 
 ### Tech Stack Leverage
 
-**Consider all capabilities of the current tech stack before building new code:**
+**Prefer utilising features of our tech stack over creating custom code:**
 
 - **Supabase**: Auth, real-time database, edge functions, file storage, database functions
-- **Sentry**: Error tracking, performance monitoring, alerting
+- **Sentry**: Error tracking, performance monitoring, alerting (accessible via MCP during development)
 - **Go/Fly.io**: Core application logic, worker pools, scaling
 - **PostgreSQL**: Database functions, triggers, row-level security
 
-**Always propose multiple solution options** explaining trade-offs between custom code vs existing platform capabilities.
+**Always propose multiple solution options** explaining trade-offs between custom code vs existing platform capabilities. If Supabase can perform a calculation and it makes sense, create it there rather than in Go.
 
 ### Problem-Solving Approach
 
