@@ -45,6 +45,7 @@ func (h *Handler) SetupRoutes(mux *http.ServeMux) {
 
 	// Static files
 	mux.HandleFunc("/test-login.html", h.ServeTestLogin)
+	mux.HandleFunc("/test-components.html", h.ServeTestComponents)
 	
 	// Web Components static files
 	mux.Handle("/js/", http.StripPrefix("/js/", http.FileServer(http.Dir("./web/dist/"))))
@@ -78,4 +79,9 @@ func (h *Handler) DatabaseHealthCheck(w http.ResponseWriter, r *http.Request) {
 // ServeTestLogin serves the test login page
 func (h *Handler) ServeTestLogin(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, "test-login.html")
+}
+
+// ServeTestComponents serves the Web Components test page
+func (h *Handler) ServeTestComponents(w http.ResponseWriter, r *http.Request) {
+	http.ServeFile(w, r, "test-components.html")
 }
