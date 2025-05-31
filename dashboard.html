@@ -339,6 +339,168 @@
       cursor: pointer;
       text-decoration: underline;
       font-size: 14px;
+      margin-right: 12px;
+    }
+
+    .bb-job-link:hover {
+      color: #2563eb;
+    }
+
+    .bb-job-link[data-bb-show-if] {
+      display: none;
+    }
+
+    /* Modal Styles */
+    .bb-modal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.5);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+
+    .bb-modal.show {
+      display: flex;
+    }
+
+    .bb-modal-content {
+      background: white;
+      border-radius: 12px;
+      padding: 32px;
+      max-width: 800px;
+      width: 90%;
+      max-height: 80vh;
+      overflow-y: auto;
+      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+    }
+
+    .bb-modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid #e5e7eb;
+    }
+
+    .bb-modal-title {
+      font-size: 1.5rem;
+      font-weight: 600;
+      margin: 0;
+    }
+
+    .bb-modal-close {
+      background: none;
+      border: none;
+      font-size: 24px;
+      cursor: pointer;
+      color: #6b7280;
+    }
+
+    .bb-modal-close:hover {
+      color: #374151;
+    }
+
+    .bb-modal-section {
+      margin-bottom: 24px;
+    }
+
+    .bb-modal-section-title {
+      font-size: 1.1rem;
+      font-weight: 600;
+      margin-bottom: 12px;
+      color: #374151;
+    }
+
+    .bb-job-info-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .bb-info-item {
+      background: #f9fafb;
+      padding: 16px;
+      border-radius: 8px;
+      border: 1px solid #e5e7eb;
+    }
+
+    .bb-info-label {
+      font-size: 12px;
+      font-weight: 500;
+      color: #6b7280;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 4px;
+    }
+
+    .bb-info-value {
+      font-size: 16px;
+      font-weight: 600;
+      color: #1f2937;
+    }
+
+    .bb-tasks-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 16px;
+    }
+
+    .bb-tasks-table th,
+    .bb-tasks-table td {
+      padding: 12px;
+      text-align: left;
+      border-bottom: 1px solid #e5e7eb;
+    }
+
+    .bb-tasks-table th {
+      background: #f9fafb;
+      font-weight: 600;
+      color: #374151;
+      font-size: 14px;
+    }
+
+    .bb-tasks-table td {
+      font-size: 14px;
+      color: #6b7280;
+    }
+
+    .bb-task-path {
+      font-family: 'Monaco', 'Menlo', monospace;
+      background: #f3f4f6;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+    }
+
+    .bb-task-status {
+      padding: 4px 8px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+
+    .bb-loading {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 40px;
+      color: #6b7280;
+    }
+
+    .bb-error {
+      color: #dc2626;
+      background: #fee2e2;
+      padding: 12px 16px;
+      border-radius: 8px;
+      margin: 16px 0;
     }
 
     .loading {
@@ -415,6 +577,18 @@
             <option value="last30">Last 30 Days</option>
             <option value="last90">Last 90 Days</option>
             <option value="all">All Time</option>
+          </select>
+        </div>
+        
+        <div class="filter-group">
+          <label class="filter-label">Status</label>
+          <select class="filter-select" id="statusFilter">
+            <option value="">All Status</option>
+            <option value="running">Running</option>
+            <option value="completed">Completed</option>
+            <option value="failed">Failed</option>
+            <option value="pending">Pending</option>
+            <option value="cancelled">Cancelled</option>
           </select>
         </div>
         
@@ -500,6 +674,12 @@
                 <button class="bb-job-link" bb-action="view-job-details" data-bb-bind-attr="bb-data-job-id:{id}">
                   View Details
                 </button>
+                <button class="bb-job-link" bb-action="restart-job" data-bb-bind-attr="bb-data-job-id:{id}" data-bb-show-if="status=completed,failed,cancelled">
+                  Restart
+                </button>
+                <button class="bb-job-link" bb-action="cancel-job" data-bb-bind-attr="bb-data-job-id:{id}" data-bb-show-if="status=running,pending">
+                  Cancel
+                </button>
               </div>
             </div>
           </div>
@@ -507,6 +687,77 @@
       </div>
     </div>
   </main>
+
+  <!-- Job Details Modal -->
+  <div id="jobDetailsModal" class="bb-modal">
+    <div class="bb-modal-content">
+      <div class="bb-modal-header">
+        <h2 class="bb-modal-title">Job Details</h2>
+        <button class="bb-modal-close" bb-action="close-modal">&times;</button>
+      </div>
+      
+      <div class="bb-modal-section">
+        <div class="bb-job-info-grid">
+          <div class="bb-info-item">
+            <div class="bb-info-label">Domain</div>
+            <div class="bb-info-value" id="modal-domain">-</div>
+          </div>
+          <div class="bb-info-item">
+            <div class="bb-info-label">Status</div>
+            <div class="bb-info-value" id="modal-status">-</div>
+          </div>
+          <div class="bb-info-item">
+            <div class="bb-info-label">Progress</div>
+            <div class="bb-info-value" id="modal-progress">-</div>
+          </div>
+          <div class="bb-info-item">
+            <div class="bb-info-label">Total Tasks</div>
+            <div class="bb-info-value" id="modal-total-tasks">-</div>
+          </div>
+          <div class="bb-info-item">
+            <div class="bb-info-label">Completed</div>
+            <div class="bb-info-value" id="modal-completed-tasks">-</div>
+          </div>
+          <div class="bb-info-item">
+            <div class="bb-info-label">Failed</div>
+            <div class="bb-info-value" id="modal-failed-tasks">-</div>
+          </div>
+          <div class="bb-info-item">
+            <div class="bb-info-label">Created</div>
+            <div class="bb-info-value" id="modal-created-at">-</div>
+          </div>
+          <div class="bb-info-item">
+            <div class="bb-info-label">Started</div>
+            <div class="bb-info-value" id="modal-started-at">-</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="bb-modal-section">
+        <div class="bb-modal-section-title">
+          Task Details
+          <button class="bb-btn bb-btn-secondary" style="float: right; font-size: 12px;" bb-action="refresh-tasks">
+            ↻ Refresh
+          </button>
+        </div>
+        <div id="tasksContent">
+          <div class="bb-loading">Loading tasks...</div>
+        </div>
+      </div>
+
+      <div class="bb-modal-section">
+        <div style="display: flex; gap: 12px; justify-content: flex-end;">
+          <button class="bb-btn bb-btn-secondary" bb-action="close-modal">Close</button>
+          <button class="bb-btn bb-btn-primary" bb-action="restart-job-modal" id="modal-restart-btn" style="display: none;">
+            Restart Job
+          </button>
+          <button class="bb-btn bb-btn-primary" bb-action="cancel-job-modal" id="modal-cancel-btn" style="display: none;">
+            Cancel Job
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <!-- Include the data binding library -->
   <script src="/js/bb-data-binder.min.js"></script>
@@ -584,6 +835,9 @@
       // Set up filters
       setupFilters();
 
+      // Set up modal functionality
+      setupModal();
+
       // Initial load
       await dataBinder.refresh();
 
@@ -613,6 +867,24 @@
           const jobId = element.getAttribute('bb-data-job-id');
           viewJobDetails(jobId);
           break;
+        case 'restart-job':
+        case 'restart-job-modal':
+          const restartJobId = element.getAttribute('bb-data-job-id') || currentJobId;
+          restartJob(restartJobId);
+          break;
+        case 'cancel-job':
+        case 'cancel-job-modal':
+          const cancelJobId = element.getAttribute('bb-data-job-id') || currentJobId;
+          cancelJob(cancelJobId);
+          break;
+        case 'close-modal':
+          closeModal();
+          break;
+        case 'refresh-tasks':
+          if (currentJobId) {
+            loadJobTasks(currentJobId);
+          }
+          break;
         default:
           console.warn('Unknown bb-action:', action);
       }
@@ -620,11 +892,18 @@
 
     function setupFilters() {
       const dateRange = document.getElementById('dateRange');
+      const statusFilter = document.getElementById('statusFilter');
       const refreshInterval = document.getElementById('refreshInterval');
 
       if (dateRange) {
         dateRange.addEventListener('change', () => {
-          dataBinder.refresh(); // Reload with new date range
+          updateJobsData(); // Reload with new filters
+        });
+      }
+
+      if (statusFilter) {
+        statusFilter.addEventListener('change', () => {
+          updateJobsData(); // Reload with new filters
         });
       }
 
@@ -644,16 +923,248 @@
       }
     }
 
+    // Global variables
+    let currentJobId = null;
+
     function refreshDashboard() {
       dataBinder.refresh();
+    }
+
+    function updateJobsData() {
+      const dateRange = document.getElementById('dateRange').value;
+      const statusFilter = document.getElementById('statusFilter').value;
+      
+      // Build query parameters
+      let params = `limit=10&range=${dateRange}`;
+      if (statusFilter) {
+        params += `&status=${statusFilter}`;
+      }
+      
+      // Load jobs with filters
+      dataBinder.fetchData(`/v1/jobs?${params}`)
+        .then(response => {
+          const jobs = response.jobs || [];
+          const processedJobs = jobs.map(job => ({
+            ...job,
+            domain: job.domains?.name || 'Unknown Domain',
+            progress: Math.round(job.progress || 0),
+            started_at_formatted: job.started_at 
+              ? new Date(job.started_at).toLocaleString() 
+              : '-'
+          }));
+          
+          dataBinder.bindTemplates({ job: processedJobs });
+          
+          // Update visibility of action buttons based on status
+          updateJobActionVisibility();
+        })
+        .catch(error => {
+          console.error('Failed to load jobs:', error);
+        });
+    }
+
+    function updateJobActionVisibility() {
+      // Show/hide action buttons based on job status
+      document.querySelectorAll('[data-bb-show-if]').forEach(element => {
+        const showIf = element.getAttribute('data-bb-show-if');
+        const jobCard = element.closest('[data-bb-template="job"]');
+        
+        if (jobCard && showIf) {
+          const statusElement = jobCard.querySelector('[data-bb-bind="status"]');
+          const currentStatus = statusElement ? statusElement.textContent.toLowerCase() : '';
+          
+          if (showIf.includes('status=')) {
+            const allowedStatuses = showIf.split('status=')[1].split(',');
+            element.style.display = allowedStatuses.includes(currentStatus) ? 'inline-block' : 'none';
+          }
+        }
+      });
     }
 
     function createJob() {
       alert('Job creation UI coming soon!');
     }
 
-    function viewJobDetails(jobId) {
-      alert(`Job details for job ID: ${jobId}\n\nThis would open the job details page.`);
+    async function viewJobDetails(jobId) {
+      if (!jobId) {
+        console.error('No job ID provided');
+        return;
+      }
+
+      currentJobId = jobId;
+      
+      try {
+        // Load job details
+        const job = await dataBinder.fetchData(`/v1/jobs/${jobId}`);
+        
+        // Update modal content
+        document.getElementById('modal-domain').textContent = job.domain || '-';
+        document.getElementById('modal-status').textContent = job.status || '-';
+        document.getElementById('modal-progress').textContent = `${Math.round(job.progress || 0)}%`;
+        document.getElementById('modal-total-tasks').textContent = job.total_tasks || 0;
+        document.getElementById('modal-completed-tasks').textContent = job.completed_tasks || 0;
+        document.getElementById('modal-failed-tasks').textContent = job.failed_tasks || 0;
+        document.getElementById('modal-created-at').textContent = job.created_at 
+          ? new Date(job.created_at).toLocaleString() : '-';
+        document.getElementById('modal-started-at').textContent = job.started_at 
+          ? new Date(job.started_at).toLocaleString() : '-';
+
+        // Show/hide action buttons
+        const restartBtn = document.getElementById('modal-restart-btn');
+        const cancelBtn = document.getElementById('modal-cancel-btn');
+        
+        if (['completed', 'failed', 'cancelled'].includes(job.status)) {
+          restartBtn.style.display = 'inline-block';
+          cancelBtn.style.display = 'none';
+        } else if (['running', 'pending'].includes(job.status)) {
+          restartBtn.style.display = 'none';
+          cancelBtn.style.display = 'inline-block';
+        } else {
+          restartBtn.style.display = 'none';
+          cancelBtn.style.display = 'none';
+        }
+
+        // Load tasks
+        await loadJobTasks(jobId);
+        
+        // Show modal
+        showModal();
+        
+      } catch (error) {
+        console.error('Failed to load job details:', error);
+        alert('Failed to load job details. Please try again.');
+      }
+    }
+
+    async function loadJobTasks(jobId) {
+      const tasksContent = document.getElementById('tasksContent');
+      tasksContent.innerHTML = '<div class="bb-loading">Loading tasks...</div>';
+      
+      try {
+        const response = await dataBinder.fetchData(`/v1/jobs/${jobId}/tasks?limit=50`);
+        const tasks = response.tasks || [];
+        
+        if (tasks.length === 0) {
+          tasksContent.innerHTML = '<div class="bb-loading">No tasks found</div>';
+          return;
+        }
+
+        // Build tasks table
+        let tableHTML = `
+          <table class="bb-tasks-table">
+            <thead>
+              <tr>
+                <th>Path</th>
+                <th>Status</th>
+                <th>Response Time</th>
+                <th>Status Code</th>
+                <th>Cache</th>
+                <th>Error</th>
+              </tr>
+            </thead>
+            <tbody>
+        `;
+
+        tasks.forEach(task => {
+          const statusClass = `bb-status-${task.status}`;
+          tableHTML += `
+            <tr>
+              <td><code class="bb-task-path">${task.path}</code></td>
+              <td><span class="bb-task-status ${statusClass}">${task.status}</span></td>
+              <td>${task.response_time ? `${task.response_time}ms` : '-'}</td>
+              <td>${task.status_code || '-'}</td>
+              <td>${task.cache_status || '-'}</td>
+              <td>${task.error ? `<span title="${task.error}" class="bb-error">${task.error.substring(0, 50)}${task.error.length > 50 ? '...' : ''}</span>` : '-'}</td>
+            </tr>
+          `;
+        });
+
+        tableHTML += '</tbody></table>';
+        
+        if (response.pagination && response.pagination.total > tasks.length) {
+          tableHTML += `<p style="text-align: center; margin-top: 16px; color: #6b7280;">
+            Showing ${tasks.length} of ${response.pagination.total} tasks
+          </p>`;
+        }
+
+        tasksContent.innerHTML = tableHTML;
+        
+      } catch (error) {
+        console.error('Failed to load tasks:', error);
+        tasksContent.innerHTML = '<div class="bb-error">Failed to load tasks</div>';
+      }
+    }
+
+    async function restartJob(jobId) {
+      if (!jobId) return;
+      
+      if (!confirm('Are you sure you want to restart this job?')) {
+        return;
+      }
+
+      try {
+        await dataBinder.fetchData(`/v1/jobs/${jobId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'restart' })
+        });
+        
+        alert('Job restart initiated successfully');
+        
+        // Refresh dashboard and modal if open
+        dataBinder.refresh();
+        if (currentJobId === jobId) {
+          viewJobDetails(jobId);
+        }
+        
+      } catch (error) {
+        console.error('Failed to restart job:', error);
+        alert('Failed to restart job. Please try again.');
+      }
+    }
+
+    async function cancelJob(jobId) {
+      if (!jobId) return;
+      
+      if (!confirm('Are you sure you want to cancel this job?')) {
+        return;
+      }
+
+      try {
+        await dataBinder.fetchData(`/v1/jobs/${jobId}`, {
+          method: 'DELETE'
+        });
+        
+        alert('Job cancelled successfully');
+        
+        // Refresh dashboard and close modal if open
+        dataBinder.refresh();
+        if (currentJobId === jobId) {
+          closeModal();
+        }
+        
+      } catch (error) {
+        console.error('Failed to cancel job:', error);
+        alert('Failed to cancel job. Please try again.');
+      }
+    }
+
+    function setupModal() {
+      // Close modal when clicking outside
+      document.getElementById('jobDetailsModal').addEventListener('click', (e) => {
+        if (e.target.id === 'jobDetailsModal') {
+          closeModal();
+        }
+      });
+    }
+
+    function showModal() {
+      document.getElementById('jobDetailsModal').classList.add('show');
+    }
+
+    function closeModal() {
+      document.getElementById('jobDetailsModal').classList.remove('show');
+      currentJobId = null;
     }
   </script>
 </body>
