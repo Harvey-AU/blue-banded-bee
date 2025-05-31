@@ -1,6 +1,11 @@
-# Blue Banded Bee Web Components
+# Blue Banded Bee Frontend Libraries
 
-Frontend components for Blue Banded Bee dashboard integration with Webflow.
+Frontend components and data binding library for Blue Banded Bee dashboard integration with Webflow.
+
+## Available Libraries
+
+- **Web Components** (`bb-components.min.js`): Custom elements for authentication and data display
+- **Data Binding Library** (`bb-data-binder.min.js`): Template + data binding system for flexible dashboard development
 
 ## Quick Start
 
@@ -20,8 +25,10 @@ Frontend components for Blue Banded Bee dashboard integration with Webflow.
   );
 </script>
 
-<!-- Blue Banded Bee Components -->
+<!-- Blue Banded Bee Libraries -->
 <script src="https://blue-banded-bee.fly.dev/js/bb-components.min.js"></script>
+<!-- OR for data binding approach -->
+<script src="https://blue-banded-bee.fly.dev/js/bb-data-binder.min.js"></script>
 ```
 
 2. **Design your templates in Webflow Designer:**
@@ -78,16 +85,75 @@ npm run serve
 
 ```
 web/
-├── src/                    # Source code
-│   ├── components/         # Web Components
-│   ├── utils/             # Utilities and API
-│   ├── auth/              # Authentication
-│   └── index.js           # Main entry point
-├── dist/                  # Built files (committed)
-│   ├── bb-components.js   # Development build
-│   └── bb-components.min.js  # Production build
-└── examples/              # Integration examples
+├── src/                         # Source code
+│   ├── components/              # Web Components
+│   ├── utils/                  # Utilities and API
+│   ├── auth/                   # Authentication
+│   ├── bb-data-binder.js       # Data binding library
+│   └── index.js                # Web Components entry point
+├── dist/                       # Built files (committed)
+│   ├── bb-components.js        # Web Components dev build
+│   ├── bb-components.min.js    # Web Components production build
+│   ├── bb-data-binder.js       # Data binding dev build
+│   └── bb-data-binder.min.js   # Data binding production build
+└── examples/                   # Integration examples
+    ├── data-binding-example.html
+    ├── form-example.html
+    └── webflow-integration.html
 ```
+
+## Data Binding Library (v0.5.4)
+
+The `BBDataBinder` library provides a template + data binding system that allows you to create flexible HTML layouts while JavaScript automatically handles data fetching, authentication, and real-time updates.
+
+### Quick Example
+
+```html
+<!-- Include the library -->
+<script src="https://blue-banded-bee.fly.dev/js/bb-data-binder.min.js"></script>
+
+<!-- Dashboard stats with data binding -->
+<div class="stats">
+  <span data-bb-bind="stats.total_jobs">0</span>
+  <span data-bb-bind="stats.running_jobs">0</span>
+</div>
+
+<!-- Job list with templates -->
+<div data-bb-template="job">
+  <h4 data-bb-bind="domain">Loading...</h4>
+  <div data-bb-bind-style="width:{progress}%"></div>
+  <span data-bb-bind="status">pending</span>
+</div>
+
+<!-- Forms with validation -->
+<form data-bb-form="create-job" data-bb-validate="live">
+  <input name="domain" required data-bb-validate-type="url">
+  <button type="submit">Create Job</button>
+</form>
+
+<!-- Initialize -->
+<script>
+  const binder = new BBDataBinder({ debug: true });
+  await binder.init();
+</script>
+```
+
+### Data Binding Attributes
+
+- **`data-bb-bind="field"`** - Bind element text content to data field
+- **`data-bb-bind-style="property:{field}"`** - Bind CSS styles with formatting
+- **`data-bb-bind-attr="attribute:{field}"`** - Bind element attributes
+- **`data-bb-template="name"`** - Mark element as template for repeated data
+- **`data-bb-auth="required|guest"`** - Conditional rendering based on auth state
+- **`data-bb-form="action"`** - Enable form handling with validation and API submission
+
+### Form Validation Attributes
+
+- **`data-bb-validate="live"`** - Enable real-time validation
+- **`data-bb-validate-type="email|url|number"`** - Field type validation
+- **`data-bb-validate-min="N"`** - Minimum length/value
+- **`data-bb-validate-max="N"`** - Maximum length/value
+- **`data-bb-validate-pattern="regex"`** - Custom pattern validation
 
 ## Available Components
 

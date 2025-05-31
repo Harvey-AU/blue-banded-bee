@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Blue Banded Bee - Data Binding Example</title>
+  
+  <!-- Supabase CDN -->
+  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+  
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      margin: 0;
+      padding: 20px;
+      background: #f5f7fa;
+      line-height: 1.6;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .header {
+      background: white;
+      padding: 24px;
+      border-radius: 12px;
+      margin-bottom: 24px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .title {
+      margin: 0 0 12px 0;
+      font-size: 2rem;
+      font-weight: 700;
+      color: #1a1a1a;
+    }
+
+    .subtitle {
+      margin: 0;
+      color: #6b7280;
+      font-size: 1.1rem;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 20px;
+      margin-bottom: 30px;
+    }
+
+    .stat-card {
+      background: white;
+      padding: 24px;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 2.5em;
+      font-weight: 700;
+      margin-bottom: 8px;
+      color: #1a1a1a;
+    }
+
+    .stat-label {
+      color: #6b7280;
+      font-size: 14px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .jobs-section {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      overflow: hidden;
+      margin-bottom: 30px;
+    }
+
+    .section-header {
+      padding: 24px;
+      border-bottom: 1px solid #e5e7eb;
+      background: #f8f9fa;
+    }
+
+    .section-title {
+      margin: 0;
+      font-size: 1.25rem;
+      font-weight: 600;
+      color: #1a1a1a;
+    }
+
+    .job-item {
+      padding: 20px 24px;
+      border-bottom: 1px solid #e5e7eb;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .job-item:last-child {
+      border-bottom: none;
+    }
+
+    .job-info {
+      flex-grow: 1;
+    }
+
+    .job-domain {
+      font-weight: 600;
+      margin-bottom: 4px;
+      color: #1a1a1a;
+    }
+
+    .job-progress {
+      font-size: 14px;
+      color: #6b7280;
+    }
+
+    .job-status {
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+
+    .status-running { background: #dbeafe; color: #1d4ed8; }
+    .status-completed { background: #dcfce7; color: #16a34a; }
+    .status-failed { background: #fee2e2; color: #dc2626; }
+    .status-pending { background: #fef3c7; color: #d97706; }
+
+    .progress-bar {
+      width: 200px;
+      height: 8px;
+      background: #e5e7eb;
+      border-radius: 4px;
+      overflow: hidden;
+      margin: 8px 0;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #3b82f6, #1d4ed8);
+      transition: width 0.3s ease;
+    }
+
+    .auth-section {
+      background: white;
+      padding: 24px;
+      border-radius: 12px;
+      margin-bottom: 24px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .btn {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 6px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.2s ease;
+    }
+
+    .btn-primary {
+      background: #3b82f6;
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: #2563eb;
+    }
+
+    .btn-secondary {
+      background: #f3f4f6;
+      color: #374151;
+    }
+
+    .btn-secondary:hover {
+      background: #e5e7eb;
+    }
+
+    .loading {
+      color: #6b7280;
+      font-style: italic;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Header Section -->
+    <div class="header">
+      <h1 class="title" data-bb-bind="site.name">Blue Banded Bee</h1>
+      <p class="subtitle" data-bb-bind="site.description">Cache warming dashboard with data binding demonstration</p>
+    </div>
+
+    <!-- Authentication Section -->
+    <div class="auth-section">
+      <div data-bb-auth="guest">
+        <h3>Authentication Required</h3>
+        <p>Please log in to view dashboard data.</p>
+        <button class="btn btn-primary" onclick="loginDemo()">Demo Login</button>
+      </div>
+      
+      <div data-bb-auth="required">
+        <h3>Welcome, <span data-bb-bind="user.name">User</span>!</h3>
+        <p>Email: <span data-bb-bind="user.email">user@example.com</span></p>
+        <button class="btn btn-secondary" onclick="logoutDemo()">Logout</button>
+      </div>
+    </div>
+
+    <!-- Stats Grid -->
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-value" data-bb-bind="stats.total_jobs">-</div>
+        <div class="stat-label">Total Jobs</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" data-bb-bind="stats.running_jobs">-</div>
+        <div class="stat-label">Running</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" data-bb-bind="stats.completed_jobs">-</div>
+        <div class="stat-label">Completed</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" data-bb-bind="stats.failed_jobs">-</div>
+        <div class="stat-label">Failed</div>
+      </div>
+    </div>
+
+    <!-- Jobs Section with Templates -->
+    <div class="jobs-section">
+      <div class="section-header">
+        <h2 class="section-title">Recent Jobs</h2>
+      </div>
+      
+      <!-- Job Template (hidden, used for data binding) -->
+      <div class="job-item" data-bb-template="job">
+        <div class="job-info">
+          <div class="job-domain" data-bb-bind="domain">example.com</div>
+          <div class="job-progress">
+            <div class="progress-bar">
+              <div class="progress-fill" data-bb-bind-style="width:{progress}%"></div>
+            </div>
+            <span data-bb-bind="completed_tasks">0</span> / <span data-bb-bind="total_tasks">0</span> tasks
+            (<span data-bb-bind="progress">0</span>%)
+          </div>
+        </div>
+        <div class="job-status" data-bb-bind-attr="class:status-{status}" data-bb-bind="status">pending</div>
+      </div>
+    </div>
+
+    <!-- Controls -->
+    <div style="background: white; padding: 24px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);">
+      <h3>Data Binding Controls</h3>
+      <button class="btn btn-primary" onclick="loadMockData()">Load Mock Data</button>
+      <button class="btn btn-secondary" onclick="refreshData()">Refresh Data</button>
+      <button class="btn btn-secondary" onclick="clearData()">Clear Data</button>
+      
+      <div style="margin-top: 16px;">
+        <label>
+          <input type="checkbox" id="debugMode" onchange="toggleDebug()"> Debug Mode
+        </label>
+      </div>
+    </div>
+  </div>
+
+  <!-- Include the data binding library -->
+  <script src="../src/bb-data-binder.js"></script>
+
+  <script>
+    // Initialize Supabase (demo config)
+    const SUPABASE_URL = "https://auth.bluebandedbee.co";
+    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdwemp0Ymd0ZGp4bmFjZGZ1anZ4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDUwNjYxNjMsImV4cCI6MjA2MDY0MjE2M30.eJjM2-3X8oXsFex_lQKvFkP1-_yLMHsueIn7_hCF6YI";
+    
+    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    // Initialize data binder
+    let dataBinder;
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      // Create data binder instance
+      dataBinder = new BBDataBinder({
+        apiBaseUrl: '',
+        debug: false,
+        refreshInterval: 0 // Manual refresh for demo
+      });
+
+      // Initialize
+      await dataBinder.init();
+
+      console.log('Data binding example initialized');
+    });
+
+    // Demo functions
+    function loadMockData() {
+      console.log('Loading mock data...');
+
+      // Mock site data
+      const siteData = {
+        site: {
+          name: 'Blue Banded Bee Dashboard',
+          description: 'Live data binding demonstration with mock data'
+        },
+        stats: {
+          total_jobs: 42,
+          running_jobs: 3,
+          completed_jobs: 35,
+          failed_jobs: 4
+        },
+        user: {
+          name: 'Demo User',
+          email: 'demo@bluebandedbee.co'
+        }
+      };
+
+      // Mock jobs data
+      const jobsData = {
+        job: [
+          {
+            domain: 'example.com',
+            progress: 75,
+            completed_tasks: 150,
+            total_tasks: 200,
+            status: 'running'
+          },
+          {
+            domain: 'testsite.org',
+            progress: 100,
+            completed_tasks: 85,
+            total_tasks: 85,
+            status: 'completed'
+          },
+          {
+            domain: 'mywebsite.net',
+            progress: 45,
+            completed_tasks: 23,
+            total_tasks: 51,
+            status: 'running'
+          },
+          {
+            domain: 'demo.co.uk',
+            progress: 0,
+            completed_tasks: 0,
+            total_tasks: 127,
+            status: 'failed'
+          }
+        ]
+      };
+
+      // Update elements and templates
+      dataBinder.updateElements(siteData);
+      dataBinder.bindTemplates(jobsData);
+    }
+
+    function refreshData() {
+      console.log('Refreshing data...');
+      
+      // Simulate API call with updated data
+      const updatedStats = {
+        stats: {
+          total_jobs: Math.floor(Math.random() * 100),
+          running_jobs: Math.floor(Math.random() * 10),
+          completed_jobs: Math.floor(Math.random() * 80),
+          failed_jobs: Math.floor(Math.random() * 10)
+        }
+      };
+
+      dataBinder.updateElements(updatedStats);
+    }
+
+    function clearData() {
+      console.log('Clearing data...');
+      
+      const emptyData = {
+        site: { name: 'Blue Banded Bee', description: 'Cache warming service' },
+        stats: { total_jobs: '-', running_jobs: '-', completed_jobs: '-', failed_jobs: '-' },
+        user: { name: 'Guest', email: '' }
+      };
+
+      dataBinder.updateElements(emptyData);
+      dataBinder.bindTemplates({ job: [] });
+    }
+
+    function toggleDebug() {
+      const debugMode = document.getElementById('debugMode').checked;
+      dataBinder.debug = debugMode;
+      console.log('Debug mode:', debugMode ? 'enabled' : 'disabled');
+    }
+
+    // Demo auth functions
+    function loginDemo() {
+      console.log('Demo login');
+      
+      // Simulate authentication
+      dataBinder.authManager = {
+        isAuthenticated: true,
+        user: { name: 'Demo User', email: 'demo@bluebandedbee.co' },
+        session: { access_token: 'demo_token' }
+      };
+      
+      dataBinder.updateAuthElements();
+      loadMockData();
+    }
+
+    function logoutDemo() {
+      console.log('Demo logout');
+      
+      // Simulate logout
+      dataBinder.authManager = {
+        isAuthenticated: false,
+        user: null,
+        session: null
+      };
+      
+      dataBinder.updateAuthElements();
+      clearData();
+    }
+  </script>
+</body>
+</html>

@@ -226,33 +226,60 @@ sentry.Init(sentry.ClientOptions{
 ## Frontend Integration
 
 ### Template + Data Binding System
-Blue Banded Bee uses a template-based approach that allows users to design custom HTML layouts whilst JavaScript handles data population and real-time updates.
+Blue Banded Bee uses a template-based approach that allows flexible HTML layouts whilst JavaScript provides functionality through attribute-based event handling.
 
-**Architecture Pattern:**
+**Current Implementation (v0.5.3):**
 ```html
-<!-- User designs custom HTML with data attributes -->
-<div class="custom-dashboard">
-  <span data-bb-bind="total_jobs">0</span>
+<!-- Dashboard with attribute-based event handling -->
+<div class="dashboard">
+  <button bb-action="refresh-dashboard">↻ Refresh</button>
+  <button bb-action="create-job">+ New Job</button>
+  <div bb-action="view-job-details" bb-data-job-id="123">View Details</div>
+</div>
+
+<!-- JavaScript automatically handles bb-action attributes -->
+<script src="/dashboard.html"></script>
+```
+
+**Current Data Binding (v0.5.4):**
+```html
+<!-- Template binding for dynamic content -->
+<div class="stats">
+  <span data-bb-bind="stats.total_jobs">0</span>
   <div data-bb-template="job">
     <h4 data-bb-bind="domain">Loading...</h4>
+    <div data-bb-bind-style="width:{progress}%"></div>
+    <span data-bb-bind="status">pending</span>
   </div>
 </div>
 
-<!-- Single script handles all data binding -->
-<script src="/js/bb-data-binder.js"></script>
+<!-- Authentication conditional rendering -->
+<div data-bb-auth="required">
+  <form data-bb-form="create-job" data-bb-validate="live">
+    <input name="domain" required data-bb-validate-type="url">
+    <button type="submit">Create Job</button>
+  </form>
+</div>
+
+<!-- Data binding library (production ready) -->
+<script src="/js/bb-data-binder.min.js"></script>
 ```
 
 **Data Flow:**
-- JavaScript scans DOM for `data-bb-bind` attributes
-- Fetches data from API endpoints (`/v1/dashboard/stats`, `/v1/jobs`)
-- Populates template elements with live data
-- Handles authentication state and real-time updates
+- Event delegation scans DOM for `bb-action` attributes
+- Data binding scans DOM for `data-bb-bind`, `data-bb-template`, `data-bb-form` attributes
+- JavaScript handles clicks, form submissions, and data population automatically
+- API endpoints (`/v1/dashboard/stats`, `/v1/jobs`) provide data
+- Real-time data binding populates `data-bb-bind` elements with live API data
 
 **Integration Benefits:**
 - Users control all HTML structure and CSS styling
 - No CSS conflicts with existing designs
 - Works with any frontend framework (Webflow, custom sites)
 - Lightweight JavaScript library (~50KB)
+- Complete form handling with validation and authentication
+- Real-time data binding with template engine for repeated content
+- Conditional rendering based on authentication state
 
 ## Security & Authentication
 
