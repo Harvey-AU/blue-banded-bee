@@ -300,8 +300,25 @@
     </bb-job-dashboard>
   </main>
 
-  <!-- Load Blue Banded Bee Components -->
-  <script src="/js/bb-components.min.js"></script>
+  <script>
+    // Wait for Supabase to be available before loading components
+    function waitForSupabase() {
+      return new Promise((resolve) => {
+        if (window.supabase && window.supabase.createClient) {
+          resolve();
+        } else {
+          setTimeout(() => waitForSupabase().then(resolve), 50);
+        }
+      });
+    }
+
+    // Load components after Supabase is ready
+    waitForSupabase().then(() => {
+      const script = document.createElement('script');
+      script.src = '/js/bb-components.min.js';
+      document.head.appendChild(script);
+    });
+  </script>
 
   <script>
     // Dashboard state management
