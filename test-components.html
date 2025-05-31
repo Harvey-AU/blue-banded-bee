@@ -94,6 +94,13 @@
 <body>
     <h1>🐝 Blue Banded Bee - Live Component Test</h1>
     
+    <div style="margin-bottom: 20px; padding: 15px; background: #f0f0f0; border-radius: 6px;">
+        <button onclick="logout()" class="bb-btn" style="background: #dc3545; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">
+            Sign Out
+        </button>
+        <span id="auth-user-info" style="margin-left: 15px; color: #666;"></span>
+    </div>
+    
     <!-- Test 1: Component Loading -->
     <div class="test-section">
         <h2>Test 1: Component Loading</h2>
@@ -185,9 +192,38 @@
     <script src="https://app.bluebandedbee.co/js/bb-components.min.js"></script>
     
     <script>
+        // Logout function
+        async function logout() {
+            try {
+                await window.supabase.auth.signOut();
+                document.getElementById('auth-user-info').textContent = 'Signed out successfully';
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1000);
+            } catch (error) {
+                console.error('Logout error:', error);
+                document.getElementById('auth-user-info').textContent = 'Error signing out';
+            }
+        }
+
+        // Check and display current auth status
+        function updateAuthStatus() {
+            window.supabase.auth.getSession().then(({ data: { session } }) => {
+                const userInfo = document.getElementById('auth-user-info');
+                if (session) {
+                    userInfo.textContent = `Logged in as: ${session.user.email}`;
+                } else {
+                    userInfo.textContent = 'Not logged in';
+                }
+            });
+        }
+
         // Test script
         window.addEventListener('load', function() {
             console.log('🧪 Starting component tests...');
+            
+            // Update auth status on load
+            setTimeout(updateAuthStatus, 500);
             
             // Test 1: Check if components loaded
             setTimeout(() => {
