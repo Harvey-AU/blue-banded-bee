@@ -110,6 +110,20 @@ go run ./cmd/test_jobs/main.go
 3. Only after steps 1-2, formulate a response based on evidence
 4. When debugging, always show findings from relevant files first
 
+### Debugging Workflow
+
+**For 404 errors on static content:**
+1. **Check Dockerfile first** - verify files are copied to container
+2. Check route registration in handlers.go
+3. Check file paths and existence
+4. Check server logs for routing issues
+
+**For deployment issues:**
+1. Verify Dockerfile includes all required files and directories
+2. Check that npm build was run for Web Components
+3. Verify git commit includes both source and built files
+4. Test Docker build locally if adding static assets
+
 ### Knowledge Persistence
 
 - Immediately document any discovered issues or bugs in relevant documentation
@@ -177,6 +191,13 @@ go run ./cmd/test_jobs/main.go
 - When modifying Web Components, always run `npm run build` in `/web` directory before committing
 - Stage both `web/src/` and `web/dist/` files when committing component changes
 - Web Components require rebuilt dist files to function in production
+
+**Docker Deployment:**
+- **CRITICAL**: Check Dockerfile when adding new static files or directories
+- The Dockerfile selectively copies files - new static content must be explicitly added
+- When creating files in root directory or new web directories, update Dockerfile COPY commands
+- Test locally with `docker build` before pushing if adding static assets
+- 404 errors for new static files often indicate missing Dockerfile entries
 
 **Testing Strategy:**
 - Test functionality in both logged-in and logged-out states
