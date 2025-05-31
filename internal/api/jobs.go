@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/Harvey-AU/blue-banded-bee/internal/auth"
@@ -74,16 +75,66 @@ func (h *Handler) listJobs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err := h.DB.GetUser(userClaims.UserID)
+	user, err := h.DB.GetUser(userClaims.UserID)
 	if err != nil {
 		log.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get user from database")
 		Unauthorised(w, r, "User not found")
 		return
 	}
 
-	// TODO: Implement list jobs functionality
-	// For now, return empty list
-	WriteSuccess(w, r, []JobResponse{}, "Jobs retrieved successfully")
+	// Parse query parameters
+	limit := 10 // default
+	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
+		if parsedLimit, err := strconv.Atoi(limitStr); err == nil && parsedLimit > 0 && parsedLimit <= 100 {
+			limit = parsedLimit
+		}
+	}
+
+	offset := 0
+	if offsetStr := r.URL.Query().Get("offset"); offsetStr != "" {
+		if parsedOffset, err := strconv.Atoi(offsetStr); err == nil && parsedOffset >= 0 {
+			offset = parsedOffset
+		}
+	}
+
+	status := r.URL.Query().Get("status") // Optional status filter
+	dateRange := r.URL.Query().Get("range") // Optional date range filter
+	include := r.URL.Query().Get("include") // Optional includes (domain, progress, etc.)
+
+	// Get jobs from database
+	orgID := ""
+	if user.OrganisationID != nil {
+		orgID = *user.OrganisationID
+	}
+	jobs, total, err := h.DB.ListJobs(orgID, limit, offset, status, dateRange)
+	if err != nil {
+		log.Error().Err(err).Str("organisation_id", orgID).Msg("Failed to list jobs")
+		DatabaseError(w, r, err)
+		return
+	}
+
+	// Calculate pagination info
+	hasNext := offset+limit < total
+	hasPrev := offset > 0
+
+	// Prepare response
+	response := map[string]interface{}{
+		"jobs": jobs,
+		"pagination": map[string]interface{}{
+			"limit":     limit,
+			"offset":    offset,
+			"total":     total,
+			"has_next":  hasNext,
+			"has_prev":  hasPrev,
+		},
+	}
+
+	if include != "" {
+		// Add additional data based on include parameter
+		response["include"] = include
+	}
+
+	WriteSuccess(w, r, response, "Jobs retrieved successfully")
 }
 
 // createJob handles POST /v1/jobs

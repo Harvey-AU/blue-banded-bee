@@ -11,6 +11,7 @@ import './auth/simple-auth.js';
 // Components
 import './components/bb-data-loader.js';
 import './components/bb-auth-login.js';
+import './components/bb-job-dashboard.js';
 
 // Initialize global BBComponents namespace
 window.BBComponents = {
@@ -19,7 +20,8 @@ window.BBComponents = {
   // Component registry
   components: {
     'bb-data-loader': 'BBDataLoader',
-    'bb-auth-login': 'BBAuthLogin'
+    'bb-auth-login': 'BBAuthLogin',
+    'bb-job-dashboard': 'BBJobDashboard'
   },
   
   // Utility functions

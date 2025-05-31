@@ -6,69 +6,49 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Initialisation
 
-Before beginning any work on this project, please first read and understand the complete initialisation guide:
+This file provides complete guidance for working with Blue Banded Bee. All work should follow the guidelines, workflow, and standards outlined below.
 
-[INIT.md](./INIT.md)
+## Project Overview
 
-All work should follow the guidelines, workflow, and standards outlined in INIT.md.
+Blue Banded Bee is a web cache warming service built in Go, focused on Webflow sites. It uses a PostgreSQL-backed worker pool architecture for efficient URL crawling and cache warming.
+
+**For detailed technical information, see:**
+- [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) - System design and components
+- [docs/DATABASE.md](./docs/DATABASE.md) - Schema and PostgreSQL features
+- [docs/API.md](./docs/API.md) - RESTful API reference
+- [README.md](./README.md) - Project overview and quick start
+- [CHANGELOG.md](./CHANGELOG.md) - Recent changes and releases
+- [Roadmap.md](./Roadmap.md) - Upcoming work and priorities
 
 ## Quick Commands
 
 ### Debugging
-
 ```bash
 # Enable debug mode by setting in .env
 DEBUG=true
 LOG_LEVEL=debug
 ```
 
-## Architecture Overview
+### Web Components
+```bash
+# Build Web Components after changes
+cd web && npm run build
 
-Blue Banded Bee is a web cache warming service built in Go, primarily focused on Webflow sites. It follows a worker pool architecture for efficient URL crawling and cache warming.
+# Test Web Components locally
+cd web && npm run serve
+```
 
-### Core Components
+### Testing
+```bash
+# Run unit tests
+go test ./...
 
-1. **Worker Pool System**
+# Run integration tests
+RUN_INTEGRATION_TESTS=true go test ./...
 
-   - Concurrent task processing with multiple workers
-   - Job management that breaks down jobs into tasks
-   - Automatic recovery of stalled or failed tasks
-
-2. **Database Layer (PostgreSQL)**
-
-   - Uses a normalised schema with reference tables
-   - Employs row-level locking with FOR UPDATE SKIP LOCKED
-   - Optimised connection pooling (25 max open, 10 max idle)
-
-3. **Crawler System**
-
-   - Concurrent URL processing with rate limiting
-   - Cache validation and performance monitoring
-   - Response time and cache status tracking
-
-4. **Job Queue**
-   - Persistent job and task tracking
-   - Progress monitoring and statistics
-   - Recovery mechanisms for failed tasks
-
-### Key Concepts
-
-1. **Jobs and Tasks**
-
-   - A Job is a collection of URLs from a single domain to be crawled
-   - Tasks are individual URL processing units within a job
-   - Workers concurrently process tasks from the queue
-
-2. **Database Schema**
-
-   - Normalised schema with domain, page, job, and task tables
-   - Tasks reference domains and pages for efficient storage
-   - PostgreSQL-specific features like FOR UPDATE SKIP LOCKED
-
-3. **Request Processing**
-   - Token bucket rate limiting (5 requests/second default)
-   - IP-based rate limiting with proxy support
-   - Configurable concurrency and depth settings
+# Test job queue functionality
+go run ./cmd/test_jobs/main.go
+```
 
 ## Code Organisation
 
@@ -87,27 +67,18 @@ Blue Banded Bee is a web cache warming service built in Go, primarily focused on
 
 ## Development Notes
 
-1. **Database Configuration**
+**Database:**
+- Use PostgreSQL-style numbered parameters ($1, $2) in queries
+- Connection settings managed through environment variables
 
-   - PostgreSQL connection settings are managed through environment variables
-   - Connection pooling is preconfigured with optimal settings
-   - Always use PostgreSQL-style numbered parameters ($1, $2) in queries
+**Testing:**
+- Unit tests: `go test ./...`
+- Integration tests: `RUN_INTEGRATION_TESTS=true go test ./...`
+- Job queue testing: `go run ./cmd/test_jobs/main.go`
 
-2. **Worker Configuration**
-
-   - Worker pools are configurable through environment variables
-   - Default: 5 concurrent workers, 1-minute recovery interval
-
-3. **Testing Approach**
-
-   - Unit tests are in \*\_test.go files next to implementation
-   - Integration tests require RUN_INTEGRATION_TESTS=true flag
-   - Use test job utility for job queue testing
-
-4. **Error Handling**
-   - Structured logging with zerolog
-   - Sentry integration for error tracking
-   - Graduated retry with exponential backoff
+**Error Handling:**
+- Structured logging with zerolog
+- Sentry integration for error tracking
 
 ## Standards & Workflow
 
@@ -138,6 +109,30 @@ Blue Banded Bee is a web cache warming service built in Go, primarily focused on
 2. Second, check actual code implementation of related functionality
 3. Only after steps 1-2, formulate a response based on evidence
 4. When debugging, always show findings from relevant files first
+
+### Knowledge Persistence
+
+- Immediately document any discovered issues or bugs in relevant documentation
+- Log learned optimisations or improvements for future reference
+- Record all edge cases and their solutions
+- Update architecture documentation with new insights
+- Maintain session-persistent memory of:
+  - Discovered bugs and their fixes
+  - Performance optimisations
+  - Edge cases and solutions
+  - Implementation insights
+
+**Before suggesting solutions:**
+1. Check if similar issues were previously addressed
+2. Review documented solutions and learnings
+3. Apply accumulated knowledge to prevent repeated issues
+4. Build upon previous optimisations
+
+**After resolving issues:**
+1. Document the root cause
+2. Record the solution and rationale
+3. Update relevant documentation
+4. Add prevention strategies to documentation
 
 ### Git and Version Control Policy
 
@@ -185,13 +180,11 @@ Blue Banded Bee is a web cache warming service built in Go, primarily focused on
 
 **Testing Strategy:**
 - Test functionality in both logged-in and logged-out states
-- Use `test-mode` attributes to prevent unwanted redirects during component testing
 - Create comprehensive test scenarios (component loading, authentication, mock data)
 
 **Configuration Management:**
 - Follow "single source of truth" patterns for credentials and config
-- Check multiple files when updating shared configuration (e.g., Supabase credentials)
-- Look for documentation files like `web/SUPABASE-CONFIG.md` that define correct values
+- Check multiple files when updating shared configuration
 
 **Architecture Documentation:**
 - When proposing platform integrations, map them to specific roadmap stages
