@@ -121,12 +121,14 @@ Blue Banded Bee is a web cache warming service built in Go, primarily focused on
 ### Preserve Functionality
 
 - Never remove or modify existing functionality without explicit permission
-- Propose changes in an additive manner
+- When working on adjacent/related features, question if existing code is necessary/valuable
+- Propose changes in an additive manner unless removal is justified
 - Maintain backward compatibility unless explicitly directed otherwise
 
 ### Documentation Maintenance
 
 - Update documentation immediately after any code changes
+- When making architectural recommendations, incorporate them into existing docs (Roadmap, Architecture)
 - Document new learnings, insights, or discovered edge cases
 - Maintain proper documentation hierarchy under `docs/`
 
@@ -139,9 +141,36 @@ Blue Banded Bee is a web cache warming service built in Go, primarily focused on
 
 ### Git and Version Control Policy
 
-**CRITICAL: Never perform git commits or pushes**
+**Git operations are allowed and encouraged**
 
-- Never use `git commit`, `git push`, or any git commands that modify the repository state
-- Never add, stage, or commit files without explicit user permission
-- The user handles all git operations and version control decisions
-- Focus on code changes and let the user manage commits and deployments
+- Use `git add`, `git commit`, and `git push` to deploy changes
+- Keep commit messages simple: 5-6 words, no AI generation references
+- Deploy via GitHub Actions (push to GitHub, not direct `fly deploy`)
+- Use the established commit message format without Claude attribution
+
+## Communication & Problem-Solving
+
+### Communication Style
+
+- **Always keep explanations concise and direct** - avoid lengthy technical justifications
+- **Explain the "why" behind technical decisions** when asked
+- **Ask before assuming** - explain what's happening and why it's appropriate
+- **Fix root causes** rather than working around problems with additional complexity
+
+### Tech Stack Leverage
+
+**Consider all capabilities of the current tech stack before building new code:**
+
+- **Supabase**: Auth, real-time database, edge functions, file storage, database functions
+- **Sentry**: Error tracking, performance monitoring, alerting
+- **Go/Fly.io**: Core application logic, worker pools, scaling
+- **PostgreSQL**: Database functions, triggers, row-level security
+
+**Always propose multiple solution options** explaining trade-offs between custom code vs existing platform capabilities.
+
+### Problem-Solving Approach
+
+- **Don't overcomplicate solutions** - prefer simple, direct fixes
+- **Address actual problems** rather than creating workarounds
+- **Use incremental solutions** that can be understood step-by-step
+- **Question existing code** when working on related features - don't assume everything is necessary
