@@ -8,6 +8,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Multiple version updates may occur on the same date, each with its own version number.
 Each version represents a distinct set of changes, even if released on the same day.
 
+## [0.5.4] – 2025-05-31
+
+### Added
+
+- **Complete Data Binding Library**: Comprehensive template + data binding system for flexible dashboard development
+  - Built `BBDataBinder` JavaScript library with `data-bb-bind` attribute processing for dynamic content
+  - Implemented template engine with `data-bb-template` for repeated elements (job lists, tables, etc.)
+  - Added authentication integration with `data-bb-auth` for conditional element display
+  - Created comprehensive form handling with `data-bb-form` attributes and real-time validation
+  - Built style and attribute binding with `data-bb-bind-style` and `data-bb-bind-attr` for dynamic CSS and attributes
+- **Enhanced Form Processing**: Production-ready form handling with validation and error management
+  - Real-time field validation with `data-bb-validate` attributes and custom validation rules
+  - Automatic form submission to API endpoints with authentication token handling
+  - Loading states, success/error messaging, and form reset capabilities
+  - Support for job creation, profile updates, and custom forms with configurable endpoints
+- **Example Templates**: Complete working examples demonstrating all data binding features
+  - `data-binding-example.html` - Full demonstration of template binding with mock data
+  - `form-example.html` - Comprehensive form handling examples with validation
+  - `dashboard-enhanced.html` - Production-ready dashboard using data binding library
+
+### Enhanced
+
+- **Build System**: Updated Rollup configuration to build data binding library alongside Web Components
+  - Added `bb-data-binder.js` and `bb-data-binder.min.js` builds for production deployment
+  - Library available at `/js/bb-data-binder.min.js` endpoint for CDN-style usage
+  - Zero runtime dependencies - works with vanilla JavaScript and Supabase
+
+### Technical Implementation
+
+- **Data Binding Architecture**: Template-driven approach where HTML controls layout and JavaScript provides functionality
+  - DOM scanning system finds and registers elements with data binding attributes
+  - Efficient element updates with path-based data mapping and template caching
+  - Event delegation for `bb-action` attributes combined with data binding for complete template system
+- **Authentication Integration**: Seamless Supabase Auth integration with conditional rendering
+  - Elements with `data-bb-auth="required"` only show when authenticated
+  - Elements with `data-bb-auth="guest"` only show when not authenticated
+  - Automatic auth state monitoring and element visibility updates
+- **Form Processing Pipeline**: Complete form lifecycle management from validation to submission
+  - Client-side validation with multiple rule types (required, email, URL, length, pattern)
+  - API endpoint determination based on form action with automatic authentication headers
+  - Success/error handling with custom events and configurable redirects
+
 ## [0.5.3] – 2025-05-31
 
 ### Changed

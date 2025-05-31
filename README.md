@@ -13,7 +13,9 @@ Automatically warm site caches (especially built for [Webflow](https://www.webfl
 - 🔄 Automatic link extraction to discover and warm additional pages
 - 🧩 Clean architecture with proper dependency injection
 - 🔐 Secure authentication via Supabase Auth with JWT
-- 🌐 Web Components frontend for seamless Webflow integration
+- 🎨 Template + data binding system for flexible dashboard development
+- 📝 Complete form handling with real-time validation
+- 🌐 Web Components and data binding library for seamless Webflow integration
 
 ## Quick Start
 
@@ -44,6 +46,7 @@ Current development stage: Stage 4 - Core Authentication & MVP Interface (Comple
   - ✅ Supabase authentication system implemented
   - ✅ RESTful API infrastructure complete
   - ✅ Multi-tenant organisation model
+  - ✅ Template + data binding system complete (v0.5.4)
   - ✅ Web Components MVP interface complete
 - 🔄 Stage 5: Billing & Subscriptions
 - 🔄 Stage 6: Multi-Interface Expansion & Launch
@@ -52,10 +55,10 @@ See our [detailed roadmap](./Roadmap.md) for more information.
 
 ## Recent Improvements
 
-- **Code Refactoring**: Complete reorganisation of the codebase with improved architecture, reduced duplication, and better separation of concerns.
-- **URL Processing**: Enhanced sitemap processing with better URL normalisation and error handling for malformed URLs.
-- **PostgreSQL Integration**: Fully migrated from SQLite to PostgreSQL with optimised schema and queries.
-- **Worker Pool**: Improved worker pool implementation with PostgreSQL's row-level locking for efficient task processing.
+- **Template + Data Binding System (v0.5.4)**: Complete data binding library with `data-bb-bind`, `data-bb-template`, and `data-bb-form` attributes for flexible dashboard development.
+- **Form Processing**: Real-time validation, authentication integration, and automatic API submission for job creation and profile management.
+- **Authentication Integration**: Conditional rendering with `data-bb-auth` attributes and seamless Supabase Auth integration.
+- **Enhanced Examples**: Complete working examples demonstrating all data binding features with production-ready templates.
 
 ## Tech Stack
 
