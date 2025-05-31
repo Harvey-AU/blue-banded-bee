@@ -80,6 +80,10 @@ Blue Banded Bee is a web cache warming service built in Go, primarily focused on
 - `internal/db/` - Database access layer
 - `internal/jobs/` - Job queue and worker implementation
 - `internal/util/` - Shared utilities
+- `web/` - Frontend Web Components for Webflow integration
+  - `web/src/` - Component source code
+  - `web/dist/` - Built components (served via `/js/` endpoint)
+  - `web/examples/` - Integration examples and documentation
 
 ## Development Notes
 

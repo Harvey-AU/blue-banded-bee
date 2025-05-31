@@ -8,6 +8,66 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Multiple version updates may occur on the same date, each with its own version number.
 Each version represents a distinct set of changes, even if released on the same day.
 
+## [0.5.0] – 2025-05-30
+
+### Added
+
+- **Web Components MVP Interface**: Complete frontend infrastructure for Webflow integration
+  - Built vanilla Web Components architecture using template + data slots pattern (industry best practice)
+  - Created `bb-data-loader` core component for API data fetching and Webflow template population
+  - Implemented `bb-auth-login` component with full Supabase authentication and social providers
+  - Added `BBBaseComponent` base class with loading/error states, data binding, and event handling
+- **Production Build System**: Rollup-based build pipeline for component distribution
+  - Zero runtime dependencies (vanilla JavaScript, Supabase via CDN)
+  - Minified production bundle (`bb-components.min.js`) ready for CDN deployment
+  - Development and production builds with source maps and error handling
+- **Static File Serving**: Integrated component serving into existing Go application
+  - Added `/js/` endpoint to serve Web Components as static files from Go app
+  - Components now accessible at `https://app.bluebandedbee.co/js/bb-components.min.js`
+  - Docker container properly configured to include built components
+
+### Enhanced
+
+- **Webflow Integration Strategy**: Clarified multi-interface architecture and user journeys
+  - **BBB Main Website**: Primary dashboard built on Webflow with embedded Web Components
+  - **Webflow Designer Extension**: Lightweight progress modals within Webflow Designer
+  - **Slack Integration**: Threaded conversations with links to main BBB site
+  - Updated documentation to reflect three distinct user journey patterns
+- **Component Architecture**: Template-driven approach for maximum Webflow compatibility
+  - Data binding with `data-bind` attributes for text content population
+  - Style binding with `data-style-bind` for dynamic CSS properties (progress bars, etc.)
+  - Event handling for user interactions (view details, cancel jobs, form submissions)
+  - Real-time updates with configurable refresh intervals and WebSocket support
+
+### Technical Implementation
+
+- **API Integration**: Seamless connection to existing `/v1/*` RESTful endpoints
+  - Authentication via JWT tokens from Supabase Auth
+  - Error handling with structured API responses and user-friendly error messages
+  - Rate limiting and CORS support for cross-origin requests
+- **Development Workflow**: Streamlined build and deployment process
+  - Source files in `/web/src/` with modular component structure
+  - Build process: `npm run build` → commit built files → Fly deployment
+  - No CDN required initially - components served from existing infrastructure
+
+### Documentation
+
+- **Complete Integration Examples**: Production-ready code examples for Webflow
+  - `webflow-integration.html` - Copy-paste example for Webflow pages
+  - `complete-example.html` - Full-featured demo with all component features
+  - Comprehensive README with step-by-step Webflow integration instructions
+- **Architecture Documentation**: Updated UI implementation plan with clarified user journeys
+  - Documented template + data slots pattern and Web Components best practices
+  - Clear separation between BBB main site, Designer Extension, and Slack integration
+  - Technical justification for vanilla Web Components over framework alternatives
+
+### Infrastructure
+
+- **Deployment Ready**: Production infrastructure complete for Stage 4 MVP
+  - Components automatically built and deployed with existing Fly.io workflow
+  - Static file serving integrated into Go application without additional services
+  - Backward compatible - no changes to existing API or authentication systems
+
 ## [0.4.3] – 2025-05-30
 
 ### Added
