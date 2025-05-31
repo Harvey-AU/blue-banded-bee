@@ -108,7 +108,7 @@ func (h *Handler) ServeDashboard(w http.ResponseWriter, r *http.Request) {
 
 // ServeNewDashboard serves the new Web Components dashboard page
 func (h *Handler) ServeNewDashboard(w http.ResponseWriter, r *http.Request) {
-	http.ServeFile(w, r, "web/examples/job-dashboard-page.html")
+	http.ServeFile(w, r, "dashboard-new.html")
 }
 
 // DashboardStats handles dashboard statistics requests
