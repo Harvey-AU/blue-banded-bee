@@ -20,7 +20,13 @@
       "Bash(go list:*)",
       "Bash(cp:*)",
       "Bash(mkdir:*)",
-      "Bash(npm run build:*)"
+      "Bash(npm run build:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(source:*)",
+      "Bash(unalias:*)",
+      "Bash(/Users/simonsmallchua/flymel.sh:*)"
     ],
     "deny": []
   },
