@@ -54,9 +54,11 @@ func (h *Handler) SetupRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/test-components.html", h.ServeTestComponents)
 	mux.HandleFunc("/test-data-components.html", h.ServeTestDataComponents)
 	mux.HandleFunc("/dashboard", h.ServeDashboard)
+	mux.HandleFunc("/dashboard-new", h.ServeNewDashboard)
 	
 	// Web Components static files
 	mux.Handle("/js/", http.StripPrefix("/js/", http.FileServer(http.Dir("./web/dist/"))))
+	mux.Handle("/web/", http.StripPrefix("/web/", http.FileServer(http.Dir("./web/"))))
 }
 
 // HealthCheck handles basic health check requests
@@ -102,6 +104,11 @@ func (h *Handler) ServeTestDataComponents(w http.ResponseWriter, r *http.Request
 // ServeDashboard serves the dashboard page
 func (h *Handler) ServeDashboard(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, "dashboard.html")
+}
+
+// ServeNewDashboard serves the new Web Components dashboard page
+func (h *Handler) ServeNewDashboard(w http.ResponseWriter, r *http.Request) {
+	http.ServeFile(w, r, "web/examples/job-dashboard-page.html")
 }
 
 // DashboardStats handles dashboard statistics requests
