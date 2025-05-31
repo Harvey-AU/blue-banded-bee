@@ -112,24 +112,24 @@
   class BBBaseComponent extends HTMLElement {
     constructor() {
       super();
-      this.isConnected = false;
+      this._isComponentConnected = false;
       this.loadingStates = new Map();
       this.errorStates = new Map();
     }
 
     connectedCallback() {
-      this.isConnected = true;
+      this._isComponentConnected = true;
       this.render();
       this.setupEventListeners();
     }
 
     disconnectedCallback() {
-      this.isConnected = false;
+      this._isComponentConnected = false;
       this.cleanup();
     }
 
     attributeChangedCallback(name, oldValue, newValue) {
-      if (oldValue !== newValue && this.isConnected) {
+      if (oldValue !== newValue && this._isComponentConnected) {
         this.handleAttributeChange(name, oldValue, newValue);
       }
     }
@@ -689,7 +689,7 @@
       const interval = this.getNumberAttribute('refresh-interval');
       if (interval > 0) {
         this.refreshTimer = setInterval(() => {
-          if (this.isConnected && !this.isLoading()) {
+          if (this._isComponentConnected && !this.isLoading()) {
             this.loadData();
           }
         }, interval * 1000);
