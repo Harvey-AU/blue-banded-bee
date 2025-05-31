@@ -46,6 +46,7 @@ func (h *Handler) SetupRoutes(mux *http.ServeMux) {
 	// Static files
 	mux.HandleFunc("/test-login.html", h.ServeTestLogin)
 	mux.HandleFunc("/test-components.html", h.ServeTestComponents)
+	mux.HandleFunc("/test-data-components.html", h.ServeTestDataComponents)
 	mux.HandleFunc("/dashboard", h.ServeDashboard)
 	
 	// Web Components static files
@@ -85,6 +86,11 @@ func (h *Handler) ServeTestLogin(w http.ResponseWriter, r *http.Request) {
 // ServeTestComponents serves the Web Components test page
 func (h *Handler) ServeTestComponents(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, "test-components.html")
+}
+
+// ServeTestDataComponents serves the data components test page
+func (h *Handler) ServeTestDataComponents(w http.ResponseWriter, r *http.Request) {
+	http.ServeFile(w, r, "test-data-components.html")
 }
 
 // ServeDashboard serves the dashboard page
