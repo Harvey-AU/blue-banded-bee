@@ -28,7 +28,20 @@
       "Bash(unalias:*)",
       "Bash(/Users/simonsmallchua/flymel.sh:*)",
       "Bash(curl:*)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(npx:*)",
+      "Bash(claude --version)",
+      "Bash(claude mcp:*)",
+      "mcp__supabase__list_projects",
+      "mcp__playwright__browser_install",
+      "mcp__playwright__browser_navigate",
+      "mcp__sentry__whoami",
+      "mcp__sentry__find_organizations",
+      "mcp__sentry__find_projects",
+      "mcp__sentry__find_issues",
+      "mcp__sentry__find_dsns",
+      "WebFetch(domain:docs.anthropic.com)",
+      "WebFetch(domain:github.com)"
     ],
     "deny": []
   },
