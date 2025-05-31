@@ -223,6 +223,37 @@ sentry.Init(sentry.ClientOptions{
 - **Job Progress**: Real-time completion tracking and statistics
 - **API Performance**: Request timing and error rates
 
+## Frontend Integration
+
+### Template + Data Binding System
+Blue Banded Bee uses a template-based approach that allows users to design custom HTML layouts whilst JavaScript handles data population and real-time updates.
+
+**Architecture Pattern:**
+```html
+<!-- User designs custom HTML with data attributes -->
+<div class="custom-dashboard">
+  <span data-bb-bind="total_jobs">0</span>
+  <div data-bb-template="job">
+    <h4 data-bb-bind="domain">Loading...</h4>
+  </div>
+</div>
+
+<!-- Single script handles all data binding -->
+<script src="/js/bb-data-binder.js"></script>
+```
+
+**Data Flow:**
+- JavaScript scans DOM for `data-bb-bind` attributes
+- Fetches data from API endpoints (`/v1/dashboard/stats`, `/v1/jobs`)
+- Populates template elements with live data
+- Handles authentication state and real-time updates
+
+**Integration Benefits:**
+- Users control all HTML structure and CSS styling
+- No CSS conflicts with existing designs
+- Works with any frontend framework (Webflow, custom sites)
+- Lightweight JavaScript library (~50KB)
+
 ## Security & Authentication
 
 ### JWT Authentication

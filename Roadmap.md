@@ -250,42 +250,34 @@ Detailed plan available in [docs/organisation-model.md](docs/plans/organisation-
 
 ### ✅ MVP Interface Development (Completed v0.5.2)
 
-- [x] **Production-Ready Web Components Infrastructure**
-  - [x] Component-based architecture with HTML Custom Elements
-  - [x] `bb-data-loader` core component for API integration
-  - [x] `bb-auth-login` component with Supabase authentication
-  - [x] Production build system with Rollup bundling
-- [x] **Webflow Integration Foundation**
-  - [x] Supabase Auth integration via CDN approach
-  - [x] Template + data slots pattern for Webflow compatibility
-  - [x] Comprehensive integration examples and documentation
-  - [x] Static file serving from Go application
-- [x] **Web Components Testing & Refinement**
-  - [x] Comprehensive testing infrastructure with authentication state management
-  - [x] Fixed OAuth redirect behaviour for test and production scenarios
-  - [x] Intuitive redirect-url attribute handling
-  - [x] Production verification in both logged-in and logged-out states
+- [x] **Dashboard Demonstration Infrastructure**
+  - [x] Working vanilla JavaScript dashboard with Supabase authentication
+  - [x] API integration for job statistics and progress tracking
+  - [x] Real-time updates and comprehensive job management interface
+  - [x] Production deployment at app.bluebandedbee.co for demonstration
+- [x] **Template + Data Binding Planning**
+  - [x] Architecture documentation for template-based integration
+  - [x] Data binding attribute specification (`data-bb-bind`, `data-bb-template`)
+  - [x] Webflow integration strategy with custom HTML layouts
+  - [x] API endpoint design for frontend data consumption
 
-### 🔴 Enhanced Dashboard & User Interface
+### 🔴 Template + Data Binding Implementation
 
-- [ ] **Job Management Interfaces**
-  - [ ] Job summary dashboard with status overview cards and performance metrics
-  - [ ] Job list interface with search, filtering, and bulk operations
-  - [ ] Job detail views with live progress tracking and task breakdown
-  - [ ] Error analysis with categorised failure reasons and retry mechanisms
-- [ ] **User Experience & Analytics**
-  - [ ] Account settings and profile management
-  - [ ] Notification system for completed jobs
-  - [ ] Performance trends and domain-specific analytics
-  - [ ] Advanced job creation interface with configuration options
-- [ ] **Organisation Management**
-  - [ ] Member invitation and management system
-  - [ ] Organisation dashboard with shared resources
-  - [ ] Organisation-level reporting and analytics
-- [ ] **Usage Management & Limits**
-  - [ ] Plan-based usage limits and tracking
-  - [ ] Upgrade prompts and usage warnings
-  - [ ] Grace period implementation
+- [ ] **Core Data Binding Library**
+  - [ ] JavaScript library for `data-bb-bind` attribute processing
+  - [ ] Template engine for `data-bb-template` repeated content
+  - [ ] Authentication integration with conditional element display
+  - [ ] API client for automatic data fetching and updates
+- [ ] **Enhanced Job Management**
+  - [ ] Real-time job progress updates via data binding
+  - [ ] Job creation forms with template-based validation
+  - [ ] Error handling and user feedback systems
+  - [ ] Advanced filtering and search capabilities
+- [ ] **User Experience Features**
+  - [ ] Account settings and profile management templates
+  - [ ] Notification system integration
+  - [ ] Performance analytics and trend visualisation
+  - [ ] Responsive design compatibility testing
 
 ### 🔴 Webflow Designer Extension
 

@@ -2,273 +2,204 @@
 
 ## Overview
 
-Blue Banded Bee's user interface consists of multiple touchpoints that work together to provide a comprehensive cache warming experience. The main BBB website (built on Webflow) serves as the primary dashboard, while additional interfaces provide contextual access points.
+Blue Banded Bee provides a template + data binding system that allows users to build custom HTML layouts whilst the JavaScript handles data fetching, authentication, and real-time updates.
 
-## User Journeys & Interface Architecture
+## Architecture Approach
 
-### 1. Webflow Designer Integration Journey
-**User Flow:**
-1. In Webflow Designer → Open BBB app/extension
-2. Connect to Webflow project → Site publishes → Cache warming triggered automatically
-3. User sees modal of cache warming status in Webflow Designer
-4. Optional: Slack thread notifications if configured
-5. Click to view summary report in BBB main site
-6. Access detailed reports on BBB main site
+### Template + Data Binding System
 
-**Interface Components:**
-- Webflow Designer Extension (modal/sidebar panels)
-- Progress indicators and real-time status
-- Quick links to BBB main site
+Users design their own HTML/CSS layouts using `data-bb-bind` attributes. The JavaScript library finds these elements and populates them with live data from the API.
 
-### 2. Direct BBB Website Journey  
-**User Flow:**
-1. Go to BBB website (Webflow-hosted) → Register/login
-2. Register site to be crawled → Configure job settings
-3. Summary results appear in dashboard → View summary reports
-4. Access detailed reports and analytics → Configure Slack notifications
+**User controls:**
+- All HTML structure and CSS styling
+- Page layout and design positioning
+- Visual appearance and branding
 
-**Interface Components:**
-- Full dashboard built as Webflow site with embedded Web Components
-- Complete job management interface
-- Comprehensive reporting and analytics
-- User account and organisation management
-
-### 3. Slack Integration Journey
-**User Flow:**  
-1. Start job via Slack command → Thread created with initial stats
-2. Progress updates posted as thread replies → Job completion summary
-3. Click link to BBB main site for detailed reports
-
-**Interface Components:**
-- Slack bot with threaded conversations
-- Real-time progress updates in Slack
-- Links to BBB main site for detailed analysis
-
-## Architecture Clarification
-
-**BBB Main Website (Webflow + Web Components):**
-- Primary user interface and dashboard
-- Built on Webflow for marketing integration
-- Interactive features via embedded Web Components
-- Complete job management, reporting, and user account features
-
-**Webflow Designer Extension:**
-- Lightweight modal/panel interface within Webflow Designer
-- Real-time progress indicators during cache warming
-- Quick actions and settings
-- Links to BBB main site for comprehensive features
-
-**Shared Infrastructure:**
-- Both interfaces use the same API endpoints (`/v1/*`)
-- Consistent authentication via Supabase Auth
-- Real-time updates via Supabase Realtime
-- Same Web Components library for consistent UX
-
-## Architecture
-
-### Technology Stack
-- **Webflow**: Marketing pages and content management
-- **JavaScript + Web Components**: Custom application embedded in Webflow
-- **Supabase Auth**: Authentication and session management
-- **Supabase Realtime**: Real-time job progress updates
+**JavaScript handles:**
+- Data fetching from API endpoints
+- Authentication with Supabase
+- Real-time updates and live syncing
+- Finding and populating template elements
 
 ### Integration Method
-Component-based architecture using native Web Components that can be embedded directly into Webflow pages without complex build processes.
+
+```html
+<!-- User's custom HTML design -->
+<div class="my-dashboard-design">
+  <div class="stat-card">
+    <h3>Total Jobs</h3>
+    <span class="big-number" data-bb-bind="total_jobs">0</span>
+  </div>
+  
+  <div class="job-list">
+    <div class="job-template" data-bb-template="job">
+      <h4 data-bb-bind="domain">Domain loading...</h4>
+      <div class="progress-bar">
+        <div class="fill" data-bb-bind-style="width:{progress}%"></div>
+      </div>
+      <span data-bb-bind="status">pending</span>
+    </div>
+  </div>
+</div>
+
+<!-- Single script inclusion -->
+<script src="https://app.bluebandedbee.co/js/bb-data-binder.js"></script>
+```
+
+## Data Binding Attributes
+
+### Basic Data Binding
+- `data-bb-bind="field_name"` - Binds element's text content to API data field
+- `data-bb-bind-attr="href:{url}"` - Binds element attributes
+- `data-bb-bind-style="width:{progress}%"` - Binds CSS styles with formatting
+
+### Template Binding
+- `data-bb-template="template_name"` - Marks element as template for repeated data
+- Templates are cloned and populated for each data item
+
+### Authentication Elements
+- `data-bb-auth="required"` - Shows element only when authenticated
+- `data-bb-auth="guest"` - Shows element only when not authenticated
+
+## API Integration
+
+### Data Sources
+The JavaScript automatically fetches data from these endpoints:
+
+**Dashboard Data:**
+- `/v1/dashboard/stats` - Job statistics and counts
+- `/v1/jobs` - Recent jobs list with progress
+
+**Real-time Updates:**
+- Supabase Realtime for live job progress
+- Automatic re-fetch on data changes
+
+### Authentication Flow
+1. Supabase Auth handles login/logout
+2. JWT tokens automatically included in API requests
+3. Page elements shown/hidden based on auth state
+4. Template binding paused until authenticated
 
 ## Implementation Phases
 
-### Phase 1: Core Dashboard Components
-
-**Authentication Components:**
-```html
-<bb-auth-login></bb-auth-login>
-<bb-auth-signup></bb-auth-signup>
-<bb-user-profile></bb-user-profile>
-```
-
-**Job Management Components:**
-```html
-<bb-job-creator domain="example.com"></bb-job-creator>
-<bb-job-list status="running"></bb-job-list>
-<bb-job-progress job-id="123"></bb-job-progress>
-```
-
-**Results Components:**
-```html
-<bb-job-results job-id="123"></bb-job-results>
-<bb-task-list job-id="123" status="failed"></bb-task-list>
-```
+### Phase 1: Core Data Binding
+- Basic `data-bb-bind` attribute support
+- Authentication integration
+- Simple template population
+- Dashboard statistics binding
 
 ### Phase 2: Advanced Features
+- Real-time updates via Supabase
+- Form handling for job creation
+- Progress indicators and live updates
+- Error handling and user feedback
 
-**Real-time Updates:**
-- WebSocket connection to Supabase Realtime
-- Live job progress indicators
-- Instant error notifications
-
-**Enhanced Results:**
-- Performance charts and analytics
-- Cache hit ratio visualisation
-- Error categorisation and debugging
-
-### Phase 3: Integration Features
-
-**Webflow Integration:**
-- Auto-detect Webflow sites
-- One-click setup for Webflow users
-- Integration with Webflow's publishing workflow
+### Phase 3: Enhanced Integration
+- Webflow-specific optimisations
+- Performance improvements
+- Advanced template features
+- Custom event handling
 
 ## Development Approach
 
-### 1. Component Structure
+### JavaScript Library Structure
 ```javascript
-class BBJobCreator extends HTMLElement {
-  connectedCallback() {
-    this.innerHTML = this.render();
-    this.setupEventListeners();
+class BBDataBinder {
+  constructor() {
+    this.authManager = new AuthManager();
+    this.apiClient = new APIClient();
+    this.templateEngine = new TemplateEngine();
   }
-  
-  async createJob(domain, options) {
-    const response = await fetch('/v1/jobs', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${this.authToken}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ domain, options })
-    });
-    return response.json();
+
+  async init() {
+    await this.authManager.init();
+    this.bindElements();
+    this.setupRealtime();
+  }
+
+  bindElements() {
+    // Find and bind data-bb-bind elements
+    const elements = document.querySelectorAll('[data-bb-bind]');
+    elements.forEach(el => this.bindElement(el));
+  }
+
+  async fetchData(endpoint) {
+    return this.apiClient.get(endpoint);
   }
 }
-
-customElements.define('bb-job-creator', BBJobCreator);
 ```
 
-### 2. State Management
-- Centralised state using browser's native storage
-- Event-driven communication between components
-- Reactive updates for real-time data
-
-### 3. Authentication Flow
-1. User logs in via Supabase Auth
-2. JWT token stored securely
-3. All API requests include Bearer token
-4. Components automatically handle auth state changes
-
-## Webflow Integration Details
-
-### Embedding Strategy
-```html
-<!-- In Webflow page head -->
-<script src="https://blue-banded-bee.fly.dev/js/components.js"></script>
-
-<!-- In page body where dashboard should appear -->
-<bb-dashboard user-org="auto"></bb-dashboard>
-```
-
-### Styling Integration
-- Components inherit Webflow's CSS variables
-- Minimal custom styling to match Webflow themes
-- Responsive design using Webflow's grid system
-
-## Data Flow Architecture
-
-### Real-time Communication
-```
-User Action → Web Component → API Request → Database
+### Real-time Updates
+```javascript
+// Real-time communication flow
+User Action → Template Update → API Request → Database
      ↓              ↑              ↓           ↓
 UI Update ← Supabase Realtime ← Database Trigger
 ```
 
-### State Synchronisation
-1. **Optimistic Updates**: UI updates immediately
-2. **Server Confirmation**: API confirms changes
-3. **Real-time Sync**: Supabase broadcasts updates
-4. **Conflict Resolution**: Handle edge cases gracefully
+## Webflow Integration
+
+### Embedding Strategy
+```html
+<!-- In Webflow page head -->
+<script src="https://app.bluebandedbee.co/js/bb-data-binder.js"></script>
+
+<!-- In page body - user's custom design -->
+<div class="dashboard-section">
+  <h2>Cache Warming Dashboard</h2>
+  <div data-bb-bind="total_jobs">Loading...</div>
+</div>
+```
+
+### Styling Integration
+- JavaScript library has no styling dependencies
+- Works with any CSS framework or custom styles
+- Respects existing Webflow responsive design
+- No CSS conflicts or overrides
 
 ## Performance Considerations
 
 ### Loading Strategy
-- **Progressive Enhancement**: Basic functionality loads first
-- **Lazy Loading**: Advanced features load on demand
-- **Service Worker**: Cache components for offline functionality
+- Lightweight JavaScript library (~50KB)
+- Progressive enhancement approach
+- Only fetches data when elements are present
+- Efficient DOM querying and updates
 
 ### API Optimisation
-- **Request Batching**: Group related API calls
-- **Local Caching**: Store frequently accessed data
-- **Efficient Polling**: Smart refresh intervals based on activity
+- Intelligent caching of static data
+- Batched API requests where possible
+- Debounced real-time updates
+- Minimal DOM manipulation
 
 ## Security Implementation
 
-### Authentication Security
-- JWT tokens with short expiry (15 minutes)
-- Automatic token refresh handling
-- Secure storage using HttpOnly cookies where possible
+### Authentication
+- JWT tokens with automatic refresh
+- Secure token storage
+- Authentication state management
+- Protected data binding (auth-only content)
 
 ### Data Protection
-- Input sanitisation for all user data
-- XSS protection in component rendering
-- CSRF protection for state-changing operations
-
-## Testing Strategy
-
-### Component Testing
-```javascript
-// Example test for job creator component
-describe('BBJobCreator', () => {
-  it('creates job with valid domain', async () => {
-    const component = document.createElement('bb-job-creator');
-    document.body.appendChild(component);
-    
-    const result = await component.createJob('example.com', {
-      use_sitemap: true,
-      max_pages: 100
-    });
-    
-    expect(result.status).toBe('success');
-    expect(result.data.domain).toBe('example.com');
-  });
-});
-```
-
-### Integration Testing
-- End-to-end testing with real Webflow pages
-- Authentication flow testing
-- Real-time update verification
-
-## Deployment Strategy
-
-### CDN Distribution
-```bash
-# Build and deploy components
-npm run build
-aws s3 sync dist/ s3://blue-banded-bee-assets/js/
-aws cloudfront create-invalidation --distribution-id E123 --paths "/js/*"
-```
-
-### Version Management
-- Semantic versioning for component library
-- Backward compatibility for existing Webflow sites
-- Gradual rollout of new features
+- Input sanitisation for all bound data
+- XSS protection in template rendering
+- CSRF protection for API requests
 
 ## Launch Checklist
 
-### Pre-Launch
-- [ ] Complete authentication flow
-- [ ] Implement core dashboard components
-- [ ] Test Webflow embedding
-- [ ] Security audit and testing
+### Core Features
+- [ ] Data binding system implementation
+- [ ] Authentication integration
+- [ ] Template engine for repeated content
+- [ ] Real-time updates via Supabase
+
+### Webflow Integration
+- [ ] Test embedding in Webflow pages
+- [ ] Verify no CSS conflicts
+- [ ] Responsive design compatibility
 - [ ] Performance optimisation
 
-### Launch
-- [ ] Deploy component library to CDN
-- [ ] Update Webflow templates
-- [ ] Create user documentation
-- [ ] Monitor for issues and user feedback
-
-### Post-Launch
-- [ ] Gather user analytics
-- [ ] Plan feature enhancements
-- [ ] Optimise based on usage patterns
-
-This implementation plan provides a clear path from concept to production while maintaining flexibility for future enhancements and integrations.
+### Documentation
+- [ ] Integration guide for users
+- [ ] Data binding reference
+- [ ] Example templates and layouts
+- [ ] Troubleshooting guide
