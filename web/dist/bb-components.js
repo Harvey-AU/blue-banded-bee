@@ -722,7 +722,7 @@
 
   class BBAuthLogin extends BBBaseComponent {
     static get observedAttributes() {
-      return ['redirect-url', 'show-providers', 'compact'];
+      return ['redirect-url', 'show-providers', 'compact', 'test-mode'];
     }
 
     constructor() {
@@ -740,8 +740,8 @@
         }
       });
 
-      // Check if already logged in
-      if (authManager.isAuthenticated()) {
+      // Check if already logged in (skip in test mode)
+      if (authManager.isAuthenticated() && !this.getBooleanAttribute('test-mode')) {
         this.handleSuccessfulLogin();
       }
     }
@@ -923,11 +923,18 @@
 
     handleSuccessfulLogin() {
       const redirectUrl = this.hasAttribute('redirect-url') ? this.getAttribute('redirect-url') : '/dashboard';
+      const testMode = this.getBooleanAttribute('test-mode');
       
       this.dispatchCustomEvent('login-success', { 
         user: authManager.getUser(),
         redirectUrl 
       });
+
+      // Skip redirect in test mode
+      if (testMode) {
+        console.log('🧪 Test mode: Login successful but redirect prevented');
+        return;
+      }
 
       // Redirect if not prevented by parent
       setTimeout(() => {
