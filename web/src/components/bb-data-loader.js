@@ -180,7 +180,7 @@ export class BBDataLoader extends BBBaseComponent {
     const interval = this.getNumberAttribute('refresh-interval');
     if (interval > 0) {
       this.refreshTimer = setInterval(() => {
-        if (this.isConnected && !this.isLoading()) {
+        if (this._isComponentConnected && !this.isLoading()) {
           this.loadData();
         }
       }, interval * 1000);
