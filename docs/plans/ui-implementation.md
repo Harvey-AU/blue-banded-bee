@@ -4,6 +4,16 @@
 
 Blue Banded Bee provides a template + data binding system that allows users to build custom HTML layouts whilst the JavaScript handles data fetching, authentication, and real-time updates.
 
+## User Interface Strategy
+
+**Primary Interface:** Template + data binding on user's own website
+**Secondary Interfaces:** 
+- **Webflow Designer Extension:** Post-publish modal with cache warming status
+- **Webflow App:** Full site management within Webflow dashboard  
+- **Slack Bot:** Simple commands (`/bb warm example.com`) with threaded progress updates
+
+**Integration Philosophy:** Users control their own design and layout, Blue Banded Bee provides the data and functionality.
+
 ## Architecture Approach
 
 ### Template + Data Binding System
@@ -139,7 +149,9 @@ UI Update ← Supabase Realtime ← Database Trigger
 
 ## Webflow Integration
 
-### Embedding Strategy
+### Multiple Integration Points
+
+**1. Template Embedding (User's Live Site)**
 ```html
 <!-- In Webflow page head -->
 <script src="https://app.bluebandedbee.co/js/bb-data-binder.js"></script>
@@ -151,11 +163,22 @@ UI Update ← Supabase Realtime ← Database Trigger
 </div>
 ```
 
+**2. Designer Extension (Post-Publish Modal)**
+- Lightweight modal appears after site publish
+- Shows cache warming progress and completion status
+- Quick summary with link to full dashboard
+- Easy to dismiss, non-intrusive design
+
+**3. Webflow App (Site Management)**
+- Full dashboard interface within Webflow's app ecosystem
+- Webhook integration with publishing events
+- Automatic cache warming triggers
+- Site-specific settings and configuration
+
 ### Styling Integration
-- JavaScript library has no styling dependencies
-- Works with any CSS framework or custom styles
-- Respects existing Webflow responsive design
-- No CSS conflicts or overrides
+- Template embedding: No styling dependencies, works with any CSS
+- Designer Extension: Minimal, native Webflow modal styling
+- Webflow App: Uses Webflow's app design system
 
 ## Performance Considerations
 
