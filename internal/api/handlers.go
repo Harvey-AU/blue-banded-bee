@@ -103,7 +103,7 @@ func (h *Handler) ServeTestDataComponents(w http.ResponseWriter, r *http.Request
 
 // ServeDashboard serves the dashboard page
 func (h *Handler) ServeDashboard(w http.ResponseWriter, r *http.Request) {
-	http.ServeFile(w, r, "dashboard.html")
+	http.ServeFile(w, r, "dashboard-new.html")
 }
 
 // ServeNewDashboard serves the new Web Components dashboard page
