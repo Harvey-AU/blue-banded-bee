@@ -279,25 +279,23 @@ Detailed plan available in [docs/organisation-model.md](docs/plans/organisation-
   - [ ] Performance analytics and trend visualisation
   - [ ] Responsive design compatibility testing
 
-### 🔴 Webflow Integration
+### 🔴 Webflow App Integration
 
 - [ ] **Webflow Developer Registration**
-  - [ ] Register as Webflow developer for Apps and Designer Extensions
-  - [ ] Set up OAuth integration with Webflow's publishing webhooks
-- [ ] **Designer Extension (Post-Publish Modal)**
-  - [ ] Simple modal showing cache warming status after site publish
-  - [ ] High-level progress indicators and completion summary
-  - [ ] Link to main website for detailed job information
-  - [ ] Lightweight interface that can be easily dismissed
-- [ ] **Webflow App (Site Management)**
-  - [ ] Full site management interface within Webflow dashboard
-  - [ ] Webhook integration with Webflow's publishing events
-  - [ ] Automatic cache warming triggers on site publish
+  - [ ] Register as Webflow developer and create App
+  - [ ] Set up OAuth integration with existing Supabase Auth system
+- [ ] **Webflow App Development**
+  - [ ] App opens within Webflow Designer interface
+  - [ ] User login with existing Supabase Auth (no separate auth)
+  - [ ] Show last crawl status for current Webflow site
+  - [ ] "Crawl Now" button to trigger immediate cache warming
+  - [ ] "Auto-crawl on publish" toggle for webhook setup
+  - [ ] Webhook integration to trigger crawls on site publish
 
 ### 🔴 Slack Integration
 
 - [ ] **Slack Application Development**
-  - [ ] Create Slack app with slash commands (`/bb warm example.com`)
+  - [ ] Create Slack app with slash commands (`/crawl sitedomain.com`)
   - [ ] Integrate with existing Supabase Auth system (no separate API keys)
   - [ ] Simple job creation workflow via slash commands
 - [ ] **Threading & Progress Updates**
@@ -306,9 +304,8 @@ Detailed plan available in [docs/organisation-model.md](docs/plans/organisation-
   - [ ] Final completion summary with link to main website
   - [ ] Error notifications with basic troubleshooting info
 - [ ] **Commands & Help**
-  - [ ] `/bb warm [domain]` - Start cache warming job
-  - [ ] `/bb status [job-id]` - Get job status (optional)
-  - [ ] `/bb help` - Show available commands
+  - [ ] `/crawl [domain]` - Start cache warming job
+  - [ ] `/crawl help` - Show available commands
   - [ ] Simple installation and setup documentation
 
 ## ⚪ Stage 5: Subscriptions & Monetisation

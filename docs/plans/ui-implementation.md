@@ -6,22 +6,23 @@ Blue Banded Bee provides a template + data binding system that allows users to b
 
 ## User Interface Strategy
 
-**Primary Interface:** Template + data binding on user's own website
+**Primary Interface:** Template + data binding system for building Blue Banded Bee's own product dashboard
 **Secondary Interfaces:** 
-- **Webflow Designer Extension:** Post-publish modal with cache warming status
-- **Webflow App:** Full site management within Webflow dashboard  
-- **Slack Bot:** Simple commands (`/bb warm example.com`) with threaded progress updates
+- **Webflow App:** Installed in user's Webflow workspace, shows crawl status and controls for their sites
+- **Slack Bot:** Simple commands (`/crawl sitedomain.com`) with threaded progress updates
 
-**Integration Philosophy:** Users control their own design and layout, Blue Banded Bee provides the data and functionality.
+**Integration Philosophy:** 
+- **Template binding** allows flexible dashboard design for Blue Banded Bee's own product
+- **External integrations** provide simple, focused functionality within user's existing workflows
 
 ## Architecture Approach
 
 ### Template + Data Binding System
 
-Users design their own HTML/CSS layouts using `data-bb-bind` attributes. The JavaScript library finds these elements and populates them with live data from the API.
+Blue Banded Bee's own dashboard pages use `data-bb-bind` attributes. The JavaScript library finds these elements and populates them with live data from the API.
 
-**User controls:**
-- All HTML structure and CSS styling
+**Template system controls:**
+- All HTML structure and CSS styling for Blue Banded Bee's dashboard
 - Page layout and design positioning
 - Visual appearance and branding
 
@@ -34,8 +35,8 @@ Users design their own HTML/CSS layouts using `data-bb-bind` attributes. The Jav
 ### Integration Method
 
 ```html
-<!-- User's custom HTML design -->
-<div class="my-dashboard-design">
+<!-- Blue Banded Bee dashboard HTML design -->
+<div class="bb-dashboard-design">
   <div class="stat-card">
     <h3>Total Jobs</h3>
     <span class="big-number" data-bb-bind="total_jobs">0</span>
@@ -147,38 +148,35 @@ User Action → Template Update → API Request → Database
 UI Update ← Supabase Realtime ← Database Trigger
 ```
 
-## Webflow Integration
+## External Integrations
 
-### Multiple Integration Points
+### Webflow App Integration
 
-**1. Template Embedding (User's Live Site)**
-```html
-<!-- In Webflow page head -->
-<script src="https://app.bluebandedbee.co/js/bb-data-binder.js"></script>
+**User Experience:**
+1. User installs Blue Banded Bee app in their Webflow workspace
+2. Opens app within Webflow Designer interface  
+3. Logs in with existing Supabase Auth (same as main website)
+4. Views last crawl status for current Webflow site
+5. Can trigger "Crawl Now" or enable "Auto-crawl on publish"
 
-<!-- In page body - user's custom design -->
-<div class="dashboard-section">
-  <h2>Cache Warming Dashboard</h2>
-  <div data-bb-bind="total_jobs">Loading...</div>
-</div>
-```
+**Technical Implementation:**
+- Uses existing `/v1/jobs` API endpoints
+- Integrates with Supabase Auth (no separate auth system)
+- Webhook integration for automatic crawling on site publish
+- Site detection from Webflow context
 
-**2. Designer Extension (Post-Publish Modal)**
-- Lightweight modal appears after site publish
-- Shows cache warming progress and completion status
-- Quick summary with link to full dashboard
-- Easy to dismiss, non-intrusive design
+### Slack Bot Integration
 
-**3. Webflow App (Site Management)**
-- Full dashboard interface within Webflow's app ecosystem
-- Webhook integration with publishing events
-- Automatic cache warming triggers
-- Site-specific settings and configuration
+**User Experience:**
+1. Install Blue Banded Bee Slack app in workspace
+2. Use `/crawl sitedomain.com` command to start cache warming
+3. Receive progress updates as thread replies
+4. Get completion summary with link to main dashboard
 
-### Styling Integration
-- Template embedding: No styling dependencies, works with any CSS
-- Designer Extension: Minimal, native Webflow modal styling
-- Webflow App: Uses Webflow's app design system
+**Technical Implementation:**
+- Uses existing `/v1/jobs` API endpoints
+- Integrates with Supabase Auth system
+- Real-time updates via existing job status APIs
 
 ## Performance Considerations
 
