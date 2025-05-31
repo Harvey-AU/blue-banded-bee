@@ -274,7 +274,7 @@ Detailed plan available in [docs/multi-interface-architecture.md](docs/architect
   - [ ] Implement basic authentication handling
   - [ ] Design extensible client architecture
 
-### ✅ MVP Interface Development (Completed v0.5.0)
+### ✅ MVP Interface Development (Completed v0.5.2)
 
 Detailed plan available in [docs/plans/ui-implementation.md](docs/plans/ui-implementation.md)
 
@@ -288,6 +288,11 @@ Detailed plan available in [docs/plans/ui-implementation.md](docs/plans/ui-imple
   - [x] Implement template + data slots pattern for Webflow compatibility
   - [x] Create comprehensive integration examples and documentation
   - [x] Set up static file serving from Go application
+- [x] **Web Components Testing & Refinement**
+  - [x] Comprehensive testing infrastructure with authentication state management
+  - [x] Fixed OAuth redirect behaviour for both test and production scenarios
+  - [x] Simplified component design with intuitive redirect-url attribute handling
+  - [x] Production-ready components verified in both logged-in and logged-out states
 
 ### 🔴 Marketing Interface (Medium Priority)
 

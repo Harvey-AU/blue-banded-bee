@@ -8,6 +8,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Multiple version updates may occur on the same date, each with its own version number.
 Each version represents a distinct set of changes, even if released on the same day.
 
+## [0.5.2] – 2025-05-31
+
+### Fixed
+
+- **Authentication Component OAuth Redirect**: Resolved OAuth login redirecting to dashboard on test pages
+  - Fixed auth state change listener to only redirect when `redirect-url` attribute is explicitly set
+  - Simplified redirect logic - components without `redirect-url` stay on current page after login
+  - Removed complex `test-mode` attribute approach in favour of intuitive behaviour
+  - OAuth flows (Google, GitHub, Slack) now complete on test pages without unwanted redirects
+
+### Enhanced
+
+- **Component Design Philosophy**: Streamlined authentication component behaviour
+  - Test pages: `<bb-auth-login>` (no redirect-url) = No redirect, works in both logged-in/out states
+  - Production pages: `<bb-auth-login redirect-url="/dashboard">` = Redirects after successful login
+  - Cleaner, more predictable component behaviour without special testing attributes
+
+### Technical Details
+
+- Auth state change listener now checks for `redirect-url` attribute before triggering redirects
+- Removed `test-mode` from observed attributes and related logic
+- Web Components rebuilt and deployed with simplified redirect handling
+- Both initial load check and OAuth completion follow same redirect-url logic
+
 ## [0.5.1] – 2025-05-31
 
 ### Added
