@@ -8,6 +8,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Multiple version updates may occur on the same date, each with its own version number.
 Each version represents a distinct set of changes, even if released on the same day.
 
+## [0.5.3] – 2025-05-31
+
+### Changed
+
+- **Dashboard Architecture**: Replaced Web Components with vanilla JavaScript + attribute-based event handling
+  - Removed Web Components dependencies (`bb-auth-login`, `bb-job-dashboard`) from dashboard
+  - Implemented vanilla JavaScript with modern styling for better reliability and maintainability
+  - Added attribute-based event system: elements with `bb-action` attributes automatically handle functionality
+  - Replaced `onclick` handlers with `bb-action="refresh-dashboard"`, `bb-action="create-job"` pattern
+  - Maintained modern UI design whilst switching to proven vanilla JavaScript approach
+
+### Enhanced
+
+- **Template + Data Binding Foundation**: Established framework for flexible dashboard development
+  - Dashboard now demonstrates template approach where HTML layout is customisable
+  - JavaScript automatically scans for `bb-action` and `bb-data-*` attributes to provide functionality
+  - Event delegation system allows any HTML element with `bb-action` to trigger Blue Banded Bee features
+  - Sets foundation for future template binding system where users control layout design
+
+### Fixed
+
+- **Production Dashboard Stability**: Resolved Web Components authentication and loading issues
+  - Dashboard now uses proven vanilla JavaScript patterns instead of experimental Web Components
+  - Removed complex component lifecycle management in favour of direct API integration
+  - Eliminated dependency on Web Components build pipeline for core dashboard functionality
+
+### Technical Details
+
+- Consolidated `dashboard-new.html` and `dashboard.html` into single vanilla JavaScript implementation
+- Added `setupAttributeHandlers()` function with event delegation for `bb-action` attributes
+- Maintained API integration with `/v1/dashboard/stats` and `/v1/jobs` endpoints
+- Preserved modern grid layout and responsive design from Web Components version
+
 ## [0.5.2] – 2025-05-31
 
 ### Fixed
