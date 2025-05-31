@@ -347,10 +347,10 @@
       </div>
 
       <div class="page-actions">
-        <button class="bb-btn bb-btn-secondary" onclick="refreshDashboard()">
+        <button class="bb-btn bb-btn-secondary" bb-action="refresh-dashboard">
           <span>↻</span> Refresh
         </button>
-        <button class="bb-btn bb-btn-primary" onclick="showNewJobModal()">
+        <button class="bb-btn bb-btn-primary" bb-action="create-job">
           <span>+</span> New Job
         </button>
       </div>
@@ -383,10 +383,10 @@
         <div class="bb-section-header">
           <h3>Recent Jobs</h3>
           <div class="bb-section-actions">
-            <button class="bb-btn bb-btn-secondary" onclick="refreshDashboard()">
+            <button class="bb-btn bb-btn-secondary" bb-action="refresh-dashboard">
               <span>↻</span> Refresh
             </button>
-            <button class="bb-btn bb-btn-primary" onclick="alert('Job creation UI coming soon!')">
+            <button class="bb-btn bb-btn-primary" bb-action="create-job">
               <span>+</span> New Job
             </button>
           </div>
@@ -411,6 +411,7 @@
       console.log('Dashboard initializing...');
       await loadDashboard();
       setupFilters();
+      setupAttributeHandlers();
     });
 
     async function loadDashboard() {
@@ -476,7 +477,7 @@
               <div style="font-size: 3em; margin-bottom: 16px;">📋</div>
               <h4 style="margin: 0 0 8px 0; color: #374151;">No Jobs Found</h4>
               <p style="margin: 0 0 24px 0;">Get started by creating your first cache warming job.</p>
-              <button class="bb-btn bb-btn-primary" onclick="alert('Job creation UI coming soon!')">
+              <button class="bb-btn bb-btn-primary" bb-action="create-job">
                 <span>+</span> Create First Job
               </button>
             </div>
@@ -505,7 +506,7 @@
                   <span style="font-weight: 500;">Started:</span> ${job.started_at ? new Date(job.started_at).toLocaleString() : '-'}
                 </div>
                 <div>
-                  <button style="background: none; border: none; color: #3b82f6; cursor: pointer; text-decoration: underline;" onclick="alert('Job details coming soon!')">
+                  <button style="background: none; border: none; color: #3b82f6; cursor: pointer; text-decoration: underline;" bb-action="view-job-details" bb-data-job-id="${job.id}">
                     View Details
                   </button>
                 </div>
@@ -547,12 +548,44 @@
       }
     }
 
+    function setupAttributeHandlers() {
+      // Set up attribute-based event handling using event delegation
+      document.addEventListener('click', (e) => {
+        const action = e.target.getAttribute('bb-action');
+        if (action) {
+          e.preventDefault();
+          handleBBAction(action, e.target);
+        }
+      });
+    }
+
+    function handleBBAction(action, element) {
+      switch (action) {
+        case 'refresh-dashboard':
+          refreshDashboard();
+          break;
+        case 'create-job':
+          createJob();
+          break;
+        case 'view-job-details':
+          const jobId = element.getAttribute('bb-data-job-id');
+          viewJobDetails(jobId);
+          break;
+        default:
+          console.warn('Unknown bb-action:', action);
+      }
+    }
+
     function refreshDashboard() {
       loadDashboard();
     }
 
-    function showNewJobModal() {
+    function createJob() {
       alert('Job creation UI coming soon!');
+    }
+
+    function viewJobDetails(jobId) {
+      alert(`Job details for job ID: ${jobId}\n\nThis would open the job details page.`);
     }
   </script>
 </body>
