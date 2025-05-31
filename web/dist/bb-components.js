@@ -735,7 +735,7 @@
       
       // Listen for auth state changes
       this.unsubscribeAuth = authManager.onAuthStateChange((event, session) => {
-        if (session) {
+        if (session && this.hasAttribute('redirect-url')) {
           this.handleSuccessfulLogin();
         }
       });
