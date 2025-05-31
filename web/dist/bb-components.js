@@ -922,7 +922,7 @@
     }
 
     handleSuccessfulLogin() {
-      const redirectUrl = this.getAttribute('redirect-url') || '/dashboard';
+      const redirectUrl = this.hasAttribute('redirect-url') ? this.getAttribute('redirect-url') : '/dashboard';
       
       this.dispatchCustomEvent('login-success', { 
         user: authManager.getUser(),
@@ -931,7 +931,7 @@
 
       // Redirect if not prevented by parent
       setTimeout(() => {
-        if (redirectUrl !== window.location.pathname) {
+        if (redirectUrl && redirectUrl !== '' && redirectUrl !== window.location.pathname) {
           window.location.href = redirectUrl;
         }
       }, 100);
