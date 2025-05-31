@@ -27,7 +27,8 @@
       "Bash(source:*)",
       "Bash(unalias:*)",
       "Bash(/Users/simonsmallchua/flymel.sh:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(ls:*)"
     ],
     "deny": []
   },

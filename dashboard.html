@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Blue Banded Bee - Job Dashboard</title>
+  <title>Blue Banded Bee - Dashboard</title>
   
   <!-- Supabase CDN -->
   <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
@@ -263,6 +263,89 @@
       padding: 0 24px 24px 24px;
     }
 
+    .bb-job-card {
+      background: #f8f9fa;
+      border: 1px solid #e9ecef;
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 16px;
+    }
+
+    .bb-job-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+
+    .bb-job-domain {
+      font-weight: 600;
+      font-size: 1.1em;
+      color: #1a1a1a;
+    }
+
+    .bb-job-status {
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+
+    .bb-job-progress {
+      margin-bottom: 16px;
+    }
+
+    .bb-progress-bar {
+      width: 100%;
+      height: 8px;
+      background: #e5e7eb;
+      border-radius: 4px;
+      overflow: hidden;
+      margin-bottom: 8px;
+    }
+
+    .bb-progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #3b82f6, #1d4ed8);
+      transition: width 0.3s ease;
+    }
+
+    .bb-job-details {
+      font-size: 14px;
+      color: #6b7280;
+    }
+
+    .bb-job-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 14px;
+    }
+
+    .bb-job-started {
+      color: #6b7280;
+    }
+
+    .bb-job-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .bb-job-link {
+      background: none;
+      border: none;
+      color: #3b82f6;
+      cursor: pointer;
+      text-decoration: underline;
+      font-size: 14px;
+    }
+
+    .loading {
+      color: #6b7280;
+      font-style: italic;
+    }
+
     @media (max-width: 768px) {
       .page-header .container {
         padding: 0 16px;
@@ -313,7 +396,7 @@
           <span class="status-dot"></span>
           <span>Live</span>
         </div>
-        <div class="user-avatar" id="userAvatar">?</div>
+        <div class="user-avatar" data-bb-bind="user.initials">?</div>
       </div>
     </div>
   </header>
@@ -359,26 +442,26 @@
     <!-- Dashboard Content -->
     <div id="dashboardContent">
       <!-- Stats Overview Cards -->
-      <div class="bb-stats-grid" id="statsContainer">
+      <div class="bb-stats-grid">
         <div class="bb-stat-card">
-          <div class="bb-stat-value" id="totalJobs">-</div>
+          <div class="bb-stat-value" data-bb-bind="stats.total_jobs">-</div>
           <div class="bb-stat-label">Total Jobs</div>
         </div>
         <div class="bb-stat-card">
-          <div class="bb-stat-value" id="runningJobs">-</div>
+          <div class="bb-stat-value" data-bb-bind="stats.running_jobs">-</div>
           <div class="bb-stat-label">Running</div>
         </div>
         <div class="bb-stat-card">
-          <div class="bb-stat-value" id="completedJobs">-</div>
+          <div class="bb-stat-value" data-bb-bind="stats.completed_jobs">-</div>
           <div class="bb-stat-label">Completed</div>
         </div>
         <div class="bb-stat-card">
-          <div class="bb-stat-value" id="failedJobs">-</div>
+          <div class="bb-stat-value" data-bb-bind="stats.failed_jobs">-</div>
           <div class="bb-stat-label">Failed</div>
         </div>
       </div>
 
-      <!-- Recent Jobs Section -->
+      <!-- Recent Jobs Section with Data Binding Templates -->
       <div class="bb-jobs-section">
         <div class="bb-section-header">
           <h3>Recent Jobs</h3>
@@ -392,12 +475,41 @@
           </div>
         </div>
         
-        <div class="bb-jobs-list" id="jobsList">
-          <!-- Jobs will be populated here -->
+        <div class="bb-jobs-list">
+          <!-- Job Template (uses data-bb-template for automatic rendering) -->
+          <div class="bb-job-card" data-bb-template="job">
+            <div class="bb-job-header">
+              <div class="bb-job-domain" data-bb-bind="domain">example.com</div>
+              <div class="bb-job-status" data-bb-bind-attr="class:bb-status-{status}" data-bb-bind="status">pending</div>
+            </div>
+            <div class="bb-job-progress">
+              <div class="bb-progress-bar">
+                <div class="bb-progress-fill" data-bb-bind-style="width:{progress}%"></div>
+              </div>
+              <div class="bb-job-details">
+                <span data-bb-bind="completed_tasks">0</span> / <span data-bb-bind="total_tasks">0</span> tasks 
+                (<span data-bb-bind="progress">0</span>%)
+              </div>
+            </div>
+            <div class="bb-job-footer">
+              <div class="bb-job-started">
+                <span style="font-weight: 500;">Started:</span> 
+                <span data-bb-bind="started_at_formatted">-</span>
+              </div>
+              <div class="bb-job-actions">
+                <button class="bb-job-link" bb-action="view-job-details" data-bb-bind-attr="bb-data-job-id:{id}">
+                  View Details
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
   </main>
+
+  <!-- Include the data binding library -->
+  <script src="/js/bb-data-binder.min.js"></script>
 
   <script>
     // Supabase configuration
@@ -406,147 +518,77 @@
 
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    // Initialize dashboard
+    // Initialize data binder and dashboard
+    let dataBinder;
+
     document.addEventListener('DOMContentLoaded', async () => {
-      console.log('Dashboard initializing...');
-      await loadDashboard();
-      setupFilters();
+      console.log('Enhanced dashboard initializing...');
+      
+      // Create data binder with production config
+      dataBinder = new BBDataBinder({
+        apiBaseUrl: '',
+        debug: false,
+        refreshInterval: 10 // Auto-refresh every 10 seconds
+      });
+
+      // Initialize data binder
+      await dataBinder.init();
+
+      // Override the refresh method to load dashboard data
+      dataBinder.refresh = async function() {
+        try {
+          console.log('Refreshing dashboard data...');
+          
+          // Load stats and jobs data
+          const data = await this.loadAndBind({
+            stats: '/v1/dashboard/stats?range=last7'
+          });
+          
+          // Load jobs separately for template binding
+          const jobsResponse = await this.fetchData('/v1/jobs?limit=10&range=last7');
+          const jobs = jobsResponse.jobs || [];
+          
+          // Process jobs data for better display
+          const processedJobs = jobs.map(job => ({
+            ...job,
+            domain: job.domains?.name || 'Unknown Domain',
+            progress: Math.round(job.progress || 0),
+            started_at_formatted: job.started_at 
+              ? new Date(job.started_at).toLocaleString() 
+              : '-'
+          }));
+          
+          // Bind jobs to template
+          this.bindTemplates({ job: processedJobs });
+          
+          console.log('Dashboard data refreshed', { stats: data.stats, jobs: processedJobs.length });
+          
+        } catch (error) {
+          console.error('Dashboard refresh failed:', error);
+          
+          // Set error state for stats
+          this.updateElements({
+            stats: {
+              total_jobs: 'Error',
+              running_jobs: 'Error', 
+              completed_jobs: 'Error',
+              failed_jobs: 'Error'
+            }
+          });
+        }
+      };
+
+      // Set up attribute-based event handling
       setupAttributeHandlers();
+      
+      // Set up filters
+      setupFilters();
+
+      // Initial load
+      await dataBinder.refresh();
+
+      console.log('Enhanced dashboard initialized');
     });
-
-    async function loadDashboard() {
-      try {
-        await Promise.all([loadStats(), loadJobs()]);
-      } catch (error) {
-        console.error('Dashboard load error:', error);
-      }
-    }
-
-    async function loadStats() {
-      try {
-        const response = await fetch('/v1/dashboard/stats?range=last7', {
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        });
-
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        }
-
-        const result = await response.json();
-        const stats = result.data;
-
-        // Update stats cards
-        document.getElementById('totalJobs').textContent = stats.total_jobs || 0;
-        document.getElementById('runningJobs').textContent = stats.running_jobs || 0;
-        document.getElementById('completedJobs').textContent = stats.completed_jobs || 0;
-        document.getElementById('failedJobs').textContent = stats.failed_jobs || 0;
-
-      } catch (error) {
-        console.error('Failed to load stats:', error);
-        // Set error state
-        document.getElementById('totalJobs').textContent = 'Error';
-        document.getElementById('runningJobs').textContent = 'Error';
-        document.getElementById('completedJobs').textContent = 'Error';
-        document.getElementById('failedJobs').textContent = 'Error';
-      }
-    }
-
-    async function loadJobs() {
-      try {
-        const response = await fetch('/v1/jobs?limit=10&range=last7', {
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        });
-
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        }
-
-        const result = await response.json();
-        const jobs = result.data.jobs || [];
-
-        // Update jobs list
-        const jobsList = document.getElementById('jobsList');
-        
-        if (jobs.length === 0) {
-          jobsList.innerHTML = `
-            <div class="bb-empty-state" style="text-align: center; padding: 60px 20px; color: #6b7280;">
-              <div style="font-size: 3em; margin-bottom: 16px;">📋</div>
-              <h4 style="margin: 0 0 8px 0; color: #374151;">No Jobs Found</h4>
-              <p style="margin: 0 0 24px 0;">Get started by creating your first cache warming job.</p>
-              <button class="bb-btn bb-btn-primary" bb-action="create-job">
-                <span>+</span> Create First Job
-              </button>
-            </div>
-          `;
-        } else {
-          jobsList.innerHTML = jobs.map(job => `
-            <div class="bb-job-card" style="background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 8px; padding: 20px; margin-bottom: 16px;">
-              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-                <div style="font-weight: 600; font-size: 1.1em; color: #1a1a1a;">
-                  ${job.domains?.name || 'Unknown Domain'}
-                </div>
-                <div class="bb-status-${job.status}" style="padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; text-transform: uppercase;">
-                  ${job.status}
-                </div>
-              </div>
-              <div style="margin-bottom: 16px;">
-                <div style="width: 100%; height: 8px; background: #e5e7eb; border-radius: 4px; overflow: hidden; margin-bottom: 8px;">
-                  <div style="height: 100%; background: linear-gradient(90deg, #3b82f6, #1d4ed8); width: ${job.progress || 0}%"></div>
-                </div>
-                <div style="font-size: 14px; color: #6b7280;">
-                  ${job.completed_tasks || 0} / ${job.total_tasks || 0} tasks (${Math.round(job.progress || 0)}%)
-                </div>
-              </div>
-              <div style="display: flex; justify-content: space-between; align-items: center; font-size: 14px;">
-                <div style="color: #6b7280;">
-                  <span style="font-weight: 500;">Started:</span> ${job.started_at ? new Date(job.started_at).toLocaleString() : '-'}
-                </div>
-                <div>
-                  <button style="background: none; border: none; color: #3b82f6; cursor: pointer; text-decoration: underline;" bb-action="view-job-details" bb-data-job-id="${job.id}">
-                    View Details
-                  </button>
-                </div>
-              </div>
-            </div>
-          `).join('');
-        }
-
-      } catch (error) {
-        console.error('Failed to load jobs:', error);
-        document.getElementById('jobsList').innerHTML = `
-          <div style="text-align: center; padding: 40px; color: #ef4444;">
-            <p>Failed to load jobs. Please try refreshing the page.</p>
-          </div>
-        `;
-      }
-    }
-
-    function setupFilters() {
-      const dateRange = document.getElementById('dateRange');
-      const refreshInterval = document.getElementById('refreshInterval');
-
-      if (dateRange) {
-        dateRange.addEventListener('change', () => {
-          loadDashboard(); // Reload with new date range
-        });
-      }
-
-      if (refreshInterval) {
-        refreshInterval.addEventListener('change', () => {
-          // Set up auto-refresh based on selection
-          const interval = parseInt(refreshInterval.value);
-          if (interval > 0) {
-            setInterval(() => {
-              loadDashboard();
-            }, interval * 1000);
-          }
-        });
-      }
-    }
 
     function setupAttributeHandlers() {
       // Set up attribute-based event handling using event delegation
@@ -576,8 +618,34 @@
       }
     }
 
+    function setupFilters() {
+      const dateRange = document.getElementById('dateRange');
+      const refreshInterval = document.getElementById('refreshInterval');
+
+      if (dateRange) {
+        dateRange.addEventListener('change', () => {
+          dataBinder.refresh(); // Reload with new date range
+        });
+      }
+
+      if (refreshInterval) {
+        refreshInterval.addEventListener('change', () => {
+          const interval = parseInt(refreshInterval.value);
+          
+          // Stop current auto-refresh
+          dataBinder.stopAutoRefresh();
+          
+          // Start new auto-refresh if interval > 0
+          if (interval > 0) {
+            dataBinder.refreshInterval = interval;
+            dataBinder.startAutoRefresh();
+          }
+        });
+      }
+    }
+
     function refreshDashboard() {
-      loadDashboard();
+      dataBinder.refresh();
     }
 
     function createJob() {
