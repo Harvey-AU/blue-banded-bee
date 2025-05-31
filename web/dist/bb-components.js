@@ -722,7 +722,7 @@
 
   class BBAuthLogin extends BBBaseComponent {
     static get observedAttributes() {
-      return ['redirect-url', 'show-providers', 'compact', 'test-mode'];
+      return ['redirect-url', 'show-providers', 'compact'];
     }
 
     constructor() {
@@ -740,8 +740,8 @@
         }
       });
 
-      // Check if already logged in (skip in test mode)
-      if (authManager.isAuthenticated() && !this.getBooleanAttribute('test-mode')) {
+      // Check if already logged in - only redirect if redirect-url is explicitly set
+      if (authManager.isAuthenticated() && this.hasAttribute('redirect-url')) {
         this.handleSuccessfulLogin();
       }
     }
@@ -922,26 +922,19 @@
     }
 
     handleSuccessfulLogin() {
-      const redirectUrl = this.hasAttribute('redirect-url') ? this.getAttribute('redirect-url') : '/dashboard';
-      const testMode = this.getBooleanAttribute('test-mode');
+      const redirectUrl = this.getAttribute('redirect-url');
       
       this.dispatchCustomEvent('login-success', { 
         user: authManager.getUser(),
         redirectUrl 
       });
 
-      // Skip redirect in test mode
-      if (testMode) {
-        console.log('🧪 Test mode: Login successful but redirect prevented');
-        return;
-      }
-
-      // Redirect if not prevented by parent
-      setTimeout(() => {
-        if (redirectUrl && redirectUrl !== '' && redirectUrl !== window.location.pathname) {
+      // Only redirect if redirect-url attribute is explicitly set
+      if (redirectUrl && redirectUrl !== '' && redirectUrl !== window.location.pathname) {
+        setTimeout(() => {
           window.location.href = redirectUrl;
-        }
-      }, 100);
+        }, 100);
+      }
     }
   }
 
