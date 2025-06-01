@@ -4,6 +4,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **VERY IMPORTANT:** Please write in British (Australian) English, not American English.
 
+**VERY IMPORTANT:** Always review [./Claude.md] each time you start new tasks or after several rounds of iterating on a task, and before deploying.
+
 ## Project Initialisation
 
 This file provides complete guidance for working with Blue Banded Bee. All work should follow the guidelines, workflow, and standards outlined below.
@@ -13,6 +15,8 @@ This file provides complete guidance for working with Blue Banded Bee. All work 
 Blue Banded Bee is a web cache warming service built in Go, focused on Webflow sites. It uses a PostgreSQL-backed worker pool architecture for efficient URL crawling and cache warming.
 
 **For detailed technical information, see:**
+
+Please review these before proceeding.
 
 - [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) - System design and components
 - [docs/DATABASE.md](./docs/DATABASE.md) - Schema and PostgreSQL features
@@ -66,6 +70,7 @@ go run ./cmd/test_jobs/main.go
 ### Application Testing with MCP Browser
 
 **DOMAIN USAGE GUIDE:**
+
 - **Local development**: `http://localhost:8080` - Blue Banded Bee application for local testing
 - **Production marketing site**: `https://bluebandedbee.co` - Marketing website only
 - **Production application**: `https://app.bluebandedbee.co` - Live Blue Banded Bee application, services, demo pages
@@ -88,7 +93,7 @@ mcp__playwright__browser_press_key("Cmd+Shift+R") # Mac
 mcp__playwright__browser_navigate("http://localhost:8080/dashboard")
 mcp__playwright__browser_press_key("F5")
 
-# IMPORTANT: 
+# IMPORTANT:
 # - NEVER test against bluebandedbee.co (it's the marketing site, not the app)
 # - Use app.bluebandedbee.co for production application testing
 # - Browser cache can show outdated content even after successful deployments
