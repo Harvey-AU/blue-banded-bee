@@ -1395,33 +1395,6 @@
           </div>
         </div>
         
-        <div class="bb-form-group">
-          <label for="includePaths">Include Paths (Optional)</label>
-          <input 
-            type="text" 
-            id="includePaths" 
-            name="include_paths" 
-            placeholder="/blog/*, /products/*"
-            class="bb-form-input"
-          >
-          <div style="font-size: 12px; color: #6b7280; margin-top: 4px;">
-            Only crawl paths matching these patterns (comma-separated)
-          </div>
-        </div>
-        
-        <div class="bb-form-group">
-          <label for="excludePaths">Exclude Paths (Optional)</label>
-          <input 
-            type="text" 
-            id="excludePaths" 
-            name="exclude_paths" 
-            placeholder="/admin/*, /wp-admin/*"
-            class="bb-form-input"
-          >
-          <div style="font-size: 12px; color: #6b7280; margin-top: 4px;">
-            Skip paths matching these patterns (comma-separated)
-          </div>
-        </div>
         
         <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 32px;">
           <button type="button" class="bb-button bb-button-outline" bb-action="close-create-job-modal">
@@ -2317,8 +2290,6 @@
       const concurrency = parseInt(formData.get('concurrency'));
       const useSitemap = formData.get('use_sitemap') === 'on';
       const findLinks = formData.get('find_links') === 'on';
-      const includePaths = formData.get('include_paths');
-      const excludePaths = formData.get('exclude_paths');
 
       // Basic validation
       if (!domain) {
@@ -2335,28 +2306,15 @@
       clearCreateJobError();
 
       try {
-        // Build job options
-        const jobOptions = {
-          max_pages: maxPages,
-          concurrency: concurrency,
-          use_sitemap: useSitemap,
-          find_links: findLinks
-        };
-
-        if (includePaths && includePaths.trim()) {
-          jobOptions.include_paths = includePaths.trim();
-        }
-
-        if (excludePaths && excludePaths.trim()) {
-          jobOptions.exclude_paths = excludePaths.trim();
-        }
-
         const response = await dataBinder.fetchData('/v1/jobs', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             domain: domain,
-            options: jobOptions
+            max_pages: maxPages,
+            concurrency: concurrency,
+            use_sitemap: useSitemap,
+            find_links: findLinks
           })
         });
 
