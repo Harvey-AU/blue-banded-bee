@@ -213,6 +213,35 @@
       50% { opacity: 0.5; }
     }
 
+    /* Job status visual enhancements */
+    .job-running {
+      border-left: 4px solid #3b82f6;
+      background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+    }
+
+    .job-completed {
+      border-left: 4px solid #22c55e;
+    }
+
+    .job-failed {
+      border-left: 4px solid #ef4444;
+    }
+
+    .progress-pulsing {
+      animation: progressPulse 2s ease-in-out infinite;
+    }
+
+    @keyframes progressPulse {
+      0%, 100% { 
+        opacity: 1;
+        transform: scaleY(1);
+      }
+      50% { 
+        opacity: 0.8;
+        transform: scaleY(0.95);
+      }
+    }
+
     .bb-btn {
       padding: 8px 16px;
       border-radius: 6px;
@@ -781,6 +810,83 @@
       margin-top: 4px;
     }
 
+    /* Global notification system */
+    .bb-notification {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      max-width: 400px;
+      z-index: 10000;
+      transform: translateX(100%);
+      transition: transform 0.3s ease;
+      opacity: 0;
+    }
+
+    .bb-notification-show {
+      transform: translateX(0);
+      opacity: 1;
+    }
+
+    .bb-notification-content {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 16px 20px;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    .bb-notification-error .bb-notification-content {
+      background: #fee2e2;
+      color: #dc2626;
+      border: 1px solid #fecaca;
+    }
+
+    .bb-notification-success .bb-notification-content {
+      background: #dcfce7;
+      color: #16a34a;
+      border: 1px solid #bbf7d0;
+    }
+
+    .bb-notification-info .bb-notification-content {
+      background: #dbeafe;
+      color: #1d4ed8;
+      border: 1px solid #bfdbfe;
+    }
+
+    .bb-notification-icon {
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+
+    .bb-notification-message {
+      flex: 1;
+      line-height: 1.4;
+    }
+
+    .bb-notification-close {
+      background: none;
+      border: none;
+      font-size: 18px;
+      font-weight: bold;
+      cursor: pointer;
+      color: inherit;
+      opacity: 0.7;
+      transition: opacity 0.2s ease;
+      padding: 0;
+      width: 20px;
+      height: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .bb-notification-close:hover {
+      opacity: 1;
+    }
+
     @media (max-width: 768px) {
       .page-header .container {
         padding: 0 16px;
@@ -1218,6 +1324,126 @@
     </div>
   </div>
 
+  <!-- Job Creation Modal -->
+  <div id="createJobModal" class="bb-modal">
+    <div class="bb-modal-content" style="max-width: 600px;">
+      <div class="bb-modal-header">
+        <h2 class="bb-modal-title">Create New Job</h2>
+        <button class="bb-modal-close" bb-action="close-create-job-modal">&times;</button>
+      </div>
+      
+      <form id="createJobForm" class="bb-auth-form">
+        <div class="bb-form-group">
+          <label for="jobDomain">Domain</label>
+          <input 
+            type="url" 
+            id="jobDomain" 
+            name="domain" 
+            required 
+            placeholder="https://example.com"
+            class="bb-form-input"
+          >
+          <div class="bb-field-error" id="domainError" style="display: none;"></div>
+        </div>
+        
+        <div class="bb-form-group">
+          <label for="maxPages">Maximum Pages</label>
+          <input 
+            type="number" 
+            id="maxPages" 
+            name="max_pages" 
+            min="1" 
+            max="1000" 
+            value="100"
+            class="bb-form-input"
+          >
+          <div style="font-size: 12px; color: #6b7280; margin-top: 4px;">
+            Maximum number of pages to crawl (1-1000)
+          </div>
+        </div>
+        
+        <div class="bb-form-group">
+          <label for="concurrency">Concurrency</label>
+          <select id="concurrency" name="concurrency" class="bb-form-input" style="padding: 12px 16px;">
+            <option value="1">1 (Slow, gentle)</option>
+            <option value="3" selected>3 (Moderate)</option>
+            <option value="5">5 (Fast)</option>
+            <option value="10">10 (Very fast)</option>
+          </select>
+          <div style="font-size: 12px; color: #6b7280; margin-top: 4px;">
+            Number of concurrent connections
+          </div>
+        </div>
+        
+        <div class="bb-form-group">
+          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+            <input type="checkbox" id="useSitemap" name="use_sitemap" checked style="margin: 0;">
+            <span>Use sitemap.xml</span>
+          </label>
+          <div style="font-size: 12px; color: #6b7280; margin-top: 4px;">
+            Automatically discover URLs from sitemap
+          </div>
+        </div>
+        
+        <div class="bb-form-group">
+          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+            <input type="checkbox" id="findLinks" name="find_links" checked style="margin: 0;">
+            <span>Follow internal links</span>
+          </label>
+          <div style="font-size: 12px; color: #6b7280; margin-top: 4px;">
+            Discover and crawl additional pages by following links
+          </div>
+        </div>
+        
+        <div class="bb-form-group">
+          <label for="includePaths">Include Paths (Optional)</label>
+          <input 
+            type="text" 
+            id="includePaths" 
+            name="include_paths" 
+            placeholder="/blog/*, /products/*"
+            class="bb-form-input"
+          >
+          <div style="font-size: 12px; color: #6b7280; margin-top: 4px;">
+            Only crawl paths matching these patterns (comma-separated)
+          </div>
+        </div>
+        
+        <div class="bb-form-group">
+          <label for="excludePaths">Exclude Paths (Optional)</label>
+          <input 
+            type="text" 
+            id="excludePaths" 
+            name="exclude_paths" 
+            placeholder="/admin/*, /wp-admin/*"
+            class="bb-form-input"
+          >
+          <div style="font-size: 12px; color: #6b7280; margin-top: 4px;">
+            Skip paths matching these patterns (comma-separated)
+          </div>
+        </div>
+        
+        <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 32px;">
+          <button type="button" class="bb-button bb-button-outline" bb-action="close-create-job-modal">
+            Cancel
+          </button>
+          <button type="submit" class="bb-button bb-button-primary" id="createJobSubmitBtn">
+            Create Job
+          </button>
+        </div>
+      </form>
+      
+      <!-- Loading State -->
+      <div id="createJobLoading" class="bb-auth-loading" style="display: none;">
+        <div class="bb-spinner"></div>
+        <p>Creating job...</p>
+      </div>
+      
+      <!-- Error Message -->
+      <div id="createJobError" class="bb-auth-error" style="display: none;"></div>
+    </div>
+  </div>
+
   <!-- Include the data binding library -->
   <script src="/js/bb-data-binder.min.js"></script>
 
@@ -1288,6 +1514,12 @@
         try {
           console.log('Refreshing dashboard data...');
           
+          // Show refresh indicator
+          const statusIndicator = document.querySelector('.status-indicator');
+          if (statusIndicator) {
+            statusIndicator.innerHTML = '<span class="status-dot"></span><span>Refreshing...</span>';
+          }
+          
           // Load stats and jobs data
           const data = await this.loadAndBind({
             stats: '/v1/dashboard/stats?range=last7'
@@ -1310,20 +1542,52 @@
           // Bind jobs to template
           this.bindTemplates({ job: processedJobs });
           
+          // Show empty state if no jobs
+          if (processedJobs.length === 0) {
+            const jobsList = document.querySelector('.bb-jobs-list');
+            if (jobsList) {
+              jobsList.innerHTML = `
+                <div style="text-align: center; padding: 40px 20px; color: #6b7280;">
+                  <div style="font-size: 48px; margin-bottom: 16px;">🐝</div>
+                  <h3 style="margin: 0 0 8px 0; color: #374151;">No jobs found</h3>
+                  <p style="margin: 0; font-size: 14px;">Create your first cache warming job to get started.</p>
+                  <button class="bb-btn bb-btn-primary" bb-action="create-job" style="margin-top: 16px;">
+                    <span>+</span> Create Job
+                  </button>
+                </div>
+              `;
+            }
+          } else {
+            // Update job action visibility and visual states
+            setTimeout(() => {
+              updateJobActionVisibility();
+              updateJobVisualStates();
+            }, 100); // Small delay to ensure DOM updates are complete
+          }
+          
           console.log('Dashboard data refreshed', { stats: data.stats, jobs: processedJobs.length });
           
         } catch (error) {
           console.error('Dashboard refresh failed:', error);
           
+          // Show user-friendly error message
+          showDashboardError('Unable to refresh dashboard data. Please check your connection and try again.');
+          
           // Set error state for stats
           this.updateElements({
             stats: {
-              total_jobs: 'Error',
-              running_jobs: 'Error', 
-              completed_jobs: 'Error',
-              failed_jobs: 'Error'
+              total_jobs: '–',
+              running_jobs: '–', 
+              completed_jobs: '–',
+              failed_jobs: '–'
             }
           });
+        } finally {
+          // Reset status indicator
+          const statusIndicator = document.querySelector('.status-indicator');
+          if (statusIndicator) {
+            statusIndicator.innerHTML = '<span class="status-dot"></span><span>Live</span>';
+          }
         }
       };
 
@@ -1342,8 +1606,37 @@
       // Setup authentication event handlers
       setupAuthHandlers();
 
+      // Set up network status monitoring
+      setupNetworkMonitoring();
+
       console.log('Enhanced dashboard initialized');
     });
+
+    function setupNetworkMonitoring() {
+      // Check initial network status
+      updateNetworkStatus();
+      
+      // Listen for network status changes
+      window.addEventListener('online', () => {
+        updateNetworkStatus();
+        showInfoMessage('Connection restored. Refreshing data...', 2000);
+        setTimeout(() => dataBinder.refresh(), 500);
+      });
+      
+      window.addEventListener('offline', () => {
+        updateNetworkStatus();
+        showDashboardError('Connection lost. Some features may not work.', 'error', 0);
+      });
+    }
+
+    function updateNetworkStatus() {
+      const statusIndicator = document.querySelector('.status-indicator');
+      if (statusIndicator && !navigator.onLine) {
+        statusIndicator.innerHTML = '<span style="background: #ef4444;" class="status-dot"></span><span>Offline</span>';
+      } else if (statusIndicator && navigator.onLine) {
+        statusIndicator.innerHTML = '<span class="status-dot"></span><span>Live</span>';
+      }
+    }
 
     async function updateUserInfo() {
       const userEmailElement = document.getElementById('userEmail');
@@ -1436,6 +1729,9 @@
         case 'close-auth-modal':
           closeAuthModal();
           break;
+        case 'close-create-job-modal':
+          closeCreateJobModal();
+          break;
         case 'show-login':
           showAuthForm('login');
           break;
@@ -1492,6 +1788,19 @@
     let currentJobId = null;
 
     function refreshDashboard() {
+      // Add loading state to refresh buttons
+      document.querySelectorAll('[bb-action="refresh-dashboard"]').forEach(btn => {
+        const originalText = btn.innerHTML;
+        btn.innerHTML = '<span>⟳</span> Refreshing...';
+        btn.disabled = true;
+        
+        // Reset button after refresh completes
+        setTimeout(() => {
+          btn.innerHTML = originalText;
+          btn.disabled = false;
+        }, 2000);
+      });
+      
       dataBinder.refresh();
     }
 
@@ -1520,8 +1829,11 @@
           
           dataBinder.bindTemplates({ job: processedJobs });
           
-          // Update visibility of action buttons based on status
-          updateJobActionVisibility();
+          // Update visibility of action buttons and visual states
+          setTimeout(() => {
+            updateJobActionVisibility();
+            updateJobVisualStates();
+          }, 100);
         })
         .catch(error => {
           console.error('Failed to load jobs:', error);
@@ -1546,8 +1858,35 @@
       });
     }
 
+    function updateJobVisualStates() {
+      // Add visual indicators for running jobs
+      document.querySelectorAll('[data-bb-template="job"]').forEach(jobCard => {
+        const statusElement = jobCard.querySelector('[data-bb-bind="status"]');
+        const progressBar = jobCard.querySelector('.bb-progress-fill');
+        const currentStatus = statusElement ? statusElement.textContent.toLowerCase() : '';
+        
+        // Remove existing animation classes
+        jobCard.classList.remove('job-running', 'job-completed', 'job-failed');
+        if (progressBar) {
+          progressBar.classList.remove('progress-pulsing');
+        }
+        
+        // Add status-specific visual effects
+        if (currentStatus === 'running') {
+          jobCard.classList.add('job-running');
+          if (progressBar) {
+            progressBar.classList.add('progress-pulsing');
+          }
+        } else if (currentStatus === 'completed') {
+          jobCard.classList.add('job-completed');
+        } else if (currentStatus === 'failed') {
+          jobCard.classList.add('job-failed');
+        }
+      });
+    }
+
     function createJob() {
-      alert('Job creation UI coming soon!');
+      showCreateJobModal();
     }
 
     async function viewJobDetails(jobId) {
@@ -1597,7 +1936,7 @@
         
       } catch (error) {
         console.error('Failed to load job details:', error);
-        alert('Failed to load job details. Please try again.');
+        showDashboardError('Failed to load job details. Please check your connection and try again.');
       }
     }
 
@@ -1668,23 +2007,28 @@
       }
 
       try {
-        await dataBinder.fetchData(`/v1/jobs/${jobId}`, {
+        const response = await dataBinder.fetchData(`/v1/jobs/${jobId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ action: 'restart' })
         });
         
-        alert('Job restart initiated successfully');
+        console.log('Job restart initiated:', response);
+        
+        // Show success message with better UX
+        const jobDetails = response.data || response;
+        showSuccessMessage(`Job restart initiated successfully for ${jobDetails.domain || 'domain'}`);
         
         // Refresh dashboard and modal if open
-        dataBinder.refresh();
+        await dataBinder.refresh();
         if (currentJobId === jobId) {
-          viewJobDetails(jobId);
+          await viewJobDetails(jobId);
         }
         
       } catch (error) {
         console.error('Failed to restart job:', error);
-        alert('Failed to restart job. Please try again.');
+        const errorMessage = error.message || 'Failed to restart job. Please try again.';
+        showDashboardError(`Restart failed: ${errorMessage}`);
       }
     }
 
@@ -1696,21 +2040,28 @@
       }
 
       try {
-        await dataBinder.fetchData(`/v1/jobs/${jobId}`, {
-          method: 'DELETE'
+        const response = await dataBinder.fetchData(`/v1/jobs/${jobId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'cancel' })
         });
         
-        alert('Job cancelled successfully');
+        console.log('Job cancelled:', response);
+        
+        // Show success message with better UX
+        const jobDetails = response.data || response;
+        showSuccessMessage(`Job cancelled successfully for ${jobDetails.domain || 'domain'}`);
         
         // Refresh dashboard and close modal if open
-        dataBinder.refresh();
+        await dataBinder.refresh();
         if (currentJobId === jobId) {
           closeModal();
         }
         
       } catch (error) {
         console.error('Failed to cancel job:', error);
-        alert('Failed to cancel job. Please try again.');
+        const errorMessage = error.message || 'Failed to cancel job. Please try again.';
+        showDashboardError(`Cancel failed: ${errorMessage}`);
       }
     }
 
@@ -1730,6 +2081,91 @@
     function closeModal() {
       document.getElementById('jobDetailsModal').classList.remove('show');
       currentJobId = null;
+    }
+
+    function showCreateJobModal() {
+      document.getElementById('createJobModal').classList.add('show');
+      // Reset form
+      document.getElementById('createJobForm').reset();
+      clearCreateJobError();
+      hideCreateJobLoading();
+      
+      // Set defaults
+      document.getElementById('maxPages').value = '100';
+      document.getElementById('concurrency').value = '3';
+      document.getElementById('useSitemap').checked = true;
+      document.getElementById('findLinks').checked = true;
+    }
+
+    function closeCreateJobModal() {
+      document.getElementById('createJobModal').classList.remove('show');
+      clearCreateJobError();
+      hideCreateJobLoading();
+    }
+
+    function showCreateJobLoading() {
+      document.getElementById('createJobLoading').style.display = 'block';
+      document.getElementById('createJobForm').style.display = 'none';
+    }
+
+    function hideCreateJobLoading() {
+      document.getElementById('createJobLoading').style.display = 'none';
+      document.getElementById('createJobForm').style.display = 'block';
+    }
+
+    function showCreateJobError(message) {
+      const errorDiv = document.getElementById('createJobError');
+      errorDiv.textContent = message;
+      errorDiv.style.display = 'block';
+    }
+
+    function clearCreateJobError() {
+      document.getElementById('createJobError').style.display = 'none';
+    }
+
+    // Global error notification system
+    function showDashboardError(message, type = 'error', duration = 5000) {
+      // Remove existing notifications
+      const existingNotification = document.querySelector('.bb-notification');
+      if (existingNotification) {
+        existingNotification.remove();
+      }
+
+      // Create notification element
+      const notification = document.createElement('div');
+      notification.className = `bb-notification bb-notification-${type}`;
+      notification.innerHTML = `
+        <div class="bb-notification-content">
+          <span class="bb-notification-icon">${type === 'error' ? '⚠️' : type === 'success' ? '✅' : 'ℹ️'}</span>
+          <span class="bb-notification-message">${message}</span>
+          <button class="bb-notification-close" onclick="this.parentElement.parentElement.remove()">×</button>
+        </div>
+      `;
+
+      // Add to page
+      document.body.appendChild(notification);
+
+      // Auto-remove after duration
+      if (duration > 0) {
+        setTimeout(() => {
+          if (notification.parentNode) {
+            notification.remove();
+          }
+        }, duration);
+      }
+
+      // Animate in
+      setTimeout(() => {
+        notification.classList.add('bb-notification-show');
+      }, 10);
+    }
+
+    function showSuccessMessage(message, duration = 3000) {
+      showDashboardError(message, 'success', duration);
+    }
+
+    function showInfoMessage(message, duration = 4000) {
+      showDashboardError(message, 'info', duration);
     }
 
     // Handle authentication callback
@@ -1823,6 +2259,7 @@
 
       // Set up modal form handlers
       setupAuthModalHandlers();
+      setupCreateJobHandler();
       
       // Set up password strength checking
       setupPasswordStrength();
@@ -1855,6 +2292,89 @@
           handleSocialLogin(provider);
         });
       });
+    }
+
+    function setupCreateJobHandler() {
+      const createJobForm = document.getElementById('createJobForm');
+      if (createJobForm) {
+        createJobForm.addEventListener('submit', handleCreateJob);
+      }
+
+      // Close modal when clicking outside
+      document.getElementById('createJobModal').addEventListener('click', (e) => {
+        if (e.target.id === 'createJobModal') {
+          closeCreateJobModal();
+        }
+      });
+    }
+
+    async function handleCreateJob(event) {
+      event.preventDefault();
+      const formData = new FormData(event.target);
+      
+      const domain = formData.get('domain');
+      const maxPages = parseInt(formData.get('max_pages'));
+      const concurrency = parseInt(formData.get('concurrency'));
+      const useSitemap = formData.get('use_sitemap') === 'on';
+      const findLinks = formData.get('find_links') === 'on';
+      const includePaths = formData.get('include_paths');
+      const excludePaths = formData.get('exclude_paths');
+
+      // Basic validation
+      if (!domain) {
+        showCreateJobError('Domain is required');
+        return;
+      }
+
+      if (maxPages < 1 || maxPages > 1000) {
+        showCreateJobError('Maximum pages must be between 1 and 1000');
+        return;
+      }
+
+      showCreateJobLoading();
+      clearCreateJobError();
+
+      try {
+        // Build job options
+        const jobOptions = {
+          max_pages: maxPages,
+          concurrency: concurrency,
+          use_sitemap: useSitemap,
+          find_links: findLinks
+        };
+
+        if (includePaths && includePaths.trim()) {
+          jobOptions.include_paths = includePaths.trim();
+        }
+
+        if (excludePaths && excludePaths.trim()) {
+          jobOptions.exclude_paths = excludePaths.trim();
+        }
+
+        const response = await dataBinder.fetchData('/v1/jobs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            domain: domain,
+            options: jobOptions
+          })
+        });
+
+        console.log('Job created successfully:', response);
+        
+        // Close modal and refresh dashboard
+        closeCreateJobModal();
+        await dataBinder.refresh();
+        
+        // Show success message
+        showSuccessMessage(`Job created successfully for ${domain}`);
+        
+      } catch (error) {
+        console.error('Failed to create job:', error);
+        showCreateJobError(error.message || 'Failed to create job. Please try again.');
+      } finally {
+        hideCreateJobLoading();
+      }
     }
 
     function showAuthModal() {
