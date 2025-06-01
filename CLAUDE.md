@@ -27,14 +27,6 @@ Please review these before proceeding.
 
 ## Quick Commands
 
-### Debugging
-
-```bash
-# Enable debug mode by setting in .env
-DEBUG=true
-LOG_LEVEL=debug
-```
-
 ### Dashboard Development
 
 ```bash
@@ -54,20 +46,48 @@ cd web && npm run build
 cd web && npm run serve
 ```
 
-### Testing
+### Development Workflow
+
+**Complete workflow for all changes:**
+
+1. **Review CLAUDE.md** - Always check this file before starting and before deploying
+2. **Test locally first** - Use `go test ./...`, `docker build .`, or local server testing
+3. **Commit with simple messages** - 5-6 words, no AI generation references  
+4. **Push to GitHub** - Only when ready for production deployment
+5. **Monitor deployment** - Check GitHub Actions status, resolve failures and repush
+6. **Test in production** - Use Playwright to verify features meet requirements
+
+**Git Message Requirements:**
+- Keep messages simple: 5-6 words maximum
+- No AI generation references or Claude attribution
+- Examples: "Add user authentication", "Fix API rate limiting", "Update dashboard styling"
+
+### Testing Commands
 
 ```bash
-# Run unit tests
+# Local testing before commit
 go test ./...
+docker build -t blue-banded-bee-test .
 
-# Run integration tests
+# Web Components (if modified)
+cd web && npm run build
+
+# Check deployment status
+gh run list --limit 5
+gh run view <run-id> --log
+
+# Unit and integration tests
+go test ./...
 RUN_INTEGRATION_TESTS=true go test ./...
-
-# Test job queue functionality
 go run ./cmd/test_jobs/main.go
+
+# Common deployment failure checks:
+# - Missing files in Dockerfile COPY commands
+# - Test files referenced but not created  
+# - Static assets not included in Docker build
 ```
 
-### Application Testing with MCP Browser
+### Production Testing with MCP Browser
 
 **DOMAIN USAGE GUIDE:**
 
@@ -100,27 +120,6 @@ mcp__playwright__browser_press_key("F5")
 # - Always perform cache-busting before taking screenshots or testing functionality
 ```
 
-### Build Verification
-
-```bash
-# Test Docker build locally BEFORE pushing
-docker build -t blue-banded-bee-test .
-
-# Check recent deployment status
-gh run list --limit 5
-
-# Check failed deployments specifically
-gh run list --status failure --limit 5
-
-# Get detailed logs for a specific run
-gh run view <run-id> --log
-
-# Common deployment failures:
-# - Missing files in Dockerfile COPY commands
-# - Test files referenced but not created
-# - Static assets not included in Docker build
-```
-
 ## Code Organisation
 
 - `cmd/app/` - Main application entry point
@@ -145,9 +144,7 @@ gh run view <run-id> --log
 
 **Testing:**
 
-- Unit tests: `go test ./...`
-- Integration tests: `RUN_INTEGRATION_TESTS=true go test ./...`
-- Job queue testing: `go run ./cmd/test_jobs/main.go`
+- See Testing Commands section above for complete workflow
 
 **Error Handling:**
 
@@ -228,13 +225,13 @@ gh run view <run-id> --log
 
 ### Git and Version Control Policy
 
-**Git operations are allowed and encouraged**
+**Follow the Development Workflow above for all changes**
 
-- Use `git add` and `git commit` freely to save progress
-- **Only `git push` when ready to test in production** - documentation-only changes don't warrant deployment
-- Keep commit messages simple: 5-6 words, no AI generation references
+- **MANDATORY**: Review CLAUDE.md before starting work and before committing
+- Use `git add` and `git commit` freely to save progress  
+- **Only `git push` when ready for production deployment**
 - Deploy via GitHub Actions (push to GitHub, not direct `fly deploy`)
-- Use the established commit message format without Claude attribution
+- Documentation-only changes don't warrant deployment unless specifically requested
 
 ## Communication & Problem-Solving
 
@@ -265,35 +262,21 @@ gh run view <run-id> --log
 
 ### Development Workflow Awareness
 
-**Build Process:**
+**Critical Deployment Checks:**
 
-- When modifying Web Components, always run `npm run build` in `/web` directory before committing
-- Stage both `web/src/` and `web/dist/` files when committing component changes
-- Web Components require rebuilt dist files to function in production
-
-**Docker Deployment:**
-
-- **CRITICAL**: Check Dockerfile when adding new static files or directories
-- The Dockerfile selectively copies files - new static content must be explicitly added
-- When creating files in root directory or new web directories, update Dockerfile COPY commands
-- Test locally with `docker build` before pushing if adding static assets
-- 404 errors for new static files often indicate missing Dockerfile entries
-- **PREVENTION**: When removing files, always check and update Dockerfile COPY commands
-- **MANDATORY**: Always run `docker build .` locally before committing changes that affect static files
-- **VERIFICATION**: Use `ls -la` to verify files exist before adding COPY commands
+- **Web Components**: Run `npm run build` in `/web` directory before committing changes
+- **Docker**: Check Dockerfile when adding static files - new content must be explicitly copied
+- **Static Assets**: Run `docker build .` locally before pushing if adding new files/directories
+- **404 Errors**: Usually indicate missing Dockerfile COPY commands for new static files
 
 **Testing Strategy:**
 
-- Test functionality in both logged-in and logged-out states
-- Create comprehensive test scenarios (component loading, authentication, mock data)
+- Test functionality in both logged-in and logged-out states  
+- Use comprehensive scenarios (component loading, authentication, mock data)
+- Test with Playwright in production to verify requirements are met
 
 **Configuration Management:**
 
 - Follow "single source of truth" patterns for credentials and config
 - Check multiple files when updating shared configuration
-
-**Architecture Documentation:**
-
-- When proposing platform integrations, map them to specific roadmap stages
-- Update architecture docs proactively when making technical recommendations
-- Consider platform strengths: Go/Fly.io for performance-critical tasks, Supabase for real-time/auth/storage
+- Update architecture docs when making technical recommendations
