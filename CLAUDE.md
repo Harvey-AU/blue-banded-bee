@@ -13,6 +13,7 @@ This file provides complete guidance for working with Blue Banded Bee. All work 
 Blue Banded Bee is a web cache warming service built in Go, focused on Webflow sites. It uses a PostgreSQL-backed worker pool architecture for efficient URL crawling and cache warming.
 
 **For detailed technical information, see:**
+
 - [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) - System design and components
 - [docs/DATABASE.md](./docs/DATABASE.md) - Schema and PostgreSQL features
 - [docs/API.md](./docs/API.md) - RESTful API reference
@@ -23,6 +24,7 @@ Blue Banded Bee is a web cache warming service built in Go, focused on Webflow s
 ## Quick Commands
 
 ### Debugging
+
 ```bash
 # Enable debug mode by setting in .env
 DEBUG=true
@@ -30,6 +32,7 @@ LOG_LEVEL=debug
 ```
 
 ### Dashboard Development
+
 ```bash
 # Dashboard uses vanilla JavaScript (no build process required)
 # Located at: dashboard.html
@@ -38,6 +41,7 @@ LOG_LEVEL=debug
 ```
 
 ### Web Components (Legacy)
+
 ```bash
 # Web Components exist but dashboard uses vanilla JS
 cd web && npm run build
@@ -47,6 +51,7 @@ cd web && npm run serve
 ```
 
 ### Testing
+
 ```bash
 # Run unit tests
 go test ./...
@@ -59,13 +64,14 @@ go run ./cmd/test_jobs/main.go
 ```
 
 ### Frontend Testing with MCP Browser
+
 ```bash
 # Always use cache-busting when testing frontend changes via MCP browser:
 
 # Method 1: Add cache-busting query parameter
-mcp__playwright__browser_navigate("https://blue-banded-bee.fly.dev/dashboard?v=" + timestamp)
+mcp__playwright__browser_navigate("https://bluebandedbee.co/dashboard?v=" + timestamp)
 
-# Method 2: Use hard refresh key combination  
+# Method 2: Use hard refresh key combination
 mcp__playwright__browser_press_key("Control+F5")  # Windows/Linux
 mcp__playwright__browser_press_key("Cmd+Shift+R") # Mac
 
@@ -78,6 +84,7 @@ mcp__playwright__browser_press_key("F5")
 ```
 
 ### Build Verification
+
 ```bash
 # Test Docker build locally BEFORE pushing
 docker build -t blue-banded-bee-test .
@@ -115,15 +122,18 @@ gh run view <run-id> --log
 ## Development Notes
 
 **Database:**
+
 - Use PostgreSQL-style numbered parameters ($1, $2) in queries
 - Connection settings managed through environment variables
 
 **Testing:**
+
 - Unit tests: `go test ./...`
 - Integration tests: `RUN_INTEGRATION_TESTS=true go test ./...`
 - Job queue testing: `go run ./cmd/test_jobs/main.go`
 
 **Error Handling:**
+
 - Structured logging with zerolog
 - Sentry integration for error tracking
 
@@ -160,12 +170,14 @@ gh run view <run-id> --log
 ### Debugging Workflow
 
 **For 404 errors on static content:**
+
 1. **Check Dockerfile first** - verify files are copied to container
 2. Check route registration in handlers.go
 3. Check file paths and existence
 4. Check server logs for routing issues
 
 **For deployment issues:**
+
 1. Verify Dockerfile includes all required files and directories
 2. Check that npm build was run for Web Components
 3. Verify git commit includes both source and built files
@@ -184,12 +196,14 @@ gh run view <run-id> --log
   - Implementation insights
 
 **Before suggesting solutions:**
+
 1. Check if similar issues were previously addressed
 2. Review documented solutions and learnings
 3. Apply accumulated knowledge to prevent repeated issues
 4. Build upon previous optimisations
 
 **After resolving issues:**
+
 1. Document the root cause
 2. Record the solution and rationale
 3. Update relevant documentation
@@ -235,11 +249,13 @@ gh run view <run-id> --log
 ### Development Workflow Awareness
 
 **Build Process:**
+
 - When modifying Web Components, always run `npm run build` in `/web` directory before committing
 - Stage both `web/src/` and `web/dist/` files when committing component changes
 - Web Components require rebuilt dist files to function in production
 
 **Docker Deployment:**
+
 - **CRITICAL**: Check Dockerfile when adding new static files or directories
 - The Dockerfile selectively copies files - new static content must be explicitly added
 - When creating files in root directory or new web directories, update Dockerfile COPY commands
@@ -250,14 +266,17 @@ gh run view <run-id> --log
 - **VERIFICATION**: Use `ls -la` to verify files exist before adding COPY commands
 
 **Testing Strategy:**
+
 - Test functionality in both logged-in and logged-out states
 - Create comprehensive test scenarios (component loading, authentication, mock data)
 
 **Configuration Management:**
+
 - Follow "single source of truth" patterns for credentials and config
 - Check multiple files when updating shared configuration
 
 **Architecture Documentation:**
+
 - When proposing platform integrations, map them to specific roadmap stages
 - Update architecture docs proactively when making technical recommendations
 - Consider platform strengths: Go/Fly.io for performance-critical tasks, Supabase for real-time/auth/storage
