@@ -62,7 +62,11 @@
       "TodoRead",
       "TodoWrite",
       "Bash(fly domains:*)",
-      "mcp__supabase__get_project"
+      "mcp__supabase__get_project",
+      "mcp__playwright__browser_type",
+      "mcp__playwright__browser_snapshot",
+      "mcp__playwright__browser_navigate_back",
+      "mcp__supabase__execute_sql"
     ],
     "deny": []
   },
