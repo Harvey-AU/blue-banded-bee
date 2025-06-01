@@ -11,6 +11,9 @@
   <!-- Password strength library -->
   <script src="https://cdn.jsdelivr.net/npm/zxcvbn@4.4.2/dist/zxcvbn.js"></script>
   
+  <!-- Cloudflare Turnstile CAPTCHA -->
+  <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+  
   <style>
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -1079,7 +1082,11 @@
             >
           </div>
           
-          <button type="submit" class="bb-button bb-button-primary bb-button-full">
+          <div class="bb-form-group">
+            <div class="cf-turnstile" data-sitekey="0x4AAAAAABfi3Cv35Nhu4sN4" data-callback="onTurnstileSuccess"></div>
+          </div>
+          
+          <button type="submit" class="bb-button bb-button-primary bb-button-full" id="signupSubmitBtn" disabled>
             Create Account
           </button>
         </form>
@@ -1704,6 +1711,18 @@
       }
     }
 
+    // CAPTCHA token storage
+    let captchaToken = null;
+    
+    // CAPTCHA success callback
+    window.onTurnstileSuccess = function(token) {
+      captchaToken = token;
+      const signupBtn = document.getElementById('signupSubmitBtn');
+      if (signupBtn) {
+        signupBtn.disabled = false;
+      }
+    };
+
     // Authentication event handlers
     function setupAuthHandlers() {
       const loginBtn = document.getElementById('loginBtn');
@@ -1795,6 +1814,22 @@
       document.getElementById('authModalTitle').textContent = titles[formType];
       document.getElementById(`${formType}Form`).style.display = 'block';
       
+      // Reset CAPTCHA state for signup form
+      if (formType === 'signup') {
+        captchaToken = null;
+        const signupBtn = document.getElementById('signupSubmitBtn');
+        if (signupBtn) {
+          signupBtn.disabled = true;
+        }
+        // Reset Turnstile widget if it exists
+        if (window.turnstile) {
+          const turnstileWidget = document.querySelector('.cf-turnstile');
+          if (turnstileWidget) {
+            window.turnstile.reset(turnstileWidget);
+          }
+        }
+      }
+      
       clearAuthError();
       hideAuthLoading();
     }
@@ -1847,13 +1882,19 @@
         return;
       }
 
+      if (!captchaToken) {
+        showAuthError('Please complete the CAPTCHA verification.');
+        return;
+      }
+
       showAuthLoading();
       clearAuthError();
 
       try {
         const { data, error } = await supabase.auth.signUp({
           email,
-          password
+          password,
+          options: { captchaToken }
         });
 
         if (error) throw error;
