@@ -58,6 +58,45 @@ RUN_INTEGRATION_TESTS=true go test ./...
 go run ./cmd/test_jobs/main.go
 ```
 
+### Frontend Testing with MCP Browser
+```bash
+# Always use cache-busting when testing frontend changes via MCP browser:
+
+# Method 1: Add cache-busting query parameter
+mcp__playwright__browser_navigate("https://blue-banded-bee.fly.dev/dashboard?v=" + timestamp)
+
+# Method 2: Use hard refresh key combination  
+mcp__playwright__browser_press_key("Control+F5")  # Windows/Linux
+mcp__playwright__browser_press_key("Cmd+Shift+R") # Mac
+
+# Method 3: Force reload after navigation
+mcp__playwright__browser_navigate(url)
+mcp__playwright__browser_press_key("F5")
+
+# IMPORTANT: Browser cache can show outdated content even after successful deployments
+# Always perform cache-busting before taking screenshots or testing functionality
+```
+
+### Build Verification
+```bash
+# Test Docker build locally BEFORE pushing
+docker build -t blue-banded-bee-test .
+
+# Check recent deployment status
+gh run list --limit 5
+
+# Check failed deployments specifically
+gh run list --status failure --limit 5
+
+# Get detailed logs for a specific run
+gh run view <run-id> --log
+
+# Common deployment failures:
+# - Missing files in Dockerfile COPY commands
+# - Test files referenced but not created
+# - Static assets not included in Docker build
+```
+
 ## Code Organisation
 
 - `cmd/app/` - Main application entry point
@@ -206,6 +245,9 @@ go run ./cmd/test_jobs/main.go
 - When creating files in root directory or new web directories, update Dockerfile COPY commands
 - Test locally with `docker build` before pushing if adding static assets
 - 404 errors for new static files often indicate missing Dockerfile entries
+- **PREVENTION**: When removing files, always check and update Dockerfile COPY commands
+- **MANDATORY**: Always run `docker build .` locally before committing changes that affect static files
+- **VERIFICATION**: Use `ls -la` to verify files exist before adding COPY commands
 
 **Testing Strategy:**
 - Test functionality in both logged-in and logged-out states
