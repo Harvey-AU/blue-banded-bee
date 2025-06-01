@@ -1312,20 +1312,20 @@
         <form id="createJobForm" class="bb-auth-form">
           <div class="bb-form-group">
             <label for="jobDomain">Domain</label>
-            <input type="url" id="jobDomain" name="domain" required placeholder="https://example.com" class="bb-form-input" />
+            <input type="text" id="jobDomain" name="domain" required placeholder="example.com" class="bb-form-input" />
             <div class="bb-field-error" id="domainError" style="display: none"></div>
           </div>
 
           <div class="bb-form-group">
             <label for="maxPages">Maximum Pages</label>
-            <input type="number" id="maxPages" name="max_pages" min="0" max="1000" value="100" class="bb-form-input" />
+            <input type="number" id="maxPages" name="max_pages" min="0" max="10000" value="0" class="bb-form-input" />
             <div style="font-size: 12px; color: #6b7280; margin-top: 4px">Maximum number of pages to crawl (set to 0 for unlimited)</div>
           </div>
 
           <!-- Hidden fields with sensible defaults -->
-          <input type="hidden" id="useSitemap" name="use_sitemap" value="on">
-          <input type="hidden" id="findLinks" name="find_links" value="on">
-          <input type="hidden" id="concurrency" name="concurrency" value="5">
+          <input type="hidden" id="useSitemap" name="use_sitemap" value="on" />
+          <input type="hidden" id="findLinks" name="find_links" value="on" />
+          <input type="hidden" id="concurrency" name="concurrency" value="5" />
 
           <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 32px">
             <button type="button" class="bb-button bb-button-outline" bb-action="close-create-job-modal">Cancel</button>
@@ -2238,6 +2238,20 @@
         clearCreateJobError();
 
         try {
+          console.log("Creating job with data:", {
+            domain: domain,
+            max_pages: maxPages,
+            concurrency: concurrency,
+            use_sitemap: useSitemap,
+            find_links: findLinks,
+          });
+          
+          console.log("Auth state before request:", {
+            hasAuth: !!dataBinder.authManager,
+            isAuthenticated: dataBinder.authManager?.isAuthenticated,
+            user: dataBinder.authManager?.user?.email,
+          });
+          
           const response = await dataBinder.fetchData("/v1/jobs", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -2249,6 +2263,8 @@
               find_links: findLinks,
             }),
           });
+          
+          console.log("Job creation response:", response);
 
           console.log("Job created successfully:", response);
 
