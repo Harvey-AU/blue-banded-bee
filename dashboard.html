@@ -839,8 +839,8 @@
         
         <!-- Show when logged in -->
         <div data-bb-auth="required" class="user-info">
-          <span data-bb-bind="user.email">user@example.com</span>
-          <div class="user-avatar" data-bb-bind="user.initials">?</div>
+          <span id="userEmail">Loading...</span>
+          <div class="user-avatar" id="userAvatar">?</div>
           <button id="logoutBtn" class="bb-button bb-button-outline">Sign Out</button>
         </div>
       </div>
@@ -1264,6 +1264,18 @@
       // Initialize data binder
       await dataBinder.init();
       
+      // Update user info in header
+      updateUserInfo();
+      
+      // Set up auth state change listener to update user info
+      if (supabase) {
+        supabase.auth.onAuthStateChange((event, session) => {
+          console.log('Auth state changed:', event, session?.user?.email);
+          // Wait a moment for the data binder to update its auth manager
+          setTimeout(updateUserInfo, 100);
+        });
+      }
+      
       // Log auth state for debugging
       console.log('Auth state after init:', {
         hasAuth: !!dataBinder.authManager,
@@ -1332,6 +1344,58 @@
 
       console.log('Enhanced dashboard initialized');
     });
+
+    async function updateUserInfo() {
+      const userEmailElement = document.getElementById('userEmail');
+      const userAvatarElement = document.getElementById('userAvatar');
+      
+      if (!userEmailElement || !userAvatarElement) return;
+      
+      try {
+        // Get current user from Supabase directly
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (session && session.user && session.user.email) {
+          const email = session.user.email;
+          
+          // Update email display
+          userEmailElement.textContent = email;
+          
+          // Update avatar with user initials
+          const initials = getInitials(email);
+          userAvatarElement.textContent = initials;
+          
+          console.log('User info updated:', email);
+        } else {
+          // No session, reset to defaults
+          userEmailElement.textContent = 'Loading...';
+          userAvatarElement.textContent = '?';
+        }
+      } catch (error) {
+        console.error('Failed to update user info:', error);
+        userEmailElement.textContent = 'Error';
+        userAvatarElement.textContent = '?';
+      }
+    }
+
+    function getInitials(email) {
+      if (!email) return '?';
+      
+      // Try to get name parts from email or use email prefix
+      const emailPrefix = email.split('@')[0];
+      
+      // Check if email has recognizable name patterns (firstname.lastname, etc.)
+      if (emailPrefix.includes('.')) {
+        const parts = emailPrefix.split('.');
+        return parts.map(part => part.charAt(0).toUpperCase()).slice(0, 2).join('');
+      } else if (emailPrefix.includes('_')) {
+        const parts = emailPrefix.split('_');
+        return parts.map(part => part.charAt(0).toUpperCase()).slice(0, 2).join('');
+      } else {
+        // Just use first two characters of email prefix
+        return emailPrefix.slice(0, 2).toUpperCase();
+      }
+    }
 
     function setupAttributeHandlers() {
       // Set up attribute-based event handling using event delegation
@@ -1691,6 +1755,7 @@
             // Clear the URL hash to clean up the URL
             history.replaceState(null, null, window.location.pathname);
             
+            // Update user info will be called after dataBinder init
             return true;
           } else if (error) {
             console.error('Auth session setup error:', error);
@@ -1742,11 +1807,16 @@
             const { error } = await supabase.auth.signOut();
             if (error) {
               console.error('Logout error:', error);
+              alert('Logout failed. Please try again.');
             } else {
+              console.log('Logout successful');
+              // The auth state change listener will update the UI automatically
+              // Refresh the page to ensure clean state
               window.location.reload();
             }
           } catch (error) {
             console.error('Logout error:', error);
+            alert('Logout failed. Please try again.');
           }
         });
       }
@@ -1854,8 +1924,11 @@
         console.log('Email login successful:', data.user.email);
         closeAuthModal();
         
-        // Refresh page to update UI
-        window.location.reload();
+        // Update user info immediately
+        updateUserInfo();
+        
+        // Refresh dashboard data
+        await dataBinder.refresh();
         
       } catch (error) {
         console.error('Email login error:', error);
@@ -1906,7 +1979,9 @@
           showAuthForm('login');
         } else {
           closeAuthModal();
-          window.location.reload();
+          // Update user info and refresh dashboard
+          updateUserInfo();
+          await dataBinder.refresh();
         }
         
       } catch (error) {
