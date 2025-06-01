@@ -820,13 +820,30 @@
     const SUPABASE_URL = "https://auth.bluebandedbee.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdwemp0Ymd0ZGp4bmFjZGZ1anZ4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDUwNjYxNjMsImV4cCI6MjA2MDY0MjE2M30.eJjM2-3X8oXsFex_lQKvFkP1-_yLMHsueIn7_hCF6YI";
 
-    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    // Wait for Supabase to be available, then create client
+    let supabase;
+    
+    function initializeSupabase() {
+      if (window.supabase && window.supabase.createClient) {
+        supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        window.supabase = supabase; // Ensure it's globally available
+        console.log('Supabase client created successfully');
+        return true;
+      }
+      return false;
+    }
 
     // Initialize data binder and dashboard
     let dataBinder;
 
     document.addEventListener('DOMContentLoaded', async () => {
       console.log('Enhanced dashboard initializing...');
+      
+      // Ensure Supabase is ready
+      if (!initializeSupabase()) {
+        console.error('Supabase not available');
+        return;
+      }
       
       // Handle auth callback tokens
       const hasToken = await handleAuthCallback();
