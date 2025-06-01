@@ -8,6 +8,9 @@
   <!-- Supabase CDN -->
   <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
   
+  <!-- Password strength library -->
+  <script src="https://cdn.jsdelivr.net/npm/zxcvbn@4.4.2/dist/zxcvbn.js"></script>
+  
   <style>
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -686,6 +689,95 @@
       border: 1px solid #fecaca;
     }
 
+    /* Password Strength Indicator */
+    .bb-password-strength {
+      margin-top: 8px;
+      padding: 12px;
+      background: #f9fafb;
+      border-radius: 6px;
+      border: 1px solid #e5e7eb;
+    }
+
+    .bb-strength-meter {
+      width: 100%;
+      height: 8px;
+      background: #e5e7eb;
+      border-radius: 4px;
+      overflow: hidden;
+      margin-bottom: 8px;
+    }
+
+    .bb-strength-fill {
+      height: 100%;
+      transition: all 0.3s ease;
+      border-radius: 4px;
+    }
+
+    .bb-strength-fill.weak {
+      width: 25%;
+      background: #ef4444;
+    }
+
+    .bb-strength-fill.fair {
+      width: 50%;
+      background: #f59e0b;
+    }
+
+    .bb-strength-fill.good {
+      width: 75%;
+      background: #eab308;
+    }
+
+    .bb-strength-fill.strong {
+      width: 100%;
+      background: #22c55e;
+    }
+
+    .bb-strength-text {
+      font-size: 12px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .bb-strength-text.weak {
+      color: #ef4444;
+    }
+
+    .bb-strength-text.fair {
+      color: #f59e0b;
+    }
+
+    .bb-strength-text.good {
+      color: #eab308;
+    }
+
+    .bb-strength-text.strong {
+      color: #22c55e;
+    }
+
+    .bb-strength-feedback {
+      font-size: 11px;
+      color: #6b7280;
+      line-height: 1.4;
+    }
+
+    /* Field validation states */
+    .bb-field-valid {
+      border-color: #22c55e !important;
+      box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.1) !important;
+    }
+
+    .bb-field-invalid {
+      border-color: #ef4444 !important;
+      box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1) !important;
+    }
+
+    .bb-field-error {
+      color: #dc2626;
+      font-size: 12px;
+      margin-top: 4px;
+    }
+
     @media (max-width: 768px) {
       .page-header .container {
         padding: 0 16px;
@@ -960,10 +1052,18 @@
               id="signupPassword" 
               name="password" 
               required 
-              placeholder="Create a password"
+              placeholder="Create a password (min 8 characters)"
               class="bb-form-input"
-              minlength="6"
+              minlength="8"
             >
+            <!-- Password strength indicator -->
+            <div class="bb-password-strength" id="passwordStrength" style="display: none;">
+              <div class="bb-strength-meter">
+                <div class="bb-strength-fill" id="strengthFill"></div>
+              </div>
+              <div class="bb-strength-text" id="strengthText">Password strength</div>
+              <div class="bb-strength-feedback" id="strengthFeedback"></div>
+            </div>
           </div>
           
           <div class="bb-form-group">
@@ -1634,6 +1734,9 @@
 
       // Set up modal form handlers
       setupAuthModalHandlers();
+      
+      // Set up password strength checking
+      setupPasswordStrength();
     }
 
     function setupAuthModalHandlers() {
@@ -1852,6 +1955,121 @@
 
     function clearAuthError() {
       document.getElementById('authError').style.display = 'none';
+    }
+
+    // Password strength checking using zxcvbn
+    function setupPasswordStrength() {
+      const passwordInput = document.getElementById('signupPassword');
+      const confirmInput = document.getElementById('signupPasswordConfirm');
+      const strengthIndicator = document.getElementById('passwordStrength');
+      const strengthFill = document.getElementById('strengthFill');
+      const strengthText = document.getElementById('strengthText');
+      const strengthFeedback = document.getElementById('strengthFeedback');
+      
+      if (!passwordInput || typeof zxcvbn === 'undefined') {
+        console.warn('Password strength checking not available');
+        return;
+      }
+
+      // Show strength indicator when password field gets focus
+      passwordInput.addEventListener('focus', () => {
+        strengthIndicator.style.display = 'block';
+      });
+
+      // Real-time password strength checking
+      passwordInput.addEventListener('input', (e) => {
+        const password = e.target.value;
+        
+        if (password.length === 0) {
+          strengthIndicator.style.display = 'none';
+          return;
+        }
+
+        strengthIndicator.style.display = 'block';
+        
+        // Use zxcvbn to evaluate password strength
+        const result = zxcvbn(password);
+        const score = result.score; // 0-4 scale
+        
+        // Clear previous classes
+        strengthFill.className = 'bb-strength-fill';
+        strengthText.className = 'bb-strength-text';
+        
+        // Apply strength classes and text
+        let strengthLabel = '';
+        switch (score) {
+          case 0:
+          case 1:
+            strengthFill.classList.add('weak');
+            strengthText.classList.add('weak');
+            strengthLabel = 'Weak';
+            break;
+          case 2:
+            strengthFill.classList.add('fair');
+            strengthText.classList.add('fair');
+            strengthLabel = 'Fair';
+            break;
+          case 3:
+            strengthFill.classList.add('good');
+            strengthText.classList.add('good');
+            strengthLabel = 'Good';
+            break;
+          case 4:
+            strengthFill.classList.add('strong');
+            strengthText.classList.add('strong');
+            strengthLabel = 'Strong';
+            break;
+        }
+        
+        strengthText.textContent = `Password strength: ${strengthLabel}`;
+        
+        // Show feedback and suggestions
+        let feedback = '';
+        if (result.feedback.warning) {
+          feedback += result.feedback.warning + '. ';
+        }
+        if (result.feedback.suggestions.length > 0) {
+          feedback += result.feedback.suggestions.join('. ');
+        }
+        if (password.length < 8) {
+          feedback = 'Password must be at least 8 characters long. ' + feedback;
+        }
+        
+        strengthFeedback.textContent = feedback;
+        
+        // Validate confirm password if it has content
+        if (confirmInput.value) {
+          validatePasswordMatch();
+        }
+      });
+
+      // Real-time password confirmation checking
+      confirmInput.addEventListener('input', validatePasswordMatch);
+      
+      function validatePasswordMatch() {
+        const password = passwordInput.value;
+        const confirm = confirmInput.value;
+        
+        // Remove existing validation styling
+        confirmInput.classList.remove('bb-field-valid', 'bb-field-invalid');
+        const existingError = confirmInput.parentElement.querySelector('.bb-field-error');
+        if (existingError) {
+          existingError.remove();
+        }
+        
+        if (confirm.length > 0) {
+          if (password === confirm) {
+            confirmInput.classList.add('bb-field-valid');
+          } else {
+            confirmInput.classList.add('bb-field-invalid');
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'bb-field-error';
+            errorDiv.textContent = 'Passwords do not match';
+            errorDiv.style.cssText = 'color: #dc2626; font-size: 12px; margin-top: 4px;';
+            confirmInput.parentElement.appendChild(errorDiv);
+          }
+        }
+      }
     }
   </script>
 </body>
