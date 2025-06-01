@@ -633,10 +633,11 @@ class BBDataBinder {
   /**
    * Fetch data from API endpoint
    */
-  async fetchData(endpoint) {
+  async fetchData(endpoint, options = {}) {
     try {
       const headers = {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        ...options.headers
       };
       
       // Add auth header if available
@@ -644,7 +645,13 @@ class BBDataBinder {
         headers['Authorization'] = `Bearer ${this.authManager.session.access_token}`;
       }
       
-      const response = await fetch(`${this.apiBaseUrl}${endpoint}`, { headers });
+      const fetchOptions = {
+        method: 'GET',
+        ...options,
+        headers
+      };
+      
+      const response = await fetch(`${this.apiBaseUrl}${endpoint}`, fetchOptions);
       
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
