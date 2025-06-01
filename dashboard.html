@@ -828,6 +828,9 @@
     document.addEventListener('DOMContentLoaded', async () => {
       console.log('Enhanced dashboard initializing...');
       
+      // Handle auth callback tokens
+      await handleAuthCallback();
+      
       // Create data binder with production config
       dataBinder = new BBDataBinder({
         apiBaseUrl: '',
@@ -1223,6 +1226,39 @@
       currentJobId = null;
     }
 
+    // Handle authentication callback
+    async function handleAuthCallback() {
+      try {
+        // Check if we have auth tokens in the URL hash
+        const hashParams = new URLSearchParams(window.location.hash.substring(1));
+        const accessToken = hashParams.get('access_token');
+        
+        if (accessToken) {
+          console.log('Processing auth callback...');
+          
+          // Get the session from Supabase
+          const { data: { session }, error } = await supabase.auth.getSession();
+          
+          if (session) {
+            console.log('User authenticated:', session.user.email);
+            
+            // Clear the URL hash to clean up the URL
+            history.replaceState(null, null, window.location.pathname);
+            
+            // The data binder will handle the auth state update
+            return true;
+          } else if (error) {
+            console.error('Auth callback error:', error);
+          }
+        }
+        
+        return false;
+      } catch (error) {
+        console.error('Auth callback processing error:', error);
+        return false;
+      }
+    }
+
     // Authentication event handlers
     function setupAuthHandlers() {
       const loginBtn = document.getElementById('loginBtn');
@@ -1234,7 +1270,7 @@
             const { data, error } = await supabase.auth.signInWithOAuth({
               provider: 'google',
               options: {
-                redirectTo: window.location.origin + '/dashboard'
+                redirectTo: 'https://blue-banded-bee.fly.dev/dashboard'
               }
             });
             if (error) {
