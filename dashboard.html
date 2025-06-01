@@ -829,17 +829,24 @@
       console.log('Enhanced dashboard initializing...');
       
       // Handle auth callback tokens
-      await handleAuthCallback();
+      const hasToken = await handleAuthCallback();
       
       // Create data binder with production config
       dataBinder = new BBDataBinder({
         apiBaseUrl: '',
-        debug: false,
+        debug: true, // Enable debug for auth troubleshooting
         refreshInterval: 10 // Auto-refresh every 10 seconds
       });
 
       // Initialize data binder
       await dataBinder.init();
+      
+      // Log auth state for debugging
+      console.log('Auth state after init:', {
+        hasAuth: !!dataBinder.authManager,
+        isAuthenticated: dataBinder.authManager?.isAuthenticated,
+        user: dataBinder.authManager?.user?.email
+      });
 
       // Override the refresh method to load dashboard data
       dataBinder.refresh = async function() {
@@ -1232,23 +1239,33 @@
         // Check if we have auth tokens in the URL hash
         const hashParams = new URLSearchParams(window.location.hash.substring(1));
         const accessToken = hashParams.get('access_token');
+        const refreshToken = hashParams.get('refresh_token');
         
         if (accessToken) {
-          console.log('Processing auth callback...');
+          console.log('Processing auth callback with tokens...');
           
-          // Get the session from Supabase
-          const { data: { session }, error } = await supabase.auth.getSession();
+          // Set the session in Supabase using the tokens
+          const { data: { session }, error } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken
+          });
           
           if (session) {
-            console.log('User authenticated:', session.user.email);
+            console.log('User authenticated via callback:', session.user.email);
             
             // Clear the URL hash to clean up the URL
             history.replaceState(null, null, window.location.pathname);
             
-            // The data binder will handle the auth state update
             return true;
           } else if (error) {
-            console.error('Auth callback error:', error);
+            console.error('Auth session setup error:', error);
+          }
+        } else {
+          // Check if already authenticated
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session) {
+            console.log('User already authenticated:', session.user.email);
+            return true;
           }
         }
         
