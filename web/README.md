@@ -26,9 +26,9 @@ Frontend components and data binding library for Blue Banded Bee dashboard integ
 </script>
 
 <!-- Blue Banded Bee Libraries -->
-<script src="https://bluebandedbee.co/js/bb-components.min.js"></script>
+<script src="https://app.bluebandedbee.co/js/bb-components.min.js"></script>
 <!-- OR for data binding approach -->
-<script src="https://bluebandedbee.co/js/bb-data-binder.min.js"></script>
+<script src="https://app.bluebandedbee.co/js/bb-data-binder.min.js"></script>
 ```
 
 2. **Design your templates in Webflow Designer:**
@@ -110,7 +110,7 @@ The `BBDataBinder` library provides a template + data binding system that allows
 
 ```html
 <!-- Include the library -->
-<script src="https://bluebandedbee.co/js/bb-data-binder.min.js"></script>
+<script src="https://app.bluebandedbee.co/js/bb-data-binder.min.js"></script>
 
 <!-- Dashboard stats with data binding -->
 <div class="stats">
@@ -186,8 +186,8 @@ Authentication component with Supabase integration.
 
 The components are served as static files from your Fly.io app:
 
-- Production: `https://bluebandedbee.co/js/bb-components.min.js`
-- Development: `https://bluebandedbee.co/js/bb-components.js`
+- Production: `https://app.bluebandedbee.co/js/bb-components.min.js`
+- Development: `https://app.bluebandedbee.co/js/bb-components.js`
 
 ## Architecture
 

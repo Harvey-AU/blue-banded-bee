@@ -8,6 +8,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Multiple version updates may occur on the same date, each with its own version number.
 Each version represents a distinct set of changes, even if released on the same day.
 
+## [0.5.5] – 2025-06-01
+
+### Added
+
+- **Authentication Testing Infrastructure**: Comprehensive testing workflow for authentication flows
+  - Created and successfully tested account creation with `simon+claude@teamharvey.co` using real-time password validation
+  - Implemented real-time password strength checking using zxcvbn library with visual feedback indicators
+  - Added password confirmation validation with visual success/error states
+  - Comprehensive authentication modal testing via MCP Playwright browser automation
+  - Database verification of account creation process (account created but requires email confirmation)
+
+### Enhanced
+
+- **Authentication Modal UX**: Production-ready authentication interface with industry-standard patterns
+  - Real-time password strength evaluation using zxcvbn library (0-4 scale with colour-coded feedback)
+  - Live password confirmation matching with instant visual validation feedback
+  - Enhanced form validation with field-level error states and success indicators
+  - Improved user experience with immediate feedback on password quality and match status
+  - Modal-based authentication flow supporting login, signup, and password reset workflows
+
+### Fixed
+
+- **Domain References**: Corrected all application URLs to use proper domain structure
+  - Updated authentication redirect URLs from `bluebandedbee.co` to `app.bluebandedbee.co`
+  - Fixed API base URLs in Web Components to point to `app.bluebandedbee.co`
+  - Updated all script URLs and CDN references in examples and documentation
+  - Rebuilt Web Components with correct production URLs
+
+### Documentation
+
+- **Domain Usage Clarification**: Comprehensive documentation of domain structure and usage
+  - **Local development**: `http://localhost:8080` - Blue Banded Bee application for local testing
+  - **Production marketing site**: `https://bluebandedbee.co` - Marketing website only
+  - **Production application**: `https://app.bluebandedbee.co` - Live application, services, demo pages
+  - **Authentication service**: `https://auth.bluebandedbee.co` - Supabase authentication (unchanged)
+  - Updated all documentation files to clearly specify domain purposes and usage contexts
+
+### Technical Implementation
+
+- **Authentication Flow Testing**: Complete browser automation testing of authentication workflows
+  - Tested modal opening/closing, form switching between login/signup modes
+  - Verified real-time password validation and strength indicators
+  - Confirmed account creation process with database verification
+  - Established testing patterns for future authentication feature development
+- **Web Components Updates**: Rebuilt production components with correct domain configuration
+  - Updated `web/src/utils/api.js` and rebuilt distribution files
+  - Fixed OAuth redirect URLs in `dashboard.html` 
+  - Updated test helpers and example files with correct domain references
+
 ## [0.5.4] – 2025-05-31
 
 ### Added

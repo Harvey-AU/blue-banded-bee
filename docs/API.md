@@ -34,9 +34,15 @@ This document defines the comprehensive API design for Blue Banded Bee's multi-i
 
 ### Base URL
 ```
-Production: https://bluebandedbee.co
-Development: http://localhost:8080
+Local Development: http://localhost:8080 (Blue Banded Bee application)
+Production Application: https://app.bluebandedbee.co (Live application, services, demo pages)
+Marketing Site: https://bluebandedbee.co (Marketing website only)
 ```
+
+**Note**: 
+- For local development and testing, use `http://localhost:8080`
+- For production application access, use `https://app.bluebandedbee.co`
+- `https://bluebandedbee.co` is only the marketing website
 
 ### Versioning
 All API endpoints are versioned under `/v1/` to ensure backward compatibility.

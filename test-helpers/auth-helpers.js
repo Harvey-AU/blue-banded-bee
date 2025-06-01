@@ -5,7 +5,7 @@
 // Load test credentials
 const TEST_EMAIL = process.env.TEST_EMAIL || 'test@bluebandedbee.dev';
 const TEST_PASSWORD = process.env.TEST_PASSWORD || 'testpass123';
-const DASHBOARD_URL = process.env.DASHBOARD_URL || 'https://bluebandedbee.co/dashboard';
+const DASHBOARD_URL = process.env.DASHBOARD_URL || 'https://app.bluebandedbee.co/dashboard';
 
 /**
  * Create a test account via the signup modal
