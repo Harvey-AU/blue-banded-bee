@@ -2229,8 +2229,8 @@
           return;
         }
 
-        if (maxPages < 0 || maxPages > 1000) {
-          showCreateJobError("Maximum pages must be between 0 and 1000");
+        if (maxPages < 0 || maxPages > 10000) {
+          showCreateJobError("Maximum pages must be between 0 and 10000");
           return;
         }
 
@@ -2263,7 +2263,7 @@
               find_links: findLinks,
             }),
           };
-          
+
           console.log("Request options:", requestOptions);
           console.log("Request body:", requestOptions.body);
 
