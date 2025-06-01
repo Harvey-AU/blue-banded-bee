@@ -8,6 +8,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Multiple version updates may occur on the same date, each with its own version number.
 Each version represents a distinct set of changes, even if released on the same day.
 
+## [0.5.6] – 2025-06-01
+
+### Enhanced
+
+- **User Experience**: Improved dashboard user identification and testing workflow
+  - Updated dashboard header to display actual user email instead of placeholder "user@example.com"
+  - Added automatic user avatar generation with smart initials extraction from email addresses
+  - Real-time user info updates when authentication state changes (login/logout/token refresh)
+  - Enhanced user session management with proper cleanup and state synchronisation
+
+### Fixed
+
+- **Dashboard User Display**: Resolved hardcoded placeholder in user interface
+  - Replaced static "user@example.com" text with dynamic user email from Supabase session
+  - Fixed avatar initials to properly reflect current authenticated user
+  - Added fallback states for loading and error conditions
+  - Improved authentication state listening for immediate UI updates
+
+### Technical Implementation
+
+- **Session Management**: Enhanced authentication flow integration
+  - Direct Supabase session querying for reliable user data access
+  - Auth state change listeners update user info automatically across login/logout cycles
+  - Graceful error handling for session retrieval failures
+  - Smart initials generation supporting various email formats (firstname.lastname, firstname_lastname, etc.)
+
+### Development Workflow
+
+- **Production Testing**: Completed full 6-step development workflow
+  - GitHub Actions deployment successful for user interface improvements
+  - Playwright MCP testing infrastructure verified (with noted session stability issues)
+  - Production deployment confirmed working via manual verification
+
 ## [0.5.5] – 2025-06-01
 
 ### Added
