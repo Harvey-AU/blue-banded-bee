@@ -8,6 +8,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Multiple version updates may occur on the same date, each with its own version number.
 Each version represents a distinct set of changes, even if released on the same day.
 
+## [0.5.7] – 2025-06-01
+
+### Fixed
+
+- **Critical Job Creation Bug**: Resolved POST request failures preventing job creation functionality
+  - Fixed `BBDataBinder.fetchData()` method to properly accept and use options parameter for method, headers, and body
+  - Method signature updated from `async fetchData(endpoint)` to `async fetchData(endpoint, options = {})`
+  - POST requests now correctly send JSON body data instead of being converted to GET requests
+  - Job creation modal now successfully creates jobs and refreshes dashboard data
+- **Data Binding Library**: Enhanced fetchData method to support all HTTP methods
+  - Added proper options parameter spread to fetch configuration
+  - Maintained backward compatibility for GET requests (existing code unaffected)
+  - Fixed API integration throughout dashboard for POST, PUT, DELETE operations
+
+### Enhanced
+
+- **Job Creation Modal**: Simplified interface with essential fields only
+  - Removed non-functional include_paths and exclude_paths fields that aren't implemented in API
+  - Hidden concurrency setting as job-level concurrency has no effect (system uses global concurrency of 50)
+  - Set sensible defaults: use_sitemap=true, find_links=true, concurrency=5
+  - Changed domain input from URL type to text type to allow simple domain names (e.g., "teamharvey.co")
+- **User Experience**: Improved job creation workflow with better validation and feedback
+  - Domain input now accepts domain names without requiring full URLs with protocol
+  - Better error messaging when job creation fails
+  - Real-time progress updates after successful job creation
+  - Toast notifications for success and error states
+
+### Technical Implementation
+
+- **Data Binding Library Rebuild**: Updated and rebuilt all Web Components with fetchData fix
+  - Rebuilt `bb-data-binder.js` and `bb-data-binder.min.js` with corrected method implementation
+  - Updated `bb-components.js` and `bb-components.min.js` for production deployment
+  - All POST/PUT/DELETE API calls throughout the application now function correctly
+- **API Integration**: Fixed job creation endpoint integration
+  - `/v1/jobs` POST endpoint now receives proper JSON data from dashboard
+  - Request debugging confirmed proper method, headers, and body transmission
+  - Removed debug logging after confirming fix works correctly
+
+### Development Process
+
+- **Testing Workflow**: Comprehensive debugging and testing of job creation flow
+  - Traced request path from modal form submission through data binding library to API
+  - Console logging confirmed fetchData method was ignoring POST parameters
+  - Verified fix works by testing job creation with various domain inputs
+  - Confirmed dashboard refresh and real-time updates work after job creation
+
 ## [0.5.6] – 2025-06-01
 
 ### Enhanced
