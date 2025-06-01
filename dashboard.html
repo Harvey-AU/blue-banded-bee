@@ -74,6 +74,48 @@
       gap: 12px;
     }
 
+    .auth-buttons {
+      display: flex;
+      gap: 8px;
+    }
+
+    .user-info {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 14px;
+    }
+
+    .bb-button {
+      padding: 8px 16px;
+      border-radius: 6px;
+      border: none;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .bb-button-primary {
+      background: #3b82f6;
+      color: white;
+    }
+
+    .bb-button-primary:hover {
+      background: #2563eb;
+    }
+
+    .bb-button-outline {
+      background: transparent;
+      color: #6b7280;
+      border: 1px solid #d1d5db;
+    }
+
+    .bb-button-outline:hover {
+      background: #f9fafb;
+      border-color: #9ca3af;
+    }
+
     .user-avatar {
       width: 32px;
       height: 32px;
@@ -558,7 +600,18 @@
           <span class="status-dot"></span>
           <span>Live</span>
         </div>
-        <div class="user-avatar" data-bb-bind="user.initials">?</div>
+        
+        <!-- Show when logged out -->
+        <div data-bb-auth="guest" class="auth-buttons">
+          <button id="loginBtn" class="bb-button bb-button-primary">Sign In</button>
+        </div>
+        
+        <!-- Show when logged in -->
+        <div data-bb-auth="required" class="user-info">
+          <span data-bb-bind="user.email">user@example.com</span>
+          <div class="user-avatar" data-bb-bind="user.initials">?</div>
+          <button id="logoutBtn" class="bb-button bb-button-outline">Sign Out</button>
+        </div>
       </div>
     </div>
   </header>
@@ -840,6 +893,9 @@
 
       // Initial load
       await dataBinder.refresh();
+
+      // Setup authentication event handlers
+      setupAuthHandlers();
 
       console.log('Enhanced dashboard initialized');
     });
@@ -1165,6 +1221,48 @@
     function closeModal() {
       document.getElementById('jobDetailsModal').classList.remove('show');
       currentJobId = null;
+    }
+
+    // Authentication event handlers
+    function setupAuthHandlers() {
+      const loginBtn = document.getElementById('loginBtn');
+      const logoutBtn = document.getElementById('logoutBtn');
+      
+      if (loginBtn) {
+        loginBtn.addEventListener('click', async () => {
+          try {
+            const { data, error } = await supabase.auth.signInWithOAuth({
+              provider: 'google',
+              options: {
+                redirectTo: window.location.origin + '/dashboard'
+              }
+            });
+            if (error) {
+              console.error('Login error:', error);
+              alert('Login failed: ' + error.message);
+            }
+          } catch (error) {
+            console.error('Login error:', error);
+            alert('Login failed');
+          }
+        });
+      }
+      
+      if (logoutBtn) {
+        logoutBtn.addEventListener('click', async () => {
+          try {
+            const { error } = await supabase.auth.signOut();
+            if (error) {
+              console.error('Logout error:', error);
+            } else {
+              // Refresh the page to update UI
+              window.location.reload();
+            }
+          } catch (error) {
+            console.error('Logout error:', error);
+          }
+        });
+      }
     }
   </script>
 </body>
