@@ -4,7 +4,7 @@
 
 const API_BASE = window.location.hostname === 'localhost' 
   ? 'http://localhost:8080'
-  : 'https://blue-banded-bee.fly.dev';
+  : 'https://bluebandedbee.co';
 
 class BBApi {
   constructor() {

@@ -34,7 +34,7 @@ This document defines the comprehensive API design for Blue Banded Bee's multi-i
 
 ### Base URL
 ```
-Production: https://blue-banded-bee.fly.dev
+Production: https://bluebandedbee.co
 Development: http://localhost:8080
 ```
 
