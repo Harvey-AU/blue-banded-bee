@@ -2245,14 +2245,14 @@
             use_sitemap: useSitemap,
             find_links: findLinks,
           });
-          
+
           console.log("Auth state before request:", {
             hasAuth: !!dataBinder.authManager,
             isAuthenticated: dataBinder.authManager?.isAuthenticated,
             user: dataBinder.authManager?.user?.email,
           });
-          
-          const response = await dataBinder.fetchData("/v1/jobs", {
+
+          const requestOptions = {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -2262,8 +2262,13 @@
               use_sitemap: useSitemap,
               find_links: findLinks,
             }),
-          });
+          };
           
+          console.log("Request options:", requestOptions);
+          console.log("Request body:", requestOptions.body);
+
+          const response = await dataBinder.fetchData("/v1/jobs", requestOptions);
+
           console.log("Job creation response:", response);
 
           console.log("Job created successfully:", response);
