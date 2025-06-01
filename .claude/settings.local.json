@@ -67,7 +67,11 @@
       "mcp__playwright__browser_snapshot",
       "mcp__playwright__browser_navigate_back",
       "mcp__supabase__execute_sql",
-      "mcp__playwright__browser_close"
+      "mcp__playwright__browser_close",
+      "Bash(pgrep:*)",
+      "Bash(timeout:*)",
+      "Bash(jobs)",
+      "Bash(pkill:*)"
     ],
     "deny": []
   },
