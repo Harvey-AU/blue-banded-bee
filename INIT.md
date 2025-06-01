@@ -1,32 +1,25 @@
-CRITICAL SESSION START PROTOCOL:
+## SESSION START PROTOCOL
 
-Before doing ANYTHING, complete this checklist:
+Complete this mandatory checklist before any work:
 
-1. READ @CLAUDE.md COMPLETELY - Follow British English, documentation-first workflow, preserve functionality, investigate before assuming
-2. READ @Roadmap.md - Understand current stage and what's actually completed
-3. READ @docs/ARCHITECTURE.md - Understand system design before making changes
-4. ASK "What is the user's EXACT request?" - Don't assume, don't expand scope
-5. INVESTIGATE FIRST - Check if things are actually broken or just assumed broken
-6. GET PERMISSION - Before removing/replacing ANY working functionality
+### 1. Review All Stored Memories
+Check user memories for Development Preferences, Workflow Reminders, Technical Stack Preferences, Git Commit Style, Testing Approach, and Problem-Solving Style.
 
-RED FLAGS - STOP AND ASK:
+### 2. Read CLAUDE.md Completely
+Follow the mandatory documentation reading list in CLAUDE.md Project Initialisation section.
 
+### 3. Check Git Status
+Review current branch, staged changes, and recent commits.
+
+### 4. Critical Session Reminders
+- **INVESTIGATE FIRST** - Don't assume things are broken
+- **GET PERMISSION** - Before removing/replacing ANY working functionality  
+- **ASK EXACT REQUEST** - Don't assume, don't expand scope
+- **PRESERVE FUNCTIONALITY** - Unless explicitly told to remove
+
+### 5. Red Flags - STOP AND ASK
 - "This seems broken" → Investigate first, don't assume
 - "Let me fix this" → Is it actually broken? Do you have permission?
 - "I'll implement..." → Did you understand the exact requirement?
 
-PREVIOUS SESSION FAILURES:
-
-- Replaced working vanilla JS dashboard with broken Web Components without permission
-- Didn't follow documentation-first workflow despite it being in CLAUDE.md
-- Made user re-explain requirements 4+ times
-- Cost $14.33 for mostly circular, destructive work
-
-SUCCESS CRITERIA:
-
-- Follow exact user request, nothing more
-- Preserve all working functionality unless explicitly told to remove it
-- Read docs before proposing solutions
-- Ask clarifying questions before implementing
-
-This is attempt #4 to fix this pattern. FOLLOW THE PROTOCOL.
+Only after completing ALL steps above, ask: "What would you like me to work on?"
