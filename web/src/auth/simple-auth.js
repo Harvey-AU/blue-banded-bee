@@ -82,15 +82,21 @@ class SimpleAuthManager {
     return data;
   }
 
-  async signUp(email, password, metadata = {}) {
+  async signUp(email, password, metadata = {}, captchaToken = null) {
     if (!this.supabase) await this.waitForSupabase();
+    
+    const options = {
+      data: metadata
+    };
+    
+    if (captchaToken) {
+      options.captchaToken = captchaToken;
+    }
     
     const { data, error } = await this.supabase.auth.signUp({
       email,
       password,
-      options: {
-        data: metadata
-      }
+      options
     });
     
     if (error) throw error;
