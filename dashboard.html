@@ -1886,7 +1886,7 @@
 
       try {
         const { error } = await supabase.auth.resetPasswordForEmail(email, {
-          redirectTo: 'https://bluebandedbee.co/dashboard'
+          redirectTo: 'https://app.bluebandedbee.co/dashboard'
         });
 
         if (error) throw error;
@@ -1912,7 +1912,7 @@
         const { data, error } = await supabase.auth.signInWithOAuth({
           provider,
           options: {
-            redirectTo: 'https://bluebandedbee.co/dashboard'
+            redirectTo: 'https://app.bluebandedbee.co/dashboard'
           }
         });
 

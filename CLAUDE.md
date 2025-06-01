@@ -63,24 +63,36 @@ RUN_INTEGRATION_TESTS=true go test ./...
 go run ./cmd/test_jobs/main.go
 ```
 
-### Frontend Testing with MCP Browser
+### Application Testing with MCP Browser
+
+**DOMAIN USAGE GUIDE:**
+- **Local development**: `http://localhost:8080` - Blue Banded Bee application for local testing
+- **Production marketing site**: `https://bluebandedbee.co` - Marketing website only
+- **Production application**: `https://app.bluebandedbee.co` - Live Blue Banded Bee application, services, demo pages
+- **FOR LOCAL TESTING**: Use `http://localhost:8080`
+- **FOR PRODUCTION TESTING**: Use `https://app.bluebandedbee.co`
 
 ```bash
-# Always use cache-busting when testing frontend changes via MCP browser:
+# ALWAYS use localhost for application testing:
+mcp__playwright__browser_navigate("http://localhost:8080/dashboard")
 
+# Cache-busting methods for frontend changes:
 # Method 1: Add cache-busting query parameter
-mcp__playwright__browser_navigate("https://bluebandedbee.co/dashboard?v=" + timestamp)
+mcp__playwright__browser_navigate("http://localhost:8080/dashboard?v=" + timestamp)
 
 # Method 2: Use hard refresh key combination
 mcp__playwright__browser_press_key("Control+F5")  # Windows/Linux
 mcp__playwright__browser_press_key("Cmd+Shift+R") # Mac
 
 # Method 3: Force reload after navigation
-mcp__playwright__browser_navigate(url)
+mcp__playwright__browser_navigate("http://localhost:8080/dashboard")
 mcp__playwright__browser_press_key("F5")
 
-# IMPORTANT: Browser cache can show outdated content even after successful deployments
-# Always perform cache-busting before taking screenshots or testing functionality
+# IMPORTANT: 
+# - NEVER test against bluebandedbee.co (it's the marketing site, not the app)
+# - Use app.bluebandedbee.co for production application testing
+# - Browser cache can show outdated content even after successful deployments
+# - Always perform cache-busting before taking screenshots or testing functionality
 ```
 
 ### Build Verification
