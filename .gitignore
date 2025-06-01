@@ -32,3 +32,10 @@ coverage/
 # Web Components - Node.js build dependencies
 web/node_modules/
 web/package-lock.json
+
+# Playwright
+node_modules/
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
