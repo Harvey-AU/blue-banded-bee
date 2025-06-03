@@ -1,16 +1,12 @@
 package crawler
 
 import (
-	"bytes"
 	"context"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
-
-	"golang.org/x/net/html"
 
 	"github.com/gocolly/colly/v2"
 	"github.com/rs/zerolog/log"
@@ -60,45 +56,42 @@ func New(config *Config, id ...string) *Crawler {
 			Msg("Crawler sending request")
 	})
 
-	// Conditionally register link extractor if enabled
-	if config.FindLinks {
-		log.Debug().
-			Bool("find_links", config.FindLinks).
-			Msg("Registering Colly link extractor")
+	// Always register link extractor - we'll control it via context
+	log.Debug().
+		Msg("Registering Colly link extractor")
 
-		c.OnHTML("a[href]", func(e *colly.HTMLElement) {
-			// Only extract links that are likely visible and clickable to users
-			if !isLinkVisibleAndClickable(e) {
-				log.Debug().
-					Str("href", e.Attr("href")).
-					Msg("Skipping hidden/non-clickable link")
-				return
-			}
-
-			href := e.Attr("href")
-			// Normalise URL (absolute)
-			u := e.Request.AbsoluteURL(href)
-
+	c.OnHTML("a[href]", func(e *colly.HTMLElement) {
+		// Only extract links that are likely visible and clickable to users
+		if !isLinkVisibleAndClickable(e) {
 			log.Debug().
-				Str("href", href).
-				Str("absolute_url", u).
-				Str("from_url", e.Request.URL.String()).
-				Msg("Colly found link")
+				Str("href", e.Attr("href")).
+				Msg("Skipping hidden/non-clickable link")
+			return
+		}
 
-			// Append to result.Links via context
-			if r, ok := e.Request.Ctx.GetAny("result").(*CrawlResult); ok {
-				r.Links = append(r.Links, u)
-				log.Debug().
-					Str("url", e.Request.URL.String()).
-					Int("links_count", len(r.Links)).
-					Msg("Added link to result")
-			} else {
-				log.Warn().
-					Str("url", e.Request.URL.String()).
-					Msg("Could not get result from Colly context")
-			}
-		})
-	}
+		href := e.Attr("href")
+		// Normalise URL (absolute)
+		u := e.Request.AbsoluteURL(href)
+
+		log.Debug().
+			Str("href", href).
+			Str("absolute_url", u).
+			Str("from_url", e.Request.URL.String()).
+			Msg("Colly found clickable link")
+
+		// Append to result.Links via context
+		if r, ok := e.Request.Ctx.GetAny("result").(*CrawlResult); ok {
+			r.Links = append(r.Links, u)
+			log.Debug().
+				Str("url", e.Request.URL.String()).
+				Int("links_count", len(r.Links)).
+				Msg("Added link to result")
+		} else {
+			log.Debug().
+				Str("url", e.Request.URL.String()).
+				Msg("No result context - not collecting links")
+		}
+	})
 
 	return &Crawler{
 		config: config,
@@ -132,99 +125,140 @@ func (c *Crawler) WarmURL(ctx context.Context, targetURL string, findLinks bool)
 	log.Debug().
 		Str("url", targetURL).
 		Bool("find_links", findLinks).
-		Msg("Starting URL warming")
+		Msg("Starting URL warming with Colly")
 
-	// Single HTTP request for both cache warming and link extraction
-	client := &http.Client{Timeout: c.config.DefaultTimeout}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, targetURL, nil)
-	if err != nil {
-		res.Error = err.Error()
-		res.ResponseTime = time.Since(start).Milliseconds()
-		return res, err
-	}
-
-	// Set a specific User-Agent to identify our crawler
-	req.Header.Set("User-Agent", "Blue-Banded-Bee-Cache-Warmer/1.0")
-
-	resp, err := client.Do(req)
-	res.ResponseTime = time.Since(start).Milliseconds()
-	if err != nil {
-		log.Error().
-			Err(err).
-			Str("url", targetURL).
-			Dur("duration_ms", time.Duration(res.ResponseTime)*time.Millisecond).
-			Msg("URL warming failed")
-		res.Error = err.Error()
-		return res, err
-	}
-
-	defer resp.Body.Close()
-
-	bodyBytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		log.Error().
-			Err(err).
-			Str("url", targetURL).
-			Msg("Failed to read response body")
-		res.Error = fmt.Sprintf("failed to read response body: %s", err.Error())
-		return res, err
-	}
-
-	res.StatusCode = resp.StatusCode
-
-	// Check for cache status headers from different CDNs
-	// Cloudflare
-	if cacheStatus := resp.Header.Get("CF-Cache-Status"); cacheStatus != "" {
-		res.CacheStatus = cacheStatus
-	}
-	// Fastly
-	if cacheStatus := resp.Header.Get("X-Cache"); cacheStatus != "" && res.CacheStatus == "" {
-		res.CacheStatus = cacheStatus
-	}
-	// Akamai
-	if cacheStatus := resp.Header.Get("X-Cache-Remote"); cacheStatus != "" && res.CacheStatus == "" {
-		res.CacheStatus = cacheStatus
-	}
-	// Vercel
-	if cacheStatus := resp.Header.Get("x-vercel-cache"); cacheStatus != "" && res.CacheStatus == "" {
-		res.CacheStatus = cacheStatus
-	}
-	// Standard Cache-Status header (newer standardized approach)
-	if cacheStatus := resp.Header.Get("Cache-Status"); cacheStatus != "" && res.CacheStatus == "" {
-		res.CacheStatus = cacheStatus
-	}
-	// Varnish (the presence of X-Varnish indicates it was processed by Varnish)
-	if varnishID := resp.Header.Get("X-Varnish"); varnishID != "" && res.CacheStatus == "" {
-		if strings.Contains(varnishID, " ") {
-			res.CacheStatus = "HIT" // Multiple IDs indicate a cache hit
-		} else {
-			res.CacheStatus = "MISS" // Single ID indicates a cache miss
+	// Use Colly for everything - single request handles cache warming and link extraction
+	collyClone := c.colly.Clone()
+	
+	// Set up timing and result collection
+	collyClone.OnRequest(func(r *colly.Request) {
+		r.Ctx.Put("result", res)
+		r.Ctx.Put("start_time", start)
+		r.Ctx.Put("find_links", findLinks)
+	})
+	
+	// Handle response - collect cache headers, status, timing
+	collyClone.OnResponse(func(r *colly.Response) {
+		startTime := r.Ctx.GetAny("start_time").(time.Time)
+		result := r.Ctx.GetAny("result").(*CrawlResult)
+		
+		// Calculate response time
+		result.ResponseTime = time.Since(startTime).Milliseconds()
+		result.StatusCode = r.StatusCode
+		result.ContentType = r.Headers.Get("Content-Type")
+		
+		// Check for cache status headers from different CDNs
+		// Cloudflare
+		if cacheStatus := r.Headers.Get("CF-Cache-Status"); cacheStatus != "" {
+			result.CacheStatus = cacheStatus
 		}
+		// Fastly
+		if cacheStatus := r.Headers.Get("X-Cache"); cacheStatus != "" && result.CacheStatus == "" {
+			result.CacheStatus = cacheStatus
+		}
+		// Akamai
+		if cacheStatus := r.Headers.Get("X-Cache-Remote"); cacheStatus != "" && result.CacheStatus == "" {
+			result.CacheStatus = cacheStatus
+		}
+		// Vercel
+		if cacheStatus := r.Headers.Get("x-vercel-cache"); cacheStatus != "" && result.CacheStatus == "" {
+			result.CacheStatus = cacheStatus
+		}
+		// Standard Cache-Status header (newer standardized approach)
+		if cacheStatus := r.Headers.Get("Cache-Status"); cacheStatus != "" && result.CacheStatus == "" {
+			result.CacheStatus = cacheStatus
+		}
+		// Varnish (the presence of X-Varnish indicates it was processed by Varnish)
+		if varnishID := r.Headers.Get("X-Varnish"); varnishID != "" && result.CacheStatus == "" {
+			if strings.Contains(varnishID, " ") {
+				result.CacheStatus = "HIT" // Multiple IDs indicate a cache hit
+			} else {
+				result.CacheStatus = "MISS" // Single ID indicates a cache miss
+			}
+		}
+		
+		// Set error for non-2xx status codes (to match test expectations)
+		if r.StatusCode < 200 || r.StatusCode >= 300 {
+			result.Error = fmt.Sprintf("non-success status code: %d", r.StatusCode)
+		}
+	})
+	
+	// Handle errors
+	collyClone.OnError(func(r *colly.Response, err error) {
+		result := r.Ctx.GetAny("result").(*CrawlResult)
+		result.Error = err.Error()
+		
+		if r != nil {
+			startTime := r.Ctx.GetAny("start_time").(time.Time)
+			result.ResponseTime = time.Since(startTime).Milliseconds()
+			result.StatusCode = r.StatusCode
+		}
+		
+		log.Error().
+			Err(err).
+			Str("url", targetURL).
+			Dur("duration_ms", time.Duration(result.ResponseTime)*time.Millisecond).
+			Msg("URL warming failed")
+	})
+	
+	// Set up context cancellation handling
+	done := make(chan error, 1)
+	
+	// Visit the URL with Colly in a goroutine to support context cancellation
+	go func() {
+		visitErr := collyClone.Visit(targetURL)
+		if visitErr != nil {
+			done <- visitErr
+			return
+		}
+		// Wait for async requests to complete
+		collyClone.Wait()
+		done <- nil
+	}()
+	
+	// Wait for either completion or context cancellation
+	select {
+	case err = <-done:
+		if err != nil {
+			res.Error = err.Error()
+			log.Error().
+				Err(err).
+				Str("url", targetURL).
+				Msg("Colly visit failed")
+			return res, err
+		}
+	case <-ctx.Done():
+		res.Error = ctx.Err().Error()
+		log.Error().
+			Err(ctx.Err()).
+			Str("url", targetURL).
+			Msg("URL warming cancelled due to context")
+		return res, ctx.Err()
 	}
 
-	res.ContentType = resp.Header.Get("Content-Type")
-
-	// Extract links only if requested
-	if findLinks {
-		res.Links = extractLinks(bodyBytes, targetURL)
-		log.Debug().
-			Str("url", targetURL).
-			Int("links_found", len(res.Links)).
-			Msg("Link extraction completed")
-	}
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		res.Error = fmt.Sprintf("non-success status code: %d", resp.StatusCode)
-		log.Warn().
-			Int("status", resp.StatusCode).
-			Str("url", targetURL).
-			Dur("duration_ms", time.Duration(res.ResponseTime)*time.Millisecond).
-			Msg("URL warming returned non-success status")
+	// Log results and return error if needed
+	if res.Error != "" {
+		if res.StatusCode < 200 || res.StatusCode >= 300 {
+			log.Warn().
+				Int("status", res.StatusCode).
+				Str("url", targetURL).
+				Str("error", res.Error).
+				Dur("duration_ms", time.Duration(res.ResponseTime)*time.Millisecond).
+				Msg("URL warming returned non-success status")
+		} else {
+			log.Error().
+				Str("url", targetURL).
+				Str("error", res.Error).
+				Dur("duration_ms", time.Duration(res.ResponseTime)*time.Millisecond).
+				Msg("URL warming failed")
+		}
+		return res, fmt.Errorf("%s", res.Error)
 	} else {
 		log.Debug().
-			Int("status", resp.StatusCode).
+			Int("status", res.StatusCode).
 			Str("url", targetURL).
 			Str("cache_status", res.CacheStatus).
+			Int("links_found", len(res.Links)).
 			Dur("duration_ms", time.Duration(res.ResponseTime)*time.Millisecond).
 			Msg("URL warming completed successfully")
 	}
@@ -273,65 +307,6 @@ func (c *Crawler) CreateHTTPClient(timeout time.Duration) *http.Client {
 			ForceAttemptHTTP2:   true,
 		},
 	}
-}
-
-// extractLinks parses HTML body and returns all anchor hrefs as absolute URLs
-func extractLinks(body []byte, base string) []string {
-	var links []string
-	baseURL, err := url.Parse(base)
-	if err != nil {
-		log.Error().
-			Err(err).
-			Str("base_url", base).
-			Msg("Failed to parse base URL for link extraction")
-		return links
-	}
-	doc, err := html.Parse(bytes.NewReader(body))
-	if err != nil {
-		log.Error().
-			Err(err).
-			Str("base_url", base).
-			Msg("Failed to parse HTML for link extraction")
-		return links
-	}
-	var f func(*html.Node)
-	f = func(n *html.Node) {
-		if n.Type == html.ElementNode && n.Data == "a" {
-			for _, attr := range n.Attr {
-				if attr.Key == "href" {
-					u, err := url.Parse(attr.Val)
-					if err == nil {
-						abs := baseURL.ResolveReference(u)
-						links = append(links, abs.String())
-
-						// Log every 10th link to avoid excessive logging
-						if len(links)%10 == 0 {
-							log.Debug().
-								Str("base_url", base).
-								Int("links_found", len(links)).
-								Msg("Extracting links from HTML")
-						}
-					} else {
-						log.Debug().
-							Err(err).
-							Str("href", attr.Val).
-							Msg("Failed to parse link URL")
-					}
-				}
-			}
-		}
-		for c := n.FirstChild; c != nil; c = c.NextSibling {
-			f(c)
-		}
-	}
-	f(doc)
-
-	log.Debug().
-		Str("base_url", base).
-		Int("total_links_found", len(links)).
-		Msg("HTML link extraction completed")
-
-	return links
 }
 
 // Config returns the Crawler's configuration.
