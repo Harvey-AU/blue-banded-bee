@@ -81,10 +81,12 @@ type Task struct {
 	SourceURL   string
 
 	// Result data
-	StatusCode   int
-	ResponseTime int64
-	CacheStatus  string
-	ContentType  string
+	StatusCode         int
+	ResponseTime       int64
+	CacheStatus        string
+	ContentType        string
+	SecondResponseTime int64
+	SecondCacheStatus  string
 }
 
 // GetNextTask gets a pending task using row-level locking
@@ -350,10 +352,12 @@ func (q *DbQueue) UpdateTaskStatus(ctx context.Context, task *Task) error {
 			_, err = tx.ExecContext(ctx, `
 				UPDATE tasks 
 				SET status = $1, completed_at = $2, status_code = $3, 
-					response_time = $4, cache_status = $5, content_type = $6
-				WHERE id = $7
+					response_time = $4, cache_status = $5, content_type = $6,
+					second_response_time = $7, second_cache_status = $8
+				WHERE id = $9
 			`, task.Status, task.CompletedAt, task.StatusCode,
-				task.ResponseTime, task.CacheStatus, task.ContentType, task.ID)
+				task.ResponseTime, task.CacheStatus, task.ContentType,
+				task.SecondResponseTime, task.SecondCacheStatus, task.ID)
 
 		case "failed":
 			_, err = tx.ExecContext(ctx, `
