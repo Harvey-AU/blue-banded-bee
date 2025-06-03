@@ -61,15 +61,27 @@ func New(config *Config, id ...string) *Crawler {
 		Msg("Registering Colly link extractor")
 
 	c.OnHTML("a[href]", func(e *colly.HTMLElement) {
-		// Only extract links that are likely visible and clickable to users
-		if !isLinkVisibleAndClickable(e) {
+		// Check if link extraction is enabled for this request
+		if findLinks, ok := e.Request.Ctx.GetAny("find_links").(bool); !ok || !findLinks {
 			log.Debug().
-				Str("href", e.Attr("href")).
-				Msg("Skipping hidden/non-clickable link")
+				Str("url", e.Request.URL.String()).
+				Bool("find_links", findLinks).
+				Msg("Link extraction disabled for this request")
 			return
 		}
 
-		href := e.Attr("href")
+		href := strings.TrimSpace(e.Attr("href"))
+		
+		// Skip empty hrefs and fragments
+		if href == "" || href == "#" {
+			return
+		}
+		
+		// Skip non-navigation links
+		if strings.HasPrefix(href, "javascript:") || strings.HasPrefix(href, "mailto:") {
+			return
+		}
+
 		// Normalise URL (absolute)
 		u := e.Request.AbsoluteURL(href)
 
@@ -77,7 +89,7 @@ func New(config *Config, id ...string) *Crawler {
 			Str("href", href).
 			Str("absolute_url", u).
 			Str("from_url", e.Request.URL.String()).
-			Msg("Colly found clickable link")
+			Msg("Colly found link")
 
 		// Append to result.Links via context
 		if r, ok := e.Request.Ctx.GetAny("result").(*CrawlResult); ok {
@@ -253,21 +265,65 @@ func (c *Crawler) WarmURL(ctx context.Context, targetURL string, findLinks bool)
 				Msg("URL warming failed")
 		}
 		return res, fmt.Errorf("%s", res.Error)
-	} else {
+	}
+
+	// Perform cache warming if first request was a MISS
+	if shouldMakeSecondRequest(res.CacheStatus) {
 		log.Debug().
-			Int("status", res.StatusCode).
 			Str("url", targetURL).
 			Str("cache_status", res.CacheStatus).
-			Int("links_found", len(res.Links)).
-			Dur("duration_ms", time.Duration(res.ResponseTime)*time.Millisecond).
-			Msg("URL warming completed successfully")
+			Msg("Cache MISS detected, making second request for cache warming")
+		
+		secondResult, err := c.makeSecondRequest(ctx, targetURL)
+		if err != nil {
+			log.Warn().
+				Err(err).
+				Str("url", targetURL).
+				Msg("Second request failed, but first request succeeded")
+			// Don't return error - first request was successful
+		} else {
+			res.SecondResponseTime = secondResult.ResponseTime
+			res.SecondCacheStatus = secondResult.CacheStatus
+			
+			log.Debug().
+				Str("url", targetURL).
+				Str("first_cache_status", res.CacheStatus).
+				Str("second_cache_status", res.SecondCacheStatus).
+				Int64("first_response_time", res.ResponseTime).
+				Int64("second_response_time", res.SecondResponseTime).
+				Msg("Cache warming completed")
+		}
 	}
+
+	log.Debug().
+		Int("status", res.StatusCode).
+		Str("url", targetURL).
+		Str("cache_status", res.CacheStatus).
+		Int("links_found", len(res.Links)).
+		Dur("duration_ms", time.Duration(res.ResponseTime)*time.Millisecond).
+		Msg("URL warming completed successfully")
 
 	return res, nil
 }
 
+// shouldMakeSecondRequest determines if we should make a second request for cache warming
+func shouldMakeSecondRequest(cacheStatus string) bool {
+	// Make second request for cache misses and bypasses
+	// Don't make second request for hits, expired, stale, etc.
+	switch strings.ToUpper(cacheStatus) {
+	case "MISS", "BYPASS":
+		return true
+	default:
+		return false
+	}
+}
 
-
+// makeSecondRequest performs a second request to verify cache warming
+// Reuses the main WarmURL logic but disables link extraction
+func (c *Crawler) makeSecondRequest(ctx context.Context, targetURL string) (*CrawlResult, error) {
+	// Reuse the main WarmURL method but disable link extraction
+	return c.WarmURL(ctx, targetURL, false)
+}
 
 func (c *Crawler) CheckCacheStatus(ctx context.Context, targetURL string) (string, error) {
 	req, err := http.NewRequestWithContext(ctx, "HEAD", targetURL, nil)
@@ -314,79 +370,3 @@ func (c *Crawler) Config() *Config {
 	return c.config
 }
 
-// isLinkVisibleAndClickable determines if a link element is likely visible and clickable to users
-// This helps filter out hidden navigation, framework-generated links, and other non-user-facing links
-func isLinkVisibleAndClickable(e *colly.HTMLElement) bool {
-	// Skip links with no href or empty href
-	href := strings.TrimSpace(e.Attr("href"))
-	if href == "" || href == "#" {
-		return false
-	}
-	
-	// Skip javascript: and mailto: links (not page navigation)
-	if strings.HasPrefix(href, "javascript:") || strings.HasPrefix(href, "mailto:") {
-		return false
-	}
-	
-	// Check for common "hidden" indicators in CSS classes or attributes
-	class := strings.ToLower(e.Attr("class"))
-	style := strings.ToLower(e.Attr("style"))
-	id := strings.ToLower(e.Attr("id"))
-	
-	// Skip links that are likely hidden or for accessibility
-	hiddenIndicators := []string{
-		"hidden", "invisible", "screen-reader", "sr-only", "visually-hidden",
-		"skip-link", "skip-nav", "offscreen", "display:none", "visibility:hidden",
-		"opacity:0", "w-condition-invisible", // Webflow hidden condition
-	}
-	
-	for _, indicator := range hiddenIndicators {
-		if strings.Contains(class, indicator) || strings.Contains(style, indicator) || strings.Contains(id, indicator) {
-			log.Debug().
-				Str("href", href).
-				Str("reason", "hidden_indicator").
-				Str("indicator", indicator).
-				Msg("Link appears hidden")
-			return false
-		}
-	}
-	
-	// Check if link has visible text content
-	linkText := strings.TrimSpace(e.Text)
-	if linkText == "" {
-		// Links with no text might be purely decorative or hidden
-		// But allow them if they have aria-label (could be icon links)
-		ariaLabel := strings.TrimSpace(e.Attr("aria-label"))
-		if ariaLabel == "" {
-			log.Debug().
-				Str("href", href).
-				Str("reason", "no_text_content").
-				Msg("Link has no visible text or aria-label")
-			return false
-		}
-	}
-	
-	// Skip links that are likely framework/CMS generated pagination with complex parameters
-	// Allow simple pagination (page=1, page=2) but skip complex multi-parameter combinations
-	if strings.Contains(href, "?") {
-		queryParts := strings.Split(strings.Split(href, "?")[1], "&")
-		pageParams := 0
-		for _, part := range queryParts {
-			if strings.Contains(part, "_page=") || strings.Contains(part, "page=") {
-				pageParams++
-			}
-		}
-		// If there are multiple pagination parameters, likely framework-generated
-		if pageParams > 2 {
-			log.Debug().
-				Str("href", href).
-				Str("reason", "complex_pagination").
-				Int("page_params", pageParams).
-				Msg("Link appears to be complex pagination")
-			return false
-		}
-	}
-	
-	// If we get here, the link appears to be visible and clickable
-	return true
-}

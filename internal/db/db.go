@@ -305,11 +305,28 @@ func setupSchema(db *sql.DB) error {
 			response_time BIGINT,
 			cache_status TEXT,
 			content_type TEXT,
+			second_response_time BIGINT,
+			second_cache_status TEXT,
 			FOREIGN KEY (job_id) REFERENCES jobs(id)
 		)
 	`)
 	if err != nil {
 		return fmt.Errorf("failed to create tasks table: %w", err)
+	}
+
+	// Add cache warming columns for existing databases (backward compatibility)
+	_, err = db.Exec(`
+		ALTER TABLE tasks ADD COLUMN IF NOT EXISTS second_response_time BIGINT
+	`)
+	if err != nil {
+		return fmt.Errorf("failed to add second_response_time column: %w", err)
+	}
+
+	_, err = db.Exec(`
+		ALTER TABLE tasks ADD COLUMN IF NOT EXISTS second_cache_status TEXT
+	`)
+	if err != nil {
+		return fmt.Errorf("failed to add second_cache_status column: %w", err)
 	}
 
 	// Add a unique constraint to prevent duplicate tasks for same page in a job
