@@ -92,7 +92,9 @@
       "mcp__playwright__browser_select_option",
       "mcp__playwright__browser_generate_playwright_test",
       "mcp__playwright__browser_wait_for",
-      "mcp__supabase__list_tables"
+      "mcp__supabase__list_tables",
+      "mcp__sentry__find_errors",
+      "Bash(fly logs:*)"
     ],
     "deny": []
   },
