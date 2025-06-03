@@ -20,7 +20,13 @@ Each version represents a distinct set of changes, even if released on the same 
 
 ### Fixed
 
-- **Link Extraction**: Consolidated to Colly-only crawler to extract only user-clickable links, eliminating problematic framework-generated pagination URLs
+- **Critical Link Extraction Bug**: Fixed context handling bug that was preventing all link discovery
+  - Link extraction was defaulting to disabled when `find_links` context value wasn't properly set
+  - Now defaults to enabled link extraction, fixing pagination link discovery (e.g., `?b84bb98f_page=2`)
+  - **TODO: Verify this fix works by testing teamharvey.co/stories pagination links**
+- **Link Extraction Logic**: Consolidated to Colly-only crawler to extract only user-clickable links
+  - Removed overly aggressive filtering that was blocking legitimate navigation links
+  - Now only filters empty hrefs, fragments (#), javascript:, and mailto: links
 - **Dashboard Form**: Fixed max_pages input field to consistently show default value of 0 (unlimited)
 
 ### Enhanced
