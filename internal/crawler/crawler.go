@@ -62,7 +62,12 @@ func New(config *Config, id ...string) *Crawler {
 
 	c.OnHTML("a[href]", func(e *colly.HTMLElement) {
 		// Check if link extraction is enabled for this request
-		if findLinks, ok := e.Request.Ctx.GetAny("find_links").(bool); !ok || !findLinks {
+		findLinksVal := e.Request.Ctx.GetAny("find_links")
+		if findLinksVal == nil {
+			log.Debug().
+				Str("url", e.Request.URL.String()).
+				Msg("find_links not set in context - defaulting to enabled")
+		} else if findLinks, ok := findLinksVal.(bool); ok && !findLinks {
 			log.Debug().
 				Str("url", e.Request.URL.String()).
 				Bool("find_links", findLinks).
