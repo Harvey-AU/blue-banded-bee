@@ -8,6 +8,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Multiple version updates may occur on the same date, each with its own version number.
 Each version represents a distinct set of changes, even if released on the same day.
 
+## [0.5.8] – 2025-06-03
+
+### Added
+
+- **Cache Warming System**: Implemented blocking cache warming with second HTTP requests on cache MISS/BYPASS
+  - Added `second_response_time` and `second_cache_status` columns to track cache warming effectiveness
+  - Cache warming logic integrated into crawler with automatic MISS detection from multiple CDN headers
+  - Blocking approach ensures complete metrics collection and immediate cache verification
+  - Supabase can calculate cache warming success (`cache_warmed`) using: `second_cache_status = 'HIT'`
+
+### Fixed
+
+- **Link Extraction**: Consolidated to Colly-only crawler to extract only user-clickable links, eliminating problematic framework-generated pagination URLs
+- **Dashboard Form**: Fixed max_pages input field to consistently show default value of 0 (unlimited)
+
+### Enhanced
+
+- **Code Architecture**: Eliminated logic duplication in cache warming implementation
+  - Cache warming second request reuses main `WarmURL()` method with `findLinks=false`
+  - Removed redundant `cache_warmed` field - can be calculated in Supabase/dashboard
+  - Database schema includes cache warming columns in initial table creation for new installations
+
 ## [0.5.7] – 2025-06-01
 
 ### Fixed
