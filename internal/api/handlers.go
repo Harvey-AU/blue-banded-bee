@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -270,9 +271,12 @@ func calculateDateRange(dateRange string) (*time.Time, *time.Time) {
 // WebflowWebhookPayload represents the structure of Webflow's site publish webhook
 type WebflowWebhookPayload struct {
 	TriggerType string `json:"triggerType"`
-	Site        string `json:"site"`
-	Domain      string `json:"domain"`
-	PublishTime string `json:"publishTime"`
+	Payload     struct {
+		Domains     []string `json:"domains"`
+		PublishedBy struct {
+			DisplayName string `json:"displayName"`
+		} `json:"publishedBy"`
+	} `json:"payload"`
 }
 
 // WebflowWebhook handles Webflow site publish webhooks
@@ -303,9 +307,8 @@ func (h *Handler) WebflowWebhook(w http.ResponseWriter, r *http.Request) {
 	log.Info().
 		Str("user_id", userID).
 		Str("trigger_type", payload.TriggerType).
-		Str("site", payload.Site).
-		Str("domain", payload.Domain).
-		Str("publish_time", payload.PublishTime).
+		Str("published_by", payload.Payload.PublishedBy.DisplayName).
+		Strs("domains", payload.Payload.Domains).
 		Msg("Webflow webhook received")
 
 	// Validate it's a site publish event
@@ -315,12 +318,15 @@ func (h *Handler) WebflowWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate domain is provided
-	if payload.Domain == "" {
-		log.Error().Msg("Webflow webhook missing domain")
-		BadRequest(w, r, "Domain is required")
+	// Validate domains are provided
+	if len(payload.Payload.Domains) == 0 {
+		log.Error().Msg("Webflow webhook missing domains")
+		BadRequest(w, r, "Domains are required")
 		return
 	}
+
+	// Use the last domain in the list (public domain if multiple, webflow.io if only one)
+	selectedDomain := payload.Payload.Domains[len(payload.Payload.Domains)-1]
 
 	// Get user from database to find their organisation
 	user, err := h.DB.GetUser(userID)
@@ -330,50 +336,63 @@ func (h *Handler) WebflowWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get organisation ID (may be empty)
-	orgID := ""
-	if user.OrganisationID != nil {
-		orgID = *user.OrganisationID
+	// Create job using shared logic with webhook defaults
+	useSitemap := true
+	findLinks := true
+	concurrency := 3
+	maxPages := 100
+	sourceType := "webflow_webhook"
+	sourceDetail := payload.Payload.PublishedBy.DisplayName
+	
+	// Store full webhook payload for debugging
+	sourceInfoBytes, _ := json.Marshal(payload)
+	sourceInfo := string(sourceInfoBytes)
+	
+	req := CreateJobRequest{
+		Domain:       selectedDomain,
+		UseSitemap:   &useSitemap,
+		FindLinks:    &findLinks,
+		Concurrency:  &concurrency,
+		MaxPages:     &maxPages,
+		SourceType:   &sourceType,
+		SourceDetail: &sourceDetail,
+		SourceInfo:   &sourceInfo,
 	}
 
-	// Create job for the published domain
-	jobRequest := jobs.CreateJobRequest{
-		Domain:      payload.Domain,
-		Concurrency: 3, // Default concurrency
-		FindLinks:   true,
-		MaxPages:    100,
-	}
-
-	// Create job with user and org context
-	job, err := h.JobsManager.CreateJob(userID, orgID, jobRequest)
+	job, err := h.createJobFromRequest(r.Context(), user, req)
 	if err != nil {
 		log.Error().Err(err).
 			Str("user_id", userID).
-			Str("org_id", orgID).
-			Str("domain", payload.Domain).
+			Str("domain", selectedDomain).
 			Msg("Failed to create job from webhook")
-		ServerError(w, r, "Failed to create job")
+		InternalError(w, r, err)
 		return
 	}
 
 	// Start the job immediately
-	if err := h.JobsManager.StartJob(job.ID); err != nil {
+	if err := h.JobsManager.StartJob(r.Context(), job.ID); err != nil {
 		log.Error().Err(err).Str("job_id", job.ID).Msg("Failed to start job from webhook")
 		// Don't return error - job was created successfully, just failed to start
+	}
+
+	orgIDStr := ""
+	if user.OrganisationID != nil {
+		orgIDStr = *user.OrganisationID
 	}
 
 	log.Info().
 		Str("job_id", job.ID).
 		Str("user_id", userID).
-		Str("org_id", orgID).
-		Str("domain", payload.Domain).
+		Str("org_id", orgIDStr).
+		Str("domain", selectedDomain).
+		Str("selected_from", strings.Join(payload.Payload.Domains, ", ")).
 		Msg("Successfully created and started job from Webflow webhook")
 
 	WriteSuccess(w, r, map[string]interface{}{
 		"job_id": job.ID,
 		"user_id": userID,
-		"org_id": orgID,
-		"domain": payload.Domain,
+		"org_id": orgIDStr,
+		"domain": selectedDomain,
 		"status": "created",
 	}, "Job created successfully from webhook")
 }
