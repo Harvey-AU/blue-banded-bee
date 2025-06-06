@@ -339,7 +339,7 @@ func (h *Handler) WebflowWebhook(w http.ResponseWriter, r *http.Request) {
 	useSitemap := true
 	findLinks := true
 	concurrency := 3
-	maxPages := 100
+	maxPages := 0 // Unlimited pages for webhook-triggered jobs
 	sourceType := "webflow_webhook"
 	sourceDetail := payload.Payload.PublishedBy.DisplayName
 	
