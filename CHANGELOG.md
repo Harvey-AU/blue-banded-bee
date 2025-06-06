@@ -8,6 +8,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Multiple version updates may occur on the same date, each with its own version number.
 Each version represents a distinct set of changes, even if released on the same day.
 
+## [0.5.11] – 2025-06-06
+
+### Added
+
+- **Webflow Webhook Integration**: Automatic cache warming triggered by Webflow site publishing
+  - Webhook endpoint `/v1/webhooks/webflow/USER_ID` for user-specific triggers
+  - Automatic job creation and execution when Webflow sites are published
+  - Smart domain selection (uses last domain in array - public domain if multiple, staging if only one)
+- **Job Source Tracking**: Comprehensive tracking of job creation sources for debugging and analytics
+  - `source_type` field: `"webflow_webhook"` or `"dashboard"`
+  - `source_detail` field: Clean display text (publisher name or action type)
+  - `source_info` field: Full debugging JSON (webhook payload or request details)
+
+### Enhanced
+
+- **Job Creation Architecture**: Refactored to eliminate code duplication
+  - Extracted shared `createJobFromRequest()` function for consistent job creation
+  - Webhook and dashboard endpoints now use common job creation logic
+  - Improved maintainability and consistency across creation sources
+
+### Technical Implementation
+
+- **Database Schema**: Added `source_type`, `source_detail`, and `source_info` columns to jobs table
+- **Webhook Security**: No authentication required for webhooks (Webflow can POST directly)
+- **Source Attribution**: Dashboard jobs tagged as `"create_job"` ready for future `"retry_job"` actions
+
 ## [0.5.10] – 2025-06-06
 
 ### Fixed

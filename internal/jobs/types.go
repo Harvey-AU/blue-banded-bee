@@ -57,6 +57,9 @@ type Job struct {
 	IncludePaths    []string  `json:"include_paths,omitempty"`
 	ExcludePaths    []string  `json:"exclude_paths,omitempty"`
 	RequiredWorkers int       `json:"required_workers"`
+	SourceType      *string   `json:"source_type,omitempty"`
+	SourceDetail    *string   `json:"source_detail,omitempty"`
+	SourceInfo      *string   `json:"source_info,omitempty"`
 	ErrorMessage    string    `json:"error_message,omitempty"`
 }
 
@@ -102,5 +105,8 @@ type JobOptions struct {
 	IncludePaths    []string `json:"include_paths,omitempty"`
 	ExcludePaths    []string `json:"exclude_paths,omitempty"`
 	RequiredWorkers int      `json:"required_workers"`
+	SourceType      *string  `json:"source_type,omitempty"`
+	SourceDetail    *string  `json:"source_detail,omitempty"`
+	SourceInfo      *string  `json:"source_info,omitempty"`
 }
 

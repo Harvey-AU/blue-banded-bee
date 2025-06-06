@@ -1,15 +1,18 @@
 package api
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/Harvey-AU/blue-banded-bee/internal/auth"
+	"github.com/Harvey-AU/blue-banded-bee/internal/db"
 	"github.com/Harvey-AU/blue-banded-bee/internal/jobs"
 	"github.com/rs/zerolog/log"
 )
@@ -65,11 +68,14 @@ func (h *Handler) JobHandler(w http.ResponseWriter, r *http.Request) {
 
 // CreateJobRequest represents the request body for creating a job
 type CreateJobRequest struct {
-	Domain      string `json:"domain"`
-	UseSitemap  *bool  `json:"use_sitemap,omitempty"`
-	FindLinks   *bool  `json:"find_links,omitempty"`
-	Concurrency *int   `json:"concurrency,omitempty"`
-	MaxPages    *int   `json:"max_pages,omitempty"`
+	Domain       string  `json:"domain"`
+	UseSitemap   *bool   `json:"use_sitemap,omitempty"`
+	FindLinks    *bool   `json:"find_links,omitempty"`
+	Concurrency  *int    `json:"concurrency,omitempty"`
+	MaxPages     *int    `json:"max_pages,omitempty"`
+	SourceType   *string `json:"source_type,omitempty"`
+	SourceDetail *string `json:"source_detail,omitempty"`
+	SourceInfo   *string `json:"source_info,omitempty"`
 }
 
 // JobResponse represents a job in API responses
@@ -157,32 +163,8 @@ func (h *Handler) listJobs(w http.ResponseWriter, r *http.Request) {
 	WriteSuccess(w, r, response, "Jobs retrieved successfully")
 }
 
-// createJob handles POST /v1/jobs
-func (h *Handler) createJob(w http.ResponseWriter, r *http.Request) {
-	userClaims, ok := auth.GetUserFromContext(r.Context())
-	if !ok {
-		Unauthorised(w, r, "User information not found")
-		return
-	}
-
-	user, err := h.DB.GetUser(userClaims.UserID)
-	if err != nil {
-		log.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get user from database")
-		Unauthorised(w, r, "User not found")
-		return
-	}
-
-	var req CreateJobRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		BadRequest(w, r, "Invalid JSON request body")
-		return
-	}
-
-	if req.Domain == "" {
-		BadRequest(w, r, "Domain is required")
-		return
-	}
-
+// createJobFromRequest creates a job from a CreateJobRequest with user context
+func (h *Handler) createJobFromRequest(ctx context.Context, user *db.User, req CreateJobRequest) (*jobs.Job, error) {
 	// Set defaults
 	useSitemap := true
 	if req.UseSitemap != nil {
@@ -212,9 +194,63 @@ func (h *Handler) createJob(w http.ResponseWriter, r *http.Request) {
 		Concurrency:    concurrency,
 		FindLinks:      findLinks,
 		MaxPages:       maxPages,
+		SourceType:     req.SourceType,
+		SourceDetail:   req.SourceDetail,
+		SourceInfo:     req.SourceInfo,
 	}
 
-	job, err := h.JobsManager.CreateJob(r.Context(), opts)
+	return h.JobsManager.CreateJob(ctx, opts)
+}
+
+// createJob handles POST /v1/jobs
+func (h *Handler) createJob(w http.ResponseWriter, r *http.Request) {
+	userClaims, ok := auth.GetUserFromContext(r.Context())
+	if !ok {
+		Unauthorised(w, r, "User information not found")
+		return
+	}
+
+	user, err := h.DB.GetUser(userClaims.UserID)
+	if err != nil {
+		log.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get user from database")
+		Unauthorised(w, r, "User not found")
+		return
+	}
+
+	var req CreateJobRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		BadRequest(w, r, "Invalid JSON request body")
+		return
+	}
+
+	if req.Domain == "" {
+		BadRequest(w, r, "Domain is required")
+		return
+	}
+
+	// Set source information if not provided (dashboard creation)
+	if req.SourceType == nil {
+		sourceType := "dashboard"
+		req.SourceType = &sourceType
+	}
+	if req.SourceDetail == nil {
+		sourceDetail := "create_job"
+		req.SourceDetail = &sourceDetail
+	}
+	if req.SourceInfo == nil {
+		sourceInfoData := map[string]interface{}{
+			"ip":         getClientIP(r),
+			"userAgent":  r.UserAgent(),
+			"timestamp":  time.Now().UTC().Format(time.RFC3339),
+			"endpoint":   r.URL.Path,
+			"method":     r.Method,
+		}
+		sourceInfoBytes, _ := json.Marshal(sourceInfoData)
+		sourceInfo := string(sourceInfoBytes)
+		req.SourceInfo = &sourceInfo
+	}
+
+	job, err := h.createJobFromRequest(r.Context(), user, req)
 	if err != nil {
 		log.Error().Err(err).Str("domain", req.Domain).Msg("Failed to create job")
 		InternalError(w, r, err)
@@ -425,6 +461,32 @@ func (h *Handler) cancelJob(w http.ResponseWriter, r *http.Request, jobID string
 	}
 
 	WriteSuccess(w, r, map[string]string{"id": jobID, "status": "cancelled"}, "Job cancelled successfully")
+}
+
+// getClientIP extracts the client IP from the request
+func getClientIP(r *http.Request) string {
+	// Check for X-Forwarded-For header first (common with proxies/load balancers)
+	xff := r.Header.Get("X-Forwarded-For")
+	if xff != "" {
+		// X-Forwarded-For can contain multiple IPs, use the first one
+		if idx := strings.Index(xff, ","); idx != -1 {
+			return strings.TrimSpace(xff[:idx])
+		}
+		return strings.TrimSpace(xff)
+	}
+
+	// Check for X-Real-IP header
+	xri := r.Header.Get("X-Real-IP")
+	if xri != "" {
+		return strings.TrimSpace(xri)
+	}
+
+	// Fall back to RemoteAddr
+	ip, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+	return ip
 }
 
 // TaskResponse represents a task in API responses
