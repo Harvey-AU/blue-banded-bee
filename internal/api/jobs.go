@@ -432,6 +432,7 @@ type TaskResponse struct {
 	ID                 string  `json:"id"`
 	JobID              string  `json:"job_id"`
 	Path               string  `json:"path"`
+	URL                string  `json:"url"`
 	Status             string  `json:"status"`
 	StatusCode         *int    `json:"status_code,omitempty"`
 	ResponseTime       *int    `json:"response_time,omitempty"`
@@ -532,11 +533,13 @@ func (h *Handler) getJobTasks(w http.ResponseWriter, r *http.Request, jobID stri
 
 	// Build query with optional status filter
 	baseQuery := `
-		SELECT t.id, t.job_id, p.path, t.status, t.status_code, t.response_time, 
+		SELECT t.id, t.job_id, p.path, d.name as domain, t.status, t.status_code, t.response_time, 
 		       t.cache_status, t.second_response_time, t.second_cache_status, t.content_type, t.error, t.source_type,
 		       t.created_at, t.started_at, t.completed_at, t.retry_count
 		FROM tasks t
 		JOIN pages p ON t.page_id = p.id
+		JOIN jobs j ON t.job_id = j.id
+		JOIN domains d ON j.domain_id = d.id
 		WHERE t.job_id = $1`
 	
 	countQuery := `
@@ -577,12 +580,13 @@ func (h *Handler) getJobTasks(w http.ResponseWriter, r *http.Request, jobID stri
 	var tasks []TaskResponse
 	for rows.Next() {
 		var task TaskResponse
+		var domain string
 		var startedAt, completedAt, createdAt sql.NullTime
 		var statusCode, responseTime, secondResponseTime sql.NullInt32
 		var cacheStatus, secondCacheStatus, contentType, errorMsg, sourceType sql.NullString
 
 		err := rows.Scan(
-			&task.ID, &task.JobID, &task.Path, &task.Status,
+			&task.ID, &task.JobID, &task.Path, &domain, &task.Status,
 			&statusCode, &responseTime, &cacheStatus, &secondResponseTime, &secondCacheStatus, &contentType, &errorMsg, &sourceType,
 			&createdAt, &startedAt, &completedAt, &task.RetryCount,
 		)
@@ -590,6 +594,9 @@ func (h *Handler) getJobTasks(w http.ResponseWriter, r *http.Request, jobID stri
 			log.Error().Err(err).Msg("Failed to scan task row")
 			continue
 		}
+
+		// Construct full URL from domain and path
+		task.URL = fmt.Sprintf("https://%s%s", domain, task.Path)
 
 		// Handle nullable fields
 		if statusCode.Valid {
