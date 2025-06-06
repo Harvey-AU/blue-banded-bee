@@ -8,6 +8,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Multiple version updates may occur on the same date, each with its own version number.
 Each version represents a distinct set of changes, even if released on the same day.
 
+## [0.5.12] – 2025-06-06
+
+### Enhanced
+
+- **Cache Warming Timing**: Added 500ms delay between first request (cache MISS detection) and second request (cache verification) to allow CDNs time to process and cache the first response
+- **Webflow Webhook Domain Selection**: Fixed webhook to use first domain (primary/canonical) instead of last domain (staging .webflow.io)
+- **Webflow Webhook Page Limits**: Removed 100-page limit for webhook-triggered jobs - now unlimited for complete site cache warming
+
+### Fixed
+
+- **Build Error**: Removed unused `fmt` import from `internal/api/handlers.go` that was causing GitHub Actions build failures
+
 ## [0.5.11] – 2025-06-06
 
 ### Added
@@ -15,7 +27,7 @@ Each version represents a distinct set of changes, even if released on the same 
 - **Webflow Webhook Integration**: Automatic cache warming triggered by Webflow site publishing
   - Webhook endpoint `/v1/webhooks/webflow/USER_ID` for user-specific triggers
   - Automatic job creation and execution when Webflow sites are published
-  - Smart domain selection (uses last domain in array - public domain if multiple, staging if only one)
+  - Smart domain selection (uses first domain in array - primary/canonical domain)
 - **Job Source Tracking**: Comprehensive tracking of job creation sources for debugging and analytics
   - `source_type` field: `"webflow_webhook"` or `"dashboard"`
   - `source_detail` field: Clean display text (publisher name or action type)
