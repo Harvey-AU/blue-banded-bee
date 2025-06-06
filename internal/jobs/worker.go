@@ -20,6 +20,13 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+// JobPerformance tracks performance metrics for a specific job
+type JobPerformance struct {
+	RecentTasks  []int64   // Last 5 task response times for this job
+	CurrentBoost int       // Current performance boost workers for this job
+	LastCheck    time.Time // When we last evaluated this job
+}
+
 // WorkerPool manages a pool of workers that process crawl tasks
 type WorkerPool struct {
 	db               *sql.DB
@@ -42,6 +49,10 @@ type WorkerPool struct {
 	cleanupInterval  time.Duration
 	notifyCh         chan struct{}
 	jobManager       *JobManager // Reference to JobManager for duplicate checking
+	
+	// Performance scaling
+	jobPerformance map[string]*JobPerformance
+	perfMutex      sync.RWMutex
 }
 
 // TaskBatch holds groups of tasks for batch processing
@@ -92,6 +103,9 @@ func NewWorkerPool(db *sql.DB, dbQueue *db.DbQueue, crawler *crawler.Crawler, nu
 		},
 		batchTimer:      time.NewTicker(10 * time.Second),
 		cleanupInterval: time.Minute, // Run cleanup every minute
+		
+		// Performance scaling
+		jobPerformance: make(map[string]*JobPerformance),
 	}
 
 	// Start the batch processor
@@ -155,6 +169,15 @@ func (wp *WorkerPool) AddJob(jobID string, options *JobOptions) {
 	wp.jobs[jobID] = true
 	wp.jobsMutex.Unlock()
 
+	// Initialize performance tracking for this job
+	wp.perfMutex.Lock()
+	wp.jobPerformance[jobID] = &JobPerformance{
+		RecentTasks:  make([]int64, 0, 5),
+		CurrentBoost: 0,
+		LastCheck:    time.Now(),
+	}
+	wp.perfMutex.Unlock()
+
 	// Simple scaling: add 5 workers per job, maximum of 50 total
 	wp.workersMutex.Lock()
 	targetWorkers := wp.currentWorkers + 5
@@ -182,9 +205,18 @@ func (wp *WorkerPool) RemoveJob(jobID string) {
 	delete(wp.jobs, jobID)
 	wp.jobsMutex.Unlock()
 
-	// Simple scaling: remove 5 workers per job, minimum of 5 total
+	// Remove performance boost for this job
+	wp.perfMutex.Lock()
+	var jobBoost int
+	if perf, exists := wp.jobPerformance[jobID]; exists {
+		jobBoost = perf.CurrentBoost
+		delete(wp.jobPerformance, jobID)
+	}
+	wp.perfMutex.Unlock()
+
+	// Simple scaling: remove 5 workers per job + any performance boost, minimum of base count
 	wp.workersMutex.Lock()
-	targetWorkers := wp.currentWorkers - 5
+	targetWorkers := wp.currentWorkers - 5 - jobBoost
 	if targetWorkers < wp.baseWorkerCount {
 		targetWorkers = wp.baseWorkerCount
 	}
@@ -193,6 +225,7 @@ func (wp *WorkerPool) RemoveJob(jobID string) {
 		Str("job_id", jobID).
 		Int("current_workers", wp.currentWorkers).
 		Int("target_workers", targetWorkers).
+		Int("job_boost_removed", jobBoost).
 		Msg("Scaling down worker pool")
 
 	wp.currentWorkers = targetWorkers
@@ -381,6 +414,11 @@ func (wp *WorkerPool) processNextTask(ctx context.Context) error {
 				if updErr != nil {
 					sentry.CaptureException(updErr)
 					log.Error().Err(updErr).Str("task_id", task.ID).Msg("Failed to mark task as completed")
+				}
+
+				// Evaluate job performance for scaling
+				if result.ResponseTime > 0 {
+					wp.evaluateJobPerformance(task.JobID, result.ResponseTime)
 				}
 			}
 			// update job progress
@@ -1061,6 +1099,85 @@ func isSameOrSubDomain(hostname, targetDomain string) bool {
 	}
 
 	return false
+}
+
+// evaluateJobPerformance checks if a job needs performance scaling
+func (wp *WorkerPool) evaluateJobPerformance(jobID string, responseTime int64) {
+	wp.perfMutex.Lock()
+	defer wp.perfMutex.Unlock()
+
+	perf, exists := wp.jobPerformance[jobID]
+	if !exists {
+		return // Job not tracked
+	}
+
+	// Add response time to recent tasks (sliding window of 5)
+	perf.RecentTasks = append(perf.RecentTasks, responseTime)
+	if len(perf.RecentTasks) > 5 {
+		perf.RecentTasks = perf.RecentTasks[1:] // Remove oldest
+	}
+
+	// Only evaluate after we have at least 3 tasks
+	if len(perf.RecentTasks) < 3 {
+		return
+	}
+
+	// Calculate average response time
+	var total int64
+	for _, rt := range perf.RecentTasks {
+		total += rt
+	}
+	avgResponseTime := total / int64(len(perf.RecentTasks))
+
+	// Determine needed boost workers based on performance tiers
+	var neededBoost int
+	switch {
+	case avgResponseTime >= 4000: // 4000ms+
+		neededBoost = 20
+	case avgResponseTime >= 3000: // 3000-4000ms
+		neededBoost = 15
+	case avgResponseTime >= 2000: // 2000-3000ms
+		neededBoost = 10
+	case avgResponseTime >= 1000: // 1000-2000ms
+		neededBoost = 5
+	default: // 0-1000ms
+		neededBoost = 0
+	}
+
+	// Check if boost needs to change
+	if neededBoost != perf.CurrentBoost {
+		boostDiff := neededBoost - perf.CurrentBoost
+		
+		log.Info().
+			Str("job_id", jobID).
+			Int64("avg_response_time", avgResponseTime).
+			Int("old_boost", perf.CurrentBoost).
+			Int("new_boost", neededBoost).
+			Int("boost_diff", boostDiff).
+			Msg("Job performance scaling triggered")
+
+		// Update current boost
+		perf.CurrentBoost = neededBoost
+		perf.LastCheck = time.Now()
+
+		// Apply scaling to worker pool
+		if boostDiff > 0 {
+			// Need more workers
+			wp.workersMutex.Lock()
+			targetWorkers := wp.currentWorkers + boostDiff
+			if targetWorkers > 50 { // Respect global max
+				targetWorkers = 50
+				perf.CurrentBoost = perf.CurrentBoost - (wp.currentWorkers + boostDiff - 50) // Adjust boost to actual
+			}
+			wp.workersMutex.Unlock()
+			
+			if targetWorkers > wp.currentWorkers {
+				go wp.scaleWorkers(context.Background(), targetWorkers)
+			}
+		}
+		// Note: For scaling down (boostDiff < 0), we let workers naturally exit
+		// when they check shouldExit in the worker loop
+	}
 }
 
 // Helper function to check if a URL points to a document
