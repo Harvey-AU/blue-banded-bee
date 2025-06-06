@@ -232,6 +232,11 @@
         border-left: 4px solid #ef4444;
       }
 
+      .job-cancelled {
+        border-left: 4px solid #6b7280;
+        opacity: 0.7;
+      }
+
       .progress-pulsing {
         animation: progressPulse 2s ease-in-out infinite;
       }
@@ -294,6 +299,10 @@
       .bb-status-pending {
         background: #fef3c7;
         color: #d97706;
+      }
+      .bb-status-cancelled {
+        background: #f3f4f6;
+        color: #6b7280;
       }
 
       .bb-stats-grid {
@@ -1817,7 +1826,7 @@
           const currentStatus = statusElement ? statusElement.textContent.toLowerCase() : "";
 
           // Remove existing animation classes
-          jobCard.classList.remove("job-running", "job-completed", "job-failed");
+          jobCard.classList.remove("job-running", "job-completed", "job-failed", "job-cancelled");
           if (progressBar) {
             progressBar.classList.remove("progress-pulsing");
           }
@@ -1832,6 +1841,8 @@
             jobCard.classList.add("job-completed");
           } else if (currentStatus === "failed") {
             jobCard.classList.add("job-failed");
+          } else if (currentStatus === "cancelled") {
+            jobCard.classList.add("job-cancelled");
           }
         });
       }
