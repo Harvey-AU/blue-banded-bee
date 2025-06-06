@@ -49,6 +49,20 @@ func New(config *Config, id ...string) *Crawler {
 		RandomDelay: time.Second / time.Duration(config.RateLimit),
 	})
 
+	// Set HTTP client with proper timeout
+	httpClient := &http.Client{
+		Timeout: config.DefaultTimeout,
+		Transport: &http.Transport{
+			MaxIdleConnsPerHost: 25,
+			MaxConnsPerHost:     50,
+			IdleConnTimeout:     120 * time.Second,
+			TLSHandshakeTimeout: 10 * time.Second,
+			DisableCompression:  true,
+			ForceAttemptHTTP2:   true,
+		},
+	}
+	c.SetClient(httpClient)
+
 	// Add this to capture requests and responses
 	c.OnRequest(func(r *colly.Request) {
 		log.Debug().

@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Multiple version updates may occur on the same date, each with its own version number.
 Each version represents a distinct set of changes, even if released on the same day.
 
+## [0.5.10] – 2025-06-06
+
+### Fixed
+
+- **Cache Warming Data Storage**: Fixed second cache warming data not being stored in database
+- **Timeout Retry Logic**: Added automatic retry for network timeouts and connection errors up to 5 attempts
+
 ## [0.5.9] – 2025-06-06
 
 ### Enhanced

@@ -340,10 +340,28 @@ func (wp *WorkerPool) processNextTask(ctx context.Context) error {
 			result, err := wp.processTask(ctx, jobsTask)
 			now := time.Now()
 			if err != nil {
-				// mark as failed
-				task.Status = string(TaskStatusFailed)
-				task.CompletedAt = now
-				task.Error = err.Error()
+				// Check if this is a retryable error
+				if isRetryableError(err) && task.RetryCount < MaxTaskRetries {
+					// Increment retry count and reset to pending
+					task.RetryCount++
+					task.Status = string(TaskStatusPending)
+					task.StartedAt = time.Time{} // Reset started time
+					log.Warn().
+						Err(err).
+						Str("task_id", task.ID).
+						Int("retry_count", task.RetryCount).
+						Msg("Task failed with retryable error, scheduling retry")
+				} else {
+					// Mark as permanently failed
+					task.Status = string(TaskStatusFailed)
+					task.CompletedAt = now
+					task.Error = err.Error()
+					log.Error().
+						Err(err).
+						Str("task_id", task.ID).
+						Int("retry_count", task.RetryCount).
+						Msg("Task failed permanently")
+				}
 				updErr := wp.dbQueue.UpdateTaskStatus(ctx, task)
 				if updErr != nil {
 					sentry.CaptureException(updErr)
@@ -991,6 +1009,24 @@ func (wp *WorkerPool) processTask(ctx context.Context, task *Task) (*crawler.Cra
 	}
 
 	return result, nil
+}
+
+// isRetryableError checks if an error should trigger a retry
+func isRetryableError(err error) bool {
+	if err == nil {
+		return false
+	}
+	
+	errorStr := strings.ToLower(err.Error())
+	
+	// Network/timeout errors that should be retried
+	return strings.Contains(errorStr, "timeout") ||
+		strings.Contains(errorStr, "deadline exceeded") ||
+		strings.Contains(errorStr, "connection") ||
+		strings.Contains(errorStr, "network") ||
+		strings.Contains(errorStr, "temporary") ||
+		strings.Contains(errorStr, "reset by peer") ||
+		strings.Contains(errorStr, "broken pipe")
 }
 
 // Helper function to check if a hostname is the same domain or a subdomain of the target domain
