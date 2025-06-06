@@ -1058,13 +1058,26 @@ func isRetryableError(err error) bool {
 	errorStr := strings.ToLower(err.Error())
 	
 	// Network/timeout errors that should be retried
-	return strings.Contains(errorStr, "timeout") ||
+	networkErrors := strings.Contains(errorStr, "timeout") ||
 		strings.Contains(errorStr, "deadline exceeded") ||
 		strings.Contains(errorStr, "connection") ||
 		strings.Contains(errorStr, "network") ||
 		strings.Contains(errorStr, "temporary") ||
 		strings.Contains(errorStr, "reset by peer") ||
-		strings.Contains(errorStr, "broken pipe")
+		strings.Contains(errorStr, "broken pipe") ||
+		strings.Contains(errorStr, "unexpected eof")
+	
+	// Server errors that should be retried (likely due to load/temporary issues)
+	serverErrors := strings.Contains(errorStr, "internal server error") ||
+		strings.Contains(errorStr, "bad gateway") ||
+		strings.Contains(errorStr, "service unavailable") ||
+		strings.Contains(errorStr, "gateway timeout") ||
+		strings.Contains(errorStr, "502") ||
+		strings.Contains(errorStr, "503") ||
+		strings.Contains(errorStr, "504") ||
+		strings.Contains(errorStr, "500")
+	
+	return networkErrors || serverErrors
 }
 
 // Helper function to check if a hostname is the same domain or a subdomain of the target domain
