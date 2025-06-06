@@ -324,8 +324,8 @@ func (h *Handler) WebflowWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Use the last domain in the list (public domain if multiple, webflow.io if only one)
-	selectedDomain := payload.Payload.Domains[len(payload.Payload.Domains)-1]
+	// Use the first domain in the list (primary/canonical domain)
+	selectedDomain := payload.Payload.Domains[0]
 
 	// Get user from database to find their organisation
 	user, err := h.DB.GetUser(userID)
