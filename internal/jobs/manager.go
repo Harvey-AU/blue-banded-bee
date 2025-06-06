@@ -197,70 +197,59 @@ func (jm *JobManager) CreateJob(ctx context.Context, options *JobOptions) (*Job,
 
 // StartJob starts a pending job
 func (jm *JobManager) StartJob(ctx context.Context, jobID string) error {
-	span := sentry.StartSpan(ctx, "manager.start_job")
+	span := sentry.StartSpan(ctx, "manager.restart_job")
 	defer span.Finish()
 
-	span.SetTag("job_id", jobID)
+	span.SetTag("original_job_id", jobID)
 
-	// Get the job using our new method
-	job, err := jm.GetJob(ctx, jobID)
+	// Get the original job to copy its configuration
+	originalJob, err := jm.GetJob(ctx, jobID)
 	if err != nil {
 		span.SetTag("error", "true")
 		span.SetData("error.message", err.Error())
 		sentry.CaptureException(err)
-		return fmt.Errorf("failed to get job: %w", err)
+		return fmt.Errorf("failed to get original job: %w", err)
 	}
 
-	// Allow restarting jobs that are either pending or running
-	if job.Status != JobStatusPending && job.Status != JobStatusRunning {
-		return fmt.Errorf("job cannot be started: %s", job.Status)
+	// Only allow restarting completed, failed, or cancelled jobs
+	if originalJob.Status != JobStatusCompleted && originalJob.Status != JobStatusFailed && originalJob.Status != JobStatusCancelled {
+		return fmt.Errorf("job cannot be restarted: %s (only completed, failed, or cancelled jobs can be restarted)", originalJob.Status)
 	}
 
-	// Update job status to running (even if it was already running)
-	job.Status = JobStatusRunning
+	// Create new job with same configuration
+	newJobOptions := &JobOptions{
+		Domain:         originalJob.Domain,
+		UserID:         originalJob.UserID,
+		OrganisationID: originalJob.OrganisationID,
+		UseSitemap:     true, // Default to true
+		Concurrency:    originalJob.Concurrency,
+		FindLinks:      originalJob.FindLinks,
+		MaxPages:       originalJob.MaxPages,
+		IncludePaths:   originalJob.IncludePaths,
+		ExcludePaths:   originalJob.ExcludePaths,
+		RequiredWorkers: originalJob.RequiredWorkers,
+	}
 
-	// Use dbQueue for transaction safety
-	err = jm.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
-		// Recover any tasks that were in progress when the server shut down
-		_, err := tx.ExecContext(ctx, `
-			UPDATE tasks 
-			SET status = $1,
-				started_at = NULL,
-				retry_count = retry_count + 1
-			WHERE job_id = $2 
-			AND status = $3
-		`, TaskStatusPending, jobID, TaskStatusRunning)
-
-		if err != nil {
-			log.Error().Err(err).Str("job_id", jobID).Msg("Failed to reset in-progress tasks")
-			// Don't return error, continue with job start
-		}
-
-		// Update job status - started_at will be set by Supabase trigger when tasks complete
-		_, err = tx.ExecContext(ctx, `
-			UPDATE jobs
-			SET status = $1
-			WHERE id = $2
-		`, job.Status, job.ID)
-
-		return err
-	})
-
+	// Create the new job
+	newJob, err := jm.CreateJob(ctx, newJobOptions)
 	if err != nil {
 		span.SetTag("error", "true")
 		span.SetData("error.message", err.Error())
 		sentry.CaptureException(err)
-		return fmt.Errorf("failed to update job status: %w", err)
+		return fmt.Errorf("failed to create new job: %w", err)
 	}
 
-	// Add job to worker pool for processing
-	// TODO: Provide worker count per job, to allow for higher volume / priority jobs
-	jm.workerPool.AddJob(job.ID, nil)
+	span.SetTag("new_job_id", newJob.ID)
+	log.Info().Str("original_job_id", jobID).Str("new_job_id", newJob.ID).Msg("Created new job as restart")
+
+	// Add new job to worker pool for processing
+	jm.workerPool.AddJob(newJob.ID, newJobOptions)
 
 	log.Debug().
-		Str("job_id", job.ID).
-		Str("domain", job.Domain).
-		Msg("Started job")
+		Str("original_job_id", jobID).
+		Str("new_job_id", newJob.ID).
+		Str("domain", newJob.Domain).
+		Msg("Restarted job with new job ID")
 
 	return nil
 }

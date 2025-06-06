@@ -83,6 +83,7 @@ type JobResponse struct {
 	SkippedTasks   int  `json:"skipped_tasks"`
 	Progress       float64 `json:"progress"`
 	CreatedAt      string  `json:"created_at"`
+	StartedAt      *string `json:"started_at,omitempty"`
 	CompletedAt    *string `json:"completed_at,omitempty"`
 }
 
@@ -251,11 +252,15 @@ func (h *Handler) getJob(w http.ResponseWriter, r *http.Request, jobID string) {
 	}
 
 	var total, completed, failed, skipped int
-	var status string
+	var status, domain string
+	var createdAt, startedAt, completedAt sql.NullTime
 	err = h.DB.GetDB().QueryRowContext(r.Context(), `
-		SELECT total_tasks, completed_tasks, failed_tasks, skipped_tasks, status 
-		FROM jobs WHERE id = $1 AND organisation_id = $2
-	`, jobID, user.OrganisationID).Scan(&total, &completed, &failed, &skipped, &status)
+		SELECT j.total_tasks, j.completed_tasks, j.failed_tasks, j.skipped_tasks, j.status,
+		       d.name as domain, j.created_at, j.started_at, j.completed_at
+		FROM jobs j
+		JOIN domains d ON j.domain_id = d.id
+		WHERE j.id = $1 AND j.organisation_id = $2
+	`, jobID, user.OrganisationID).Scan(&total, &completed, &failed, &skipped, &status, &domain, &createdAt, &startedAt, &completedAt)
 
 	if err != nil {
 		NotFound(w, r, "Job not found")
@@ -270,12 +275,26 @@ func (h *Handler) getJob(w http.ResponseWriter, r *http.Request, jobID string) {
 
 	response := JobResponse{
 		ID:             jobID,
+		Domain:         domain,
 		Status:         status,
 		TotalTasks:     total,
 		CompletedTasks: completed,
 		FailedTasks:    failed,
 		SkippedTasks:   skipped,
 		Progress:       progress,
+	}
+
+	// Add timestamps if available
+	if createdAt.Valid {
+		response.CreatedAt = createdAt.Time.Format(time.RFC3339)
+	}
+	if startedAt.Valid {
+		startedTime := startedAt.Time.Format(time.RFC3339)
+		response.StartedAt = &startedTime
+	}
+	if completedAt.Valid {
+		completedTime := completedAt.Time.Format(time.RFC3339)
+		response.CompletedAt = &completedTime
 	}
 
 	WriteSuccess(w, r, response, "Job retrieved successfully")
@@ -410,20 +429,22 @@ func (h *Handler) cancelJob(w http.ResponseWriter, r *http.Request, jobID string
 
 // TaskResponse represents a task in API responses
 type TaskResponse struct {
-	ID           string  `json:"id"`
-	JobID        string  `json:"job_id"`
-	Path         string  `json:"path"`
-	Status       string  `json:"status"`
-	StatusCode   *int    `json:"status_code,omitempty"`
-	ResponseTime *int    `json:"response_time,omitempty"`
-	CacheStatus  *string `json:"cache_status,omitempty"`
-	ContentType  *string `json:"content_type,omitempty"`
-	Error        *string `json:"error,omitempty"`
-	SourceType   *string `json:"source_type,omitempty"`
-	CreatedAt    string  `json:"created_at"`
-	StartedAt    *string `json:"started_at,omitempty"`
-	CompletedAt  *string `json:"completed_at,omitempty"`
-	RetryCount   int     `json:"retry_count"`
+	ID                 string  `json:"id"`
+	JobID              string  `json:"job_id"`
+	Path               string  `json:"path"`
+	Status             string  `json:"status"`
+	StatusCode         *int    `json:"status_code,omitempty"`
+	ResponseTime       *int    `json:"response_time,omitempty"`
+	CacheStatus        *string `json:"cache_status,omitempty"`
+	SecondResponseTime *int    `json:"second_response_time,omitempty"`
+	SecondCacheStatus  *string `json:"second_cache_status,omitempty"`
+	ContentType        *string `json:"content_type,omitempty"`
+	Error              *string `json:"error,omitempty"`
+	SourceType         *string `json:"source_type,omitempty"`
+	CreatedAt          string  `json:"created_at"`
+	StartedAt          *string `json:"started_at,omitempty"`
+	CompletedAt        *string `json:"completed_at,omitempty"`
+	RetryCount         int     `json:"retry_count"`
 }
 
 // getJobTasks handles GET /v1/jobs/:id/tasks
@@ -473,11 +494,46 @@ func (h *Handler) getJobTasks(w http.ResponseWriter, r *http.Request, jobID stri
 	}
 
 	status := r.URL.Query().Get("status") // Optional status filter
+	sortParam := r.URL.Query().Get("sort") // Optional sort parameter
+
+	// Parse sort parameter
+	var orderBy string = "t.created_at DESC" // default
+	if sortParam != "" {
+		// Handle sort direction prefix
+		direction := "DESC"
+		column := sortParam
+		if strings.HasPrefix(sortParam, "-") {
+			direction = "DESC"
+			column = strings.TrimPrefix(sortParam, "-")
+		} else {
+			direction = "ASC"
+		}
+		
+		// Map column names to actual SQL columns
+		switch column {
+		case "path":
+			orderBy = "p.path " + direction
+		case "status":
+			orderBy = "t.status " + direction
+		case "response_time":
+			orderBy = "t.response_time " + direction + " NULLS LAST"
+		case "cache_status":
+			orderBy = "t.cache_status " + direction + " NULLS LAST"
+		case "second_response_time":
+			orderBy = "t.second_response_time " + direction + " NULLS LAST"
+		case "status_code":
+			orderBy = "t.status_code " + direction + " NULLS LAST"
+		case "created_at":
+			orderBy = "t.created_at " + direction
+		default:
+			orderBy = "t.created_at DESC" // fallback to default
+		}
+	}
 
 	// Build query with optional status filter
 	baseQuery := `
 		SELECT t.id, t.job_id, p.path, t.status, t.status_code, t.response_time, 
-		       t.cache_status, t.content_type, t.error, t.source_type,
+		       t.cache_status, t.second_response_time, t.second_cache_status, t.content_type, t.error, t.source_type,
 		       t.created_at, t.started_at, t.completed_at, t.retry_count
 		FROM tasks t
 		JOIN pages p ON t.page_id = p.id
@@ -496,7 +552,7 @@ func (h *Handler) getJobTasks(w http.ResponseWriter, r *http.Request, jobID stri
 		args = append(args, status)
 	}
 
-	baseQuery += ` ORDER BY t.created_at DESC LIMIT $` + strconv.Itoa(len(args)+1) + ` OFFSET $` + strconv.Itoa(len(args)+2)
+	baseQuery += ` ORDER BY ` + orderBy + ` LIMIT $` + strconv.Itoa(len(args)+1) + ` OFFSET $` + strconv.Itoa(len(args)+2)
 	args = append(args, limit, offset)
 
 	// Get total count
@@ -522,12 +578,12 @@ func (h *Handler) getJobTasks(w http.ResponseWriter, r *http.Request, jobID stri
 	for rows.Next() {
 		var task TaskResponse
 		var startedAt, completedAt, createdAt sql.NullTime
-		var statusCode, responseTime sql.NullInt32
-		var cacheStatus, contentType, errorMsg, sourceType sql.NullString
+		var statusCode, responseTime, secondResponseTime sql.NullInt32
+		var cacheStatus, secondCacheStatus, contentType, errorMsg, sourceType sql.NullString
 
 		err := rows.Scan(
 			&task.ID, &task.JobID, &task.Path, &task.Status,
-			&statusCode, &responseTime, &cacheStatus, &contentType, &errorMsg, &sourceType,
+			&statusCode, &responseTime, &cacheStatus, &secondResponseTime, &secondCacheStatus, &contentType, &errorMsg, &sourceType,
 			&createdAt, &startedAt, &completedAt, &task.RetryCount,
 		)
 		if err != nil {
@@ -546,6 +602,13 @@ func (h *Handler) getJobTasks(w http.ResponseWriter, r *http.Request, jobID stri
 		}
 		if cacheStatus.Valid {
 			task.CacheStatus = &cacheStatus.String
+		}
+		if secondResponseTime.Valid {
+			srt := int(secondResponseTime.Int32)
+			task.SecondResponseTime = &srt
+		}
+		if secondCacheStatus.Valid {
+			task.SecondCacheStatus = &secondCacheStatus.String
 		}
 		if contentType.Valid {
 			task.ContentType = &contentType.String
