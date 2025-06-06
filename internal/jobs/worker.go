@@ -36,7 +36,6 @@ type WorkerPool struct {
 	activeJobs       sync.WaitGroup
 	baseWorkerCount  int
 	currentWorkers   int
-	jobRequirements  map[string]int
 	workersMutex     sync.RWMutex
 	taskBatch        *TaskBatch
 	batchTimer       *time.Ticker
@@ -83,7 +82,6 @@ func NewWorkerPool(db *sql.DB, dbQueue *db.DbQueue, crawler *crawler.Crawler, nu
 		baseWorkerCount: numWorkers,
 		currentWorkers:  numWorkers,
 		jobs:            make(map[string]bool),
-		jobRequirements: make(map[string]int),
 
 		stopCh:           make(chan struct{}),
 		notifyCh:         make(chan struct{}, 1), // Buffer of 1 to prevent blocking
@@ -155,31 +153,26 @@ func (wp *WorkerPool) WaitForJobs() {
 func (wp *WorkerPool) AddJob(jobID string, options *JobOptions) {
 	wp.jobsMutex.Lock()
 	wp.jobs[jobID] = true
-
-	// Store the worker requirement for this job
-	requiredWorkers := wp.baseWorkerCount
-	if options != nil && options.RequiredWorkers > 0 {
-		requiredWorkers = options.RequiredWorkers
-		wp.jobRequirements[jobID] = options.RequiredWorkers
-	}
-
-	// Calculate the maximum required workers across all jobs
-	maxRequired := wp.baseWorkerCount
-	for _, count := range wp.jobRequirements {
-		if count > maxRequired {
-			maxRequired = count
-		}
-	}
 	wp.jobsMutex.Unlock()
 
-	// Scale up if needed
-	if maxRequired > wp.currentWorkers {
-		wp.scaleWorkers(context.Background(), maxRequired)
+	// Simple scaling: add 5 workers per job, maximum of 50 total
+	wp.workersMutex.Lock()
+	targetWorkers := wp.currentWorkers + 5
+	if targetWorkers > 50 {
+		targetWorkers = 50
+	}
+	
+	if targetWorkers > wp.currentWorkers {
+		wp.workersMutex.Unlock()
+		wp.scaleWorkers(context.Background(), targetWorkers)
+	} else {
+		wp.workersMutex.Unlock()
 	}
 
 	log.Debug().
 		Str("job_id", jobID).
-		Int("required_workers", requiredWorkers).
+		Int("current_workers", wp.currentWorkers).
+		Int("target_workers", targetWorkers).
 		Msg("Added job to worker pool")
 }
 
@@ -187,34 +180,24 @@ func (wp *WorkerPool) AddJob(jobID string, options *JobOptions) {
 func (wp *WorkerPool) RemoveJob(jobID string) {
 	wp.jobsMutex.Lock()
 	delete(wp.jobs, jobID)
-
-	// Remove worker requirement for this job
-	delete(wp.jobRequirements, jobID)
-
-	// Calculate the maximum required workers across remaining jobs
-	maxRequired := wp.baseWorkerCount
-	for _, count := range wp.jobRequirements {
-		if count > maxRequired {
-			maxRequired = count
-		}
-	}
 	wp.jobsMutex.Unlock()
 
-	// Scale down if possible (in a separate goroutine to avoid blocking)
-	if maxRequired < wp.currentWorkers {
-		go func() {
-			wp.workersMutex.Lock()
-			defer wp.workersMutex.Unlock()
-
-			log.Debug().
-				Int("current_workers", wp.currentWorkers).
-				Int("target_workers", maxRequired).
-				Msg("Scaling down worker pool")
-
-			wp.currentWorkers = maxRequired
-			// Note: We don't actually stop excess workers, they'll exit on next task completion
-		}()
+	// Simple scaling: remove 5 workers per job, minimum of 5 total
+	wp.workersMutex.Lock()
+	targetWorkers := wp.currentWorkers - 5
+	if targetWorkers < wp.baseWorkerCount {
+		targetWorkers = wp.baseWorkerCount
 	}
+
+	log.Debug().
+		Str("job_id", jobID).
+		Int("current_workers", wp.currentWorkers).
+		Int("target_workers", targetWorkers).
+		Msg("Scaling down worker pool")
+
+	wp.currentWorkers = targetWorkers
+	// Note: We don't actually stop excess workers, they'll exit on next task completion
+	wp.workersMutex.Unlock()
 
 	log.Debug().
 		Str("job_id", jobID).
@@ -374,6 +357,8 @@ func (wp *WorkerPool) processNextTask(ctx context.Context) error {
 				task.ResponseTime = result.ResponseTime
 				task.CacheStatus = result.CacheStatus
 				task.ContentType = result.ContentType
+				task.SecondResponseTime = result.SecondResponseTime
+				task.SecondCacheStatus = result.SecondCacheStatus
 				updErr := wp.dbQueue.UpdateTaskStatus(ctx, task)
 				if updErr != nil {
 					sentry.CaptureException(updErr)

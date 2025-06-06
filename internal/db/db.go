@@ -72,10 +72,10 @@ func New(config *Config) (*DB, error) {
 		config.SSLMode = "disable"
 	}
 	if config.MaxIdleConns == 0 {
-		config.MaxIdleConns = 15
+		config.MaxIdleConns = 25
 	}
 	if config.MaxOpenConns == 0 {
-		config.MaxOpenConns = 35
+		config.MaxOpenConns = 75
 	}
 	if config.MaxLifetime == 0 {
 		config.MaxLifetime = 30 * time.Minute
@@ -112,8 +112,8 @@ func InitFromEnv() (*DB, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to connect to PostgreSQL via DATABASE_URL: %w", err)
 		}
-		client.SetMaxOpenConns(25)
-		client.SetMaxIdleConns(10)
+		client.SetMaxOpenConns(75)
+		client.SetMaxIdleConns(25)
 		client.SetConnMaxLifetime(5 * time.Minute)
 		// Verify connection
 		if err := client.Ping(); err != nil {
@@ -140,8 +140,8 @@ func InitFromEnv() (*DB, error) {
 		Password:     os.Getenv("POSTGRES_PASSWORD"),
 		Database:     os.Getenv("POSTGRES_DB"),
 		SSLMode:      os.Getenv("POSTGRES_SSL_MODE"),
-		MaxIdleConns: 10,
-		MaxOpenConns: 25,
+		MaxIdleConns: 25,
+		MaxOpenConns: 75,
 		MaxLifetime:  5 * time.Minute,
 	}
 
