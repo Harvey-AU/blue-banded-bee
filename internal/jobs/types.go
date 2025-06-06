@@ -79,10 +79,12 @@ type Task struct {
 	SourceURL  string `json:"source_url,omitempty"` // URL where this was discovered (for links)
 
 	// Result data
-	StatusCode   int    `json:"status_code,omitempty"`
-	ResponseTime int64  `json:"response_time,omitempty"`
-	CacheStatus  string `json:"cache_status,omitempty"`
-	ContentType  string `json:"content_type,omitempty"`
+	StatusCode         int    `json:"status_code,omitempty"`
+	ResponseTime       int64  `json:"response_time,omitempty"`
+	CacheStatus        string `json:"cache_status,omitempty"`
+	ContentType        string `json:"content_type,omitempty"`
+	SecondResponseTime int64  `json:"second_response_time,omitempty"`
+	SecondCacheStatus  string `json:"second_cache_status,omitempty"`
 
 	// Job configuration that affects processing
 	FindLinks bool `json:"-"` // Not stored in DB, just used during processing
