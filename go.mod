@@ -1,6 +1,8 @@
 module github.com/Harvey-AU/blue-banded-bee
 
-go 1.24.2
+go 1.23.0
+
+toolchain go1.24.2
 
 require (
 	github.com/getsentry/sentry-go v0.32.0
@@ -10,7 +12,6 @@ require (
 	github.com/joho/godotenv v1.5.1
 	github.com/lib/pq v1.10.9
 	github.com/rs/zerolog v1.34.0
-	golang.org/x/net v0.39.0
 	golang.org/x/time v0.11.0
 
 )
@@ -31,6 +32,7 @@ require (
 	github.com/nlnwa/whatwg-url v0.6.2 // indirect
 	github.com/saintfish/chardet v0.0.0-20230101081208-5e3ef4b5456d // indirect
 	github.com/temoto/robotstxt v1.1.2 // indirect
+	golang.org/x/net v0.39.0 // indirect
 	golang.org/x/sys v0.32.0 // indirect
 	golang.org/x/text v0.24.0 // indirect
 	google.golang.org/appengine v1.6.8 // indirect

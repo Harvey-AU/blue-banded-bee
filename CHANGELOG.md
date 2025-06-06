@@ -8,6 +8,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Multiple version updates may occur on the same date, each with its own version number.
 Each version represents a distinct set of changes, even if released on the same day.
 
+## [0.5.9] – 2025-06-06
+
+### Enhanced
+
+- **Worker Pool Scaling**: Improved auto-scaling for better performance and bot protection
+  - Simplified worker scaling from complex job-requirements tracking to simple +5/-5 arithmetic per job
+  - Auto-scaling: 1 job = 5 workers, 2 jobs = 10 workers, up to maximum 50 workers (10 jobs)
+  - Each job gets dedicated workers preventing single-job monopolisation and bot detection risks
+- **Database Connection Pool**: Increased to support higher concurrency
+  - MaxOpenConns: 25 → 75 connections to prevent bottlenecks with increased worker count
+  - MaxIdleConns: 10 → 25 connections for better connection reuse
+- **Crawler Rate Limiting**: Reduced aggressive settings for better politeness to target servers
+  - MaxConcurrency: 50 → 10 concurrent requests per crawler instance
+  - RateLimit: 100 → 10 requests per second for safer cache warming
+
+### Technical Implementation
+
+- **Simplified Scaling Logic**: Removed complex `jobRequirements` map and maximum calculation logic
+  - `AddJob()`: Simple `currentWorkers + 5` with max limit of 50
+  - `RemoveJob()`: Simple `currentWorkers - 5` with minimum limit of 5
+  - Eliminated per-job worker requirement tracking for cleaner, more predictable scaling
+
 ## [0.5.8] – 2025-06-03
 
 ### Added
@@ -161,7 +183,7 @@ Each version represents a distinct set of changes, even if released on the same 
   - Established testing patterns for future authentication feature development
 - **Web Components Updates**: Rebuilt production components with correct domain configuration
   - Updated `web/src/utils/api.js` and rebuilt distribution files
-  - Fixed OAuth redirect URLs in `dashboard.html` 
+  - Fixed OAuth redirect URLs in `dashboard.html`
   - Updated test helpers and example files with correct domain references
 
 ## [0.5.4] – 2025-05-31
