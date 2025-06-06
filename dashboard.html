@@ -1247,6 +1247,10 @@
         <div class="bb-modal-section">
           <div class="bb-job-info-grid">
             <div class="bb-info-item">
+              <div class="bb-info-label">Job ID</div>
+              <div class="bb-info-value" id="modal-job-id" style="font-family: monospace; font-size: 12px;">-</div>
+            </div>
+            <div class="bb-info-item">
               <div class="bb-info-label">Domain</div>
               <div class="bb-info-value" id="modal-domain">-</div>
             </div>
@@ -1271,12 +1275,20 @@
               <div class="bb-info-value" id="modal-failed-tasks">-</div>
             </div>
             <div class="bb-info-item">
-              <div class="bb-info-label">Created</div>
-              <div class="bb-info-value" id="modal-created-at">-</div>
+              <div class="bb-info-label">Start Time</div>
+              <div class="bb-info-value" id="modal-started-at">-</div>
             </div>
             <div class="bb-info-item">
-              <div class="bb-info-label">Started</div>
-              <div class="bb-info-value" id="modal-started-at">-</div>
+              <div class="bb-info-label">End Time</div>
+              <div class="bb-info-value" id="modal-completed-at">-</div>
+            </div>
+            <div class="bb-info-item">
+              <div class="bb-info-label">Total Time</div>
+              <div class="bb-info-value" id="modal-total-time">-</div>
+            </div>
+            <div class="bb-info-item">
+              <div class="bb-info-label">Avg Time/Task</div>
+              <div class="bb-info-value" id="modal-avg-time">-</div>
             </div>
           </div>
         </div>
@@ -1284,10 +1296,24 @@
         <div class="bb-modal-section">
           <div class="bb-modal-section-title">
             Task Details
-            <button class="bb-btn bb-btn-secondary" style="float: right; font-size: 12px" bb-action="refresh-tasks">↻ Refresh</button>
+            <div style="float: right; display: flex; gap: 8px; align-items: center;">
+              <select id="tasksLimit" style="font-size: 12px; padding: 4px;">
+                <option value="50">50</option>
+                <option value="100">100</option>
+                <option value="200">200</option>
+                <option value="500">500</option>
+                <option value="1000">1000</option>
+              </select>
+              <button class="bb-btn bb-btn-secondary" style="font-size: 12px" bb-action="refresh-tasks">↻ Refresh</button>
+            </div>
           </div>
           <div id="tasksContent">
             <div class="bb-loading">Loading tasks...</div>
+          </div>
+          <div id="tasksPagination" style="text-align: center; margin-top: 16px; display: none;">
+            <button id="prevTasksBtn" class="bb-btn bb-btn-secondary" style="font-size: 12px; margin-right: 8px;" bb-action="tasks-prev-page">← Previous</button>
+            <span id="tasksPageInfo" style="margin: 0 16px; font-size: 14px;"></span>
+            <button id="nextTasksBtn" class="bb-btn bb-btn-secondary" style="font-size: 12px; margin-left: 8px;" bb-action="tasks-next-page">Next →</button>
           </div>
         </div>
 
@@ -1652,6 +1678,18 @@
               loadJobTasks(currentJobId);
             }
             break;
+          case "tasks-prev-page":
+            if (currentJobId && tasksCurrentPage > 0) {
+              tasksCurrentPage--;
+              loadJobTasks(currentJobId);
+            }
+            break;
+          case "tasks-next-page":
+            if (currentJobId && tasksHasNext) {
+              tasksCurrentPage++;
+              loadJobTasks(currentJobId);
+            }
+            break;
           default:
             console.warn("Unknown bb-action:", action);
         }
@@ -1692,6 +1730,10 @@
 
       // Global variables
       let currentJobId = null;
+      let tasksCurrentPage = 0;
+      let tasksHasNext = false;
+      let tasksSortColumn = "created_at";
+      let tasksSortDirection = "desc";
 
       function refreshDashboard() {
         // Add loading state to refresh buttons
@@ -1801,20 +1843,65 @@
         }
 
         currentJobId = jobId;
+        
+        // Reset pagination state
+        tasksCurrentPage = 0;
+        tasksSortColumn = "created_at";
+        tasksSortDirection = "desc";
 
         try {
           // Load job details
           const job = await dataBinder.fetchData(`/v1/jobs/${jobId}`);
 
           // Update modal content
+          document.getElementById("modal-job-id").textContent = jobId;
           document.getElementById("modal-domain").textContent = job.domain || "-";
           document.getElementById("modal-status").textContent = job.status || "-";
           document.getElementById("modal-progress").textContent = `${Math.round(job.progress || 0)}%`;
           document.getElementById("modal-total-tasks").textContent = job.total_tasks || 0;
           document.getElementById("modal-completed-tasks").textContent = job.completed_tasks || 0;
           document.getElementById("modal-failed-tasks").textContent = job.failed_tasks || 0;
-          document.getElementById("modal-created-at").textContent = job.created_at ? new Date(job.created_at).toLocaleString() : "-";
-          document.getElementById("modal-started-at").textContent = job.started_at ? new Date(job.started_at).toLocaleString() : "-";
+          
+          // Format time fields
+          const startedAt = job.started_at ? new Date(job.started_at) : null;
+          const completedAt = job.completed_at ? new Date(job.completed_at) : null;
+          
+          document.getElementById("modal-started-at").textContent = startedAt ? startedAt.toLocaleString() : "-";
+          document.getElementById("modal-completed-at").textContent = completedAt ? completedAt.toLocaleString() : "-";
+          
+          // Calculate total time
+          let totalTimeText = "-";
+          let avgTimeText = "-";
+          
+          if (startedAt && completedAt) {
+            const totalMs = completedAt - startedAt;
+            const totalMinutes = Math.round(totalMs / 60000);
+            const hours = Math.floor(totalMinutes / 60);
+            const minutes = totalMinutes % 60;
+            
+            if (hours > 0) {
+              totalTimeText = `${hours}h ${minutes}m`;
+            } else {
+              totalTimeText = `${minutes}m`;
+            }
+            
+            // Calculate average time per completed task
+            const completedTasks = job.completed_tasks || 0;
+            if (completedTasks > 0) {
+              const avgMs = totalMs / completedTasks;
+              const avgSeconds = Math.round(avgMs / 1000);
+              if (avgSeconds < 60) {
+                avgTimeText = `${avgSeconds}s`;
+              } else {
+                const avgMin = Math.floor(avgSeconds / 60);
+                const avgSec = avgSeconds % 60;
+                avgTimeText = `${avgMin}m ${avgSec}s`;
+              }
+            }
+          }
+          
+          document.getElementById("modal-total-time").textContent = totalTimeText;
+          document.getElementById("modal-avg-time").textContent = avgTimeText;
 
           // Show/hide action buttons
           const restartBtn = document.getElementById("modal-restart-btn");
@@ -1844,27 +1931,44 @@
 
       async function loadJobTasks(jobId) {
         const tasksContent = document.getElementById("tasksContent");
+        const pagination = document.getElementById("tasksPagination");
+        const limitSelect = document.getElementById("tasksLimit");
+        
         tasksContent.innerHTML = '<div class="bb-loading">Loading tasks...</div>';
+        pagination.style.display = 'none';
 
         try {
-          const response = await dataBinder.fetchData(`/v1/jobs/${jobId}/tasks?limit=50`);
+          const limit = limitSelect ? limitSelect.value : 50;
+          const offset = tasksCurrentPage * limit;
+          const sort = tasksSortDirection === 'desc' ? '-' + tasksSortColumn : tasksSortColumn;
+          
+          const response = await dataBinder.fetchData(`/v1/jobs/${jobId}/tasks?limit=${limit}&offset=${offset}&sort=${sort}`);
           const tasks = response.tasks || [];
 
-          if (tasks.length === 0) {
+          if (tasks.length === 0 && tasksCurrentPage === 0) {
             tasksContent.innerHTML = '<div class="bb-loading">No tasks found</div>';
             return;
           }
 
-          // Build tasks table
+          // Build sortable table header
+          const getSortIcon = (column) => {
+            if (tasksSortColumn === column) {
+              return tasksSortDirection === 'desc' ? ' ↓' : ' ↑';
+            }
+            return '';
+          };
+
+          // Build tasks table with sortable headers
           let tableHTML = `
           <table class="bb-tasks-table">
             <thead>
               <tr>
-                <th>Path</th>
-                <th>Status</th>
-                <th>Response Time</th>
-                <th>Status Code</th>
-                <th>Cache</th>
+                <th style="cursor: pointer;" onclick="sortTasks('path')">Path${getSortIcon('path')}</th>
+                <th style="cursor: pointer;" onclick="sortTasks('status')">Status${getSortIcon('status')}</th>
+                <th style="cursor: pointer;" onclick="sortTasks('response_time')">Response Time${getSortIcon('response_time')}</th>
+                <th style="cursor: pointer;" onclick="sortTasks('cache_status')">Cache Status${getSortIcon('cache_status')}</th>
+                <th style="cursor: pointer;" onclick="sortTasks('second_response_time')">2nd Request${getSortIcon('second_response_time')}</th>
+                <th style="cursor: pointer;" onclick="sortTasks('status_code')">Status Code${getSortIcon('status_code')}</th>
                 <th>Error</th>
               </tr>
             </thead>
@@ -1873,13 +1977,20 @@
 
           tasks.forEach((task) => {
             const statusClass = `bb-status-${task.status}`;
+            
+            // Format second request data (just response time, no cache status)
+            const secondRequest = task.second_response_time 
+              ? `${task.second_response_time}ms`
+              : "-";
+            
             tableHTML += `
             <tr>
               <td><code class="bb-task-path">${task.path}</code></td>
               <td><span class="bb-task-status ${statusClass}">${task.status}</span></td>
               <td>${task.response_time ? `${task.response_time}ms` : "-"}</td>
-              <td>${task.status_code || "-"}</td>
               <td>${task.cache_status || "-"}</td>
+              <td>${secondRequest}</td>
+              <td>${task.status_code || "-"}</td>
               <td>${
                 task.error
                   ? `<span title="${task.error}" class="bb-error">${task.error.substring(0, 50)}${task.error.length > 50 ? "..." : ""}</span>`
@@ -1890,17 +2001,42 @@
           });
 
           tableHTML += "</tbody></table>";
+          tasksContent.innerHTML = tableHTML;
 
-          if (response.pagination && response.pagination.total > tasks.length) {
-            tableHTML += `<p style="text-align: center; margin-top: 16px; color: #6b7280;">
-            Showing ${tasks.length} of ${response.pagination.total} tasks
-          </p>`;
+          // Update pagination
+          if (response.pagination) {
+            const { total, has_next, has_prev } = response.pagination;
+            tasksHasNext = has_next;
+            
+            const startItem = offset + 1;
+            const endItem = Math.min(offset + parseInt(limit), total);
+            
+            document.getElementById("tasksPageInfo").textContent = 
+              `${startItem}-${endItem} of ${total} tasks`;
+            
+            document.getElementById("prevTasksBtn").disabled = !has_prev;
+            document.getElementById("nextTasksBtn").disabled = !has_next;
+            
+            pagination.style.display = total > limit ? 'block' : 'none';
           }
 
-          tasksContent.innerHTML = tableHTML;
         } catch (error) {
           console.error("Failed to load tasks:", error);
           tasksContent.innerHTML = '<div class="bb-error">Failed to load tasks</div>';
+        }
+      }
+
+      // Add sorting function
+      function sortTasks(column) {
+        if (tasksSortColumn === column) {
+          tasksSortDirection = tasksSortDirection === 'desc' ? 'asc' : 'desc';
+        } else {
+          tasksSortColumn = column;
+          tasksSortDirection = 'desc';
+        }
+        tasksCurrentPage = 0; // Reset to first page when sorting
+        if (currentJobId) {
+          loadJobTasks(currentJobId);
         }
       }
 
@@ -2612,6 +2748,24 @@
           }
         }
       }
+
+      // Setup tasks controls
+      function setupTasksControls() {
+        const limitSelect = document.getElementById("tasksLimit");
+        if (limitSelect) {
+          limitSelect.addEventListener("change", () => {
+            tasksCurrentPage = 0; // Reset to first page when changing limit
+            if (currentJobId) {
+              loadJobTasks(currentJobId);
+            }
+          });
+        }
+      }
+
+      // Initialize when page loads
+      document.addEventListener("DOMContentLoaded", () => {
+        setupTasksControls();
+      });
     </script>
   </body>
 </html>
