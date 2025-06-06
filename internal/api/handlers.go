@@ -1,7 +1,9 @@
 package api
 
 import (
+	"encoding/json"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/Harvey-AU/blue-banded-bee/internal/auth"
@@ -45,6 +47,9 @@ func (h *Handler) SetupRoutes(mux *http.ServeMux) {
 	// Profile route (requires auth)
 	mux.Handle("/v1/auth/profile", auth.AuthMiddleware(http.HandlerFunc(h.AuthProfile)))
 
+
+	// Webhook endpoints (no auth required)
+	mux.HandleFunc("/v1/webhooks/webflow/", h.WebflowWebhook) // Note: trailing slash for path params
 
 	// Admin endpoints (require special authentication)
 	mux.HandleFunc("/admin/reset-db", h.AdminResetDatabase)
@@ -260,4 +265,115 @@ func calculateDateRange(dateRange string) (*time.Time, *time.Time) {
 	}
 
 	return startDate, endDate
+}
+
+// WebflowWebhookPayload represents the structure of Webflow's site publish webhook
+type WebflowWebhookPayload struct {
+	TriggerType string `json:"triggerType"`
+	Site        string `json:"site"`
+	Domain      string `json:"domain"`
+	PublishTime string `json:"publishTime"`
+}
+
+// WebflowWebhook handles Webflow site publish webhooks
+func (h *Handler) WebflowWebhook(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		MethodNotAllowed(w, r)
+		return
+	}
+
+	// Extract user ID from URL path: /v1/webhooks/webflow/USER_ID
+	pathParts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+	if len(pathParts) < 4 || pathParts[3] == "" {
+		log.Error().Str("path", r.URL.Path).Msg("Webflow webhook missing user ID in URL")
+		BadRequest(w, r, "User ID required in URL path")
+		return
+	}
+	userID := pathParts[3]
+
+	// Parse webhook payload
+	var payload WebflowWebhookPayload
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		log.Error().Err(err).Msg("Failed to parse Webflow webhook payload")
+		BadRequest(w, r, "Invalid webhook payload")
+		return
+	}
+
+	// Log webhook received
+	log.Info().
+		Str("user_id", userID).
+		Str("trigger_type", payload.TriggerType).
+		Str("site", payload.Site).
+		Str("domain", payload.Domain).
+		Str("publish_time", payload.PublishTime).
+		Msg("Webflow webhook received")
+
+	// Validate it's a site publish event
+	if payload.TriggerType != "site_publish" {
+		log.Warn().Str("trigger_type", payload.TriggerType).Msg("Ignoring non-site-publish webhook")
+		WriteSuccess(w, r, nil, "Webhook received but ignored (not site_publish)")
+		return
+	}
+
+	// Validate domain is provided
+	if payload.Domain == "" {
+		log.Error().Msg("Webflow webhook missing domain")
+		BadRequest(w, r, "Domain is required")
+		return
+	}
+
+	// Get user from database to find their organisation
+	user, err := h.DB.GetUser(userID)
+	if err != nil {
+		log.Error().Err(err).Str("user_id", userID).Msg("Failed to get user from database for webhook")
+		BadRequest(w, r, "Invalid user ID")
+		return
+	}
+
+	// Get organisation ID (may be empty)
+	orgID := ""
+	if user.OrganisationID != nil {
+		orgID = *user.OrganisationID
+	}
+
+	// Create job for the published domain
+	jobRequest := jobs.CreateJobRequest{
+		Domain:      payload.Domain,
+		Concurrency: 3, // Default concurrency
+		FindLinks:   true,
+		MaxPages:    100,
+	}
+
+	// Create job with user and org context
+	job, err := h.JobsManager.CreateJob(userID, orgID, jobRequest)
+	if err != nil {
+		log.Error().Err(err).
+			Str("user_id", userID).
+			Str("org_id", orgID).
+			Str("domain", payload.Domain).
+			Msg("Failed to create job from webhook")
+		ServerError(w, r, "Failed to create job")
+		return
+	}
+
+	// Start the job immediately
+	if err := h.JobsManager.StartJob(job.ID); err != nil {
+		log.Error().Err(err).Str("job_id", job.ID).Msg("Failed to start job from webhook")
+		// Don't return error - job was created successfully, just failed to start
+	}
+
+	log.Info().
+		Str("job_id", job.ID).
+		Str("user_id", userID).
+		Str("org_id", orgID).
+		Str("domain", payload.Domain).
+		Msg("Successfully created and started job from Webflow webhook")
+
+	WriteSuccess(w, r, map[string]interface{}{
+		"job_id": job.ID,
+		"user_id": userID,
+		"org_id": orgID,
+		"domain": payload.Domain,
+		"status": "created",
+	}, "Job created successfully from webhook")
 }
