@@ -1248,7 +1248,7 @@
           <div class="bb-job-info-grid">
             <div class="bb-info-item">
               <div class="bb-info-label">Job ID</div>
-              <div class="bb-info-value" id="modal-job-id" style="font-family: monospace; font-size: 12px;">-</div>
+              <div class="bb-info-value" id="modal-job-id" style="font-family: monospace; font-size: 12px">-</div>
             </div>
             <div class="bb-info-item">
               <div class="bb-info-label">Domain</div>
@@ -1296,8 +1296,8 @@
         <div class="bb-modal-section">
           <div class="bb-modal-section-title">
             Task Details
-            <div style="float: right; display: flex; gap: 8px; align-items: center;">
-              <select id="tasksLimit" style="font-size: 12px; padding: 4px;">
+            <div style="float: right; display: flex; gap: 8px; align-items: center">
+              <select id="tasksLimit" style="font-size: 12px; padding: 4px">
                 <option value="50">50</option>
                 <option value="100">100</option>
                 <option value="200">200</option>
@@ -1310,10 +1310,14 @@
           <div id="tasksContent">
             <div class="bb-loading">Loading tasks...</div>
           </div>
-          <div id="tasksPagination" style="text-align: center; margin-top: 16px; display: none;">
-            <button id="prevTasksBtn" class="bb-btn bb-btn-secondary" style="font-size: 12px; margin-right: 8px;" bb-action="tasks-prev-page">← Previous</button>
-            <span id="tasksPageInfo" style="margin: 0 16px; font-size: 14px;"></span>
-            <button id="nextTasksBtn" class="bb-btn bb-btn-secondary" style="font-size: 12px; margin-left: 8px;" bb-action="tasks-next-page">Next →</button>
+          <div id="tasksPagination" style="text-align: center; margin-top: 16px; display: none">
+            <button id="prevTasksBtn" class="bb-btn bb-btn-secondary" style="font-size: 12px; margin-right: 8px" bb-action="tasks-prev-page">
+              ← Previous
+            </button>
+            <span id="tasksPageInfo" style="margin: 0 16px; font-size: 14px"></span>
+            <button id="nextTasksBtn" class="bb-btn bb-btn-secondary" style="font-size: 12px; margin-left: 8px" bb-action="tasks-next-page">
+              Next →
+            </button>
           </div>
         </div>
 
@@ -1843,7 +1847,7 @@
         }
 
         currentJobId = jobId;
-        
+
         // Reset pagination state
         tasksCurrentPage = 0;
         tasksSortColumn = "created_at";
@@ -1861,30 +1865,30 @@
           document.getElementById("modal-total-tasks").textContent = job.total_tasks || 0;
           document.getElementById("modal-completed-tasks").textContent = job.completed_tasks || 0;
           document.getElementById("modal-failed-tasks").textContent = job.failed_tasks || 0;
-          
+
           // Format time fields
           const startedAt = job.started_at ? new Date(job.started_at) : null;
           const completedAt = job.completed_at ? new Date(job.completed_at) : null;
-          
+
           document.getElementById("modal-started-at").textContent = startedAt ? startedAt.toLocaleString() : "-";
           document.getElementById("modal-completed-at").textContent = completedAt ? completedAt.toLocaleString() : "-";
-          
+
           // Calculate total time
           let totalTimeText = "-";
           let avgTimeText = "-";
-          
+
           if (startedAt && completedAt) {
             const totalMs = completedAt - startedAt;
             const totalMinutes = Math.round(totalMs / 60000);
             const hours = Math.floor(totalMinutes / 60);
             const minutes = totalMinutes % 60;
-            
+
             if (hours > 0) {
               totalTimeText = `${hours}h ${minutes}m`;
             } else {
               totalTimeText = `${minutes}m`;
             }
-            
+
             // Calculate average time per completed task
             const completedTasks = job.completed_tasks || 0;
             if (completedTasks > 0) {
@@ -1899,7 +1903,7 @@
               }
             }
           }
-          
+
           document.getElementById("modal-total-time").textContent = totalTimeText;
           document.getElementById("modal-avg-time").textContent = avgTimeText;
 
@@ -1933,15 +1937,15 @@
         const tasksContent = document.getElementById("tasksContent");
         const pagination = document.getElementById("tasksPagination");
         const limitSelect = document.getElementById("tasksLimit");
-        
+
         tasksContent.innerHTML = '<div class="bb-loading">Loading tasks...</div>';
-        pagination.style.display = 'none';
+        pagination.style.display = "none";
 
         try {
           const limit = limitSelect ? limitSelect.value : 50;
           const offset = tasksCurrentPage * limit;
-          const sort = tasksSortDirection === 'desc' ? '-' + tasksSortColumn : tasksSortColumn;
-          
+          const sort = tasksSortDirection === "desc" ? "-" + tasksSortColumn : tasksSortColumn;
+
           const response = await dataBinder.fetchData(`/v1/jobs/${jobId}/tasks?limit=${limit}&offset=${offset}&sort=${sort}`);
           const tasks = response.tasks || [];
 
@@ -1953,9 +1957,9 @@
           // Build sortable table header
           const getSortIcon = (column) => {
             if (tasksSortColumn === column) {
-              return tasksSortDirection === 'desc' ? ' ↓' : ' ↑';
+              return tasksSortDirection === "desc" ? " ↓" : " ↑";
             }
-            return '';
+            return "";
           };
 
           // Build tasks table with sortable headers
@@ -1963,12 +1967,12 @@
           <table class="bb-tasks-table">
             <thead>
               <tr>
-                <th style="cursor: pointer;" onclick="sortTasks('path')">Path${getSortIcon('path')}</th>
-                <th style="cursor: pointer;" onclick="sortTasks('status')">Status${getSortIcon('status')}</th>
-                <th style="cursor: pointer;" onclick="sortTasks('response_time')">Response Time${getSortIcon('response_time')}</th>
-                <th style="cursor: pointer;" onclick="sortTasks('cache_status')">Cache Status${getSortIcon('cache_status')}</th>
-                <th style="cursor: pointer;" onclick="sortTasks('second_response_time')">2nd Request${getSortIcon('second_response_time')}</th>
-                <th style="cursor: pointer;" onclick="sortTasks('status_code')">Status Code${getSortIcon('status_code')}</th>
+                <th style="cursor: pointer;" onclick="sortTasks('path')">Path${getSortIcon("path")}</th>
+                <th style="cursor: pointer;" onclick="sortTasks('status')">Status${getSortIcon("status")}</th>
+                <th style="cursor: pointer;" onclick="sortTasks('response_time')">Response Time${getSortIcon("response_time")}</th>
+                <th style="cursor: pointer;" onclick="sortTasks('cache_status')">Cache Status${getSortIcon("cache_status")}</th>
+                <th style="cursor: pointer;" onclick="sortTasks('second_response_time')">2nd Request${getSortIcon("second_response_time")}</th>
+                <th style="cursor: pointer;" onclick="sortTasks('status_code')">Status Code${getSortIcon("status_code")}</th>
                 <th>Error</th>
               </tr>
             </thead>
@@ -1977,15 +1981,13 @@
 
           tasks.forEach((task) => {
             const statusClass = `bb-status-${task.status}`;
-            
+
             // Format second request data (just response time, no cache status)
-            const secondRequest = task.second_response_time 
-              ? `${task.second_response_time}ms`
-              : "-";
-            
+            const secondRequest = task.second_response_time ? `${task.second_response_time}ms` : "-";
+
             tableHTML += `
             <tr>
-              <td><code class="bb-task-path">${task.path}</code></td>
+              <td><a href="${task.url}" target="_blank"><code class="bb-task-path">${task.path}</code></a></td>
               <td><span class="bb-task-status ${statusClass}">${task.status}</span></td>
               <td>${task.response_time ? `${task.response_time}ms` : "-"}</td>
               <td>${task.cache_status || "-"}</td>
@@ -2007,19 +2009,17 @@
           if (response.pagination) {
             const { total, has_next, has_prev } = response.pagination;
             tasksHasNext = has_next;
-            
+
             const startItem = offset + 1;
             const endItem = Math.min(offset + parseInt(limit), total);
-            
-            document.getElementById("tasksPageInfo").textContent = 
-              `${startItem}-${endItem} of ${total} tasks`;
-            
+
+            document.getElementById("tasksPageInfo").textContent = `${startItem}-${endItem} of ${total} tasks`;
+
             document.getElementById("prevTasksBtn").disabled = !has_prev;
             document.getElementById("nextTasksBtn").disabled = !has_next;
-            
-            pagination.style.display = total > limit ? 'block' : 'none';
-          }
 
+            pagination.style.display = total > limit ? "block" : "none";
+          }
         } catch (error) {
           console.error("Failed to load tasks:", error);
           tasksContent.innerHTML = '<div class="bb-error">Failed to load tasks</div>';
@@ -2029,10 +2029,10 @@
       // Add sorting function
       function sortTasks(column) {
         if (tasksSortColumn === column) {
-          tasksSortDirection = tasksSortDirection === 'desc' ? 'asc' : 'desc';
+          tasksSortDirection = tasksSortDirection === "desc" ? "asc" : "desc";
         } else {
           tasksSortColumn = column;
-          tasksSortDirection = 'desc';
+          tasksSortDirection = "desc";
         }
         tasksCurrentPage = 0; // Reset to first page when sorting
         if (currentJobId) {
