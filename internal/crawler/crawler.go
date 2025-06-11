@@ -288,14 +288,16 @@ func (c *Crawler) WarmURL(ctx context.Context, targetURL string, findLinks bool)
 
 	// Perform cache warming if first request was a MISS
 	if shouldMakeSecondRequest(res.CacheStatus) {
+		
 		log.Debug().
 			Str("url", targetURL).
 			Str("cache_status", res.CacheStatus).
-			Msg("Cache MISS detected, waiting 500ms before second request for cache warming")
+			Int("delay_ms", 1500).
+			Msg("Cache MISS detected, waiting 1500ms before second request for cache warming")
 		
-		// Wait 500ms to allow CDN to process and cache the first response
+		// Wait random delay to allow CDN to process and cache the first response
 		select {
-		case <-time.After(500 * time.Millisecond):
+		case <-time.After(time.Duration(1500) * time.Millisecond):
 			// Continue with second request
 		case <-ctx.Done():
 			// Context cancelled during wait
