@@ -27,7 +27,7 @@ func DefaultConfig() *Config {
 	return &Config{
 		DefaultTimeout: 30 * time.Second,
 		MaxConcurrency: 10,
-		RateLimit:      10,
+		RateLimit:      3,
 		UserAgent:      "Blue Banded Bee (Cache-warmer)",
 		RetryAttempts:  3,
 		RetryDelay:     500 * time.Millisecond,
