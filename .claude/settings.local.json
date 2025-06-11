@@ -94,7 +94,8 @@
       "mcp__playwright__browser_wait_for",
       "mcp__supabase__list_tables",
       "mcp__sentry__find_errors",
-      "Bash(fly logs:*)"
+      "Bash(fly logs:*)",
+      "Bash(winget install:*)"
     ],
     "deny": []
   },
