@@ -307,7 +307,7 @@ func (c *Crawler) WarmURL(ctx context.Context, targetURL string, findLinks bool)
 	// Perform cache warming if first request was a MISS
 	if shouldMakeSecondRequest(res.CacheStatus) {
 		// Random delay between 1.5-10s for systematic testing
-		delayMs := 1500 + rand.Intn(8500) // 1500-10000ms range
+		delayMs := 1500 + rand.Intn(16000) // 1500-17500ms range
 		
 		log.Debug().
 			Str("url", targetURL).
