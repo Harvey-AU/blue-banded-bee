@@ -3,6 +3,7 @@ package crawler
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"net/http"
 	"net/url"
 	"strings"
@@ -178,6 +179,23 @@ func (c *Crawler) WarmURL(ctx context.Context, targetURL string, findLinks bool)
 		result.StatusCode = r.StatusCode
 		result.ContentType = r.Headers.Get("Content-Type")
 		
+		// Log comprehensive Cloudflare headers for analysis
+		cfCacheStatus := r.Headers.Get("CF-Cache-Status")
+		cfRay := r.Headers.Get("CF-Ray")
+		cfDatacenter := r.Headers.Get("CF-IPCountry")
+		cfConnectingIP := r.Headers.Get("CF-Connecting-IP")
+		cfVisitor := r.Headers.Get("CF-Visitor")
+		
+		log.Debug().
+			Str("url", r.Request.URL.String()).
+			Str("cf_cache_status", cfCacheStatus).
+			Str("cf_ray", cfRay).
+			Str("cf_datacenter", cfDatacenter).
+			Str("cf_connecting_ip", cfConnectingIP).
+			Str("cf_visitor", cfVisitor).
+			Int64("response_time_ms", result.ResponseTime).
+			Msg("Cloudflare headers analysis")
+		
 		// Check for cache status headers from different CDNs
 		// Cloudflare
 		if cacheStatus := r.Headers.Get("CF-Cache-Status"); cacheStatus != "" {
@@ -288,16 +306,18 @@ func (c *Crawler) WarmURL(ctx context.Context, targetURL string, findLinks bool)
 
 	// Perform cache warming if first request was a MISS
 	if shouldMakeSecondRequest(res.CacheStatus) {
+		// Random delay between 1.5-10s for systematic testing
+		delayMs := 1500 + rand.Intn(8500) // 1500-10000ms range
 		
 		log.Debug().
 			Str("url", targetURL).
 			Str("cache_status", res.CacheStatus).
-			Int("delay_ms", 1500).
-			Msg("Cache MISS detected, waiting 1500ms before second request for cache warming")
+			Int("delay_ms", delayMs).
+			Msg("Cache MISS detected, waiting random delay for cache warming analysis")
 		
 		// Wait random delay to allow CDN to process and cache the first response
 		select {
-		case <-time.After(time.Duration(1500) * time.Millisecond):
+		case <-time.After(time.Duration(delayMs) * time.Millisecond):
 			// Continue with second request
 		case <-ctx.Done():
 			// Context cancelled during wait
@@ -316,13 +336,18 @@ func (c *Crawler) WarmURL(ctx context.Context, targetURL string, findLinks bool)
 			res.SecondResponseTime = secondResult.ResponseTime
 			res.SecondCacheStatus = secondResult.CacheStatus
 			
+			// Calculate improvement ratio for pattern analysis
+			improvementRatio := float64(res.ResponseTime) / float64(res.SecondResponseTime)
+			
 			log.Debug().
 				Str("url", targetURL).
 				Str("first_cache_status", res.CacheStatus).
 				Str("second_cache_status", res.SecondCacheStatus).
 				Int64("first_response_time", res.ResponseTime).
 				Int64("second_response_time", res.SecondResponseTime).
-				Msg("Cache warming completed")
+				Int("delay_used_ms", delayMs).
+				Float64("improvement_ratio", improvementRatio).
+				Msg("Cache warming analysis - pattern data")
 		}
 	}
 
