@@ -281,6 +281,17 @@ Detailed plan available in [docs/organisation-model.md](docs/plans/organisation-
   - [ ] Performance analytics and trend visualisation
   - [ ] Responsive design compatibility testing
 
+### 🔴 Task prioritisation & URL processing
+
+- [ ] **Task Prioritisation**
+  - [ ] Prioritisation by page hierarchy and importance - give pages ranking by no. of pages, i.e. 1700 page site, highest rank is 1700. all pages start at 0 rank, except homepage which is max (1700) give pages higher score based on if it's in the header or homepage, then each time it's in a page assign more rank
+  - [ ] Job-level task prioritisation options
+
+- [ ] **URL Processing Enhancements**
+  - [ ] Option to treat query strings as same URL
+  - [ ] Remove anchor links from link discovery
+  - [ ] Path inclusion/exclusion rules
+
 ### 🔴 Webflow App Integration
 
 - [ ] **Webflow Developer Registration**
@@ -370,16 +381,6 @@ Detailed plan available in [docs/organisation-model.md](docs/plans/organisation-
   - [ ] Automatic cache warming based on Webflow publish events
 
 ## ⚪ Stage 7: Feature Refinement & Launch Preparation
-
-### 🔴 Advanced Crawler Features
-
-- [ ] **Task Prioritisation**
-  - [ ] Prioritisation by page hierarchy and importance
-  - [ ] Job-level task prioritisation options
-- [ ] **URL Processing Enhancements**
-  - [ ] Option to treat query strings as same URL
-  - [ ] Remove anchor links from link discovery
-  - [ ] Path inclusion/exclusion rules
 
 ### 🔴 Security & Compliance
 
