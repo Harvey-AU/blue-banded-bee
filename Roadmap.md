@@ -290,7 +290,7 @@ Detailed plan available in [docs/organisation-model.md](docs/plans/organisation-
 
 - [ ] **Task Prioritisation**
 
-  - [ ] Prioritisation by page hierarchy and importance - give pages ranking by no. of pages, i.e. 1700 page site, highest rank is 1700. all pages start at 0 rank, except homepage which is max (1700) give pages higher score based on if it's in the header or homepage, then each time it's in a page assign more rank
+  - [ ] Prioritisation by page hierarchy and importance - [Implementation Plan](./docs/plans/task-prioritization.md)
   - [ ] Job-level task prioritisation options
 
 - [ ] **URL Processing Enhancements**
