@@ -71,7 +71,7 @@ func (jm *JobManager) CreateJob(ctx context.Context, options *JobOptions) (*Job,
 			JOIN domains d ON j.domain_id = d.id
 			WHERE d.name = $1
 			AND j.organisation_id = $2
-			AND j.status IN ('pending', 'running')
+			AND j.status IN ('pending', 'initializing', 'running', 'paused')
 			ORDER BY j.created_at DESC
 			LIMIT 1
 		`, normalisedDomain, *options.OrganisationID).Scan(&existingJobID, &existingJobStatus, &existingOrgID)
