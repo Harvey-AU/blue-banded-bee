@@ -71,11 +71,50 @@ func New(config *Config, id ...string) *Crawler {
 			Msg("Crawler sending request")
 	})
 
-	// Always register link extractor - we'll control it via context
-	log.Debug().
-		Msg("Registering Colly link extractor")
+	// Note: OnHTML handler will be registered on the clone in WarmURL to ensure proper context access
 
-	c.OnHTML("a[href]", func(e *colly.HTMLElement) {
+	return &Crawler{
+		config: config,
+		colly:  c,
+		id:     crawlerID,
+	}
+}
+
+// WarmURL performs a crawl of the specified URL and returns the result.
+// It respects context cancellation, enforces timeout, and treats non-2xx statuses as errors.
+func (c *Crawler) WarmURL(ctx context.Context, targetURL string, findLinks bool) (*CrawlResult, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
+	parsed, err := url.Parse(targetURL)
+	if err != nil {
+		res := &CrawlResult{URL: targetURL, Timestamp: time.Now().Unix(), Error: err.Error()}
+		return res, err
+	}
+
+	if parsed.Scheme == "" || parsed.Host == "" {
+		err := fmt.Errorf("invalid URL format: %s", targetURL)
+		res := &CrawlResult{URL: targetURL, Timestamp: time.Now().Unix(), Error: err.Error()}
+		return res, err
+	}
+
+	start := time.Now()
+	res := &CrawlResult{URL: targetURL, Timestamp: start.Unix()}
+
+	log.Debug().
+		Str("url", targetURL).
+		Bool("find_links", findLinks).
+		Msg("Starting URL warming with Colly")
+
+	// Use Colly for everything - single request handles cache warming and link extraction
+	collyClone := c.colly.Clone()
+	
+	// Register link extractor on the clone to ensure proper context access
+	log.Debug().
+		Msg("Registering Colly link extractor on clone")
+
+	collyClone.OnHTML("a[href]", func(e *colly.HTMLElement) {
 		// Check if link extraction is enabled for this request
 		findLinksVal := e.Request.Ctx.GetAny("find_links")
 		if findLinksVal == nil {
@@ -124,43 +163,6 @@ func New(config *Config, id ...string) *Crawler {
 				Msg("No result context - not collecting links")
 		}
 	})
-
-	return &Crawler{
-		config: config,
-		colly:  c,
-		id:     crawlerID,
-	}
-}
-
-// WarmURL performs a crawl of the specified URL and returns the result.
-// It respects context cancellation, enforces timeout, and treats non-2xx statuses as errors.
-func (c *Crawler) WarmURL(ctx context.Context, targetURL string, findLinks bool) (*CrawlResult, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-
-	parsed, err := url.Parse(targetURL)
-	if err != nil {
-		res := &CrawlResult{URL: targetURL, Timestamp: time.Now().Unix(), Error: err.Error()}
-		return res, err
-	}
-
-	if parsed.Scheme == "" || parsed.Host == "" {
-		err := fmt.Errorf("invalid URL format: %s", targetURL)
-		res := &CrawlResult{URL: targetURL, Timestamp: time.Now().Unix(), Error: err.Error()}
-		return res, err
-	}
-
-	start := time.Now()
-	res := &CrawlResult{URL: targetURL, Timestamp: start.Unix()}
-
-	log.Debug().
-		Str("url", targetURL).
-		Bool("find_links", findLinks).
-		Msg("Starting URL warming with Colly")
-
-	// Use Colly for everything - single request handles cache warming and link extraction
-	collyClone := c.colly.Clone()
 	
 	// Set up timing and result collection
 	collyClone.OnRequest(func(r *colly.Request) {
