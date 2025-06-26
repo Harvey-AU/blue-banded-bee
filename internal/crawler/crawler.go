@@ -429,7 +429,7 @@ func shouldMakeSecondRequest(cacheStatus string) bool {
 	// Make second request for cache misses and bypasses
 	// Don't make second request for hits, expired, stale, etc.
 	switch strings.ToUpper(cacheStatus) {
-	case "MISS", "BYPASS":
+	case "MISS", "BYPASS", "EXPIRED":
 		return true
 	default:
 		return false
