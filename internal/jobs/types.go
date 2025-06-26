@@ -89,6 +89,9 @@ type Task struct {
 	SecondResponseTime int64  `json:"second_response_time,omitempty"`
 	SecondCacheStatus  string `json:"second_cache_status,omitempty"`
 
+	// Priority
+	PriorityScore float64 `json:"priority_score"`
+
 	// Job configuration that affects processing
 	FindLinks bool `json:"-"` // Not stored in DB, just used during processing
 }
