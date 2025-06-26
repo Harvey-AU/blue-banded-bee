@@ -290,7 +290,7 @@ Detailed plan available in [docs/organisation-model.md](docs/plans/organisation-
 
 - [x] **Task Prioritisation**
 
-  - [ ] Prioritisation by page hierarchy and importance - [Implementation Plan](docs/plans/task-prioritisation.md)
+  - [x] Prioritisation by page hierarchy and importance - [Implementation Plan](docs/plans/task-prioritisation.md)
   - [ ] Job-level task prioritisation options
 
 - [ ] **URL Processing Enhancements**
