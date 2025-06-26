@@ -5,16 +5,19 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"net/url"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/PuerkitoBio/goquery"
 	"github.com/Harvey-AU/blue-banded-bee/internal/crawler"
 	"github.com/Harvey-AU/blue-banded-bee/internal/db"
 	"github.com/Harvey-AU/blue-banded-bee/internal/util"
 	"github.com/getsentry/sentry-go"
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 	"github.com/rs/zerolog/log"
 )
 
@@ -777,81 +780,99 @@ func (jm *JobManager) processSitemap(ctx context.Context, jobID, domain string, 
 			// Get the homepage URL
 			homepageURL := fmt.Sprintf("https://%s/", domain)
 			
-			// Create a crawler to fetch the homepage
-			crawlerConfig := crawler.DefaultConfig()
-			crawlerConfig.MaxConcurrency = 1
-			crawlerConfig.RateLimit = 1
-			crawlerConfig.FindLinks = true // We need to extract links
-			crawlerInstance := crawler.New(crawlerConfig)
+			// Fetch the homepage HTML
+			client := &http.Client{
+				Timeout: 30 * time.Second,
+			}
 			
-			// Crawl the homepage
-			result, err := crawlerInstance.WarmURL(bgCtx, homepageURL, false)
+			resp, err := client.Get(homepageURL)
 			if err != nil {
 				log.Error().
 					Err(err).
 					Str("job_id", jobID).
-					Msg("Failed to crawl homepage for header links")
+					Msg("Failed to fetch homepage for header links")
+				return
+			}
+			defer resp.Body.Close()
+			
+			// Parse HTML to find header links
+			doc, err := goquery.NewDocumentFromReader(resp.Body)
+			if err != nil {
+				log.Error().
+					Err(err).
+					Str("job_id", jobID).
+					Msg("Failed to parse homepage HTML")
 				return
 			}
 			
-			// Extract header links (simplified approach - links in first part of page)
-			// In a real implementation, we'd parse HTML and find actual <header> tags
+			// Find all links within header tags
 			headerLinks := []string{}
-			for _, link := range result.Links {
-				// Simple heuristic: common header links
-				u, err := url.Parse(link)
-				if err != nil {
-					continue
-				}
-				path := u.Path
-				if path == "/" || path == "/about" || path == "/services" || path == "/contact" || 
-				   path == "/products" || path == "/team" || path == "/blog" || path == "/pricing" {
-					headerLinks = append(headerLinks, link)
-				}
-			}
-			
-			if len(headerLinks) > 0 {
-				// Update header link priorities to 1.000
-				if err := jm.dbQueue.Execute(bgCtx, func(tx *sql.Tx) error {
-					for _, link := range headerLinks {
-						u, err := url.Parse(link)
-						if err != nil {
-							continue
+			doc.Find("header a[href]").Each(func(i int, s *goquery.Selection) {
+				if href, exists := s.Attr("href"); exists {
+					// Convert relative URLs to absolute
+					u, err := url.Parse(href)
+					if err == nil {
+						if !u.IsAbs() {
+							base, _ := url.Parse(homepageURL)
+							u = base.ResolveReference(u)
 						}
-						path := u.Path
-						if path == "" {
-							path = "/"
-						}
-						
-						_, err = tx.ExecContext(bgCtx, `
-							UPDATE tasks t
-							SET priority_score = 1.000
-							FROM pages p
-							WHERE t.page_id = p.id
-							AND t.job_id = $1
-							AND p.path = $2
-							AND t.priority_score < 1.000
-						`, jobID, path)
-						
-						if err != nil {
-							log.Warn().
-								Err(err).
-								Str("path", path).
-								Msg("Failed to update header link priority")
+						// Only include same-domain links
+						if u.Host == "" || u.Host == domain || strings.HasSuffix(u.Host, "."+domain) {
+							headerLinks = append(headerLinks, u.String())
 						}
 					}
+				}
+			})
+			
+			if len(headerLinks) > 0 {
+				// Extract paths from header links
+				paths := make([]string, 0, len(headerLinks))
+				for _, link := range headerLinks {
+					u, err := url.Parse(link)
+					if err != nil {
+						continue
+					}
+					path := u.Path
+					if path == "" {
+						path = "/"
+					}
+					paths = append(paths, path)
+				}
+				
+				// Update header link priorities to 1.000 in a single query
+				if err := jm.dbQueue.Execute(bgCtx, func(tx *sql.Tx) error {
+					result, err := tx.ExecContext(bgCtx, `
+						UPDATE tasks t
+						SET priority_score = 1.000
+						FROM pages p
+						WHERE t.page_id = p.id
+						AND t.job_id = $1
+						AND p.path = ANY($2)
+						AND t.priority_score < 1.000
+					`, jobID, pq.Array(paths))
+					
+					if err != nil {
+						return fmt.Errorf("failed to update header link priorities: %w", err)
+					}
+					
+					rowsAffected, _ := result.RowsAffected()
+					log.Info().
+						Str("job_id", jobID).
+						Int("header_link_count", len(paths)).
+						Int64("tasks_updated", rowsAffected).
+						Msg("Updated header link priorities to 1.000")
+					
 					return nil
 				}); err != nil {
 					log.Error().
 						Err(err).
 						Str("job_id", jobID).
 						Msg("Failed to update header link priorities")
-				} else {
-					log.Info().
-						Str("job_id", jobID).
-						Int("header_link_count", len(headerLinks)).
-						Msg("Updated header link priorities to 1.000")
 				}
+			} else {
+				log.Info().
+					Str("job_id", jobID).
+					Msg("No header links found on homepage")
 			}
 		}()
 	} else {
