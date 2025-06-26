@@ -3,7 +3,6 @@ package crawler
 import (
 	"context"
 	"fmt"
-	"math/rand"
 	"net/http"
 	"net/url"
 	"strings"
@@ -308,25 +307,85 @@ func (c *Crawler) WarmURL(ctx context.Context, targetURL string, findLinks bool)
 
 	// Perform cache warming if first request was a MISS
 	if shouldMakeSecondRequest(res.CacheStatus) {
-		// Random delay between 1.5-10s for systematic testing
-		delayMs := 1500 + rand.Intn(16000) // 1500-17500ms range
+		// Dynamic delay based on initial response time (1.5x with bounds)
+		delayMs := int(float64(res.ResponseTime) * 1.5)
+		if delayMs < 2000 {
+			delayMs = 2000 // Minimum 2 seconds
+		}
+		if delayMs > 30000 {
+			delayMs = 30000 // Maximum 30 seconds
+		}
 		
 		log.Debug().
 			Str("url", targetURL).
 			Str("cache_status", res.CacheStatus).
-			Int("delay_ms", delayMs).
-			Msg("Cache MISS detected, waiting random delay for cache warming analysis")
+			Int64("initial_response_time", res.ResponseTime).
+			Int("calculated_delay_ms", delayMs).
+			Msg("Cache MISS detected, using dynamic delay based on initial response time")
 		
-		// Wait random delay to allow CDN to process and cache the first response
+		// Wait for initial delay to allow CDN to process and cache
 		select {
 		case <-time.After(time.Duration(delayMs) * time.Millisecond):
-			// Continue with second request
+			// Continue with cache check loop
 		case <-ctx.Done():
 			// Context cancelled during wait
-			log.Debug().Str("url", targetURL).Msg("Cache warming cancelled during delay")
+			log.Debug().Str("url", targetURL).Msg("Cache warming cancelled during initial delay")
 			return res, nil // First request was successful, return that
 		}
 		
+		// Check cache status with HEAD requests in a loop
+		maxChecks := 5
+		checkDelay := 2000 // 2 seconds between checks
+		cacheHit := false
+		
+		for i := 0; i < maxChecks; i++ {
+			// Check cache status with HEAD request
+			cacheStatus, err := c.CheckCacheStatus(ctx, targetURL)
+			if err != nil {
+				log.Warn().
+					Err(err).
+					Str("url", targetURL).
+					Int("check_attempt", i+1).
+					Msg("Failed to check cache status")
+			} else {
+				log.Debug().
+					Str("url", targetURL).
+					Str("cache_status", cacheStatus).
+					Int("check_attempt", i+1).
+					Msg("Cache status check")
+				
+				// If cache is now HIT, we can proceed with second request
+				if cacheStatus == "HIT" || cacheStatus == "STALE" || cacheStatus == "REVALIDATED" {
+					cacheHit = true
+					break
+				}
+			}
+			
+			// If not the last check, wait before next attempt
+			if i < maxChecks-1 {
+				select {
+				case <-time.After(time.Duration(checkDelay) * time.Millisecond):
+					// Continue to next check
+				case <-ctx.Done():
+					log.Debug().Str("url", targetURL).Msg("Cache warming cancelled during check loop")
+					return res, nil
+				}
+			}
+		}
+		
+		// Log whether cache became available
+		if cacheHit {
+			log.Debug().
+				Str("url", targetURL).
+				Msg("Cache is now available, proceeding with second request")
+		} else {
+			log.Warn().
+				Str("url", targetURL).
+				Int("max_checks", maxChecks).
+				Msg("Cache did not become available after maximum checks")
+		}
+		
+		// Perform second request to measure cached response time
 		secondResult, err := c.makeSecondRequest(ctx, targetURL)
 		if err != nil {
 			log.Warn().
@@ -347,8 +406,9 @@ func (c *Crawler) WarmURL(ctx context.Context, targetURL string, findLinks bool)
 				Str("second_cache_status", res.SecondCacheStatus).
 				Int64("first_response_time", res.ResponseTime).
 				Int64("second_response_time", res.SecondResponseTime).
-				Int("delay_used_ms", delayMs).
+				Int("initial_delay_ms", delayMs).
 				Float64("improvement_ratio", improvementRatio).
+				Bool("cache_hit_before_second", cacheHit).
 				Msg("Cache warming analysis - pattern data")
 		}
 	}
