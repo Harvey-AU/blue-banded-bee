@@ -87,6 +87,9 @@ type Task struct {
 	ContentType        string
 	SecondResponseTime int64
 	SecondCacheStatus  string
+	
+	// Priority
+	PriorityScore float64
 }
 
 // GetNextTask gets a pending task using row-level locking
@@ -97,7 +100,7 @@ func (q *DbQueue) GetNextTask(ctx context.Context, jobID string) (*Task, error) 
 		// Query for a pending task with FOR UPDATE SKIP LOCKED
 		// This allows concurrent workers to each get different tasks
 		query := `
-			SELECT id, job_id, page_id, path, created_at, retry_count, source_type, source_url 
+			SELECT id, job_id, page_id, path, created_at, retry_count, source_type, source_url, priority_score 
 			FROM tasks 
 			WHERE status = 'pending'
 		`
@@ -109,9 +112,9 @@ func (q *DbQueue) GetNextTask(ctx context.Context, jobID string) (*Task, error) 
 			args = append(args, jobID)
 		}
 
-		// Add ordering and locking
+		// Add ordering and locking - prioritize by priority_score DESC, then created_at ASC
 		query += `
-			ORDER BY created_at ASC
+			ORDER BY priority_score DESC, created_at ASC
 			LIMIT 1
 			FOR UPDATE SKIP LOCKED
 		`
@@ -127,6 +130,7 @@ func (q *DbQueue) GetNextTask(ctx context.Context, jobID string) (*Task, error) 
 		err := row.Scan(
 			&task.ID, &task.JobID, &task.PageID, &task.Path,
 			&task.CreatedAt, &task.RetryCount, &task.SourceType, &task.SourceURL,
+			&task.PriorityScore,
 		)
 
 		if err == sql.ErrNoRows {
@@ -212,8 +216,8 @@ func (q *DbQueue) EnqueueURLs(ctx context.Context, jobID string, pageIDs []int, 
 		stmt, err := tx.PrepareContext(ctx, `
 			INSERT INTO tasks (
 				id, job_id, page_id, path, status, created_at, retry_count,
-				source_type, source_url
-			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+				source_type, source_url, priority_score
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 		`)
 		if err != nil {
 			return fmt.Errorf("failed to prepare statement: %w", err)
@@ -239,7 +243,7 @@ func (q *DbQueue) EnqueueURLs(ctx context.Context, jobID string, pageIDs []int, 
 
 			taskID := uuid.New().String()
 			_, err = stmt.ExecContext(ctx,
-				taskID, jobID, pageID, paths[i], status, now, 0, sourceType, sourceURL)
+				taskID, jobID, pageID, paths[i], status, now, 0, sourceType, sourceURL, 0.000)
 
 			if err != nil {
 				return fmt.Errorf("failed to insert task: %w", err)

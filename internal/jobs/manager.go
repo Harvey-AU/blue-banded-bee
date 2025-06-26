@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -741,6 +742,118 @@ func (jm *JobManager) processSitemap(ctx context.Context, jobID, domain string, 
 			Str("domain", domain).
 			Int("url_count", len(urls)).
 			Msg("Added sitemap URLs to job queue")
+		
+		// Set homepage priority to 1.000
+		if err := jm.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
+			// Update homepage task priority
+			_, err := tx.ExecContext(ctx, `
+				UPDATE tasks t
+				SET priority_score = 1.000
+				FROM pages p
+				WHERE t.page_id = p.id
+				AND t.job_id = $1
+				AND p.path = '/'
+			`, jobID)
+			return err
+		}); err != nil {
+			log.Error().
+				Err(err).
+				Str("job_id", jobID).
+				Msg("Failed to set homepage priority")
+		} else {
+			log.Info().
+				Str("job_id", jobID).
+				Msg("Set homepage priority to 1.000")
+		}
+		
+		// Crawl homepage to find header links and set their priorities to 1.000
+		go func() {
+			// Create a new context for this background operation
+			bgCtx := context.Background()
+			
+			// Wait a bit for the homepage task to be processed
+			time.Sleep(5 * time.Second)
+			
+			// Get the homepage URL
+			homepageURL := fmt.Sprintf("https://%s/", domain)
+			
+			// Create a crawler to fetch the homepage
+			crawlerConfig := crawler.DefaultConfig()
+			crawlerConfig.MaxConcurrency = 1
+			crawlerConfig.RateLimit = 1
+			crawlerConfig.FindLinks = true // We need to extract links
+			crawlerInstance := crawler.New(crawlerConfig)
+			
+			// Crawl the homepage
+			result, err := crawlerInstance.WarmURL(bgCtx, homepageURL, false)
+			if err != nil {
+				log.Error().
+					Err(err).
+					Str("job_id", jobID).
+					Msg("Failed to crawl homepage for header links")
+				return
+			}
+			
+			// Extract header links (simplified approach - links in first part of page)
+			// In a real implementation, we'd parse HTML and find actual <header> tags
+			headerLinks := []string{}
+			for _, link := range result.Links {
+				// Simple heuristic: common header links
+				u, err := url.Parse(link)
+				if err != nil {
+					continue
+				}
+				path := u.Path
+				if path == "/" || path == "/about" || path == "/services" || path == "/contact" || 
+				   path == "/products" || path == "/team" || path == "/blog" || path == "/pricing" {
+					headerLinks = append(headerLinks, link)
+				}
+			}
+			
+			if len(headerLinks) > 0 {
+				// Update header link priorities to 1.000
+				if err := jm.dbQueue.Execute(bgCtx, func(tx *sql.Tx) error {
+					for _, link := range headerLinks {
+						u, err := url.Parse(link)
+						if err != nil {
+							continue
+						}
+						path := u.Path
+						if path == "" {
+							path = "/"
+						}
+						
+						_, err = tx.ExecContext(bgCtx, `
+							UPDATE tasks t
+							SET priority_score = 1.000
+							FROM pages p
+							WHERE t.page_id = p.id
+							AND t.job_id = $1
+							AND p.path = $2
+							AND t.priority_score < 1.000
+						`, jobID, path)
+						
+						if err != nil {
+							log.Warn().
+								Err(err).
+								Str("path", path).
+								Msg("Failed to update header link priority")
+						}
+					}
+					return nil
+				}); err != nil {
+					log.Error().
+						Err(err).
+						Str("job_id", jobID).
+						Msg("Failed to update header link priorities")
+				} else {
+					log.Info().
+						Str("job_id", jobID).
+						Int("header_link_count", len(headerLinks)).
+						Msg("Updated header link priorities to 1.000")
+				}
+			}
+		}()
 	} else {
 		log.Info().
 			Str("job_id", jobID).

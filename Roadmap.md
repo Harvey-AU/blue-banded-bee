@@ -283,18 +283,18 @@ Detailed plan available in [docs/organisation-model.md](docs/plans/organisation-
 
 ### 🔴 Task prioritisation & URL processing
 
-- [ ] **Stop duplicate domain crawls oncurrently, close old job**
+- [x] **Stop duplicate domain crawls oncurrently, close old job**
 
-  - [ ] When creating a job, check if there's an active job for this user
-  - [ ] If so, cancel the old job
+  - [x] When creating a job, check if there's an active job for this user
+  - [x] If so, cancel the old job
 
-- [ ] **Task Prioritisation**
+- [x] **Task Prioritisation**
 
-  - [ ] Prioritisation by page hierarchy and importance - [Implementation Plan](./docs/plans/task-prioritization.md)
+  - [ ] Prioritisation by page hierarchy and importance - [Implementation Plan](docs/plans/task-prioritisation.md)
   - [ ] Job-level task prioritisation options
 
 - [ ] **URL Processing Enhancements**
-  - [ ] Option to treat query strings as same URL
+  - [ ] Option to treat query strings as same URL (not sure tihs is required)
   - [ ] Remove anchor links from link discovery
   - [ ] Path inclusion/exclusion rules
 
