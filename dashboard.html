@@ -992,8 +992,8 @@
           <div class="filter-group">
             <label class="filter-label">Date Range</label>
             <select class="filter-select" id="dateRange">
-              <option value="today">Today</option>
-              <option value="last7" selected>Last 7 Days</option>
+              <option value="today" selected>Today</option>
+              <option value="last7">Last 7 Days</option>
               <option value="last30">Last 30 Days</option>
               <option value="last90">Last 90 Days</option>
               <option value="all">All Time</option>
@@ -1462,11 +1462,11 @@
 
             // Load stats and jobs data
             const data = await this.loadAndBind({
-              stats: "/v1/dashboard/stats?range=last7",
+              stats: "/v1/dashboard/stats?range=today",
             });
 
             // Load jobs separately for template binding
-            const jobsResponse = await this.fetchData("/v1/jobs?limit=10&range=last7");
+            const jobsResponse = await this.fetchData("/v1/jobs?limit=10&range=today");
             const jobs = jobsResponse.jobs || [];
 
             // Process jobs data for better display

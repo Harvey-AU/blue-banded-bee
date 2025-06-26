@@ -272,7 +272,7 @@ Detailed plan available in [docs/organisation-model.md](docs/plans/organisation-
   - [x] Style and attribute binding (`data-bb-bind-style`, `data-bb-bind-attr`)
 - [x] **Enhanced Job Management**
   - [x] Real-time job progress updates via data binding
-  - [x] Job creation forms with template-based validation  
+  - [x] Job creation forms with template-based validation
   - [x] Error handling and user feedback systems
   - [x] Advanced filtering and search capabilities
 - [ ] **User Experience Features**
@@ -283,7 +283,13 @@ Detailed plan available in [docs/organisation-model.md](docs/plans/organisation-
 
 ### 🔴 Task prioritisation & URL processing
 
+- [ ] **Stop duplicate domain crawls oncurrently, close old job**
+
+  - [ ] When creating a job, check if there's an active job for this user
+  - [ ] If so, cancel the old job
+
 - [ ] **Task Prioritisation**
+
   - [ ] Prioritisation by page hierarchy and importance - give pages ranking by no. of pages, i.e. 1700 page site, highest rank is 1700. all pages start at 0 rank, except homepage which is max (1700) give pages higher score based on if it's in the header or homepage, then each time it's in a page assign more rank
   - [ ] Job-level task prioritisation options
 
