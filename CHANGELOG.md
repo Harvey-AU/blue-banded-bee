@@ -28,6 +28,10 @@ Each version represents a distinct set of changes, even if released on the same 
   - Important pages discovered early get higher priority
   - Ensures critical site pages are cached before less important ones
 
+### Fixed
+
+- **Recrawl pages with EXPIRED cache status**
+
 ## [0.5.13] – 2025-06-26
 
 ### Added
