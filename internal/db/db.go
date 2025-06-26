@@ -307,6 +307,7 @@ func setupSchema(db *sql.DB) error {
 			content_type TEXT,
 			second_response_time BIGINT,
 			second_cache_status TEXT,
+			priority_score NUMERIC(4,3) DEFAULT 0.000,
 			FOREIGN KEY (job_id) REFERENCES jobs(id)
 		)
 	`)
@@ -327,6 +328,14 @@ func setupSchema(db *sql.DB) error {
 	`)
 	if err != nil {
 		return fmt.Errorf("failed to add second_cache_status column: %w", err)
+	}
+
+	// Add priority_score column for task prioritization
+	_, err = db.Exec(`
+		ALTER TABLE tasks ADD COLUMN IF NOT EXISTS priority_score NUMERIC(4,3) DEFAULT 0.000
+	`)
+	if err != nil {
+		return fmt.Errorf("failed to add priority_score column: %w", err)
 	}
 
 	// Add a unique constraint to prevent duplicate tasks for same page in a job
@@ -353,6 +362,12 @@ func setupSchema(db *sql.DB) error {
 	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_tasks_status_created ON tasks(status, created_at)`)
 	if err != nil {
 		return fmt.Errorf("failed to create task status/created_at index: %w", err)
+	}
+
+	// Add index for priority-based task queries
+	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_tasks_priority ON tasks(job_id, status, priority_score DESC)`)
+	if err != nil {
+		return fmt.Errorf("failed to create task priority index: %w", err)
 	}
 
 	// Enable Row-Level Security for all tables

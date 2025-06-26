@@ -8,7 +8,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Multiple version updates may occur on the same date, each with its own version number.
 Each version represents a distinct set of changes, even if released on the same day.
 
-## [Unreleased]
+## [0.5.14] – 2025-06-26
+
+### Added
+
+- **Task Prioritisation Implementation**: Implemented priority-based task processing system
+  - Added `priority_score` column to tasks table (0.000-1.000 range)
+  - Tasks now processed by priority score (DESC) then creation time (ASC)
+  - Homepage automatically gets priority 1.000 after sitemap processing
+  - Header links (detected by common paths) also get priority 1.000
+  - Discovered links inherit 80% of source page priority (propagation)
+  - Added index `idx_tasks_priority` for efficient priority-based queries
+  - All tasks start at 0.000 and only increase based on criteria
+
+### Enhanced
+
+- **Task Processing Order**: Changed from FIFO to priority-based processing
+  - High-value pages (homepage, header links) crawled first
+  - Important pages discovered early get higher priority
+  - Ensures critical site pages are cached before less important ones
+
+## [0.5.13] – 2025-06-26
 
 ### Added
 
@@ -17,11 +37,12 @@ Each version represents a distinct set of changes, even if released on the same 
   - Minimal schema changes - only adds `priority_score` column to pages table
   - Homepage detection and automatic highest priority assignment
   - Link propagation scoring - pages inherit 80% of source page priority
-  - Detailed implementation plan in [docs/plans/task-prioritization.md](./docs/plans/task-prioritization.md)
+  - Detailed implementation plan in [docs/plans/task-prioritization.md](docs/plans/task-prioritisation.md)
 
 ### Enhanced
 
 - **Job Duplicate Prevention**: Cancel existing jobs when creating new job for same domain
+
   - Prevents multiple concurrent crawls of same domain
   - Automatically cancels in-progress jobs for domain before creating new one
   - Improves resource utilisation and prevents redundant crawling

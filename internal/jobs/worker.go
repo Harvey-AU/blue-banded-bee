@@ -340,16 +340,17 @@ func (wp *WorkerPool) processNextTask(ctx context.Context) error {
 
 			// Convert db.Task to jobs.Task for processing
 			jobsTask := &Task{
-				ID:         task.ID,
-				JobID:      task.JobID,
-				PageID:     task.PageID,
-				Path:       task.Path,
-				Status:     TaskStatus(task.Status),
-				CreatedAt:  task.CreatedAt,
-				StartedAt:  task.StartedAt, 
-				RetryCount: task.RetryCount,
-				SourceType: task.SourceType,
-				SourceURL:  task.SourceURL,
+				ID:            task.ID,
+				JobID:         task.JobID,
+				PageID:        task.PageID,
+				Path:          task.Path,
+				Status:        TaskStatus(task.Status),
+				CreatedAt:     task.CreatedAt,
+				StartedAt:     task.StartedAt, 
+				RetryCount:    task.RetryCount,
+				SourceType:    task.SourceType,
+				SourceURL:     task.SourceURL,
+				PriorityScore: task.PriorityScore,
 			}
 			
 			// Need to fetch additional info from the database
@@ -1042,6 +1043,15 @@ func (wp *WorkerPool) processTask(ctx context.Context, task *Task) (*crawler.Cra
 					Str("task_id", task.ID).
 					Int("link_count", len(filtered)).
 					Msg("Successfully enqueued discovered links")
+				
+				// Update priorities for the discovered links
+				if err := wp.updateTaskPriorities(ctx, task.JobID, domainID, task.PriorityScore, filtered); err != nil {
+					log.Error().
+						Err(err).
+						Str("task_id", task.ID).
+						Float64("current_priority", task.PriorityScore).
+						Msg("Failed to update task priorities for discovered links")
+				}
 			}
 		}
 	}
@@ -1112,6 +1122,62 @@ func isSameOrSubDomain(hostname, targetDomain string) bool {
 	}
 
 	return false
+}
+
+// updateTaskPriorities updates the priority scores for tasks of linked pages
+func (wp *WorkerPool) updateTaskPriorities(ctx context.Context, jobID string, domainID int, currentTaskPriority float64, links []string) error {
+	if len(links) == 0 {
+		return nil
+	}
+
+	// Calculate new priority as 80% of current task priority
+	newPriority := currentTaskPriority * 0.8
+
+	// Extract paths from URLs
+	paths := make([]string, 0, len(links))
+	for _, link := range links {
+		u, err := url.Parse(link)
+		if err != nil {
+			log.Warn().Str("url", link).Err(err).Msg("Failed to parse URL for priority update")
+			continue
+		}
+		path := u.Path
+		if path == "" {
+			path = "/"
+		}
+		paths = append(paths, path)
+	}
+
+	if len(paths) == 0 {
+		return nil
+	}
+
+	// Update all task priorities in a single query
+	result, err := wp.db.ExecContext(ctx, `
+		UPDATE tasks t
+		SET priority_score = $1
+		FROM pages p
+		WHERE t.page_id = p.id
+		AND t.job_id = $2
+		AND p.domain_id = $3
+		AND p.path = ANY($4)
+		AND t.priority_score < $1
+	`, newPriority, jobID, domainID, pq.Array(paths))
+
+	if err != nil {
+		return fmt.Errorf("failed to update task priorities: %w", err)
+	}
+
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected > 0 {
+		log.Info().
+			Str("job_id", jobID).
+			Int64("tasks_updated", rowsAffected).
+			Float64("new_priority", newPriority).
+			Msg("Updated task priorities for discovered links")
+	}
+
+	return nil
 }
 
 // evaluateJobPerformance checks if a job needs performance scaling
