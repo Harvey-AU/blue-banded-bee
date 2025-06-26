@@ -8,6 +8,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Multiple version updates may occur on the same date, each with its own version number.
 Each version represents a distinct set of changes, even if released on the same day.
 
+## [Unreleased]
+
+### Added
+
+- **Task Prioritisation Planning**: Created comprehensive plan for priority-based task processing
+  - PostgreSQL view-based approach using percentage scores (0.0-1.0)
+  - Minimal schema changes - only adds `priority_score` column to pages table
+  - Homepage detection and automatic highest priority assignment
+  - Link propagation scoring - pages inherit 80% of source page priority
+  - Detailed implementation plan in [docs/plans/task-prioritization.md](./docs/plans/task-prioritization.md)
+
+### Enhanced
+
+- **Job Duplicate Prevention**: Cancel existing jobs when creating new job for same domain
+  - Prevents multiple concurrent crawls of same domain
+  - Automatically cancels in-progress jobs for domain before creating new one
+  - Improves resource utilisation and prevents redundant crawling
+
+- **Cache Warming Timing**: Adjusted delay for second cache warming attempt
+  - Increased delay to 1.5x initial response time for better cache propagation
+  - Added randomisation to cache warming delays for more natural traffic patterns
+  - Enhanced logging of cache status results for analysis
+
+### Fixed
+
+- **Link Discovery**: Fixed link extraction to properly find paginated links
+  - Restored proper link discovery functionality that was inadvertently disabled
+
 ## [0.5.12] – 2025-06-06
 
 ### Enhanced
