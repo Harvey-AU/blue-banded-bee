@@ -298,6 +298,8 @@ Detailed plan available in [docs/organisation-model.md](docs/plans/organisation-
   - [ ] Remove anchor links from link discovery
   - [ ] Path inclusion/exclusion rules
 
+- [ ] Considering impact of and plan updates [Go v1.25 release](/docs/plans/Go-1.25.md)
+
 ### 🔴 Webflow App Integration
 
 - [ ] **Webflow Developer Registration**
