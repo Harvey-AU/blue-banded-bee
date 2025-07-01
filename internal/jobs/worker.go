@@ -190,7 +190,6 @@ func (wp *WorkerPool) AddJob(jobID string, options *JobOptions) {
 		Msg("Added job to worker pool")
 }
 
-// RemoveJob removes a job from the worker pool
 func (wp *WorkerPool) RemoveJob(jobID string) {
 	wp.jobsMutex.Lock()
 	delete(wp.jobs, jobID)
@@ -207,10 +206,7 @@ func (wp *WorkerPool) RemoveJob(jobID string) {
 
 	// Simple scaling: remove 5 workers per job + any performance boost, minimum of base count
 	wp.workersMutex.Lock()
-	targetWorkers := wp.currentWorkers - 5 - jobBoost
-	if targetWorkers < wp.baseWorkerCount {
-		targetWorkers = wp.baseWorkerCount
-	}
+	targetWorkers := max(wp.currentWorkers - 5 - jobBoost, wp.baseWorkerCount)
 
 	log.Debug().
 		Str("job_id", jobID).
