@@ -432,6 +432,7 @@ func (wp *WorkerPool) processNextTask(ctx context.Context) error {
 
 // EnqueueURLs adds multiple URLs as tasks for a job
 // Legacy wrapper that delegates to dbQueue.EnqueueURLs
+// TODO: I think we should delete this or edit the comment above if it's not "legacy"
 func (wp *WorkerPool) EnqueueURLs(ctx context.Context, jobID string, pageIDs []int, urls []string, sourceType string, sourceURL string) error {
 	log.Debug().
 		Str("job_id", jobID).
