@@ -77,7 +77,7 @@ func (h *Handler) AuthRegister(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Create user with organisation atomically
+	// Create user with organisation automatically
 	user, org, err := h.DB.CreateUser(req.UserID, req.Email, req.FullName, orgName)
 	if err != nil {
 		sentry.CaptureException(err)
