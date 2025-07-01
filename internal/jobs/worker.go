@@ -288,7 +288,6 @@ func (wp *WorkerPool) worker(ctx context.Context, workerID int) {
 	}
 }
 
-// processNextTask processes the next available task from any active job
 func (wp *WorkerPool) processNextTask(ctx context.Context) error {
 	// Get the list of active jobs
 	wp.jobsMutex.RLock()
