@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/getsentry/sentry-go"
@@ -46,23 +45,6 @@ func (q *DbQueue) Execute(ctx context.Context, fn func(*sql.Tx) error) error {
 	}
 
 	return nil
-}
-
-// isRetryableError checks if a database error is worth retrying
-func isRetryableError(err error) bool {
-	if err == nil {
-		return false
-	}
-	
-	errorStr := strings.ToLower(err.Error())
-	
-	// Connection-related errors that might be transient
-	return strings.Contains(errorStr, "connection") ||
-		strings.Contains(errorStr, "unexpected parse") ||
-		strings.Contains(errorStr, "bad connection") ||
-		strings.Contains(errorStr, "broken pipe") ||
-		strings.Contains(errorStr, "timeout") ||
-		strings.Contains(errorStr, "reset by peer")
 }
 
 // Task represents a task in the queue
