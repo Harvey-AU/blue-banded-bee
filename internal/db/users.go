@@ -27,34 +27,6 @@ type Organisation struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
-// CreateUser creates a new user in the database
-func (db *DB) CreateUser(userID, email string, fullName *string) (*User, error) {
-	user := &User{
-		ID:       userID,
-		Email:    email,
-		FullName: fullName,
-	}
-
-	query := `
-		INSERT INTO users (id, email, full_name, created_at, updated_at)
-		VALUES ($1, $2, $3, NOW(), NOW())
-		RETURNING created_at, updated_at
-	`
-	
-	err := db.client.QueryRow(query, user.ID, user.Email, user.FullName).Scan(
-		&user.CreatedAt, &user.UpdatedAt,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create user: %w", err)
-	}
-
-	log.Info().
-		Str("user_id", user.ID).
-		Str("email", user.Email).
-		Msg("Created new user")
-
-	return user, nil
-}
 
 // GetUser retrieves a user by ID
 func (db *DB) GetUser(userID string) (*User, error) {
@@ -75,30 +47,6 @@ func (db *DB) GetUser(userID string) (*User, error) {
 			return nil, fmt.Errorf("user not found")
 		}
 		return nil, fmt.Errorf("failed to get user: %w", err)
-	}
-
-	return user, nil
-}
-
-// GetUserByEmail retrieves a user by email
-func (db *DB) GetUserByEmail(email string) (*User, error) {
-	user := &User{}
-	
-	query := `
-		SELECT id, email, full_name, organisation_id, created_at, updated_at
-		FROM users
-		WHERE email = $1
-	`
-	
-	err := db.client.QueryRow(query, email).Scan(
-		&user.ID, &user.Email, &user.FullName, &user.OrganisationID,
-		&user.CreatedAt, &user.UpdatedAt,
-	)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return nil, fmt.Errorf("user not found")
-		}
-		return nil, fmt.Errorf("failed to get user by email: %w", err)
 	}
 
 	return user, nil
