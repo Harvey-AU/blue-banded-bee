@@ -103,7 +103,6 @@ func (db *DB) GetOrganisation(organisationID string) (*Organisation, error) {
 	return org, nil
 }
 
-// GetOrganisationMembers retrieves all members of an organisation
 func (db *DB) GetOrganisationMembers(organisationID string) ([]*User, error) {
 	query := `
 		SELECT id, email, full_name, organisation_id, created_at, updated_at
@@ -138,9 +137,8 @@ func (db *DB) GetOrganisationMembers(organisationID string) ([]*User, error) {
 	return users, nil
 }
 
-// CreateUserWithOrganisation creates a new user and organisation atomically
 // If user already exists, returns the existing user and their organisation
-func (db *DB) CreateUserWithOrganisation(userID, email string, fullName *string, orgName string) (*User, *Organisation, error) {
+func (db *DB) CreateUser(userID, email string, fullName *string, orgName string) (*User, *Organisation, error) {
 	// First check if user already exists
 	existingUser, err := db.GetUser(userID)
 	if err == nil {
