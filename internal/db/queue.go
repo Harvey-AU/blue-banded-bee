@@ -94,7 +94,7 @@ func (q *DbQueue) GetNextTask(ctx context.Context, jobID string) (*Task, error) 
 			args = append(args, jobID)
 		}
 
-		// Add ordering and locking - prioritize by priority_score DESC, then created_at ASC
+		// Add ordering and locking - prioritise by priority_score DESC, then created_at ASC
 		query += `
 			ORDER BY priority_score DESC, created_at ASC
 			LIMIT 1
