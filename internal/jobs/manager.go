@@ -11,10 +11,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/PuerkitoBio/goquery"
 	"github.com/Harvey-AU/blue-banded-bee/internal/crawler"
 	"github.com/Harvey-AU/blue-banded-bee/internal/db"
 	"github.com/Harvey-AU/blue-banded-bee/internal/util"
+	"github.com/PuerkitoBio/goquery"
 	"github.com/getsentry/sentry-go"
 	"github.com/google/uuid"
 	"github.com/lib/pq"
@@ -59,11 +59,9 @@ func (jm *JobManager) CreateJob(ctx context.Context, options *JobOptions) (*Job,
 
 	span.SetTag("domain", options.Domain)
 
-	// Normalise domain to ensure consistent handling of www. prefix and http/https
 	normalisedDomain := util.NormaliseDomain(options.Domain)
 	
-	// Check for existing active jobs for the same domain and user
-	// Only check if organisation ID is provided
+	// Check for existing active jobs for the same domain and org
 	if options.OrganisationID != nil && *options.OrganisationID != "" {
 		var existingJobID string
 		var existingJobStatus string
@@ -89,7 +87,7 @@ func (jm *JobManager) CreateJob(ctx context.Context, options *JobOptions) (*Job,
 				Str("organisation_id", *options.OrganisationID).
 				Msg("Found existing active job for domain, cancelling it")
 		
-			// Cancel the existing job
+			
 			if err := jm.CancelJob(ctx, existingJobID); err != nil {
 				log.Error().
 					Err(err).
@@ -109,7 +107,7 @@ func (jm *JobManager) CreateJob(ctx context.Context, options *JobOptions) (*Job,
 	// Create a new job object
 	job := &Job{
 		ID:              uuid.New().String(),
-		Domain:          normalisedDomain, // Use normalised domain
+		Domain:          normalisedDomain,
 		UserID:          options.UserID,
 		OrganisationID:  options.OrganisationID,
 		Status:          JobStatusPending,
@@ -198,9 +196,6 @@ func (jm *JobManager) CreateJob(ctx context.Context, options *JobOptions) (*Job,
 				return fmt.Errorf("failed to create page record for root path: %w", err)
 			}
 			
-			// Mark this page as processed for this job
-			// Will mark as processed after task creation succeeds
-			
 			// Enqueue the root URL with its page ID
 			_, err = tx.ExecContext(ctx, `
 				INSERT INTO tasks (
@@ -224,8 +219,7 @@ func (jm *JobManager) CreateJob(ctx context.Context, options *JobOptions) (*Job,
 			if err != nil {
 				return err
 			}
-			
-			// Only mark this page as processed after successful task creation
+
 			jm.markPageProcessed(job.ID, pageID)
 			
 			return nil
@@ -321,10 +315,6 @@ func (jm *JobManager) markPageProcessed(jobID string, pageID int) {
 	defer jm.pagesMutex.Unlock()
 	jm.processedPages[key] = struct{}{}
 }
-
-// Note: This method was previously used to mark multiple pages as processed
-// but has been replaced by marking individual pages after successful task creation
-// in the EnqueueJobURLs function. Kept as documentation.
 
 // Helper method to clear processed pages for a job (when job is completed or canceled)
 func (jm *JobManager) clearProcessedPages(jobID string) {
@@ -572,7 +562,6 @@ func (jm *JobManager) GetJobStatus(ctx context.Context, jobID string) (*Job, err
 
 	span.SetTag("job_id", jobID)
 
-	// Get the job using our new method
 	job, err := jm.GetJob(ctx, jobID)
 	if err != nil {
 		span.SetTag("error", "true")
@@ -603,8 +592,6 @@ func (jm *JobManager) processSitemap(ctx context.Context, jobID, domain string, 
 	sitemapCrawler := crawler.New(crawlerConfig)
 
 	// Discover sitemaps for the domain
-	// Note: Only pass the domain, not the full URL with https://
-	// as DiscoverSitemaps already adds the https:// prefix
 	sitemaps, err := sitemapCrawler.DiscoverSitemaps(ctx, domain)
 	
 	// Log discovered sitemaps
@@ -681,6 +668,7 @@ func (jm *JobManager) processSitemap(ctx context.Context, jobID, domain string, 
 		}
 		
 		// Get domain ID from the job
+		// QUESTION: Better practice to pass jobID to function?
 		var domainID int
 		err := jm.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
 			return tx.QueryRowContext(ctx, `
@@ -775,6 +763,7 @@ func (jm *JobManager) processSitemap(ctx context.Context, jobID, domain string, 
 			bgCtx := context.Background()
 			
 			// Wait a bit for the homepage task to be processed
+			// QUESTION: Is this delay required?
 			time.Sleep(5 * time.Second)
 			
 			// Get the homepage URL
@@ -806,6 +795,7 @@ func (jm *JobManager) processSitemap(ctx context.Context, jobID, domain string, 
 			}
 			
 			// Find all links within header tags
+			// TODO: Ensure works for buttons and non-"A type" elements
 			headerLinks := []string{}
 			doc.Find("header a[href]").Each(func(i int, s *goquery.Selection) {
 				if href, exists := s.Attr("href"); exists {
@@ -826,6 +816,8 @@ func (jm *JobManager) processSitemap(ctx context.Context, jobID, domain string, 
 			
 			if len(headerLinks) > 0 {
 				// Extract paths from header links
+				// TODO: Reduce priority by 1% by order link is found, 1st is 1.000, 2nd is 0.990, 3rd is 0.980
+				// TODO: Apply this same logic to links found in pages
 				paths := make([]string, 0, len(headerLinks))
 				for _, link := range headerLinks {
 					u, err := url.Parse(link)
@@ -897,6 +889,7 @@ func (jm *JobManager) processSitemap(ctx context.Context, jobID, domain string, 
 	// Start the job if it's in pending state
 	job, err := jm.GetJob(ctx, jobID)
 	if err == nil && job.Status == JobStatusPending {
+		// QUESTION: Is there any harm in starting the job earlier? It could cause a bunch of issues, but we could theoretically start the job after the first 5 pages are added from the sitemap.
 		if err := jm.StartJob(ctx, jobID); err != nil {
 			log.Error().
 				Err(err).
