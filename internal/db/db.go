@@ -110,9 +110,9 @@ func InitFromEnv() (*DB, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to connect to PostgreSQL via DATABASE_URL: %w", err)
 		}
-		client.SetMaxOpenConns(75) //QUESTION: Check if these are being set here and should be using values defined in Main or higher up?
-		client.SetMaxIdleConns(25)
-		client.SetConnMaxLifetime(5 * time.Minute)
+		client.SetMaxOpenConns(75) // QUESTION: Check if these are being set here and should be using values defined in Main or higher up?
+		client.SetMaxIdleConns(25) // QUESTION: Check if these are being set here and should be using values defined in Main or higher up?
+		client.SetConnMaxLifetime(5 * time.Minute) // QUESTION: Check if these are being set here and should be using values defined in Main or higher up?
 		// Verify connection
 		if err := client.Ping(); err != nil {
 			return nil, fmt.Errorf("failed to ping PostgreSQL via DATABASE_URL: %w", err)

@@ -27,7 +27,6 @@ type JobPerformance struct {
 	LastCheck    time.Time // When we last evaluated this job
 }
 
-// WorkerPool manages a pool of workers that process crawl tasks
 type WorkerPool struct {
 	db               *sql.DB
 	dbQueue          *db.DbQueue
@@ -65,7 +64,6 @@ type TaskBatch struct {
 	mu sync.Mutex
 }
 
-// NewWorkerPool creates a new worker pool
 func NewWorkerPool(db *sql.DB, dbQueue *db.DbQueue, crawler *crawler.Crawler, numWorkers int, dbConfig *db.Config) *WorkerPool {
 	// Validate inputs
 	if db == nil {
@@ -101,8 +99,8 @@ func NewWorkerPool(db *sql.DB, dbQueue *db.DbQueue, crawler *crawler.Crawler, nu
 			tasks:     make([]*Task, 0, 50),
 			jobCounts: make(map[string]struct{ completed, failed int }),
 		},
-		batchTimer:      time.NewTicker(10 * time.Second),
-		cleanupInterval: time.Minute, // Run cleanup every minute
+		batchTimer:      time.NewTicker(10 * time.Second), // QUESTION: What does this 10s do? Seems long, but that is based on me not knowing what it does.
+		cleanupInterval: time.Minute, // Run cleanup every minute // QUESTION: Could this be done sooner? Benefit / disadvantage?
 		
 		// Performance scaling
 		jobPerformance: make(map[string]*JobPerformance),
@@ -119,7 +117,6 @@ func NewWorkerPool(db *sql.DB, dbQueue *db.DbQueue, crawler *crawler.Crawler, nu
 	return wp
 }
 
-// Start starts the worker pool
 func (wp *WorkerPool) Start(ctx context.Context) {
 	log.Info().Int("workers", wp.numWorkers).Msg("Starting worker pool")
 
@@ -144,12 +141,10 @@ func (wp *WorkerPool) Start(ctx context.Context) {
 		log.Error().Err(err).Msg("Failed to recover running jobs on startup")
 	}
 
-	// Start monitors
 	wp.StartTaskMonitor(ctx)
 	wp.StartCleanupMonitor(ctx)
 }
 
-// Stop stops the worker pool
 func (wp *WorkerPool) Stop() {
 	wp.stopping.Store(true)
 	log.Debug().Msg("Stopping worker pool")
@@ -163,13 +158,12 @@ func (wp *WorkerPool) WaitForJobs() {
 	wp.activeJobs.Wait()
 }
 
-// AddJob adds a job to be processed by the worker pool
 func (wp *WorkerPool) AddJob(jobID string, options *JobOptions) {
 	wp.jobsMutex.Lock()
 	wp.jobs[jobID] = true
 	wp.jobsMutex.Unlock()
 
-	// Initialize performance tracking for this job
+	// Initialise performance tracking for this job
 	wp.perfMutex.Lock()
 	wp.jobPerformance[jobID] = &JobPerformance{
 		RecentTasks:  make([]int64, 0, 5),
