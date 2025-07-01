@@ -224,7 +224,6 @@ func (wp *WorkerPool) RemoveJob(jobID string) {
 		Msg("Removed job from worker pool")
 }
 
-// worker processes tasks from the database
 func (wp *WorkerPool) worker(ctx context.Context, workerID int) {
 	defer wp.wg.Done()
 
@@ -264,10 +263,7 @@ func (wp *WorkerPool) worker(ctx context.Context, workerID int) {
 						log.Debug().Msg("Waiting for new tasks")
 					}
 					// Exponential backoff with a maximum
-					sleepTime := time.Duration(float64(baseSleep) * math.Pow(1.5, float64(min(consecutiveNoTasks, 10))))
-					if sleepTime > maxSleep {
-						sleepTime = maxSleep
-					}
+					sleepTime := min(time.Duration(float64(baseSleep) * math.Pow(1.5, float64(min(consecutiveNoTasks, 10)))), maxSleep)
 
 					// Wait for either the backoff duration or a notification
 					select {
