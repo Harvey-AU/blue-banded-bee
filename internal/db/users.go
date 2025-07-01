@@ -52,36 +52,6 @@ func (db *DB) GetUser(userID string) (*User, error) {
 	return user, nil
 }
 
-// UpdateUserEmail updates the user's email address
-func (db *DB) UpdateUserEmail(userID, newEmail string) error {
-	query := `
-		UPDATE users 
-		SET email = $1, updated_at = NOW()
-		WHERE id = $2
-	`
-	
-	result, err := db.client.Exec(query, newEmail, userID)
-	if err != nil {
-		return fmt.Errorf("failed to update user email: %w", err)
-	}
-
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("failed to get rows affected: %w", err)
-	}
-
-	if rowsAffected == 0 {
-		return fmt.Errorf("user not found")
-	}
-
-	log.Info().
-		Str("user_id", userID).
-		Str("new_email", newEmail).
-		Msg("Updated user email")
-
-	return nil
-}
-
 // CreateOrganisation creates a new organisation
 func (db *DB) CreateOrganisation(name string) (*Organisation, error) {
 	org := &Organisation{
