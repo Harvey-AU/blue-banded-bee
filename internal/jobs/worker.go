@@ -422,11 +422,6 @@ func (wp *WorkerPool) processNextTask(ctx context.Context) error {
 					wp.evaluateJobPerformance(task.JobID, result.ResponseTime)
 				}
 			}
-			// update job progress
-			if err := wp.dbQueue.UpdateJobProgress(ctx, task.JobID); err != nil {
-				sentry.CaptureException(err)
-				log.Error().Err(err).Str("job_id", task.JobID).Msg("Failed to update job progress via helper")
-			}
 			return nil
 		}
 	}

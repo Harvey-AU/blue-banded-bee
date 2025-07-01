@@ -236,34 +236,6 @@ func (q *DbQueue) EnqueueURLs(ctx context.Context, jobID string, pageIDs []int, 
 	})
 }
 
-
-
-// CompleteTask marks a task as completed
-// This is now a thin wrapper around UpdateTaskStatus for backward compatibility
-func (q *DbQueue) CompleteTask(ctx context.Context, task *Task) error {
-	task.Status = "completed"
-	return q.UpdateTaskStatus(ctx, task)
-}
-
-// FailTask marks a task as failed
-// This is now a thin wrapper around UpdateTaskStatus for backward compatibility
-func (q *DbQueue) FailTask(ctx context.Context, task *Task, err error) error {
-	task.Status = "failed"
-	if err != nil {
-		task.Error = err.Error()
-	}
-	return q.UpdateTaskStatus(ctx, task)
-}
-
-// UpdateJobProgress is now handled automatically by database triggers
-// This function is kept for backward compatibility but does nothing
-func (q *DbQueue) UpdateJobProgress(ctx context.Context, jobID string) error {
-	// Progress is now automatically updated by database triggers
-	// when task status changes, so this function is no longer needed
-	return nil
-}
-
-
 // CleanupStuckJobs finds and fixes jobs that are stuck in pending/running state
 // despite having all their tasks completed
 func (q *DbQueue) CleanupStuckJobs(ctx context.Context) error {
