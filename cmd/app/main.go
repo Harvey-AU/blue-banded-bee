@@ -81,22 +81,22 @@ func main() {
 
 	// Initialise crawler
 	crawlerConfig := crawler.DefaultConfig()
-	cr := crawler.New(crawlerConfig)
+	cr := crawler.New(crawlerConfig) // QUESTION: Should we change cr to crawler for clarity, as others have clearer names.
 
 	// Create database queue for operations
 	dbQueue := db.NewDbQueue(pgDB.GetDB())
 	
 	// Create a worker pool for task processing
-	var jobWorkers int = 5
+	var jobWorkers int = 5 // QUESTION: Set in env or dynamically - consider impact throughout app where worker pool sizing is set.
 	workerPool := jobs.NewWorkerPool(pgDB.GetDB(), dbQueue, cr, jobWorkers, pgDB.GetConfig())
 	
-	// Create job manager first
+	// Create job manager
 	jobsManager := jobs.NewJobManager(pgDB.GetDB(), dbQueue, cr, workerPool)
 	
 	// Set the job manager in the worker pool for duplicate checking
 	workerPool.SetJobManager(jobsManager)
 	
-	// Start the worker pool now that it's fully configured
+	// Start the worker pool
 	workerPool.Start(context.Background())
 	defer workerPool.Stop()
 
