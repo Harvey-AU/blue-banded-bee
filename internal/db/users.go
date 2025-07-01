@@ -165,7 +165,7 @@ func (db *DB) CreateUser(userID, email string, fullName *string, orgName string)
 	}
 
 	// User doesn't exist, create new user and organisation
-	// Start a transaction for atomic operation
+	// Start a transaction for automatic operation
 	tx, err := db.client.Begin()
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to start transaction: %w", err)
