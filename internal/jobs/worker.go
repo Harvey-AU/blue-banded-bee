@@ -174,10 +174,7 @@ func (wp *WorkerPool) AddJob(jobID string, options *JobOptions) {
 
 	// Simple scaling: add 5 workers per job, maximum of 50 total
 	wp.workersMutex.Lock()
-	targetWorkers := wp.currentWorkers + 5
-	if targetWorkers > 50 {
-		targetWorkers = 50
-	}
+	targetWorkers := min(wp.currentWorkers + 5, 50)
 	
 	if targetWorkers > wp.currentWorkers {
 		wp.workersMutex.Unlock()
