@@ -60,6 +60,7 @@ func (h *Handler) AuthRegister(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Default organisation name logic
+	// TODO: Set default organisation to Full Name
 	orgName := "Personal Organisation"
 	if req.OrgName != nil && *req.OrgName != "" {
 		orgName = *req.OrgName
@@ -69,8 +70,9 @@ func (h *Handler) AuthRegister(w http.ResponseWriter, r *http.Request) {
 			domain := emailParts[1]
 			domainName := strings.Split(domain, ".")[0]
 			// Capitalise first letter manually
+			// TODO: Does this create an org with the .com etc? Remove that.
 			if len(domainName) > 0 {
-				orgName = strings.ToUpper(domainName[:1]) + domainName[1:] + " Organisation"
+				orgName = strings.ToUpper(domainName[:1]) + domainName[1:]
 			}
 		}
 	}
