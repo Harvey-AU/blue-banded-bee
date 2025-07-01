@@ -32,6 +32,7 @@ func CreatePageRecords(ctx context.Context, dbQueue QueueProvider, domainID int,
 	paths := make([]string, 0, len(urls))
 
 	// Get domain name from the database
+	// TODO: Pass domain name into function rather than this DB call.
 	var domainName string
 	err := dbQueue.Execute(ctx, func(tx *sql.Tx) error {
 		return tx.QueryRowContext(ctx, `
@@ -49,7 +50,7 @@ func CreatePageRecords(ctx context.Context, dbQueue QueueProvider, domainID int,
 		// Parse URL to extract the path
 		log.Debug().Str("original_url", url).Msg("Processing URL")
 
-		// Use centralized URL utility to extract path
+		// Use centralised URL utility to extract path
 		path := util.ExtractPathFromURL(url)
 
 		// Add paths to our result array
