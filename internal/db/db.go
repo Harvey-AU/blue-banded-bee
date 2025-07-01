@@ -112,7 +112,7 @@ func InitFromEnv() (*DB, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to connect to PostgreSQL via DATABASE_URL: %w", err)
 		}
-		client.SetMaxOpenConns(75)
+		client.SetMaxOpenConns(75) //QUESTION: Check if these are being set here and should be using values defined in Main or higher up?
 		client.SetMaxIdleConns(25)
 		client.SetConnMaxLifetime(5 * time.Minute)
 		// Verify connection
@@ -212,6 +212,7 @@ func setupSchema(db *sql.DB) error {
 	}
 
 	// Create pages lookup table
+	// QUESTION: Why do we have domain_id and ID? wouldn't the domain(path) be unique?
 	_, err = db.Exec(`
 		CREATE TABLE IF NOT EXISTS pages (
 			id SERIAL PRIMARY KEY,
@@ -255,37 +256,6 @@ func setupSchema(db *sql.DB) error {
 		return fmt.Errorf("failed to create jobs table: %w", err)
 	}
 
-	// Add skipped_tasks column if it doesn't exist (for existing databases)
-	_, err = db.Exec(`
-		ALTER TABLE jobs ADD COLUMN IF NOT EXISTS skipped_tasks INTEGER DEFAULT 0
-	`)
-	if err != nil {
-		return fmt.Errorf("failed to add skipped_tasks column: %w", err)
-	}
-
-	// Add user_id and organisation_id columns if they don't exist (for existing databases)
-	_, err = db.Exec(`
-		ALTER TABLE jobs ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES users(id)
-	`)
-	if err != nil {
-		return fmt.Errorf("failed to add user_id column: %w", err)
-	}
-
-	_, err = db.Exec(`
-		ALTER TABLE jobs ADD COLUMN IF NOT EXISTS organisation_id UUID REFERENCES organisations(id)
-	`)
-	if err != nil {
-		return fmt.Errorf("failed to add organisation_id column: %w", err)
-	}
-
-	// Add error_message column if it doesn't exist (for existing databases)
-	_, err = db.Exec(`
-		ALTER TABLE jobs ADD COLUMN IF NOT EXISTS error_message TEXT
-	`)
-	if err != nil {
-		return fmt.Errorf("failed to add error_message column: %w", err)
-	}
-
 	// Create tasks table
 	_, err = db.Exec(`
 		CREATE TABLE IF NOT EXISTS tasks (
@@ -315,56 +285,19 @@ func setupSchema(db *sql.DB) error {
 		return fmt.Errorf("failed to create tasks table: %w", err)
 	}
 
-	// Add cache warming columns for existing databases (backward compatibility)
-	_, err = db.Exec(`
-		ALTER TABLE tasks ADD COLUMN IF NOT EXISTS second_response_time BIGINT
-	`)
-	if err != nil {
-		return fmt.Errorf("failed to add second_response_time column: %w", err)
-	}
-
-	_, err = db.Exec(`
-		ALTER TABLE tasks ADD COLUMN IF NOT EXISTS second_cache_status TEXT
-	`)
-	if err != nil {
-		return fmt.Errorf("failed to add second_cache_status column: %w", err)
-	}
-
-	// Add priority_score column for task prioritization
-	_, err = db.Exec(`
-		ALTER TABLE tasks ADD COLUMN IF NOT EXISTS priority_score NUMERIC(4,3) DEFAULT 0.000
-	`)
-	if err != nil {
-		return fmt.Errorf("failed to add priority_score column: %w", err)
-	}
-
-	// Add a unique constraint to prevent duplicate tasks for same page in a job
-	_, err = db.Exec(`
-		CREATE UNIQUE INDEX IF NOT EXISTS idx_tasks_job_page_unique 
-		ON tasks(job_id, page_id)
-	`)
-	if err != nil {
-		return fmt.Errorf("failed to create unique index on tasks: %w", err)
-	}
-
 	// Create indexes
 	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_tasks_job_id ON tasks(job_id)`)
 	if err != nil {
 		return fmt.Errorf("failed to create task job_id index: %w", err)
 	}
-
 	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status)`)
 	if err != nil {
 		return fmt.Errorf("failed to create task status index: %w", err)
 	}
-
-	// Add PostgreSQL-specific index for task queue
 	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_tasks_status_created ON tasks(status, created_at)`)
 	if err != nil {
 		return fmt.Errorf("failed to create task status/created_at index: %w", err)
 	}
-
-	// Add index for priority-based task queries
 	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_tasks_priority ON tasks(job_id, status, priority_score DESC)`)
 	if err != nil {
 		return fmt.Errorf("failed to create task priority index: %w", err)
@@ -470,6 +403,7 @@ func setupTimestampTriggers(db *sql.DB) error {
 // setupProgressTriggers creates database triggers for automatic progress calculation
 func setupProgressTriggers(db *sql.DB) error {
 	// Function to automatically calculate job progress when tasks change
+	// QUESTION: When a job has 'completed' but has skipped tasks, the % complete should be not 100%, it should be the % that were done. The status should still be completed.
 	_, err := db.Exec(`
 		CREATE OR REPLACE FUNCTION update_job_progress()
 		RETURNS TRIGGER AS $$
@@ -676,6 +610,7 @@ func (db *DB) ResetSchema() error {
 
 
 // Serialize converts data to JSON string representation
+// QUESTION: Should it be, Serialise, to be british English?
 func Serialize(v interface{}) string {
 	data, err := json.Marshal(v)
 	if err != nil {
