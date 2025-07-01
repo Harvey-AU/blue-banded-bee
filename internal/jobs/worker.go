@@ -231,7 +231,7 @@ func (wp *WorkerPool) worker(ctx context.Context, workerID int) {
 
 	// Track consecutive no-task counts for backoff
 	consecutiveNoTasks := 0
-	maxSleep := 30 * time.Second
+	maxSleep := 5 * time.Second // Note: Changed from 30 to 5 seconds, to increase resonsiveness when inactive.
 	baseSleep := 200 * time.Millisecond // Faster processing when active
 
 	for {
