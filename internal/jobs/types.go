@@ -35,6 +35,7 @@ const (
 )
 
 // Job represents a crawling job for a domain
+// CHECK: Do all of these currently get utilised somewhere in the app?
 type Job struct {
 	ID              string    `json:"id"`
 	Domain          string    `json:"domain"`
@@ -79,7 +80,7 @@ type Task struct {
 
 	// Source information
 	SourceType string `json:"source_type"`          // "sitemap", "link", "manual"
-	SourceURL  string `json:"source_url,omitempty"` // URL where this was discovered (for links)
+	SourceURL  string `json:"source_url,omitempty"` // URL where this was discovered (for find_links)
 
 	// Result data
 	StatusCode         int    `json:"status_code,omitempty"`
@@ -93,7 +94,7 @@ type Task struct {
 	PriorityScore float64 `json:"priority_score"`
 
 	// Job configuration that affects processing
-	FindLinks bool `json:"-"` // Not stored in DB, just used during processing
+	FindLinks bool `json:"-"`
 }
 
 // JobOptions defines configuration options for a crawl job
