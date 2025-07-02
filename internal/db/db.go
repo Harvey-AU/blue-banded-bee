@@ -607,12 +607,12 @@ func (db *DB) ResetSchema() error {
 }
 
 
-// Serialize converts data to JSON string representation
-// QUESTION: Should it be, Serialise, to be british English?
-func Serialize(v interface{}) string {
+// Serialise converts data to JSON string representation.
+// It is named with British English spelling for consistency.
+func Serialise(v interface{}) string {
 	data, err := json.Marshal(v)
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to serialize data")
+		log.Error().Err(err).Msg("Failed to serialise data")
 		return "{}"
 	}
 	return string(data)
