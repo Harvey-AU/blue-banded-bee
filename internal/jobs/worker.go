@@ -99,8 +99,8 @@ func NewWorkerPool(db *sql.DB, dbQueue *db.DbQueue, crawler *crawler.Crawler, nu
 			tasks:     make([]*Task, 0, 50),
 			jobCounts: make(map[string]struct{ completed, failed int }),
 		},
-		batchTimer:      time.NewTicker(10 * time.Second), // QUESTION: What does this 10s do? Seems long, but that is based on me not knowing what it does.
-		cleanupInterval: time.Minute, // Run cleanup every minute // QUESTION: Could this be done sooner? Benefit / disadvantage?
+		batchTimer:      time.NewTicker(10 * time.Second),
+		cleanupInterval: time.Minute,
 		
 		// Performance scaling
 		jobPerformance: make(map[string]*JobPerformance),
