@@ -306,7 +306,7 @@ func (q *DbQueue) UpdateTaskStatus(ctx context.Context, task *Task) error {
 				WHERE id = $3
 			`, task.Status, task.StartedAt, task.ID)
 
-		// QUESTION: Should we be passing retries if there were multiple attempts and it completed?
+		// TODO: Pass retries count there were multiple attempts and it completed
 		case "completed":
 			_, err = tx.ExecContext(ctx, `
 				UPDATE tasks 
