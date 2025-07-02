@@ -412,23 +412,21 @@ func (wp *WorkerPool) processNextTask(ctx context.Context) error {
 	return sql.ErrNoRows
 }
 
-// EnqueueURLs adds multiple URLs as tasks for a job
-// Legacy wrapper that delegates to dbQueue.EnqueueURLs
-// TODO: I think we should delete this or edit the comment above if it's not "legacy"
+// EnqueueURLs is a wrapper that ensures all task enqueuing goes through the JobManager.
+// This allows for centralized logic, such as duplicate checking, to be applied.
 func (wp *WorkerPool) EnqueueURLs(ctx context.Context, jobID string, pageIDs []int, urls []string, sourceType string, sourceURL string) error {
 	log.Debug().
 		Str("job_id", jobID).
 		Str("source_type", sourceType).
 		Int("url_count", len(urls)).
-		Msg("EnqueueURLs called")
-	
-	// Check if we have a job manager to use for duplicate checking
-	// If not, fall back to direct dbQueue usage
-	if wp.jobManager != nil {
-		return wp.jobManager.EnqueueJobURLs(ctx, jobID, pageIDs, urls, sourceType, sourceURL)
+		Msg("EnqueueURLs called via WorkerPool, passing to JobManager")
+
+	// The jobManager must be set for the worker pool to function correctly.
+	if wp.jobManager == nil {
+		panic("jobManager is not set on WorkerPool")
 	}
 	
-	return wp.dbQueue.EnqueueURLs(ctx, jobID, pageIDs, urls, sourceType, sourceURL)
+	return wp.jobManager.EnqueueJobURLs(ctx, jobID, pageIDs, urls, sourceType, sourceURL)
 }
 
 // StartTaskMonitor starts a background process that monitors for pending tasks
