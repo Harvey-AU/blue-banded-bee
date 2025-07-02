@@ -141,7 +141,15 @@ func (c *Crawler) WarmURL(ctx context.Context, targetURL string, findLinks bool)
 		}
 
 		// Normalise URL (absolute)
-		u := e.Request.AbsoluteURL(href)
+		var u string
+		if strings.HasPrefix(href, "?") {
+			// It's a query-only link, so resolve it against the base URL without its own query
+			base := e.Request.URL
+			base.RawQuery = ""
+			u = base.String() + href
+		} else {
+			u = e.Request.AbsoluteURL(href)
+		}
 
 		log.Debug().
 			Str("href", href).
