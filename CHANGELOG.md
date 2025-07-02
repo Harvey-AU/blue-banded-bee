@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Multiple version updates may occur on the same date, each with its own version number.
 Each version represents a distinct set of changes, even if released on the same day.
 
+## [0.5.16] – 2025-07-02
+
+### Enhanced
+- **User Registration**: The default organisation name is now set to the user's full name upon registration for a more personalized experience.
+- **Organisation Name Cleanup**: Organisation names derived from email addresses are now cleaned of common TLDs (e.g., `.com`) for better readability.
+
+### Fixed
+- **Database Efficiency**: Removed a redundant database call in the page creation process by passing the domain name as a parameter.
+- **Task Auditing**: Ensured that the `retry_count` for a task is correctly preserved when a task succeeds after one or more retries.
+
 ## [0.5.15] – 2025-07-02
 
 ### Changed
