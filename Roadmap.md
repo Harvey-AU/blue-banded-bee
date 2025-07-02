@@ -296,6 +296,7 @@ Detailed plan available in [docs/organisation-model.md](docs/plans/organisation-
   - [ ] Job-level task prioritisation options
 
 - [ ] **URL Processing Enhancements**
+  - [x] Filter out links that are hidden via inline `style` attributes.
   - [ ] Option to treat query strings as same URL (not sure tihs is required)
   - [ ] Remove anchor links from link discovery
   - [ ] Path inclusion/exclusion rules
