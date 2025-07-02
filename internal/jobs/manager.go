@@ -686,7 +686,7 @@ func (jm *JobManager) processSitemap(ctx context.Context, jobID, domain string, 
 		}
 
 		// Create page records and get their IDs
-		pageIDs, paths, err := db.CreatePageRecords(ctx, jm.dbQueue, domainID, urls)
+		pageIDs, paths, err := db.CreatePageRecords(ctx, jm.dbQueue, domainID, domain, urls)
 		if err != nil {
 			span.SetTag("error", "true")
 			span.SetData("error.message", err.Error())
