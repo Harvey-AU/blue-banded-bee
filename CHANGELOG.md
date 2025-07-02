@@ -8,6 +8,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Multiple version updates may occur on the same date, each with its own version number.
 Each version represents a distinct set of changes, even if released on the same day.
 
+## [0.5.15] – 2025-07-02
+
+### Changed
+- **Codebase Cleanup**: Numerous small changes to improve code clarity, including fixing comment typos, removing unused code, and standardising function names.
+- **Worker Pool Logic**: Simplified worker scaling logic and reduced worker sleep time to improve responsiveness.
+
+### Fixed
+- **Architectural Consistency**: Corrected a flaw where the `WorkerPool` did not correctly use the `JobManager` for enqueueing tasks, ensuring duplicate-checking logic is now properly applied.
+
+### Documentation
+- **Project Management**: Updated `TODO.md` to convert all file references to clickable links and consolidated several in-code `TODO` comments into the main file for better tracking.
+- **AI Collaboration**: Added `gemini.md` to document the best practices and working protocols for AI collaboration on this project.
+- **Language Standardisation**: Renamed `Serialize` function to `Serialise` to maintain British English consistency throughout the codebase.
+
 ## [0.5.14] – 2025-06-26
 
 ### Added
