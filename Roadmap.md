@@ -291,6 +291,8 @@ Detailed plan available in [docs/organisation-model.md](docs/plans/organisation-
 - [x] **Task Prioritisation**
 
   - [x] Prioritisation by page hierarchy and importance - [Implementation Plan](docs/plans/task-prioritisation.md)
+  - [x] Implement link priority ordering for header links (1st: 1.000, 2nd: 0.990, etc.) ([internal/jobs/manager.go:819-820](./internal/jobs/manager.go#L819))
+  - [x] Apply priority ordering logic to all discovered page links ([internal/jobs/manager.go:816](./internal/jobs/manager.go#L816))
   - [ ] Job-level task prioritisation options
 
 - [ ] **URL Processing Enhancements**
@@ -358,6 +360,7 @@ Detailed plan available in [docs/organisation-model.md](docs/plans/organisation-
   - [ ] Move CPU-intensive analytics queries to PostgreSQL functions
   - [ ] Optimise task acquisition with database-side logic
   - [ ] Enhance Row Level Security policies for multi-tenant usage
+  - [ ] Consolidate database connection settings into single configuration location and make them configurable via environment variables ([internal/db/db.go:113-115](./internal/db/db.go#L113))
 - [ ] **File Storage & Edge Functions**
   - [ ] Store crawler logs, sitemap caches, and error reports in Supabase Storage
   - [ ] Create Edge Functions for webhook handling and scheduled tasks
@@ -387,6 +390,8 @@ Detailed plan available in [docs/organisation-model.md](docs/plans/organisation-
   - [ ] Create configuration UI for scheduling options
   - [ ] Implement cron-like scheduler for recurring runs
   - [ ] Automatic cache warming based on Webflow publish events
+- [ ] **Monitoring & Reporting**
+  - [ ] Fix completion percentage to reflect actual completed vs skipped tasks (not always 100%) ([internal/db/db.go:404](./internal/db/db.go#L404))
 
 ## ⚪ Stage 7: Feature Refinement & Launch Preparation
 
@@ -396,6 +401,7 @@ Detailed plan available in [docs/organisation-model.md](docs/plans/organisation-
   - [ ] Test and refine multi-provider account linking
   - [ ] Member invitation system for organisations
 - [ ] **Audit & Security Features**
+  - [ ] Secure admin endpoints properly or remove them in production ([internal/api/admin.go:11,25](./internal/api/admin.go#L11))
   - [ ] Login IP tracking and session limits
   - [ ] Active job limits per organisation
   - [ ] Audit logging for account changes and access history
