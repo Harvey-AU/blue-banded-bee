@@ -12,7 +12,7 @@ Each version represents a distinct set of changes, even if released on the same 
 
 ### Enhanced
 - **User Registration**: The default organisation name is now set to the user's full name upon registration for a more personalized experience.
-- **Organisation Name Cleanup**: Organisation names derived from email addresses are now cleaned of common TLDs (e.g., `.com`) for better readability.
+- **Organisation Name Cleanup**: Organisation names derived from email addresses are now cleaned of common TLDs (e.g., `.com`), ignores generic domains, and doesn't capitalise.
 
 ### Fixed
 - **Database Efficiency**: Removed a redundant database call in the page creation process by passing the domain name as a parameter.
