@@ -1,15 +1,5 @@
 # TODOS
 
-## 🟡 API & User Experience Improvements (Medium Priority)
-
-[x] [internal/api/auth.go:63](./internal/api/auth.go#L63) - Set default organisation to user's Full Name
-[x] [internal/api/auth.go:73](./internal/api/auth.go#L73) - Fix organisation creation to remove .com suffix from names
-
-## 🟢 Code Quality & Architecture
-
-[x] [internal/db/pages.go:35](./internal/db/pages.go#L35) - Pass domain name as parameter instead of making a DB call
-[x] [internal/db/queue.go:309](./internal/db/queue.go#L309) - Investigate if retry_count is already tracked for successful tasks and implement if not
-
 ## Restart job button in dashboard doesn't seem to be working
 
 ## Restart error seen when starting a new job, but then it starts working
