@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Multiple version updates may occur on the same date, each with its own version number.
 Each version represents a distinct set of changes, even if released on the same day.
 
+## [0.5.18] – 2025-07-02
+
+### Enhanced
+- **Crawler Efficiency**: Implemented a comprehensive visibility check to prevent the crawler from processing links that are hidden. The check includes inline styles (`display: none`, `visibility: hidden`), common utility classes (`hide`, `d-none`, `sr-only`, etc.), and attributes like `aria-hidden="true"`, `data-hidden`, and `data-visible="false"`. This significantly reduces the number of unnecessary tasks created.
+
 ## [0.5.17] – 2025-07-02
 
 ### Added
