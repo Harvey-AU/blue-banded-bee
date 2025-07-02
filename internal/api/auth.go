@@ -5,9 +5,14 @@ import (
 	"net/http"
 	"strings"
 
+	emailverifier "github.com/AfterShip/email-verifier"
 	"github.com/Harvey-AU/blue-banded-bee/internal/auth"
 	"github.com/getsentry/sentry-go"
 	"github.com/rs/zerolog/log"
+)
+
+var (
+	verifier = emailverifier.NewVerifier()
 )
 
 // AuthRegisterRequest represents a user registration request
@@ -59,23 +64,33 @@ func (h *Handler) AuthRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Default organisation name logic
-	orgName := "Personal Organisation" // Ultimate fallback
+	orgName := "Personal Organisation"
+
+	// 1. Org name if set
 	if req.OrgName != nil && *req.OrgName != "" {
 		orgName = *req.OrgName
-	} else if req.FullName != nil && *req.FullName != "" {
-		orgName = *req.FullName
-	} else {
-		// Extract domain from email for organisation name
-		if emailParts := strings.Split(req.Email, "@"); len(emailParts) == 2 {
-			domain := emailParts[1]
-			// Remove common TLDs to get a cleaner name
-			domainName := strings.Split(domain, ".")[0]
-			// Capitalise first letter manually
-			if len(domainName) > 0 {
-				orgName = strings.ToUpper(domainName[:1]) + domainName[1:]
+	}
+
+	// 2. Domain name if not generic
+	if orgName == "" {
+		result, err := verifier.Verify(req.Email)
+		if err != nil {
+			log.Warn().Err(err).Msg("Email verifier failed")
+		} else if !result.Free {
+			// Not a free provider, so use the domain name
+			if emailParts := strings.Split(req.Email, "@"); len(emailParts) == 2 {
+				domain := emailParts[1]
+				domainName := strings.Split(domain, ".")[0]
+				if len(domainName) > 0 {
+					orgName = domainName
+				}
 			}
 		}
+	}
+
+	// 3. Person's full name
+	if orgName == "" && req.FullName != nil && *req.FullName != "" {
+		orgName = *req.FullName
 	}
 
 	// Create user with organisation automatically
