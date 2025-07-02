@@ -5,6 +5,8 @@ go 1.23.0
 toolchain go1.24.2
 
 require (
+	github.com/AfterShip/email-verifier v1.4.1
+	github.com/PuerkitoBio/goquery v1.10.3
 	github.com/getsentry/sentry-go v0.32.0
 	github.com/gocolly/colly/v2 v2.2.0
 	github.com/golang-jwt/jwt/v5 v5.2.2
@@ -17,8 +19,6 @@ require (
 )
 
 require (
-	github.com/AfterShip/email-verifier v1.4.1 // indirect
-	github.com/PuerkitoBio/goquery v1.10.3 // indirect
 	github.com/andybalholm/cascadia v1.3.3 // indirect
 	github.com/antchfx/htmlquery v1.3.4 // indirect
 	github.com/antchfx/xmlquery v1.4.4 // indirect
