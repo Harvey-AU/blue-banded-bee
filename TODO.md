@@ -1,5 +1,35 @@
 # TODOS
 
+## 🔴 Security & Authentication (High Priority)
+
+[ ] internal/api/admin.go:11,25 - Secure admin endpoints properly or remove them in production
+
+## 🟡 API & User Experience Improvements (Medium Priority)
+
+[ ] internal/api/auth.go:63 - Set default organisation to user's Full Name
+[ ] internal/api/auth.go:73 - Fix organisation creation to remove .com suffix from names
+
+## 🟡 Performance & Configuration
+
+[ ] internal/db/db.go:113-115 - Consolidate database connection settings into single configuration location and make them configurable via environment variables
+
+## 🟢 Code Quality & Architecture
+
+[ ] internal/jobs/worker.go:417 - Delete or update the comment if this code is not actually "legacy"
+[ ] internal/jobs/manager.go:766 - Remove 5-second delay and goroutine for header link extraction. Move code to run synchronously after EnqueueURLsForJob completes
+[ ] internal/db/pages.go:35 - Pass domain name as parameter instead of making a DB call
+[ ] internal/db/queue.go:309 - Investigate if retry_count is already tracked for successful tasks and implement if not
+
+## 🟢 Feature Enhancements
+
+[ ] internal/jobs/manager.go:798 - Ensure link finding works for buttons and non-"A" elements
+[ ] internal/jobs/manager.go:819-820 - Implement link priority ordering (1st: 1.000, 2nd: 0.990, etc.)
+[ ] internal/db/db.go:404 - Fix completion percentage to reflect actual completed vs skipped tasks (not always 100%)
+
+## 🔵 Trivial
+
+[x] internal/db/db.go:611 - Change "Serialize" to "Serialise" for British English consistency
+
 ## Restart job button in dashboard doesn't seem to be working
 
 ## Restart error seen when starting a new job, but then it starts working

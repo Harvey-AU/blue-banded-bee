@@ -153,7 +153,7 @@ func (jm *JobManager) CreateJob(ctx context.Context, options *JobOptions) (*Job,
 			job.ID, domainID, job.UserID, job.OrganisationID, string(job.Status), job.Progress,
 			job.TotalTasks, job.CompletedTasks, job.FailedTasks, job.SkippedTasks,
 			job.CreatedAt, job.Concurrency, job.FindLinks,
-			db.Serialize(job.IncludePaths), db.Serialize(job.ExcludePaths),
+			db.Serialise(job.IncludePaths), db.Serialise(job.ExcludePaths),
 			job.RequiredWorkers, job.MaxPages,
 			job.FoundTasks, job.SitemapTasks, job.SourceType, job.SourceDetail, job.SourceInfo,
 		)
