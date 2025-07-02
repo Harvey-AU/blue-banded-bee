@@ -15,7 +15,7 @@
 
 ## 🟢 Code Quality & Architecture
 
-[ ] [internal/jobs/worker.go:417](./internal/jobs/worker.go#L417) - Delete or update the comment if this code is not actually "legacy"
+[x] [internal/jobs/worker.go:417](./internal/jobs/worker.go#L417) - Clarified purpose of EnqueueURLs wrapper and removed legacy code paths.
 [x] [internal/jobs/manager.go:766](./internal/jobs/manager.go#L766) - Remove 5-second delay and goroutine for header link extraction. Move code to run synchronously after EnqueueURLsForJob completes
 [ ] [internal/db/pages.go:35](./internal/db/pages.go#L35) - Pass domain name as parameter instead of making a DB call
 [ ] [internal/db/queue.go:309](./internal/db/queue.go#L309) - Investigate if retry_count is already tracked for successful tasks and implement if not
