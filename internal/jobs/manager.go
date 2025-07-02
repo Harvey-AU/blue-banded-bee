@@ -5,8 +5,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"net/http"
-	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -14,17 +12,15 @@ import (
 	"github.com/Harvey-AU/blue-banded-bee/internal/crawler"
 	"github.com/Harvey-AU/blue-banded-bee/internal/db"
 	"github.com/Harvey-AU/blue-banded-bee/internal/util"
-	"github.com/PuerkitoBio/goquery"
 	"github.com/getsentry/sentry-go"
 	"github.com/google/uuid"
-	"github.com/lib/pq"
 	"github.com/rs/zerolog/log"
 )
 
 // DbQueueProvider defines the interface for database operations
 type DbQueueProvider interface {
 	Execute(ctx context.Context, fn func(*sql.Tx) error) error
-	EnqueueURLs(ctx context.Context, jobID string, pageIDs []int, paths []string, sourceType string, sourceURL string) error
+	EnqueueURLs(ctx context.Context, jobID string, pages []db.Page, sourceType string, sourceURL string) error
 	CleanupStuckJobs(ctx context.Context) error
 }
 
@@ -331,58 +327,56 @@ func (jm *JobManager) clearProcessedPages(jobID string) {
 }
 
 // EnqueueJobURLs is a wrapper around dbQueue.EnqueueURLs that adds duplicate detection
-func (jm *JobManager) EnqueueJobURLs(ctx context.Context, jobID string, pageIDs []int, paths []string, sourceType string, sourceURL string) error {
+func (jm *JobManager) EnqueueJobURLs(ctx context.Context, jobID string, pages []db.Page, sourceType string, sourceURL string) error {
 	span := sentry.StartSpan(ctx, "manager.enqueue_job_urls")
 	defer span.Finish()
-	
+
 	span.SetTag("job_id", jobID)
-	span.SetTag("url_count", fmt.Sprintf("%d", len(pageIDs)))
-	
-	if len(pageIDs) == 0 {
+	span.SetTag("url_count", fmt.Sprintf("%d", len(pages)))
+
+	if len(pages) == 0 {
 		return nil
 	}
-	
+
 	// Filter out pages that have already been processed
-	var filteredPageIDs []int
-	var filteredPaths []string
-	
-	for i, pageID := range pageIDs {
-		if !jm.isPageProcessed(jobID, pageID) {
-			filteredPageIDs = append(filteredPageIDs, pageID)
-			filteredPaths = append(filteredPaths, paths[i])
+	var filteredPages []db.Page
+
+	for _, page := range pages {
+		if !jm.isPageProcessed(jobID, page.ID) {
+			filteredPages = append(filteredPages, page)
 			// Don't mark as processed yet - we'll do that after successful enqueue
 		}
 	}
-	
+
 	// If all pages were already processed, just return success
-	if len(filteredPageIDs) == 0 {
+	if len(filteredPages) == 0 {
 		log.Debug().
 			Str("job_id", jobID).
-			Int("skipped_urls", len(pageIDs)).
+			Int("skipped_urls", len(pages)).
 			Msg("All URLs already processed, skipping")
 		return nil
 	}
-	
+
 	log.Debug().
 		Str("job_id", jobID).
-		Int("total_urls", len(pageIDs)).
-		Int("new_urls", len(filteredPageIDs)).
-		Int("skipped_urls", len(pageIDs) - len(filteredPageIDs)).
+		Int("total_urls", len(pages)).
+		Int("new_urls", len(filteredPages)).
+		Int("skipped_urls", len(pages)-len(filteredPages)).
 		Msg("Enqueueing filtered URLs")
-	
+
 	// Use the filtered lists to enqueue only new pages
-	err := jm.dbQueue.EnqueueURLs(ctx, jobID, filteredPageIDs, filteredPaths, sourceType, sourceURL)
-	
+	err := jm.dbQueue.EnqueueURLs(ctx, jobID, filteredPages, sourceType, sourceURL)
+
 	// Only mark pages as processed if the enqueue was successful
 	if err == nil {
 		// If these are found links (not from sitemap), update the found_tasks counter
-		if sourceType != "sitemap" && len(filteredPageIDs) > 0 {
+		if sourceType != "sitemap" && len(filteredPages) > 0 {
 			updateErr := jm.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
 				_, err := tx.ExecContext(ctx, `
 					UPDATE jobs
 					SET found_tasks = found_tasks + $1
 					WHERE id = $2
-				`, len(filteredPageIDs), jobID)
+				`, len(filteredPages), jobID)
 				return err
 			})
 			if updateErr != nil {
@@ -392,19 +386,19 @@ func (jm *JobManager) EnqueueJobURLs(ctx context.Context, jobID string, pageIDs 
 					Msg("Failed to update found task count")
 			}
 		}
-		
+
 		// Mark all successfully enqueued pages as processed
-		for _, pageID := range filteredPageIDs {
-			jm.markPageProcessed(jobID, pageID)
+		for _, page := range filteredPages {
+			jm.markPageProcessed(jobID, page.ID)
 		}
 	} else {
 		log.Error().
 			Err(err).
 			Str("job_id", jobID).
-			Int("url_count", len(filteredPageIDs)).
+			Int("url_count", len(filteredPages)).
 			Msg("Failed to enqueue URLs, not marking pages as processed")
 	}
-	
+
 	return err
 }
 
@@ -686,7 +680,7 @@ func (jm *JobManager) processSitemap(ctx context.Context, jobID, domain string, 
 		}
 
 		// Create page records and get their IDs
-		pageIDs, paths, err := db.CreatePageRecords(ctx, jm.dbQueue, domainID, domain, urls)
+		pageIDs, paths, err := db.CreatePageRecords(ctx, jm.dbQueue.(*db.DbQueue), domainID, domain, urls)
 		if err != nil {
 			span.SetTag("error", "true")
 			span.SetData("error.message", err.Error())
@@ -697,7 +691,24 @@ func (jm *JobManager) processSitemap(ctx context.Context, jobID, domain string, 
 				Msg("Failed to create page records")
 			return
 		}
-		
+
+		// Prepare pages with priorities
+		pagesWithPriority := make([]db.Page, len(pageIDs))
+		for i, pageID := range pageIDs {
+			pagesWithPriority[i] = db.Page{
+				ID:       pageID,
+				Path:     paths[i],
+				Priority: 0.5, // Default sitemap priority
+			}
+			// Set homepage priority to 1.000
+			if paths[i] == "/" {
+				pagesWithPriority[i].Priority = 1.000
+				log.Info().
+					Str("job_id", jobID).
+					Msg("Set homepage priority to 1.000")
+			}
+		}
+
 		// Update sitemap task count in the job
 		err = jm.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
 			_, err := tx.ExecContext(ctx, `
@@ -713,10 +724,10 @@ func (jm *JobManager) processSitemap(ctx context.Context, jobID, domain string, 
 				Str("job_id", jobID).
 				Msg("Failed to update sitemap task count")
 		}
-		
+
 		// Use our wrapper function that checks for duplicates
 		baseURL := fmt.Sprintf("https://%s", domain)
-		if err := jm.EnqueueJobURLs(ctx, jobID, pageIDs, paths, "sitemap", baseURL); err != nil {
+		if err := jm.EnqueueJobURLs(ctx, jobID, pagesWithPriority, "sitemap", baseURL); err != nil {
 			span.SetTag("error", "true")
 			span.SetData("error.message", err.Error())
 			log.Error().
@@ -732,136 +743,7 @@ func (jm *JobManager) processSitemap(ctx context.Context, jobID, domain string, 
 			Str("domain", domain).
 			Int("url_count", len(urls)).
 			Msg("Added sitemap URLs to job queue")
-		
-		// Set homepage priority to 1.000
-		if err := jm.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
-			// Update homepage task priority
-			_, err := tx.ExecContext(ctx, `
-				UPDATE tasks t
-				SET priority_score = 1.000
-				FROM pages p
-				WHERE t.page_id = p.id
-				AND t.job_id = $1
-				AND p.path = '/'
-			`, jobID)
-			return err
-		}); err != nil {
-			log.Error().
-				Err(err).
-				Str("job_id", jobID).
-				Msg("Failed to set homepage priority")
-		} else {
-			log.Info().
-				Str("job_id", jobID).
-				Msg("Set homepage priority to 1.000")
-		}
-		
-		// Crawl homepage to find header links and set their priorities to 1.000
-		go func() {
-			// Create a new context for this background operation
-			bgCtx := context.Background()
-			
-			// Get the homepage URL
-			homepageURL := fmt.Sprintf("https://%s/", domain)
-			
-			// Fetch the homepage HTML
-			client := &http.Client{
-				Timeout: 30 * time.Second,
-			}
-			
-			resp, err := client.Get(homepageURL)
-			if err != nil {
-				log.Error().
-					Err(err).
-					Str("job_id", jobID).
-					Msg("Failed to fetch homepage for header links")
-				return
-			}
-			defer resp.Body.Close()
-			
-			// Parse HTML to find header links
-			doc, err := goquery.NewDocumentFromReader(resp.Body)
-			if err != nil {
-				log.Error().
-					Err(err).
-					Str("job_id", jobID).
-					Msg("Failed to parse homepage HTML")
-				return
-			}
-			
-			// Find all links within header tags
-			// TODO: Change this to use the same functionality as other find_links functionality in project, but just constrained to HEADER.
-			headerLinks := []string{}
-			doc.Find("header a[href]").Each(func(i int, s *goquery.Selection) {
-				if href, exists := s.Attr("href"); exists {
-					// Convert relative URLs to absolute
-					u, err := url.Parse(href)
-					if err == nil {
-						if !u.IsAbs() {
-							base, _ := url.Parse(homepageURL)
-							u = base.ResolveReference(u)
-						}
-						// Only include same-domain links
-						if u.Host == "" || u.Host == domain || strings.HasSuffix(u.Host, "."+domain) {
-							headerLinks = append(headerLinks, u.String())
-						}
-					}
-				}
-			})
-			
-			if len(headerLinks) > 0 {
-				// Extract paths from header links
-				// TODO: Reduce priority by 1% by order link is found, 1st is 1.000, 2nd is 0.990, 3rd is 0.980
-				// TODO: Apply this same logic to links found in pages
-				paths := make([]string, 0, len(headerLinks))
-				for _, link := range headerLinks {
-					u, err := url.Parse(link)
-					if err != nil {
-						continue
-					}
-					path := u.Path
-					if path == "" {
-						path = "/"
-					}
-					paths = append(paths, path)
-				}
-				
-				// Update header link priorities to 1.000 in a single query
-				if err := jm.dbQueue.Execute(bgCtx, func(tx *sql.Tx) error {
-					result, err := tx.ExecContext(bgCtx, `
-						UPDATE tasks t
-						SET priority_score = 1.000
-						FROM pages p
-						WHERE t.page_id = p.id
-						AND t.job_id = $1
-						AND p.path = ANY($2)
-						AND t.priority_score < 1.000
-					`, jobID, pq.Array(paths))
-					
-					if err != nil {
-						return fmt.Errorf("failed to update header link priorities: %w", err)
-					}
-					
-					rowsAffected, _ := result.RowsAffected()
-					log.Info().
-						Str("job_id", jobID).
-						Int("header_link_count", len(paths)).
-						Int64("tasks_updated", rowsAffected).
-						Msg("Updated header link priorities to 1.000")
-					
-					return nil
-				}); err != nil {
-					log.Error().
-						Err(err).
-						Str("job_id", jobID).
-						Msg("Failed to update header link priorities")
-				}
-			} else {
-				log.Info().
-					Str("job_id", jobID).
-					Msg("No header links found on homepage")
-			}
-		}()
+
 	} else {
 		log.Info().
 			Str("job_id", jobID).

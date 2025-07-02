@@ -415,19 +415,19 @@ func (wp *WorkerPool) processNextTask(ctx context.Context) error {
 
 // EnqueueURLs is a wrapper that ensures all task enqueuing goes through the JobManager.
 // This allows for centralised logic, such as duplicate checking, to be applied.
-func (wp *WorkerPool) EnqueueURLs(ctx context.Context, jobID string, pageIDs []int, urls []string, sourceType string, sourceURL string) error {
+func (wp *WorkerPool) EnqueueURLs(ctx context.Context, jobID string, pages []db.Page, sourceType string, sourceURL string) error {
 	log.Debug().
 		Str("job_id", jobID).
 		Str("source_type", sourceType).
-		Int("url_count", len(urls)).
+		Int("url_count", len(pages)).
 		Msg("EnqueueURLs called via WorkerPool, passing to JobManager")
 
 	// The jobManager must be set for the worker pool to function correctly.
 	if wp.jobManager == nil {
 		panic("jobManager is not set on WorkerPool")
 	}
-	
-	return wp.jobManager.EnqueueJobURLs(ctx, jobID, pageIDs, urls, sourceType, sourceURL)
+
+	return wp.jobManager.EnqueueJobURLs(ctx, jobID, pages, sourceType, sourceURL)
 }
 
 // StartTaskMonitor starts a background process that monitors for pending tasks
@@ -921,115 +921,91 @@ func (wp *WorkerPool) processTask(ctx context.Context, task *Task) (*crawler.Cra
 	if task.FindLinks && len(result.Links) > 0 {
 		log.Debug().
 			Str("task_id", task.ID).
-			Int("links_before_filtering", len(result.Links)).
+			Int("total_links_found", len(result.Links["header"])+len(result.Links["footer"])+len(result.Links["body"])).
 			Bool("find_links_enabled", task.FindLinks).
-			Msg("Starting link filtering")
+			Msg("Starting link processing and priority assignment")
 
-		// Filter links based on requirements:
-		// 1. Only same domain/subdomain links (no external domains)
-		var filtered []string
-
-		for _, link := range result.Links {
-			linkURL, err := url.Parse(link)
-			if err != nil {
-				log.Debug().Err(err).Str("link", link).Msg("Failed to parse discovered link URL")
-				continue
-			}
-
-			// Only process links from the same domain or subdomains
-			isSameDomain := isSameOrSubDomain(linkURL.Hostname(), task.DomainName)
-			if !isSameDomain {
-				log.Debug().
-					Str("link", link).
-					Str("link_hostname", linkURL.Hostname()).
-					Str("job_domain", task.DomainName).
-					Msg("Skipping external domain link")
-				continue
-			}
-
-			// Strip anchor fragments before adding (page.html#section1 -> page.html)
-			linkURL.Fragment = ""
-			
-			// Normalise trailing slashes (/events-news/ -> /events-news)
-			if linkURL.Path != "/" && strings.HasSuffix(linkURL.Path, "/") {
-				linkURL.Path = strings.TrimSuffix(linkURL.Path, "/")
-			}
-			
-			cleanLink := linkURL.String()
-			
-			// At this point, it's same domain, so add it (without fragment or trailing slash)
-			filtered = append(filtered, cleanLink)
-			log.Debug().
-				Str("original_link", link).
-				Str("clean_link", cleanLink).
-				Str("link_hostname", linkURL.Hostname()).
-				Str("job_domain", task.DomainName).
-				Msg("Added same-domain link (stripped anchors)")
+		// Get domain ID for this job
+		var domainID int
+		err := wp.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
+			return tx.QueryRowContext(ctx, `
+				SELECT domain_id FROM jobs WHERE id = $1
+			`, task.JobID).Scan(&domainID)
+		})
+		if err != nil {
+			log.Error().
+				Err(err).
+				Str("job_id", task.JobID).
+				Msg("Failed to get domain ID for discovered links")
+			return result, nil
 		}
 
-		log.Debug().
-			Str("task_id", task.ID).
-			Int("links_after_filtering", len(filtered)).
-			Str("domain_name", task.DomainName).
-			Msg("Link filtering completed")
+		isHomepage := task.Path == "/"
 
-		// Enqueue filtered links
-		if len(filtered) > 0 {
-			// Get domain ID for this job
-			var domainID int
-			err := wp.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
-				return tx.QueryRowContext(ctx, `
-					SELECT domain_id FROM jobs WHERE id = $1
-				`, task.JobID).Scan(&domainID)
-			})
-			if err != nil {
-				log.Error().
-					Err(err).
-					Str("job_id", task.JobID).
-					Msg("Failed to get domain ID for discovered links")
-				return result, nil
+		processLinkCategory := func(links []string, priority float64) {
+			if len(links) == 0 {
+				return
 			}
-			
-			// Create page records for discovered links
-			pageIDs, paths, err := db.CreatePageRecords(ctx, wp.dbQueue, domainID, task.DomainName, filtered)
-			if err != nil {
-				log.Error().
-					Err(err).
-					Str("task_id", task.ID).
-					Int("link_count", len(filtered)).
-					Msg("Failed to create page records for links")
-				return result, nil
-			}
-			
-			// Enqueue the filtered links with proper page IDs
-			if err := wp.EnqueueURLs(
-				ctx,
-				task.JobID,
-				pageIDs,
-				paths,
-				"link",     // source_type is "link" for discovered links
-				urlStr,     // source_url is the URL where these links were found
-			); err != nil {
-				log.Error().
-					Err(err).
-					Str("task_id", task.ID).
-					Int("link_count", len(filtered)).
-					Msg("Failed to enqueue discovered links")
-			} else {
-				log.Info().
-					Str("task_id", task.ID).
-					Int("link_count", len(filtered)).
-					Msg("Successfully enqueued discovered links")
-				
-				// Update priorities for the discovered links
-				if err := wp.updateTaskPriorities(ctx, task.JobID, domainID, task.PriorityScore, filtered); err != nil {
-					log.Error().
-						Err(err).
-						Str("task_id", task.ID).
-						Float64("current_priority", task.PriorityScore).
-						Msg("Failed to update task priorities for discovered links")
+
+			// 1. Filter links for same-domain
+			var filtered []string
+			for _, link := range links {
+				linkURL, err := url.Parse(link)
+				if err != nil {
+					continue
+				}
+				if isSameOrSubDomain(linkURL.Hostname(), task.DomainName) {
+					linkURL.Fragment = ""
+					if linkURL.Path != "/" && strings.HasSuffix(linkURL.Path, "/") {
+						linkURL.Path = strings.TrimSuffix(linkURL.Path, "/")
+					}
+					filtered = append(filtered, linkURL.String())
 				}
 			}
+
+			if len(filtered) == 0 {
+				return
+			}
+
+			// 2. Create page records
+			pageIDs, paths, err := db.CreatePageRecords(ctx, wp.dbQueue, domainID, task.DomainName, filtered)
+			if err != nil {
+				log.Error().Err(err).Msg("Failed to create page records for links")
+				return
+			}
+
+			// 3. Create a slice of db.Page for enqueuing
+			pagesToEnqueue := make([]db.Page, len(pageIDs))
+			for i := range pageIDs {
+				pagesToEnqueue[i] = db.Page{
+					ID:   pageIDs[i],
+					Path: paths[i],
+					// Priority will be set by the caller of processLinkCategory
+				}
+			}
+
+			// 4. Enqueue new tasks
+			if err := wp.EnqueueURLs(ctx, task.JobID, pagesToEnqueue, "link", urlStr); err != nil {
+				log.Error().Err(err).Msg("Failed to enqueue discovered links")
+				return // Stop if enqueuing fails
+			}
+
+			// 5. Update priorities for the newly created tasks
+			if err := wp.updateTaskPriorities(ctx, task.JobID, domainID, priority, paths); err != nil {
+				log.Error().Err(err).Msg("Failed to update task priorities for discovered links")
+			}
+		}
+
+		// Apply priorities based on page type and link category
+		if isHomepage {
+			log.Debug().Str("task_id", task.ID).Msg("Processing links from HOMEPAGE")
+			processLinkCategory(result.Links["header"], 1.000)
+			processLinkCategory(result.Links["footer"], 0.990)
+			processLinkCategory(result.Links["body"], task.PriorityScore*0.9) // Children of homepage
+		} else {
+			log.Debug().Str("task_id", task.ID).Msg("Processing links from regular page")
+			// For all other pages, only process body links
+			processLinkCategory(result.Links["body"], task.PriorityScore*0.9) // Children of other pages
 		}
 	}
 
@@ -1102,29 +1078,7 @@ func isSameOrSubDomain(hostname, targetDomain string) bool {
 }
 
 // updateTaskPriorities updates the priority scores for tasks of linked pages
-func (wp *WorkerPool) updateTaskPriorities(ctx context.Context, jobID string, domainID int, currentTaskPriority float64, links []string) error {
-	if len(links) == 0 {
-		return nil
-	}
-
-	// Calculate new priority as 80% of current task priority
-	newPriority := currentTaskPriority * 0.8
-
-	// Extract paths from URLs
-	paths := make([]string, 0, len(links))
-	for _, link := range links {
-		u, err := url.Parse(link)
-		if err != nil {
-			log.Warn().Str("url", link).Err(err).Msg("Failed to parse URL for priority update")
-			continue
-		}
-		path := u.Path
-		if path == "" {
-			path = "/"
-		}
-		paths = append(paths, path)
-	}
-
+func (wp *WorkerPool) updateTaskPriorities(ctx context.Context, jobID string, domainID int, newPriority float64, paths []string) error {
 	if len(paths) == 0 {
 		return nil
 	}
