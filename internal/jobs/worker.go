@@ -318,6 +318,7 @@ func (wp *WorkerPool) processNextTask(ctx context.Context) error {
 				Str("job_id", task.JobID).
 				Int("page_id", task.PageID).
 				Str("path", task.Path).
+				Float64("priority", task.PriorityScore).
 				Msg("Found and claimed pending task")
 
 			// Convert db.Task to jobs.Task for processing
@@ -413,7 +414,7 @@ func (wp *WorkerPool) processNextTask(ctx context.Context) error {
 }
 
 // EnqueueURLs is a wrapper that ensures all task enqueuing goes through the JobManager.
-// This allows for centralized logic, such as duplicate checking, to be applied.
+// This allows for centralised logic, such as duplicate checking, to be applied.
 func (wp *WorkerPool) EnqueueURLs(ctx context.Context, jobID string, pageIDs []int, urls []string, sourceType string, sourceURL string) error {
 	log.Debug().
 		Str("job_id", jobID).
