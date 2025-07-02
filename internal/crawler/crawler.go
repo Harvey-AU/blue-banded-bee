@@ -100,7 +100,11 @@ func (c *Crawler) WarmURL(ctx context.Context, targetURL string, findLinks bool)
 	}
 
 	start := time.Now()
-	res := &CrawlResult{URL: targetURL, Timestamp: start.Unix()}
+	res := &CrawlResult{
+		URL:   targetURL,
+		Timestamp: start.Unix(),
+		Links: make(map[string][]string),
+	}
 
 	log.Debug().
 		Str("url", targetURL).
@@ -109,12 +113,12 @@ func (c *Crawler) WarmURL(ctx context.Context, targetURL string, findLinks bool)
 
 	// Use Colly for everything - single request handles cache warming and link extraction
 	collyClone := c.colly.Clone()
-	
+
 	// Register link extractor on the clone to ensure proper context access
 	log.Debug().
 		Msg("Registering Colly link extractor on clone")
 
-	collyClone.OnHTML("a[href]", func(e *colly.HTMLElement) {
+	collyClone.OnHTML("html", func(e *colly.HTMLElement) {
 		// Check if link extraction is enabled for this request
 		findLinksVal := e.Request.Ctx.GetAny("find_links")
 		if findLinksVal == nil {
@@ -129,58 +133,53 @@ func (c *Crawler) WarmURL(ctx context.Context, targetURL string, findLinks bool)
 			return
 		}
 
-		href := strings.TrimSpace(e.Attr("href"))
-
-		// Check if the element is hidden by an inline style on itself or a parent.
-		if isElementHidden(e.DOM) {
-			log.Debug().
-				Str("href", href).
-				Str("from_url", e.Request.URL.String()).
-				Msg("Skipping link hidden by inline style or class")
-			return // Do not process this link
-		}
-		
-		// Skip empty hrefs and fragments
-		if href == "" || href == "#" {
-			return
-		}
-		
-		// Skip non-navigation links
-		if strings.HasPrefix(href, "javascript:") || strings.HasPrefix(href, "mailto:") {
-			return
-		}
-
-		// Normalise URL (absolute)
-		var u string
-		if strings.HasPrefix(href, "?") {
-			// It's a query-only link, so resolve it against the base URL without its own query
-			base := e.Request.URL
-			base.RawQuery = ""
-			u = base.String() + href
-		} else {
-			u = e.Request.AbsoluteURL(href)
-		}
-
-		log.Debug().
-			Str("href", href).
-			Str("absolute_url", u).
-			Str("from_url", e.Request.URL.String()).
-			Msg("Colly found link")
-
-		// Append to result.Links via context
-		if r, ok := e.Request.Ctx.GetAny("result").(*CrawlResult); ok {
-			r.Links = append(r.Links, u)
-			log.Debug().
-				Str("url", e.Request.URL.String()).
-				Int("links_count", len(r.Links)).
-				Msg("Added link to result")
-		} else {
+		result, ok := e.Request.Ctx.GetAny("result").(*CrawlResult)
+		if !ok {
 			log.Debug().
 				Str("url", e.Request.URL.String()).
 				Msg("No result context - not collecting links")
+			return
 		}
+
+		extractLinks := func(selection *goquery.Selection, category string) {
+			selection.Find("a[href]").Each(func(i int, s *goquery.Selection) {
+				href := strings.TrimSpace(s.AttrOr("href", ""))
+				if isElementHidden(s) || href == "" || href == "#" || strings.HasPrefix(href, "javascript:") || strings.HasPrefix(href, "mailto:") {
+					return
+				}
+
+				var u string
+				if strings.HasPrefix(href, "?") {
+					base := e.Request.URL
+					base.RawQuery = ""
+					u = base.String() + href
+				} else {
+					u = e.Request.AbsoluteURL(href)
+				}
+
+				result.Links[category] = append(result.Links[category], u)
+			})
+		}
+
+		// Extract from header and footer first
+		extractLinks(e.DOM.Find("header"), "header")
+		extractLinks(e.DOM.Find("footer"), "footer")
+
+		// Remove header and footer to get body links
+		e.DOM.Find("header").Remove()
+		e.DOM.Find("footer").Remove()
+
+		// Extract remaining links as "body"
+		extractLinks(e.DOM, "body")
+
+		log.Debug().
+			Str("url", e.Request.URL.String()).
+			Int("header_links", len(result.Links["header"])).
+			Int("footer_links", len(result.Links["footer"])).
+			Int("body_links", len(result.Links["body"])).
+			Msg("Categorized links from page")
 	})
-	
+
 	// Set up timing and result collection
 	collyClone.OnRequest(func(r *colly.Request) {
 		r.Ctx.Put("result", res)

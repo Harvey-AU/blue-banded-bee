@@ -151,8 +151,8 @@ func (q *DbQueue) GetNextTask(ctx context.Context, jobID string) (*Task, error) 
 }
 
 // EnqueueURLs adds multiple URLs as tasks for a job
-func (q *DbQueue) EnqueueURLs(ctx context.Context, jobID string, pageIDs []int, paths []string, sourceType string, sourceURL string) error {
-	if len(pageIDs) == 0 {
+func (q *DbQueue) EnqueueURLs(ctx context.Context, jobID string, pages []Page, sourceType string, sourceURL string) error {
+	if len(pages) == 0 {
 		return nil
 	}
 
@@ -172,8 +172,8 @@ func (q *DbQueue) EnqueueURLs(ctx context.Context, jobID string, pageIDs []int, 
 		// Count how many tasks will be pending vs skipped
 		pendingCount := 0
 		skippedCount := 0
-		for i := range pageIDs {
-			if pageIDs[i] == 0 {
+		for _, page := range pages {
+			if page.ID == 0 {
 				continue
 			}
 			if maxPages == 0 || currentTaskCount+pendingCount < maxPages {
@@ -189,7 +189,7 @@ func (q *DbQueue) EnqueueURLs(ctx context.Context, jobID string, pageIDs []int, 
 			SET total_tasks = total_tasks + $1,
 				skipped_tasks = skipped_tasks + $2
 			WHERE id = $3
-		`, len(pageIDs), skippedCount, jobID)
+		`, len(pages), skippedCount, jobID)
 		if err != nil {
 			return fmt.Errorf("failed to update job total tasks: %w", err)
 		}
@@ -209,8 +209,8 @@ func (q *DbQueue) EnqueueURLs(ctx context.Context, jobID string, pageIDs []int, 
 		// Insert each task with appropriate status
 		now := time.Now()
 		processedCount := 0
-		for i, pageID := range pageIDs {
-			if pageID == 0 {
+		for _, page := range pages {
+			if page.ID == 0 {
 				continue
 			}
 
@@ -225,7 +225,7 @@ func (q *DbQueue) EnqueueURLs(ctx context.Context, jobID string, pageIDs []int, 
 
 			taskID := uuid.New().String()
 			_, err = stmt.ExecContext(ctx,
-				taskID, jobID, pageID, paths[i], status, now, 0, sourceType, sourceURL, 0.000)
+				taskID, jobID, page.ID, page.Path, status, now, 0, sourceType, sourceURL, page.Priority)
 
 			if err != nil {
 				return fmt.Errorf("failed to insert task: %w", err)

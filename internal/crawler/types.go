@@ -12,7 +12,7 @@ type CrawlResult struct {
 	Timestamp           int64    // Unix timestamp of the crawl
 	RetryCount          int      // Number of retries performed
 	SkippedCrawl        bool     // Whether full crawl was skipped due to cache hit
-	Links               []string // Extracted hyperlinks (including PDFs/docs)
+	Links               map[string][]string // Extracted hyperlinks (including PDFs/docs)
 	SecondResponseTime  int64    // Response time of second request in milliseconds (if made)
 	SecondCacheStatus   string   // Cache status of second request (if made)
 }
