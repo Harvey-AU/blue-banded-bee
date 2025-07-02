@@ -990,7 +990,7 @@ func (wp *WorkerPool) processTask(ctx context.Context, task *Task) (*crawler.Cra
 			}
 			
 			// Create page records for discovered links
-			pageIDs, paths, err := db.CreatePageRecords(ctx, wp.dbQueue, domainID, filtered)
+			pageIDs, paths, err := db.CreatePageRecords(ctx, wp.dbQueue, domainID, task.DomainName, filtered)
 			if err != nil {
 				log.Error().
 					Err(err).

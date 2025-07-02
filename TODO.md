@@ -2,13 +2,13 @@
 
 ## 🟡 API & User Experience Improvements (Medium Priority)
 
-[ ] [internal/api/auth.go:63](./internal/api/auth.go#L63) - Set default organisation to user's Full Name
-[ ] [internal/api/auth.go:73](./internal/api/auth.go#L73) - Fix organisation creation to remove .com suffix from names
+[x] [internal/api/auth.go:63](./internal/api/auth.go#L63) - Set default organisation to user's Full Name
+[x] [internal/api/auth.go:73](./internal/api/auth.go#L73) - Fix organisation creation to remove .com suffix from names
 
 ## 🟢 Code Quality & Architecture
 
-[ ] [internal/db/pages.go:35](./internal/db/pages.go#L35) - Pass domain name as parameter instead of making a DB call
-[ ] [internal/db/queue.go:309](./internal/db/queue.go#L309) - Investigate if retry_count is already tracked for successful tasks and implement if not
+[x] [internal/db/pages.go:35](./internal/db/pages.go#L35) - Pass domain name as parameter instead of making a DB call
+[x] [internal/db/queue.go:309](./internal/db/queue.go#L309) - Investigate if retry_count is already tracked for successful tasks and implement if not
 
 ## Restart job button in dashboard doesn't seem to be working
 

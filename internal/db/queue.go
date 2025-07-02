@@ -306,17 +306,17 @@ func (q *DbQueue) UpdateTaskStatus(ctx context.Context, task *Task) error {
 				WHERE id = $3
 			`, task.Status, task.StartedAt, task.ID)
 
-		// TODO: Pass retries count there were multiple attempts and it completed
 		case "completed":
 			_, err = tx.ExecContext(ctx, `
 				UPDATE tasks 
 				SET status = $1, completed_at = $2, status_code = $3, 
 					response_time = $4, cache_status = $5, content_type = $6,
-					second_response_time = $7, second_cache_status = $8
-				WHERE id = $9
+					second_response_time = $7, second_cache_status = $8,
+					retry_count = $9
+				WHERE id = $10
 			`, task.Status, task.CompletedAt, task.StatusCode,
 				task.ResponseTime, task.CacheStatus, task.ContentType,
-				task.SecondResponseTime, task.SecondCacheStatus, task.ID)
+				task.SecondResponseTime, task.SecondCacheStatus, task.RetryCount, task.ID)
 
 		case "failed":
 			_, err = tx.ExecContext(ctx, `
