@@ -17,7 +17,7 @@ type QueueProvider interface {
 
 // CreatePageRecords creates page records for a list of URLs and returns their IDs and paths
 // This function extracts paths from full URLs and creates database records
-func CreatePageRecords(ctx context.Context, dbQueue QueueProvider, domainID int, urls []string) ([]int, []string, error) {
+func CreatePageRecords(ctx context.Context, dbQueue QueueProvider, domainID int, domainName string, urls []string) ([]int, []string, error) {
 	span := sentry.StartSpan(ctx, "db.create_page_records")
 	defer span.Finish()
 
@@ -31,19 +31,7 @@ func CreatePageRecords(ctx context.Context, dbQueue QueueProvider, domainID int,
 	pageIDs := make([]int, 0, len(urls))
 	paths := make([]string, 0, len(urls))
 
-	// Get domain name from the database
-	// TODO: Pass domain name into function rather than this DB call.
-	var domainName string
-	err := dbQueue.Execute(ctx, func(tx *sql.Tx) error {
-		return tx.QueryRowContext(ctx, `
-			SELECT name FROM domains WHERE id = $1
-		`, domainID).Scan(&domainName)
-	})
-	if err != nil {
-		span.SetTag("error", "true")
-		span.SetData("error.message", err.Error())
-		return nil, nil, fmt.Errorf("failed to get domain name: %w", err)
-	}
+	
 
 	// Extract paths from URLs
 	for _, url := range urls {
@@ -59,7 +47,7 @@ func CreatePageRecords(ctx context.Context, dbQueue QueueProvider, domainID int,
 	}
 
 	// Insert pages into database in a transaction
-	err = dbQueue.Execute(ctx, func(tx *sql.Tx) error {
+	err := dbQueue.Execute(ctx, func(tx *sql.Tx) error {
 		// Prepare statement for bulk insertion
 		stmt, err := tx.PrepareContext(ctx, `
 			INSERT INTO pages (domain_id, path)
