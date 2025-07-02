@@ -668,7 +668,6 @@ func (jm *JobManager) processSitemap(ctx context.Context, jobID, domain string, 
 		}
 		
 		// Get domain ID from the job
-		// QUESTION: Better practice to pass jobID to function?
 		var domainID int
 		err := jm.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
 			return tx.QueryRowContext(ctx, `
@@ -762,10 +761,6 @@ func (jm *JobManager) processSitemap(ctx context.Context, jobID, domain string, 
 			// Create a new context for this background operation
 			bgCtx := context.Background()
 			
-			// Wait a bit for the homepage task to be processed
-			// QUESTION: Is this delay required?
-			time.Sleep(5 * time.Second)
-			
 			// Get the homepage URL
 			homepageURL := fmt.Sprintf("https://%s/", domain)
 			
@@ -796,6 +791,7 @@ func (jm *JobManager) processSitemap(ctx context.Context, jobID, domain string, 
 			
 			// Find all links within header tags
 			// TODO: Ensure works for buttons and non-"A type" elements
+			// TODO: Change this to use the same functionality as other find_links functionality in project, but just constrained to HEADER.
 			headerLinks := []string{}
 			doc.Find("header a[href]").Each(func(i int, s *goquery.Selection) {
 				if href, exists := s.Attr("href"); exists {
@@ -889,7 +885,6 @@ func (jm *JobManager) processSitemap(ctx context.Context, jobID, domain string, 
 	// Start the job if it's in pending state
 	job, err := jm.GetJob(ctx, jobID)
 	if err == nil && job.Status == JobStatusPending {
-		// QUESTION: Is there any harm in starting the job earlier? It could cause a bunch of issues, but we could theoretically start the job after the first 5 pages are added from the sitemap.
 		if err := jm.StartJob(ctx, jobID); err != nil {
 			log.Error().
 				Err(err).

@@ -110,9 +110,9 @@ func InitFromEnv() (*DB, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to connect to PostgreSQL via DATABASE_URL: %w", err)
 		}
-		client.SetMaxOpenConns(75) // QUESTION: Check if these are being set here and should be using values defined in Main or higher up?
-		client.SetMaxIdleConns(25) // QUESTION: Check if these are being set here and should be using values defined in Main or higher up?
-		client.SetConnMaxLifetime(5 * time.Minute) // QUESTION: Check if these are being set here and should be using values defined in Main or higher up?
+		client.SetMaxOpenConns(75)
+		client.SetMaxIdleConns(25)
+		client.SetConnMaxLifetime(5 * time.Minute)
 		// Verify connection
 		if err := client.Ping(); err != nil {
 			return nil, fmt.Errorf("failed to ping PostgreSQL via DATABASE_URL: %w", err)
@@ -210,7 +210,6 @@ func setupSchema(db *sql.DB) error {
 	}
 
 	// Create pages lookup table
-	// QUESTION: Why do we have domain_id and ID? wouldn't the domain(path) be unique?
 	_, err = db.Exec(`
 		CREATE TABLE IF NOT EXISTS pages (
 			id SERIAL PRIMARY KEY,
@@ -401,7 +400,6 @@ func setupTimestampTriggers(db *sql.DB) error {
 // setupProgressTriggers creates database triggers for automatic progress calculation
 func setupProgressTriggers(db *sql.DB) error {
 	// Function to automatically calculate job progress when tasks change
-	// QUESTION: When a job has 'completed' but has skipped tasks, the % complete should be not 100%, it should be the % that were done. The status should still be completed.
 	_, err := db.Exec(`
 		CREATE OR REPLACE FUNCTION update_job_progress()
 		RETURNS TRIGGER AS $$
