@@ -8,6 +8,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Multiple version updates may occur on the same date, each with its own version number.
 Each version represents a distinct set of changes, even if released on the same day.
 
+## [0.5.19] – 2025-07-02
+
+### Enhanced
+- **Task Prioritisation**: Refactored job initiation and link discovery for more accurate and efficient priority assignment.
+  - The separate, post-sitemap homepage scan for header/footer links has been removed, eliminating a redundant HTTP request and potential race conditions.
+  - The homepage (`/`) is now assigned a priority of `1.000` directly during sitemap processing.
+  - Link discovery logic is now context-aware:
+    - On the homepage, links in the `<header>` are assigned priority `1.000`, and links in the `<footer>` get `0.990`.
+    - On all other pages, links within `<header>` and `<footer>` are ignored, preventing low-value navigation links from being crawled repeatedly.
+    - Links in the page body inherit their priority from the parent page as before.
+
 ## [0.5.18] – 2025-07-02
 
 ### Enhanced
@@ -945,7 +956,7 @@ Each version represents a distinct set of changes, even if released on the same 
 
 - Updated `docs/architecture/jobs.md` to document new task counters and link-extraction behaviour
 
-## [0.3.2] – 2025-04-21
+## [0.3.2] ��� 2025-04-21
 
 ### Changed
 
