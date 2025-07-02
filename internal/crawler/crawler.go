@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/PuerkitoBio/goquery"
 	"github.com/gocolly/colly/v2"
 	"github.com/rs/zerolog/log"
 )
@@ -129,6 +130,15 @@ func (c *Crawler) WarmURL(ctx context.Context, targetURL string, findLinks bool)
 		}
 
 		href := strings.TrimSpace(e.Attr("href"))
+
+		// Check if the element is hidden by an inline style on itself or a parent.
+		if isElementHidden(e.DOM) {
+			log.Debug().
+				Str("href", href).
+				Str("from_url", e.Request.URL.String()).
+				Msg("Skipping link hidden by inline style or class")
+			return // Do not process this link
+		}
 		
 		// Skip empty hrefs and fragments
 		if href == "" || href == "#" {
@@ -494,5 +504,56 @@ func (c *Crawler) CreateHTTPClient(timeout time.Duration) *http.Client {
 // Config returns the Crawler's configuration.
 func (c *Crawler) Config() *Config {
 	return c.config
+}
+
+// isElementHidden checks if an element is hidden based on common inline styles,
+// accessibility attributes, and conventional CSS classes.
+// This is a best-effort check based on raw HTML attributes, as it does not
+// evaluate external or internal CSS stylesheets.
+func isElementHidden(s *goquery.Selection) bool {
+	// Define the list of common hiding classes
+	hidingClasses := []string{
+		"hide",
+		"hidden",
+		"display-none",
+		"d-none",
+		"invisible",
+		"is-hidden",
+		"sr-only",
+		"visually-hidden",
+	}
+
+	// Loop through the current element and all its parents up to the body
+	for n := s; n.Length() > 0 && !n.Is("body"); n = n.Parent() {
+		// 1. Check for explicit data attributes
+		if _, exists := n.Attr("data-hidden"); exists {
+			return true
+		}
+		if val, exists := n.Attr("data-visible"); exists && val == "false" {
+			return true
+		}
+
+		// 2. Check for aria-hidden="true" attribute
+		if ariaHidden, exists := n.Attr("aria-hidden"); exists && ariaHidden == "true" {
+			return true
+		}
+
+		// 3. Check for inline style attributes
+		if style, exists := n.Attr("style"); exists {
+			if strings.Contains(style, "display: none") || strings.Contains(style, "visibility: hidden") {
+				return true
+			}
+		}
+
+		// 4. Check for common hiding classes
+		for _, class := range hidingClasses {
+			if n.HasClass(class) {
+				return true
+			}
+		}
+	}
+
+	// No hiding attributes or classes were found
+	return false
 }
 
