@@ -790,7 +790,6 @@ func (jm *JobManager) processSitemap(ctx context.Context, jobID, domain string, 
 			}
 			
 			// Find all links within header tags
-			// TODO: Ensure works for buttons and non-"A type" elements
 			// TODO: Change this to use the same functionality as other find_links functionality in project, but just constrained to HEADER.
 			headerLinks := []string{}
 			doc.Find("header a[href]").Each(func(i int, s *goquery.Selection) {
