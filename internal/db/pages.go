@@ -43,10 +43,24 @@ func CreatePageRecords(ctx context.Context, q *DbQueue, domainID int, domain str
 				continue
 			}
 
+			// Check cache first
+			cacheKey := fmt.Sprintf("page:%d:%s", domainID, path)
+			if cachedID, found := q.db.Cache.Get(cacheKey); found {
+				if id, ok := cachedID.(int); ok {
+					pageIDs = append(pageIDs, id)
+					paths = append(paths, path)
+					continue // Skip database query
+				}
+			}
+
 			var pageID int
 			if err := stmt.QueryRowContext(ctx, domainID, path).Scan(&pageID); err != nil {
 				return fmt.Errorf("failed to insert/get page record: %w", err)
 			}
+
+			// Store in cache
+			q.db.Cache.Set(cacheKey, pageID)
+
 			pageIDs = append(pageIDs, pageID)
 			paths = append(paths, path)
 		}
