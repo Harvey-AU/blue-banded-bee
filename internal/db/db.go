@@ -274,6 +274,7 @@ func setupSchema(db *sql.DB) error {
 			content_type TEXT,
 			second_response_time BIGINT,
 			second_cache_status TEXT,
+			cache_check_attempts JSONB,
 			priority_score NUMERIC(4,3) DEFAULT 0.000,
 			FOREIGN KEY (job_id) REFERENCES jobs(id)
 		)

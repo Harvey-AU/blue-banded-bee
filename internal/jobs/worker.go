@@ -3,6 +3,7 @@ package jobs
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"math"
 	"net/url"
@@ -394,6 +395,17 @@ func (wp *WorkerPool) processNextTask(ctx context.Context) error {
 				task.ContentType = result.ContentType
 				task.SecondResponseTime = result.SecondResponseTime
 				task.SecondCacheStatus = result.SecondCacheStatus
+
+				// Marshal the cache check attempts into JSON
+				if result.CacheCheckAttempts != nil {
+					jsonAttempts, err := json.Marshal(result.CacheCheckAttempts)
+					if err != nil {
+						log.Error().Err(err).Str("task_id", task.ID).Msg("Failed to marshal cache check attempts")
+					} else {
+						task.CacheCheckAttempts = jsonAttempts
+					}
+				}
+
 				updErr := wp.dbQueue.UpdateTaskStatus(ctx, task)
 				if updErr != nil {
 					sentry.CaptureException(updErr)

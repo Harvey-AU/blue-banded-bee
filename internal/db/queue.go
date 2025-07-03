@@ -69,7 +69,8 @@ type Task struct {
 	ContentType        string
 	SecondResponseTime int64
 	SecondCacheStatus  string
-	
+	CacheCheckAttempts []byte // Stored as JSONB
+
 	// Priority
 	PriorityScore float64
 }
@@ -312,11 +313,12 @@ func (q *DbQueue) UpdateTaskStatus(ctx context.Context, task *Task) error {
 				SET status = $1, completed_at = $2, status_code = $3, 
 					response_time = $4, cache_status = $5, content_type = $6,
 					second_response_time = $7, second_cache_status = $8,
-					retry_count = $9
-				WHERE id = $10
+					retry_count = $9, cache_check_attempts = $10
+				WHERE id = $11
 			`, task.Status, task.CompletedAt, task.StatusCode,
 				task.ResponseTime, task.CacheStatus, task.ContentType,
-				task.SecondResponseTime, task.SecondCacheStatus, task.RetryCount, task.ID)
+				task.SecondResponseTime, task.SecondCacheStatus, task.RetryCount,
+				task.CacheCheckAttempts, task.ID)
 
 		case "failed":
 			_, err = tx.ExecContext(ctx, `
