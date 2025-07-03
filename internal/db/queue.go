@@ -13,11 +13,11 @@ import (
 
 // DbQueue is a PostgreSQL implementation of a job queue
 type DbQueue struct {
-	db *sql.DB
+	db *DB
 }
 
 // NewDbQueue creates a PostgreSQL job queue
-func NewDbQueue(db *sql.DB) *DbQueue {
+func NewDbQueue(db *DB) *DbQueue {
 	return &DbQueue{
 		db: db,
 	}
@@ -26,7 +26,7 @@ func NewDbQueue(db *sql.DB) *DbQueue {
 // Execute runs a database operation in a transaction
 func (q *DbQueue) Execute(ctx context.Context, fn func(*sql.Tx) error) error {
 	// Begin transaction
-	tx, err := q.db.BeginTx(ctx, nil)
+	tx, err := q.db.client.BeginTx(ctx, nil)
 	if err != nil {
 		sentry.CaptureException(err)
 		return fmt.Errorf("failed to begin transaction: %w", err)
@@ -250,7 +250,7 @@ func (q *DbQueue) CleanupStuckJobs(ctx context.Context) error {
 		JobStatusRunning   = "running"
 	)
 
-	result, err := q.db.ExecContext(ctx, `
+	result, err := q.db.client.ExecContext(ctx, `
 		UPDATE jobs 
 		SET status = $1, 
 			completed_at = COALESCE(completed_at, $2),

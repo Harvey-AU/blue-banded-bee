@@ -84,7 +84,7 @@ func main() {
 	cr := crawler.New(crawlerConfig) // QUESTION: Should we change cr to crawler for clarity, as others have clearer names.
 
 	// Create database queue for operations
-	dbQueue := db.NewDbQueue(pgDB.GetDB())
+	dbQueue := db.NewDbQueue(pgDB)
 	
 	// Create a worker pool for task processing
 	var jobWorkers int = 5 // QUESTION: Set in env or dynamically - consider impact throughout app where worker pool sizing is set.

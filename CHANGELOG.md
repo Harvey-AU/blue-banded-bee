@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Multiple version updates may occur on the same date, each with its own version number.
 Each version represents a distinct set of changes, even if released on the same day.
 
+## [0.5.22] – 2025-07-03
+
+### Enhanced
+- **Database Performance**: Implemented an in-memory cache for page lookups (`pages` table) to significantly reduce redundant "upsert" queries. This dramatically improves performance during the page creation phase of a job by caching results for URLs that are processed multiple times within the same job.
+
 ## [0.5.21] – 2025-07-03
 
 ### Changed

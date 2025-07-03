@@ -7,6 +7,8 @@ import (
 	"os"
 	"time"
 
+	"github.com/Harvey-AU/blue-banded-bee/internal/cache"
+
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/rs/zerolog/log"
 )
@@ -15,6 +17,7 @@ import (
 type DB struct {
 	client *sql.DB
 	config *Config
+	Cache  *cache.InMemoryCache
 }
 
 // GetConfig returns the original DB connection settings
@@ -98,7 +101,10 @@ func New(config *Config) (*DB, error) {
 		return nil, fmt.Errorf("failed to setup schema: %w", err)
 	}
 
-	return &DB{client: client, config: config}, nil
+	// Create the cache
+	dbCache := cache.NewInMemoryCache()
+
+	return &DB{client: client, config: config, Cache: dbCache}, nil
 }
 
 // InitFromEnv creates a PostgreSQL connection using environment variables
@@ -127,7 +133,10 @@ func InitFromEnv() (*DB, error) {
 			DatabaseURL: url,
 		}
 
-		return &DB{client: client, config: config}, nil
+		// Create the cache
+		dbCache := cache.NewInMemoryCache()
+
+		return &DB{client: client, config: config, Cache: dbCache}, nil
 	}
 
 	config := &Config{
