@@ -8,6 +8,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Multiple version updates may occur on the same date, each with its own version number.
 Each version represents a distinct set of changes, even if released on the same day.
 
+## [0.5.20] – 2025-07-03
+
+### Added
+- **Cache Warming Auditing**: Added detailed auditing for the cache warming retry mechanism.
+  - The `tasks` table now includes a `cache_check_attempts` JSONB column to store the results of each `HEAD` request check.
+  - Each attempt logs the cache status and the delay before the check.
+
+### Enhanced
+- **Cache Warming Strategy**: Improved the cache warming retry logic for more robust cache verification.
+  - Increased the maximum number of `HEAD` check retries from 5 to 10.
+  - Implemented a progressive backoff for the delay between checks, starting at 2 seconds and increasing by 1 second for each subsequent attempt.
+
+### Fixed
+- **Database Connection Stability**: Resolved a critical issue causing `driver: bad connection` and `unexpected Parse response` errors when using a connection pooler (like Supabase PgBouncer).
+  - The PostgreSQL connection string now includes `prepare_threshold=0` to disable server-side prepared statements, ensuring compatibility with transaction-based poolers.
+  - Added an automatic schema migration (`ALTER TABLE`) to ensure the `cache_check_attempts` column is added to existing databases.
+
 ## [0.5.19] – 2025-07-02
 
 ### Enhanced
