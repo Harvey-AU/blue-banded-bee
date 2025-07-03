@@ -59,7 +59,7 @@ func main() {
 	crawler := crawler.New(nil)
 
 	// Create database queue for operations
-	dbQueue := db.NewDbQueue(database.GetDB())
+	dbQueue := db.NewDbQueue(database)
 
 	// Create worker pool
 	var jobWorkers int = 3
