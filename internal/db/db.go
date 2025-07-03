@@ -287,17 +287,31 @@ func setupSchema(db *sql.DB) error {
 	if err != nil {
 		return fmt.Errorf("failed to create task job_id index: %w", err)
 	}
-	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status)`)
+
+	// Drop deprecated indexes if they exist
+	_, err = db.Exec(`DROP INDEX IF EXISTS idx_tasks_status`)
 	if err != nil {
-		return fmt.Errorf("failed to create task status index: %w", err)
+		return fmt.Errorf("failed to drop old status index: %w", err)
 	}
-	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_tasks_status_created ON tasks(status, created_at)`)
+	_, err = db.Exec(`DROP INDEX IF EXISTS idx_tasks_status_created`)
 	if err != nil {
-		return fmt.Errorf("failed to create task status/created_at index: %w", err)
+		return fmt.Errorf("failed to drop old status/created_at index: %w", err)
 	}
-	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_tasks_priority ON tasks(job_id, status, priority_score DESC)`)
+	_, err = db.Exec(`DROP INDEX IF EXISTS idx_tasks_priority`)
 	if err != nil {
-		return fmt.Errorf("failed to create task priority index: %w", err)
+		return fmt.Errorf("failed to drop old priority index: %w", err)
+	}
+
+	// Create optimised index for worker task claiming
+	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_tasks_pending_claim_order ON tasks (created_at) WHERE status = 'pending'`)
+	if err != nil {
+		return fmt.Errorf("failed to create optimised pending task index: %w", err)
+	}
+
+	// Index for dashboard/API queries on job status and priority
+	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_tasks_job_status_priority ON tasks(job_id, status, priority_score DESC)`)
+	if err != nil {
+		return fmt.Errorf("failed to create task job/status/priority index: %w", err)
 	}
 
 	// Enable Row-Level Security for all tables
