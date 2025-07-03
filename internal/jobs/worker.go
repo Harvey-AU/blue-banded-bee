@@ -17,7 +17,7 @@ import (
 	"github.com/Harvey-AU/blue-banded-bee/internal/db"
 	"github.com/Harvey-AU/blue-banded-bee/internal/util"
 	"github.com/getsentry/sentry-go"
-	"github.com/lib/pq"
+	"github.com/jackc/pgx/v5"
 	"github.com/rs/zerolog/log"
 )
 
@@ -1105,7 +1105,7 @@ func (wp *WorkerPool) updateTaskPriorities(ctx context.Context, jobID string, do
 		AND p.domain_id = $3
 		AND p.path = ANY($4)
 		AND t.priority_score < $1
-	`, newPriority, jobID, domainID, pq.Array(paths))
+	`, newPriority, jobID, domainID, paths)
 
 	if err != nil {
 		return fmt.Errorf("failed to update task priorities: %w", err)
@@ -1216,61 +1216,53 @@ func isDocumentLink(path string) bool {
 
 
 // listenForNotifications sets up PostgreSQL LISTEN/NOTIFY
-
-
-
 func (wp *WorkerPool) listenForNotifications(ctx context.Context) {
 	defer wp.wg.Done()
 
-	// Define notification handler
-	eventCallback := func(_ *pq.Notification) {
-		// Notify workers of new tasks (non-blocking)
-		select {
-		case wp.notifyCh <- struct{}{}:
-		default:
-			// Channel already has notification pending
-		}
+	// Use pgx to connect for notifications
+	conn, err := pgx.Connect(ctx, wp.dbConfig.ConnectionString())
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to connect for notifications")
+		return
 	}
+	defer conn.Close(ctx)
 
-	// Configure listener with simple error handling
-	listener := pq.NewListener(wp.dbConfig.ConnectionString(),
-		10*time.Second, // Min reconnect interval
-		time.Minute,    // Max reconnect interval
-		func(ev pq.ListenerEventType, err error) {
-			if err != nil {
-				log.Error().Err(err).Msg("Database notification error")
-			}
-		})
-
-	err := listener.Listen("new_tasks")
+	_, err = conn.Exec(ctx, "LISTEN new_tasks")
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to start listening for notifications")
 		return
 	}
 
-	// Ensure listener is closed when we're done
-	defer listener.Close()
-
-ListenLoop:
 	for {
+		notification, err := conn.WaitForNotification(ctx)
+		if err != nil {
+			if ctx.Err() != nil {
+				return // Context cancelled
+			}
+			log.Error().Err(err).Msg("Error waiting for notification, reconnecting...")
+			// Reconnect on error
+			conn.Close(ctx)
+			conn, err = pgx.Connect(ctx, wp.dbConfig.ConnectionString())
+			if err != nil {
+				log.Error().Err(err).Msg("Failed to reconnect for notifications")
+				time.Sleep(5 * time.Second)
+				continue
+			}
+			_, err = conn.Exec(ctx, "LISTEN new_tasks")
+			if err != nil {
+				log.Error().Err(err).Msg("Failed to re-listen for notifications")
+				time.Sleep(5 * time.Second)
+				continue
+			}
+			continue
+		}
+
+		log.Debug().Str("channel", notification.Channel).Msg("Received database notification")
+		// Notify workers of new tasks (non-blocking)
 		select {
-		case <-wp.stopCh:
-			return
-		case <-ctx.Done():
-			return
-		case n := <-listener.Notify:
-			if n == nil {
-				// Connection lost, break inner loop to reconnect
-				log.Warn().Msg("Database connection lost")
-				break ListenLoop
-			}
-			eventCallback(n)
-		case <-time.After(90 * time.Second):
-			// Check connection is alive
-			if err := listener.Ping(); err != nil {
-				log.Error().Err(err).Msg("Database connection lost")
-				break ListenLoop
-			}
+		case wp.notifyCh <- struct{}{}:
+		default:
+			// Channel already has notification pending
 		}
 	}
 }
