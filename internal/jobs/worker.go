@@ -1219,39 +1219,53 @@ func isDocumentLink(path string) bool {
 func (wp *WorkerPool) listenForNotifications(ctx context.Context) {
 	defer wp.wg.Done()
 
-	// Use pgx to connect for notifications
-	conn, err := pgx.Connect(ctx, wp.dbConfig.ConnectionString())
+	var conn *pgx.Conn
+	var err error
+
+	connect := func() (*pgx.Conn, error) {
+		c, err := pgx.Connect(ctx, wp.dbConfig.ConnectionString())
+		if err != nil {
+			return nil, err
+		}
+		_, err = c.Exec(ctx, "LISTEN new_tasks")
+		if err != nil {
+			c.Close(ctx)
+			return nil, err
+		}
+		return c, nil
+	}
+
+	conn, err = connect()
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to connect for notifications")
+		log.Error().Err(err).Msg("Failed to connect for notifications initially")
 		return
 	}
 	defer conn.Close(ctx)
 
-	_, err = conn.Exec(ctx, "LISTEN new_tasks")
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to start listening for notifications")
-		return
-	}
-
 	for {
+		select {
+		case <-wp.stopCh:
+			log.Debug().Msg("Notification listener received stop signal.")
+			return
+		case <-ctx.Done():
+			log.Debug().Msg("Notification listener context cancelled.")
+			return
+		default:
+			// Non-blocking check for stop signal before waiting for notification
+		}
+
 		notification, err := conn.WaitForNotification(ctx)
 		if err != nil {
-			if ctx.Err() != nil {
-				return // Context cancelled
+			if ctx.Err() != nil || wp.stopping.Load() {
+				return // Context cancelled or pool is stopping
 			}
 			log.Error().Err(err).Msg("Error waiting for notification, reconnecting...")
-			// Reconnect on error
 			conn.Close(ctx)
-			conn, err = pgx.Connect(ctx, wp.dbConfig.ConnectionString())
+			time.Sleep(5 * time.Second) // Wait before reconnecting
+
+			conn, err = connect()
 			if err != nil {
 				log.Error().Err(err).Msg("Failed to reconnect for notifications")
-				time.Sleep(5 * time.Second)
-				continue
-			}
-			_, err = conn.Exec(ctx, "LISTEN new_tasks")
-			if err != nil {
-				log.Error().Err(err).Msg("Failed to re-listen for notifications")
-				time.Sleep(5 * time.Second)
 				continue
 			}
 			continue
