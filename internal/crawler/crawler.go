@@ -351,13 +351,22 @@ func (c *Crawler) WarmURL(ctx context.Context, targetURL string, findLinks bool)
 		}
 		
 		// Check cache status with HEAD requests in a loop
-		maxChecks := 5
-		checkDelay := 2000 // 2 seconds between checks
+		maxChecks := 10
+		checkDelay := 2000 // Initial 2 seconds delay
 		cacheHit := false
-		
+
 		for i := 0; i < maxChecks; i++ {
 			// Check cache status with HEAD request
 			cacheStatus, err := c.CheckCacheStatus(ctx, targetURL)
+
+			// Record the attempt
+			attempt := CacheCheckAttempt{
+				Attempt:     i + 1,
+				CacheStatus: cacheStatus,
+				Delay:       checkDelay,
+			}
+			res.CacheCheckAttempts = append(res.CacheCheckAttempts, attempt)
+
 			if err != nil {
 				log.Warn().
 					Err(err).
@@ -370,14 +379,14 @@ func (c *Crawler) WarmURL(ctx context.Context, targetURL string, findLinks bool)
 					Str("cache_status", cacheStatus).
 					Int("check_attempt", i+1).
 					Msg("Cache status check")
-				
+
 				// If cache is now HIT, we can proceed with second request
 				if cacheStatus == "HIT" || cacheStatus == "STALE" || cacheStatus == "REVALIDATED" {
 					cacheHit = true
 					break
 				}
 			}
-			
+
 			// If not the last check, wait before next attempt
 			if i < maxChecks-1 {
 				select {
@@ -387,6 +396,8 @@ func (c *Crawler) WarmURL(ctx context.Context, targetURL string, findLinks bool)
 					log.Debug().Str("url", targetURL).Msg("Cache warming cancelled during check loop")
 					return res, nil
 				}
+				// Increase delay for the next iteration
+				checkDelay += 1000
 			}
 		}
 		

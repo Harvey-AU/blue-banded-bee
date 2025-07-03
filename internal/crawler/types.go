@@ -1,20 +1,28 @@
 package crawler
 
+// CacheCheckAttempt stores the result of a single cache status check.
+type CacheCheckAttempt struct {
+	Attempt     int    `json:"attempt"`
+	CacheStatus string `json:"cache_status"`
+	Delay       int    `json:"delay_ms"`
+}
+
 // CrawlResult represents the result of a URL crawl operation
 type CrawlResult struct {
-	URL                 string   // The URL that was crawled
-	ResponseTime        int64    // Response time in milliseconds
-	StatusCode          int      // HTTP status code
-	Error               string   // Error message if any
-	Warning             string   // Warning message if any
-	CacheStatus         string   // Cache status (e.g., HIT, MISS)
-	ContentType         string   // Content type of the response
-	Timestamp           int64    // Unix timestamp of the crawl
-	RetryCount          int      // Number of retries performed
-	SkippedCrawl        bool     // Whether full crawl was skipped due to cache hit
-	Links               map[string][]string // Extracted hyperlinks (including PDFs/docs)
-	SecondResponseTime  int64    // Response time of second request in milliseconds (if made)
-	SecondCacheStatus   string   // Cache status of second request (if made)
+	URL                 string              `json:"url"`
+	ResponseTime        int64               `json:"response_time"`
+	StatusCode          int                 `json:"status_code"`
+	Error               string              `json:"error,omitempty"`
+	Warning             string              `json:"warning,omitempty"`
+	CacheStatus         string              `json:"cache_status"`
+	ContentType         string              `json:"content_type"`
+	Timestamp           int64               `json:"timestamp"`
+	RetryCount          int                 `json:"retry_count"`
+	SkippedCrawl        bool                `json:"skipped_crawl,omitempty"`
+	Links               map[string][]string `json:"links,omitempty"`
+	SecondResponseTime  int64               `json:"second_response_time,omitempty"`
+	SecondCacheStatus   string              `json:"second_cache_status,omitempty"`
+	CacheCheckAttempts  []CacheCheckAttempt `json:"cache_check_attempts,omitempty"`
 }
 
 // CrawlOptions defines configuration options for a crawl operation
