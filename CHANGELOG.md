@@ -16,6 +16,9 @@ Each version represents a distinct set of changes, even if released on the same 
   - The `prepare_threshold=0` setting is no longer needed and has been removed.
 - **Notification System**: Rewrote the database notification listener (`LISTEN/NOTIFY`) to use `pgx`'s native, more robust implementation, improving real-time worker notifications.
 
+### Fixed
+- **Graceful Shutdown**: Fixed an issue where the new `pgx`-based notification listener would not terminate correctly during a graceful shutdown, preventing the worker pool from stopping cleanly.
+
 ## [0.5.20] – 2025-07-03
 
 ### Added
