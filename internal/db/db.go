@@ -5,11 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"strings"
 	"time"
 
-	_ "github.com/lib/pq"
-
+	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/rs/zerolog/log"
 )
 
@@ -42,18 +40,11 @@ type Config struct {
 func (c *Config) ConnectionString() string {
 	// If we have a DatabaseURL, use it directly
 	if c.DatabaseURL != "" {
-		// Ensure prepare_threshold=0 is set for Supabase compatibility
-		if strings.Contains(c.DatabaseURL, "prepare_threshold") {
-			return c.DatabaseURL
-		}
-		if strings.Contains(c.DatabaseURL, "?") {
-			return c.DatabaseURL + "&prepare_threshold=0"
-		}
-		return c.DatabaseURL + "?prepare_threshold=0"
+		return c.DatabaseURL
 	}
 
 	// Otherwise use the individual components
-	return fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s prepare_threshold=0",
+	return fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
 		c.Host, c.Port, c.User, c.Password, c.Database, c.SSLMode)
 }
 
@@ -87,7 +78,7 @@ func New(config *Config) (*DB, error) {
 		config.MaxLifetime = 30 * time.Minute
 	}
 
-	client, err := sql.Open("postgres", config.ConnectionString())
+	client, err := sql.Open("pgx", config.ConnectionString())
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to PostgreSQL: %w", err)
 	}
@@ -114,16 +105,7 @@ func New(config *Config) (*DB, error) {
 func InitFromEnv() (*DB, error) {
 	// If DATABASE_URL is provided, use it directly
 	if url := os.Getenv("DATABASE_URL"); url != "" {
-		// Ensure prepare_threshold=0 is set for Supabase compatibility
-		if !strings.Contains(url, "prepare_threshold") {
-			if strings.Contains(url, "?") {
-				url += "&prepare_threshold=0"
-			} else {
-				url += "?prepare_threshold=0"
-			}
-		}
-
-		client, err := sql.Open("postgres", url)
+		client, err := sql.Open("pgx", url)
 		if err != nil {
 			return nil, fmt.Errorf("failed to connect to PostgreSQL via DATABASE_URL: %w", err)
 		}
