@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Multiple version updates may occur on the same date, each with its own version number.
 Each version represents a distinct set of changes, even if released on the same day.
 
+## [0.5.21] – 2025-07-03
+
+### Changed
+- **Database Driver**: Switched the PostgreSQL driver from `lib/pq` to the more modern and performant `pgx`.
+  - This resolves underlying issues with connection poolers (like Supabase PgBouncer) without requiring connection string workarounds.
+  - The `prepare_threshold=0` setting is no longer needed and has been removed.
+- **Notification System**: Rewrote the database notification listener (`LISTEN/NOTIFY`) to use `pgx`'s native, more robust implementation, improving real-time worker notifications.
+
 ## [0.5.20] – 2025-07-03
 
 ### Added
