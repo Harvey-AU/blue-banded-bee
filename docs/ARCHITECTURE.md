@@ -312,6 +312,14 @@ Blue Banded Bee uses a template-based approach that allows flexible HTML layouts
 - **Real-time**: Supabase Realtime for live job progress updates
 - **Storage**: Supabase Storage for logs and file assets
 
+### Data Storage & Archiving Strategy
+
+The project employs a two-tier strategy for handling file storage to balance performance, cost, and accessibility.
+
+- **Hot Storage (Supabase Storage)**: Used for recent and frequently accessed files. This includes temporary assets, crawler logs for active jobs, and recent HTML page captures for debugging purposes. Supabase Storage provides fast, instant access suitable for day-to-day operations.
+
+- **Cold Storage (Cloudflare R2)**: Planned for the long-term archival of historical data, primarily HTML page content. As data ages (e.g., older than 30-90 days), an automated Go background job will move it from Supabase Storage to Cloudflare R2. R2 offers significantly lower storage costs with no egress fees, making it ideal for large volumes of data that are accessed infrequently. This approach ensures the main database and hot storage remain lean and performant, while historical data is preserved cost-effectively.
+
 ### Configuration
 - **Environment Variables**: Centralised configuration
 - **Database Migrations**: Schema versioning and updates
