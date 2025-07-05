@@ -2,7 +2,9 @@ package api
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -53,6 +55,19 @@ func (h *Handler) SetupRoutes(mux *http.ServeMux) {
 
 	// Admin endpoints (require special authentication)
 	mux.HandleFunc("/admin/reset-db", h.AdminResetDatabase)
+
+	// Debug endpoints (no auth required)
+	mux.HandleFunc("/debug/fgtrace", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		f, err := os.Open("trace.out")
+		if err != nil {
+			http.Error(w, "could not open trace file", http.StatusInternalServerError)
+			return
+		}
+		defer f.Close()
+		w.Header().Set("Content-Type", "application/octet-stream")
+		w.Header().Set("Content-Disposition", `attachment; filename="trace.out"`)
+		io.Copy(w, f)
+	}))
 
 	// Static files
 	mux.HandleFunc("/test-login.html", h.ServeTestLogin)
