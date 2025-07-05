@@ -108,12 +108,14 @@ func NewWorkerPool(db *sql.DB, dbQueue *db.DbQueue, crawler *crawler.Crawler, nu
 	}
 
 	// Start the batch processor
-	wp.wg.Add(1)
-	go wp.processBatches(context.Background())
+	wp.wg.Go(func() {
+		wp.processBatches(context.Background())
+	})
 
 	// Start the notification listener
-	wp.wg.Add(1)
-	go wp.listenForNotifications(context.Background())
+	wp.wg.Go(func() {
+		wp.listenForNotifications(context.Background())
+	})
 
 	return wp
 }
@@ -121,14 +123,17 @@ func NewWorkerPool(db *sql.DB, dbQueue *db.DbQueue, crawler *crawler.Crawler, nu
 func (wp *WorkerPool) Start(ctx context.Context) {
 	log.Info().Int("workers", wp.numWorkers).Msg("Starting worker pool")
 
-	wp.wg.Add(wp.numWorkers)
 	for i := 0; i < wp.numWorkers; i++ {
-		go wp.worker(ctx, i)
+		i := i
+		wp.wg.Go(func() {
+			wp.worker(ctx, i)
+		})
 	}
 
 	// Start the recovery monitor
-	wp.wg.Add(1)
-	go wp.recoveryMonitor(ctx)
+	wp.wg.Go(func() {
+		wp.recoveryMonitor(ctx)
+	})
 
 	// Run initial cleanup
 	if err := wp.CleanupStuckJobs(ctx); err != nil {
@@ -226,8 +231,6 @@ func (wp *WorkerPool) RemoveJob(jobID string) {
 }
 
 func (wp *WorkerPool) worker(ctx context.Context, workerID int) {
-	defer wp.wg.Done()
-
 	log.Info().Int("worker_id", workerID).Msg("Starting worker")
 
 	// Track consecutive no-task counts for backoff
@@ -741,8 +744,9 @@ func (wp *WorkerPool) scaleWorkers(ctx context.Context, targetWorkers int) {
 	// Start additional workers
 	for i := 0; i < workersToAdd; i++ {
 		workerID := wp.currentWorkers + i
-		wp.wg.Add(1)
-		go wp.worker(ctx, workerID)
+		wp.wg.Go(func() {
+			wp.worker(ctx, workerID)
+		})
 	}
 
 	wp.currentWorkers = targetWorkers
@@ -844,9 +848,7 @@ func (wp *WorkerPool) flushBatches(ctx context.Context) {
 
 // Add new method to start the cleanup monitor
 func (wp *WorkerPool) StartCleanupMonitor(ctx context.Context) {
-	wp.wg.Add(1)
-	go func() {
-		defer wp.wg.Done()
+	wp.wg.Go(func() {
 		ticker := time.NewTicker(wp.cleanupInterval)
 		defer ticker.Stop()
 
@@ -862,7 +864,7 @@ func (wp *WorkerPool) StartCleanupMonitor(ctx context.Context) {
 				}
 			}
 		}
-	}()
+	})
 	log.Info().Msg("Job cleanup monitor started")
 }
 
