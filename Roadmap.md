@@ -419,3 +419,12 @@ Detailed plan available in [docs/organisation-model.md](docs/plans/organisation-
   - [ ] Complete marketplace submission process
   - [ ] Set up support channels and user onboarding
   - [ ] Implement usage analytics and tracking
+
+### 🔴 Data Archiving & Retention
+
+- [ ] **Implement two-tier data storage strategy**
+  - [ ] Use Supabase Storage for "hot" data (recent logs, debug files)
+  - [ ] Implement Cloudflare R2 for "cold" storage of historical HTML page captures
+  - [ ] Create automated Go job to handle data lifecycle (e.g., move files > 30 days to R2)
+  - [ ] Update database to track storage location (hot/cold) for each archived file
+
