@@ -428,3 +428,12 @@ Detailed plan available in [docs/organisation-model.md](docs/plans/organisation-
   - [ ] Create automated Go job to handle data lifecycle (e.g., move files > 30 days to R2)
   - [ ] Update database to track storage location (hot/cold) for each archived file
 
+### 🔴 Content Storage & Change Tracking
+
+- [ ] **Implement Semantic Hashing for change detection** - [Implementation Plan](./docs/plans/content-storage-and-change-tracking.md)
+  - [ ] Add `content_hash` and `html_storage_path` columns to `tasks` table
+  - [ ] Add `latest_content_hash` column to `pages` table
+  - [ ] Implement HTML parsing and canonical content extraction in Go worker
+  - [ ] Store HTML in Supabase Storage only when semantic hash changes
+
+
