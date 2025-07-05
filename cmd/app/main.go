@@ -20,14 +20,16 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"golang.org/x/time/rate"
+	"runtime/trace"
 )
 
 // Config holds the application configuration loaded from environment variables
 type Config struct {
-	Port      string // HTTP port to listen on
-	Env       string // Environment (development/production)
-	SentryDSN string // Sentry DSN for error tracking
-	LogLevel  string // Log level (debug, info, warn, error)
+	Port                   string // HTTP port to listen on
+	Env                    string // Environment (development/production)
+	SentryDSN              string // Sentry DSN for error tracking
+	LogLevel               string // Log level (debug, info, warn, error)
+	FlightRecorderEnabled bool   // Flight recorder for performance debugging
 }
 
 func main() {
@@ -36,10 +38,26 @@ func main() {
 
 	// Load configuration
 	config := &Config{
-		Port:      getEnvWithDefault("PORT", "8080"),
-		Env:       getEnvWithDefault("APP_ENV", "development"),
-		SentryDSN: os.Getenv("SENTRY_DSN"),
-		LogLevel:  getEnvWithDefault("LOG_LEVEL", "info"),
+		Port:                   getEnvWithDefault("PORT", "8080"),
+		Env:                    getEnvWithDefault("APP_ENV", "development"),
+		SentryDSN:              os.Getenv("SENTRY_DSN"),
+		LogLevel:               getEnvWithDefault("LOG_LEVEL", "info"),
+		FlightRecorderEnabled: getEnvWithDefault("FLIGHT_RECORDER_ENABLED", "false") == "true",
+	}
+
+	// Start flight recorder if enabled
+	if config.FlightRecorderEnabled {
+		f, err := os.Create("trace.out")
+		if err != nil {
+			log.Fatal().Err(err).Msg("failed to create trace file")
+		}
+		defer f.Close()
+
+		if err := trace.Start(f); err != nil {
+			log.Fatal().Err(err).Msg("failed to start flight recorder")
+		}
+		defer trace.Stop()
+		log.Info().Msg("Flight recorder enabled, writing to trace.out")
 	}
 
 	setupLogging(config)
