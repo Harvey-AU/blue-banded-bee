@@ -296,8 +296,9 @@ Detailed plan available in [docs/organisation-model.md](docs/plans/organisation-
   - [ ] Job-level task prioritisation options
 
 - [ ] **URL Processing Enhancements**
+
   - [x] Filter out links that are hidden via inline `style` attributes.
-  - [ ] Option to treat query strings as same URL (not sure tihs is required)
+  - [ ] Option to treat query strings as same URL (not sure this is required)
   - [ ] Remove anchor links from link discovery
   - [ ] Path inclusion/exclusion rules
 
@@ -435,5 +436,3 @@ Detailed plan available in [docs/organisation-model.md](docs/plans/organisation-
   - [ ] Add `latest_content_hash` column to `pages` table
   - [ ] Implement HTML parsing and canonical content extraction in Go worker
   - [ ] Store HTML in Supabase Storage only when semantic hash changes
-
-
