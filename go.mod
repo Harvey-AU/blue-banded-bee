@@ -1,8 +1,6 @@
 module github.com/Harvey-AU/blue-banded-bee
 
-go 1.23.0
-
-toolchain go1.24.2
+go 1.25rc1
 
 require (
 	github.com/AfterShip/email-verifier v1.4.1
@@ -15,7 +13,6 @@ require (
 	github.com/joho/godotenv v1.5.1
 	github.com/rs/zerolog v1.34.0
 	golang.org/x/time v0.11.0
-
 )
 
 require (
