@@ -298,9 +298,7 @@ Detailed plan available in [docs/organisation-model.md](docs/plans/organisation-
 - [ ] **URL Processing Enhancements**
 
   - [x] Filter out links that are hidden via inline `style` attributes.
-  - [ ] Option to treat query strings as same URL (not sure this is required)
-  - [ ] Remove anchor links from link discovery
-  - [ ] Path inclusion/exclusion rules
+  - [x] Remove anchor links from link discovery
 
 - [ ] Considering impact of and plan updates [Go v1.25 release](/docs/plans/Go-1.25.md)
 
@@ -399,6 +397,8 @@ Detailed plan available in [docs/organisation-model.md](docs/plans/organisation-
 
 ### 🔴 Security & Compliance
 
+- [ ] **Core app functionality**
+  - [ ] Path inclusion/exclusion rules
 - [ ] **Enhanced Authentication**
   - [ ] Test and refine multi-provider account linking
   - [ ] Member invitation system for organisations
