@@ -436,3 +436,11 @@ Detailed plan available in [docs/organisation-model.md](docs/plans/organisation-
   - [ ] Add `latest_content_hash` column to `pages` table
   - [ ] Implement HTML parsing and canonical content extraction in Go worker
   - [ ] Store HTML in Supabase Storage only when semantic hash changes
+
+### 🔴 Code Quality & Maintenance
+
+- [ ] **Code Quality Improvement** - [Implementation Plan](./docs/plans/code-quality-improvement.md)
+  - [ ] Phase 1: Automated formatting and ineffectual assignments cleanup
+  - [ ] Phase 2: Refactor high-complexity functions (WarmURL, getJobTasks, processSitemap)
+  - [ ] Add golangci-lint to CI/CD pipeline
+  - [ ] Improve Go Report Card score from C to A
