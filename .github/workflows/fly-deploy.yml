@@ -18,9 +18,6 @@ jobs:
         with:
           go-version: "1.25"
 
-      - name: Display Go version
-        run: go version
-
       - name: Run tests and generate coverage report
         run: go test -v -coverprofile=coverage.out ./...
 
