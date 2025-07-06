@@ -8,45 +8,63 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Multiple version updates may occur on the same date, each with its own version number.
 Each version represents a distinct set of changes, even if released on the same day.
 
+## [0.5.24] – 2025-07-06
+
+### Security
+
+- **CSRF Protection**: Implemented global Cross-Site Request Forgery (CSRF) protection by adding Go 1.25's experimental `http.CrossOriginProtection` middleware to all API endpoints. This hardens the application against malicious cross-origin requests that could otherwise perform unauthorised actions on behalf of an authenticated user.
+
 ## [0.5.23] – 2025-07-06
 
+### Added
+
+- **Performance Debugging**: Implemented Go's built-in flight recorder (`runtime/trace`) to allow for in-depth performance analysis of the application in production environments. The trace data is accessible via the `/debug/fgtrace` endpoint.
+
 ### Fixed
+
 - **Flight Recorder**: Corrected the flight recorder's shutdown logic to ensure `trace.Stop()` is called during graceful server shutdown instead of immediately on startup. This allows the recorder to capture the full application lifecycle, making it usable for production performance debugging.
 
 ## [0.5.22] – 2025-07-03
 
 ### Enhanced
+
 - **Database Performance**: Implemented an in-memory cache for page lookups (`pages` table) to significantly reduce redundant "upsert" queries. This dramatically improves performance during the page creation phase of a job by caching results for URLs that are processed multiple times within the same job.
 
 ## [0.5.21] – 2025-07-03
 
 ### Changed
+
 - **Database Driver**: Switched the PostgreSQL driver from `lib/pq` to the more modern and performant `pgx`.
   - This resolves underlying issues with connection poolers (like Supabase PgBouncer) without requiring connection string workarounds.
   - The `prepare_threshold=0` setting is no longer needed and has been removed.
 - **Notification System**: Rewrote the database notification listener (`LISTEN/NOTIFY`) to use `pgx`'s native, more robust implementation, improving real-time worker notifications.
 
 ### Enhanced
+
 - **Database Performance**: Optimised the `tasks` table indexing for faster worker performance.
   - Replaced several general-purpose indexes with a highly specific partial index (`idx_tasks_pending_claim_order`) for the critical task-claiming query.
   - This significantly improves the speed and scalability of task processing by eliminating expensive sorting operations.
 
 ### Fixed
+
 - **Graceful Shutdown**: Fixed an issue where the new `pgx`-based notification listener would not terminate correctly during a graceful shutdown, preventing the worker pool from stopping cleanly.
 
 ## [0.5.20] – 2025-07-03
 
 ### Added
+
 - **Cache Warming Auditing**: Added detailed auditing for the cache warming retry mechanism.
   - The `tasks` table now includes a `cache_check_attempts` JSONB column to store the results of each `HEAD` request check.
   - Each attempt logs the cache status and the delay before the check.
 
 ### Enhanced
+
 - **Cache Warming Strategy**: Improved the cache warming retry logic for more robust cache verification.
   - Increased the maximum number of `HEAD` check retries from 5 to 10.
   - Implemented a progressive backoff for the delay between checks, starting at 2 seconds and increasing by 1 second for each subsequent attempt.
 
 ### Fixed
+
 - **Database Connection Stability**: Resolved a critical issue causing `driver: bad connection` and `unexpected Parse response` errors when using a connection pooler (like Supabase PgBouncer).
   - The PostgreSQL connection string now includes `prepare_threshold=0` to disable server-side prepared statements, ensuring compatibility with transaction-based poolers.
   - Added an automatic schema migration (`ALTER TABLE`) to ensure the `cache_check_attempts` column is added to existing databases.
@@ -54,6 +72,7 @@ Each version represents a distinct set of changes, even if released on the same 
 ## [0.5.19] – 2025-07-02
 
 ### Enhanced
+
 - **Task Prioritisation**: Refactored job initiation and link discovery for more accurate and efficient priority assignment.
   - The separate, post-sitemap homepage scan for header/footer links has been removed, eliminating a redundant HTTP request and potential race conditions.
   - The homepage (`/`) is now assigned a priority of `1.000` directly during sitemap processing.
@@ -65,36 +84,44 @@ Each version represents a distinct set of changes, even if released on the same 
 ## [0.5.18] – 2025-07-02
 
 ### Enhanced
+
 - **Crawler Efficiency**: Implemented a comprehensive visibility check to prevent the crawler from processing links that are hidden. The check includes inline styles (`display: none`, `visibility: hidden`), common utility classes (`hide`, `d-none`, `sr-only`, etc.), and attributes like `aria-hidden="true"`, `data-hidden`, and `data-visible="false"`. This significantly reduces the number of unnecessary tasks created.
 
 ## [0.5.17] – 2025-07-02
 
 ### Added
+
 - **Task Logging**: Included the `priority_score` in the log message when a task is claimed by a worker for improved debugging.
 
 ### Fixed
+
 - **Crawler Stability**: Fixed an infinite loop issue where relative links containing only a query string (e.g., `?page=2`) were repeatedly appended to the current URL instead of replacing the existing query.
 
 ## [0.5.16] – 2025-07-02
 
 ### Enhanced
+
 - **User Registration**: The default organisation name is now set to the user's full name upon registration for a more personalized experience.
 - **Organisation Name Cleanup**: Organisation names derived from email addresses are now cleaned of common TLDs (e.g., `.com`), ignores generic domains, and doesn't capitalise.
 
 ### Fixed
+
 - **Database Efficiency**: Removed a redundant database call in the page creation process by passing the domain name as a parameter.
 - **Task Auditing**: Ensured that the `retry_count` for a task is correctly preserved when a task succeeds after one or more retries.
 
 ## [0.5.15] – 2025-07-02
 
 ### Changed
+
 - **Codebase Cleanup**: Numerous small changes to improve code clarity, including fixing comment typos, removing unused code, and standardising function names.
 - **Worker Pool Logic**: Simplified worker scaling logic and reduced worker sleep time to improve responsiveness.
 
 ### Fixed
+
 - **Architectural Consistency**: Corrected a flaw where the `WorkerPool` did not correctly use the `JobManager` for enqueueing tasks, ensuring duplicate-checking logic is now properly applied.
 
 ### Documentation
+
 - **Project Management**: Updated `TODO.md` to convert all file references to clickable links and consolidated several in-code `TODO` comments into the main file for better tracking.
 - **AI Collaboration**: Added `gemini.md` to document the best practices and working protocols for AI collaboration on this project.
 - **Language Standardisation**: Renamed `Serialize` function to `Serialise` to maintain British English consistency throughout the codebase.

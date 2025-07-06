@@ -183,6 +183,7 @@ func main() {
 	// Add middleware in reverse order (outermost first)
 	handler = api.LoggingMiddleware(handler)
 	handler = api.RequestIDMiddleware(handler)
+	handler = api.CrossOriginProtectionMiddleware(handler)
 	handler = api.CORSMiddleware(handler)
 
 	// Create a new HTTP server
