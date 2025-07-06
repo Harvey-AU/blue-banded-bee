@@ -1,3 +1,9 @@
+[![Fly Deploy](https://github.com/Harvey-AU/blue-banded-bee/actions/workflows/fly-deploy.yml/badge.svg)](https://github.com/Harvey-AU/blue-banded-bee/actions/workflows/fly-deploy.yml)
+[![codecov](https://codecov.io/gh/Harvey-AU/blue-banded-bee/graph/badge.svg?token=YOUR_CODECOV_TOKEN_HERE)](https://codecov.io/gh/Harvey-AU/blue-banded-bee)
+[![Go Report Card](https://goreportcard.com/badge/github.com/Harvey-AU/blue-banded-bee)](https://goreportcard.com/report/github.com/Harvey-AU/blue-banded-bee)
+[![Go Version](https://img.shields.io/badge/go-1.25-blue.svg)](https://golang.org/)
+[![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+
 # Blue Banded Bee 🐝
 
 Automatically warm site caches (especially built for [Webflow](https://www.webflow.com)) after publishing to improve initial page load times. Named after [a special little bee](https://www.aussiebee.com.au/blue-banded-bee-information.html) native to where we live in Castlemaine, Victoria, Australia.
@@ -11,6 +17,9 @@ Automatically warm site caches (especially built for [Webflow](https://www.webfl
 - 🗄️ Persistent storage with PostgreSQL database
 - 🌐 Intelligent sitemap processing and URL discovery
 - 🔄 Automatic link extraction to discover and warm additional pages
+- 🔥 Smart cache warming with automatic re-requests on cache MISS
+- 🥇 Prioritised task processing to crawl important pages first
+- 🔌 Webhook integration for automatic crawling (e.g., on Webflow site publish)
 - 🧩 Clean architecture with proper dependency injection
 - 🔐 Secure authentication via Supabase Auth with JWT
 - 🎨 Template + data binding system for flexible dashboard development
@@ -44,21 +53,19 @@ Current development stage: Stage 4 - Core Authentication & MVP Interface (Comple
 - ✅ Stage 3: PostgreSQL Migration & Performance Optimisation
 - ✅ Stage 4: Core Authentication & MVP Interface
   - ✅ Supabase authentication system implemented
-  - ✅ RESTful API infrastructure complete
-  - ✅ Multi-tenant organisation model
-  - ✅ Template + data binding system complete (v0.5.4)
-  - ✅ Web Components MVP interface complete
-- 🔄 Stage 5: Billing & Subscriptions
-- 🔄 Stage 6: Multi-Interface Expansion & Launch
+  - ✅ Core backend and frontend infrastructure complete
+- 🔄 Stage 5: Subscriptions & Monetisation
+- 🔄 Stage 6: Platform Optimisation & Advanced Features
+- 🔄 Stage 7: Feature Refinement & Launch Preparation
 
 See our [detailed roadmap](./Roadmap.md) for more information.
 
-## Recent Improvements
+## What's New
 
-- **Template + Data Binding System (v0.5.4)**: Complete data binding library with `data-bb-bind`, `data-bb-template`, and `data-bb-form` attributes for flexible dashboard development.
-- **Form Processing**: Real-time validation, authentication integration, and automatic API submission for job creation and profile management.
-- **Authentication Integration**: Conditional rendering with `data-bb-auth` attributes and seamless Supabase Auth integration.
-- **Enhanced Examples**: Complete working examples demonstrating all data binding features with production-ready templates.
+- **Webflow Webhook Integration (v0.5.11)**: Automatically trigger cache warming jobs when a Webflow site is published, ensuring your cache is always fresh.
+- **Advanced Task Prioritisation (v0.5.19)**: Intelligently prioritises URLs, crawling critical homepage and header links first to warm the most important parts of your site immediately.
+- **Enhanced Performance (v0.5.22)**: Switched to the high-performance `pgx` database driver and added in-memory caching for page lookups to dramatically speed up job processing.
+- **Smarter Crawling (v0.5.18)**: The crawler now performs comprehensive visibility checks to avoid processing hidden links, reducing unnecessary work.
 
 ## Tech Stack
 
