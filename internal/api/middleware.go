@@ -120,3 +120,23 @@ func CORSMiddleware(next http.Handler) http.Handler {
 		next.ServeHTTP(w, r)
 	})
 }
+
+// CrossOriginProtectionMiddleware provides protection against CSRF attacks.
+// It is a wrapper around Go's experimental http.CrossOriginProtection.
+func CrossOriginProtectionMiddleware(next http.Handler) http.Handler {
+	// Using nil for the config uses the default protection.
+	// The Handler method returns a handler that serves the given handler
+	// after performing cross-origin request checks.
+	return http.NewCrossOriginProtection().Handler(next)
+}
+
+// SecurityHeadersMiddleware adds security-related headers
+func SecurityHeadersMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("X-Frame-Options", "DENY")
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';")
+		w.Header().Set("Strict-Transport-Security", "max-age=63072000; includeSubDomains")
+		next.ServeHTTP(w, r)
+	})
+}
