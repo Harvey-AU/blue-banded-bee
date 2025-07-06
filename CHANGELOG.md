@@ -10,6 +10,9 @@ Each version represents a distinct set of changes, even if released on the same 
 
 ## [0.5.23] – 2025-07-06
 
+### Added
+- **Performance Debugging**: Implemented Go's built-in flight recorder (`runtime/trace`) to allow for in-depth performance analysis of the application in production environments. The trace data is accessible via the `/debug/fgtrace` endpoint.
+
 ### Fixed
 - **Flight Recorder**: Corrected the flight recorder's shutdown logic to ensure `trace.Stop()` is called during graceful server shutdown instead of immediately on startup. This allows the recorder to capture the full application lifecycle, making it usable for production performance debugging.
 
