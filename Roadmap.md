@@ -439,6 +439,7 @@ Detailed plan available in [docs/organisation-model.md](docs/plans/organisation-
 
 ### 🔴 Code Quality & Maintenance
 
+- [ ] **Increase Test Coverage** - [Implementation Plan](./docs/plans/increase-test-coverage.md)
 - [ ] **Code Quality Improvement** - [Implementation Plan](./docs/plans/code-quality-improvement.md)
   - [ ] Phase 1: Automated formatting and ineffectual assignments cleanup
   - [ ] Phase 2: Refactor high-complexity functions (WarmURL, getJobTasks, processSitemap)

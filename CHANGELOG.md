@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Multiple version updates may occur on the same date, each with its own version number.
 Each version represents a distinct set of changes, even if released on the same day.
 
+## [0.5.25] – 2025-07-06
+
+### Github action updates
+
+- **Codecov**: Implemented integration to report on testing coverage, indicated in badge in README
+- **Go Report**: Added code quality reporting into README
+
 ## [0.5.24] – 2025-07-06
 
 ### Security
