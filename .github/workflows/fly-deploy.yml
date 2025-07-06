@@ -13,10 +13,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: "1.25.0-rc1" # Update to the desired Go version
+      - name: Install Go 1.25rc1
+        run: |
+          wget https://go.dev/dl/go1.25rc1.linux-amd64.tar.gz
+          sudo rm -rf /usr/local/go && sudo tar -C /usr/local -xzf go1.25rc1.linux-amd64.tar.gz
+          echo "/usr/local/go/bin" >> $GITHUB_PATH
+        shell: bash
+
+      - name: Check Go version
+        run: go version # Update to the desired Go version
 
       - name: Run tests and generate coverage report
         run: go test -v -coverprofile=coverage.out ./...
