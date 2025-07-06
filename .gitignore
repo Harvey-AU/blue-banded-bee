@@ -27,7 +27,10 @@ Thumbs.db
 logs/
 
 # Testing
-coverage/
+coverage.out
+
+# Performance traces
+trace.out
 
 # Web Components - Node.js build dependencies
 web/node_modules/
