@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Multiple version updates may occur on the same date, each with its own version number.
 Each version represents a distinct set of changes, even if released on the same day.
 
+## [0.5.23] – 2025-07-06
+
+### Fixed
+- **Flight Recorder**: Corrected the flight recorder's shutdown logic to ensure `trace.Stop()` is called during graceful server shutdown instead of immediately on startup. This allows the recorder to capture the full application lifecycle, making it usable for production performance debugging.
+
 ## [0.5.22] – 2025-07-03
 
 ### Enhanced

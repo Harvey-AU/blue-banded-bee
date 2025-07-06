@@ -63,7 +63,7 @@ New experimental GC optimized for programs creating many small objects, with exp
 
 **Action**: Test with `GOEXPERIMENT=greenteagc` in development environment to measure performance impact.
 
-#### 5. Flight Recording
+#### 5. Flight Recording [DONE]
 
 **Impact: ⭐⭐⭐**
 
