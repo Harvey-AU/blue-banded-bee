@@ -51,13 +51,18 @@ func main() {
 		if err != nil {
 			log.Fatal().Err(err).Msg("failed to create trace file")
 		}
-		defer f.Close()
 
 		if err := trace.Start(f); err != nil {
 			log.Fatal().Err(err).Msg("failed to start flight recorder")
 		}
-		defer trace.Stop()
 		log.Info().Msg("Flight recorder enabled, writing to trace.out")
+
+		// Defer closing the trace and the file to the shutdown sequence
+		defer func() {
+			trace.Stop()
+			f.Close()
+			log.Info().Msg("Flight recorder stopped and trace file closed.")
+		}()
 	}
 
 	setupLogging(config)
