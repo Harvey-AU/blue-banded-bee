@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Multiple version updates may occur on the same date, each with its own version number.
 Each version represents a distinct set of changes, even if released on the same day.
 
+## [0.5.26] – 2025-07-07
+
+### Enhanced
+
+- **Crawler Efficiency**: Implemented an in-memory cache for the HTTP client used by the crawler. This significantly reduces bandwidth and speeds up crawling by preventing the repeated download of assets (like JavaScript and CSS) within the same crawl job.
+
 ## [0.5.25] – 2025-07-06
 
 ### Github action updates
