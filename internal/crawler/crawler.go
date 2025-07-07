@@ -23,6 +23,21 @@ type Crawler struct {
 	id     string // Add an ID field to identify each crawler instance
 }
 
+// A custom http.RoundTripper to inject httptrace from context
+type contextTracingTransport struct {
+	transport http.RoundTripper
+}
+
+// RoundTrip implements the http.RoundTripper interface.
+func (t *contextTracingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	// Check if the request's context has a trace
+	if trace, ok := req.Context().Value("trace").(*httptrace.ClientTrace); ok {
+		// Add the trace to the request's context
+		req = req.WithContext(httptrace.WithClientTrace(req.Context(), trace))
+	}
+	return t.transport.RoundTrip(req)
+}
+
 // New creates a new Crawler instance with the given configuration and optional ID
 // If config is nil, default configuration is used
 func New(config *Config, id ...string) *Crawler {
@@ -55,7 +70,7 @@ func New(config *Config, id ...string) *Crawler {
 
 	// Set up a caching transport
 	cacheTransport := httpcache.NewMemoryCacheTransport()
-	cacheTransport.Transport = &http.Transport{
+	baseTransport := &http.Transport{
 		MaxIdleConnsPerHost: 25,
 		MaxConnsPerHost:     50,
 		IdleConnTimeout:     120 * time.Second,
@@ -63,6 +78,10 @@ func New(config *Config, id ...string) *Crawler {
 		DisableCompression:  true,
 		ForceAttemptHTTP2:   true,
 	}
+
+	// Wrap the base transport with our custom tracing transport
+	tracingTransport := &contextTracingTransport{transport: baseTransport}
+	cacheTransport.Transport = tracingTransport
 
 	// Set HTTP client with caching transport and proper timeout
 	httpClient := &http.Client{
