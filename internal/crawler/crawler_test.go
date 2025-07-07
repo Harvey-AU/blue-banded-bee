@@ -76,6 +76,41 @@ func TestPerformanceMetrics(t *testing.T) {
 	}
 }
 
+func TestPerformanceMetricsWithRealURL(t *testing.T) {
+	// Skip in CI or if no internet connection
+	if testing.Short() {
+		t.Skip("Skipping test that requires internet connection")
+	}
+
+	// Use a real HTTPS URL to test DNS, TCP, and TLS metrics
+	crawler := New(nil)
+	result, err := crawler.WarmURL(context.Background(), "https://httpbin.org/status/200", false)
+	if err != nil {
+		t.Fatalf("Expected no error, got %v", err)
+	}
+
+	// Log all performance metrics
+	t.Logf("Performance Metrics for HTTPS request:")
+	t.Logf("  DNS Lookup: %dms", result.Performance.DNSLookupTime)
+	t.Logf("  TCP Connection: %dms", result.Performance.TCPConnectionTime)
+	t.Logf("  TLS Handshake: %dms", result.Performance.TLSHandshakeTime)
+	t.Logf("  TTFB: %dms", result.Performance.TTFB)
+	t.Logf("  Content Transfer: %dms", result.Performance.ContentTransferTime)
+	t.Logf("  Total Response Time: %dms", result.ResponseTime)
+
+	// For a real HTTPS request, we should capture at least some of these
+	if result.Performance.DNSLookupTime == 0 && 
+	   result.Performance.TCPConnectionTime == 0 && 
+	   result.Performance.TLSHandshakeTime == 0 {
+		t.Log("Warning: No connection metrics captured - connection might be reused")
+	}
+
+	// TTFB should always be captured
+	if result.Performance.TTFB == 0 {
+		t.Error("TTFB should be greater than 0 for real request")
+	}
+}
+
 func TestWarmURLError(t *testing.T) {
 	crawler := New(nil)
 	// Use a malformed URL instead
