@@ -2,8 +2,10 @@ package crawler
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"net/http"
+	"net/http/httptrace"
 	"net/url"
 	"strings"
 	"time"
@@ -106,9 +108,9 @@ func (c *Crawler) WarmURL(ctx context.Context, targetURL string, findLinks bool)
 
 	start := time.Now()
 	res := &CrawlResult{
-		URL:   targetURL,
+		URL:       targetURL,
 		Timestamp: start.Unix(),
-		Links: make(map[string][]string),
+		Links:     make(map[string][]string),
 	}
 
 	log.Debug().
@@ -187,28 +189,41 @@ func (c *Crawler) WarmURL(ctx context.Context, targetURL string, findLinks bool)
 
 	// Set up timing and result collection
 	collyClone.OnRequest(func(r *colly.Request) {
+		trace, performanceMetrics := createHTTPTrace()
+		r.Ctx.Put("trace", trace)
+		r.Ctx.Put("performance", performanceMetrics)
 		r.Ctx.Put("result", res)
 		r.Ctx.Put("start_time", start)
 		r.Ctx.Put("find_links", findLinks)
 	})
-	
+
 	// Handle response - collect cache headers, status, timing
 	collyClone.OnResponse(func(r *colly.Response) {
 		startTime := r.Ctx.GetAny("start_time").(time.Time)
 		result := r.Ctx.GetAny("result").(*CrawlResult)
-		
+		performanceMetrics := r.Ctx.GetAny("performance").(*PerformanceMetrics)
+
+		// Finalize performance metrics
+		if gotFirstByteTime, ok := r.Ctx.GetAny("got_first_byte_time").(time.Time); ok {
+			performanceMetrics.ContentTransferTime = time.Since(gotFirstByteTime).Milliseconds()
+		}
+		result.Performance = *performanceMetrics
+
 		// Calculate response time
 		result.ResponseTime = time.Since(startTime).Milliseconds()
 		result.StatusCode = r.StatusCode
 		result.ContentType = r.Headers.Get("Content-Type")
-		
+		result.ContentLength = int64(len(r.Body))
+		result.Headers = r.Headers.Clone()
+		result.RedirectURL = r.Request.URL.String()
+
 		// Log comprehensive Cloudflare headers for analysis
 		cfCacheStatus := r.Headers.Get("CF-Cache-Status")
 		cfRay := r.Headers.Get("CF-Ray")
 		cfDatacenter := r.Headers.Get("CF-IPCountry")
 		cfConnectingIP := r.Headers.Get("CF-Connecting-IP")
 		cfVisitor := r.Headers.Get("CF-Visitor")
-		
+
 		log.Debug().
 			Str("url", r.Request.URL.String()).
 			Str("cf_cache_status", cfCacheStatus).
@@ -218,7 +233,7 @@ func (c *Crawler) WarmURL(ctx context.Context, targetURL string, findLinks bool)
 			Str("cf_visitor", cfVisitor).
 			Int64("response_time_ms", result.ResponseTime).
 			Msg("Cloudflare headers analysis")
-		
+
 		// Check for cache status headers from different CDNs
 		// Cloudflare
 		if cacheStatus := r.Headers.Get("CF-Cache-Status"); cacheStatus != "" {
@@ -248,34 +263,34 @@ func (c *Crawler) WarmURL(ctx context.Context, targetURL string, findLinks bool)
 				result.CacheStatus = "MISS" // Single ID indicates a cache miss
 			}
 		}
-		
+
 		// Set error for non-2xx status codes (to match test expectations)
 		if r.StatusCode < 200 || r.StatusCode >= 300 {
 			result.Error = fmt.Sprintf("non-success status code: %d", r.StatusCode)
 		}
 	})
-	
+
 	// Handle errors
 	collyClone.OnError(func(r *colly.Response, err error) {
 		result := r.Ctx.GetAny("result").(*CrawlResult)
 		result.Error = err.Error()
-		
+
 		if r != nil {
 			startTime := r.Ctx.GetAny("start_time").(time.Time)
 			result.ResponseTime = time.Since(startTime).Milliseconds()
 			result.StatusCode = r.StatusCode
 		}
-		
+
 		log.Error().
 			Err(err).
 			Str("url", targetURL).
 			Dur("duration_ms", time.Duration(result.ResponseTime)*time.Millisecond).
 			Msg("URL warming failed")
 	})
-	
+
 	// Set up context cancellation handling
 	done := make(chan error, 1)
-	
+
 	// Visit the URL with Colly in a goroutine to support context cancellation
 	go func() {
 		visitErr := collyClone.Visit(targetURL)
@@ -287,7 +302,7 @@ func (c *Crawler) WarmURL(ctx context.Context, targetURL string, findLinks bool)
 		collyClone.Wait()
 		done <- nil
 	}()
-	
+
 	// Wait for either completion or context cancellation
 	select {
 	case err = <-done:
@@ -337,14 +352,14 @@ func (c *Crawler) WarmURL(ctx context.Context, targetURL string, findLinks bool)
 		if delayMs > 30000 {
 			delayMs = 30000 // Maximum 30 seconds
 		}
-		
+
 		log.Debug().
 			Str("url", targetURL).
 			Str("cache_status", res.CacheStatus).
 			Int64("initial_response_time", res.ResponseTime).
 			Int("calculated_delay_ms", delayMs).
 			Msg("Cache MISS detected, using dynamic delay based on initial response time")
-		
+
 		// Wait for initial delay to allow CDN to process and cache
 		select {
 		case <-time.After(time.Duration(delayMs) * time.Millisecond):
@@ -354,7 +369,7 @@ func (c *Crawler) WarmURL(ctx context.Context, targetURL string, findLinks bool)
 			log.Debug().Str("url", targetURL).Msg("Cache warming cancelled during initial delay")
 			return res, nil // First request was successful, return that
 		}
-		
+
 		// Check cache status with HEAD requests in a loop
 		maxChecks := 10
 		checkDelay := 2000 // Initial 2 seconds delay
@@ -405,7 +420,7 @@ func (c *Crawler) WarmURL(ctx context.Context, targetURL string, findLinks bool)
 				checkDelay += 1000
 			}
 		}
-		
+
 		// Log whether cache became available
 		if cacheHit {
 			log.Debug().
@@ -417,7 +432,7 @@ func (c *Crawler) WarmURL(ctx context.Context, targetURL string, findLinks bool)
 				Int("max_checks", maxChecks).
 				Msg("Cache did not become available after maximum checks")
 		}
-		
+
 		// Perform second request to measure cached response time
 		secondResult, err := c.makeSecondRequest(ctx, targetURL)
 		if err != nil {
@@ -429,10 +444,13 @@ func (c *Crawler) WarmURL(ctx context.Context, targetURL string, findLinks bool)
 		} else {
 			res.SecondResponseTime = secondResult.ResponseTime
 			res.SecondCacheStatus = secondResult.CacheStatus
-			
+			res.SecondContentLength = secondResult.ContentLength
+			res.SecondHeaders = secondResult.Headers
+			res.SecondPerformance = &secondResult.Performance
+
 			// Calculate improvement ratio for pattern analysis
 			improvementRatio := float64(res.ResponseTime) / float64(res.SecondResponseTime)
-			
+
 			log.Debug().
 				Str("url", targetURL).
 				Str("first_cache_status", res.CacheStatus).
@@ -570,5 +588,41 @@ func isElementHidden(s *goquery.Selection) bool {
 
 	// No hiding attributes or classes were found
 	return false
+}
+
+// createHTTPTrace creates an httptrace.ClientTrace to capture detailed timing metrics.
+func createHTTPTrace() (*httptrace.ClientTrace, *PerformanceMetrics) {
+	metrics := &PerformanceMetrics{}
+	var dnsStartTime, connectStartTime, tlsStartTime time.Time
+
+	trace := &httptrace.ClientTrace{
+		DNSStart: func(info httptrace.DNSStartInfo) {
+			dnsStartTime = time.Now()
+		},
+		DNSDone: func(info httptrace.DNSDoneInfo) {
+			metrics.DNSLookupTime = time.Since(dnsStartTime).Milliseconds()
+		},
+		ConnectStart: func(network, addr string) {
+			connectStartTime = time.Now()
+		},
+		ConnectDone: func(network, addr string, err error) {
+			if err == nil {
+				metrics.TCPConnectionTime = time.Since(connectStartTime).Milliseconds()
+			}
+		},
+		TLSHandshakeStart: func() {
+			tlsStartTime = time.Now()
+		},
+		TLSHandshakeDone: func(state tls.ConnectionState, err error) {
+			if err == nil {
+				metrics.TLSHandshakeTime = time.Since(tlsStartTime).Milliseconds()
+			}
+		},
+		GotFirstResponseByte: func() {
+			metrics.TTFB = time.Since(connectStartTime).Milliseconds()
+		},
+	}
+
+	return trace, metrics
 }
 

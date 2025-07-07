@@ -63,13 +63,30 @@ type Task struct {
 	SourceURL   string
 
 	// Result data
-	StatusCode         int
-	ResponseTime       int64
-	CacheStatus        string
-	ContentType        string
-	SecondResponseTime int64
-	SecondCacheStatus  string
-	CacheCheckAttempts []byte // Stored as JSONB
+	StatusCode          int
+	ResponseTime        int64
+	CacheStatus         string
+	ContentType         string
+	ContentLength       int64
+	Headers             []byte // Stored as JSONB
+	RedirectURL         string
+	DNSLookupTime       int64
+	TCPConnectionTime   int64
+	TLSHandshakeTime    int64
+	TTFB                int64
+	ContentTransferTime int64
+
+	// Second request data
+	SecondResponseTime         int64
+	SecondCacheStatus          string
+	SecondContentLength        int64
+	SecondHeaders              []byte // Stored as JSONB
+	SecondDNSLookupTime        int64
+	SecondTCPConnectionTime    int64
+	SecondTLSHandshakeTime     int64
+	SecondTTFB                 int64
+	SecondContentTransferTime  int64
+	CacheCheckAttempts         []byte // Stored as JSONB
 
 	// Priority
 	PriorityScore float64
@@ -312,13 +329,27 @@ func (q *DbQueue) UpdateTaskStatus(ctx context.Context, task *Task) error {
 				UPDATE tasks 
 				SET status = $1, completed_at = $2, status_code = $3, 
 					response_time = $4, cache_status = $5, content_type = $6,
-					second_response_time = $7, second_cache_status = $8,
-					retry_count = $9, cache_check_attempts = $10
-				WHERE id = $11
+					content_length = $7, headers = $8, redirect_url = $9,
+					dns_lookup_time = $10, tcp_connection_time = $11, tls_handshake_time = $12,
+					ttfb = $13, content_transfer_time = $14,
+					second_response_time = $15, second_cache_status = $16,
+					second_content_length = $17, second_headers = $18,
+					second_dns_lookup_time = $19, second_tcp_connection_time = $20,
+					second_tls_handshake_time = $21, second_ttfb = $22,
+					second_content_transfer_time = $23,
+					retry_count = $24, cache_check_attempts = $25
+				WHERE id = $26
 			`, task.Status, task.CompletedAt, task.StatusCode,
 				task.ResponseTime, task.CacheStatus, task.ContentType,
-				task.SecondResponseTime, task.SecondCacheStatus, task.RetryCount,
-				task.CacheCheckAttempts, task.ID)
+				task.ContentLength, task.Headers, task.RedirectURL,
+				task.DNSLookupTime, task.TCPConnectionTime, task.TLSHandshakeTime,
+				task.TTFB, task.ContentTransferTime,
+				task.SecondResponseTime, task.SecondCacheStatus,
+				task.SecondContentLength, task.SecondHeaders,
+				task.SecondDNSLookupTime, task.SecondTCPConnectionTime,
+				task.SecondTLSHandshakeTime, task.SecondTTFB,
+				task.SecondContentTransferTime,
+				task.RetryCount, task.CacheCheckAttempts, task.ID)
 
 		case "failed":
 			_, err = tx.ExecContext(ctx, `
