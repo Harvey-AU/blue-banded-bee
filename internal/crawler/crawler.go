@@ -8,6 +8,7 @@ import (
 	"net/http/httptrace"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
@@ -18,23 +19,64 @@ import (
 
 // Crawler represents a URL crawler with configuration and metrics
 type Crawler struct {
-	config *Config
-	colly  *colly.Collector
-	id     string // Add an ID field to identify each crawler instance
+	config     *Config
+	colly      *colly.Collector
+	id         string    // Add an ID field to identify each crawler instance
+	metricsMap *sync.Map // Shared metrics storage for the transport
 }
 
-// A custom http.RoundTripper to inject httptrace from context
-type contextTracingTransport struct {
-	transport http.RoundTripper
+// tracingRoundTripper captures HTTP trace metrics for each request
+type tracingRoundTripper struct {
+	transport  http.RoundTripper
+	metricsMap *sync.Map // Maps URL -> PerformanceMetrics
 }
 
-// RoundTrip implements the http.RoundTripper interface.
-func (t *contextTracingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	// Check if the request's context has a trace
-	if trace, ok := req.Context().Value("trace").(*httptrace.ClientTrace); ok {
-		// Add the trace to the request's context
-		req = req.WithContext(httptrace.WithClientTrace(req.Context(), trace))
+// RoundTrip implements the http.RoundTripper interface with httptrace instrumentation
+func (t *tracingRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	// Create performance metrics for this request
+	metrics := &PerformanceMetrics{}
+	
+	// Create trace with callbacks that populate metrics
+	var dnsStartTime, connectStartTime, tlsStartTime, requestStartTime time.Time
+	requestStartTime = time.Now()
+	
+	trace := &httptrace.ClientTrace{
+		DNSStart: func(info httptrace.DNSStartInfo) {
+			dnsStartTime = time.Now()
+		},
+		DNSDone: func(info httptrace.DNSDoneInfo) {
+			if !dnsStartTime.IsZero() {
+				metrics.DNSLookupTime = time.Since(dnsStartTime).Milliseconds()
+			}
+		},
+		ConnectStart: func(network, addr string) {
+			connectStartTime = time.Now()
+		},
+		ConnectDone: func(network, addr string, err error) {
+			if err == nil && !connectStartTime.IsZero() {
+				metrics.TCPConnectionTime = time.Since(connectStartTime).Milliseconds()
+			}
+		},
+		TLSHandshakeStart: func() {
+			tlsStartTime = time.Now()
+		},
+		TLSHandshakeDone: func(state tls.ConnectionState, err error) {
+			if err == nil && !tlsStartTime.IsZero() {
+				metrics.TLSHandshakeTime = time.Since(tlsStartTime).Milliseconds()
+			}
+		},
+		GotFirstResponseByte: func() {
+			metrics.TTFB = time.Since(requestStartTime).Milliseconds()
+		},
 	}
+	
+	// Store metrics for this URL (will be retrieved in OnResponse)
+	t.metricsMap.Store(req.URL.String(), metrics)
+	
+	// Attach trace to request context
+	req = req.WithContext(httptrace.WithClientTrace(req.Context(), trace))
+	
+	// Perform the request
 	return t.transport.RoundTrip(req)
 }
 
@@ -68,6 +110,9 @@ func New(config *Config, id ...string) *Crawler {
 		RandomDelay: time.Second / time.Duration(config.RateLimit),
 	})
 
+	// Create metrics map for this crawler instance
+	metricsMap := &sync.Map{}
+
 	// Set up a caching transport
 	cacheTransport := httpcache.NewMemoryCacheTransport()
 	baseTransport := &http.Transport{
@@ -80,7 +125,10 @@ func New(config *Config, id ...string) *Crawler {
 	}
 
 	// Wrap the base transport with our custom tracing transport
-	tracingTransport := &contextTracingTransport{transport: baseTransport}
+	tracingTransport := &tracingRoundTripper{
+		transport:  baseTransport,
+		metricsMap: metricsMap,
+	}
 	cacheTransport.Transport = tracingTransport
 
 	// Set HTTP client with caching transport and proper timeout
@@ -100,9 +148,10 @@ func New(config *Config, id ...string) *Crawler {
 	// Note: OnHTML handler will be registered on the clone in WarmURL to ensure proper context access
 
 	return &Crawler{
-		config: config,
-		colly:  c,
-		id:     crawlerID,
+		config:     config,
+		colly:      c,
+		id:         crawlerID,
+		metricsMap: metricsMap,
 	}
 }
 
@@ -208,9 +257,6 @@ func (c *Crawler) WarmURL(ctx context.Context, targetURL string, findLinks bool)
 
 	// Set up timing and result collection
 	collyClone.OnRequest(func(r *colly.Request) {
-		trace, performanceMetrics := createHTTPTrace()
-		r.Ctx.Put("trace", trace)
-		r.Ctx.Put("performance", performanceMetrics)
 		r.Ctx.Put("result", res)
 		r.Ctx.Put("start_time", start)
 		r.Ctx.Put("find_links", findLinks)
@@ -220,13 +266,16 @@ func (c *Crawler) WarmURL(ctx context.Context, targetURL string, findLinks bool)
 	collyClone.OnResponse(func(r *colly.Response) {
 		startTime := r.Ctx.GetAny("start_time").(time.Time)
 		result := r.Ctx.GetAny("result").(*CrawlResult)
-		performanceMetrics := r.Ctx.GetAny("performance").(*PerformanceMetrics)
-
-		// Finalize performance metrics
-		if gotFirstByteTime, ok := r.Ctx.GetAny("got_first_byte_time").(time.Time); ok {
-			performanceMetrics.ContentTransferTime = time.Since(gotFirstByteTime).Milliseconds()
+		
+		// Retrieve performance metrics from the metrics map
+		if metricsVal, ok := c.metricsMap.LoadAndDelete(r.Request.URL.String()); ok {
+			performanceMetrics := metricsVal.(*PerformanceMetrics)
+			// Content transfer time is total response time minus TTFB
+			if performanceMetrics.TTFB > 0 {
+				performanceMetrics.ContentTransferTime = time.Since(startTime).Milliseconds() - performanceMetrics.TTFB
+			}
+			result.Performance = *performanceMetrics
 		}
-		result.Performance = *performanceMetrics
 
 		// Calculate response time
 		result.ResponseTime = time.Since(startTime).Milliseconds()
@@ -312,18 +361,7 @@ func (c *Crawler) WarmURL(ctx context.Context, targetURL string, findLinks bool)
 
 	// Visit the URL with Colly in a goroutine to support context cancellation
 	go func() {
-		// Create a new context for this request that includes the trace
-		trace, performanceMetrics := createHTTPTrace(collyClone.Ctx)
-		reqCtx := httptrace.WithClientTrace(ctx, trace)
-
-		// Put the performance metrics struct into the colly context so we can retrieve it in the response handler
-		collyClone.Ctx.Put("performance", performanceMetrics)
-		collyClone.Ctx.Put("result", res)
-		collyClone.Ctx.Put("start_time", start)
-		collyClone.Ctx.Put("find_links", findLinks)
-
-		// Make the request using the new context
-		visitErr := collyClone.Request("GET", targetURL, nil, reqCtx, nil)
+		visitErr := collyClone.Visit(targetURL)
 		if visitErr != nil {
 			done <- visitErr
 			return
@@ -620,39 +658,4 @@ func isElementHidden(s *goquery.Selection) bool {
 	return false
 }
 
-// createHTTPTrace creates an httptrace.ClientTrace to capture detailed timing metrics.
-func createHTTPTrace() (*httptrace.ClientTrace, *PerformanceMetrics) {
-	metrics := &PerformanceMetrics{}
-	var dnsStartTime, connectStartTime, tlsStartTime time.Time
-
-	trace := &httptrace.ClientTrace{
-		DNSStart: func(info httptrace.DNSStartInfo) {
-			dnsStartTime = time.Now()
-		},
-		DNSDone: func(info httptrace.DNSDoneInfo) {
-			metrics.DNSLookupTime = time.Since(dnsStartTime).Milliseconds()
-		},
-		ConnectStart: func(network, addr string) {
-			connectStartTime = time.Now()
-		},
-		ConnectDone: func(network, addr string, err error) {
-			if err == nil {
-				metrics.TCPConnectionTime = time.Since(connectStartTime).Milliseconds()
-			}
-		},
-		TLSHandshakeStart: func() {
-			tlsStartTime = time.Now()
-		},
-		TLSHandshakeDone: func(state tls.ConnectionState, err error) {
-			if err == nil {
-				metrics.TLSHandshakeTime = time.Since(tlsStartTime).Milliseconds()
-			}
-		},
-		GotFirstResponseByte: func() {
-			metrics.TTFB = time.Since(connectStartTime).Milliseconds()
-		},
-	}
-
-	return trace, metrics
-}
 
