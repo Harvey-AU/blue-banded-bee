@@ -10,6 +10,7 @@ import (
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/gocolly/colly/v2"
+	"github.com/gregjones/httpcache"
 	"github.com/rs/zerolog/log"
 )
 
@@ -50,17 +51,21 @@ func New(config *Config, id ...string) *Crawler {
 		RandomDelay: time.Second / time.Duration(config.RateLimit),
 	})
 
-	// Set HTTP client with proper timeout
+	// Set up a caching transport
+	cacheTransport := httpcache.NewMemoryCacheTransport()
+	cacheTransport.Transport = &http.Transport{
+		MaxIdleConnsPerHost: 25,
+		MaxConnsPerHost:     50,
+		IdleConnTimeout:     120 * time.Second,
+		TLSHandshakeTimeout: 10 * time.Second,
+		DisableCompression:  true,
+		ForceAttemptHTTP2:   true,
+	}
+
+	// Set HTTP client with caching transport and proper timeout
 	httpClient := &http.Client{
-		Timeout: config.DefaultTimeout,
-		Transport: &http.Transport{
-			MaxIdleConnsPerHost: 25,
-			MaxConnsPerHost:     50,
-			IdleConnTimeout:     120 * time.Second,
-			TLSHandshakeTimeout: 10 * time.Second,
-			DisableCompression:  true,
-			ForceAttemptHTTP2:   true,
-		},
+		Timeout:   config.DefaultTimeout,
+		Transport: cacheTransport,
 	}
 	c.SetClient(httpClient)
 
