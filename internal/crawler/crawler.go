@@ -312,7 +312,18 @@ func (c *Crawler) WarmURL(ctx context.Context, targetURL string, findLinks bool)
 
 	// Visit the URL with Colly in a goroutine to support context cancellation
 	go func() {
-		visitErr := collyClone.Visit(targetURL)
+		// Create a new context for this request that includes the trace
+		trace, performanceMetrics := createHTTPTrace(collyClone.Ctx)
+		reqCtx := httptrace.WithClientTrace(ctx, trace)
+
+		// Put the performance metrics struct into the colly context so we can retrieve it in the response handler
+		collyClone.Ctx.Put("performance", performanceMetrics)
+		collyClone.Ctx.Put("result", res)
+		collyClone.Ctx.Put("start_time", start)
+		collyClone.Ctx.Put("find_links", findLinks)
+
+		// Make the request using the new context
+		visitErr := collyClone.Request("GET", targetURL, nil, reqCtx, nil)
 		if visitErr != nil {
 			done <- visitErr
 			return
