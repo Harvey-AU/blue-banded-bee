@@ -1,0 +1,42 @@
+# forge.yaml - Fixed version for local Ollama
+default_model: "ollama/qwen2.5-coder:7b"
+base_url: "http://localhost:11434"
+
+# Performance settings
+temperature: 0.7
+max_tokens: 2048
+context_window: 8192
+
+# Custom agents (with required id field)
+agents:
+  - id: "coder"
+    name: "coder"
+    model: "ollama/qwen2.5-coder:7b"
+    description: "General coding tasks"
+
+  - id: "reasoner"
+    name: "reasoner"
+    model: "ollama/deepseek-r1:8b"
+    description: "Complex debugging and architecture"
+
+  - id: "auditor"
+    name: "auditor"
+    model: "ollama/deepseek-r1:8b"
+    description: "Code review and security analysis"
+
+# Custom rules for your workflow
+custom_rules: |
+  1. Always add comprehensive error handling
+  2. Include unit tests for new functions  
+  3. Follow team naming conventions
+  4. No auto-commits without approval
+
+# Workflow commands
+commands:
+  - name: "audit"
+    description: "Security and code quality audit"
+    prompt: "Analyze this code for security issues, performance problems, and maintainability concerns"
+
+  - name: "refactor"
+    description: "Improve code structure"
+    prompt: "Refactor this code to improve readability, performance, and maintainability"
