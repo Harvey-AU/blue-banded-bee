@@ -96,12 +96,7 @@
       "mcp__sentry__find_errors",
       "Bash(fly logs:*)",
       "Bash(winget install:*)",
-      "Bash(fly status:*)",
-      "Bash(flyctl logs:*)",
-      "Bash(export:*)",
-      "Bash(fly machine status:*)",
-      "Bash(fly monitor:*)",
-      "Bash(fly dashboard:*)"
+      "WebFetch(domain:goo.gle)"
     ],
     "deny": []
   },
