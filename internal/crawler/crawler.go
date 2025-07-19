@@ -113,8 +113,7 @@ func New(config *Config, id ...string) *Crawler {
 	// Create metrics map for this crawler instance
 	metricsMap := &sync.Map{}
 
-	// Set up a caching transport
-	cacheTransport := httpcache.NewMemoryCacheTransport()
+	// Set up base transport
 	baseTransport := &http.Transport{
 		MaxIdleConnsPerHost: 25,
 		MaxConnsPerHost:     50,
@@ -129,12 +128,11 @@ func New(config *Config, id ...string) *Crawler {
 		transport:  baseTransport,
 		metricsMap: metricsMap,
 	}
-	cacheTransport.Transport = tracingTransport
 
-	// Set HTTP client with caching transport and proper timeout
+	// Set HTTP client with tracing transport and proper timeout
 	httpClient := &http.Client{
 		Timeout:   config.DefaultTimeout,
-		Transport: cacheTransport,
+		Transport: tracingTransport,
 	}
 	c.SetClient(httpClient)
 
