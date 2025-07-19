@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Multiple version updates may occur on the same date, each with its own version number.
 Each version represents a distinct set of changes, even if released on the same day.
 
+## [0.5.28] – 2025-07-19
+
+### Fixed
+
+- **Memory Leak**: Removed unbounded in-memory HTTP cache that was causing memory exhaustion during crawl jobs. The cache was storing entire HTML pages without eviction, leading to out-of-memory crashes.
+
 ## [0.5.27] – 2025-07-19
 
 ### Enhanced

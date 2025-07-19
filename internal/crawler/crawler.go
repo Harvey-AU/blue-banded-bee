@@ -13,7 +13,6 @@ import (
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/gocolly/colly/v2"
-	"github.com/gregjones/httpcache"
 	"github.com/rs/zerolog/log"
 )
 
