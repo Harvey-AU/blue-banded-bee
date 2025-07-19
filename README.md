@@ -85,12 +85,13 @@ See our [detailed roadmap](./Roadmap.md) for more information.
 - **[Development Guide](docs/DEVELOPMENT.md)** - Setup, local development, testing, debugging, and contributing guidelines
 - **[API Reference](docs/API.md)** - Complete REST API endpoints, authentication, and response formats
 - **[Database Reference](docs/DATABASE.md)** - PostgreSQL schema, queries, performance optimisation, and operations
+- **[Flight Recorder](docs/flight-recorder.md)** - Performance debugging with Go's built-in flight recorder
 
 ### Future Plans
 
 - **[UI Implementation](docs/plans/ui-implementation.md)** - Web interface development with Web Components
 - **[Webflow Integration](docs/plans/webflow-integration.md)** - Webflow marketplace and Designer extension strategy
-- **[Scaling Strategy](docs/plans/scaling-strategy.md)** - Dynamic worker scaling, priority systems, and performance optimisation
+- **[Scaling Strategy](docs/plans/_archive/scaling-strategy.md)** - Dynamic worker scaling, priority systems, and performance optimisation
 
 ### Project Status
 
