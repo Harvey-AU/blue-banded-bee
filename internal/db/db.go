@@ -338,6 +338,12 @@ func setupSchema(db *sql.DB) error {
 		return fmt.Errorf("failed to create task job/status/priority index: %w", err)
 	}
 
+	// Unique constraint to prevent duplicate tasks for same job/page combination
+	_, err = db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_tasks_job_page_unique ON tasks(job_id, page_id)`)
+	if err != nil {
+		return fmt.Errorf("failed to create unique job/page index: %w", err)
+	}
+
 	// Enable Row-Level Security for all tables
 	tables := []string{"organisations", "users", "domains", "pages", "jobs", "tasks"}
 	for _, table := range tables {

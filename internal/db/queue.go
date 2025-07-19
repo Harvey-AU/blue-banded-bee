@@ -212,12 +212,13 @@ func (q *DbQueue) EnqueueURLs(ctx context.Context, jobID string, pages []Page, s
 			return fmt.Errorf("failed to update job total tasks: %w", err)
 		}
 
-		// Prepare statement for batch insert
+		// Prepare statement for batch insert with duplicate handling
 		stmt, err := tx.PrepareContext(ctx, `
 			INSERT INTO tasks (
 				id, job_id, page_id, path, status, created_at, retry_count,
 				source_type, source_url, priority_score
 			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+			ON CONFLICT (job_id, page_id) DO NOTHING
 		`)
 		if err != nil {
 			return fmt.Errorf("failed to prepare statement: %w", err)
