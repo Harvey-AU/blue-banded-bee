@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Multiple version updates may occur on the same date, each with its own version number.
 Each version represents a distinct set of changes, even if released on the same day.
 
+## [0.5.27] – 2025-07-19
+
+### Enhanced
+
+- **DB Optimisation**: Implemented a bunch of indexes on Supabase tables and deleted all historical data on pages/domains/tasks/jobs to clean and speed up.
+
 ## [0.5.26] – 2025-07-07
 
 ### Enhanced
