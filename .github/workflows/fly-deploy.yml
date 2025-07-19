@@ -13,10 +13,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Go 1.25rc1
+      - name: Install Go 1.25rc2
         run: |
-          wget https://go.dev/dl/go1.25rc1.linux-amd64.tar.gz
-          sudo rm -rf /usr/local/go && sudo tar -C /usr/local -xzf go1.25rc1.linux-amd64.tar.gz
+          wget https://go.dev/dl/go1.25rc2.linux-amd64.tar.gz
+          sudo rm -rf /usr/local/go && sudo tar -C /usr/local -xzf go1.25rc2.linux-amd64.tar.gz
           echo "/usr/local/go/bin" >> $GITHUB_PATH
         shell: bash
 
