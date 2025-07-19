@@ -204,17 +204,6 @@ func (jm *JobManager) CreateJob(ctx context.Context, options *JobOptions) (*Job,
 				return fmt.Errorf("failed to enqueue task for root path: %w", err)
 			}
 			
-			// Update job's total task count and found_tasks count (for root URL)
-			_, err = tx.ExecContext(ctx, `
-				UPDATE jobs
-				SET total_tasks = total_tasks + 1,
-				    found_tasks = found_tasks + 1
-				WHERE id = $1
-			`, job.ID)
-			
-			if err != nil {
-				return err
-			}
 
 			jm.markPageProcessed(job.ID, pageID)
 			
@@ -369,23 +358,6 @@ func (jm *JobManager) EnqueueJobURLs(ctx context.Context, jobID string, pages []
 
 	// Only mark pages as processed if the enqueue was successful
 	if err == nil {
-		// If these are found links (not from sitemap), update the found_tasks counter
-		if sourceType != "sitemap" && len(filteredPages) > 0 {
-			updateErr := jm.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
-				_, err := tx.ExecContext(ctx, `
-					UPDATE jobs
-					SET found_tasks = found_tasks + $1
-					WHERE id = $2
-				`, len(filteredPages), jobID)
-				return err
-			})
-			if updateErr != nil {
-				log.Error().
-					Err(updateErr).
-					Str("job_id", jobID).
-					Msg("Failed to update found task count")
-			}
-		}
 
 		// Mark all successfully enqueued pages as processed
 		for _, page := range filteredPages {
@@ -709,21 +681,6 @@ func (jm *JobManager) processSitemap(ctx context.Context, jobID, domain string, 
 			}
 		}
 
-		// Update sitemap task count in the job
-		err = jm.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
-			_, err := tx.ExecContext(ctx, `
-				UPDATE jobs
-				SET sitemap_tasks = sitemap_tasks + $1
-				WHERE id = $2
-			`, len(pageIDs), jobID)
-			return err
-		})
-		if err != nil {
-			log.Error().
-				Err(err).
-				Str("job_id", jobID).
-				Msg("Failed to update sitemap task count")
-		}
 
 		// Use our wrapper function that checks for duplicates
 		baseURL := fmt.Sprintf("https://%s", domain)
@@ -743,6 +700,17 @@ func (jm *JobManager) processSitemap(ctx context.Context, jobID, domain string, 
 			Str("domain", domain).
 			Int("url_count", len(urls)).
 			Msg("Added sitemap URLs to job queue")
+		
+		// Recalculate job statistics after bulk sitemap operation
+		if err := jm.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
+			_, err := tx.ExecContext(ctx, `SELECT recalculate_job_stats($1)`, jobID)
+			return err
+		}); err != nil {
+			log.Error().
+				Err(err).
+				Str("job_id", jobID).
+				Msg("Failed to recalculate job stats after sitemap processing")
+		}
 
 	} else {
 		log.Info().

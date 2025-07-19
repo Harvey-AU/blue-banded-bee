@@ -201,16 +201,6 @@ func (q *DbQueue) EnqueueURLs(ctx context.Context, jobID string, pages []Page, s
 			}
 		}
 
-		// Update job's total task count and skipped count
-		_, err = tx.ExecContext(ctx, `
-			UPDATE jobs
-			SET total_tasks = total_tasks + $1,
-				skipped_tasks = skipped_tasks + $2
-			WHERE id = $3
-		`, len(pages), skippedCount, jobID)
-		if err != nil {
-			return fmt.Errorf("failed to update job total tasks: %w", err)
-		}
 
 		// Prepare statement for batch insert with duplicate handling
 		stmt, err := tx.PrepareContext(ctx, `
