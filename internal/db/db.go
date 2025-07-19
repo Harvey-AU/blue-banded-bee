@@ -1,6 +1,7 @@
 package db
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -648,6 +649,15 @@ func (db *DB) ResetSchema() error {
 	return nil
 }
 
+
+// RecalculateJobStats recalculates all statistics for a job based on actual task records
+func (db *DB) RecalculateJobStats(ctx context.Context, jobID string) error {
+	_, err := db.client.ExecContext(ctx, `SELECT recalculate_job_stats($1)`, jobID)
+	if err != nil {
+		return fmt.Errorf("failed to recalculate job stats: %w", err)
+	}
+	return nil
+}
 
 // Serialise converts data to JSON string representation.
 // It is named with British English spelling for consistency.
