@@ -17,6 +17,7 @@ app
 .vscode/
 *.swp
 .obsidian/
+.aider*
 
 # OS
 .DS_Store
