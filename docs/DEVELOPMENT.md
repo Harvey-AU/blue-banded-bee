@@ -350,6 +350,14 @@ go install github.com/cosmtrek/air@latest
 - Use `EXPLAIN ANALYZE` for query performance
 - Check connection pool settings
 
+### Flight Recorder
+
+For detailed performance debugging, see [Flight Recorder Documentation](flight-recorder.md). The flight recorder provides runtime trace data that can help diagnose:
+- Goroutine scheduling issues
+- Memory allocation patterns
+- CPU usage hotspots
+- Lock contention
+
 ### Getting Help
 
 1. **Check existing documentation** in this guide and [ARCHITECTURE.md](ARCHITECTURE.md)
