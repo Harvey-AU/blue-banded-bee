@@ -44,3 +44,6 @@ node_modules/
 /playwright/.cache/
 .gemini/
 .claude/mcp.json
+
+# Supabase
+supabase/
