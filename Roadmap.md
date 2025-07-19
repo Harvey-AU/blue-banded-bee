@@ -290,7 +290,7 @@ Detailed plan available in [docs/organisation-model.md](docs/plans/organisation-
 
 - [x] **Task Prioritisation**
 
-  - [x] Prioritisation by page hierarchy and importance - [Implementation Plan](docs/plans/task-prioritisation.md)
+  - [x] Prioritisation by page hierarchy and importance - [Implementation Plan](docs/plans/_archive/task-prioritisation.md)
   - [x] Implement link priority ordering for header links (1st: 1.000, 2nd: 0.990, etc.) ([internal/jobs/manager.go:819-820](./internal/jobs/manager.go#L819))
   - [x] Apply priority ordering logic to all discovered page links ([internal/jobs/manager.go:816](./internal/jobs/manager.go#L816))
   - [ ] Job-level task prioritisation options

@@ -223,6 +223,14 @@ sentry.Init(sentry.ClientOptions{
 - **Job Progress**: Real-time completion tracking and statistics
 - **API Performance**: Request timing and error rates
 
+### Performance Debugging
+
+For detailed runtime performance analysis, the application includes a [Flight Recorder](flight-recorder.md) that captures Go runtime trace data. This helps diagnose:
+- Goroutine scheduling and concurrency issues
+- Memory allocation patterns and GC pressure
+- CPU usage hotspots and bottlenecks
+- Lock contention and synchronisation problems
+
 ## Frontend Integration
 
 ### Template + Data Binding System

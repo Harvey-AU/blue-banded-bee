@@ -184,7 +184,7 @@ Each version represents a distinct set of changes, even if released on the same 
   - Minimal schema changes - only adds `priority_score` column to pages table
   - Homepage detection and automatic highest priority assignment
   - Link propagation scoring - pages inherit 80% of source page priority
-  - Detailed implementation plan in [docs/plans/task-prioritization.md](docs/plans/task-prioritisation.md)
+  - Detailed implementation plan in [docs/plans/task-prioritization.md](docs/plans/_archive/task-prioritisation.md)
 
 ### Enhanced
 
