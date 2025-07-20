@@ -43,8 +43,10 @@ Immediate changes with minimal code modification:
   - `Accept-Encoding: gzip, deflate, br`
   - Location: `internal/crawler/crawler.go:139`
 - [ ] **Bot Information Page**: Create `/bot` page on website explaining bot, purpose, approach, safety
-- [ ] **Enhanced Error Detection**: Add 403/429 to `isRetryableError`
+- [x] **Enhanced Error Detection**: Add 403/429 detection with limited retries
   - Location: `internal/jobs/worker.go:1057`
+  - Separated blocking errors (403/429) from regular retryable errors
+  - Limited blocking error retries to 2 attempts (vs 5 for network errors)
 
 **Expected Impact**: 50-70% blocking reduction, minimal performance impact
 

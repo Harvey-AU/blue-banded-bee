@@ -361,9 +361,31 @@ func (wp *WorkerPool) processNextTask(ctx context.Context) error {
 			result, err := wp.processTask(ctx, jobsTask)
 			now := time.Now()
 			if err != nil {
-				// Check if this is a retryable error
-				if isRetryableError(err) && task.RetryCount < MaxTaskRetries {
-					// Increment retry count and reset to pending
+				// Check if this is a blocking error (403/429)
+				if isBlockingError(err) {
+					// For blocking errors, only retry twice (less aggressive)
+					if task.RetryCount < 2 {
+						task.RetryCount++
+						task.Status = string(TaskStatusPending)
+						task.StartedAt = time.Time{} // Reset started time
+						log.Warn().
+							Err(err).
+							Str("task_id", task.ID).
+							Int("retry_count", task.RetryCount).
+							Msg("Task blocked (403/429), limited retry scheduled")
+					} else {
+						// Mark as permanently failed after 2 retries
+						task.Status = string(TaskStatusFailed)
+						task.CompletedAt = now
+						task.Error = err.Error()
+						log.Error().
+							Err(err).
+							Str("task_id", task.ID).
+							Int("retry_count", task.RetryCount).
+							Msg("Task blocked permanently after 2 retries")
+					}
+				} else if isRetryableError(err) && task.RetryCount < MaxTaskRetries {
+					// For other retryable errors, use normal retry limit
 					task.RetryCount++
 					task.Status = string(TaskStatusPending)
 					task.StartedAt = time.Time{} // Reset started time
@@ -1082,14 +1104,23 @@ func isRetryableError(err error) bool {
 		strings.Contains(errorStr, "504") ||
 		strings.Contains(errorStr, "500")
 	
-	// Blocking/rate limit errors that should be retried with backoff
-	blockingErrors := strings.Contains(errorStr, "403") ||
+	return networkErrors || serverErrors
+}
+
+// isBlockingError checks if an error indicates we're being blocked
+func isBlockingError(err error) bool {
+	if err == nil {
+		return false
+	}
+	
+	errorStr := strings.ToLower(err.Error())
+	
+	// Blocking/rate limit errors that need special handling
+	return strings.Contains(errorStr, "403") ||
 		strings.Contains(errorStr, "forbidden") ||
 		strings.Contains(errorStr, "429") ||
 		strings.Contains(errorStr, "too many requests") ||
 		strings.Contains(errorStr, "rate limit")
-	
-	return networkErrors || serverErrors || blockingErrors
 }
 
 // Helper function to check if a hostname is the same domain or a subdomain of the target domain
