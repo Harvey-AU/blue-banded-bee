@@ -946,6 +946,55 @@
         opacity: 1;
       }
 
+      /* Dropdown menu styles */
+      .bb-dropdown {
+        position: relative;
+        display: inline-block;
+      }
+
+      .bb-dropdown-menu {
+        position: absolute;
+        top: 100%;
+        right: 0;
+        margin-top: 4px;
+        background: white;
+        border: 1px solid #e5e7eb;
+        border-radius: 6px;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        min-width: 160px;
+        z-index: 10;
+        display: none;
+      }
+
+      .bb-dropdown-menu.show {
+        display: block;
+      }
+
+      .bb-dropdown-item {
+        display: block;
+        width: 100%;
+        padding: 8px 16px;
+        text-align: left;
+        background: none;
+        border: none;
+        cursor: pointer;
+        font-size: 14px;
+        color: #374151;
+        transition: background-color 0.2s;
+      }
+
+      .bb-dropdown-item:hover {
+        background-color: #f3f4f6;
+      }
+
+      .bb-dropdown-item:first-child {
+        border-radius: 5px 5px 0 0;
+      }
+
+      .bb-dropdown-item:last-child {
+        border-radius: 0 0 5px 5px;
+      }
+
       @media (max-width: 768px) {
         .page-header .container {
           padding: 0 16px;
@@ -1028,16 +1077,6 @@
             </select>
           </div>
 
-          <div class="filter-group">
-            <label class="filter-label">Status</label>
-            <div class="filter-tabs" id="statusFilterTabs">
-                <a href="#" class="filter-tab active" data-status="">All</a>
-                <a href="#" class="filter-tab" data-status="completed">Complete</a>
-                <a href="#" class="filter-tab" data-status="running">In Progress</a>
-                <a href="#" class="filter-tab" data-status="failed">Failed</a>
-            </div>
-            <button class="bb-btn bb-btn-secondary" id="exportBtn">Export</button>
-          </div>
 
           <div class="filter-group">
             <label class="filter-label">Refresh</label>
@@ -1340,7 +1379,23 @@
                 <option value="500">500</option>
                 <option value="1000">1000</option>
               </select>
+              <div class="bb-dropdown">
+                <button class="bb-btn bb-btn-secondary" style="font-size: 12px" bb-action="toggle-export-menu">Export ▼</button>
+                <div class="bb-dropdown-menu" id="exportDropdownMenu">
+                  <button class="bb-dropdown-item" bb-action="export-job">All Tasks</button>
+                  <button class="bb-dropdown-item" bb-action="export-broken-links">Broken Links</button>
+                  <button class="bb-dropdown-item" bb-action="export-slow-pages">Slow Pages</button>
+                </div>
+              </div>
               <button class="bb-btn bb-btn-secondary" style="font-size: 12px" bb-action="refresh-tasks">↻ Refresh</button>
+            </div>
+          </div>
+          <div style="margin: 16px 0;">
+            <div class="filter-tabs" id="modalTaskFilterTabs" style="justify-content: center;">
+              <a href="#" class="filter-tab active" data-status="">All</a>
+              <a href="#" class="filter-tab" data-status="completed">Complete</a>
+              <a href="#" class="filter-tab" data-status="pending">In Progress</a>
+              <a href="#" class="filter-tab" data-status="failed">Failed</a>
             </div>
           </div>
           <div id="tasksContent">
@@ -1557,6 +1612,17 @@
 
         // Set up attribute-based event handling
         setupAttributeHandlers();
+        
+        // Close dropdown when clicking outside
+        document.addEventListener("click", (e) => {
+          const dropdown = document.getElementById("exportDropdownMenu");
+          const exportButton = e.target.closest('[bb-action="toggle-export-menu"]');
+          const dropdownItem = e.target.closest('.bb-dropdown-item');
+          
+          if (!exportButton && !dropdownItem && dropdown && dropdown.classList.contains("show")) {
+            closeExportDropdown();
+          }
+        });
 
         // Set up filters
         setupFilters();
@@ -1730,84 +1796,228 @@
               loadJobTasks(currentJobId);
             }
             break;
+          case "toggle-export-menu":
+            toggleExportDropdown();
+            break;
+          case "export-job":
+            if (currentJobId) {
+              exportJobToCSV(currentJobId);
+              closeExportDropdown();
+            }
+            break;
+          case "export-broken-links":
+            if (currentJobId) {
+              exportBrokenLinks(currentJobId);
+              closeExportDropdown();
+            }
+            break;
+          case "export-slow-pages":
+            if (currentJobId) {
+              exportSlowPages(currentJobId);
+              closeExportDropdown();
+            }
+            break;
           default:
             console.warn("Unknown bb-action:", action);
         }
       }
 
-      async function exportToCSV() {
-        const exportBtn = document.getElementById("exportBtn");
-        exportBtn.disabled = true;
-        exportBtn.textContent = "Exporting...";
+
+      async function exportJobToCSV(jobId) {
+        if (!jobId) {
+          console.error("No job ID provided for export");
+          return;
+        }
 
         try {
-            const dateRange = document.getElementById("dateRange").value;
-            const statusFilter = document.querySelector("#statusFilterTabs .filter-tab.active").dataset.status;
+          // Show loading state on export button
+          const exportButton = document.querySelector('[bb-action="export-job"]');
+          if (exportButton) {
+            exportButton.disabled = true;
+            exportButton.textContent = "Exporting...";
+          }
 
-            // 1. Fetch all jobs for the current filter in batches
-            let jobs = [];
-            let jobsOffset = 0;
-            const jobsLimit = 500;
-            let jobsHasMore = true;
+          // Fetch job details
+          const job = await dataBinder.fetchData(`/v1/jobs/${jobId}`);
+          
+          // Get current status filter
+          const activeTab = document.querySelector("#modalTaskFilterTabs .filter-tab.active");
+          const statusFilter = activeTab ? activeTab.dataset.status : "";
+          
+          // Fetch all tasks for this job with status filter
+          let allTasks = [];
+          let tasksOffset = 0;
+          const tasksLimit = 500;
+          let tasksHasMore = true;
 
-            while(jobsHasMore) {
-                let jobsParams = `range=${dateRange}&limit=${jobsLimit}&offset=${jobsOffset}`;
-                if (statusFilter) {
-                    jobsParams += `&status=${statusFilter}`;
-                }
-                const jobsResponse = await dataBinder.fetchData(`/v1/jobs?${jobsParams}`);
-                const newJobs = jobsResponse.jobs || [];
-                jobs = jobs.concat(newJobs);
-                jobsOffset += jobsLimit;
-                jobsHasMore = newJobs.length === jobsLimit;
+          while(tasksHasMore) {
+            let url = `/v1/jobs/${jobId}/tasks?limit=${tasksLimit}&offset=${tasksOffset}`;
+            if (statusFilter) {
+              url += `&status=${statusFilter}`;
             }
+            const tasksResponse = await dataBinder.fetchData(url);
+            const newTasks = tasksResponse.tasks || [];
+            allTasks = allTasks.concat(newTasks);
+            tasksOffset += tasksLimit;
+            tasksHasMore = newTasks.length === tasksLimit;
+          }
 
-            if (jobs.length === 0) {
-                showInfoMessage("No data to export.", 3000);
-                return;
-            }
+          if (allTasks.length === 0) {
+            showInfoMessage("No tasks found for this job.", 3000);
+            return;
+          }
 
-            let allTasks = [];
+          // Add job info to each task
+          allTasks.forEach(task => {
+            task.job_id = jobId;
+            task.job_domain = job.domain || job.domains?.name || "Unknown";
+          });
 
-            // 2. Fetch all tasks for each job
-            for (const job of jobs) {
-                let tasks = [];
-                let tasksOffset = 0;
-                const tasksLimit = 500; // Fetch tasks in batches of 500
-                let tasksHasMore = true;
+          // Convert to CSV and download
+          const csv = convertToCSV(allTasks);
+          const date = new Date().toISOString().slice(0, 10);
+          const domain = (job.domain || job.domains?.name || "unknown").replace(/[^a-z0-9]/gi, '_');
+          downloadCSV(csv, `crawl_${domain}_${date}.csv`);
 
-                while(tasksHasMore) {
-                    const tasksResponse = await dataBinder.fetchData(`/v1/jobs/${job.id}/tasks?limit=${tasksLimit}&offset=${tasksOffset}`);
-                    const newTasks = tasksResponse.tasks || [];
-                    tasks = tasks.concat(newTasks);
-                    tasksOffset += tasksLimit;
-                    tasksHasMore = newTasks.length === tasksLimit;
-                }
-                
-                // Add job info to each task
-                tasks.forEach(task => {
-                    task.job_id = job.id;
-                    task.job_domain = job.domains.name;
-                });
-
-                allTasks = allTasks.concat(tasks);
-            }
-
-            if (allTasks.length === 0) {
-                showInfoMessage("No tasks found for the selected jobs.", 3000);
-                return;
-            }
-
-            // 3. Convert to CSV and download
-            const csv = convertToCSV(allTasks);
-            downloadCSV(csv);
+          showInfoMessage(`Exported ${allTasks.length} tasks successfully.`, 3000);
 
         } catch (error) {
-            console.error("Export failed:", error);
-            showDashboardError("Failed to export data. Please try again.");
+          console.error("Export failed:", error);
+          showDashboardError("Failed to export job data. Please try again.");
         } finally {
-            exportBtn.disabled = false;
-            exportBtn.textContent = "Export";
+          // Reset export button
+          const exportButton = document.querySelector('[bb-action="export-job"]');
+          if (exportButton) {
+            exportButton.disabled = false;
+            exportButton.textContent = "Export";
+          }
+        }
+      }
+
+      async function exportBrokenLinks(jobId) {
+        if (!jobId) {
+          console.error("No job ID provided for export");
+          return;
+        }
+
+        try {
+          // Show loading state
+          showInfoMessage("Exporting broken links...", 2000);
+
+          // Fetch job details
+          const job = await dataBinder.fetchData(`/v1/jobs/${jobId}`);
+          
+          // Fetch all tasks for this job (no status filter, we'll filter by status code)
+          let allTasks = [];
+          let tasksOffset = 0;
+          const tasksLimit = 500;
+          let tasksHasMore = true;
+
+          while(tasksHasMore) {
+            const url = `/v1/jobs/${jobId}/tasks?limit=${tasksLimit}&offset=${tasksOffset}`;
+            const tasksResponse = await dataBinder.fetchData(url);
+            const newTasks = tasksResponse.tasks || [];
+            allTasks = allTasks.concat(newTasks);
+            tasksOffset += tasksLimit;
+            tasksHasMore = newTasks.length === tasksLimit;
+          }
+
+          // Filter for broken links (non-2xx status codes)
+          const brokenLinks = allTasks.filter(task => 
+            task.status_code && (task.status_code < 200 || task.status_code >= 300)
+          );
+
+          if (brokenLinks.length === 0) {
+            showInfoMessage("No broken links found in this job.", 3000);
+            return;
+          }
+
+          // Convert to CSV with broken links specific format
+          const headers = ["url", "status_code", "error", "found_on_page", "timestamp"];
+          const rows = brokenLinks.map(task => {
+            return [
+              `"${task.path || ''}"`,
+              task.status_code || '',
+              `"${(task.error || '').replace(/"/g, '""')}"`,
+              `"${task.referrer || 'Unknown'}"`, // Assuming there's a referrer field
+              `"${task.created_at || ''}"`
+            ].join(',');
+          });
+          
+          const csv = [headers.join(',')].concat(rows).join('\r\n');
+          const date = new Date().toISOString().slice(0, 10);
+          const domain = (job.domain || job.domains?.name || "unknown").replace(/[^a-z0-9]/gi, '_');
+          downloadCSV(csv, `crawl_${domain}_broken_links_${date}.csv`);
+
+          showInfoMessage(`Exported ${brokenLinks.length} broken links successfully.`, 3000);
+
+        } catch (error) {
+          console.error("Export failed:", error);
+          showDashboardError("Failed to export broken links. Please try again.");
+        }
+      }
+
+      async function exportSlowPages(jobId) {
+        if (!jobId) {
+          console.error("No job ID provided for export");
+          return;
+        }
+
+        try {
+          // Show loading state
+          showInfoMessage("Exporting slow pages...", 2000);
+
+          // Fetch job details
+          const job = await dataBinder.fetchData(`/v1/jobs/${jobId}`);
+          
+          // Fetch all tasks for this job
+          let allTasks = [];
+          let tasksOffset = 0;
+          const tasksLimit = 500;
+          let tasksHasMore = true;
+
+          while(tasksHasMore) {
+            const url = `/v1/jobs/${jobId}/tasks?limit=${tasksLimit}&offset=${tasksOffset}`;
+            const tasksResponse = await dataBinder.fetchData(url);
+            const newTasks = tasksResponse.tasks || [];
+            allTasks = allTasks.concat(newTasks);
+            tasksOffset += tasksLimit;
+            tasksHasMore = newTasks.length === tasksLimit;
+          }
+
+          // Filter for slow pages (response time > 2000ms on either request)
+          const slowPages = allTasks.filter(task => 
+            (task.response_time && task.response_time > 2000) || 
+            (task.second_response_time && task.second_response_time > 2000)
+          );
+
+          if (slowPages.length === 0) {
+            showInfoMessage("No slow pages found in this job.", 3000);
+            return;
+          }
+
+          // Convert to CSV with slow pages specific format
+          const headers = ["url", "first_load_time_ms", "second_load_time_ms", "cache_status", "timestamp"];
+          const rows = slowPages.map(task => {
+            return [
+              `"${task.path || ''}"`,
+              task.response_time || '',
+              task.second_response_time || '',
+              `"${task.cache_status || ''}"`,
+              `"${task.created_at || ''}"`
+            ].join(',');
+          });
+          
+          const csv = [headers.join(',')].concat(rows).join('\r\n');
+          const date = new Date().toISOString().slice(0, 10);
+          const domain = (job.domain || job.domains?.name || "unknown").replace(/[^a-z0-9]/gi, '_');
+          downloadCSV(csv, `crawl_${domain}_slow_pages_${date}.csv`);
+
+          showInfoMessage(`Exported ${slowPages.length} slow pages successfully.`, 3000);
+
+        } catch (error) {
+          console.error("Export failed:", error);
+          showDashboardError("Failed to export slow pages. Please try again.");
         }
       }
 
@@ -1832,14 +2042,13 @@
           return [headers.join(',')].concat(rows).join('\r\n');
       }
 
-      function downloadCSV(csvContent) {
+      function downloadCSV(csvContent, filename) {
           const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
           const link = document.createElement("a");
           if (link.download !== undefined) {
               const url = URL.createObjectURL(blob);
-              const date = new Date().toISOString().slice(0, 10);
               link.setAttribute("href", url);
-              link.setAttribute("download", `bbb_export_${date}.csv`);
+              link.setAttribute("download", filename || `export_${new Date().toISOString().slice(0, 10)}.csv`);
               link.style.visibility = 'hidden';
               document.body.appendChild(link);
               link.click();
@@ -1858,8 +2067,10 @@
           });
         }
 
-        if (statusFilterTabs) {
-            statusFilterTabs.addEventListener("click", (e) => {
+        // Modal task filter tabs
+        const modalTaskFilterTabs = document.getElementById("modalTaskFilterTabs");
+        if (modalTaskFilterTabs) {
+            modalTaskFilterTabs.addEventListener("click", (e) => {
                 if (e.target.classList.contains("filter-tab")) {
                     e.preventDefault();
                     // Check if the clicked tab is already active
@@ -1867,12 +2078,17 @@
                         return;
                     }
                     
-                    const currentActive = statusFilterTabs.querySelector(".active");
+                    const currentActive = modalTaskFilterTabs.querySelector(".active");
                     if(currentActive) {
                         currentActive.classList.remove("active");
                     }
                     e.target.classList.add("active");
-                    updateJobsData();
+                    
+                    // Reset pagination and reload tasks
+                    tasksCurrentPage = 0;
+                    if (currentJobId) {
+                        loadJobTasks(currentJobId);
+                    }
                 }
             });
         }
@@ -1892,12 +2108,6 @@
           });
         }
 
-        const exportBtn = document.getElementById("exportBtn");
-        if(exportBtn) {
-            exportBtn.addEventListener("click", () => {
-                exportToCSV();
-            });
-        }
       }
 
       // Global variables
@@ -1926,13 +2136,9 @@
 
       function updateJobsData() {
         const dateRange = document.getElementById("dateRange").value;
-        const statusFilter = document.querySelector("#statusFilterTabs .filter-tab.active").dataset.status;
 
-        // Build query parameters
+        // Build query parameters (no status filter on dashboard anymore)
         let params = `limit=10&range=${dateRange}`;
-        if (statusFilter) {
-          params += `&status=${statusFilter}`;
-        }
 
         // Load jobs with filters
         dataBinder
@@ -2022,6 +2228,15 @@
         tasksCurrentPage = 0;
         tasksSortColumn = "created_at";
         tasksSortDirection = "desc";
+        
+        // Reset filter tabs to "All"
+        const modalTabs = document.querySelectorAll("#modalTaskFilterTabs .filter-tab");
+        modalTabs.forEach((tab) => {
+          tab.classList.remove("active");
+          if (tab.dataset.status === "") {
+            tab.classList.add("active");
+          }
+        });
 
         try {
           // Load job details
@@ -2115,8 +2330,18 @@
           const limit = limitSelect ? limitSelect.value : 50;
           const offset = tasksCurrentPage * limit;
           const sort = tasksSortDirection === "desc" ? "-" + tasksSortColumn : tasksSortColumn;
+          
+          // Get current status filter
+          const activeTab = document.querySelector("#modalTaskFilterTabs .filter-tab.active");
+          const statusFilter = activeTab ? activeTab.dataset.status : "";
+          
+          // Build URL with status filter
+          let url = `/v1/jobs/${jobId}/tasks?limit=${limit}&offset=${offset}&sort=${sort}`;
+          if (statusFilter) {
+            url += `&status=${statusFilter}`;
+          }
 
-          const response = await dataBinder.fetchData(`/v1/jobs/${jobId}/tasks?limit=${limit}&offset=${offset}&sort=${sort}`);
+          const response = await dataBinder.fetchData(url);
           const tasks = response.tasks || [];
 
           if (tasks.length === 0 && tasksCurrentPage === 0) {
@@ -2290,6 +2515,21 @@
       function closeModal() {
         document.getElementById("jobDetailsModal").classList.remove("show");
         currentJobId = null;
+        closeExportDropdown(); // Close dropdown when modal closes
+      }
+
+      function toggleExportDropdown() {
+        const dropdown = document.getElementById("exportDropdownMenu");
+        if (dropdown) {
+          dropdown.classList.toggle("show");
+        }
+      }
+
+      function closeExportDropdown() {
+        const dropdown = document.getElementById("exportDropdownMenu");
+        if (dropdown) {
+          dropdown.classList.remove("show");
+        }
       }
 
       function showCreateJobModal() {
