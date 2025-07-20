@@ -1082,7 +1082,14 @@ func isRetryableError(err error) bool {
 		strings.Contains(errorStr, "504") ||
 		strings.Contains(errorStr, "500")
 	
-	return networkErrors || serverErrors
+	// Blocking/rate limit errors that should be retried with backoff
+	blockingErrors := strings.Contains(errorStr, "403") ||
+		strings.Contains(errorStr, "forbidden") ||
+		strings.Contains(errorStr, "429") ||
+		strings.Contains(errorStr, "too many requests") ||
+		strings.Contains(errorStr, "rate limit")
+	
+	return networkErrors || serverErrors || blockingErrors
 }
 
 // Helper function to check if a hostname is the same domain or a subdomain of the target domain
