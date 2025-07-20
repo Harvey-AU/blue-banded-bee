@@ -135,8 +135,13 @@ func New(config *Config, id ...string) *Crawler {
 	}
 	c.SetClient(httpClient)
 
-	// Add this to capture requests and responses
+	// Add browser-like headers to avoid blocking
 	c.OnRequest(func(r *colly.Request) {
+		// Set browser-like headers
+		r.Headers.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8")
+		r.Headers.Set("Accept-Language", "en-US,en;q=0.9")
+		r.Headers.Set("Accept-Encoding", "gzip, deflate, br")
+		
 		log.Debug().
 			Str("url", r.URL.String()).
 			Msg("Crawler sending request")
@@ -566,6 +571,9 @@ func (c *Crawler) CheckCacheStatus(ctx context.Context, targetURL string) (strin
 	}
 
 	req.Header.Set("User-Agent", c.config.UserAgent)
+	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8")
+	req.Header.Set("Accept-Language", "en-US,en;q=0.9")
+	req.Header.Set("Accept-Encoding", "gzip, deflate, br")
 
 	client := &http.Client{
 		Timeout: c.config.DefaultTimeout,
