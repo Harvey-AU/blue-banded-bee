@@ -299,8 +299,9 @@ Detailed plan available in [docs/organisation-model.md](docs/plans/organisation-
 
   - [x] Filter out links that are hidden via inline `style` attributes.
   - [x] Remove anchor links from link discovery
+  - [ ] If sitemap can't be found, setup job with / page and start as normal finding links through pages
 
-- [ ] Considering impact of and plan updates [Go v1.25 release](/docs/plans/Go-1.25.md)
+- [x] Considering impact of and plan updates [Go v1.25 release](/docs/plans/Go-1.25.md)
 
 ### 🔴 Webflow App Integration
 
