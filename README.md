@@ -24,6 +24,7 @@ Automatically warm site caches (especially built for [Webflow](https://www.webfl
 - 🔐 Secure authentication via Supabase Auth with JWT
 - 🎨 Template + data binding system for flexible dashboard development
 - 📝 Complete form handling with real-time validation
+- 📊 Dashboard with job statistics and progress tracking
 - 🌐 Web Components and data binding library for seamless Webflow integration
 
 ## Quick Start
