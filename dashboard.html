@@ -1870,7 +1870,7 @@
           // Add job info to each task
           allTasks.forEach(task => {
             task.job_id = jobId;
-            task.job_domain = job.domain || job.domains?.name || "Unknown";
+            task.domain = job.domain || job.domains?.name || "Unknown";
           });
 
           // Convert to CSV and download
@@ -1923,23 +1923,22 @@
           }
 
           // Filter for broken links (non-2xx status codes)
-          const brokenLinks = allTasks.filter(task => 
-            task.status_code && (task.status_code < 200 || task.status_code >= 300)
-          );
+          const brokenLinks = allTasks.filter(task => task.status && task.status === "failed");
+          
 
           if (brokenLinks.length === 0) {
             showInfoMessage("No broken links found in this job.", 3000);
             return;
           }
 
-          // Convert to CSV with broken links specific format
-          const headers = ["url", "status_code", "error", "found_on_page", "timestamp"];
+          // Convert to CSV with broken links specific format using actual columns
+          const headers = ["path", "status_code", "error", "source_url", "created_at"];
           const rows = brokenLinks.map(task => {
             return [
               `"${task.path || ''}"`,
               task.status_code || '',
               `"${(task.error || '').replace(/"/g, '""')}"`,
-              `"${task.referrer || 'Unknown'}"`, // Assuming there's a referrer field
+              `"${task.source_url || ''}"`,
               `"${task.created_at || ''}"`
             ].join(',');
           });
@@ -1985,10 +1984,9 @@
             tasksHasMore = newTasks.length === tasksLimit;
           }
 
-          // Filter for slow pages (response time > 2000ms on either request)
+          // Filter for slow pages (response time > 2000ms)
           const slowPages = allTasks.filter(task => 
-            (task.response_time && task.response_time > 2000) || 
-            (task.second_response_time && task.second_response_time > 2000)
+            task.response_time && task.response_time > 2000
           );
 
           if (slowPages.length === 0) {
@@ -1996,13 +1994,13 @@
             return;
           }
 
-          // Convert to CSV with slow pages specific format
-          const headers = ["url", "first_load_time_ms", "second_load_time_ms", "cache_status", "timestamp"];
+          // Convert to CSV with slow pages specific format using actual columns
+          const headers = ["path", "response_time_ms", "status_code", "cache_status", "created_at"];
           const rows = slowPages.map(task => {
             return [
               `"${task.path || ''}"`,
               task.response_time || '',
-              task.second_response_time || '',
+              task.status_code || '',
               `"${task.cache_status || ''}"`,
               `"${task.created_at || ''}"`
             ].join(',');
@@ -2021,11 +2019,11 @@
         }
       }
 
+
       function convertToCSV(data) {
           const headers = [
-              "job_id", "job_domain", "path", "status", "status_code", 
-              "response_time", "cache_status", "second_response_time", 
-              "second_cache_status", "error", "created_at"
+              "job_id", "domain", "path", "status", "status_code", 
+              "response_time", "cache_status", "error", "created_at"
           ];
           const rows = data.map(row => {
               return headers.map(header => {
@@ -2368,7 +2366,6 @@
                 <th style="cursor: pointer;" onclick="sortTasks('cache_status')">Cache Status${getSortIcon("cache_status")}</th>
                 <th style="cursor: pointer;" onclick="sortTasks('second_response_time')">2nd Request${getSortIcon("second_response_time")}</th>
                 <th style="cursor: pointer;" onclick="sortTasks('status_code')">Status Code${getSortIcon("status_code")}</th>
-                <th>Error</th>
               </tr>
             </thead>
             <tbody>
@@ -2381,20 +2378,15 @@
             const secondRequest = task.second_response_time ? `${task.second_response_time}ms` : "-";
 
             tableHTML += `
-            <tr>
-              <td><a href="${task.url}" target="_blank"><code class="bb-task-path">${task.path}</code></a></td>
-              <td><span class="bb-task-status ${statusClass}">${task.status}</span></td>
-              <td>${task.response_time ? `${task.response_time}ms` : "-"}</td>
-              <td>${task.cache_status || "-"}</td>
-              <td>${secondRequest}</td>
-              <td>${task.status_code || "-"}</td>
-              <td>${
-                task.error
-                  ? `<span title="${task.error}" class="bb-error">${task.error.substring(0, 50)}${task.error.length > 50 ? "..." : ""}</span>`
-                  : "-"
-              }</td>
-            </tr>
-          `;
+              <tr>
+                <td><a href="${task.url}" target="_blank"><code class="bb-task-path">${task.path}</code></a></td>
+                <td><span class="bb-task-status ${statusClass}" ${task.error ? `title="${task.error.substring(0, 50)}${task.error.length > 50 ? "..." : ""}"` : ""}>${task.status}</span></td>
+                <td>${task.response_time ? `${task.response_time}ms` : "-"}</td>
+                <td ${task.error ? `title="${task.error.substring(0, 50)}${task.error.length > 50 ? "..." : ""}"` : ""}>${task.cache_status || "-"}</td>
+                <td>${secondRequest}</td>
+                <td>${task.status_code || "-"}</td>
+              </tr>
+              `;
           });
 
           tableHTML += "</tbody></table>";
