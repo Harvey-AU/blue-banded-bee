@@ -8,6 +8,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Multiple version updates may occur on the same date, each with its own version number.
 Each version represents a distinct set of changes, even if released on the same day.
 
+## [Unreleased]
+
+### Enhanced
+
+- **Crawler Blocking Avoidance - Phase 1**: Implemented quick wins to reduce bot blocking
+  - Updated User-Agent to professional format: `BlueBandedBee/1.0 (+https://www.bluebandedbee.co/pages/about-the-bot)`
+  - Added browser-like headers (Accept, Accept-Language, Accept-Encoding) to appear less bot-like
+  - Enhanced error detection to recognise 403 (Forbidden) and 429 (Too Many Requests) as blocking signals
+  - Limited retry attempts for 403/429 errors to 2 (instead of 5) to avoid exacerbating blocking
+  - Added test coverage for error detection logic
+  - Expected impact: 50-70% reduction in blocking, particularly on Shopify sites
+
 ## [0.5.28] – 2025-07-19
 
 ### Fixed
