@@ -1036,6 +1036,7 @@
                 <a href="#" class="filter-tab" data-status="running">In Progress</a>
                 <a href="#" class="filter-tab" data-status="failed">Failed</a>
             </div>
+            <button class="bb-btn bb-btn-secondary" id="exportBtn">Export</button>
           </div>
 
           <div class="filter-group">
@@ -1734,6 +1735,118 @@
         }
       }
 
+      async function exportToCSV() {
+        const exportBtn = document.getElementById("exportBtn");
+        exportBtn.disabled = true;
+        exportBtn.textContent = "Exporting...";
+
+        try {
+            const dateRange = document.getElementById("dateRange").value;
+            const statusFilter = document.querySelector("#statusFilterTabs .filter-tab.active").dataset.status;
+
+            // 1. Fetch all jobs for the current filter in batches
+            let jobs = [];
+            let jobsOffset = 0;
+            const jobsLimit = 500;
+            let jobsHasMore = true;
+
+            while(jobsHasMore) {
+                let jobsParams = `range=${dateRange}&limit=${jobsLimit}&offset=${jobsOffset}`;
+                if (statusFilter) {
+                    jobsParams += `&status=${statusFilter}`;
+                }
+                const jobsResponse = await dataBinder.fetchData(`/v1/jobs?${jobsParams}`);
+                const newJobs = jobsResponse.jobs || [];
+                jobs = jobs.concat(newJobs);
+                jobsOffset += jobsLimit;
+                jobsHasMore = newJobs.length === jobsLimit;
+            }
+
+            if (jobs.length === 0) {
+                showInfoMessage("No data to export.", 3000);
+                return;
+            }
+
+            let allTasks = [];
+
+            // 2. Fetch all tasks for each job
+            for (const job of jobs) {
+                let tasks = [];
+                let tasksOffset = 0;
+                const tasksLimit = 500; // Fetch tasks in batches of 500
+                let tasksHasMore = true;
+
+                while(tasksHasMore) {
+                    const tasksResponse = await dataBinder.fetchData(`/v1/jobs/${job.id}/tasks?limit=${tasksLimit}&offset=${tasksOffset}`);
+                    const newTasks = tasksResponse.tasks || [];
+                    tasks = tasks.concat(newTasks);
+                    tasksOffset += tasksLimit;
+                    tasksHasMore = newTasks.length === tasksLimit;
+                }
+                
+                // Add job info to each task
+                tasks.forEach(task => {
+                    task.job_id = job.id;
+                    task.job_domain = job.domains.name;
+                });
+
+                allTasks = allTasks.concat(tasks);
+            }
+
+            if (allTasks.length === 0) {
+                showInfoMessage("No tasks found for the selected jobs.", 3000);
+                return;
+            }
+
+            // 3. Convert to CSV and download
+            const csv = convertToCSV(allTasks);
+            downloadCSV(csv);
+
+        } catch (error) {
+            console.error("Export failed:", error);
+            showDashboardError("Failed to export data. Please try again.");
+        } finally {
+            exportBtn.disabled = false;
+            exportBtn.textContent = "Export";
+        }
+      }
+
+      function convertToCSV(data) {
+          const headers = [
+              "job_id", "job_domain", "path", "status", "status_code", 
+              "response_time", "cache_status", "second_response_time", 
+              "second_cache_status", "error", "created_at"
+          ];
+          const rows = data.map(row => {
+              return headers.map(header => {
+                  let value = row[header];
+                  if (value === null || value === undefined) {
+                      value = "";
+                  } else if (typeof value === 'string') {
+                      // Escape quotes by doubling them
+                      value = `"${value.replace(/"/g, '""')}"`;
+                  }
+                  return value;
+              }).join(',');
+          });
+          return [headers.join(',')].concat(rows).join('\r\n');
+      }
+
+      function downloadCSV(csvContent) {
+          const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+          const link = document.createElement("a");
+          if (link.download !== undefined) {
+              const url = URL.createObjectURL(blob);
+              const date = new Date().toISOString().slice(0, 10);
+              link.setAttribute("href", url);
+              link.setAttribute("download", `bbb_export_${date}.csv`);
+              link.style.visibility = 'hidden';
+              document.body.appendChild(link);
+              link.click();
+              document.body.removeChild(link);
+          }
+      }
+
       function setupFilters() {
         const dateRange = document.getElementById("dateRange");
         const statusFilterTabs = document.getElementById("statusFilterTabs");
@@ -1777,6 +1890,13 @@
               dataBinder.startAutoRefresh();
             }
           });
+        }
+
+        const exportBtn = document.getElementById("exportBtn");
+        if(exportBtn) {
+            exportBtn.addEventListener("click", () => {
+                exportToCSV();
+            });
         }
       }
 
