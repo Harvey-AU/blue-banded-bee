@@ -187,6 +187,34 @@
         box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
       }
 
+      .filter-tabs {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+
+      .filter-tab {
+        padding: 8px 16px;
+        border-radius: 6px;
+        text-decoration: none;
+        color: #6b7280;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        border: 1px solid #d1d5db;
+      }
+
+      .filter-tab:hover {
+        background-color: #f3f4f6;
+        border-color: #9ca3af;
+      }
+
+      .filter-tab.active {
+        background-color: #3b82f6;
+        color: white;
+        border-color: #3b82f6;
+      }
+
       .page-actions {
         display: flex;
         gap: 12px;
@@ -1002,14 +1030,12 @@
 
           <div class="filter-group">
             <label class="filter-label">Status</label>
-            <select class="filter-select" id="statusFilter">
-              <option value="">All Status</option>
-              <option value="running">Running</option>
-              <option value="completed">Completed</option>
-              <option value="failed">Failed</option>
-              <option value="pending">Pending</option>
-              <option value="cancelled">Cancelled</option>
-            </select>
+            <div class="filter-tabs" id="statusFilterTabs">
+                <a href="#" class="filter-tab active" data-status="">All</a>
+                <a href="#" class="filter-tab" data-status="completed">Complete</a>
+                <a href="#" class="filter-tab" data-status="running">In Progress</a>
+                <a href="#" class="filter-tab" data-status="failed">Failed</a>
+            </div>
           </div>
 
           <div class="filter-group">
@@ -1710,7 +1736,7 @@
 
       function setupFilters() {
         const dateRange = document.getElementById("dateRange");
-        const statusFilter = document.getElementById("statusFilter");
+        const statusFilterTabs = document.getElementById("statusFilterTabs");
         const refreshInterval = document.getElementById("refreshInterval");
 
         if (dateRange) {
@@ -1719,10 +1745,23 @@
           });
         }
 
-        if (statusFilter) {
-          statusFilter.addEventListener("change", () => {
-            updateJobsData(); // Reload with new filters
-          });
+        if (statusFilterTabs) {
+            statusFilterTabs.addEventListener("click", (e) => {
+                if (e.target.classList.contains("filter-tab")) {
+                    e.preventDefault();
+                    // Check if the clicked tab is already active
+                    if(e.target.classList.contains("active")) {
+                        return;
+                    }
+                    
+                    const currentActive = statusFilterTabs.querySelector(".active");
+                    if(currentActive) {
+                        currentActive.classList.remove("active");
+                    }
+                    e.target.classList.add("active");
+                    updateJobsData();
+                }
+            });
         }
 
         if (refreshInterval) {
@@ -1767,7 +1806,7 @@
 
       function updateJobsData() {
         const dateRange = document.getElementById("dateRange").value;
-        const statusFilter = document.getElementById("statusFilter").value;
+        const statusFilter = document.querySelector("#statusFilterTabs .filter-tab.active").dataset.status;
 
         // Build query parameters
         let params = `limit=10&range=${dateRange}`;
