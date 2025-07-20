@@ -299,6 +299,7 @@ Detailed plan available in [docs/organisation-model.md](docs/plans/organisation-
 
   - [x] Filter out links that are hidden via inline `style` attributes.
   - [x] Remove anchor links from link discovery
+  - [ ] Support compressed sitemaps (.xml.gz and other formats)
   - [ ] If sitemap can't be found, setup job with / page and start as normal finding links through pages
   - [ ] Only store source_url if page was found ON a page and redirect_url if it's a redirect AND it doesn't match the domain/path of the task
 
