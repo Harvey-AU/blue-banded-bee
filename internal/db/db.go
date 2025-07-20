@@ -73,13 +73,13 @@ func New(config *Config) (*DB, error) {
 		config.SSLMode = "disable"
 	}
 	if config.MaxIdleConns == 0 {
-		config.MaxIdleConns = 25
+		config.MaxIdleConns = 30
 	}
 	if config.MaxOpenConns == 0 {
 		config.MaxOpenConns = 75
 	}
 	if config.MaxLifetime == 0 {
-		config.MaxLifetime = 30 * time.Minute
+		config.MaxLifetime = 20 * time.Minute
 	}
 
 	client, err := sql.Open("pgx", config.ConnectionString())
@@ -110,28 +110,33 @@ func New(config *Config) (*DB, error) {
 
 // InitFromEnv creates a PostgreSQL connection using environment variables
 func InitFromEnv() (*DB, error) {
-	// If DATABASE_URL is provided, use it directly
+	// If DATABASE_URL is provided, use it with default config
 	if url := os.Getenv("DATABASE_URL"); url != "" {
+		config := &Config{
+			DatabaseURL:  url,
+			MaxIdleConns: 30,
+			MaxOpenConns: 75,
+			MaxLifetime:  20 * time.Minute,
+		}
+
 		client, err := sql.Open("pgx", url)
 		if err != nil {
 			return nil, fmt.Errorf("failed to connect to PostgreSQL via DATABASE_URL: %w", err)
 		}
-		client.SetMaxOpenConns(75)
-		client.SetMaxIdleConns(25)
-		client.SetConnMaxLifetime(5 * time.Minute)
+
+		// Configure connection pool using the same settings
+		client.SetMaxOpenConns(config.MaxOpenConns)
+		client.SetMaxIdleConns(config.MaxIdleConns)
+		client.SetConnMaxLifetime(config.MaxLifetime)
+
 		// Verify connection
 		if err := client.Ping(); err != nil {
 			return nil, fmt.Errorf("failed to ping PostgreSQL via DATABASE_URL: %w", err)
 		}
+
 		// Initialise schema
 		if err := setupSchema(client); err != nil {
 			return nil, fmt.Errorf("failed to setup schema: %w", err)
-		}
-
-		// Create a config that stores the original DATABASE_URL
-		config := &Config{
-			// Set this special field for DATABASE_URL
-			DatabaseURL: url,
 		}
 
 		// Create the cache
@@ -147,9 +152,9 @@ func InitFromEnv() (*DB, error) {
 		Password:     os.Getenv("POSTGRES_PASSWORD"),
 		Database:     os.Getenv("POSTGRES_DB"),
 		SSLMode:      os.Getenv("POSTGRES_SSL_MODE"),
-		MaxIdleConns: 25,
+		MaxIdleConns: 30,
 		MaxOpenConns: 75,
-		MaxLifetime:  5 * time.Minute,
+		MaxLifetime:  20 * time.Minute,
 	}
 
 	// Use defaults if not set
