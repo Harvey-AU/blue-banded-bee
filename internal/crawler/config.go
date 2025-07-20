@@ -28,7 +28,7 @@ func DefaultConfig() *Config {
 		DefaultTimeout: 30 * time.Second,
 		MaxConcurrency: 10,
 		RateLimit:      3,
-		UserAgent:      "Blue Banded Bee (Cache-warmer)",
+		UserAgent:      "BlueBandedBee/1.0 (+https://www.bluebandedbee.co/pages/about-the-bot)",
 		RetryAttempts:  3,
 		RetryDelay:     500 * time.Millisecond,
 		SkipCachedURLs: false, // Default to crawling all URLs
