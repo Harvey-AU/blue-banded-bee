@@ -730,15 +730,4 @@ func (jm *JobManager) processSitemap(ctx context.Context, jobID, domain string, 
 			log.Error().Err(updateErr).Str("job_id", jobID).Msg("Failed to update job with warning message")
 		}
 	}
-
-	// Start the job if it's in pending state
-	job, err := jm.GetJob(ctx, jobID)
-	if err == nil && job.Status == JobStatusPending {
-		if err := jm.StartJob(ctx, jobID); err != nil {
-			log.Error().
-				Err(err).
-				Str("job_id", jobID).
-				Msg("Failed to start job after processing sitemap")
-		}
-	}
 }
