@@ -504,6 +504,7 @@ type TaskResponse struct {
 	ContentType        *string `json:"content_type,omitempty"`
 	Error              *string `json:"error,omitempty"`
 	SourceType         *string `json:"source_type,omitempty"`
+	SourceURL          *string `json:"source_url,omitempty"`
 	CreatedAt          string  `json:"created_at"`
 	StartedAt          *string `json:"started_at,omitempty"`
 	CompletedAt        *string `json:"completed_at,omitempty"`
@@ -596,7 +597,7 @@ func (h *Handler) getJobTasks(w http.ResponseWriter, r *http.Request, jobID stri
 	// Build query with optional status filter
 	baseQuery := `
 		SELECT t.id, t.job_id, p.path, d.name as domain, t.status, t.status_code, t.response_time, 
-		       t.cache_status, t.second_response_time, t.second_cache_status, t.content_type, t.error, t.source_type,
+		       t.cache_status, t.second_response_time, t.second_cache_status, t.content_type, t.error, t.source_type, t.source_url,
 		       t.created_at, t.started_at, t.completed_at, t.retry_count
 		FROM tasks t
 		JOIN pages p ON t.page_id = p.id
@@ -645,11 +646,11 @@ func (h *Handler) getJobTasks(w http.ResponseWriter, r *http.Request, jobID stri
 		var domain string
 		var startedAt, completedAt, createdAt sql.NullTime
 		var statusCode, responseTime, secondResponseTime sql.NullInt32
-		var cacheStatus, secondCacheStatus, contentType, errorMsg, sourceType sql.NullString
+		var cacheStatus, secondCacheStatus, contentType, errorMsg, sourceType, sourceURL sql.NullString
 
 		err := rows.Scan(
 			&task.ID, &task.JobID, &task.Path, &domain, &task.Status,
-			&statusCode, &responseTime, &cacheStatus, &secondResponseTime, &secondCacheStatus, &contentType, &errorMsg, &sourceType,
+			&statusCode, &responseTime, &cacheStatus, &secondResponseTime, &secondCacheStatus, &contentType, &errorMsg, &sourceType, &sourceURL,
 			&createdAt, &startedAt, &completedAt, &task.RetryCount,
 		)
 		if err != nil {
@@ -687,6 +688,9 @@ func (h *Handler) getJobTasks(w http.ResponseWriter, r *http.Request, jobID stri
 		}
 		if sourceType.Valid {
 			task.SourceType = &sourceType.String
+		}
+		if sourceURL.Valid {
+			task.SourceURL = &sourceURL.String
 		}
 		if startedAt.Valid {
 			sa := startedAt.Time.Format(time.RFC3339)
