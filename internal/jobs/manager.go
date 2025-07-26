@@ -28,7 +28,7 @@ type DbQueueProvider interface {
 type JobManager struct {
 	db      *sql.DB
 	dbQueue DbQueueProvider
-	crawler *crawler.Crawler
+	crawler CrawlerInterface
 
 	workerPool *WorkerPool
 	
@@ -38,7 +38,7 @@ type JobManager struct {
 }
 
 // NewJobManager creates a new job manager
-func NewJobManager(db *sql.DB, dbQueue DbQueueProvider, crawler *crawler.Crawler, workerPool *WorkerPool) *JobManager {
+func NewJobManager(db *sql.DB, dbQueue DbQueueProvider, crawler CrawlerInterface, workerPool *WorkerPool) *JobManager {
 	return &JobManager{
 		db:             db,
 		dbQueue:        dbQueue,
