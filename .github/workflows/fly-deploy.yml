@@ -24,6 +24,8 @@ jobs:
         run: go version # Update to the desired Go version
 
       - name: Run tests and generate coverage report
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: go test -v -coverprofile=coverage.out ./...
 
       - name: Upload coverage to Codecov
