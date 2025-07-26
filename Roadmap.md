@@ -284,19 +284,16 @@ Detailed plan available in [docs/organisation-model.md](docs/plans/organisation-
 ### 🔴 Task prioritisation & URL processing
 
 - [x] **Stop duplicate domain crawls oncurrently, close old job**
-
   - [x] When creating a job, check if there's an active job for this user
   - [x] If so, cancel the old job
 
 - [x] **Task Prioritisation**
-
   - [x] Prioritisation by page hierarchy and importance - [Implementation Plan](docs/plans/_archive/task-prioritisation.md)
   - [x] Implement link priority ordering for header links (1st: 1.000, 2nd: 0.990, etc.) ([internal/jobs/manager.go:819-820](./internal/jobs/manager.go#L819))
   - [x] Apply priority ordering logic to all discovered page links ([internal/jobs/manager.go:816](./internal/jobs/manager.go#L816))
   - [ ] Job-level task prioritisation options
 
 - [ ] **URL Processing Enhancements**
-
   - [x] Filter out links that are hidden via inline `style` attributes.
   - [x] Remove anchor links from link discovery
   - [ ] Support compressed sitemaps (.xml.gz and other formats)

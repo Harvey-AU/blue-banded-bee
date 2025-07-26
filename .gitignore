@@ -11,6 +11,7 @@
 /dist/
 *.exe
 app
+main
 
 # IDE
 .idea/
@@ -47,4 +48,5 @@ node_modules/
 .claude/mcp.json
 
 # Supabase
-supabase/
+supabase/.temp/
+supabase/.branches/
