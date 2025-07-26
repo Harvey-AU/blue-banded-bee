@@ -4,6 +4,12 @@
 
 This plan focuses on creating simple, practical integration tests that verify core functionality with minimal complexity.
 
+**Note:** This approach was chosen over the more complex unit testing with mocks strategy (see archived `_archive/unit-testing-with-testify.md`) because:
+- Simpler to implement and maintain
+- Tests real database interactions
+- No need to maintain mock implementations
+- Better confidence that tests reflect production behavior
+
 ---
 
 ## Overall Approach
@@ -52,14 +58,14 @@ go test ./internal/jobs/... -v
 
 ## Simplified Test Plan
 
-### Phase 1: Basic Tests (Start Here)
+### Phase 1: Basic Tests (In Progress)
 
-| Test Function | Est. Lines | Complexity | Purpose |
-| :------------ | :--------- | :--------- | :------ |
-| **`TestGetJob`** | 10-15 lines | **Low** | Verify basic read operations work |
-| **`TestCreateJob`** | 20-30 lines | **Low** | Test job creation without sitemap complexity |
-| **`TestCancelJob`** | 20-30 lines | **Low** | Test state transitions |
-| **`TestProcessSitemapFallback`** | 30-40 lines | **Medium** | Test your new fallback feature |
+| Test Function | Est. Lines | Complexity | Purpose | Status |
+| :------------ | :--------- | :--------- | :------ | :----- |
+| **`TestGetJob`** | 10-15 lines | **Low** | Verify basic read operations work | ✅ Complete (42 lines) |
+| **`TestCreateJob`** | 20-30 lines | **Low** | Test job creation without sitemap complexity | 🔴 Next |
+| **`TestCancelJob`** | 20-30 lines | **Low** | Test state transitions | ⚪ Pending |
+| **`TestProcessSitemapFallback`** | 30-40 lines | **Medium** | Test your new fallback feature | ⚪ Pending |
 
 **Phase 1 Total:** ~80-115 lines (much simpler than original 350-470)
 
