@@ -13,11 +13,6 @@ import (
 )
 
 func TestGetJob(t *testing.T) {
-	// Skip in CI environment
-	if os.Getenv("CI") == "true" {
-		t.Skip("Skipping database test in CI environment")
-	}
-
 	// 1. Connect to test database
 	database, err := db.InitFromEnv()
 	require.NoError(t, err, "Failed to connect to test database")
@@ -59,11 +54,6 @@ func TestGetJob(t *testing.T) {
 }
 
 func TestCreateJob(t *testing.T) {
-	// Skip in CI environment
-	if os.Getenv("CI") == "true" {
-		t.Skip("Skipping database test in CI environment")
-	}
-
 	// Connect to test database
 	database, err := db.InitFromEnv()
 	require.NoError(t, err, "Failed to connect to test database")
@@ -113,11 +103,6 @@ func TestCreateJob(t *testing.T) {
 }
 
 func TestCancelJob(t *testing.T) {
-	// Skip in CI environment
-	if os.Getenv("CI") == "true" {
-		t.Skip("Skipping database test in CI environment")
-	}
-
 	// Connect to test database
 	database, err := db.InitFromEnv()
 	require.NoError(t, err, "Failed to connect to test database")
@@ -176,11 +161,6 @@ func TestCancelJob(t *testing.T) {
 }
 
 func TestProcessSitemapFallback(t *testing.T) {
-	// Skip in CI environment
-	if os.Getenv("CI") == "true" {
-		t.Skip("Skipping database test in CI environment")
-	}
-
 	// Connect to test database
 	database, err := db.InitFromEnv()
 	require.NoError(t, err, "Failed to connect to test database")
@@ -239,11 +219,6 @@ func TestProcessSitemapFallback(t *testing.T) {
 }
 
 func TestEnqueueJobURLs(t *testing.T) {
-	// Skip in CI environment
-	if os.Getenv("CI") == "true" {
-		t.Skip("Skipping database test in CI environment")
-	}
-
 	// Connect to test database
 	database, err := db.InitFromEnv()
 	require.NoError(t, err, "Failed to connect to test database")
