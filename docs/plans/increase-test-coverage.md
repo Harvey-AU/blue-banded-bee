@@ -4,11 +4,10 @@
 
 This plan focuses on creating simple, practical integration tests that verify core functionality with minimal complexity.
 
-**Note:** This approach was chosen over the more complex unit testing with mocks strategy (see archived `_archive/unit-testing-with-testify.md`) because:
-- Simpler to implement and maintain
-- Tests real database interactions
-- No need to maintain mock implementations
-- Better confidence that tests reflect production behavior
+**Note:** This integration testing approach complements the unit testing strategy in `unit-testing-with-testify.md`:
+- **Integration tests (this plan)**: Test database operations and basic flows with real DB
+- **Unit tests (other plan)**: Test complex business logic with mocks
+- Together they provide comprehensive coverage
 
 ---
 
