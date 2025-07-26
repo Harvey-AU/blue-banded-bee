@@ -716,18 +716,85 @@ func (jm *JobManager) processSitemap(ctx context.Context, jobID, domain string, 
 		log.Info().
 			Str("job_id", jobID).
 			Str("domain", domain).
-			Msg("No URLs found in sitemap")
+			Msg("No URLs found in sitemap, falling back to root page")
 
-		// Update job with warning using dbQueue
-		if updateErr := jm.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
-			_, err := tx.ExecContext(ctx, `
-				UPDATE jobs
-				SET error_message = $1
-				WHERE id = $2
-			`, "No URLs found in sitemap", jobID)
+		// Get domain ID from the job
+		var domainID int
+		err := jm.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
+			return tx.QueryRowContext(ctx, `
+				SELECT domain_id FROM jobs WHERE id = $1
+			`, jobID).Scan(&domainID)
+		})
+		if err != nil {
+			log.Error().
+				Err(err).
+				Str("job_id", jobID).
+				Msg("Failed to get domain ID for fallback root page")
+			return
+		}
+
+		// Create fallback root URL list
+		rootURL := fmt.Sprintf("https://%s/", domain)
+		urls = []string{rootURL}
+
+		// Create page records using the existing function
+		pageIDs, paths, err := db.CreatePageRecords(ctx, jm.dbQueue.(*db.DbQueue), domainID, domain, urls)
+		if err != nil {
+			log.Error().
+				Err(err).
+				Str("job_id", jobID).
+				Str("domain", domain).
+				Msg("Failed to create page records for fallback")
+			return
+		}
+
+		// Prepare pages with highest priority
+		pagesWithPriority := make([]db.Page, len(pageIDs))
+		for i, pageID := range pageIDs {
+			pagesWithPriority[i] = db.Page{
+				ID:       pageID,
+				Path:     paths[i],
+				Priority: 1.000, // Highest priority for root page
+			}
+		}
+
+		// Use the existing EnqueueJobURLs function
+		baseURL := fmt.Sprintf("https://%s", domain)
+		if err := jm.EnqueueJobURLs(ctx, jobID, pagesWithPriority, "fallback", baseURL); err != nil {
+			log.Error().
+				Err(err).
+				Str("job_id", jobID).
+				Str("domain", domain).
+				Msg("Failed to enqueue fallback root URL")
+			
+			// Update job with error
+			if updateErr := jm.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
+				_, err := tx.ExecContext(ctx, `
+					UPDATE jobs
+					SET error_message = $1
+					WHERE id = $2
+				`, fmt.Sprintf("Failed to create fallback task: %v", err), jobID)
+				return err
+			}); updateErr != nil {
+				log.Error().Err(updateErr).Str("job_id", jobID).Msg("Failed to update job with error message")
+			}
+			return
+		}
+
+		log.Info().
+			Str("job_id", jobID).
+			Str("domain", domain).
+			Msg("Created fallback root page task - job will proceed with link discovery")
+		
+		// Recalculate job statistics
+		if err := jm.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
+			_, err := tx.ExecContext(ctx, `SELECT recalculate_job_stats($1)`, jobID)
 			return err
-		}); updateErr != nil {
-			log.Error().Err(updateErr).Str("job_id", jobID).Msg("Failed to update job with warning message")
+		}); err != nil {
+			log.Error().
+				Err(err).
+				Str("job_id", jobID).
+				Msg("Failed to recalculate job stats after fallback creation")
 		}
 	}
 }
