@@ -25,10 +25,10 @@ import (
 
 // Config holds the application configuration loaded from environment variables
 type Config struct {
-	Port                   string // HTTP port to listen on
-	Env                    string // Environment (development/production)
-	SentryDSN              string // Sentry DSN for error tracking
-	LogLevel               string // Log level (debug, info, warn, error)
+	Port                  string // HTTP port to listen on
+	Env                   string // Environment (development/production)
+	SentryDSN             string // Sentry DSN for error tracking
+	LogLevel              string // Log level (debug, info, warn, error)
 	FlightRecorderEnabled bool   // Flight recorder for performance debugging
 }
 
@@ -38,10 +38,10 @@ func main() {
 
 	// Load configuration
 	config := &Config{
-		Port:                   getEnvWithDefault("PORT", "8080"),
-		Env:                    getEnvWithDefault("APP_ENV", "development"),
-		SentryDSN:              os.Getenv("SENTRY_DSN"),
-		LogLevel:               getEnvWithDefault("LOG_LEVEL", "info"),
+		Port:                  getEnvWithDefault("PORT", "8080"),
+		Env:                   getEnvWithDefault("APP_ENV", "development"),
+		SentryDSN:             os.Getenv("SENTRY_DSN"),
+		LogLevel:              getEnvWithDefault("LOG_LEVEL", "info"),
 		FlightRecorderEnabled: getEnvWithDefault("FLIGHT_RECORDER_ENABLED", "false") == "true",
 	}
 
@@ -70,8 +70,8 @@ func main() {
 	// Initialise Sentry for error tracking and performance monitoring
 	if config.SentryDSN != "" {
 		err := sentry.Init(sentry.ClientOptions{
-			Dsn:              config.SentryDSN,
-			Environment:      config.Env,
+			Dsn:         config.SentryDSN,
+			Environment: config.Env,
 			TracesSampleRate: func() float64 {
 				if config.Env == "production" {
 					return 0.1 // 10% sampling in production
@@ -79,7 +79,7 @@ func main() {
 				return 1.0 // 100% sampling in development
 			}(),
 			AttachStacktrace: true,
-			Debug:           config.Env == "development",
+			Debug:            config.Env == "development",
 		})
 		if err != nil {
 			log.Warn().Err(err).Msg("Failed to initialise Sentry")
@@ -108,17 +108,17 @@ func main() {
 
 	// Create database queue for operations
 	dbQueue := db.NewDbQueue(pgDB)
-	
+
 	// Create a worker pool for task processing
 	var jobWorkers int = 5 // QUESTION: Set in env or dynamically - consider impact throughout app where worker pool sizing is set.
 	workerPool := jobs.NewWorkerPool(pgDB.GetDB(), dbQueue, cr, jobWorkers, pgDB.GetConfig())
-	
+
 	// Create job manager
 	jobsManager := jobs.NewJobManager(pgDB.GetDB(), dbQueue, cr, workerPool)
-	
+
 	// Set the job manager in the worker pool for duplicate checking
 	workerPool.SetJobManager(jobsManager)
-	
+
 	// Start the worker pool
 	workerPool.Start(context.Background())
 	defer workerPool.Stop()
@@ -169,7 +169,7 @@ func main() {
 
 	// Create middleware stack
 	var handler http.Handler = mux
-	
+
 	// Add rate limiting
 	handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ip := getClientIP(r)
@@ -179,7 +179,7 @@ func main() {
 		}
 		mux.ServeHTTP(w, r)
 	})
-	
+
 	// Add middleware in reverse order (outermost first)
 	handler = api.LoggingMiddleware(handler)
 	handler = api.RequestIDMiddleware(handler)

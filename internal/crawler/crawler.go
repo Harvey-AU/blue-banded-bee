@@ -34,11 +34,11 @@ type tracingRoundTripper struct {
 func (t *tracingRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 	// Create performance metrics for this request
 	metrics := &PerformanceMetrics{}
-	
+
 	// Create trace with callbacks that populate metrics
 	var dnsStartTime, connectStartTime, tlsStartTime, requestStartTime time.Time
 	requestStartTime = time.Now()
-	
+
 	trace := &httptrace.ClientTrace{
 		DNSStart: func(info httptrace.DNSStartInfo) {
 			dnsStartTime = time.Now()
@@ -68,13 +68,13 @@ func (t *tracingRoundTripper) RoundTrip(req *http.Request) (*http.Response, erro
 			metrics.TTFB = time.Since(requestStartTime).Milliseconds()
 		},
 	}
-	
+
 	// Store metrics for this URL (will be retrieved in OnResponse)
 	t.metricsMap.Store(req.URL.String(), metrics)
-	
+
 	// Attach trace to request context
 	req = req.WithContext(httptrace.WithClientTrace(req.Context(), trace))
-	
+
 	// Perform the request
 	return t.transport.RoundTrip(req)
 }
@@ -141,7 +141,7 @@ func New(config *Config, id ...string) *Crawler {
 		r.Headers.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8")
 		r.Headers.Set("Accept-Language", "en-US,en;q=0.9")
 		r.Headers.Set("Accept-Encoding", "gzip, deflate, br")
-		
+
 		log.Debug().
 			Str("url", r.URL.String()).
 			Msg("Crawler sending request")
@@ -268,7 +268,7 @@ func (c *Crawler) WarmURL(ctx context.Context, targetURL string, findLinks bool)
 	collyClone.OnResponse(func(r *colly.Response) {
 		startTime := r.Ctx.GetAny("start_time").(time.Time)
 		result := r.Ctx.GetAny("result").(*CrawlResult)
-		
+
 		// Retrieve performance metrics from the metrics map
 		if metricsVal, ok := c.metricsMap.LoadAndDelete(r.Request.URL.String()); ok {
 			performanceMetrics := metricsVal.(*PerformanceMetrics)
@@ -662,5 +662,3 @@ func isElementHidden(s *goquery.Selection) bool {
 	// No hiding attributes or classes were found
 	return false
 }
-
-

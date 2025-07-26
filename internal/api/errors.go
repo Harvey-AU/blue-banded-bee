@@ -20,25 +20,25 @@ type ErrorCode string
 
 const (
 	// Client errors (4xx)
-	ErrCodeBadRequest     ErrorCode = "BAD_REQUEST"
-	ErrCodeUnauthorised   ErrorCode = "UNAUTHORISED"
-	ErrCodeForbidden      ErrorCode = "FORBIDDEN"
-	ErrCodeNotFound       ErrorCode = "NOT_FOUND"
+	ErrCodeBadRequest       ErrorCode = "BAD_REQUEST"
+	ErrCodeUnauthorised     ErrorCode = "UNAUTHORISED"
+	ErrCodeForbidden        ErrorCode = "FORBIDDEN"
+	ErrCodeNotFound         ErrorCode = "NOT_FOUND"
 	ErrCodeMethodNotAllowed ErrorCode = "METHOD_NOT_ALLOWED"
-	ErrCodeConflict       ErrorCode = "CONFLICT"
-	ErrCodeValidation     ErrorCode = "VALIDATION_ERROR"
-	ErrCodeRateLimit      ErrorCode = "RATE_LIMIT_EXCEEDED"
+	ErrCodeConflict         ErrorCode = "CONFLICT"
+	ErrCodeValidation       ErrorCode = "VALIDATION_ERROR"
+	ErrCodeRateLimit        ErrorCode = "RATE_LIMIT_EXCEEDED"
 
 	// Server errors (5xx)
-	ErrCodeInternal       ErrorCode = "INTERNAL_ERROR"
+	ErrCodeInternal           ErrorCode = "INTERNAL_ERROR"
 	ErrCodeServiceUnavailable ErrorCode = "SERVICE_UNAVAILABLE"
-	ErrCodeDatabaseError  ErrorCode = "DATABASE_ERROR"
+	ErrCodeDatabaseError      ErrorCode = "DATABASE_ERROR"
 )
 
 // WriteError writes a standardised error response
 func WriteError(w http.ResponseWriter, r *http.Request, err error, status int, code ErrorCode) {
 	requestID := GetRequestID(r)
-	
+
 	errResp := ErrorResponse{
 		Status:    status,
 		Message:   err.Error(),
@@ -64,7 +64,7 @@ func WriteError(w http.ResponseWriter, r *http.Request, err error, status int, c
 // WriteErrorMessage writes a standardised error response with a custom message
 func WriteErrorMessage(w http.ResponseWriter, r *http.Request, message string, status int, code ErrorCode) {
 	requestID := GetRequestID(r)
-	
+
 	errResp := ErrorResponse{
 		Status:    status,
 		Message:   message,

@@ -31,7 +31,7 @@ type JobManager struct {
 	crawler CrawlerInterface
 
 	workerPool *WorkerPool
-	
+
 	// Map to track which pages have been processed for each job
 	processedPages map[string]struct{} // Key format: "jobID_pageID"
 	pagesMutex     sync.RWMutex        // Mutex for thread-safe access
@@ -56,13 +56,13 @@ func (jm *JobManager) CreateJob(ctx context.Context, options *JobOptions) (*Job,
 	span.SetTag("domain", options.Domain)
 
 	normalisedDomain := util.NormaliseDomain(options.Domain)
-	
+
 	// Check for existing active jobs for the same domain and org
 	if options.OrganisationID != nil && *options.OrganisationID != "" {
 		var existingJobID string
 		var existingJobStatus string
 		var existingOrgID string
-		
+
 		err := jm.db.QueryRowContext(ctx, `
 			SELECT j.id, j.status, j.organisation_id
 			FROM jobs j
@@ -73,7 +73,7 @@ func (jm *JobManager) CreateJob(ctx context.Context, options *JobOptions) (*Job,
 			ORDER BY j.created_at DESC
 			LIMIT 1
 		`, normalisedDomain, *options.OrganisationID).Scan(&existingJobID, &existingJobStatus, &existingOrgID)
-		
+
 		if err == nil && existingJobID != "" {
 			// Found an existing active job for the same domain and organisation
 			log.Info().
@@ -82,8 +82,7 @@ func (jm *JobManager) CreateJob(ctx context.Context, options *JobOptions) (*Job,
 				Str("domain", normalisedDomain).
 				Str("organisation_id", *options.OrganisationID).
 				Msg("Found existing active job for domain, cancelling it")
-		
-			
+
 			if err := jm.CancelJob(ctx, existingJobID); err != nil {
 				log.Error().
 					Err(err).
@@ -99,7 +98,7 @@ func (jm *JobManager) CreateJob(ctx context.Context, options *JobOptions) (*Job,
 				Msg("Error checking for existing jobs")
 		}
 	}
-	
+
 	// Create a new job object
 	job := &Job{
 		ID:              uuid.New().String(),
@@ -126,7 +125,7 @@ func (jm *JobManager) CreateJob(ctx context.Context, options *JobOptions) (*Job,
 	}
 
 	var domainID int
-	
+
 	// Use dbQueue for transaction safety
 	err := jm.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
 		// Get or create domain ID
@@ -177,7 +176,7 @@ func (jm *JobManager) CreateJob(ctx context.Context, options *JobOptions) (*Job,
 	} else {
 		// Prepare for manual root URL creation
 		rootPath := "/"
-		
+
 		// Create a page record for the root URL
 		err := jm.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
 			var pageID int
@@ -187,11 +186,11 @@ func (jm *JobManager) CreateJob(ctx context.Context, options *JobOptions) (*Job,
 				ON CONFLICT (domain_id, path) DO UPDATE SET path = EXCLUDED.path
 				RETURNING id
 			`, domainID, rootPath).Scan(&pageID)
-			
+
 			if err != nil {
 				return fmt.Errorf("failed to create page record for root path: %w", err)
 			}
-			
+
 			// Enqueue the root URL with its page ID
 			_, err = tx.ExecContext(ctx, `
 				INSERT INTO tasks (
@@ -199,17 +198,16 @@ func (jm *JobManager) CreateJob(ctx context.Context, options *JobOptions) (*Job,
 					source_type, source_url
 				) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 			`, uuid.New().String(), job.ID, pageID, rootPath, "pending", time.Now().UTC(), 0, "manual", "")
-			
+
 			if err != nil {
 				return fmt.Errorf("failed to enqueue task for root path: %w", err)
 			}
-			
 
 			jm.markPageProcessed(job.ID, pageID)
-			
+
 			return nil
 		})
-		
+
 		if err != nil {
 			span.SetTag("error", "true")
 			span.SetData("error.message", err.Error())
@@ -248,15 +246,15 @@ func (jm *JobManager) StartJob(ctx context.Context, jobID string) error {
 
 	// Create new job with same configuration
 	newJobOptions := &JobOptions{
-		Domain:         originalJob.Domain,
-		UserID:         originalJob.UserID,
-		OrganisationID: originalJob.OrganisationID,
-		UseSitemap:     true, // Default to true
-		Concurrency:    originalJob.Concurrency,
-		FindLinks:      originalJob.FindLinks,
-		MaxPages:       originalJob.MaxPages,
-		IncludePaths:   originalJob.IncludePaths,
-		ExcludePaths:   originalJob.ExcludePaths,
+		Domain:          originalJob.Domain,
+		UserID:          originalJob.UserID,
+		OrganisationID:  originalJob.OrganisationID,
+		UseSitemap:      true, // Default to true
+		Concurrency:     originalJob.Concurrency,
+		FindLinks:       originalJob.FindLinks,
+		MaxPages:        originalJob.MaxPages,
+		IncludePaths:    originalJob.IncludePaths,
+		ExcludePaths:    originalJob.ExcludePaths,
 		RequiredWorkers: originalJob.RequiredWorkers,
 	}
 
@@ -305,7 +303,7 @@ func (jm *JobManager) markPageProcessed(jobID string, pageID int) {
 func (jm *JobManager) clearProcessedPages(jobID string) {
 	jm.pagesMutex.Lock()
 	defer jm.pagesMutex.Unlock()
-	
+
 	// Find all keys that start with this job ID
 	prefix := jobID + "_"
 	for key := range jm.processedPages {
@@ -431,7 +429,7 @@ func (jm *JobManager) CancelJob(ctx context.Context, jobID string) error {
 
 	// Remove job from worker pool
 	jm.workerPool.RemoveJob(job.ID)
-	
+
 	// Clear processed pages for this job
 	jm.clearProcessedPages(job.ID)
 
@@ -538,7 +536,6 @@ func (jm *JobManager) GetJobStatus(ctx context.Context, jobID string) (*Job, err
 	return job, nil
 }
 
-
 // processSitemap fetches and processes a sitemap for a domain
 func (jm *JobManager) processSitemap(ctx context.Context, jobID, domain string, includePaths, excludePaths []string) {
 	span := sentry.StartSpan(ctx, "manager.process_sitemap")
@@ -559,14 +556,14 @@ func (jm *JobManager) processSitemap(ctx context.Context, jobID, domain string, 
 
 	// Discover sitemaps for the domain
 	sitemaps, err := sitemapCrawler.DiscoverSitemaps(ctx, domain)
-	
+
 	// Log discovered sitemaps
 	log.Info().
 		Str("job_id", jobID).
 		Str("domain", domain).
 		Int("sitemap_count", len(sitemaps)).
 		Msg("Sitemaps discovered")
-		
+
 	// Process each sitemap to extract URLs
 	var urls []string
 	for _, sitemapURL := range sitemaps {
@@ -574,7 +571,7 @@ func (jm *JobManager) processSitemap(ctx context.Context, jobID, domain string, 
 			Str("job_id", jobID).
 			Str("sitemap_url", sitemapURL).
 			Msg("Processing sitemap")
-			
+
 		sitemapURLs, err := sitemapCrawler.ParseSitemap(ctx, sitemapURL)
 		if err != nil {
 			log.Warn().
@@ -584,13 +581,13 @@ func (jm *JobManager) processSitemap(ctx context.Context, jobID, domain string, 
 				Msg("Error parsing sitemap")
 			continue
 		}
-		
+
 		log.Info().
 			Str("job_id", jobID).
 			Str("sitemap_url", sitemapURL).
 			Int("url_count", len(sitemapURLs)).
 			Msg("Parsed URLs from sitemap")
-			
+
 		urls = append(urls, sitemapURLs...)
 	}
 	if err != nil {
@@ -632,7 +629,7 @@ func (jm *JobManager) processSitemap(ctx context.Context, jobID, domain string, 
 				Str("url", url).
 				Msg("URL from sitemap")
 		}
-		
+
 		// Get domain ID from the job
 		var domainID int
 		err := jm.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
@@ -681,7 +678,6 @@ func (jm *JobManager) processSitemap(ctx context.Context, jobID, domain string, 
 			}
 		}
 
-
 		// Use our wrapper function that checks for duplicates
 		baseURL := fmt.Sprintf("https://%s", domain)
 		if err := jm.EnqueueJobURLs(ctx, jobID, pagesWithPriority, "sitemap", baseURL); err != nil {
@@ -700,7 +696,7 @@ func (jm *JobManager) processSitemap(ctx context.Context, jobID, domain string, 
 			Str("domain", domain).
 			Int("url_count", len(urls)).
 			Msg("Added sitemap URLs to job queue")
-		
+
 		// Recalculate job statistics after bulk sitemap operation
 		if err := jm.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
 			_, err := tx.ExecContext(ctx, `SELECT recalculate_job_stats($1)`, jobID)
@@ -766,7 +762,7 @@ func (jm *JobManager) processSitemap(ctx context.Context, jobID, domain string, 
 				Str("job_id", jobID).
 				Str("domain", domain).
 				Msg("Failed to enqueue fallback root URL")
-			
+
 			// Update job with error
 			if updateErr := jm.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
 				_, err := tx.ExecContext(ctx, `
@@ -785,7 +781,7 @@ func (jm *JobManager) processSitemap(ctx context.Context, jobID, domain string, 
 			Str("job_id", jobID).
 			Str("domain", domain).
 			Msg("Created fallback root page task - job will proceed with link discovery")
-		
+
 		// Recalculate job statistics
 		if err := jm.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
 			_, err := tx.ExecContext(ctx, `SELECT recalculate_job_stats($1)`, jobID)

@@ -56,11 +56,11 @@ func GetRequestID(r *http.Request) string {
 func generateRequestID() string {
 	// Use timestamp + random bytes for uniqueness
 	timestamp := time.Now().UnixNano()
-	
+
 	// Generate 4 random bytes
 	randomBytes := make([]byte, 4)
 	rand.Read(randomBytes)
-	
+
 	return fmt.Sprintf("%x-%x", timestamp, randomBytes)
 }
 

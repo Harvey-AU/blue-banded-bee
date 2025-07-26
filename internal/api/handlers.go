@@ -45,10 +45,9 @@ func (h *Handler) SetupRoutes(mux *http.ServeMux) {
 	// Authentication routes (no auth middleware)
 	mux.HandleFunc("/v1/auth/register", h.AuthRegister)
 	mux.HandleFunc("/v1/auth/session", h.AuthSession)
-	
+
 	// Profile route (requires auth)
 	mux.Handle("/v1/auth/profile", auth.AuthMiddleware(http.HandlerFunc(h.AuthProfile)))
-
 
 	// Webhook endpoints (no auth required)
 	mux.HandleFunc("/v1/webhooks/webflow/", h.WebflowWebhook) // Note: trailing slash for path params
@@ -75,7 +74,7 @@ func (h *Handler) SetupRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/test-data-components.html", h.ServeTestDataComponents)
 	mux.HandleFunc("/dashboard", h.ServeDashboard)
 	mux.HandleFunc("/dashboard-new", h.ServeNewDashboard)
-	
+
 	// Web Components static files
 	mux.Handle("/js/", http.StripPrefix("/js/", http.FileServer(http.Dir("./web/dist/"))))
 	mux.Handle("/web/", http.StripPrefix("/web/", http.FileServer(http.Dir("./web/"))))
@@ -174,15 +173,15 @@ func (h *Handler) DashboardStats(w http.ResponseWriter, r *http.Request) {
 	}
 
 	WriteSuccess(w, r, map[string]interface{}{
-		"total_jobs":     stats.TotalJobs,
-		"running_jobs":   stats.RunningJobs,
-		"completed_jobs": stats.CompletedJobs,
-		"failed_jobs":    stats.FailedJobs,
-		"total_tasks":    stats.TotalTasks,
+		"total_jobs":          stats.TotalJobs,
+		"running_jobs":        stats.RunningJobs,
+		"completed_jobs":      stats.CompletedJobs,
+		"failed_jobs":         stats.FailedJobs,
+		"total_tasks":         stats.TotalTasks,
 		"avg_completion_time": stats.AvgCompletionTime,
-		"date_range":     dateRange,
-		"period_start":   startDate,
-		"period_end":     endDate,
+		"date_range":          dateRange,
+		"period_start":        startDate,
+		"period_end":          endDate,
 	}, "Dashboard statistics retrieved successfully")
 }
 
@@ -229,10 +228,10 @@ func (h *Handler) DashboardActivity(w http.ResponseWriter, r *http.Request) {
 	}
 
 	WriteSuccess(w, r, map[string]interface{}{
-		"activity": activity,
-		"date_range": dateRange,
+		"activity":     activity,
+		"date_range":   dateRange,
 		"period_start": startDate,
-		"period_end": endDate,
+		"period_end":   endDate,
 	}, "Dashboard activity retrieved successfully")
 }
 
@@ -357,11 +356,11 @@ func (h *Handler) WebflowWebhook(w http.ResponseWriter, r *http.Request) {
 	maxPages := 0 // Unlimited pages for webhook-triggered jobs
 	sourceType := "webflow_webhook"
 	sourceDetail := payload.Payload.PublishedBy.DisplayName
-	
+
 	// Store full webhook payload for debugging
 	sourceInfoBytes, _ := json.Marshal(payload)
 	sourceInfo := string(sourceInfoBytes)
-	
+
 	req := CreateJobRequest{
 		Domain:       selectedDomain,
 		UseSitemap:   &useSitemap,
@@ -403,10 +402,10 @@ func (h *Handler) WebflowWebhook(w http.ResponseWriter, r *http.Request) {
 		Msg("Successfully created and started job from Webflow webhook")
 
 	WriteSuccess(w, r, map[string]interface{}{
-		"job_id": job.ID,
+		"job_id":  job.ID,
 		"user_id": userID,
-		"org_id": orgIDStr,
-		"domain": selectedDomain,
-		"status": "created",
+		"org_id":  orgIDStr,
+		"domain":  selectedDomain,
+		"status":  "created",
 	}, "Job created successfully from webhook")
 }

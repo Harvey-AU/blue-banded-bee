@@ -30,7 +30,7 @@ func TestWarmURL(t *testing.T) {
 	if result.CacheStatus != "HIT" {
 		t.Errorf("Expected cache status HIT, got %s", result.CacheStatus)
 	}
-	
+
 	// Check that performance metrics are captured
 	if result.Performance.TTFB == 0 {
 		t.Log("Warning: TTFB not captured (may be too fast for local test)")
@@ -43,7 +43,7 @@ func TestWarmURL(t *testing.T) {
 func TestPerformanceMetrics(t *testing.T) {
 	// Create a test server with a small delay to ensure metrics are captured
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		time.Sleep(10 * time.Millisecond) // Small delay to ensure measurable times
+		time.Sleep(10 * time.Millisecond)        // Small delay to ensure measurable times
 		w.Header().Set("CF-Cache-Status", "HIT") // Use HIT to avoid cache warming loop
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("Performance test response"))
@@ -99,9 +99,9 @@ func TestPerformanceMetricsWithRealURL(t *testing.T) {
 	t.Logf("  Total Response Time: %dms", result.ResponseTime)
 
 	// For a real HTTPS request, we should capture at least some of these
-	if result.Performance.DNSLookupTime == 0 && 
-	   result.Performance.TCPConnectionTime == 0 && 
-	   result.Performance.TLSHandshakeTime == 0 {
+	if result.Performance.DNSLookupTime == 0 &&
+		result.Performance.TCPConnectionTime == 0 &&
+		result.Performance.TLSHandshakeTime == 0 {
 		t.Log("Warning: No connection metrics captured - connection might be reused")
 	}
 
