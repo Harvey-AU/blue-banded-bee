@@ -39,8 +39,13 @@ TEST_DATABASE_URL=<your-branch-connection-string>
 
 Run tests with the test environment:
 ```bash
-# Load test environment and run tests
-set -a; source .env.test; set +a; go test ./internal/jobs/... -v
+# Option 1: Use the test script
+./scripts/test-db.sh
+
+# Option 2: Manual command
+set -a; source .env; source .env.test; set +a
+export DATABASE_URL="$TEST_DATABASE_URL"
+go test ./internal/jobs/... -v
 ```
 
 ---

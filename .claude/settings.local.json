@@ -62,7 +62,8 @@
       "Bash(fly logs:*)",
       "Bash(winget install:*)",
       "WebFetch(domain:goo.gle)",
-      "mcp__supabase__search_docs"
+      "mcp__supabase__search_docs",
+      "Bash(./scripts/test-db.sh:*)"
     ],
     "deny": []
   },
