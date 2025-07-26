@@ -49,7 +49,7 @@ type WorkerPool struct {
 	cleanupInterval  time.Duration
 	notifyCh         chan struct{}
 	jobManager       *JobManager // Reference to JobManager for duplicate checking
-	
+
 	// Performance scaling
 	jobPerformance map[string]*JobPerformance
 	perfMutex      sync.RWMutex
@@ -102,7 +102,7 @@ func NewWorkerPool(db *sql.DB, dbQueue *db.DbQueue, crawler *crawler.Crawler, nu
 		},
 		batchTimer:      time.NewTicker(10 * time.Second),
 		cleanupInterval: time.Minute,
-		
+
 		// Performance scaling
 		jobPerformance: make(map[string]*JobPerformance),
 	}
@@ -180,8 +180,8 @@ func (wp *WorkerPool) AddJob(jobID string, options *JobOptions) {
 
 	// Simple scaling: add 5 workers per job, maximum of 50 total
 	wp.workersMutex.Lock()
-	targetWorkers := min(wp.currentWorkers + 5, 50)
-	
+	targetWorkers := min(wp.currentWorkers+5, 50)
+
 	if targetWorkers > wp.currentWorkers {
 		wp.workersMutex.Unlock()
 		wp.scaleWorkers(context.Background(), targetWorkers)
@@ -212,7 +212,7 @@ func (wp *WorkerPool) RemoveJob(jobID string) {
 
 	// Simple scaling: remove 5 workers per job + any performance boost, minimum of base count
 	wp.workersMutex.Lock()
-	targetWorkers := max(wp.currentWorkers - 5 - jobBoost, wp.baseWorkerCount)
+	targetWorkers := max(wp.currentWorkers-5-jobBoost, wp.baseWorkerCount)
 
 	log.Debug().
 		Str("job_id", jobID).
@@ -235,7 +235,7 @@ func (wp *WorkerPool) worker(ctx context.Context, workerID int) {
 
 	// Track consecutive no-task counts for backoff
 	consecutiveNoTasks := 0
-	maxSleep := 5 * time.Second // Note: Changed from 30 to 5 seconds, to increase resonsiveness when inactive.
+	maxSleep := 5 * time.Second         // Note: Changed from 30 to 5 seconds, to increase resonsiveness when inactive.
 	baseSleep := 200 * time.Millisecond // Faster processing when active
 
 	for {
@@ -267,7 +267,7 @@ func (wp *WorkerPool) worker(ctx context.Context, workerID int) {
 						log.Debug().Msg("Waiting for new tasks")
 					}
 					// Exponential backoff with a maximum
-					sleepTime := min(time.Duration(float64(baseSleep) * math.Pow(1.5, float64(min(consecutiveNoTasks, 10)))), maxSleep)
+					sleepTime := min(time.Duration(float64(baseSleep)*math.Pow(1.5, float64(min(consecutiveNoTasks, 10)))), maxSleep)
 
 					// Wait for either the backoff duration or a notification
 					select {
@@ -333,13 +333,13 @@ func (wp *WorkerPool) processNextTask(ctx context.Context) error {
 				Path:          task.Path,
 				Status:        TaskStatus(task.Status),
 				CreatedAt:     task.CreatedAt,
-				StartedAt:     task.StartedAt, 
+				StartedAt:     task.StartedAt,
 				RetryCount:    task.RetryCount,
 				SourceType:    task.SourceType,
 				SourceURL:     task.SourceURL,
 				PriorityScore: task.PriorityScore,
 			}
-			
+
 			// Need to fetch additional info from the database
 			var domainName string
 			var findLinks bool
@@ -349,14 +349,14 @@ func (wp *WorkerPool) processNextTask(ctx context.Context) error {
 				JOIN jobs j ON j.domain_id = d.id
 				WHERE j.id = $1
 			`, task.JobID).Scan(&domainName, &findLinks)
-			
+
 			if err != nil {
 				log.Error().Err(err).Str("job_id", task.JobID).Msg("Failed to get domain name and find_links setting")
 			} else {
 				jobsTask.DomainName = domainName
 				jobsTask.FindLinks = findLinks
 			}
-			
+
 			// Process the task
 			result, err := wp.processTask(ctx, jobsTask)
 			now := time.Now()
@@ -672,7 +672,7 @@ func (wp *WorkerPool) recoverStaleTasks(ctx context.Context) error {
 // and resets their 'running' tasks to 'pending', then adds them to the worker pool
 func (wp *WorkerPool) recoverRunningJobs(ctx context.Context) error {
 	log.Info().Msg("Recovering jobs that were running before restart")
-	
+
 	// Find jobs with 'running' status that have 'running' tasks
 	rows, err := wp.db.QueryContext(ctx, `
 		SELECT DISTINCT j.id
@@ -681,13 +681,13 @@ func (wp *WorkerPool) recoverRunningJobs(ctx context.Context) error {
 		WHERE j.status = $1
 		AND t.status = $2
 	`, JobStatusRunning, TaskStatusRunning)
-	
+
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to query for running jobs with running tasks")
 		return err
 	}
 	defer rows.Close()
-	
+
 	var recoveredJobs []string
 	for rows.Next() {
 		var jobID string
@@ -695,7 +695,7 @@ func (wp *WorkerPool) recoverRunningJobs(ctx context.Context) error {
 			log.Error().Err(err).Msg("Failed to scan job ID during recovery")
 			continue
 		}
-		
+
 		// Reset running tasks to pending for this job
 		err := wp.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
 			result, err := tx.ExecContext(ctx, `
@@ -706,32 +706,32 @@ func (wp *WorkerPool) recoverRunningJobs(ctx context.Context) error {
 				WHERE job_id = $2 
 				AND status = $3
 			`, TaskStatusPending, jobID, TaskStatusRunning)
-			
+
 			if err != nil {
 				return err
 			}
-			
+
 			rowsAffected, _ := result.RowsAffected()
 			log.Info().
 				Str("job_id", jobID).
 				Int64("tasks_reset", rowsAffected).
 				Msg("Reset running tasks to pending")
-			
+
 			return nil
 		})
-		
+
 		if err != nil {
 			log.Error().Err(err).Str("job_id", jobID).Msg("Failed to reset running tasks")
 			continue
 		}
-		
+
 		// Add job back to worker pool
 		wp.AddJob(jobID, nil)
 		recoveredJobs = append(recoveredJobs, jobID)
-		
+
 		log.Info().Str("job_id", jobID).Msg("Recovered running job and added to worker pool")
 	}
-	
+
 	if len(recoveredJobs) > 0 {
 		log.Info().
 			Int("count", len(recoveredJobs)).
@@ -740,7 +740,7 @@ func (wp *WorkerPool) recoverRunningJobs(ctx context.Context) error {
 	} else {
 		log.Debug().Msg("No running jobs found to recover")
 	}
-	
+
 	return rows.Err()
 }
 
@@ -878,7 +878,6 @@ func (wp *WorkerPool) flushBatches(ctx context.Context) {
 				Msg("⏱️ TIMING: Completed batch task updates")
 		}
 
-
 		return nil
 	})
 
@@ -950,12 +949,11 @@ func (wp *WorkerPool) CleanupStuckJobs(ctx context.Context) error {
 	return nil
 }
 
-
 // processTask processes an individual task
 func (wp *WorkerPool) processTask(ctx context.Context, task *Task) (*crawler.CrawlResult, error) {
 	// Construct a proper URL for processing
 	var urlStr string
-	
+
 	// Check if path is already a full URL
 	if strings.HasPrefix(task.Path, "http://") || strings.HasPrefix(task.Path, "https://") {
 		urlStr = util.NormaliseURL(task.Path)
@@ -966,7 +964,7 @@ func (wp *WorkerPool) processTask(ctx context.Context, task *Task) (*crawler.Cra
 		// Fallback case - assume path is a full URL but missing protocol
 		urlStr = util.NormaliseURL(task.Path)
 	}
-	
+
 	log.Info().Str("url", urlStr).Str("task_id", task.ID).Msg("Starting URL warm")
 
 	result, err := wp.crawler.WarmURL(ctx, urlStr, task.FindLinks)
@@ -1081,9 +1079,9 @@ func isRetryableError(err error) bool {
 	if err == nil {
 		return false
 	}
-	
+
 	errorStr := strings.ToLower(err.Error())
-	
+
 	// Network/timeout errors that should be retried
 	networkErrors := strings.Contains(errorStr, "timeout") ||
 		strings.Contains(errorStr, "deadline exceeded") ||
@@ -1093,7 +1091,7 @@ func isRetryableError(err error) bool {
 		strings.Contains(errorStr, "reset by peer") ||
 		strings.Contains(errorStr, "broken pipe") ||
 		strings.Contains(errorStr, "unexpected eof")
-	
+
 	// Server errors that should be retried (likely due to load/temporary issues)
 	serverErrors := strings.Contains(errorStr, "internal server error") ||
 		strings.Contains(errorStr, "bad gateway") ||
@@ -1103,7 +1101,7 @@ func isRetryableError(err error) bool {
 		strings.Contains(errorStr, "503") ||
 		strings.Contains(errorStr, "504") ||
 		strings.Contains(errorStr, "500")
-	
+
 	return networkErrors || serverErrors
 }
 
@@ -1112,9 +1110,9 @@ func isBlockingError(err error) bool {
 	if err == nil {
 		return false
 	}
-	
+
 	errorStr := strings.ToLower(err.Error())
-	
+
 	// Blocking/rate limit errors that need special handling
 	return strings.Contains(errorStr, "403") ||
 		strings.Contains(errorStr, "forbidden") ||
@@ -1129,16 +1127,16 @@ func isSameOrSubDomain(hostname, targetDomain string) bool {
 	// Normalise both domains by removing www prefix
 	hostname = strings.ToLower(hostname)
 	targetDomain = strings.ToLower(targetDomain)
-	
+
 	// Remove www. prefix if present
 	normalisedHostname := strings.TrimPrefix(hostname, "www.")
 	normalisedTarget := strings.TrimPrefix(targetDomain, "www.")
-	
+
 	// Direct match (after normalization)
 	if normalisedHostname == normalisedTarget {
 		return true
 	}
-	
+
 	// Original direct match (before normalization)
 	if hostname == targetDomain {
 		return true
@@ -1148,7 +1146,7 @@ func isSameOrSubDomain(hostname, targetDomain string) bool {
 	if strings.HasSuffix(hostname, "."+targetDomain) {
 		return true
 	}
-	
+
 	// Check if hostname ends with .normalisedTarget (subdomain check without www)
 	if strings.HasSuffix(hostname, "."+normalisedTarget) {
 		return true
@@ -1237,7 +1235,7 @@ func (wp *WorkerPool) evaluateJobPerformance(jobID string, responseTime int64) {
 	// Check if boost needs to change
 	if neededBoost != perf.CurrentBoost {
 		boostDiff := neededBoost - perf.CurrentBoost
-		
+
 		log.Info().
 			Str("job_id", jobID).
 			Int64("avg_response_time", avgResponseTime).
@@ -1260,7 +1258,7 @@ func (wp *WorkerPool) evaluateJobPerformance(jobID string, responseTime int64) {
 				perf.CurrentBoost = perf.CurrentBoost - (wp.currentWorkers + boostDiff - 50) // Adjust boost to actual
 			}
 			wp.workersMutex.Unlock()
-			
+
 			if targetWorkers > wp.currentWorkers {
 				go wp.scaleWorkers(context.Background(), targetWorkers)
 			}
@@ -1281,7 +1279,6 @@ func isDocumentLink(path string) bool {
 		strings.HasSuffix(lower, ".ppt") ||
 		strings.HasSuffix(lower, ".pptx")
 }
-
 
 // listenForNotifications sets up PostgreSQL LISTEN/NOTIFY
 func (wp *WorkerPool) listenForNotifications(ctx context.Context) {

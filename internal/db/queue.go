@@ -77,16 +77,16 @@ type Task struct {
 	ContentTransferTime int64
 
 	// Second request data
-	SecondResponseTime         int64
-	SecondCacheStatus          string
-	SecondContentLength        int64
-	SecondHeaders              []byte // Stored as JSONB
-	SecondDNSLookupTime        int64
-	SecondTCPConnectionTime    int64
-	SecondTLSHandshakeTime     int64
-	SecondTTFB                 int64
-	SecondContentTransferTime  int64
-	CacheCheckAttempts         []byte // Stored as JSONB
+	SecondResponseTime        int64
+	SecondCacheStatus         string
+	SecondContentLength       int64
+	SecondHeaders             []byte // Stored as JSONB
+	SecondDNSLookupTime       int64
+	SecondTCPConnectionTime   int64
+	SecondTLSHandshakeTime    int64
+	SecondTTFB                int64
+	SecondContentTransferTime int64
+	CacheCheckAttempts        []byte // Stored as JSONB
 
 	// Priority
 	PriorityScore float64
@@ -200,7 +200,6 @@ func (q *DbQueue) EnqueueURLs(ctx context.Context, jobID string, pages []Page, s
 				skippedCount++
 			}
 		}
-
 
 		// Prepare statement for batch insert with duplicate handling
 		stmt, err := tx.PrepareContext(ctx, `
@@ -375,6 +374,6 @@ func (q *DbQueue) UpdateTaskStatus(ctx context.Context, task *Task) error {
 	if err != nil {
 		return err
 	}
-	
+
 	return nil
 }

@@ -620,7 +620,7 @@ func (db *DB) ResetSchema() error {
 	// Drop tables in reverse order to respect foreign keys
 	// Use CASCADE to handle any remaining dependencies
 	tables := []string{"tasks", "jobs", "pages", "domains"}
-	
+
 	for _, table := range tables {
 		log.Debug().Str("table", table).Msg("Dropping table")
 		_, err := db.client.Exec(fmt.Sprintf(`DROP TABLE IF EXISTS %s CASCADE`, table))
@@ -649,11 +649,10 @@ func (db *DB) ResetSchema() error {
 		log.Error().Err(err).Msg("Failed to recreate schema")
 		return fmt.Errorf("failed to recreate schema: %w", err)
 	}
-	
+
 	log.Info().Msg("Successfully reset database schema")
 	return nil
 }
-
 
 // RecalculateJobStats recalculates all statistics for a job based on actual task records
 func (db *DB) RecalculateJobStats(ctx context.Context, jobID string) error {

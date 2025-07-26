@@ -14,7 +14,6 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-
 // DiscoverSitemaps attempts to find sitemaps for a domain by checking common locations
 func (c *Crawler) DiscoverSitemaps(ctx context.Context, domain string) ([]string, error) {
 	// Normalise the domain first to handle different input formats
@@ -91,7 +90,7 @@ func (c *Crawler) DiscoverSitemaps(ctx context.Context, domain string) ([]string
 				log.Debug().Err(err).Str("url", sitemapURL).Msg("Error fetching sitemap")
 				continue
 			}
-			
+
 			resp.Body.Close()
 			log.Debug().Str("url", sitemapURL).Int("status", resp.StatusCode).Msg("Sitemap check response")
 			if resp.StatusCode == http.StatusOK {
@@ -194,7 +193,7 @@ func (c *Crawler) ParseSitemap(ctx context.Context, sitemapURL string) ([]string
 				log.Warn().Str("url", childSitemapURL).Msg("Invalid child sitemap URL, skipping")
 				continue
 			}
-			
+
 			childURLs, err := c.ParseSitemap(ctx, childSitemapURL)
 			if err != nil {
 				log.Warn().Err(err).Str("url", childSitemapURL).Msg("Failed to parse child sitemap")
@@ -205,7 +204,7 @@ func (c *Crawler) ParseSitemap(ctx context.Context, sitemapURL string) ([]string
 	} else {
 		// It's a regular sitemap
 		extractedURLs := extractURLsFromXML(content, "<url>", "</url>", "<loc>", "</loc>")
-		
+
 		// Validate and normalise all extracted URLs
 		var validURLs []string
 		for _, extractedURL := range extractedURLs {
@@ -216,7 +215,7 @@ func (c *Crawler) ParseSitemap(ctx context.Context, sitemapURL string) ([]string
 				log.Debug().Str("invalid_url", extractedURL).Msg("Skipping invalid URL from sitemap")
 			}
 		}
-		
+
 		log.Debug().
 			Str("sitemap_url", sitemapURL).
 			Int("url_count", len(validURLs)).
@@ -231,7 +230,6 @@ func (c *Crawler) ParseSitemap(ctx context.Context, sitemapURL string) ([]string
 
 	return urls, nil
 }
-
 
 // Helper function to extract URLs from XML content
 func extractURLsFromXML(content, startTag, endTag, locStartTag, locEndTag string) []string {

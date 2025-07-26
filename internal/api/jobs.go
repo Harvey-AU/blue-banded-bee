@@ -80,13 +80,13 @@ type CreateJobRequest struct {
 
 // JobResponse represents a job in API responses
 type JobResponse struct {
-	ID           string `json:"id"`
-	Domain       string `json:"domain"`
-	Status       string `json:"status"`
-	TotalTasks   int    `json:"total_tasks"`
-	CompletedTasks int  `json:"completed_tasks"`
-	FailedTasks    int  `json:"failed_tasks"`
-	SkippedTasks   int  `json:"skipped_tasks"`
+	ID             string  `json:"id"`
+	Domain         string  `json:"domain"`
+	Status         string  `json:"status"`
+	TotalTasks     int     `json:"total_tasks"`
+	CompletedTasks int     `json:"completed_tasks"`
+	FailedTasks    int     `json:"failed_tasks"`
+	SkippedTasks   int     `json:"skipped_tasks"`
 	Progress       float64 `json:"progress"`
 	CreatedAt      string  `json:"created_at"`
 	StartedAt      *string `json:"started_at,omitempty"`
@@ -123,7 +123,7 @@ func (h *Handler) listJobs(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	status := r.URL.Query().Get("status") // Optional status filter
+	status := r.URL.Query().Get("status")   // Optional status filter
 	dateRange := r.URL.Query().Get("range") // Optional date range filter
 	include := r.URL.Query().Get("include") // Optional includes (domain, progress, etc.)
 
@@ -147,11 +147,11 @@ func (h *Handler) listJobs(w http.ResponseWriter, r *http.Request) {
 	response := map[string]interface{}{
 		"jobs": jobs,
 		"pagination": map[string]interface{}{
-			"limit":     limit,
-			"offset":    offset,
-			"total":     total,
-			"has_next":  hasNext,
-			"has_prev":  hasPrev,
+			"limit":    limit,
+			"offset":   offset,
+			"total":    total,
+			"has_next": hasNext,
+			"has_prev": hasPrev,
 		},
 	}
 
@@ -239,11 +239,11 @@ func (h *Handler) createJob(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.SourceInfo == nil {
 		sourceInfoData := map[string]interface{}{
-			"ip":         getClientIP(r),
-			"userAgent":  r.UserAgent(),
-			"timestamp":  time.Now().UTC().Format(time.RFC3339),
-			"endpoint":   r.URL.Path,
-			"method":     r.Method,
+			"ip":        getClientIP(r),
+			"userAgent": r.UserAgent(),
+			"timestamp": time.Now().UTC().Format(time.RFC3339),
+			"endpoint":  r.URL.Path,
+			"method":    r.Method,
 		}
 		sourceInfoBytes, _ := json.Marshal(sourceInfoData)
 		sourceInfo := string(sourceInfoBytes)
@@ -557,7 +557,7 @@ func (h *Handler) getJobTasks(w http.ResponseWriter, r *http.Request, jobID stri
 		}
 	}
 
-	status := r.URL.Query().Get("status") // Optional status filter
+	status := r.URL.Query().Get("status")  // Optional status filter
 	sortParam := r.URL.Query().Get("sort") // Optional sort parameter
 
 	// Parse sort parameter
@@ -572,7 +572,7 @@ func (h *Handler) getJobTasks(w http.ResponseWriter, r *http.Request, jobID stri
 		} else {
 			direction = "ASC"
 		}
-		
+
 		// Map column names to actual SQL columns
 		switch column {
 		case "path":
@@ -604,14 +604,14 @@ func (h *Handler) getJobTasks(w http.ResponseWriter, r *http.Request, jobID stri
 		JOIN jobs j ON t.job_id = j.id
 		JOIN domains d ON j.domain_id = d.id
 		WHERE t.job_id = $1`
-	
+
 	countQuery := `
 		SELECT COUNT(*) 
 		FROM tasks t 
 		WHERE t.job_id = $1`
 
 	args := []interface{}{jobID}
-	
+
 	if status != "" {
 		baseQuery += ` AND t.status = $2`
 		countQuery += ` AND t.status = $2`
@@ -717,14 +717,13 @@ func (h *Handler) getJobTasks(w http.ResponseWriter, r *http.Request, jobID stri
 	response := map[string]interface{}{
 		"tasks": tasks,
 		"pagination": map[string]interface{}{
-			"limit":     limit,
-			"offset":    offset,
-			"total":     total,
-			"has_next":  hasNext,
-			"has_prev":  hasPrev,
+			"limit":    limit,
+			"offset":   offset,
+			"total":    total,
+			"has_next": hasNext,
+			"has_prev": hasPrev,
 		},
 	}
 
 	WriteSuccess(w, r, response, "Tasks retrieved successfully")
 }
-

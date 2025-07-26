@@ -24,11 +24,11 @@ const (
 // UserClaims represents the Supabase JWT claims
 type UserClaims struct {
 	jwt.RegisteredClaims
-	UserID   string `json:"sub"`
-	Email    string `json:"email"`
-	AppMetadata map[string]interface{} `json:"app_metadata"`
+	UserID       string                 `json:"sub"`
+	Email        string                 `json:"email"`
+	AppMetadata  map[string]interface{} `json:"app_metadata"`
 	UserMetadata map[string]interface{} `json:"user_metadata"`
-	Role     string `json:"role"`
+	Role         string                 `json:"role"`
 }
 
 // AuthMiddleware validates Supabase JWT tokens
@@ -42,16 +42,16 @@ func AuthMiddleware(next http.Handler) http.Handler {
 		}
 
 		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
-		
+
 		// Validate the JWT using Supabase JWT secret
 		claims, err := validateSupabaseToken(tokenString)
 		if err != nil {
 			log.Warn().Err(err).Str("token_prefix", tokenString[:min(10, len(tokenString))]).Msg("JWT validation failed")
-			
+
 			// Determine specific error type and capture critical errors in Sentry
 			errorMsg := "Invalid authentication token"
 			statusCode := http.StatusUnauthorized
-			
+
 			if strings.Contains(err.Error(), "expired") {
 				errorMsg = "Authentication token has expired"
 				// Don't capture expired tokens - this is normal user behavior
@@ -65,11 +65,11 @@ func AuthMiddleware(next http.Handler) http.Handler {
 				// Capture service misconfigurations - critical system error
 				sentry.CaptureException(err)
 			}
-			
+
 			writeAuthError(w, errorMsg, statusCode)
 			return
 		}
-		
+
 		// Add user claims to context
 		ctx := context.WithValue(r.Context(), UserKey, claims)
 		next.ServeHTTP(w, r.WithContext(ctx))
@@ -90,19 +90,19 @@ func validateSupabaseToken(tokenString string) (*UserClaims, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
-		
+
 		return []byte(jwtSecret), nil
 	})
-	
+
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse token: %w", err)
 	}
-	
+
 	// Extract and return claims
 	if claims, ok := token.Claims.(*UserClaims); ok && token.Valid {
 		return claims, nil
 	}
-	
+
 	return nil, fmt.Errorf("invalid token claims")
 }
 
@@ -119,7 +119,7 @@ func OptionalAuthMiddleware(next http.Handler) http.Handler {
 		authHeader := r.Header.Get("Authorization")
 		if authHeader != "" && strings.HasPrefix(authHeader, "Bearer ") {
 			tokenString := strings.TrimPrefix(authHeader, "Bearer ")
-			
+
 			// Try to validate the token
 			claims, err := validateSupabaseToken(tokenString)
 			if err == nil {
@@ -131,7 +131,7 @@ func OptionalAuthMiddleware(next http.Handler) http.Handler {
 				log.Warn().Err(err).Msg("Invalid JWT token in optional auth")
 			}
 		}
-		
+
 		next.ServeHTTP(w, r)
 	})
 }
@@ -140,7 +140,7 @@ func OptionalAuthMiddleware(next http.Handler) http.Handler {
 func writeAuthError(w http.ResponseWriter, message string, statusCode int) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
-	
+
 	response := map[string]interface{}{
 		"error": map[string]interface{}{
 			"message": message,
@@ -148,7 +148,7 @@ func writeAuthError(w http.ResponseWriter, message string, statusCode int) {
 			"type":    "authentication_error",
 		},
 	}
-	
+
 	json.NewEncoder(w).Encode(response)
 }
 
@@ -178,14 +178,14 @@ func ValidateSession(tokenString string) *SessionInfo {
 			RefreshNeeded: strings.Contains(err.Error(), "expired"),
 		}
 	}
-	
+
 	// Check if token expires soon (within 5 minutes)
 	refreshNeeded := false
 	if claims.ExpiresAt != nil {
 		timeUntilExpiry := claims.ExpiresAt.Time.Unix() - time.Now().Unix()
 		refreshNeeded = timeUntilExpiry < 300 // 5 minutes
 	}
-	
+
 	return &SessionInfo{
 		IsValid:       true,
 		ExpiresAt:     claims.ExpiresAt.Time.Unix(),

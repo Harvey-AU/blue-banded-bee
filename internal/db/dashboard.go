@@ -20,9 +20,9 @@ type JobStats struct {
 
 // ActivityPoint represents a data point for activity charts
 type ActivityPoint struct {
-	Timestamp string `json:"timestamp"`
-	JobsCount int    `json:"jobs_count"`
-	TasksCount int   `json:"tasks_count"`
+	Timestamp  string `json:"timestamp"`
+	JobsCount  int    `json:"jobs_count"`
+	TasksCount int    `json:"tasks_count"`
 }
 
 // GetJobStats retrieves job statistics for the dashboard
