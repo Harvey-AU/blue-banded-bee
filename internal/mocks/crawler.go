@@ -44,3 +44,14 @@ func (m *MockCrawler) ParseSitemap(ctx context.Context, sitemapURL string) ([]st
 	
 	return args.Get(0).([]string), args.Error(1)
 }
+
+// FilterURLs mocks the FilterURLs method
+func (m *MockCrawler) FilterURLs(urls []string, includePaths, excludePaths []string) []string {
+	args := m.Called(urls, includePaths, excludePaths)
+	
+	if args.Get(0) == nil {
+		return nil
+	}
+	
+	return args.Get(0).([]string)
+}
