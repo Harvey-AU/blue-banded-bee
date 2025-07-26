@@ -31,7 +31,7 @@ jobs:
           go install github.com/jstemmer/go-junit-report/v2@latest
           
           # Run tests with JSON output and convert to JUnit XML
-          go test -v -coverprofile=coverage.out ./... -json | go-junit-report -parser gojson > junit.xml
+          go test -v -coverprofile=coverage.out ./... -json | $(go env GOPATH)/bin/go-junit-report -parser gojson > junit.xml
           
           # Show coverage summary
           go tool cover -func=coverage.out
