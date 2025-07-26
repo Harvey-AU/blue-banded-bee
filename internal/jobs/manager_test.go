@@ -109,3 +109,66 @@ func TestCreateJob(t *testing.T) {
 	_, err = sqlDB.ExecContext(ctx, "DELETE FROM jobs WHERE domain_id IN (SELECT id FROM domains WHERE name LIKE 'test-%')")
 	require.NoError(t, err)
 }
+
+func TestCancelJob(t *testing.T) {
+	// Skip in CI environment
+	if os.Getenv("CI") == "true" {
+		t.Skip("Skipping database test in CI environment")
+	}
+
+	// Connect to test database
+	database, err := db.InitFromEnv()
+	require.NoError(t, err, "Failed to connect to test database")
+	defer database.Close()
+
+	ctx := context.Background()
+	sqlDB := database.GetDB()
+	dbQueue := db.NewDbQueue(database)
+	
+	// Create JobManager with minimal worker pool for RemoveJob functionality
+	wp := &WorkerPool{
+		jobs:     make(map[string]bool),
+		stopCh:   make(chan struct{}),
+		notifyCh: make(chan struct{}, 1),
+	}
+	jm := NewJobManager(sqlDB, dbQueue, nil, wp)
+	
+	// Test case 1: Cancel a pending job
+	options := &JobOptions{
+		Domain:      "test-cancel.example.com",
+		Concurrency: 5,
+		FindLinks:   true,
+		MaxPages:    100,
+		UseSitemap:  false, // Don't trigger sitemap processing
+	}
+	
+	// Create a job
+	job, err := jm.CreateJob(ctx, options)
+	require.NoError(t, err, "Failed to create job")
+	require.NotNil(t, job)
+	
+	// Cancel the job
+	err = jm.CancelJob(ctx, job.ID)
+	require.NoError(t, err, "CancelJob should not return error")
+	
+	// Verify job status is cancelled
+	cancelledJob, err := jm.GetJob(ctx, job.ID)
+	require.NoError(t, err)
+	assert.Equal(t, JobStatusCancelled, cancelledJob.Status)
+	assert.False(t, cancelledJob.CompletedAt.IsZero(), "CompletedAt should be set")
+	
+	// Test case 2: Try to cancel an already cancelled job
+	err = jm.CancelJob(ctx, job.ID)
+	assert.Error(t, err, "Should error when cancelling already cancelled job")
+	assert.Contains(t, err.Error(), "job cannot be canceled")
+	
+	// Test case 3: Try to cancel a non-existent job
+	err = jm.CancelJob(ctx, "non-existent-id")
+	assert.Error(t, err, "Should error when cancelling non-existent job")
+	
+	// Cleanup
+	_, err = sqlDB.ExecContext(ctx, "DELETE FROM tasks WHERE job_id IN (SELECT id FROM jobs WHERE domain_id IN (SELECT id FROM domains WHERE name LIKE 'test-%'))")
+	require.NoError(t, err)
+	_, err = sqlDB.ExecContext(ctx, "DELETE FROM jobs WHERE domain_id IN (SELECT id FROM domains WHERE name LIKE 'test-%')")
+	require.NoError(t, err)
+}
