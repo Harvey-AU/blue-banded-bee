@@ -1,4 +1,12 @@
-# Unit Testing Strategy with Testify
+# Unit Testing Strategy with Testify (ARCHIVED)
+
+**Status:** This plan has been superseded by the simpler integration testing approach in `increase-test-coverage.md`.
+
+**Decision:** Instead of complex mocking, we're using a Supabase branch database for real integration tests. This provides better confidence with less complexity.
+
+---
+
+# Original Plan: Unit Testing Strategy with Testify
 
 ## Overview
 
