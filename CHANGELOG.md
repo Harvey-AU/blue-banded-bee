@@ -10,15 +10,20 @@ Each version represents a distinct set of changes, even if released on the same 
 
 ## [Unreleased]
 
+### Added
+
+- **Test Infrastructure**: Set up Supabase branch for integration testing with testify framework
+
+## [0.5.29] – 2025-07-26
+
+### Added
+
+- **Sitemap Fallback**: Falls back to crawling from root page when sitemap unavailable
+- **Database Migrations**: Transitioned to migration-based database management
+
 ### Enhanced
 
-- **Crawler Blocking Avoidance - Phase 1**: Implemented quick wins to reduce bot blocking
-  - Updated User-Agent to professional format: `BlueBandedBee/1.0 (+https://www.bluebandedbee.co/pages/about-the-bot)`
-  - Added browser-like headers (Accept, Accept-Language, Accept-Encoding) to appear less bot-like
-  - Enhanced error detection to recognise 403 (Forbidden) and 429 (Too Many Requests) as blocking signals
-  - Limited retry attempts for 403/429 errors to 2 (instead of 5) to avoid exacerbating blocking
-  - Added test coverage for error detection logic
-  - Expected impact: 50-70% reduction in blocking, particularly on Shopify sites
+- **Crawler Blocking Avoidance**: Updated User-Agent and headers to reduce bot blocking
 
 ## [0.5.28] – 2025-07-19
 
