@@ -12,7 +12,13 @@ Each version represents a distinct set of changes, even if released on the same 
 
 ### Added
 
-- **Test Infrastructure**: Set up Supabase branch for integration testing with testify framework
+- **Comprehensive Test Suite**: 
+  - Integration tests for core job operations (GetJob, CreateJob, CancelJob, ProcessSitemapFallback, EnqueueJobURLs)
+  - Unit tests with mocks using testify framework
+  - Refactored to use interfaces for better testability (CrawlerInterface)
+  - Test coverage reporting with Codecov
+  - Test Analytics enabled with JUnit XML reports
+- **Codecov Configuration**: Added codecov.yml for coverage reporting settings
 
 ## [0.5.29] – 2025-07-26
 

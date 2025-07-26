@@ -442,12 +442,14 @@ Detailed plan available in [docs/organisation-model.md](docs/plans/organisation-
 
 ### 🔴 Code Quality & Maintenance
 
-- [ ] **Increase Test Coverage** - [Implementation Plan](./docs/plans/increase-test-coverage.md)
+- [x] **Increase Test Coverage** - [Implementation Plan](./docs/plans/increase-test-coverage.md)
   - [x] Set up Supabase test branch database infrastructure
   - [x] Add testify testing framework
   - [x] Create simplified test plan (Phase 1: 80-115 lines)
-  - [ ] Implement Phase 1 tests (GetJob, CreateJob, CancelJob, ProcessSitemapFallback)
-  - [ ] Implement Phase 2 tests (EnqueueJobURLs, ProcessTask, WorkerPool_Basic)
+  - [x] Implement Phase 1 tests (GetJob, CreateJob, CancelJob, ProcessSitemapFallback)
+  - [x] Implement integration tests (EnqueueJobURLs)
+  - [x] Implement unit tests with mocks (CrawlerInterface refactoring)
+  - [x] Enable Codecov reporting and Test Analytics
 - [ ] **Code Quality Improvement** - [Implementation Plan](./docs/plans/code-quality-improvement.md)
   - [ ] Phase 1: Automated formatting and ineffectual assignments cleanup
   - [ ] Phase 2: Refactor high-complexity functions (WarmURL, getJobTasks, processSitemap)
