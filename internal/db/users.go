@@ -27,17 +27,16 @@ type Organisation struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
-
 // GetUser retrieves a user by ID
 func (db *DB) GetUser(userID string) (*User, error) {
 	user := &User{}
-	
+
 	query := `
 		SELECT id, email, full_name, organisation_id, created_at, updated_at
 		FROM users
 		WHERE id = $1
 	`
-	
+
 	err := db.client.QueryRow(query, userID).Scan(
 		&user.ID, &user.Email, &user.FullName, &user.OrganisationID,
 		&user.CreatedAt, &user.UpdatedAt,
@@ -64,7 +63,7 @@ func (db *DB) CreateOrganisation(name string) (*Organisation, error) {
 		VALUES ($1, $2, NOW(), NOW())
 		RETURNING created_at, updated_at
 	`
-	
+
 	err := db.client.QueryRow(query, org.ID, org.Name).Scan(
 		&org.CreatedAt, &org.UpdatedAt,
 	)
@@ -83,13 +82,13 @@ func (db *DB) CreateOrganisation(name string) (*Organisation, error) {
 // GetOrganisation retrieves an organisation by ID
 func (db *DB) GetOrganisation(organisationID string) (*Organisation, error) {
 	org := &Organisation{}
-	
+
 	query := `
 		SELECT id, name, created_at, updated_at
 		FROM organisations
 		WHERE id = $1
 	`
-	
+
 	err := db.client.QueryRow(query, organisationID).Scan(
 		&org.ID, &org.Name, &org.CreatedAt, &org.UpdatedAt,
 	)
@@ -110,7 +109,7 @@ func (db *DB) GetOrganisationMembers(organisationID string) ([]*User, error) {
 		WHERE organisation_id = $1
 		ORDER BY created_at ASC
 	`
-	
+
 	rows, err := db.client.Query(query, organisationID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get organisation members: %w", err)
@@ -183,7 +182,7 @@ func (db *DB) CreateUser(userID, email string, fullName *string, orgName string)
 		VALUES ($1, $2, NOW(), NOW())
 		RETURNING created_at, updated_at
 	`
-	
+
 	err = tx.QueryRow(orgQuery, org.ID, org.Name).Scan(
 		&org.CreatedAt, &org.UpdatedAt,
 	)
@@ -204,7 +203,7 @@ func (db *DB) CreateUser(userID, email string, fullName *string, orgName string)
 		VALUES ($1, $2, $3, $4, NOW(), NOW())
 		RETURNING created_at, updated_at
 	`
-	
+
 	err = tx.QueryRow(userQuery, user.ID, user.Email, user.FullName, user.OrganisationID).Scan(
 		&user.CreatedAt, &user.UpdatedAt,
 	)

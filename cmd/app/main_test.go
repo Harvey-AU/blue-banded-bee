@@ -68,11 +68,11 @@ func TestTestCrawlEndpoint(t *testing.T) {
 func TestRateLimiter(t *testing.T) {
 	// Create a new rate limiter
 	limiter := newRateLimiter()
-	
+
 	// Mock request with X-Forwarded-For
 	req1, _ := http.NewRequest("GET", "/test", nil)
 	req1.Header.Set("X-Forwarded-For", "192.168.1.1")
-	
+
 	// Test basic allowance
 	for i := 0; i < 5; i++ {
 		ip := getClientIP(req1)
@@ -81,14 +81,14 @@ func TestRateLimiter(t *testing.T) {
 			t.Errorf("Request %d should be allowed", i+1)
 		}
 	}
-	
+
 	// This should be blocked
 	ip := getClientIP(req1)
 	rLimiter := limiter.getLimiter(ip)
 	if rLimiter.Allow() {
 		t.Errorf("Request should be blocked after rate limit")
 	}
-	
+
 	// Different IP should be allowed
 	req2, _ := http.NewRequest("GET", "/test", nil)
 	req2.Header.Set("X-Forwarded-For", "192.168.1.2")

@@ -15,10 +15,10 @@ func TestDatabaseConnection(t *testing.T) {
 	if os.Getenv("CI") == "true" {
 		t.Skip("Skipping database connection test in CI environment")
 	}
-	
+
 	// This test verifies that the test database is properly configured
 	t.Logf("Attempting to connect with DATABASE_URL: %s", os.Getenv("DATABASE_URL"))
-	
+
 	database, err := db.InitFromEnv()
 	if err != nil {
 		t.Logf("Connection error details: %v", err)
@@ -31,7 +31,7 @@ func TestDatabaseConnection(t *testing.T) {
 	// Verify we can query the database
 	ctx := context.Background()
 	sqlDB := database.GetDB()
-	
+
 	var result int
 	err = sqlDB.QueryRowContext(ctx, "SELECT 1").Scan(&result)
 	require.NoError(t, err, "Failed to execute test query")

@@ -113,4 +113,3 @@ type JobOptions struct {
 	SourceDetail    *string  `json:"source_detail,omitempty"`
 	SourceInfo      *string  `json:"source_info,omitempty"`
 }
-
