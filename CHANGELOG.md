@@ -21,10 +21,6 @@ Each version represents a distinct set of changes, even if released on the same 
 - **Sitemap Fallback**: Falls back to crawling from root page when sitemap unavailable
 - **Database Migrations**: Transitioned to migration-based database management
 
-### Enhanced
-
-- **Crawler Blocking Avoidance**: Updated User-Agent and headers to reduce bot blocking
-
 ## [0.5.28] – 2025-07-19
 
 ### Fixed
