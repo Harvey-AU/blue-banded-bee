@@ -1,5 +1,6 @@
 codecov:
   require_ci_to_pass: yes
+  branch: main  # Explicitly set the default branch
 
 coverage:
   precision: 2
@@ -12,13 +13,21 @@ coverage:
         target: auto
         threshold: 1%
         base: auto
+        if_ci_failed: error
+        informational: false
+        only_pulls: false  # Important: Allow status checks on push events
     patch:
       default:
         target: auto
         threshold: 1%
         base: auto
+        if_ci_failed: error
+        informational: false
+        only_pulls: false  # Important: Allow status checks on push events
 
 comment:
   layout: "reach,diff,flags,files,footer"
   behavior: default
   require_changes: no
+  require_base: false  # Don't require base report for comments
+  require_head: true
