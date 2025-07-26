@@ -4,6 +4,8 @@
 
 Blue Banded Bee uses PostgreSQL as its primary database with a normalised schema designed for efficiency and data integrity. The system leverages PostgreSQL-specific features like `FOR UPDATE SKIP LOCKED` for lock-free concurrent task processing.
 
+As of 26th July 2025 we manage database schema/setup via migrations.
+
 ## Connection Configuration
 
 ### Environment Variables
@@ -38,6 +40,7 @@ client.SetConnMaxIdleTime(2 * time.Minute)  // Idle connection timeout
 ### Core Tables
 
 #### Domains Table
+
 Stores unique domain names with integer primary keys for normalisation.
 
 ```sql
@@ -51,6 +54,7 @@ CREATE INDEX idx_domains_name ON domains(name);
 ```
 
 #### Pages Table
+
 Stores page paths with domain references to reduce redundancy.
 
 ```sql
@@ -66,6 +70,7 @@ CREATE INDEX idx_pages_domain_path ON pages(domain_id, path);
 ```
 
 #### Jobs Table
+
 Stores job metadata and progress tracking.
 
 ```sql
@@ -100,6 +105,7 @@ CREATE INDEX idx_jobs_created_at ON jobs(created_at);
 ```
 
 **Status Values:**
+
 - `pending` - Job created but not started
 - `running` - Job actively processing tasks
 - `completed` - All tasks finished successfully
@@ -107,6 +113,7 @@ CREATE INDEX idx_jobs_created_at ON jobs(created_at);
 - `failed` - Job failed due to system error
 
 **Task Counters:**
+
 - `total_tasks` = `sitemap_tasks` + `found_tasks`
 - `sitemap_tasks` - URLs from sitemap processing
 - `found_tasks` - URLs discovered through link crawling
@@ -115,6 +122,7 @@ CREATE INDEX idx_jobs_created_at ON jobs(created_at);
 - `skipped_tasks` - URLs skipped due to limits or filters
 
 #### Tasks Table
+
 Stores individual URL processing tasks.
 
 ```sql
@@ -145,6 +153,7 @@ CREATE INDEX idx_tasks_pending ON tasks(created_at) WHERE status = 'pending';
 ```
 
 **Status Values:**
+
 - `pending` - Task waiting to be processed
 - `running` - Task currently being processed
 - `completed` - Task successfully completed
@@ -154,6 +163,7 @@ CREATE INDEX idx_tasks_pending ON tasks(created_at) WHERE status = 'pending';
 ### Authentication Tables
 
 #### Users Table
+
 Extends Supabase auth.users with application-specific data.
 
 ```sql
@@ -171,6 +181,7 @@ CREATE INDEX idx_users_organisation ON users(organisation_id);
 ```
 
 #### Organisations Table
+
 Simple organisation model for data sharing.
 
 ```sql
@@ -194,7 +205,7 @@ SELECT t.id, t.job_id, d.name as domain, p.path, t.source_type, t.source_url
 FROM tasks t
 JOIN pages p ON t.page_id = p.id
 JOIN domains d ON p.domain_id = d.id
-WHERE t.job_id = ANY($1) 
+WHERE t.job_id = ANY($1)
   AND t.status = 'pending'
 ORDER BY t.created_at ASC
 LIMIT 1
@@ -208,7 +219,7 @@ Efficient bulk inserts using PostgreSQL arrays:
 ```sql
 -- Batch task creation (internal/db/queue.go)
 INSERT INTO tasks (id, job_id, domain_id, page_id, status, source_type, source_url, created_at)
-SELECT 
+SELECT
     gen_random_uuid()::text,
     $1,
     $2,
@@ -227,17 +238,17 @@ Atomic progress updates with conditional status changes:
 -- Job progress update (internal/db/queue.go)
 UPDATE jobs
 SET
-    progress = CASE 
-        WHEN total_tasks > 0 THEN 
+    progress = CASE
+        WHEN total_tasks > 0 THEN
             ((completed_tasks + failed_tasks)::REAL / total_tasks::REAL) * 100.0
         ELSE 0.0
     END,
     completed_tasks = (
-        SELECT COUNT(*) FROM tasks 
+        SELECT COUNT(*) FROM tasks
         WHERE job_id = $1 AND status = 'completed'
     ),
     failed_tasks = (
-        SELECT COUNT(*) FROM tasks 
+        SELECT COUNT(*) FROM tasks
         WHERE job_id = $1 AND status = 'failed'
     )
 WHERE id = $1;
@@ -255,6 +266,7 @@ Instead of storing full URLs, the system:
 4. **Reconstructs URLs** by joining domain + path during processing
 
 Benefits:
+
 - Reduces storage redundancy
 - Improves data integrity
 - Enables efficient domain-based queries
@@ -268,7 +280,7 @@ INSERT INTO tasks (id, job_id, domain_id, page_id, status, ...)
 VALUES (gen_random_uuid()::text, ?, ?, ?, 'pending', ...);
 
 -- 2. Task Claiming (atomic)
-UPDATE tasks SET 
+UPDATE tasks SET
     status = 'running',
     started_at = NOW()
 WHERE id = ? AND status = 'pending';
@@ -289,7 +301,7 @@ Handles system restarts and stuck jobs:
 
 ```sql
 -- Reset stuck running tasks on startup
-UPDATE tasks 
+UPDATE tasks
 SET status = 'pending',
     started_at = NULL,
     retry_count = retry_count + 1
@@ -297,12 +309,12 @@ WHERE status = 'running'
   AND started_at < NOW() - INTERVAL '10 minutes';
 
 -- Mark jobs complete when all tasks finished
-UPDATE jobs 
-SET status = 'completed', 
+UPDATE jobs
+SET status = 'completed',
     completed_at = NOW(),
     progress = 100.0
 WHERE status IN ('pending', 'running')
-  AND total_tasks > 0 
+  AND total_tasks > 0
   AND total_tasks = completed_tasks + failed_tasks;
 ```
 
@@ -324,7 +336,7 @@ FOR ALL USING (auth.uid()::text = id);
 CREATE POLICY "org_jobs_access" ON jobs
 FOR ALL USING (
     organisation_id IN (
-        SELECT organisation_id FROM users 
+        SELECT organisation_id FROM users
         WHERE id = auth.uid()::text
     )
 );
@@ -333,9 +345,9 @@ FOR ALL USING (
 CREATE POLICY "job_tasks_access" ON tasks
 FOR ALL USING (
     job_id IN (
-        SELECT id FROM jobs 
+        SELECT id FROM jobs
         WHERE organisation_id IN (
-            SELECT organisation_id FROM users 
+            SELECT organisation_id FROM users
             WHERE id = auth.uid()::text
         )
     )
@@ -347,16 +359,19 @@ FOR ALL USING (
 ### Query Optimisation
 
 **Indexed Queries:**
+
 - Task status lookups use `idx_tasks_status`
 - Job lookups by user/org use `idx_jobs_user_org`
 - Pending task queries use partial index `idx_tasks_pending`
 
 **Connection Management:**
+
 - Connection pooling reduces overhead
 - Long-lived connections for worker processes
 - Automatic reconnection on failures
 
 **Batch Processing:**
+
 - Bulk inserts for task creation
 - Batch updates for progress tracking
 - Efficient array operations for URL processing
@@ -365,26 +380,26 @@ FOR ALL USING (
 
 ```sql
 -- Check worker efficiency
-SELECT 
+SELECT
     status,
     COUNT(*) as count,
     AVG(EXTRACT(EPOCH FROM (completed_at - started_at))) as avg_duration
-FROM tasks 
+FROM tasks
 WHERE started_at > NOW() - INTERVAL '1 hour'
 GROUP BY status;
 
 -- Monitor job completion rates
-SELECT 
+SELECT
     DATE_TRUNC('hour', created_at) as hour,
     COUNT(*) as jobs_created,
     COUNT(completed_at) as jobs_completed
-FROM jobs 
+FROM jobs
 WHERE created_at > NOW() - INTERVAL '24 hours'
 GROUP BY hour
 ORDER BY hour;
 
 -- Check database performance
-SELECT 
+SELECT
     schemaname,
     tablename,
     seq_scan,
@@ -401,11 +416,11 @@ WHERE schemaname = 'public';
 
 ```sql
 -- Add new columns safely
-ALTER TABLE jobs 
+ALTER TABLE jobs
 ADD COLUMN IF NOT EXISTS new_field TEXT DEFAULT '';
 
 -- Create indexes concurrently (non-blocking)
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_new_field 
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_new_field
 ON jobs(new_field);
 
 -- Remove old columns after confirming unused
@@ -415,6 +430,7 @@ ALTER TABLE jobs DROP COLUMN IF EXISTS old_field;
 ### Data Migration Scripts
 
 Located in `docs/migrations/` (when needed):
+
 - `001_initial_schema.sql` - Base schema creation
 - `002_add_auth_tables.sql` - User authentication tables
 - `003_add_indexes.sql` - Performance indexes
@@ -454,7 +470,8 @@ SELECT COUNT(*) FROM users;
 **Solution**: Use explicit `ALTER TABLE` commands for schema changes
 
 **Issue**: Column removal requires data migration
-**Solution**: 
+**Solution**:
+
 1. Add new columns first
 2. Migrate data
 3. Remove old columns in separate deployment
