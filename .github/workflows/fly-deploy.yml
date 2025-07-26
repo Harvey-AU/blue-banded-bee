@@ -27,14 +27,25 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
+          set -euo pipefail  # Exit on error, undefined vars, and pipe failures
+          
           # Install tools for test reporting
           go install github.com/jstemmer/go-junit-report/v2@latest
           
-          # Run tests with JSON output and convert to JUnit XML
-          go test -v -coverprofile=coverage.out ./... -json | $(go env GOPATH)/bin/go-junit-report -parser gojson > junit.xml
+          # Run tests with JSON output, save to file first to preserve exit code
+          go test -v -coverprofile=coverage.out ./... -json > test-output.json
+          
+          # Convert to JUnit XML (this won't fail even if tests failed)
+          $(go env GOPATH)/bin/go-junit-report -parser gojson < test-output.json > junit.xml
           
           # Show coverage summary
-          go tool cover -func=coverage.out
+          go tool cover -func=coverage.out || true
+          
+          # Check if tests actually passed by examining the JSON output
+          if grep -q '"Action":"fail"' test-output.json; then
+            echo "Tests failed!"
+            exit 1
+          fi
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
