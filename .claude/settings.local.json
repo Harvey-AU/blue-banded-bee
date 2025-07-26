@@ -63,7 +63,8 @@
       "Bash(winget install:*)",
       "WebFetch(domain:goo.gle)",
       "mcp__supabase__search_docs",
-      "Bash(./scripts/test-db.sh:*)"
+      "Bash(./scripts/test-db.sh:*)",
+      "Bash(git rm:*)"
     ],
     "deny": []
   },
