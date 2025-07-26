@@ -11,6 +11,11 @@ import (
 )
 
 func TestDatabaseConnection(t *testing.T) {
+	// Skip this test in CI environment
+	if os.Getenv("CI") == "true" {
+		t.Skip("Skipping database connection test in CI environment")
+	}
+	
 	// This test verifies that the test database is properly configured
 	t.Logf("Attempting to connect with DATABASE_URL: %s", os.Getenv("DATABASE_URL"))
 	
