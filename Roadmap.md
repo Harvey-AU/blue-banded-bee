@@ -297,13 +297,13 @@ Detailed plan available in [docs/organisation-model.md](docs/plans/organisation-
   - [x] Filter out links that are hidden via inline `style` attributes.
   - [x] Remove anchor links from link discovery
   - [ ] Support compressed sitemaps (.xml.gz and other formats)
-  - [ ] If sitemap can't be found, setup job with / page and start as normal finding links through pages
+  - [x] If sitemap can't be found, setup job with / page and start as normal finding links through pages
   - [ ] Only store source_url if page was found ON a page and redirect_url if it's a redirect AND it doesn't match the domain/path of the task
 
 - [x] Considering impact of and plan updates [Go v1.25 release](/docs/plans/Go-1.25.md)
 
-- [ ] **Blocking Avoidance**
-  - [ ] Series of tweaks to reduce blocking [Implementation Plan](docs/plans/blocking-avoidance.md)
+- [x] **Blocking Avoidance**
+  - [x] Series of tweaks to reduce blocking [Implementation Plan](docs/plans/blocking-avoidance.md)
 
 ### 🔴 Webflow App Integration
 
@@ -443,6 +443,11 @@ Detailed plan available in [docs/organisation-model.md](docs/plans/organisation-
 ### 🔴 Code Quality & Maintenance
 
 - [ ] **Increase Test Coverage** - [Implementation Plan](./docs/plans/increase-test-coverage.md)
+  - [x] Set up Supabase test branch database infrastructure
+  - [x] Add testify testing framework
+  - [x] Create simplified test plan (Phase 1: 80-115 lines)
+  - [ ] Implement Phase 1 tests (GetJob, CreateJob, CancelJob, ProcessSitemapFallback)
+  - [ ] Implement Phase 2 tests (EnqueueJobURLs, ProcessTask, WorkerPool_Basic)
 - [ ] **Code Quality Improvement** - [Implementation Plan](./docs/plans/code-quality-improvement.md)
   - [ ] Phase 1: Automated formatting and ineffectual assignments cleanup
   - [ ] Phase 2: Refactor high-complexity functions (WarmURL, getJobTasks, processSitemap)

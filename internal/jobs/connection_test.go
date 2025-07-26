@@ -11,6 +11,11 @@ import (
 )
 
 func TestDatabaseConnection(t *testing.T) {
+	// Skip this test if DATABASE_URL is not set (e.g., in CI)
+	if os.Getenv("DATABASE_URL") == "" {
+		t.Skip("Skipping database connection test - DATABASE_URL not set")
+	}
+	
 	// This test verifies that the test database is properly configured
 	t.Logf("Attempting to connect with DATABASE_URL: %s", os.Getenv("DATABASE_URL"))
 	
