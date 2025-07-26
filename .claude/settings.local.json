@@ -61,7 +61,8 @@
       "Bash(npm uninstall:*)",
       "Bash(fly logs:*)",
       "Bash(winget install:*)",
-      "WebFetch(domain:goo.gle)"
+      "WebFetch(domain:goo.gle)",
+      "mcp__supabase__search_docs"
     ],
     "deny": []
   },

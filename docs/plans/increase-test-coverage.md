@@ -1,48 +1,109 @@
 # Implementation Plan: Increase Test Coverage
 
-**Objective:** Significantly increase the test coverage for the `internal/jobs` package from its current low percentage to provide a robust safety net for future development.
+**Objective:** Incrementally increase test coverage for the `internal/jobs` package using a Supabase branch database for simplified integration testing.
 
-This plan focuses on creating meaningful integration tests that verify the interaction between the `JobManager`, `WorkerPool`, and the PostgreSQL database.
-
----
-
-## Overall Approach & Complexity
-
--   **Complexity:** Medium to High. The code is concurrent (worker pools, goroutines for sitemap processing) and heavily stateful (all logic depends on the PostgreSQL database). Tests must manage this state carefully.
--   **Method:** We will use a real test database. For each test, the workflow will be:
-    1.  Set up the required state in the database (e.g., create a user, create a pending job).
-    2.  Execute the function being tested.
-    3.  Query the database to assert that the state has changed as expected (e.g., the job status is now `running`).
--   **Dependencies:** The `crawler` component will be mocked to prevent real network requests during tests.
+This plan focuses on creating simple, practical integration tests that verify core functionality with minimal complexity.
 
 ---
 
-## Test Breakdown
+## Overall Approach
 
-### 1. `manager_test.go`
+- **Complexity:** Low to Medium. By using a Supabase branch database, we eliminate the need for mocking and complex test setup.
+- **Method:** We will use a Supabase branch database that mirrors production. For each test:
+  1. Use the branch database with existing schema and stored procedures
+  2. Execute the function being tested
+  3. Query the database to verify the expected state changes
+  4. Reset branch data between test runs if needed
+- **Dependencies:** No mocking required - we'll use real HTTP requests to test domains when needed
 
-| Test Function | Est. Lines of Code | Complexity | Notes |
-| :--- | :--- | :--- | :--- |
-| **`TestCreateJob`** | 40-60 lines | **Medium** | Requires DB setup to create a job and then query to verify its properties. Testing the "cancel existing" logic adds a bit more setup. |
-| **`TestCreateJob_Sitemap`** | 50-70 lines | **High** | This test is complex because `processSitemap` runs in a goroutine. It will require mocking the crawler and using techniques (like polling the DB) to wait for the concurrent process to finish before asserting the results. |
-| **`TestCancelJob`** | 30-40 lines | **Medium** | Requires creating a job in a `running` state first, then calling cancel and asserting the new `cancelled` state in the DB. |
-| **`TestGetJob`** | 25-35 lines | **Low** | The simplest test. Create a job, fetch it, and compare the results. |
-| **`TestEnqueueJobURLs`** | 40-50 lines | **Medium** | Needs to test the in-memory duplicate check (`processedPages` map) along with the database interaction, ensuring duplicates are not written to the `tasks` table. |
+---
 
-### 2. `worker_test.go`
+## Supabase Branch Setup Instructions
 
-| Test Function | Est. Lines of Code | Complexity | Notes |
-| :--- | :--- | :--- | :--- |
-| **`TestWorkerPool_StartStop`**| 20-30 lines | **Low** | A simple sanity check to ensure the pool starts and stops without deadlocking. |
-| **`TestWorkerPool_ProcessJob`**| 60-80 lines | **Very High** | This is the most complex test. It's a full end-to-end integration test that involves the `JobManager`, `WorkerPool`, a mocked `Crawler`, and the database. It will verify the entire core loop. |
-| **`TestProcessTask`** | 40-50 lines | **Medium** | This will test the `processTask` function in isolation, which is simpler than testing the whole pool. It still requires a mocked crawler and DB assertions. |
-| **`TestIsSameOrSubDomain`** | 40-50 lines | **Low** | This is a pure helper function. It will be a simple, table-driven unit test with no external dependencies. |
+### 1. Create a Development Branch
+
+1. Log into your Supabase project dashboard
+2. Navigate to the "Branches" section
+3. Click "Create branch" and name it `test-branch` or similar
+4. Wait for the branch to be provisioned (usually 1-2 minutes)
+5. Copy the branch connection string from the Settings → Database page
+
+### 2. Configure Test Environment
+
+Create a `.env.test` file in your project root:
+```bash
+TEST_DATABASE_URL=<your-branch-connection-string>
+```
+
+### 3. Test Execution
+
+Run tests with the test environment:
+```bash
+# Load test environment and run tests
+set -a; source .env.test; set +a; go test ./internal/jobs/... -v
+```
+
+---
+
+## Simplified Test Plan
+
+### Phase 1: Basic Tests (Start Here)
+
+| Test Function | Est. Lines | Complexity | Purpose |
+| :------------ | :--------- | :--------- | :------ |
+| **`TestGetJob`** | 10-15 lines | **Low** | Verify basic read operations work |
+| **`TestCreateJob`** | 20-30 lines | **Low** | Test job creation without sitemap complexity |
+| **`TestCancelJob`** | 20-30 lines | **Low** | Test state transitions |
+| **`TestProcessSitemapFallback`** | 30-40 lines | **Medium** | Test your new fallback feature |
+
+**Phase 1 Total:** ~80-115 lines (much simpler than original 350-470)
+
+### Phase 2: Extended Tests (Future)
+
+| Test Function | Est. Lines | Complexity | Purpose |
+| :------------ | :--------- | :--------- | :------ |
+| **`TestEnqueueJobURLs`** | 30-40 lines | **Medium** | Test duplicate detection |
+| **`TestProcessTask`** | 40-50 lines | **Medium** | Test single task processing with real HTTP |
+| **`TestWorkerPool_Basic`** | 30-40 lines | **Medium** | Basic worker pool functionality |
+
+### Test Implementation Pattern
+
+```go
+func TestGetJob(t *testing.T) {
+    // 1. Connect to test database
+    db, err := db.InitFromEnv()
+    require.NoError(t, err)
+    
+    // 2. Create test data
+    jobID := createTestJob(t, db, "test.example.com")
+    
+    // 3. Execute function
+    jm := jobs.NewJobManager(db, nil, nil)
+    job, err := jm.GetJob(context.Background(), jobID)
+    
+    // 4. Assert results
+    require.NoError(t, err)
+    assert.Equal(t, jobID, job.ID)
+    assert.Equal(t, "test.example.com", job.DomainName)
+}
+```
+
+---
+
+## Benefits of This Approach
+
+1. **No Mocking Required** - Use real crawler for actual HTTP requests
+2. **Real Database Features** - All triggers, stored procedures work as in production
+3. **Simple Setup** - Just set TEST_DATABASE_URL and run
+4. **Incremental Progress** - Start with 100 lines instead of 500
+5. **Production-Like** - Tests run against exact same schema as production
 
 ---
 
 ## Summary
 
--   **Total Estimated Lines of Code:** 350 - 470 lines
--   **Total Estimated Time:** Approximately 1 to 1.5 hours.
+- **Phase 1:** 80-115 lines of simple tests (30 minutes to implement)
+- **Phase 2:** Additional 100-130 lines when needed
+- **Total Time:** Phase 1 can be completed in under an hour
 
-This plan outlines the necessary steps to build a comprehensive test suite for the core job processing logic.
+This approach provides immediate value with minimal complexity, allowing for incremental improvement of test coverage.
