@@ -2,7 +2,6 @@ package jobs
 
 import (
 	"context"
-	"os"
 	"testing"
 	"time"
 
