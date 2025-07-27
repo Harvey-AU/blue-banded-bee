@@ -461,7 +461,7 @@ func (jm *JobManager) GetJob(ctx context.Context, jobID string) (*Job, error) {
 				j.id, d.name, j.status, j.progress, j.total_tasks, j.completed_tasks, j.failed_tasks, j.skipped_tasks,
 				j.created_at, j.started_at, j.completed_at, j.concurrency, j.find_links,
 				j.include_paths, j.exclude_paths, j.error_message, j.required_workers,
-				j.found_tasks, j.sitemap_tasks
+				j.found_tasks, j.sitemap_tasks, j.duration_seconds, j.avg_time_per_task_seconds
 			FROM jobs j
 			JOIN domains d ON j.domain_id = d.id
 			WHERE j.id = $1
@@ -469,7 +469,7 @@ func (jm *JobManager) GetJob(ctx context.Context, jobID string) (*Job, error) {
 			&job.ID, &job.Domain, &job.Status, &job.Progress, &job.TotalTasks, &job.CompletedTasks,
 			&job.FailedTasks, &job.SkippedTasks, &job.CreatedAt, &startedAt, &completedAt, &job.Concurrency,
 			&job.FindLinks, &includePaths, &excludePaths, &errorMessage, &job.RequiredWorkers,
-			&job.FoundTasks, &job.SitemapTasks,
+			&job.FoundTasks, &job.SitemapTasks, &job.DurationSeconds, &job.AvgTimePerTaskSeconds,
 		)
 		return err
 	})

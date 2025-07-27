@@ -1,0 +1,2 @@
+-- Initial schema migration (already applied to remote)
+-- This file exists to sync local migration history with remote
