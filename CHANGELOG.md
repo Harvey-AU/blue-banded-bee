@@ -19,6 +19,18 @@ Each version represents a distinct set of changes, even if released on the same 
   - Test coverage reporting with Codecov
   - Test Analytics enabled with JUnit XML reports
 - **Codecov Configuration**: Added codecov.yml for coverage reporting settings
+- **Test Infrastructure Documentation**: New comprehensive testing guide at docs/TESTING.md
+
+### Changed
+
+- **CI/CD Pipeline**: Updated to use Supabase pooler URLs for IPv4 compatibility in GitHub Actions
+- **Test Environment**: Standardised on TEST_DATABASE_URL for all test database connections
+- **Documentation**: Updated testing sections across README, DEVELOPMENT.md, and API-TESTING-GUIDE.md
+
+### Fixed
+
+- **CI Database Connection**: Resolved IPv6 connectivity issues by using Supabase session pooler
+- **Test Environment Loading**: Fixed test configuration to properly use .env.test file
 
 ## [0.5.29] – 2025-07-26
 
