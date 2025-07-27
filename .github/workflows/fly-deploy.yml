@@ -27,17 +27,6 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.TEST_DATABASE_URL }}
         run: |
-          # Convert direct database URL to pooler URL for IPv4 support
-          # GitHub Actions doesn't support IPv6, but Supabase pooler supports IPv4
-          if [[ "$DATABASE_URL" == *"db.tdribylqvkraxemlixaw.supabase.co"* ]]; then
-            echo "Converting to pooler URL for IPv4 support..."
-            # Extract password from the URL
-            PASSWORD=$(echo "$DATABASE_URL" | sed -n 's/.*postgres:\([^@]*\)@.*/\1/p')
-            # Convert to pooler URL format (session mode on port 5432)
-            export DATABASE_URL="postgresql://postgres.tdribylqvkraxemlixaw:${PASSWORD}@aws-0-us-west-1.pooler.supabase.com:5432/postgres"
-            echo "Using pooler URL for IPv4 connectivity"
-          fi
-          
           # Install tools for test reporting
           go install github.com/jstemmer/go-junit-report/v2@latest
           
