@@ -303,7 +303,7 @@ Detailed plan available in [docs/organisation-model.md](docs/plans/organisation-
 - [x] Considering impact of and plan updates [Go v1.25 release](/docs/plans/Go-1.25.md)
 
 - [x] **Blocking Avoidance**
-  - [x] Series of tweaks to reduce blocking [Implementation Plan](docs/plans/blocking-avoidance.md)
+  - [x] Series of tweaks to reduce blocking [Implementation Plan](docs/plans/_archive/blocking-avoidance.md)
 
 ### 🔴 Webflow App Integration
 
