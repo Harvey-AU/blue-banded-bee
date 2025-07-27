@@ -85,64 +85,20 @@ go run ./cmd/app/main.go
 
 ## Testing
 
-### Test Environment Setup
+See the comprehensive [Testing Documentation](./testing/README.md) for:
+- Test environment setup
+- Writing and running tests
+- CI/CD pipeline details
+- Troubleshooting guide
 
-The project uses a dedicated Supabase test branch database for integration testing:
-
-1. **Local Testing**: Uses `.env.test` file with `TEST_DATABASE_URL`
-2. **CI Testing**: Uses GitHub Actions secrets with Supabase pooler URL for IPv4 compatibility
-
+Quick commands:
 ```bash
-# Run all tests locally
+# Run all tests
 ./run-tests.sh
-
-# Or run directly with test environment
-go test -v ./...
 
 # Run with coverage
 go test -v -coverprofile=coverage.out ./...
-go tool cover -html=coverage.out
 ```
-
-### CI/CD Pipeline
-
-The GitHub Actions workflow (`.github/workflows/fly-deploy.yml`) runs on every push:
-
-1. **Test Execution**: Runs all tests with coverage reporting
-2. **Coverage Reporting**: Uploads to Codecov for tracking
-3. **JUnit Results**: Converts test output for GitHub integration
-4. **Deployment**: Auto-deploys to Fly.io on successful tests (main branch only)
-
-#### Important CI Configuration
-
-- **Database Connection**: CI uses Supabase pooler URL (session mode, port 5432) for IPv4 compatibility
-- **Test Database**: Set `TEST_DATABASE_URL` secret in GitHub to use pooler format:
-  ```
-  postgresql://postgres.PROJECT_REF:[PASSWORD]@aws-0-[REGION].pooler.supabase.com:5432/postgres
-  ```
-
-### Test Categories
-
-#### Integration Tests (Database)
-
-Real database tests using Supabase test branch:
-- Job management operations
-- Task queue processing
-- Database schema validation
-- Transaction handling
-
-```bash
-# Run database connection test
-go test -v ./internal/jobs -run TestDatabaseConnection
-```
-
-#### Unit Tests
-
-Business logic tests with mocked dependencies:
-- URL parsing and validation
-- Retry logic
-- Error handling
-- Priority calculations
 
 ### Manual API Testing
 

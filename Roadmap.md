@@ -450,6 +450,9 @@ Detailed plan available in [docs/organisation-model.md](docs/plans/organisation-
   - [x] Implement integration tests (EnqueueJobURLs)
   - [x] Implement unit tests with mocks (CrawlerInterface refactoring)
   - [x] Enable Codecov reporting and Test Analytics
+  - [x] Set up CI/CD with Supabase pooler URLs for IPv4 compatibility
+  - [x] Fix test environment loading to use .env.test file
+  - [x] Reorganise testing documentation into modular structure
 - [ ] **Code Quality Improvement** - [Implementation Plan](./docs/plans/code-quality-improvement.md)
   - [ ] Phase 1: Automated formatting and ineffectual assignments cleanup
   - [ ] Phase 2: Refactor high-complexity functions (WarmURL, getJobTasks, processSitemap)

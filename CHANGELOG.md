@@ -19,13 +19,13 @@ Each version represents a distinct set of changes, even if released on the same 
   - Test coverage reporting with Codecov
   - Test Analytics enabled with JUnit XML reports
 - **Codecov Configuration**: Added codecov.yml for coverage reporting settings
-- **Test Infrastructure Documentation**: New comprehensive testing guide at docs/TESTING.md
 
 ### Changed
 
 - **CI/CD Pipeline**: Updated to use Supabase pooler URLs for IPv4 compatibility in GitHub Actions
 - **Test Environment**: Standardised on TEST_DATABASE_URL for all test database connections
-- **Documentation**: Updated testing sections across README, DEVELOPMENT.md, and API-TESTING-GUIDE.md
+- **Testing Documentation**: Reorganised into modular structure under docs/testing/
+- **Project Guidance**: Updated CLAUDE.md and gemini.md with platform documentation verification approach
 
 ### Fixed
 

@@ -85,7 +85,7 @@ The project uses comprehensive automated testing with real database integration:
 - **CI/CD Pipeline**: GitHub Actions runs all tests on every push
 - **Test Database**: Dedicated Supabase branch for integration testing
 - **Coverage Tracking**: Codecov monitors test coverage (see badge above)
-- **Testing Guide**: See [docs/TESTING.md](docs/TESTING.md) for detailed testing documentation
+- **Documentation**: See [Testing Guide](docs/testing/README.md)
 
 ## Documentation
 
@@ -95,7 +95,7 @@ The project uses comprehensive automated testing with real database integration:
 - **[Development Guide](docs/DEVELOPMENT.md)** - Setup, local development, testing, debugging, and contributing guidelines
 - **[API Reference](docs/API.md)** - Complete REST API endpoints, authentication, and response formats
 - **[Database Reference](docs/DATABASE.md)** - PostgreSQL schema, queries, performance optimisation, and operations
-- **[Testing Guide](docs/TESTING.md)** - Comprehensive testing strategy, CI/CD setup, and troubleshooting
+- **[Testing Guide](docs/testing/README.md)** - Comprehensive testing strategy, CI/CD setup, and troubleshooting
 - **[Flight Recorder](docs/flight-recorder.md)** - Performance debugging with Go's built-in flight recorder
 
 ### Future Plans
