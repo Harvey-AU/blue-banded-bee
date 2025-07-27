@@ -65,7 +65,9 @@
       "mcp__supabase__search_docs",
       "Bash(./scripts/test-db.sh:*)",
       "Bash(git rm:*)",
-      "Bash(go tool cover:*)"
+      "Bash(go tool cover:*)",
+      "Bash(supabase migration:*)",
+      "Bash(git checkout:*)"
     ],
     "deny": []
   },
