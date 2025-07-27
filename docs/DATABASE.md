@@ -6,6 +6,16 @@ Blue Banded Bee uses PostgreSQL as its primary database with a normalised schema
 
 As of 26th July 2025 we manage database schema/setup via migrations.
 
+### Migration Workflow
+
+Blue Banded Bee uses Supabase GitHub integration for automatic migration deployment:
+
+1. **Create Migration Files**: Place new `.sql` files in `supabase/migrations/` with timestamp prefix
+2. **Push to GitHub**: Migrations apply automatically when merged to `test-branch` or `main`
+3. **No Manual Steps**: Supabase handles all migration execution via GitHub integration
+
+**Important**: Do NOT run `supabase db push` manually - let the GitHub integration handle it.
+
 ## Connection Configuration
 
 ### Environment Variables
@@ -412,28 +422,46 @@ WHERE schemaname = 'public';
 
 ## Migration Management
 
-### Schema Updates
+### Creating Migrations
 
-```sql
--- Add new columns safely
-ALTER TABLE jobs
-ADD COLUMN IF NOT EXISTS new_field TEXT DEFAULT '';
+1. **Generate migration file**:
+   ```bash
+   supabase migration new your_migration_name
+   ```
+   This creates a timestamped file in `supabase/migrations/`
 
--- Create indexes concurrently (non-blocking)
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_new_field
-ON jobs(new_field);
+2. **Write migration SQL**:
+   ```sql
+   -- Add new columns safely
+   ALTER TABLE jobs
+   ADD COLUMN IF NOT EXISTS new_field TEXT DEFAULT '';
 
--- Remove old columns after confirming unused
-ALTER TABLE jobs DROP COLUMN IF EXISTS old_field;
-```
+   -- Create indexes concurrently (non-blocking)
+   CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_new_field
+   ON jobs(new_field);
 
-### Data Migration Scripts
+   -- Remove old columns after confirming unused
+   ALTER TABLE jobs DROP COLUMN IF EXISTS old_field;
+   ```
 
-Located in `docs/migrations/` (when needed):
+3. **Test locally** (optional):
+   ```bash
+   supabase start
+   supabase db reset  # Applies all migrations
+   ```
 
-- `001_initial_schema.sql` - Base schema creation
-- `002_add_auth_tables.sql` - User authentication tables
-- `003_add_indexes.sql` - Performance indexes
+4. **Deploy via GitHub**:
+   - Push to feature branch
+   - Create PR to `test-branch` (migrations auto-apply)
+   - After testing, merge to `main` (migrations auto-apply)
+
+### Migration Files
+
+All migrations are in `supabase/migrations/`:
+- `20240101000000_initial_schema.sql` - Base schema creation
+- `20250720013915_remote_schema.sql` - Initial remote state
+- `20250727212804_add_job_duration_fields.sql` - Calculated duration fields
+- New migrations get timestamped names automatically
 
 ## Backup & Recovery
 
