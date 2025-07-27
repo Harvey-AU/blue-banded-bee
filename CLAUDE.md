@@ -117,22 +117,30 @@ Blue Banded Bee is a web cache warming service built in Go, focused on Webflow s
    ```
 
 2. **Write your SQL changes** in the migration file
-3. **Test locally**: `supabase db push`
-4. **Commit the migration** with your code changes
+3. **Commit the migration** with your code changes
+4. **Push to your feature branch**
 
-### Current Schema Management
+That's it! Migrations apply automatically through our GitHub integration.
 
-- **Migration files**: Located in `supabase/migrations/`
-- **Automatic application**: Migrations run automatically on deploy to Supabase
-- **Test environment**: Currently requires manual migration application (known issue)
-- **Legacy code**: `internal/db/db.go` contains schema setup code that should be migrated to proper migration files
+### How Migrations Work
+
+- **Feature branch → test-branch**: Migrations apply automatically to test environment
+- **test-branch → main**: Migrations apply automatically to production
+- **No manual steps required** - Supabase GitHub integration handles everything
+
+### Migration Files
+
+- **Location**: `supabase/migrations/`
+- **Naming**: `[timestamp]_description.sql` (created automatically by CLI)
+- **Order**: Migrations run in timestamp order
+- **Tracking**: Supabase tracks which migrations have been applied
 
 ### Important Notes
 
+- **DO NOT** add schema management to Go code - use migrations only
+- **DO NOT** edit or rename existing migration files after they're deployed
+- Keep migrations **additive** (ADD COLUMN, CREATE INDEX) not destructive
 - All data is currently test-only and can be deleted
-- Schema changes should be additive (ADD COLUMN, CREATE INDEX) not destructive
-- The test database may need migrations applied manually until CI/CD is updated
-- Do NOT add schema management to Go code - use Supabase migrations instead
 
 ## Working with CI/Workflows and Integrations
 
