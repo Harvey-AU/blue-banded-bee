@@ -102,6 +102,37 @@ Blue Banded Bee is a web cache warming service built in Go, focused on Webflow s
 - **Preserve existing functionality** - Unless explicitly asked to remove
 - **Ask before expanding scope** - Don't add unrequested features
 
+## Database Schema Management
+
+**IMPORTANT: We use Supabase's built-in migration system. Do NOT duplicate this functionality in Go code.**
+
+### How to Make Schema Changes
+
+1. **Create a migration file**:
+
+   ```bash
+   supabase migration new descriptive_name_here
+   # This creates: supabase/migrations/[timestamp]_descriptive_name_here.sql
+   ```
+
+2. **Write your SQL changes** in the migration file
+3. **Test locally**: `supabase db push`
+4. **Commit the migration** with your code changes
+
+### Current Schema Management
+
+- **Migration files**: Located in `supabase/migrations/`
+- **Automatic application**: Migrations run automatically on deploy to Supabase
+- **Test environment**: Currently requires manual migration application (known issue)
+- **Legacy code**: `internal/db/db.go` contains schema setup code that should be migrated to proper migration files
+
+### Important Notes
+
+- All data is currently test-only and can be deleted
+- Schema changes should be additive (ADD COLUMN, CREATE INDEX) not destructive
+- The test database may need migrations applied manually until CI/CD is updated
+- Do NOT add schema management to Go code - use Supabase migrations instead
+
 ## Working with CI/Workflows and Integrations
 
 When dealing with CI pipelines, workflows, or third-party integrations (GitHub Actions, Supabase, etc.):

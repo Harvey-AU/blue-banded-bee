@@ -186,18 +186,20 @@ func (db *DB) GetJobActivity(organisationID string, startDate, endDate *time.Tim
 
 // JobListItem represents a job in the list view
 type JobListItem struct {
-	ID             string  `json:"id"`
-	Status         string  `json:"status"`
-	Progress       float64 `json:"progress"`
-	TotalTasks     int     `json:"total_tasks"`
-	CompletedTasks int     `json:"completed_tasks"`
-	FailedTasks    int     `json:"failed_tasks"`
-	SitemapTasks   int     `json:"sitemap_tasks"`
-	FoundTasks     int     `json:"found_tasks"`
-	CreatedAt      string  `json:"created_at"`
-	StartedAt      *string `json:"started_at,omitempty"`
-	CompletedAt    *string `json:"completed_at,omitempty"`
-	Domain         *string `json:"domains,omitempty"` // For compatibility with frontend
+	ID                    string   `json:"id"`
+	Status                string   `json:"status"`
+	Progress              float64  `json:"progress"`
+	TotalTasks            int      `json:"total_tasks"`
+	CompletedTasks        int      `json:"completed_tasks"`
+	FailedTasks           int      `json:"failed_tasks"`
+	SitemapTasks          int      `json:"sitemap_tasks"`
+	FoundTasks            int      `json:"found_tasks"`
+	CreatedAt             string   `json:"created_at"`
+	StartedAt             *string  `json:"started_at,omitempty"`
+	CompletedAt           *string  `json:"completed_at,omitempty"`
+	Domain                *string  `json:"domains,omitempty"` // For compatibility with frontend
+	DurationSeconds       *int     `json:"duration_seconds,omitempty"`
+	AvgTimePerTaskSeconds *float64 `json:"avg_time_per_task_seconds,omitempty"`
 }
 
 // Domain represents the domain information for jobs
@@ -257,7 +259,8 @@ func (db *DB) ListJobs(organisationID string, limit, offset int, status, dateRan
 		SELECT 
 			j.id, j.status, j.progress, j.total_tasks, j.completed_tasks, 
 			j.failed_tasks, j.sitemap_tasks, j.found_tasks, j.created_at,
-			j.started_at, j.completed_at, d.name as domain_name
+			j.started_at, j.completed_at, d.name as domain_name,
+			j.duration_seconds, j.avg_time_per_task_seconds
 		` + baseQuery + `
 		ORDER BY j.created_at DESC
 		LIMIT $` + fmt.Sprintf("%d", argCount+1) + ` OFFSET $` + fmt.Sprintf("%d", argCount+2)
@@ -280,6 +283,7 @@ func (db *DB) ListJobs(organisationID string, limit, offset int, status, dateRan
 			&job.ID, &job.Status, &job.Progress, &job.TotalTasks, &job.CompletedTasks,
 			&job.FailedTasks, &job.SitemapTasks, &job.FoundTasks, &job.CreatedAt,
 			&startedAt, &completedAt, &domainName,
+			&job.DurationSeconds, &job.AvgTimePerTaskSeconds,
 		)
 		if err != nil {
 			log.Error().Err(err).Msg("Failed to scan job row")

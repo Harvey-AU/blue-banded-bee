@@ -260,7 +260,25 @@ func setupSchema(db *sql.DB) error {
 			max_pages INTEGER NOT NULL,
 			include_paths TEXT,
 			exclude_paths TEXT,
-			required_workers INTEGER DEFAULT 0
+			required_workers INTEGER DEFAULT 0,
+			error_message TEXT,
+			source_type TEXT,
+			source_detail TEXT,
+			source_info TEXT,
+			duration_seconds INTEGER GENERATED ALWAYS AS (
+				CASE 
+					WHEN started_at IS NOT NULL AND completed_at IS NOT NULL 
+					THEN EXTRACT(EPOCH FROM (completed_at - started_at))::INTEGER
+					ELSE NULL
+				END
+			) STORED,
+			avg_time_per_task_seconds NUMERIC GENERATED ALWAYS AS (
+				CASE 
+					WHEN started_at IS NOT NULL AND completed_at IS NOT NULL AND completed_tasks > 0 
+					THEN EXTRACT(EPOCH FROM (completed_at - started_at))::NUMERIC / completed_tasks::NUMERIC
+					ELSE NULL
+				END
+			) STORED
 		)
 	`)
 	if err != nil {
@@ -360,6 +378,7 @@ func setupSchema(db *sql.DB) error {
 		}
 	}
 
+
 	// Set up Row Level Security policies
 	err = setupRLSPolicies(db)
 	if err != nil {
@@ -390,7 +409,7 @@ func setupTimestampTriggers(db *sql.DB) error {
 		  -- Only set started_at if it's currently NULL and completed_tasks > 0
 		  -- Handle both INSERT and UPDATE operations
 		  IF NEW.completed_tasks > 0 AND (TG_OP = 'INSERT' OR OLD.started_at IS NULL) AND NEW.started_at IS NULL THEN
-		    NEW.started_at = NOW();
+		    NEW.started_at = CURRENT_TIMESTAMP AT TIME ZONE 'UTC';
 		  END IF;
 		  
 		  RETURN NEW;
@@ -409,7 +428,7 @@ func setupTimestampTriggers(db *sql.DB) error {
 		  -- Set completed_at when progress reaches 100% and it's not already set
 		  -- Handle both INSERT and UPDATE operations
 		  IF NEW.progress >= 100.0 AND (TG_OP = 'INSERT' OR OLD.completed_at IS NULL) AND NEW.completed_at IS NULL THEN
-		    NEW.completed_at = NOW();
+		    NEW.completed_at = CURRENT_TIMESTAMP AT TIME ZONE 'UTC';
 		  END IF;
 		  
 		  RETURN NEW;
