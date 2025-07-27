@@ -549,10 +549,16 @@ func (jm *JobManager) processSitemap(ctx context.Context, jobID, domain string, 
 		Str("domain", domain).
 		Msg("Starting sitemap processing")
 
-	// Create a crawler config that allows skipping already cached URLs
-	crawlerConfig := crawler.DefaultConfig()
-	crawlerConfig.SkipCachedURLs = false
-	sitemapCrawler := crawler.New(crawlerConfig)
+	// Use the injected crawler if available, otherwise create a new one
+	var sitemapCrawler CrawlerInterface
+	if jm.crawler != nil {
+		sitemapCrawler = jm.crawler
+	} else {
+		// Create a crawler config that allows skipping already cached URLs
+		crawlerConfig := crawler.DefaultConfig()
+		crawlerConfig.SkipCachedURLs = false
+		sitemapCrawler = crawler.New(crawlerConfig)
+	}
 
 	// Discover sitemaps for the domain
 	sitemaps, err := sitemapCrawler.DiscoverSitemaps(ctx, domain)
