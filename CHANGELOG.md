@@ -8,21 +8,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Multiple version updates may occur on the same date, each with its own version number.
 Each version represents a distinct set of changes, even if released on the same day.
 
-## [Unreleased]
+## [0.5.30] – 2025-07-27
 
 ### Added
 
-- **Comprehensive Test Suite**: 
+- **Comprehensive Test Suite**:
   - Integration tests for core job operations (GetJob, CreateJob, CancelJob, ProcessSitemapFallback, EnqueueJobURLs)
   - Unit tests with mocks using testify framework
   - Refactored to use interfaces for better testability (CrawlerInterface)
-  - Test coverage reporting with Codecov
+  - Test coverage reporting with Codecov (17.4% coverage achieved)
   - Test Analytics enabled with JUnit XML reports
+  - Codecov Flags and Components configuration for better test categorisation
 - **Codecov Configuration**: Added codecov.yml for coverage reporting settings
+- **Post-Launch API Testing Plan**: Created comprehensive testing strategy for implementation after product launch
 
 ### Changed
 
-- **CI/CD Pipeline**: Updated to use Supabase pooler URLs for IPv4 compatibility in GitHub Actions
+- **CI/CD Pipeline**:
+  - Updated to use Supabase pooler URLs for IPv4 compatibility in GitHub Actions
+  - Separated test workflow from deployment workflow
+  - Added unit and integration test separation with build tags
 - **Test Environment**: Standardised on TEST_DATABASE_URL for all test database connections
 - **Testing Documentation**: Reorganised into modular structure under docs/testing/
 - **Project Guidance**: Updated CLAUDE.md and gemini.md with platform documentation verification approach
@@ -31,6 +36,8 @@ Each version represents a distinct set of changes, even if released on the same 
 
 - **CI Database Connection**: Resolved IPv6 connectivity issues by using Supabase session pooler
 - **Test Environment Loading**: Fixed test configuration to properly use .env.test file
+- **Coverage Calculation**: Fixed coverage reporting to include all packages with -coverpkg=./...
+- **Test Race Conditions**: Implemented polling approach instead of fixed sleep times
 
 ## [0.5.29] – 2025-07-26
 
@@ -220,7 +227,6 @@ Each version represents a distinct set of changes, even if released on the same 
 ### Enhanced
 
 - **Job Duplicate Prevention**: Cancel existing jobs when creating new job for same domain
-
   - Prevents multiple concurrent crawls of same domain
   - Automatically cancels in-progress jobs for domain before creating new one
   - Improves resource utilisation and prevents redundant crawling
