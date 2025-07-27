@@ -32,8 +32,10 @@ My process is: **Investigate -> Plan -> Get Permission -> Execute -> Verify**.
 When encountering issues with CI pipelines, workflows, or third-party integrations:
 
 - **Platform Documentation First:** I will check documentation from the source platforms (GitHub Actions, Supabase, etc.) to understand problems and constraints.
+- **Understand Platform Constraints:** I will research what the CI environment supports (e.g., GitHub Actions doesn't support IPv6).
 - **Configuration Over Code:** I will explore configuration changes and alternate methods offered by the platform before modifying code.
 - **Platform-Specific Solutions:** I will use platform-provided solutions (e.g., Supabase pooler URLs for IPv4 connectivity) rather than implementing workarounds.
 - **Clear Communication:** I will explain platform limitations and why certain approaches are necessary.
+- **Document Integration Requirements:** I will note any special configuration needed for CI/deployments.
 
 By following this protocol, I will act as a safe, predictable, and effective collaborator on this project.

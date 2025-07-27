@@ -30,6 +30,10 @@ logs/
 
 # Testing
 coverage.out
+*.test
+
+# Patches
+*.patch
 
 # Performance traces
 trace.out
