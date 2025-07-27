@@ -2,6 +2,7 @@ package jobs
 
 import (
 	"context"
+	"database/sql"
 	"testing"
 	"time"
 
@@ -205,7 +206,7 @@ func TestProcessSitemapFallback(t *testing.T) {
 
 	// Verify that a root task was created with fallback source type
 	var taskCount int
-	var sourceType string
+	var sourceType sql.NullString
 	err = sqlDB.QueryRowContext(ctx, `
 		SELECT COUNT(*), MIN(source_type) 
 		FROM tasks 
@@ -214,7 +215,8 @@ func TestProcessSitemapFallback(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, 1, taskCount, "Should have exactly one root task")
-	assert.Equal(t, "fallback", sourceType, "Root task should have 'fallback' source type")
+	assert.True(t, sourceType.Valid, "Source type should not be NULL")
+	assert.Equal(t, "fallback", sourceType.String, "Root task should have 'fallback' source type")
 
 	// Cleanup
 	_, err = sqlDB.ExecContext(ctx, "DELETE FROM tasks WHERE job_id = $1", job.ID)
