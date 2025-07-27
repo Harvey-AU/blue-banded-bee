@@ -52,12 +52,34 @@ SUPABASE_ANON_KEY=your_anon_key
 ### 3. Database Setup
 
 ```bash
-# Create PostgreSQL database
-createdb bluebandedbeee
+# For local development with Supabase
+supabase start  # Starts local Supabase instance
+supabase db reset  # Creates tables from migrations
 
+# Or for standalone PostgreSQL
+createdb bluebandedbeee
 # The application will automatically create tables on first run
 go run ./cmd/app/main.go
 ```
+
+### 4. Database Migrations
+
+**Creating new migrations**:
+```bash
+# Generate a new migration file
+supabase migration new your_migration_name
+
+# Edit the file in supabase/migrations/
+# Test locally
+supabase db reset
+```
+
+**Deployment process**:
+1. Push changes to feature branch
+2. Create PR to `test-branch` - migrations apply automatically
+3. After testing, merge to `main` - migrations apply automatically
+
+**Note**: Supabase GitHub integration handles all migration deployment. Never run `supabase db push` manually.
 
 ## Development Server
 
@@ -223,15 +245,18 @@ Before submitting:
 
 ### Git Workflow
 
+See [BRANCHING.md](./BRANCHING.md) for comprehensive Git workflow.
+
+Quick reference:
 ```bash
-# Create feature branch
+# Create feature branch from main
 git checkout -b feature/your-feature
 
 # Make changes and commit
 git add .
 git commit -m "feat: add new feature"
 
-# Push and create PR
+# Push and create PR to test-branch
 git push origin feature/your-feature
 ```
 

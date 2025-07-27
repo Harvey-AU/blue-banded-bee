@@ -55,8 +55,9 @@ Only after completing ALL steps above, ask: "What would you like me to work on?"
 3. **docs/ARCHITECTURE.md** - System design and components
 4. **docs/DATABASE.md** - Schema and PostgreSQL features
 5. **docs/API.md** - RESTful API reference
-6. **Roadmap.md** - Upcoming work and priorities
-7. **CHANGELOG.md** - Recent changes and releases
+6. **docs/BRANCHING.md** - Git workflow and PR process
+7. **Roadmap.md** - Upcoming work and priorities
+8. **CHANGELOG.md** - Recent changes and releases
 
 **Additional references as needed:**
 
