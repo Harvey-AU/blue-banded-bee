@@ -62,7 +62,7 @@ Only after completing ALL steps above, ask: "What would you like me to work on?"
 
 - **docs/DEVELOPMENT.md** - Development environment setup
 - **SECURITY.md** - Security guidelines and considerations
-- **API-TESTING-GUIDE.md** - API testing procedures
+- **docs/testing/** - Complete testing documentation (setup, CI/CD, troubleshooting)
 
 ## Project Overview
 
