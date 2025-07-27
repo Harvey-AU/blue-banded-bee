@@ -2,7 +2,6 @@ package jobs
 
 import (
 	"context"
-	"database/sql"
 	"testing"
 	"time"
 
@@ -201,22 +200,50 @@ func TestProcessSitemapFallback(t *testing.T) {
 	require.NoError(t, err, "Failed to create job")
 	require.NotNil(t, job)
 
-	// Wait for processSitemap goroutine to complete
-	time.Sleep(2 * time.Second)
-
-	// Verify that a root task was created with fallback source type
-	var taskCount int
-	var sourceType sql.NullString
-	err = sqlDB.QueryRowContext(ctx, `
-		SELECT COUNT(*), MIN(source_type) 
-		FROM tasks 
-		WHERE job_id = $1 AND path = '/'
-	`, job.ID).Scan(&taskCount, &sourceType)
+	// Check if any tasks exist immediately after job creation
+	var initialTaskCount int
+	err = sqlDB.QueryRowContext(ctx, `SELECT COUNT(*) FROM tasks WHERE job_id = $1`, job.ID).Scan(&initialTaskCount)
 	require.NoError(t, err)
+	t.Logf("Initial task count after job creation: %d", initialTaskCount)
+
+	// Wait for processSitemap goroutine to complete
+	// Poll for the task to be created instead of fixed sleep
+	var taskCount int
+	var sourceType string
+	maxWait := 10 * time.Second
+	pollInterval := 500 * time.Millisecond
+	deadline := time.Now().Add(maxWait)
+	
+	for time.Now().Before(deadline) {
+		err = sqlDB.QueryRowContext(ctx, `
+			SELECT COUNT(*) 
+			FROM tasks 
+			WHERE job_id = $1 AND path = '/'
+		`, job.ID).Scan(&taskCount)
+		require.NoError(t, err)
+		
+		if taskCount > 0 {
+			// Task exists, get its source type
+			err = sqlDB.QueryRowContext(ctx, `
+				SELECT source_type 
+				FROM tasks 
+				WHERE job_id = $1 AND path = '/'
+			`, job.ID).Scan(&sourceType)
+			require.NoError(t, err)
+			break
+		}
+		
+		time.Sleep(pollInterval)
+	}
+
+	// Debug output
+	t.Logf("Task count: %d", taskCount)
+	if taskCount > 0 {
+		t.Logf("Source type: %s", sourceType)
+	}
 
 	assert.Equal(t, 1, taskCount, "Should have exactly one root task")
-	assert.True(t, sourceType.Valid, "Source type should not be NULL")
-	assert.Equal(t, "fallback", sourceType.String, "Root task should have 'fallback' source type")
+	assert.Equal(t, "fallback", sourceType, "Root task should have 'fallback' source type")
 
 	// Cleanup
 	_, err = sqlDB.ExecContext(ctx, "DELETE FROM tasks WHERE job_id = $1", job.ID)
