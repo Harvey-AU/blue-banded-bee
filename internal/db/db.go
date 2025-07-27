@@ -260,7 +260,25 @@ func setupSchema(db *sql.DB) error {
 			max_pages INTEGER NOT NULL,
 			include_paths TEXT,
 			exclude_paths TEXT,
-			required_workers INTEGER DEFAULT 0
+			required_workers INTEGER DEFAULT 0,
+			error_message TEXT,
+			source_type TEXT,
+			source_detail TEXT,
+			source_info TEXT,
+			duration_seconds INTEGER GENERATED ALWAYS AS (
+				CASE 
+					WHEN started_at IS NOT NULL AND completed_at IS NOT NULL 
+					THEN EXTRACT(EPOCH FROM (completed_at - started_at))::INTEGER
+					ELSE NULL
+				END
+			) STORED,
+			avg_time_per_task_seconds NUMERIC GENERATED ALWAYS AS (
+				CASE 
+					WHEN duration_seconds IS NOT NULL AND total_tasks > 0 
+					THEN duration_seconds::NUMERIC / total_tasks::NUMERIC
+					ELSE NULL
+				END
+			) STORED
 		)
 	`)
 	if err != nil {
@@ -357,6 +375,39 @@ func setupSchema(db *sql.DB) error {
 		_, err = db.Exec(fmt.Sprintf("ALTER TABLE %s ENABLE ROW LEVEL SECURITY", table))
 		if err != nil {
 			return fmt.Errorf("failed to enable RLS on %s table: %w", table, err)
+		}
+	}
+
+	// Add new columns to existing tables (for schema updates)
+	// These will be no-ops if columns already exist
+	alterStatements := []string{
+		// Add missing columns to jobs table
+		`ALTER TABLE jobs ADD COLUMN IF NOT EXISTS error_message TEXT`,
+		`ALTER TABLE jobs ADD COLUMN IF NOT EXISTS source_type TEXT`,
+		`ALTER TABLE jobs ADD COLUMN IF NOT EXISTS source_detail TEXT`,
+		`ALTER TABLE jobs ADD COLUMN IF NOT EXISTS source_info TEXT`,
+		// Add calculated duration fields
+		`ALTER TABLE jobs ADD COLUMN IF NOT EXISTS duration_seconds INTEGER GENERATED ALWAYS AS (
+			CASE 
+				WHEN started_at IS NOT NULL AND completed_at IS NOT NULL 
+				THEN EXTRACT(EPOCH FROM (completed_at - started_at))::INTEGER
+				ELSE NULL
+			END
+		) STORED`,
+		`ALTER TABLE jobs ADD COLUMN IF NOT EXISTS avg_time_per_task_seconds NUMERIC GENERATED ALWAYS AS (
+			CASE 
+				WHEN duration_seconds IS NOT NULL AND total_tasks > 0 
+				THEN duration_seconds::NUMERIC / total_tasks::NUMERIC
+				ELSE NULL
+			END
+		) STORED`,
+	}
+
+	for _, stmt := range alterStatements {
+		_, err = db.Exec(stmt)
+		if err != nil {
+			// Log but don't fail - some columns might already exist
+			log.Debug().Err(err).Str("statement", stmt).Msg("ALTER TABLE statement (expected for existing columns)")
 		}
 	}
 
