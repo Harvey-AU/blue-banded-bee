@@ -31,3 +31,62 @@ comment:
   require_changes: no
   require_base: false  # Don't require base report for comments
   require_head: true
+
+# Flags group coverage reports by test type, service, etc.
+flags:
+  # All tests
+  all:
+    paths:
+      - "**/*.go"
+    carryforward: true
+  
+  # Unit tests (currently all our tests)
+  unit:
+    paths:
+      - "**/*.go"
+    carryforward: true
+  
+  # Future: Integration tests
+  # integration:
+  #   paths:
+  #     - "**/*.go"
+  #   carryforward: true
+
+# Components group files into logical parts of your application
+component_management:
+  default_rules:  # rules that will be inherited by all components
+    statuses:
+      - type: project
+        target: auto
+        threshold: 1%
+  
+  individual_components:
+    - component_id: api
+      name: API Layer
+      paths:
+        - "internal/api/**"
+    
+    - component_id: crawler
+      name: Web Crawler
+      paths:
+        - "internal/crawler/**"
+    
+    - component_id: jobs
+      name: Job Management
+      paths:
+        - "internal/jobs/**"
+    
+    - component_id: database
+      name: Database Layer
+      paths:
+        - "internal/db/**"
+    
+    - component_id: auth
+      name: Authentication
+      paths:
+        - "internal/auth/**"
+    
+    - component_id: cmd
+      name: Applications
+      paths:
+        - "cmd/**"
