@@ -102,6 +102,17 @@ Blue Banded Bee is a web cache warming service built in Go, focused on Webflow s
 - **Preserve existing functionality** - Unless explicitly asked to remove
 - **Ask before expanding scope** - Don't add unrequested features
 
+## Working with CI/Workflows and Integrations
+
+When dealing with CI pipelines, workflows, or third-party integrations (GitHub Actions, Supabase, etc.):
+
+- **CHECK PLATFORM DOCUMENTATION FIRST** - When errors occur, verify documentation from the source platforms to understand the problem
+- **UNDERSTAND PLATFORM CONSTRAINTS** - Research what the CI environment supports (e.g., GitHub Actions doesn't support IPv6)
+- **PREFER CONFIGURATION OVER CODE** - Look for configuration changes or alternate methods the platform offers before modifying code
+- **USE PLATFORM-PROVIDED SOLUTIONS** - Platforms often provide specific solutions for common issues (e.g., Supabase pooler URLs for IPv4)
+- **EXPLAIN PLATFORM LIMITATIONS** - Clearly communicate why certain approaches won't work due to platform constraints
+- **DOCUMENT INTEGRATION REQUIREMENTS** - Note any special configuration needed for CI/deployments
+
 ## Quality Checks
 
 Before presenting any solution:
