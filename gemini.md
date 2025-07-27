@@ -35,8 +35,9 @@ My process is: **Investigate -> Plan -> Get Permission -> Execute -> Verify**.
 
 1. **Create migration:** `supabase migration new descriptive_name_here`
 2. **Write SQL changes** in the created migration file
-3. **Commit** the migration file with code changes
-4. **Push** to feature branch
+3. **Test locally (optional):** `supabase db reset`
+4. **Commit** the migration file with code changes
+5. **Push** to feature branch
 
 Migrations apply automatically via Supabase GitHub integration:
 - Feature → test-branch: Auto-deploys to test environment
@@ -45,6 +46,8 @@ Migrations apply automatically via Supabase GitHub integration:
 ### Key Points:
 
 - Migration files are in `supabase/migrations/`
+- **Migrations apply automatically via Supabase GitHub integration**
+- **Never run `supabase db push` manually** - let GitHub integration handle it
 - No manual deployment steps needed
 - Never edit existing migrations after deployment
 - Never add schema code to Go files
