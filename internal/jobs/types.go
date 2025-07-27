@@ -62,6 +62,9 @@ type Job struct {
 	SourceDetail    *string   `json:"source_detail,omitempty"`
 	SourceInfo      *string   `json:"source_info,omitempty"`
 	ErrorMessage    string    `json:"error_message,omitempty"`
+	// Calculated fields from database
+	DurationSeconds       *int     `json:"duration_seconds,omitempty"`
+	AvgTimePerTaskSeconds *float64 `json:"avg_time_per_task_seconds,omitempty"`
 }
 
 // Task represents a single URL to be crawled within a job

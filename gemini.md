@@ -27,7 +27,27 @@ My process is: **Investigate -> Plan -> Get Permission -> Execute -> Verify**.
 
 - **Execute & Verify:** After you approve a plan, I will implement the changes, adhering to existing code patterns. I will then verify my work by running the project's test suite (`go test ./...`) and any other relevant build or linting commands.
 
-## 4. Working with CI/Workflows and Integrations
+## 4. Database Schema Management
+
+**Important:** This project uses Supabase's built-in migration system. I will not duplicate this functionality in Go code.
+
+### Making Schema Changes:
+
+1. **Create migration:** `supabase migration new descriptive_name_here`
+2. **Write SQL changes** in the created migration file
+3. **Test locally:** `supabase db push`
+4. **Commit** the migration file with code changes
+
+### Key Points:
+
+- Migration files are in `supabase/migrations/`
+- Migrations apply automatically on Supabase deploy
+- Test database may need manual migration application
+- Legacy schema code exists in `internal/db/db.go` but should not be extended
+- All data is test-only and can be deleted
+- Changes should be additive (ADD COLUMN, CREATE INDEX), not destructive
+
+## 5. Working with CI/Workflows and Integrations
 
 When encountering issues with CI pipelines, workflows, or third-party integrations:
 
