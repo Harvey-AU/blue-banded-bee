@@ -40,17 +40,17 @@ flags:
       - "**/*.go"
     carryforward: true
   
-  # Unit tests (currently all our tests)
+  # Unit tests (tests with mocks, no DB)
   unit:
     paths:
       - "**/*.go"
     carryforward: true
   
-  # Future: Integration tests
-  # integration:
-  #   paths:
-  #     - "**/*.go"
-  #   carryforward: true
+  # Integration tests (tests with real database)
+  integration:
+    paths:
+      - "**/*.go"
+    carryforward: true
 
 # Components group files into logical parts of your application
 component_management:
