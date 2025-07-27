@@ -390,7 +390,7 @@ func setupTimestampTriggers(db *sql.DB) error {
 		  -- Only set started_at if it's currently NULL and completed_tasks > 0
 		  -- Handle both INSERT and UPDATE operations
 		  IF NEW.completed_tasks > 0 AND (TG_OP = 'INSERT' OR OLD.started_at IS NULL) AND NEW.started_at IS NULL THEN
-		    NEW.started_at = NOW();
+		    NEW.started_at = CURRENT_TIMESTAMP AT TIME ZONE 'UTC';
 		  END IF;
 		  
 		  RETURN NEW;
@@ -409,7 +409,7 @@ func setupTimestampTriggers(db *sql.DB) error {
 		  -- Set completed_at when progress reaches 100% and it's not already set
 		  -- Handle both INSERT and UPDATE operations
 		  IF NEW.progress >= 100.0 AND (TG_OP = 'INSERT' OR OLD.completed_at IS NULL) AND NEW.completed_at IS NULL THEN
-		    NEW.completed_at = NOW();
+		    NEW.completed_at = CURRENT_TIMESTAMP AT TIME ZONE 'UTC';
 		  END IF;
 		  
 		  RETURN NEW;
