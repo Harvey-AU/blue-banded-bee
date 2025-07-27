@@ -1,5 +1,9 @@
 # API Testing Guide
 
+## Overview
+
+This guide covers manual API testing for development. For automated testing, see the Testing section in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
+
 ## Quick Start - Testing Your APIs
 
 ### 1. Start Your API Server
