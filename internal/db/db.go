@@ -274,8 +274,8 @@ func setupSchema(db *sql.DB) error {
 			) STORED,
 			avg_time_per_task_seconds NUMERIC GENERATED ALWAYS AS (
 				CASE 
-					WHEN duration_seconds IS NOT NULL AND total_tasks > 0 
-					THEN duration_seconds::NUMERIC / total_tasks::NUMERIC
+					WHEN started_at IS NOT NULL AND completed_at IS NOT NULL AND completed_tasks > 0 
+					THEN EXTRACT(EPOCH FROM (completed_at - started_at))::NUMERIC / completed_tasks::NUMERIC
 					ELSE NULL
 				END
 			) STORED
@@ -436,8 +436,8 @@ func setupSchema(db *sql.DB) error {
 		_, err = db.Exec(`
 			ALTER TABLE jobs ADD COLUMN avg_time_per_task_seconds NUMERIC GENERATED ALWAYS AS (
 				CASE 
-					WHEN duration_seconds IS NOT NULL AND total_tasks > 0 
-					THEN duration_seconds::NUMERIC / total_tasks::NUMERIC
+					WHEN started_at IS NOT NULL AND completed_at IS NOT NULL AND total_tasks > 0 
+					THEN EXTRACT(EPOCH FROM (completed_at - started_at))::NUMERIC / total_tasks::NUMERIC
 					ELSE NULL
 				END
 			) STORED
