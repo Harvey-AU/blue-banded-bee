@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/Harvey-AU/blue-banded-bee/internal/cache"
@@ -113,21 +112,6 @@ func New(config *Config) (*DB, error) {
 func InitFromEnv() (*DB, error) {
 	// If DATABASE_URL is provided, use it with default config
 	if url := os.Getenv("DATABASE_URL"); url != "" {
-		// Force IPv4 connections by appending connect_timeout and target_session_attrs
-		// This helps avoid IPv6 issues in environments like GitHub Actions
-		if !strings.Contains(url, "connect_timeout=") {
-			if strings.Contains(url, "?") {
-				url += "&connect_timeout=10"
-			} else {
-				url += "?connect_timeout=10"
-			}
-		}
-		
-		// Add prefer_simple_protocol to help with connection issues
-		if !strings.Contains(url, "prefer_simple_protocol=") {
-			url += "&prefer_simple_protocol=true"
-		}
-		
 		config := &Config{
 			DatabaseURL:  url,
 			MaxIdleConns: 30,
