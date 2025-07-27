@@ -24,16 +24,23 @@ jobs:
       - name: Check Go version
         run: go version
 
-      - name: Run tests and generate coverage report
+      - name: Run unit tests
+        run: |
+          echo "=== Running Unit Tests ==="
+          # Run tests without integration tag (unit tests and tests without tags)
+          go test -v -coverprofile=coverage-unit.out -coverpkg=./... -tags='!integration' ./...
+          
+      - name: Run integration tests
         env:
           DATABASE_URL: ${{ secrets.TEST_DATABASE_URL }}
         run: |
+          echo "=== Running Integration Tests ==="
           # Install tools for test reporting
           go install github.com/jstemmer/go-junit-report/v2@latest
           
-          # Run tests with JSON output, save to file first to preserve exit code
+          # Run only integration tests
           set +e  # Don't exit on error temporarily
-          go test -v -coverprofile=coverage.out -coverpkg=./... ./... -json > test-output.json
+          go test -v -coverprofile=coverage-integration.out -coverpkg=./... -tags=integration ./... -json > test-output.json
           TEST_EXIT_CODE=$?
           echo "Test exit code: $TEST_EXIT_CODE"
           set -e  # Re-enable exit on error
@@ -55,17 +62,63 @@ jobs:
           
           # Show coverage summary
           echo "=== Coverage Summary ==="
-          go tool cover -func=coverage.out || true
+          go tool cover -func=coverage-integration.out || true
           
           # Exit with the original test exit code
           exit ${TEST_EXIT_CODE}
 
-      - name: Upload coverage to Codecov
+      - name: Merge coverage reports
+        if: always()
+        run: |
+          echo "=== Merging Coverage Reports ==="
+          # Install gocovmerge to merge coverage files
+          go install github.com/wadey/gocovmerge@latest
+          
+          # Merge unit and integration coverage
+          if [ -f coverage-unit.out ] && [ -f coverage-integration.out ]; then
+            $(go env GOPATH)/bin/gocovmerge coverage-unit.out coverage-integration.out > coverage.out
+          elif [ -f coverage-unit.out ]; then
+            cp coverage-unit.out coverage.out
+          elif [ -f coverage-integration.out ]; then
+            cp coverage-integration.out coverage.out
+          fi
+          
+          # Show total coverage
+          if [ -f coverage.out ]; then
+            echo "=== Total Coverage ==="
+            go tool cover -func=coverage.out | tail -1
+          fi
+
+      - name: Upload unit test coverage to Codecov
+        if: always()
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage-unit.out
+          flags: unit
+          name: unit-tests
+          fail_ci_if_error: false
+          verbose: true
+
+      - name: Upload integration test coverage to Codecov
+        if: always()
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage-integration.out
+          flags: integration
+          name: integration-tests
+          fail_ci_if_error: false
+          verbose: true
+
+      - name: Upload combined coverage to Codecov
+        if: always()
         uses: codecov/codecov-action@v4
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./coverage.out
-          flags: all,unit
+          flags: all
+          name: all-tests
           fail_ci_if_error: true
           verbose: true
 
