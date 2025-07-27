@@ -260,7 +260,25 @@ func setupSchema(db *sql.DB) error {
 			max_pages INTEGER NOT NULL,
 			include_paths TEXT,
 			exclude_paths TEXT,
-			required_workers INTEGER DEFAULT 0
+			required_workers INTEGER DEFAULT 0,
+			error_message TEXT,
+			source_type TEXT,
+			source_detail TEXT,
+			source_info TEXT,
+			duration_seconds INTEGER GENERATED ALWAYS AS (
+				CASE 
+					WHEN started_at IS NOT NULL AND completed_at IS NOT NULL 
+					THEN EXTRACT(EPOCH FROM (completed_at - started_at))::INTEGER
+					ELSE NULL
+				END
+			) STORED,
+			avg_time_per_task_seconds NUMERIC GENERATED ALWAYS AS (
+				CASE 
+					WHEN started_at IS NOT NULL AND completed_at IS NOT NULL AND completed_tasks > 0 
+					THEN EXTRACT(EPOCH FROM (completed_at - started_at))::NUMERIC / completed_tasks::NUMERIC
+					ELSE NULL
+				END
+			) STORED
 		)
 	`)
 	if err != nil {
@@ -360,6 +378,75 @@ func setupSchema(db *sql.DB) error {
 		}
 	}
 
+	// Add new columns to existing tables (for schema updates)
+	// These will be no-ops if columns already exist
+	alterStatements := []string{
+		// Add missing columns to jobs table
+		`ALTER TABLE jobs ADD COLUMN IF NOT EXISTS error_message TEXT`,
+		`ALTER TABLE jobs ADD COLUMN IF NOT EXISTS source_type TEXT`,
+		`ALTER TABLE jobs ADD COLUMN IF NOT EXISTS source_detail TEXT`,
+		`ALTER TABLE jobs ADD COLUMN IF NOT EXISTS source_info TEXT`,
+	}
+
+	for _, stmt := range alterStatements {
+		_, err = db.Exec(stmt)
+		if err != nil {
+			// Log but don't fail - some columns might already exist
+			log.Debug().Err(err).Str("statement", stmt).Msg("ALTER TABLE statement (expected for existing columns)")
+		}
+	}
+
+	// Handle generated columns separately - they may need to be dropped and recreated
+	// Check if duration_seconds exists
+	var durationExists bool
+	err = db.QueryRow(`
+		SELECT EXISTS (
+			SELECT 1 FROM information_schema.columns 
+			WHERE table_name = 'jobs' AND column_name = 'duration_seconds'
+		)
+	`).Scan(&durationExists)
+	
+	if err == nil && !durationExists {
+		// Add duration_seconds if it doesn't exist
+		_, err = db.Exec(`
+			ALTER TABLE jobs ADD COLUMN duration_seconds INTEGER GENERATED ALWAYS AS (
+				CASE 
+					WHEN started_at IS NOT NULL AND completed_at IS NOT NULL 
+					THEN EXTRACT(EPOCH FROM (completed_at - started_at))::INTEGER
+					ELSE NULL
+				END
+			) STORED
+		`)
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to add duration_seconds column")
+		}
+	}
+
+	// Check if avg_time_per_task_seconds exists
+	var avgTimeExists bool
+	err = db.QueryRow(`
+		SELECT EXISTS (
+			SELECT 1 FROM information_schema.columns 
+			WHERE table_name = 'jobs' AND column_name = 'avg_time_per_task_seconds'
+		)
+	`).Scan(&avgTimeExists)
+	
+	if err == nil && !avgTimeExists {
+		// Add avg_time_per_task_seconds if it doesn't exist
+		_, err = db.Exec(`
+			ALTER TABLE jobs ADD COLUMN avg_time_per_task_seconds NUMERIC GENERATED ALWAYS AS (
+				CASE 
+					WHEN started_at IS NOT NULL AND completed_at IS NOT NULL AND total_tasks > 0 
+					THEN EXTRACT(EPOCH FROM (completed_at - started_at))::NUMERIC / total_tasks::NUMERIC
+					ELSE NULL
+				END
+			) STORED
+		`)
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to add avg_time_per_task_seconds column")
+		}
+	}
+
 	// Set up Row Level Security policies
 	err = setupRLSPolicies(db)
 	if err != nil {
@@ -390,7 +477,7 @@ func setupTimestampTriggers(db *sql.DB) error {
 		  -- Only set started_at if it's currently NULL and completed_tasks > 0
 		  -- Handle both INSERT and UPDATE operations
 		  IF NEW.completed_tasks > 0 AND (TG_OP = 'INSERT' OR OLD.started_at IS NULL) AND NEW.started_at IS NULL THEN
-		    NEW.started_at = NOW();
+		    NEW.started_at = CURRENT_TIMESTAMP AT TIME ZONE 'UTC';
 		  END IF;
 		  
 		  RETURN NEW;
@@ -409,7 +496,7 @@ func setupTimestampTriggers(db *sql.DB) error {
 		  -- Set completed_at when progress reaches 100% and it's not already set
 		  -- Handle both INSERT and UPDATE operations
 		  IF NEW.progress >= 100.0 AND (TG_OP = 'INSERT' OR OLD.completed_at IS NULL) AND NEW.completed_at IS NULL THEN
-		    NEW.completed_at = NOW();
+		    NEW.completed_at = CURRENT_TIMESTAMP AT TIME ZONE 'UTC';
 		  END IF;
 		  
 		  RETURN NEW;
