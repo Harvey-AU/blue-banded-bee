@@ -109,6 +109,7 @@ Blue Banded Bee is a web cache warming service built in Go, focused on Webflow s
 ### How to Make Schema Changes
 
 1. **Create a migration file**:
+
    ```bash
    supabase migration new descriptive_name_here
    # This creates: supabase/migrations/[timestamp]_descriptive_name_here.sql
