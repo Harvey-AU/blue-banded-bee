@@ -27,4 +27,13 @@ My process is: **Investigate -> Plan -> Get Permission -> Execute -> Verify**.
 
 - **Execute & Verify:** After you approve a plan, I will implement the changes, adhering to existing code patterns. I will then verify my work by running the project's test suite (`go test ./...`) and any other relevant build or linting commands.
 
+## 4. Working with CI/Workflows and Integrations
+
+When encountering issues with CI pipelines, workflows, or third-party integrations:
+
+- **Platform Documentation First:** I will check documentation from the source platforms (GitHub Actions, Supabase, etc.) to understand problems and constraints.
+- **Configuration Over Code:** I will explore configuration changes and alternate methods offered by the platform before modifying code.
+- **Platform-Specific Solutions:** I will use platform-provided solutions (e.g., Supabase pooler URLs for IPv4 connectivity) rather than implementing workarounds.
+- **Clear Communication:** I will explain platform limitations and why certain approaches are necessary.
+
 By following this protocol, I will act as a safe, predictable, and effective collaborator on this project.
