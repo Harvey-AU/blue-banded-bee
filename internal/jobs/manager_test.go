@@ -7,14 +7,23 @@ import (
 
 	"github.com/Harvey-AU/blue-banded-bee/internal/crawler"
 	"github.com/Harvey-AU/blue-banded-bee/internal/db"
+	"github.com/Harvey-AU/blue-banded-bee/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func TestGetJob(t *testing.T) {
-	// 1. Connect to test database
+func setupTest(t *testing.T) *db.DB {
+	t.Helper()
+	testutil.LoadTestEnv(t)
+	
 	database, err := db.InitFromEnv()
 	require.NoError(t, err, "Failed to connect to test database")
+	return database
+}
+
+func TestGetJob(t *testing.T) {
+	// 1. Connect to test database
+	database := setupTest(t)
 	defer database.Close()
 
 	// 2. Create test data using a simpler approach
@@ -54,8 +63,7 @@ func TestGetJob(t *testing.T) {
 
 func TestCreateJob(t *testing.T) {
 	// Connect to test database
-	database, err := db.InitFromEnv()
-	require.NoError(t, err, "Failed to connect to test database")
+	database := setupTest(t)
 	defer database.Close()
 
 	ctx := context.Background()
@@ -103,8 +111,7 @@ func TestCreateJob(t *testing.T) {
 
 func TestCancelJob(t *testing.T) {
 	// Connect to test database
-	database, err := db.InitFromEnv()
-	require.NoError(t, err, "Failed to connect to test database")
+	database := setupTest(t)
 	defer database.Close()
 
 	ctx := context.Background()
@@ -161,8 +168,7 @@ func TestCancelJob(t *testing.T) {
 
 func TestProcessSitemapFallback(t *testing.T) {
 	// Connect to test database
-	database, err := db.InitFromEnv()
-	require.NoError(t, err, "Failed to connect to test database")
+	database := setupTest(t)
 	defer database.Close()
 
 	ctx := context.Background()
@@ -219,8 +225,7 @@ func TestProcessSitemapFallback(t *testing.T) {
 
 func TestEnqueueJobURLs(t *testing.T) {
 	// Connect to test database
-	database, err := db.InitFromEnv()
-	require.NoError(t, err, "Failed to connect to test database")
+	database := setupTest(t)
 	defer database.Close()
 
 	ctx := context.Background()
