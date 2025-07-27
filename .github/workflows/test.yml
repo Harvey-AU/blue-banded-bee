@@ -33,7 +33,7 @@ jobs:
           
           # Run tests with JSON output, save to file first to preserve exit code
           set +e  # Don't exit on error temporarily
-          go test -v -coverprofile=coverage.out ./... -json > test-output.json
+          go test -v -coverprofile=coverage.out -coverpkg=./... ./... -json > test-output.json
           TEST_EXIT_CODE=$?
           echo "Test exit code: $TEST_EXIT_CODE"
           set -e  # Re-enable exit on error
