@@ -12,6 +12,12 @@ import (
 func LoadTestEnv(t *testing.T) {
 	t.Helper()
 
+	// If DATABASE_URL is already set (e.g., in CI), use it
+	if os.Getenv("DATABASE_URL") != "" {
+		t.Log("DATABASE_URL already set in environment")
+		return
+	}
+
 	// Find .env.test file (might be in parent directories during test runs)
 	envPath := findEnvTestFile()
 	if envPath == "" {
