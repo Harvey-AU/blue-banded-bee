@@ -642,10 +642,26 @@ func (wp *WorkerPool) checkForPendingTasks(ctx context.Context) error {
 		if !active {
 			// Add job to the worker pool
 			log.Info().Str("job_id", jobID).Msg("Adding job with pending tasks to worker pool")
-			wp.AddJob(jobID, nil)
+			
+			// Get job options
+			var findLinks bool
+			err := wp.db.QueryRowContext(ctx, `
+				SELECT find_links FROM jobs WHERE id = $1
+			`, jobID).Scan(&findLinks)
+			
+			if err != nil {
+				log.Error().Err(err).Str("job_id", jobID).Msg("Failed to get job options")
+				continue
+			}
+			
+			options := &JobOptions{
+				FindLinks: findLinks,
+			}
+			
+			wp.AddJob(jobID, options)
 
 			// Update job status if needed
-			_, err := wp.db.ExecContext(ctx, `
+			_, err = wp.db.ExecContext(ctx, `
 				UPDATE jobs SET
 					status = $1,
 					started_at = CASE WHEN started_at IS NULL THEN $2 ELSE started_at END
