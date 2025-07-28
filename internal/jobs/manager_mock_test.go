@@ -6,6 +6,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/Harvey-AU/blue-banded-bee/internal/crawler"
 	"github.com/Harvey-AU/blue-banded-bee/internal/db"
 	"github.com/Harvey-AU/blue-banded-bee/internal/mocks"
 	"github.com/stretchr/testify/assert"
@@ -18,9 +19,12 @@ func TestJobManagerWithMockCrawler(t *testing.T) {
 	// Create mock crawler
 	mockCrawler := new(mocks.MockCrawler)
 
-	// Set expectation
-	mockCrawler.On("DiscoverSitemaps", ctx, "example.com").
-		Return([]string{"https://example.com/sitemap.xml"}, nil)
+	// Set expectation - use the new method
+	mockCrawler.On("DiscoverSitemapsAndRobots", ctx, "example.com").
+		Return(&crawler.SitemapDiscoveryResult{
+			Sitemaps:    []string{"https://example.com/sitemap.xml"},
+			RobotsRules: &crawler.RobotsRules{},
+		}, nil)
 
 	// Create JobManager with mock
 	jm := &JobManager{
@@ -29,11 +33,12 @@ func TestJobManagerWithMockCrawler(t *testing.T) {
 	}
 
 	// Call the method that uses crawler
-	sitemaps, err := jm.crawler.DiscoverSitemaps(ctx, "example.com")
+	result, err := jm.crawler.DiscoverSitemapsAndRobots(ctx, "example.com")
 
 	// Assert
 	assert.NoError(t, err)
-	assert.Equal(t, []string{"https://example.com/sitemap.xml"}, sitemaps)
+	assert.NotNil(t, result)
+	assert.Equal(t, []string{"https://example.com/sitemap.xml"}, result.Sitemaps)
 	mockCrawler.AssertExpectations(t)
 }
 
@@ -48,8 +53,11 @@ func TestJobManager_ProcessSitemap(t *testing.T) {
 		mockCrawler := new(mocks.MockCrawler)
 
 		// Test that crawler methods can be mocked
-		mockCrawler.On("DiscoverSitemaps", ctx, "example.com").
-			Return([]string{"https://example.com/sitemap.xml"}, nil)
+		mockCrawler.On("DiscoverSitemapsAndRobots", ctx, "example.com").
+			Return(&crawler.SitemapDiscoveryResult{
+				Sitemaps:    []string{"https://example.com/sitemap.xml"},
+				RobotsRules: &crawler.RobotsRules{},
+			}, nil)
 
 		mockCrawler.On("ParseSitemap", ctx, "https://example.com/sitemap.xml").
 			Return([]string{"https://example.com/"}, nil)
@@ -64,9 +72,9 @@ func TestJobManager_ProcessSitemap(t *testing.T) {
 		}
 
 		// Test crawler interface methods
-		sitemaps, err := jm.crawler.DiscoverSitemaps(ctx, "example.com")
+		result, err := jm.crawler.DiscoverSitemapsAndRobots(ctx, "example.com")
 		assert.NoError(t, err)
-		assert.Equal(t, []string{"https://example.com/sitemap.xml"}, sitemaps)
+		assert.Equal(t, []string{"https://example.com/sitemap.xml"}, result.Sitemaps)
 
 		urls, err := jm.crawler.ParseSitemap(ctx, "https://example.com/sitemap.xml")
 		assert.NoError(t, err)
