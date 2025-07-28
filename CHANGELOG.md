@@ -8,6 +8,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Multiple version updates may occur on the same date, each with its own version number.
 Each version represents a distinct set of changes, even if released on the same day.
 
+## [0.5.31] – 2025-07-28
+
+### Added
+
+- **Comprehensive robots.txt Compliance**:
+  - Added robots.txt parsing and crawl-delay honouring
+  - Implemented URL filtering against Disallow/Allow patterns
+  - Added robots.txt caching at job level to prevent repeated fetches
+  - Manual root URLs now fail if robots.txt cannot be checked
+  - Dynamically discovered links are filtered against robots rules
+  - Added GetUserAgent method to crawler for proper identification
+  - Added 1MB size limit for robots.txt parsing (security)
+
+### Changed
+
+- **Performance Optimisation**:
+  - Robots.txt is now fetched once per job and cached in worker pool
+  - Database query reduced from per-task to per-job for job information
+  - Refactored processSitemap into smaller, maintainable functions
+
+### Fixed
+
+- **Interface Cleanup**: Removed duplicate DiscoverSitemaps method from interfaces
+- **Security**: Reduced robots.txt size limit from 10MB to 1MB to prevent memory exhaustion
+
 ## [0.5.30] – 2025-07-27
 
 ### Added

@@ -24,6 +24,11 @@ type Crawler struct {
 	metricsMap *sync.Map // Shared metrics storage for the transport
 }
 
+// GetUserAgent returns the user agent string for this crawler
+func (c *Crawler) GetUserAgent() string {
+	return c.config.UserAgent
+}
+
 // tracingRoundTripper captures HTTP trace metrics for each request
 type tracingRoundTripper struct {
 	transport  http.RoundTripper
