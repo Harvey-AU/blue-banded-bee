@@ -466,3 +466,12 @@ Detailed plan available in [docs/organisation-model.md](docs/plans/organisation-
   - [ ] Phase 2: Refactor high-complexity functions (WarmURL, getJobTasks, processSitemap)
   - [ ] Add golangci-lint to CI/CD pipeline
   - [ ] Improve Go Report Card score from C to A
+
+### 🔴 Robots.txt Compliance Auditing
+
+- [ ] **Track and audit robots.txt filtering decisions**
+  - [ ] Add optional logging table for blocked URLs during job processing
+  - [ ] Record URL, path, matching disallow pattern, and job context
+  - [ ] Create admin endpoint to review filtering decisions
+  - [ ] Add metrics for blocked vs allowed URL ratios per domain
+  - [ ] Enable/disable audit logging per job for performance
