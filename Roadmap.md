@@ -281,7 +281,7 @@ Detailed plan available in [docs/organisation-model.md](docs/plans/organisation-
   - [ ] Performance analytics and trend visualisation
   - [ ] Responsive design compatibility testing
 
-### 🔴 Task prioritisation & URL processing
+### ✅ Task prioritisation & URL processing
 
 - [x] **Stop duplicate domain crawls oncurrently, close old job**
   - [x] When creating a job, check if there's an active job for this user
@@ -292,6 +292,13 @@ Detailed plan available in [docs/organisation-model.md](docs/plans/organisation-
   - [x] Implement link priority ordering for header links (1st: 1.000, 2nd: 0.990, etc.) ([internal/jobs/manager.go:819-820](./internal/jobs/manager.go#L819))
   - [x] Apply priority ordering logic to all discovered page links ([internal/jobs/manager.go:816](./internal/jobs/manager.go#L816))
   - [ ] Job-level task prioritisation options
+
+- [x] **Robots.txt Compliance**
+  - [x] Parse and honour robots.txt crawl-delay directives
+  - [x] Filter URLs against Disallow/Allow patterns before enqueueing
+  - [x] Cache robots.txt rules at job level to prevent repeated fetches
+  - [x] Fail manual URL creation if robots.txt cannot be checked
+  - [x] Filter dynamically discovered links against robots rules
 
 - [ ] **URL Processing Enhancements**
   - [x] Filter out links that are hidden via inline `style` attributes.
