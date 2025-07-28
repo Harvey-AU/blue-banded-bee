@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -560,8 +561,25 @@ func (jm *JobManager) processSitemap(ctx context.Context, jobID, domain string, 
 		sitemapCrawler = crawler.New(crawlerConfig)
 	}
 
-	// Discover sitemaps for the domain
-	sitemaps, err := sitemapCrawler.DiscoverSitemaps(ctx, domain)
+	// Discover sitemaps and robots.txt rules for the domain
+	discoveryResult, err := sitemapCrawler.DiscoverSitemapsAndRobots(ctx, domain)
+	if err != nil {
+		// For backward compatibility, try the old method
+		sitemaps, err := sitemapCrawler.DiscoverSitemaps(ctx, domain)
+		if err == nil {
+			discoveryResult = &crawler.SitemapDiscoveryResult{
+				Sitemaps:    sitemaps,
+				RobotsRules: &crawler.RobotsRules{},
+			}
+		}
+	}
+
+	var sitemaps []string
+	var robotsRules *crawler.RobotsRules
+	if discoveryResult != nil {
+		sitemaps = discoveryResult.Sitemaps
+		robotsRules = discoveryResult.RobotsRules
+	}
 
 	// Log discovered sitemaps
 	log.Info().
@@ -596,7 +614,7 @@ func (jm *JobManager) processSitemap(ctx context.Context, jobID, domain string, 
 
 		urls = append(urls, sitemapURLs...)
 	}
-	if err != nil {
+	if err != nil && discoveryResult == nil {
 		span.SetTag("error", "true")
 		span.SetData("error.message", err.Error())
 		log.Error().
@@ -619,9 +637,58 @@ func (jm *JobManager) processSitemap(ctx context.Context, jobID, domain string, 
 		return
 	}
 
+	// Store crawl delay in domains table if we got robots rules
+	if robotsRules != nil && robotsRules.CrawlDelay > 0 {
+		if updateErr := jm.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
+			_, err := tx.ExecContext(ctx, `
+				UPDATE domains
+				SET crawl_delay_seconds = $1
+				WHERE name = $2
+			`, robotsRules.CrawlDelay, domain)
+			return err
+		}); updateErr != nil {
+			log.Error().
+				Err(updateErr).
+				Str("domain", domain).
+				Int("crawl_delay", robotsRules.CrawlDelay).
+				Msg("Failed to update domain with crawl delay")
+		} else {
+			log.Info().
+				Str("domain", domain).
+				Int("crawl_delay", robotsRules.CrawlDelay).
+				Msg("Updated domain with crawl delay from robots.txt")
+		}
+	}
+
 	// Filter URLs based on include/exclude patterns
 	if len(includePaths) > 0 || len(excludePaths) > 0 {
 		urls = sitemapCrawler.FilterURLs(urls, includePaths, excludePaths)
+	}
+
+	// Filter URLs against robots.txt rules
+	if robotsRules != nil && len(robotsRules.DisallowPatterns) > 0 {
+		var allowedURLs []string
+		for _, urlStr := range urls {
+			// Extract path from URL
+			if parsedURL, err := url.Parse(urlStr); err == nil {
+				path := parsedURL.Path
+				if crawler.IsPathAllowed(robotsRules, path) {
+					allowedURLs = append(allowedURLs, urlStr)
+				} else {
+					log.Debug().
+						Str("url", urlStr).
+						Str("path", path).
+						Msg("URL blocked by robots.txt")
+				}
+			}
+		}
+		log.Info().
+			Str("job_id", jobID).
+			Int("original_count", len(urls)).
+			Int("allowed_count", len(allowedURLs)).
+			Int("blocked_count", len(urls)-len(allowedURLs)).
+			Msg("Filtered URLs against robots.txt rules")
+		urls = allowedURLs
 	}
 
 	// Add URLs to the job queue

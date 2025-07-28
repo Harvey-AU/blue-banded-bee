@@ -343,18 +343,22 @@ func (wp *WorkerPool) processNextTask(ctx context.Context) error {
 			// Need to fetch additional info from the database
 			var domainName string
 			var findLinks bool
+			var crawlDelay sql.NullInt64
 			err := wp.db.QueryRowContext(ctx, `
-				SELECT d.name, j.find_links 
+				SELECT d.name, j.find_links, d.crawl_delay_seconds
 				FROM domains d
 				JOIN jobs j ON j.domain_id = d.id
 				WHERE j.id = $1
-			`, task.JobID).Scan(&domainName, &findLinks)
+			`, task.JobID).Scan(&domainName, &findLinks, &crawlDelay)
 
 			if err != nil {
-				log.Error().Err(err).Str("job_id", task.JobID).Msg("Failed to get domain name and find_links setting")
+				log.Error().Err(err).Str("job_id", task.JobID).Msg("Failed to get domain info")
 			} else {
 				jobsTask.DomainName = domainName
 				jobsTask.FindLinks = findLinks
+				if crawlDelay.Valid {
+					jobsTask.CrawlDelay = int(crawlDelay.Int64)
+				}
 			}
 
 			// Process the task
@@ -966,6 +970,16 @@ func (wp *WorkerPool) processTask(ctx context.Context, task *Task) (*crawler.Cra
 	}
 
 	log.Info().Str("url", urlStr).Str("task_id", task.ID).Msg("Starting URL warm")
+
+	// Apply crawl delay if specified for this domain
+	if task.CrawlDelay > 0 {
+		log.Debug().
+			Str("task_id", task.ID).
+			Str("domain", task.DomainName).
+			Int("crawl_delay_seconds", task.CrawlDelay).
+			Msg("Applying crawl delay from robots.txt")
+		time.Sleep(time.Duration(task.CrawlDelay) * time.Second)
+	}
 
 	result, err := wp.crawler.WarmURL(ctx, urlStr, task.FindLinks)
 	if err != nil {
