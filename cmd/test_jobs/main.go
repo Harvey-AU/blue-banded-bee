@@ -63,7 +63,10 @@ func main() {
 
 	// Create worker pool
 	var jobWorkers int = 3
-	workerPool := jobs.NewWorkerPool(database.GetDB(), dbQueue, crawler, jobWorkers, database.GetConfig())
+	dbConfig := &db.Config{
+		DatabaseURL: dbURL,
+	}
+	workerPool := jobs.NewWorkerPool(database.GetDB(), dbQueue, crawler, jobWorkers, dbConfig)
 	workerPool.Start(context.Background())
 	defer workerPool.Stop()
 
