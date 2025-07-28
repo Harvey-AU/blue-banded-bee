@@ -179,9 +179,12 @@ func TestProcessSitemapFallback(t *testing.T) {
 
 	// Create a mock crawler that returns no sitemaps (to trigger fallback)
 	mockCrawler := &MockCrawlerForIntegration{
-		discoverSitemapsFunc: func(ctx context.Context, domain string) ([]string, error) {
+		discoverSitemapsAndRobotsFunc: func(ctx context.Context, domain string) (*crawler.SitemapDiscoveryResult, error) {
 			// Return empty to trigger fallback behaviour
-			return []string{}, nil
+			return &crawler.SitemapDiscoveryResult{
+				Sitemaps:    []string{},
+				RobotsRules: &crawler.RobotsRules{},
+			}, nil
 		},
 	}
 
@@ -336,31 +339,20 @@ func TestEnqueueJobURLs(t *testing.T) {
 
 // MockCrawlerForIntegration is a simple mock for integration tests
 type MockCrawlerForIntegration struct {
-	discoverSitemapsFunc         func(ctx context.Context, domain string) ([]string, error)
 	discoverSitemapsAndRobotsFunc func(ctx context.Context, domain string) (*crawler.SitemapDiscoveryResult, error)
 	parseSitemapFunc             func(ctx context.Context, sitemapURL string) ([]string, error)
 	warmURLFunc                  func(ctx context.Context, url string, findLinks bool) (*crawler.CrawlResult, error)
 	filterURLsFunc               func(urls []string, includePaths, excludePaths []string) []string
 }
 
-func (m *MockCrawlerForIntegration) DiscoverSitemaps(ctx context.Context, domain string) ([]string, error) {
-	if m.discoverSitemapsFunc != nil {
-		return m.discoverSitemapsFunc(ctx, domain)
-	}
-	return []string{}, nil
-}
 
 func (m *MockCrawlerForIntegration) DiscoverSitemapsAndRobots(ctx context.Context, domain string) (*crawler.SitemapDiscoveryResult, error) {
 	if m.discoverSitemapsAndRobotsFunc != nil {
 		return m.discoverSitemapsAndRobotsFunc(ctx, domain)
 	}
-	// Default behavior - call DiscoverSitemaps for backward compatibility
-	sitemaps, err := m.DiscoverSitemaps(ctx, domain)
-	if err != nil {
-		return nil, err
-	}
+	// Default behavior - return empty results
 	return &crawler.SitemapDiscoveryResult{
-		Sitemaps:    sitemaps,
+		Sitemaps:    []string{},
 		RobotsRules: &crawler.RobotsRules{},
 	}, nil
 }

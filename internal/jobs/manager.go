@@ -564,22 +564,18 @@ func (jm *JobManager) processSitemap(ctx context.Context, jobID, domain string, 
 	// Discover sitemaps and robots.txt rules for the domain
 	discoveryResult, err := sitemapCrawler.DiscoverSitemapsAndRobots(ctx, domain)
 	if err != nil {
-		// For backward compatibility, try the old method
-		sitemaps, err := sitemapCrawler.DiscoverSitemaps(ctx, domain)
-		if err == nil {
-			discoveryResult = &crawler.SitemapDiscoveryResult{
-				Sitemaps:    sitemaps,
-				RobotsRules: &crawler.RobotsRules{},
-			}
+		log.Error().
+			Err(err).
+			Str("domain", domain).
+			Msg("Failed to discover sitemaps and robots rules")
+		discoveryResult = &crawler.SitemapDiscoveryResult{
+			Sitemaps:    []string{},
+			RobotsRules: &crawler.RobotsRules{},
 		}
 	}
 
-	var sitemaps []string
-	var robotsRules *crawler.RobotsRules
-	if discoveryResult != nil {
-		sitemaps = discoveryResult.Sitemaps
-		robotsRules = discoveryResult.RobotsRules
-	}
+	sitemaps := discoveryResult.Sitemaps
+	robotsRules := discoveryResult.RobotsRules
 
 	// Log discovered sitemaps
 	log.Info().
