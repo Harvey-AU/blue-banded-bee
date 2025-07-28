@@ -53,6 +53,18 @@ type WorkerPool struct {
 	// Performance scaling
 	jobPerformance map[string]*JobPerformance
 	perfMutex      sync.RWMutex
+
+	// Job info cache to avoid repeated DB lookups
+	jobInfoCache map[string]*JobInfo
+	jobInfoMutex sync.RWMutex
+}
+
+// JobInfo caches job-specific data that doesn't change during execution
+type JobInfo struct {
+	DomainName  string
+	FindLinks   bool
+	CrawlDelay  int
+	RobotsRules *crawler.RobotsRules // Cached robots.txt rules for URL filtering
 }
 
 // TaskBatch holds groups of tasks for batch processing
@@ -105,6 +117,9 @@ func NewWorkerPool(db *sql.DB, dbQueue *db.DbQueue, crawler *crawler.Crawler, nu
 
 		// Performance scaling
 		jobPerformance: make(map[string]*JobPerformance),
+		
+		// Job info cache
+		jobInfoCache: make(map[string]*JobInfo),
 	}
 
 	// Start the batch processor
@@ -178,6 +193,53 @@ func (wp *WorkerPool) AddJob(jobID string, options *JobOptions) {
 	}
 	wp.perfMutex.Unlock()
 
+	// Cache job info to avoid repeated database lookups
+	ctx := context.Background()
+	var domainName string
+	var crawlDelay sql.NullInt64
+	err := wp.db.QueryRowContext(ctx, `
+		SELECT d.name, d.crawl_delay_seconds
+		FROM domains d
+		JOIN jobs j ON j.domain_id = d.id
+		WHERE j.id = $1
+	`, jobID).Scan(&domainName, &crawlDelay)
+
+	if err == nil {
+		jobInfo := &JobInfo{
+			DomainName: domainName,
+			FindLinks:  options.FindLinks,
+			CrawlDelay: 0,
+		}
+		if crawlDelay.Valid {
+			jobInfo.CrawlDelay = int(crawlDelay.Int64)
+		}
+		
+		// Parse robots.txt to get filtering rules
+		robotsRules, err := crawler.ParseRobotsTxt(ctx, domainName, wp.crawler.GetUserAgent())
+		if err != nil {
+			log.Debug().
+				Err(err).
+				Str("domain", domainName).
+				Msg("Failed to parse robots.txt, proceeding without restrictions")
+			jobInfo.RobotsRules = &crawler.RobotsRules{} // Empty rules = no restrictions
+		} else {
+			jobInfo.RobotsRules = robotsRules
+		}
+		
+		wp.jobInfoMutex.Lock()
+		wp.jobInfoCache[jobID] = jobInfo
+		wp.jobInfoMutex.Unlock()
+		
+		log.Debug().
+			Str("job_id", jobID).
+			Str("domain", domainName).
+			Int("crawl_delay", jobInfo.CrawlDelay).
+			Int("disallow_patterns", len(jobInfo.RobotsRules.DisallowPatterns)).
+			Msg("Cached job info with robots rules")
+	} else {
+		log.Error().Err(err).Str("job_id", jobID).Msg("Failed to cache job info")
+	}
+
 	// Simple scaling: add 5 workers per job, maximum of 50 total
 	wp.workersMutex.Lock()
 	targetWorkers := min(wp.currentWorkers+5, 50)
@@ -209,6 +271,11 @@ func (wp *WorkerPool) RemoveJob(jobID string) {
 		delete(wp.jobPerformance, jobID)
 	}
 	wp.perfMutex.Unlock()
+	
+	// Remove from job info cache
+	wp.jobInfoMutex.Lock()
+	delete(wp.jobInfoCache, jobID)
+	wp.jobInfoMutex.Unlock()
 
 	// Simple scaling: remove 5 workers per job + any performance boost, minimum of base count
 	wp.workersMutex.Lock()
@@ -340,21 +407,38 @@ func (wp *WorkerPool) processNextTask(ctx context.Context) error {
 				PriorityScore: task.PriorityScore,
 			}
 
-			// Need to fetch additional info from the database
-			var domainName string
-			var findLinks bool
-			err := wp.db.QueryRowContext(ctx, `
-				SELECT d.name, j.find_links 
-				FROM domains d
-				JOIN jobs j ON j.domain_id = d.id
-				WHERE j.id = $1
-			`, task.JobID).Scan(&domainName, &findLinks)
+			// Get job info from cache
+			wp.jobInfoMutex.RLock()
+			jobInfo, exists := wp.jobInfoCache[task.JobID]
+			wp.jobInfoMutex.RUnlock()
 
-			if err != nil {
-				log.Error().Err(err).Str("job_id", task.JobID).Msg("Failed to get domain name and find_links setting")
+			if exists {
+				jobsTask.DomainName = jobInfo.DomainName
+				jobsTask.FindLinks = jobInfo.FindLinks
+				jobsTask.CrawlDelay = jobInfo.CrawlDelay
 			} else {
-				jobsTask.DomainName = domainName
-				jobsTask.FindLinks = findLinks
+				// Fallback to database if not in cache (shouldn't happen normally)
+				log.Warn().Str("job_id", task.JobID).Msg("Job info not in cache, querying database")
+				
+				var domainName string
+				var findLinks bool
+				var crawlDelay sql.NullInt64
+				err := wp.db.QueryRowContext(ctx, `
+					SELECT d.name, j.find_links, d.crawl_delay_seconds
+					FROM domains d
+					JOIN jobs j ON j.domain_id = d.id
+					WHERE j.id = $1
+				`, task.JobID).Scan(&domainName, &findLinks, &crawlDelay)
+
+				if err != nil {
+					log.Error().Err(err).Str("job_id", task.JobID).Msg("Failed to get domain info")
+				} else {
+					jobsTask.DomainName = domainName
+					jobsTask.FindLinks = findLinks
+					if crawlDelay.Valid {
+						jobsTask.CrawlDelay = int(crawlDelay.Int64)
+					}
+				}
 			}
 
 			// Process the task
@@ -967,6 +1051,16 @@ func (wp *WorkerPool) processTask(ctx context.Context, task *Task) (*crawler.Cra
 
 	log.Info().Str("url", urlStr).Str("task_id", task.ID).Msg("Starting URL warm")
 
+	// Apply crawl delay if specified for this domain
+	if task.CrawlDelay > 0 {
+		log.Debug().
+			Str("task_id", task.ID).
+			Str("domain", task.DomainName).
+			Int("crawl_delay_seconds", task.CrawlDelay).
+			Msg("Applying crawl delay from robots.txt")
+		time.Sleep(time.Duration(task.CrawlDelay) * time.Second)
+	}
+
 	result, err := wp.crawler.WarmURL(ctx, urlStr, task.FindLinks)
 	if err != nil {
 		log.Error().Err(err).Str("task_id", task.ID).Msg("Crawler failed")
@@ -1002,6 +1096,14 @@ func (wp *WorkerPool) processTask(ctx context.Context, task *Task) (*crawler.Cra
 			return result, nil
 		}
 
+		// Get robots rules from cache for URL filtering
+		var robotsRules *crawler.RobotsRules
+		wp.jobInfoMutex.RLock()
+		if jobInfo, exists := wp.jobInfoCache[task.JobID]; exists {
+			robotsRules = jobInfo.RobotsRules
+		}
+		wp.jobInfoMutex.RUnlock()
+
 		isHomepage := task.Path == "/"
 
 		processLinkCategory := func(links []string, priority float64) {
@@ -1009,8 +1111,9 @@ func (wp *WorkerPool) processTask(ctx context.Context, task *Task) (*crawler.Cra
 				return
 			}
 
-			// 1. Filter links for same-domain
+			// 1. Filter links for same-domain and robots.txt compliance
 			var filtered []string
+			var blockedCount int
 			for _, link := range links {
 				linkURL, err := url.Parse(link)
 				if err != nil {
@@ -1021,8 +1124,28 @@ func (wp *WorkerPool) processTask(ctx context.Context, task *Task) (*crawler.Cra
 					if linkURL.Path != "/" && strings.HasSuffix(linkURL.Path, "/") {
 						linkURL.Path = strings.TrimSuffix(linkURL.Path, "/")
 					}
+					
+					// Check robots.txt rules
+					if robotsRules != nil && !crawler.IsPathAllowed(robotsRules, linkURL.Path) {
+						blockedCount++
+						log.Debug().
+							Str("url", linkURL.String()).
+							Str("path", linkURL.Path).
+							Str("source", urlStr).
+							Msg("Link blocked by robots.txt")
+						continue
+					}
+					
 					filtered = append(filtered, linkURL.String())
 				}
+			}
+
+			if blockedCount > 0 {
+				log.Info().
+					Str("task_id", task.ID).
+					Int("blocked_count", blockedCount).
+					Int("allowed_count", len(filtered)).
+					Msg("Filtered discovered links against robots.txt")
 			}
 
 			if len(filtered) == 0 {
