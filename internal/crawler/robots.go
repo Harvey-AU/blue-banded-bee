@@ -2,6 +2,7 @@ package crawler
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -84,7 +85,9 @@ func ParseRobotsTxt(ctx context.Context, domain string, userAgent string) (*Robo
 		return nil, fmt.Errorf("robots.txt returned status %d", resp.StatusCode)
 	}
 
-	return parseRobotsTxtContent(resp.Body, userAgent)
+	// Limit robots.txt size to 10MB to prevent memory exhaustion
+	limitedReader := io.LimitReader(resp.Body, 10*1024*1024) // 10MB limit
+	return parseRobotsTxtContent(limitedReader, userAgent)
 }
 
 // parseRobotsTxtContent parses the robots.txt content
@@ -95,7 +98,20 @@ func parseRobotsTxtContent(r io.Reader, userAgent string) (*RobotsRules, error) 
 		AllowPatterns:    []string{},
 	}
 
-	scanner := bufio.NewScanner(r)
+	// Read entire content to check if we hit the limit
+	content, err := io.ReadAll(r)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read robots.txt: %w", err)
+	}
+
+	// Check if we likely hit the 10MB limit (exactly 10MB read)
+	if len(content) == 10*1024*1024 {
+		log.Warn().
+			Int("size_bytes", len(content)).
+			Msg("Robots.txt file truncated at 10MB limit")
+	}
+
+	scanner := bufio.NewScanner(bytes.NewReader(content))
 	
 	// Track if we're in a section that applies to us
 	var inOurSection bool
