@@ -70,6 +70,27 @@ Disallow: /nobing
 			wantDisallow: []string{},
 			wantAllow:    []string{},
 		},
+		{
+			name: "Similar bot rules (AhrefsBot)",
+			robotsTxt: `
+User-agent: *
+Crawl-delay: 1
+Disallow: /admin
+
+User-agent: AhrefsBot
+Crawl-delay: 10
+Disallow: /checkout
+Disallow: /cart
+Allow: /cart/view
+
+Sitemap: https://example.com/sitemap.xml
+`,
+			userAgent:    "BlueBandedBee/1.0",
+			wantDelay:    10,
+			wantSitemaps: []string{"https://example.com/sitemap.xml"},
+			wantDisallow: []string{"/checkout", "/cart"},
+			wantAllow:    []string{"/cart/view"},
+		},
 	}
 
 	for _, tt := range tests {
