@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -176,6 +177,76 @@ func (jm *JobManager) CreateJob(ctx context.Context, options *JobOptions) (*Job,
 	} else {
 		// Prepare for manual root URL creation
 		rootPath := "/"
+
+		// Check robots.txt before creating manual root URL
+		// Use a temporary crawler to fetch robots.txt
+		var robotsRules *crawler.RobotsRules
+		if jm.crawler != nil {
+			_, err := jm.crawler.DiscoverSitemapsAndRobots(ctx, normalisedDomain)
+			if err != nil {
+				log.Error().
+					Err(err).
+					Str("domain", normalisedDomain).
+					Msg("Failed to fetch robots.txt for manual URL")
+				
+				// Update job with error
+				if updateErr := jm.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
+					_, err := tx.ExecContext(ctx, `
+						UPDATE jobs
+						SET status = $1, error_message = $2, completed_at = $3
+						WHERE id = $4
+					`, JobStatusFailed, fmt.Sprintf("Failed to fetch robots.txt: %v", err), time.Now().UTC(), job.ID)
+					return err
+				}); updateErr != nil {
+					log.Error().Err(updateErr).Str("job_id", job.ID).Msg("Failed to update job status")
+				}
+				return job, fmt.Errorf("failed to fetch robots.txt: %w", err)
+			}
+			
+			// Parse robots.txt for filtering
+			robotsRules, err = crawler.ParseRobotsTxt(ctx, normalisedDomain, "BlueBandedBee/1.0")
+			if err != nil {
+				log.Error().
+					Err(err).
+					Str("domain", normalisedDomain).
+					Msg("Failed to parse robots.txt for manual URL")
+				
+				// Update job with error
+				if updateErr := jm.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
+					_, err := tx.ExecContext(ctx, `
+						UPDATE jobs
+						SET status = $1, error_message = $2, completed_at = $3
+						WHERE id = $4
+					`, JobStatusFailed, fmt.Sprintf("Failed to parse robots.txt: %v", err), time.Now().UTC(), job.ID)
+					return err
+				}); updateErr != nil {
+					log.Error().Err(updateErr).Str("job_id", job.ID).Msg("Failed to update job status")
+				}
+				return job, fmt.Errorf("failed to parse robots.txt: %w", err)
+			}
+		}
+
+		// Check if root path is allowed by robots.txt
+		if robotsRules != nil && !crawler.IsPathAllowed(robotsRules, rootPath) {
+			log.Warn().
+				Str("job_id", job.ID).
+				Str("domain", normalisedDomain).
+				Str("path", rootPath).
+				Msg("Root path is disallowed by robots.txt, job cannot proceed")
+			
+			// Update job with error
+			if updateErr := jm.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
+				_, err := tx.ExecContext(ctx, `
+					UPDATE jobs
+					SET status = $1, error_message = $2, completed_at = $3
+					WHERE id = $4
+				`, JobStatusFailed, "Root path (/) is disallowed by robots.txt", time.Now().UTC(), job.ID)
+				return err
+			}); updateErr != nil {
+				log.Error().Err(updateErr).Str("job_id", job.ID).Msg("Failed to update job status")
+			}
+			return job, fmt.Errorf("root path is disallowed by robots.txt")
+		}
 
 		// Create a page record for the root URL
 		err := jm.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
@@ -536,6 +607,197 @@ func (jm *JobManager) GetJobStatus(ctx context.Context, jobID string) (*Job, err
 	return job, nil
 }
 
+// discoverAndParseSitemaps discovers and parses all sitemaps for a domain
+func (jm *JobManager) discoverAndParseSitemaps(ctx context.Context, domain string) ([]string, *crawler.RobotsRules, error) {
+	// Use the injected crawler if available, otherwise create a new one
+	var sitemapCrawler CrawlerInterface
+	if jm.crawler != nil {
+		sitemapCrawler = jm.crawler
+	} else {
+		// Create a crawler config that allows skipping already cached URLs
+		crawlerConfig := crawler.DefaultConfig()
+		crawlerConfig.SkipCachedURLs = false
+		sitemapCrawler = crawler.New(crawlerConfig)
+	}
+
+	// Discover sitemaps and robots.txt rules for the domain
+	discoveryResult, err := sitemapCrawler.DiscoverSitemapsAndRobots(ctx, domain)
+	if err != nil {
+		log.Error().
+			Err(err).
+			Str("domain", domain).
+			Msg("Failed to discover sitemaps and robots rules")
+		return []string{}, &crawler.RobotsRules{}, err
+	}
+
+	sitemaps := discoveryResult.Sitemaps
+	robotsRules := discoveryResult.RobotsRules
+
+	// Log discovered sitemaps
+	log.Info().
+		Str("domain", domain).
+		Int("sitemap_count", len(sitemaps)).
+		Msg("Sitemaps discovered")
+
+	// Process each sitemap to extract URLs
+	var urls []string
+	for _, sitemapURL := range sitemaps {
+		log.Info().
+			Str("sitemap_url", sitemapURL).
+			Msg("Processing sitemap")
+
+		sitemapURLs, err := sitemapCrawler.ParseSitemap(ctx, sitemapURL)
+		if err != nil {
+			log.Warn().
+				Err(err).
+				Str("sitemap_url", sitemapURL).
+				Msg("Error parsing sitemap")
+			continue
+		}
+
+		log.Info().
+			Str("sitemap_url", sitemapURL).
+			Int("url_count", len(sitemapURLs)).
+			Msg("Parsed URLs from sitemap")
+
+		urls = append(urls, sitemapURLs...)
+	}
+
+	return urls, robotsRules, nil
+}
+
+// filterURLsAgainstRobots filters URLs against robots.txt rules and path patterns
+func (jm *JobManager) filterURLsAgainstRobots(urls []string, robotsRules *crawler.RobotsRules, includePaths, excludePaths []string) []string {
+	// Use the injected crawler if available for path filtering
+	var filteredURLs []string
+	if jm.crawler != nil && (len(includePaths) > 0 || len(excludePaths) > 0) {
+		filteredURLs = jm.crawler.FilterURLs(urls, includePaths, excludePaths)
+	} else {
+		filteredURLs = urls
+	}
+
+	// Filter URLs against robots.txt rules
+	if robotsRules != nil && len(robotsRules.DisallowPatterns) > 0 {
+		var allowedURLs []string
+		for _, urlStr := range filteredURLs {
+			// Extract path from URL
+			if parsedURL, err := url.Parse(urlStr); err == nil {
+				path := parsedURL.Path
+				if crawler.IsPathAllowed(robotsRules, path) {
+					allowedURLs = append(allowedURLs, urlStr)
+				} else {
+					log.Debug().
+						Str("url", urlStr).
+						Str("path", path).
+						Msg("URL blocked by robots.txt")
+				}
+			}
+		}
+		log.Info().
+			Int("original_count", len(filteredURLs)).
+			Int("allowed_count", len(allowedURLs)).
+			Int("blocked_count", len(filteredURLs)-len(allowedURLs)).
+			Msg("Filtered URLs against robots.txt rules")
+		return allowedURLs
+	}
+
+	return filteredURLs
+}
+
+// enqueueURLsForJob creates page records and enqueues URLs for a job
+func (jm *JobManager) enqueueURLsForJob(ctx context.Context, jobID, domain string, urls []string, sourceType string) error {
+	if len(urls) == 0 {
+		return nil
+	}
+
+	// Get domain ID from the job
+	var domainID int
+	err := jm.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
+		return tx.QueryRowContext(ctx, `
+			SELECT domain_id FROM jobs WHERE id = $1
+		`, jobID).Scan(&domainID)
+	})
+	if err != nil {
+		return fmt.Errorf("failed to get domain ID: %w", err)
+	}
+
+	// Create page records and get their IDs
+	pageIDs, paths, err := db.CreatePageRecords(ctx, jm.dbQueue.(*db.DbQueue), domainID, domain, urls)
+	if err != nil {
+		return fmt.Errorf("failed to create page records: %w", err)
+	}
+
+	// Prepare pages with priorities
+	pagesWithPriority := make([]db.Page, len(pageIDs))
+	for i, pageID := range pageIDs {
+		pagesWithPriority[i] = db.Page{
+			ID:       pageID,
+			Path:     paths[i],
+			Priority: 0.5, // Default sitemap priority
+		}
+		// Set homepage priority to 1.000
+		if paths[i] == "/" {
+			pagesWithPriority[i].Priority = 1.000
+			log.Info().
+				Str("job_id", jobID).
+				Msg("Set homepage priority to 1.000")
+		}
+	}
+
+	// Use our wrapper function that checks for duplicates
+	baseURL := fmt.Sprintf("https://%s", domain)
+	if err := jm.EnqueueJobURLs(ctx, jobID, pagesWithPriority, sourceType, baseURL); err != nil {
+		return fmt.Errorf("failed to enqueue URLs: %w", err)
+	}
+
+	log.Info().
+		Str("job_id", jobID).
+		Str("domain", domain).
+		Int("url_count", len(urls)).
+		Str("source_type", sourceType).
+		Msg("Added URLs to job queue")
+
+	// Recalculate job statistics after bulk operation
+	if err := jm.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
+		_, err := tx.ExecContext(ctx, `SELECT recalculate_job_stats($1)`, jobID)
+		return err
+	}); err != nil {
+		log.Error().
+			Err(err).
+			Str("job_id", jobID).
+			Msg("Failed to recalculate job stats")
+	}
+
+	return nil
+}
+
+// updateDomainCrawlDelay updates the domain's crawl delay from robots.txt
+func (jm *JobManager) updateDomainCrawlDelay(ctx context.Context, domain string, crawlDelay int) {
+	if crawlDelay <= 0 {
+		return
+	}
+
+	if err := jm.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
+		_, err := tx.ExecContext(ctx, `
+			UPDATE domains
+			SET crawl_delay_seconds = $1
+			WHERE name = $2
+		`, crawlDelay, domain)
+		return err
+	}); err != nil {
+		log.Error().
+			Err(err).
+			Str("domain", domain).
+			Int("crawl_delay", crawlDelay).
+			Msg("Failed to update domain with crawl delay")
+	} else {
+		log.Info().
+			Str("domain", domain).
+			Int("crawl_delay", crawlDelay).
+			Msg("Updated domain with crawl delay from robots.txt")
+	}
+}
+
 // processSitemap fetches and processes a sitemap for a domain
 func (jm *JobManager) processSitemap(ctx context.Context, jobID, domain string, includePaths, excludePaths []string) {
 	span := sentry.StartSpan(ctx, "manager.process_sitemap")
@@ -549,53 +811,8 @@ func (jm *JobManager) processSitemap(ctx context.Context, jobID, domain string, 
 		Str("domain", domain).
 		Msg("Starting sitemap processing")
 
-	// Use the injected crawler if available, otherwise create a new one
-	var sitemapCrawler CrawlerInterface
-	if jm.crawler != nil {
-		sitemapCrawler = jm.crawler
-	} else {
-		// Create a crawler config that allows skipping already cached URLs
-		crawlerConfig := crawler.DefaultConfig()
-		crawlerConfig.SkipCachedURLs = false
-		sitemapCrawler = crawler.New(crawlerConfig)
-	}
-
-	// Discover sitemaps for the domain
-	sitemaps, err := sitemapCrawler.DiscoverSitemaps(ctx, domain)
-
-	// Log discovered sitemaps
-	log.Info().
-		Str("job_id", jobID).
-		Str("domain", domain).
-		Int("sitemap_count", len(sitemaps)).
-		Msg("Sitemaps discovered")
-
-	// Process each sitemap to extract URLs
-	var urls []string
-	for _, sitemapURL := range sitemaps {
-		log.Info().
-			Str("job_id", jobID).
-			Str("sitemap_url", sitemapURL).
-			Msg("Processing sitemap")
-
-		sitemapURLs, err := sitemapCrawler.ParseSitemap(ctx, sitemapURL)
-		if err != nil {
-			log.Warn().
-				Err(err).
-				Str("job_id", jobID).
-				Str("sitemap_url", sitemapURL).
-				Msg("Error parsing sitemap")
-			continue
-		}
-
-		log.Info().
-			Str("job_id", jobID).
-			Str("sitemap_url", sitemapURL).
-			Int("url_count", len(sitemapURLs)).
-			Msg("Parsed URLs from sitemap")
-
-		urls = append(urls, sitemapURLs...)
-	}
+	// Step 1: Discover and parse sitemaps
+	urls, robotsRules, err := jm.discoverAndParseSitemaps(ctx, domain)
 	if err != nil {
 		span.SetTag("error", "true")
 		span.SetData("error.message", err.Error())
@@ -605,7 +822,7 @@ func (jm *JobManager) processSitemap(ctx context.Context, jobID, domain string, 
 			Str("domain", domain).
 			Msg("Failed to discover sitemaps")
 
-		// Update job with error using dbQueue
+		// Update job with error
 		if updateErr := jm.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
 			_, err := tx.ExecContext(ctx, `
 				UPDATE jobs
@@ -619,12 +836,13 @@ func (jm *JobManager) processSitemap(ctx context.Context, jobID, domain string, 
 		return
 	}
 
-	// Filter URLs based on include/exclude patterns
-	if len(includePaths) > 0 || len(excludePaths) > 0 {
-		urls = sitemapCrawler.FilterURLs(urls, includePaths, excludePaths)
-	}
+	// Step 2: Update domain crawl delay if present
+	jm.updateDomainCrawlDelay(ctx, domain, robotsRules.CrawlDelay)
 
-	// Add URLs to the job queue
+	// Step 3: Filter URLs against robots.txt and path patterns
+	urls = jm.filterURLsAgainstRobots(urls, robotsRules, includePaths, excludePaths)
+
+	// Step 4: Enqueue URLs or create fallback
 	if len(urls) > 0 {
 		// Log URLs for debugging
 		for i, url := range urls {
@@ -636,57 +854,7 @@ func (jm *JobManager) processSitemap(ctx context.Context, jobID, domain string, 
 				Msg("URL from sitemap")
 		}
 
-		// Get domain ID from the job
-		var domainID int
-		err := jm.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
-			return tx.QueryRowContext(ctx, `
-				SELECT domain_id FROM jobs WHERE id = $1
-			`, jobID).Scan(&domainID)
-		})
-		if err != nil {
-			span.SetTag("error", "true")
-			span.SetData("error.message", err.Error())
-			log.Error().
-				Err(err).
-				Str("job_id", jobID).
-				Str("domain", domain).
-				Msg("Failed to get domain ID for job")
-			return
-		}
-
-		// Create page records and get their IDs
-		pageIDs, paths, err := db.CreatePageRecords(ctx, jm.dbQueue.(*db.DbQueue), domainID, domain, urls)
-		if err != nil {
-			span.SetTag("error", "true")
-			span.SetData("error.message", err.Error())
-			log.Error().
-				Err(err).
-				Str("job_id", jobID).
-				Str("domain", domain).
-				Msg("Failed to create page records")
-			return
-		}
-
-		// Prepare pages with priorities
-		pagesWithPriority := make([]db.Page, len(pageIDs))
-		for i, pageID := range pageIDs {
-			pagesWithPriority[i] = db.Page{
-				ID:       pageID,
-				Path:     paths[i],
-				Priority: 0.5, // Default sitemap priority
-			}
-			// Set homepage priority to 1.000
-			if paths[i] == "/" {
-				pagesWithPriority[i].Priority = 1.000
-				log.Info().
-					Str("job_id", jobID).
-					Msg("Set homepage priority to 1.000")
-			}
-		}
-
-		// Use our wrapper function that checks for duplicates
-		baseURL := fmt.Sprintf("https://%s", domain)
-		if err := jm.EnqueueJobURLs(ctx, jobID, pagesWithPriority, "sitemap", baseURL); err != nil {
+		if err := jm.enqueueURLsForJob(ctx, jobID, domain, urls, "sitemap"); err != nil {
 			span.SetTag("error", "true")
 			span.SetData("error.message", err.Error())
 			log.Error().
@@ -696,73 +864,17 @@ func (jm *JobManager) processSitemap(ctx context.Context, jobID, domain string, 
 				Msg("Failed to enqueue sitemap URLs")
 			return
 		}
-
-		log.Info().
-			Str("job_id", jobID).
-			Str("domain", domain).
-			Int("url_count", len(urls)).
-			Msg("Added sitemap URLs to job queue")
-
-		// Recalculate job statistics after bulk sitemap operation
-		if err := jm.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
-			_, err := tx.ExecContext(ctx, `SELECT recalculate_job_stats($1)`, jobID)
-			return err
-		}); err != nil {
-			log.Error().
-				Err(err).
-				Str("job_id", jobID).
-				Msg("Failed to recalculate job stats after sitemap processing")
-		}
-
 	} else {
 		log.Info().
 			Str("job_id", jobID).
 			Str("domain", domain).
 			Msg("No URLs found in sitemap, falling back to root page")
 
-		// Get domain ID from the job
-		var domainID int
-		err := jm.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
-			return tx.QueryRowContext(ctx, `
-				SELECT domain_id FROM jobs WHERE id = $1
-			`, jobID).Scan(&domainID)
-		})
-		if err != nil {
-			log.Error().
-				Err(err).
-				Str("job_id", jobID).
-				Msg("Failed to get domain ID for fallback root page")
-			return
-		}
-
-		// Create fallback root URL list
+		// Create fallback root URL
 		rootURL := fmt.Sprintf("https://%s/", domain)
-		urls = []string{rootURL}
+		fallbackURLs := []string{rootURL}
 
-		// Create page records using the existing function
-		pageIDs, paths, err := db.CreatePageRecords(ctx, jm.dbQueue.(*db.DbQueue), domainID, domain, urls)
-		if err != nil {
-			log.Error().
-				Err(err).
-				Str("job_id", jobID).
-				Str("domain", domain).
-				Msg("Failed to create page records for fallback")
-			return
-		}
-
-		// Prepare pages with highest priority
-		pagesWithPriority := make([]db.Page, len(pageIDs))
-		for i, pageID := range pageIDs {
-			pagesWithPriority[i] = db.Page{
-				ID:       pageID,
-				Path:     paths[i],
-				Priority: 1.000, // Highest priority for root page
-			}
-		}
-
-		// Use the existing EnqueueJobURLs function
-		baseURL := fmt.Sprintf("https://%s", domain)
-		if err := jm.EnqueueJobURLs(ctx, jobID, pagesWithPriority, "fallback", baseURL); err != nil {
+		if err := jm.enqueueURLsForJob(ctx, jobID, domain, fallbackURLs, "fallback"); err != nil {
 			log.Error().
 				Err(err).
 				Str("job_id", jobID).
@@ -787,16 +899,5 @@ func (jm *JobManager) processSitemap(ctx context.Context, jobID, domain string, 
 			Str("job_id", jobID).
 			Str("domain", domain).
 			Msg("Created fallback root page task - job will proceed with link discovery")
-
-		// Recalculate job statistics
-		if err := jm.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
-			_, err := tx.ExecContext(ctx, `SELECT recalculate_job_stats($1)`, jobID)
-			return err
-		}); err != nil {
-			log.Error().
-				Err(err).
-				Str("job_id", jobID).
-				Msg("Failed to recalculate job stats after fallback creation")
-		}
 	}
 }
