@@ -184,19 +184,45 @@ func (jm *JobManager) CreateJob(ctx context.Context, options *JobOptions) (*Job,
 		if jm.crawler != nil {
 			_, err := jm.crawler.DiscoverSitemapsAndRobots(ctx, normalisedDomain)
 			if err != nil {
-				log.Warn().
+				log.Error().
 					Err(err).
 					Str("domain", normalisedDomain).
-					Msg("Failed to fetch robots.txt for manual URL, proceeding without filtering")
-			} else {
-				// Parse robots.txt for filtering
-				robotsRules, err = crawler.ParseRobotsTxt(ctx, normalisedDomain, "BlueBandedBee/1.0")
-				if err != nil {
-					log.Warn().
-						Err(err).
-						Str("domain", normalisedDomain).
-						Msg("Failed to parse robots.txt for manual URL, proceeding without filtering")
+					Msg("Failed to fetch robots.txt for manual URL")
+				
+				// Update job with error
+				if updateErr := jm.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
+					_, err := tx.ExecContext(ctx, `
+						UPDATE jobs
+						SET status = $1, error_message = $2, completed_at = $3
+						WHERE id = $4
+					`, JobStatusFailed, fmt.Sprintf("Failed to fetch robots.txt: %v", err), time.Now().UTC(), job.ID)
+					return err
+				}); updateErr != nil {
+					log.Error().Err(updateErr).Str("job_id", job.ID).Msg("Failed to update job status")
 				}
+				return job, fmt.Errorf("failed to fetch robots.txt: %w", err)
+			}
+			
+			// Parse robots.txt for filtering
+			robotsRules, err = crawler.ParseRobotsTxt(ctx, normalisedDomain, "BlueBandedBee/1.0")
+			if err != nil {
+				log.Error().
+					Err(err).
+					Str("domain", normalisedDomain).
+					Msg("Failed to parse robots.txt for manual URL")
+				
+				// Update job with error
+				if updateErr := jm.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
+					_, err := tx.ExecContext(ctx, `
+						UPDATE jobs
+						SET status = $1, error_message = $2, completed_at = $3
+						WHERE id = $4
+					`, JobStatusFailed, fmt.Sprintf("Failed to parse robots.txt: %v", err), time.Now().UTC(), job.ID)
+					return err
+				}); updateErr != nil {
+					log.Error().Err(updateErr).Str("job_id", job.ID).Msg("Failed to update job status")
+				}
+				return job, fmt.Errorf("failed to parse robots.txt: %w", err)
 			}
 		}
 

@@ -85,8 +85,8 @@ func ParseRobotsTxt(ctx context.Context, domain string, userAgent string) (*Robo
 		return nil, fmt.Errorf("robots.txt returned status %d", resp.StatusCode)
 	}
 
-	// Limit robots.txt size to 10MB to prevent memory exhaustion
-	limitedReader := io.LimitReader(resp.Body, 10*1024*1024) // 10MB limit
+	// Limit robots.txt size to 1MB to prevent memory exhaustion
+	limitedReader := io.LimitReader(resp.Body, 1*1024*1024) // 1MB limit
 	return parseRobotsTxtContent(limitedReader, userAgent)
 }
 
@@ -104,11 +104,11 @@ func parseRobotsTxtContent(r io.Reader, userAgent string) (*RobotsRules, error) 
 		return nil, fmt.Errorf("failed to read robots.txt: %w", err)
 	}
 
-	// Check if we likely hit the 10MB limit (exactly 10MB read)
-	if len(content) == 10*1024*1024 {
+	// Check if we likely hit the 1MB limit (exactly 1MB read)
+	if len(content) == 1*1024*1024 {
 		log.Warn().
 			Int("size_bytes", len(content)).
-			Msg("Robots.txt file truncated at 10MB limit")
+			Msg("Robots.txt file truncated at 1MB limit")
 	}
 
 	scanner := bufio.NewScanner(bytes.NewReader(content))
