@@ -23,16 +23,6 @@ func (m *MockCrawler) WarmURL(ctx context.Context, url string, findLinks bool) (
 	return args.Get(0).(*crawler.CrawlResult), args.Error(1)
 }
 
-// DiscoverSitemaps mocks the DiscoverSitemaps method
-func (m *MockCrawler) DiscoverSitemaps(ctx context.Context, domain string) ([]string, error) {
-	args := m.Called(ctx, domain)
-
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-
-	return args.Get(0).([]string), args.Error(1)
-}
 
 // DiscoverSitemapsAndRobots mocks the DiscoverSitemapsAndRobots method
 func (m *MockCrawler) DiscoverSitemapsAndRobots(ctx context.Context, domain string) (*crawler.SitemapDiscoveryResult, error) {
