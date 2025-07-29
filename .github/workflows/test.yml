@@ -28,7 +28,7 @@ jobs:
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v7
         with:
-          version: v2.3.0 # Latest version that supports Go 1.25
+          version: v2.3.0 # Latest stable version
           args: --timeout 5m
 
       - name: Run unit tests
