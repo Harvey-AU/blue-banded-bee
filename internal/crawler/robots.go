@@ -27,7 +27,7 @@ type RobotsRules struct {
 }
 
 // ParseRobotsTxt fetches and parses robots.txt for a domain
-// 
+//
 // The parser follows these rules in order of precedence:
 // 1. If there are specific rules for "BlueBandedBee", use those
 // 2. If there are rules for similar legitimate web crawlers (AhrefsBot, MJ12bot, etc.), use those
@@ -45,7 +45,7 @@ func ParseRobotsTxt(ctx context.Context, domain string, userAgent string) (*Robo
 		// Domain only - default to https
 		robotsURL = fmt.Sprintf("https://%s/robots.txt", domain)
 	}
-	
+
 	log.Debug().
 		Str("domain", domain).
 		Str("robots_url", robotsURL).
@@ -112,7 +112,7 @@ func parseRobotsTxtContent(r io.Reader, userAgent string) (*RobotsRules, error) 
 	}
 
 	scanner := bufio.NewScanner(bytes.NewReader(content))
-	
+
 	// Track if we're in a section that applies to us
 	var inOurSection bool
 	var inWildcardSection bool
@@ -124,15 +124,15 @@ func parseRobotsTxtContent(r io.Reader, userAgent string) (*RobotsRules, error) 
 	// List of similar crawler/SEO bots whose rules we should also respect
 	// These are legitimate web crawlers that BlueBandedBee is similar to
 	similarBots := []string{
-		"ahrefsbot",        // SEO crawler
-		"ahrefssiteaudit",  // SEO site audit
-		"mj12bot",          // Majestic SEO crawler
-		"semrushbot",       // SEO crawler
-		"dotbot",           // Moz crawler
-		"rogerbot",         // Moz crawler (legacy)
-		"screaming frog",   // SEO spider
-		"sitebot",          // Generic site crawler
-		"webcrawler",       // Generic crawler
+		"ahrefsbot",       // SEO crawler
+		"ahrefssiteaudit", // SEO site audit
+		"mj12bot",         // Majestic SEO crawler
+		"semrushbot",      // SEO crawler
+		"dotbot",          // Moz crawler
+		"rogerbot",        // Moz crawler (legacy)
+		"screaming frog",  // SEO spider
+		"sitebot",         // Generic site crawler
+		"webcrawler",      // Generic crawler
 	}
 
 	// Temporary storage for wildcard rules
@@ -144,7 +144,7 @@ func parseRobotsTxtContent(r io.Reader, userAgent string) (*RobotsRules, error) 
 
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
-		
+
 		// Skip empty lines and comments
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
@@ -157,11 +157,11 @@ func parseRobotsTxtContent(r io.Reader, userAgent string) (*RobotsRules, error) 
 		if strings.HasPrefix(lowerLine, "user-agent:") {
 			agent := strings.TrimSpace(line[11:])
 			agentLower := strings.ToLower(agent)
-			
+
 			// Check if this section applies to us
 			inOurSection = false
 			inWildcardSection = false
-			
+
 			if agent == "*" {
 				inWildcardSection = true
 			} else if agentLower == botName || strings.Contains(agentLower, botName) {

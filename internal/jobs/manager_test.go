@@ -17,7 +17,7 @@ import (
 func setupTest(t *testing.T) *db.DB {
 	t.Helper()
 	testutil.LoadTestEnv(t)
-	
+
 	database, err := db.InitFromEnv()
 	require.NoError(t, err, "Failed to connect to test database")
 	return database
@@ -218,7 +218,7 @@ func TestProcessSitemapFallback(t *testing.T) {
 	maxWait := 10 * time.Second
 	pollInterval := 500 * time.Millisecond
 	deadline := time.Now().Add(maxWait)
-	
+
 	for time.Now().Before(deadline) {
 		err = sqlDB.QueryRowContext(ctx, `
 			SELECT COUNT(*) 
@@ -226,7 +226,7 @@ func TestProcessSitemapFallback(t *testing.T) {
 			WHERE job_id = $1 AND path = '/'
 		`, job.ID).Scan(&taskCount)
 		require.NoError(t, err)
-		
+
 		if taskCount > 0 {
 			// Task exists, get its source type
 			err = sqlDB.QueryRowContext(ctx, `
@@ -237,7 +237,7 @@ func TestProcessSitemapFallback(t *testing.T) {
 			require.NoError(t, err)
 			break
 		}
-		
+
 		time.Sleep(pollInterval)
 	}
 
@@ -340,11 +340,10 @@ func TestEnqueueJobURLs(t *testing.T) {
 // MockCrawlerForIntegration is a simple mock for integration tests
 type MockCrawlerForIntegration struct {
 	discoverSitemapsAndRobotsFunc func(ctx context.Context, domain string) (*crawler.SitemapDiscoveryResult, error)
-	parseSitemapFunc             func(ctx context.Context, sitemapURL string) ([]string, error)
-	warmURLFunc                  func(ctx context.Context, url string, findLinks bool) (*crawler.CrawlResult, error)
-	filterURLsFunc               func(urls []string, includePaths, excludePaths []string) []string
+	parseSitemapFunc              func(ctx context.Context, sitemapURL string) ([]string, error)
+	warmURLFunc                   func(ctx context.Context, url string, findLinks bool) (*crawler.CrawlResult, error)
+	filterURLsFunc                func(urls []string, includePaths, excludePaths []string) []string
 }
-
 
 func (m *MockCrawlerForIntegration) DiscoverSitemapsAndRobots(ctx context.Context, domain string) (*crawler.SitemapDiscoveryResult, error) {
 	if m.discoverSitemapsAndRobotsFunc != nil {
