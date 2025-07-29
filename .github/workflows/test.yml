@@ -25,12 +25,18 @@ jobs:
       - name: Check Go version
         run: go version
 
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: v2.3.0 # Latest version that supports Go 1.25
+          args: --timeout 5m
+
       - name: Run unit tests
         run: |
           echo "=== Running Unit Tests ==="
           # Run tests without integration tag (unit tests and tests without tags)
           go test -v -coverprofile=coverage-unit.out -coverpkg=./... -tags='!integration' ./...
-          
+
       - name: Run integration tests
         env:
           DATABASE_URL: ${{ secrets.TEST_DATABASE_URL }}
@@ -38,14 +44,14 @@ jobs:
           echo "=== Running Integration Tests ==="
           # Install tools for test reporting
           go install github.com/jstemmer/go-junit-report/v2@latest
-          
+
           # Run only integration tests
           set +e  # Don't exit on error temporarily
           go test -v -coverprofile=coverage-integration.out -coverpkg=./... -tags=integration ./... -json > test-output.json
           TEST_EXIT_CODE=$?
           echo "Test exit code: $TEST_EXIT_CODE"
           set -e  # Re-enable exit on error
-          
+
           # Show some test output for debugging
           echo "=== Test Results ==="
           if grep -q '"Action":"fail"' test-output.json; then
@@ -57,14 +63,14 @@ jobs:
             echo "Packages tested:"
             grep '"Action":"pass"' test-output.json | grep -o '"Package":"[^"]*"' | sort -u || true
           fi
-          
+
           # Convert to JUnit XML (this won't fail even if tests failed)
           $(go env GOPATH)/bin/go-junit-report -parser gojson < test-output.json > junit.xml
-          
+
           # Show coverage summary
           echo "=== Coverage Summary ==="
           go tool cover -func=coverage-integration.out || true
-          
+
           # Exit with the original test exit code
           exit ${TEST_EXIT_CODE}
 
@@ -74,7 +80,7 @@ jobs:
           echo "=== Merging Coverage Reports ==="
           # Install gocovmerge to merge coverage files
           go install github.com/wadey/gocovmerge@latest
-          
+
           # Merge unit and integration coverage
           if [ -f coverage-unit.out ] && [ -f coverage-integration.out ]; then
             $(go env GOPATH)/bin/gocovmerge coverage-unit.out coverage-integration.out > coverage.out
@@ -83,7 +89,7 @@ jobs:
           elif [ -f coverage-integration.out ]; then
             cp coverage-integration.out coverage.out
           fi
-          
+
           # Show total coverage
           if [ -f coverage.out ]; then
             echo "=== Total Coverage ==="

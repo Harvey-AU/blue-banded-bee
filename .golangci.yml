@@ -1,0 +1,103 @@
+version: 2
+
+run:
+  go: "1.25"
+  timeout: 5m
+  tests: true
+
+issues:
+  exclude-dirs:
+    - .git
+    - .github
+    - .vscode
+    - .obsidian
+    - .aider.tags.cache.v4
+    - .gemini
+    - .claude
+    - web/node_modules
+
+  exclude-rules:
+    # Exclude test files from certain checks
+    - path: _test\.go
+      linters:
+        - gocyclo
+        - gosec
+        - goconst
+
+    # Exclude generated files
+    - path: ".*\\.pb\\.go$"
+      linters:
+        - all
+
+    # Allow complex main functions
+    - path: cmd/
+      linters:
+        - gocyclo
+
+  max-issues-per-linter: 50
+  max-same-issues: 10
+  uniq-by-line: true
+
+linters:
+  enable:
+    # Code formatting
+    - gofmt
+    - gofumpt
+    - goimports
+
+    # Code quality
+    - ineffassign # Detects ineffectual assignments
+    - gocyclo # Cyclomatic complexity
+    - gocritic # Various code quality checks
+    - staticcheck # Go static analysis
+    - gosimple # Simplify code
+    - unused # Unused code detection
+
+    # Error handling
+    - errcheck # Unchecked errors
+    - errorlint # Error wrapping
+
+    # Performance
+    - prealloc # Slice preallocation
+
+    # Security
+    - gosec # Security issues
+
+    # Readability
+    - goconst # Repeated constants
+    - misspell # Spelling mistakes
+    - unconvert # Unnecessary type conversions
+    - unparam # Unused function parameters
+
+  disable:
+    - govet # Disabled because it's very strict and may conflict with Go 1.25
+    - revive # Disabled as it's redundant with other linters
+    - golint # Deprecated
+
+linters-settings:
+  gocyclo:
+    min-complexity: 15 # Allow complexity up to 15 (matches Go Report Card threshold)
+
+  gocritic:
+    enabled-tags:
+      - diagnostic
+      - style
+      - performance
+    disabled-checks:
+      - commentedOutCode
+      - ifElseChain
+
+  gosec:
+    severity: medium
+    confidence: medium
+
+  errcheck:
+    check-type-assertions: true
+    check-blank: false
+
+output:
+  formats:
+    colored-line-number:
+      path: stdout
+  print-issued-lines: true
+  print-linter-name: true
