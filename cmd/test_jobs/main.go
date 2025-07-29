@@ -63,7 +63,10 @@ func main() {
 
 	// Create worker pool
 	var jobWorkers int = 3
-	workerPool := jobs.NewWorkerPool(database.GetDB(), dbQueue, crawler, jobWorkers, database.GetConfig())
+	dbConfig := &db.Config{
+		DatabaseURL: dbURL,
+	}
+	workerPool := jobs.NewWorkerPool(database.GetDB(), dbQueue, crawler, jobWorkers, dbConfig)
 	workerPool.Start(context.Background())
 	defer workerPool.Stop()
 
@@ -89,12 +92,10 @@ func main() {
 
 	log.Info().Str("job_id", job.ID).Msg("Created test job")
 
-	// Start the job
-	if err := jobManager.StartJob(context.Background(), job.ID); err != nil {
-		log.Fatal().Err(err).Msg("Failed to start job")
-	}
-
-	log.Info().Str("job_id", job.ID).Msg("Started job, monitoring progress...")
+	// Add the job to the worker pool - it will automatically start processing pending tasks
+	workerPool.AddJob(job.ID, jobOptions)
+	
+	log.Info().Str("job_id", job.ID).Msg("Added job to worker pool, monitoring progress...")
 
 	// Monitor job progress
 	for {
