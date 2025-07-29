@@ -2,10 +2,11 @@
 
 ## Prerequisites
 
-- **Go 1.24.2+** - Latest Go version with module support
+- **Go 1.25rc2** - We use Go 1.25rc2 for advanced features (see [Go 1.25 Plan](./plans/_archive/go-1.25.md))
 - **PostgreSQL** - Local instance or remote database access
 - **Air** (optional) - Hot reloading for development (`go install github.com/cosmtrek/air@latest`)
 - **Git** - Version control
+- **golangci-lint** (optional) - Code quality checks (`brew install golangci-lint`)
 
 ## Quick Setup
 
@@ -234,14 +235,65 @@ GODEBUG=gctrace=1 go run ./cmd/app/main.go
 
 ### Code Quality
 
-Before submitting:
+We use a **hybrid approach** for code quality checks due to our Go 1.25rc2 usage:
 
-1. **Format code**: `go fmt ./...`
-2. **Run linter**: `golangci-lint run` (if installed)
-3. **Run tests**: `./run-tests.sh` (uses test database)
-4. **Check coverage**: `go test -v -coverprofile=coverage.out ./...`
-5. **Verify CI compatibility**: Ensure tests work with Supabase pooler URLs
-6. **Update docs**: Update relevant documentation for any changes
+#### Local Development (Fast Feedback)
+Before committing, run these **local** checks:
+
+```bash
+# 1. Format code (instant)
+go fmt ./...
+
+# 2. Basic static analysis (5-10 seconds)
+go vet ./...
+
+# 3. Run tests (1-2 minutes)
+./run-tests.sh
+
+# 4. Check coverage (optional)
+go test -v -coverprofile=coverage.out ./...
+```
+
+#### Why Local golangci-lint Doesn't Work
+Our project uses **Go 1.25rc2** for advanced features (container-aware GOMAXPROCS, Green Tea GC, etc.), but most golangci-lint installations are built with Go 1.24. This creates a version compatibility issue:
+
+```bash
+# This will fail with version error:
+golangci-lint run --config .golangci.yml
+# Error: Go language version (go1.24) lower than targeted Go version (1.25)
+```
+
+#### CI-Based Comprehensive Linting ✅
+Our **GitHub Actions CI** uses golangci-lint v2.3.0 built with Go 1.25 support:
+
+- **Runs automatically** on every push/PR
+- **140+ linters** enabled (security, performance, style, complexity)
+- **Fast feedback** (~30 seconds)
+- **Blocks problematic code** from merging
+
+#### Recommended Workflow
+```bash
+# 1. 🏠 Local development - fast iteration
+go fmt ./... && go vet ./... && go test ./...
+
+# 2. 🚀 Push to GitHub
+git add . && git commit -m "feat: new feature" && git push
+
+# 3. ⚡ GitHub CI provides comprehensive feedback
+# - Formatting issues
+# - Security vulnerabilities  
+# - Performance problems
+# - Code complexity issues
+# - Documentation gaps
+```
+
+#### Pre-Submission Checklist
+- [ ] Code formatted with `go fmt ./...`
+- [ ] No issues from `go vet ./...`
+- [ ] All tests pass with `./run-tests.sh`
+- [ ] Verify CI compatibility (Supabase pooler URLs work)
+- [ ] Update relevant documentation
+- [ ] Push and verify GitHub Actions pass
 
 ### Git Workflow
 
