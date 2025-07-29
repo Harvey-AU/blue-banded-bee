@@ -43,14 +43,14 @@ func LoadTestEnv(t *testing.T) {
 func findEnvTestFile() string {
 	// Start from current directory
 	dir, _ := os.Getwd()
-	
+
 	// Search up to 5 levels up
 	for i := 0; i < 5; i++ {
 		envPath := filepath.Join(dir, ".env.test")
 		if _, err := os.Stat(envPath); err == nil {
 			return envPath
 		}
-		
+
 		// Move to parent directory
 		parent := filepath.Dir(dir)
 		if parent == dir {
@@ -58,6 +58,6 @@ func findEnvTestFile() string {
 		}
 		dir = parent
 	}
-	
+
 	return ""
 }

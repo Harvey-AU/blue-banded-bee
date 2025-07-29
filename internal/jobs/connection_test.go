@@ -16,7 +16,7 @@ import (
 func TestDatabaseConnection(t *testing.T) {
 	// Load test environment
 	testutil.LoadTestEnv(t)
-	
+
 	// This test verifies that the test database is properly configured
 	t.Logf("Attempting to connect with DATABASE_URL: %s", os.Getenv("DATABASE_URL"))
 
