@@ -378,7 +378,6 @@ func setupSchema(db *sql.DB) error {
 		}
 	}
 
-
 	// Set up Row Level Security policies
 	err = setupRLSPolicies(db)
 	if err != nil {

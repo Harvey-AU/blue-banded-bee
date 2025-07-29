@@ -11,16 +11,32 @@ The pipeline runs on every push to main branch.
    wget https://go.dev/dl/go1.25rc2.linux-amd64.tar.gz
    ```
 
-2. **Run Tests**
+2. **Code Quality Check** (golangci-lint v2.3.0)
    ```bash
-   go test -v -coverprofile=coverage.out ./... -json > test-output.json
+   # Runs 140+ linters for:
+   # - Security vulnerabilities (gosec)
+   # - Code formatting (gofmt, goimports)  
+   # - Performance issues (ineffassign)
+   # - Complexity analysis (gocyclo)
+   # - Best practices (errcheck)
+   ```
+   **Fast failure**: Stops pipeline immediately if quality issues found
+
+3. **Run Tests**
+   ```bash
+   # Unit tests
+   go test -v -coverprofile=coverage-unit.out -tags='!integration' ./...
+   
+   # Integration tests  
+   go test -v -coverprofile=coverage-integration.out -tags=integration ./... -json > test-output.json
    ```
 
-3. **Generate Reports**
+4. **Generate Reports**
    - JUnit XML for GitHub integration
    - Coverage report for Codecov
+   - Merged coverage from unit + integration tests
 
-4. **Deploy** (on success)
+5. **Deploy** (on success)
    - Deploys to Fly.io
 
 ### Key Configuration
@@ -41,9 +57,25 @@ Uses `TEST_DATABASE_URL` secret which must be a Supabase pooler URL for IPv4 sup
 ### Debugging CI Failures
 
 Check the workflow output for:
+
+**Linting Failures** (Step 2):
+- Code formatting issues → Run `go fmt ./...` locally
+- Security vulnerabilities → Review gosec warnings  
+- Unused variables → Clean up with `go vet ./...`
+- Complex functions → Refactor to reduce cyclomatic complexity
+
+**Test Failures** (Step 3):
 - Connection errors → Verify pooler URL format
 - Test failures → Check test output JSON
 - Coverage drops → Review Codecov report
+
+**Common Linting Issues**:
+```bash
+# Fix most common issues locally:
+go fmt ./...           # Formatting
+go vet ./...           # Basic static analysis
+go mod tidy            # Clean dependencies
+```
 
 ## Local CI Testing
 
