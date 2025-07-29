@@ -188,7 +188,7 @@ func (jm *JobManager) CreateJob(ctx context.Context, options *JobOptions) (*Job,
 					Err(err).
 					Str("domain", normalisedDomain).
 					Msg("Failed to fetch robots.txt for manual URL")
-				
+
 				// Update job with error
 				if updateErr := jm.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
 					_, err := tx.ExecContext(ctx, `
@@ -202,7 +202,7 @@ func (jm *JobManager) CreateJob(ctx context.Context, options *JobOptions) (*Job,
 				}
 				return job, fmt.Errorf("failed to fetch robots.txt: %w", err)
 			}
-			
+
 			// Parse robots.txt for filtering
 			robotsRules, err = crawler.ParseRobotsTxt(ctx, normalisedDomain, "BlueBandedBee/1.0")
 			if err != nil {
@@ -210,7 +210,7 @@ func (jm *JobManager) CreateJob(ctx context.Context, options *JobOptions) (*Job,
 					Err(err).
 					Str("domain", normalisedDomain).
 					Msg("Failed to parse robots.txt for manual URL")
-				
+
 				// Update job with error
 				if updateErr := jm.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
 					_, err := tx.ExecContext(ctx, `
@@ -233,7 +233,7 @@ func (jm *JobManager) CreateJob(ctx context.Context, options *JobOptions) (*Job,
 				Str("domain", normalisedDomain).
 				Str("path", rootPath).
 				Msg("Root path is disallowed by robots.txt, job cannot proceed")
-			
+
 			// Update job with error
 			if updateErr := jm.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
 				_, err := tx.ExecContext(ctx, `
