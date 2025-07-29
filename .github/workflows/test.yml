@@ -26,7 +26,7 @@ jobs:
         run: go version
 
       - name: Run golangci-lint
-        uses: golangci/golangci-lint-action@v6
+        uses: golangci/golangci-lint-action@v7
         with:
           version: v2.3.0 # Latest version that supports Go 1.25
           args: --timeout 5m
