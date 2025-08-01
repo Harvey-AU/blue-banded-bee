@@ -67,7 +67,8 @@
       "Bash(git rm:*)",
       "Bash(go tool cover:*)",
       "Bash(supabase migration:*)",
-      "Bash(git checkout:*)"
+      "Bash(git checkout:*)",
+      "mcp__supabase__get_logs"
     ],
     "deny": []
   },

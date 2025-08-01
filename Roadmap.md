@@ -462,10 +462,10 @@ Detailed plan available in [docs/organisation-model.md](docs/plans/organisation-
   - [x] Reorganise testing documentation into modular structure
   - [ ] **Implement Comprehensive API Testing** - [Post-Launch Plan](./docs/plans/api-testing-post-launch.md)
 - [ ] **Code Quality Improvement** - [Implementation Plan](./docs/plans/code-quality-improvement.md)
-  - [ ] Phase 1: Automated formatting and ineffectual assignments cleanup
+  - [x] Phase 1: Automated formatting and ineffectual assignments cleanup
   - [ ] Phase 2: Refactor high-complexity functions (WarmURL, getJobTasks, processSitemap)
-  - [ ] Add golangci-lint to CI/CD pipeline
-  - [ ] Improve Go Report Card score from C to A
+  - [?] Add golangci-lint to CI/CD pipeline - not compatible with 1.25rc2 wait for alignment
+  - [x] Improve Go Report Card score from C to A
 
 ### 🔴 Robots.txt Compliance Auditing
 
