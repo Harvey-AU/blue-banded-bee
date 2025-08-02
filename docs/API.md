@@ -20,7 +20,7 @@ This document defines the comprehensive API design for Blue Banded Bee's multi-i
 - `/v1/auth/register` - User registration
 - `/v1/auth/profile` - User profile (authenticated)
 - `/v1/auth/session` - Session validation
-- `/admin/reset-db` - Admin database reset (secured)
+- `/admin/reset-db` - Admin database reset (system administrators only)
 
 🔄 **Next Implementation Phase:**
 - Complete CRUD operations for jobs (cancel, retry)
@@ -623,6 +623,40 @@ GET /health
   }
 }
 ```
+
+### System Administrator Endpoints
+
+These endpoints require system administrator privileges. See [SECURITY.md](../SECURITY.md#system-administrator-role) for setup instructions.
+
+#### Database Reset (Development Only)
+```http
+POST /admin/reset-db
+Authorization: Bearer <jwt_token>
+```
+
+**Requirements:**
+- Valid JWT authentication
+- `system_role: "system_admin"` in user's `app_metadata`
+- `APP_ENV != "production"`
+- `ALLOW_DB_RESET=true` environment variable
+
+**Response (200):**
+```json
+{
+  "status": "success",
+  "data": null,
+  "message": "Database schema reset successfully",
+  "meta": {
+    "timestamp": "2023-05-18T12:34:56Z",
+    "version": "1.0.0"
+  }
+}
+```
+
+**Security Notes:**
+- Returns 404 in production environments
+- All reset actions are logged and tracked in Sentry
+- Only Blue Banded Bee operators should have system administrator access
 
 ## Error Handling
 
