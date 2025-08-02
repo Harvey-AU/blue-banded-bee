@@ -20,7 +20,7 @@ func (h *Handler) AdminResetDatabase(w http.ResponseWriter, r *http.Request) {
 	// Check if this is running in development environment
 	env := os.Getenv("APP_ENV")
 	if env == "production" {
-		NotFound(w, r) // Return 404 in production to hide the endpoint
+		NotFound(w, r, "Not found") // Return 404 in production to hide the endpoint
 		return
 	}
 
