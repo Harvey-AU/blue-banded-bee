@@ -106,7 +106,7 @@ func (h *Handler) AdminResetDatabase(w http.ResponseWriter, r *http.Request) {
 // This is distinct from organisation-level admin roles - system admins are Blue Banded Bee operators
 // who have elevated privileges for system-level operations like database resets
 func hasSystemAdminRole(claims *auth.UserClaims) bool {
-	if claims.AppMetadata == nil {
+	if claims == nil || claims.AppMetadata == nil {
 		return false
 	}
 
