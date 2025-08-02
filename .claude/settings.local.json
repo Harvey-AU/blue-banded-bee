@@ -1,4 +1,5 @@
 {
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
   "permissions": {
     "allow": [
       "Bash(go run:*)",
@@ -69,7 +70,11 @@
       "Bash(supabase migration:*)",
       "Bash(git checkout:*)",
       "mcp__supabase__get_logs",
-      "WebFetch(domain:supabase.com)"
+      "WebFetch(domain:supabase.com)",
+      "WebFetch(domain:www.implicator.ai)",
+      "mcp__supabase__list_projects",
+      "mcp__supabase__list_tables",
+      "mcp__supabase__execute_sql"
     ],
     "deny": []
   },
