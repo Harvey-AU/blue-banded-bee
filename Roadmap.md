@@ -413,7 +413,7 @@ Detailed plan available in [docs/organisation-model.md](docs/plans/organisation-
   - [ ] Test and refine multi-provider account linking
   - [ ] Member invitation system for organisations
 - [ ] **Audit & Security Features**
-  - [ ] Secure admin endpoints properly or remove them in production ([internal/api/admin.go:11,25](./internal/api/admin.go#L11))
+  - [x] Secure admin endpoints properly with system_role authentication ([internal/api/admin.go:11,25](./internal/api/admin.go#L11))
   - [ ] Login IP tracking and session limits
   - [ ] Active job limits per organisation
   - [ ] Audit logging for account changes and access history

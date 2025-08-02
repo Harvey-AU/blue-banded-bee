@@ -8,6 +8,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Multiple version updates may occur on the same date, each with its own version number.
 Each version represents a distinct set of changes, even if released on the same day.
 
+## [0.5.32] – 2025-08-02
+
+### Enhanced
+
+- **Admin Endpoint Security**: Implemented proper authentication for admin endpoints
+  - Added `system_role` authentication requirement for all admin endpoints (`/admin/*`)
+  - Admin endpoints now require `system_role` claim in JWT token for access
+  - Unauthorised access attempts properly rejected with 403 Forbidden responses
+  - Comprehensive test coverage added for admin authentication scenarios
+  - Security enhancement ensures admin functionality is protected in production
+
 ## [0.5.31] – 2025-07-28
 
 ### Added

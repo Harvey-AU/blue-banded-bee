@@ -68,9 +68,11 @@
       "Bash(go tool cover:*)",
       "Bash(supabase migration:*)",
       "Bash(git checkout:*)",
-      "mcp__supabase__get_logs"
+      "mcp__supabase__get_logs",
+      "WebFetch(domain:supabase.com)"
     ],
     "deny": []
   },
-  "enableAllProjectMcpServers": false
+  "enableAllProjectMcpServers": false,
+  "$schema": "https://json.schemastore.org/claude-code-settings.json"
 }
