@@ -74,7 +74,11 @@
       "Bash(flyctl logs:*)",
       "Bash(C:/Users/User/.fly/bin/flyctl.exe logs --app blue-banded-bee -n 50)",
       "Bash(C:/Users/User/.fly/bin/flyctl.exe logs --app blue-banded-bee)",
-      "Bash(supabase:*)"
+      "Bash(supabase:*)",      
+      "WebFetch(domain:www.implicator.ai)",
+      "mcp__supabase__list_projects",
+      "mcp__supabase__list_tables",
+      "mcp__supabase__execute_sql"
     ],
     "deny": []
   },
