@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/Harvey-AU/blue-banded-bee/internal/cache"
@@ -73,16 +74,26 @@ func New(config *Config) (*DB, error) {
 		config.SSLMode = "disable"
 	}
 	if config.MaxIdleConns == 0 {
-		config.MaxIdleConns = 30
+		config.MaxIdleConns = 50  // Increased from 30
 	}
 	if config.MaxOpenConns == 0 {
-		config.MaxOpenConns = 75
+		config.MaxOpenConns = 150  // Increased from 75 for 49 workers
 	}
 	if config.MaxLifetime == 0 {
-		config.MaxLifetime = 20 * time.Minute
+		config.MaxLifetime = 10 * time.Minute  // Reduced from 20 minutes
 	}
 
-	client, err := sql.Open("pgx", config.ConnectionString())
+	// Add statement timeout to connection string
+	connStr := config.ConnectionString()
+	if !strings.Contains(connStr, "statement_timeout") {
+		separator := "?"
+		if strings.Contains(connStr, "?") {
+			separator = "&"
+		}
+		connStr += separator + "statement_timeout=60000" // 60 seconds
+	}
+	
+	client, err := sql.Open("pgx", connStr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to PostgreSQL: %w", err)
 	}
@@ -91,6 +102,7 @@ func New(config *Config) (*DB, error) {
 	client.SetMaxOpenConns(config.MaxOpenConns)
 	client.SetMaxIdleConns(config.MaxIdleConns)
 	client.SetConnMaxLifetime(config.MaxLifetime)
+	client.SetConnMaxIdleTime(2 * time.Minute)  // Close idle connections after 2 minutes
 
 	// Test connection
 	if err := client.Ping(); err != nil {
@@ -114,11 +126,20 @@ func InitFromEnv() (*DB, error) {
 	if url := os.Getenv("DATABASE_URL"); url != "" {
 		config := &Config{
 			DatabaseURL:  url,
-			MaxIdleConns: 30,
-			MaxOpenConns: 75,
-			MaxLifetime:  20 * time.Minute,
+			MaxIdleConns: 50,   // Increased from 30
+			MaxOpenConns: 150,  // Increased from 75 for 49 workers  
+			MaxLifetime:  10 * time.Minute,  // Reduced from 20 minutes
 		}
 
+		// Add statement timeout to DATABASE_URL if not present
+		if !strings.Contains(url, "statement_timeout") {
+			separator := "?"
+			if strings.Contains(url, "?") {
+				separator = "&"
+			}
+			url += separator + "statement_timeout=60000" // 60 seconds
+		}
+		
 		client, err := sql.Open("pgx", url)
 		if err != nil {
 			return nil, fmt.Errorf("failed to connect to PostgreSQL via DATABASE_URL: %w", err)
@@ -128,6 +149,7 @@ func InitFromEnv() (*DB, error) {
 		client.SetMaxOpenConns(config.MaxOpenConns)
 		client.SetMaxIdleConns(config.MaxIdleConns)
 		client.SetConnMaxLifetime(config.MaxLifetime)
+		client.SetConnMaxIdleTime(2 * time.Minute)  // Close idle connections after 2 minutes
 
 		// Verify connection
 		if err := client.Ping(); err != nil {
