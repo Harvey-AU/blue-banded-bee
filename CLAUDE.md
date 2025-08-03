@@ -52,12 +52,12 @@ Only after completing ALL steps above, ask: "What would you like me to work on?"
 
 1. **CLAUDE.md** (this file) - Complete project guidance and workflow
 2. **README.md** - Project overview and quick start
-3. **docs/ARCHITECTURE.md** - System design and components
-4. **docs/DATABASE.md** - Schema and PostgreSQL features
-5. **docs/API.md** - RESTful API reference
-6. **docs/BRANCHING.md** - Git workflow and PR process
-7. **Roadmap.md** - Upcoming work and priorities
-8. **CHANGELOG.md** - Recent changes and releases
+3. **CHANGELOG.md** - Recent changes and releases
+4. **docs/ARCHITECTURE.md** - System design and components
+5. **docs/DATABASE.md** - Schema and PostgreSQL features
+6. **docs/API.md** - RESTful API reference
+7. **docs/BRANCHING.md** - Git workflow and PR process
+8. **Roadmap.md** - Upcoming work and priorities
 
 **Additional references as needed:**
 

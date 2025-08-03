@@ -1,4 +1,5 @@
 {
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
   "permissions": {
     "allow": [
       "Bash(go run:*)",
@@ -69,10 +70,13 @@
       "Bash(supabase migration:*)",
       "Bash(git checkout:*)",
       "mcp__supabase__get_logs",
-      "WebFetch(domain:supabase.com)"
+      "WebFetch(domain:supabase.com)",
+      "Bash(flyctl logs:*)",
+      "Bash(C:/Users/User/.fly/bin/flyctl.exe logs --app blue-banded-bee -n 50)",
+      "Bash(C:/Users/User/.fly/bin/flyctl.exe logs --app blue-banded-bee)",
+      "Bash(supabase:*)"
     ],
     "deny": []
   },
-  "enableAllProjectMcpServers": false,
-  "$schema": "https://json.schemastore.org/claude-code-settings.json"
+  "enableAllProjectMcpServers": false
 }
