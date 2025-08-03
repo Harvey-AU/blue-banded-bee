@@ -82,5 +82,6 @@
     ],
     "deny": []
   },
-  "enableAllProjectMcpServers": false
+  "enableAllProjectMcpServers": false,
+  "$schema": "https://json.schemastore.org/claude-code-settings.json"
 }
