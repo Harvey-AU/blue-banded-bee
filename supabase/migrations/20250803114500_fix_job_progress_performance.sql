@@ -100,6 +100,9 @@ CREATE TRIGGER trigger_update_job_counters
     FOR EACH ROW
     EXECUTE FUNCTION update_job_counters();
 
+-- Drop the existing function if it exists (may have different parameter names)
+DROP FUNCTION IF EXISTS recalculate_job_stats(TEXT);
+
 -- Create the missing recalculate function that the Go code expects
 CREATE OR REPLACE FUNCTION recalculate_job_stats(p_job_id TEXT) 
 RETURNS void AS $$
