@@ -2,12 +2,18 @@
 -- Instead of counting all tasks on every update, we increment/decrement counters
 
 -- First, ensure all job counters are accurate before switching to incremental updates
-UPDATE jobs j
-SET 
-    total_tasks = COALESCE((SELECT COUNT(*) FROM tasks WHERE job_id = j.id), 0),
-    completed_tasks = COALESCE((SELECT COUNT(*) FROM tasks WHERE job_id = j.id AND status = 'completed'), 0),
-    failed_tasks = COALESCE((SELECT COUNT(*) FROM tasks WHERE job_id = j.id AND status = 'failed'), 0),
-    skipped_tasks = COALESCE((SELECT COUNT(*) FROM tasks WHERE job_id = j.id AND status = 'skipped'), 0);
+-- This will only run if the jobs table exists and has data
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'jobs') THEN
+        UPDATE jobs j
+        SET 
+            total_tasks = COALESCE((SELECT COUNT(*) FROM tasks WHERE job_id = j.id), 0),
+            completed_tasks = COALESCE((SELECT COUNT(*) FROM tasks WHERE job_id = j.id AND status = 'completed'), 0),
+            failed_tasks = COALESCE((SELECT COUNT(*) FROM tasks WHERE job_id = j.id AND status = 'failed'), 0),
+            skipped_tasks = COALESCE((SELECT COUNT(*) FROM tasks WHERE job_id = j.id AND status = 'skipped'), 0);
+    END IF;
+END $$;
 
 -- Drop the old inefficient trigger
 DROP TRIGGER IF EXISTS trigger_update_job_progress ON tasks;
@@ -94,11 +100,16 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Create the new efficient trigger
-CREATE TRIGGER trigger_update_job_counters
-    AFTER INSERT OR UPDATE OF status OR DELETE ON tasks
-    FOR EACH ROW
-    EXECUTE FUNCTION update_job_counters();
+-- Create the new efficient trigger only if tasks table exists
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'tasks') THEN
+        CREATE TRIGGER trigger_update_job_counters
+            AFTER INSERT OR UPDATE OF status OR DELETE ON tasks
+            FOR EACH ROW
+            EXECUTE FUNCTION update_job_counters();
+    END IF;
+END $$;
 
 -- Drop the existing function if it exists (may have different parameter names)
 DROP FUNCTION IF EXISTS recalculate_job_stats(TEXT);
