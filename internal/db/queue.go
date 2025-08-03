@@ -25,6 +25,13 @@ func NewDbQueue(db *DB) *DbQueue {
 
 // Execute runs a database operation in a transaction
 func (q *DbQueue) Execute(ctx context.Context, fn func(*sql.Tx) error) error {
+	// Add timeout to context if none exists
+	if _, ok := ctx.Deadline(); !ok {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, 30*time.Second)
+		defer cancel()
+	}
+	
 	// Begin transaction
 	tx, err := q.db.client.BeginTx(ctx, nil)
 	if err != nil {
