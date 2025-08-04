@@ -86,11 +86,18 @@ func New(config *Config) (*DB, error) {
 	// Add statement timeout to connection string
 	connStr := config.ConnectionString()
 	if !strings.Contains(connStr, "statement_timeout") {
-		separator := "?"
-		if strings.Contains(connStr, "?") {
-			separator = "&"
+		// Check if we're using URL format or key=value format
+		if strings.HasPrefix(connStr, "postgres://") || strings.HasPrefix(connStr, "postgresql://") {
+			// URL format - use query parameters
+			separator := "?"
+			if strings.Contains(connStr, "?") {
+				separator = "&"
+			}
+			connStr += separator + "statement_timeout=60000" // 60 seconds
+		} else {
+			// Key=value format - append as another key=value pair
+			connStr += " statement_timeout=60000" // 60 seconds
 		}
-		connStr += separator + "statement_timeout=60000" // 60 seconds
 	}
 	
 	client, err := sql.Open("pgx", connStr)
