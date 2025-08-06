@@ -1522,13 +1522,25 @@
         // Initialize data binder
         await dataBinder.init();
 
+        // Check if user exists in backend on page load
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
+          await registerUserWithBackend(session.user);
+        }
+
         // Update user info in header
         updateUserInfo();
 
         // Set up auth state change listener to update user info
         if (supabase) {
-          supabase.auth.onAuthStateChange((event, session) => {
+          supabase.auth.onAuthStateChange(async (event, session) => {
             console.log("Auth state changed:", event, session?.user?.email);
+            
+            // Register user with backend on sign in (handles OAuth returns)
+            if ((event === 'SIGNED_IN' || event === 'USER_UPDATED') && session?.user) {
+              await registerUserWithBackend(session.user);
+            }
+            
             // Wait a moment for the data binder to update its auth manager
             setTimeout(updateUserInfo, 100);
           });
@@ -2899,6 +2911,10 @@
           if (error) throw error;
 
           console.log("Email login successful:", data.user.email);
+          
+          // Register user with backend (in case they don't exist)
+          await registerUserWithBackend(data.user);
+          
           closeAuthModal();
 
           // Update user info immediately
@@ -2953,7 +2969,10 @@
           if (data.user && !data.user.email_confirmed_at) {
             showAuthError("Please check your email and click the confirmation link before signing in.");
             showAuthForm("login");
-          } else {
+          } else if (data.user) {
+            // Register user with backend
+            await registerUserWithBackend(data.user);
+            
             closeAuthModal();
             // Update user info and refresh dashboard
             updateUserInfo();
@@ -2964,6 +2983,53 @@
           showAuthError(error.message || "Signup failed. Please try again.");
         } finally {
           hideAuthLoading();
+        }
+      }
+
+      // Register user with backend database
+      async function registerUserWithBackend(user) {
+        if (!user || !user.id || !user.email) {
+          console.error("Invalid user data for registration");
+          return false;
+        }
+
+        try {
+          const session = await supabase.auth.getSession();
+          if (!session.data.session) {
+            console.error("No session available for registration");
+            return false;
+          }
+
+          const response = await fetch("/v1/auth/register", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${session.data.session.access_token}`,
+            },
+            body: JSON.stringify({
+              user_id: user.id,
+              email: user.email,
+              full_name: user.user_metadata?.full_name || null,
+            }),
+          });
+
+          if (!response.ok) {
+            // If user already exists (409 Conflict), that's fine
+            if (response.status === 409) {
+              console.log("User already registered in backend");
+              return true;
+            }
+            const errorData = await response.json();
+            console.error("Backend registration failed:", errorData);
+            return false;
+          }
+
+          const data = await response.json();
+          console.log("User registered with backend:", data);
+          return true;
+        } catch (error) {
+          console.error("Failed to register user with backend:", error);
+          return false;
         }
       }
 
