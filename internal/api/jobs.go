@@ -101,10 +101,11 @@ func (h *Handler) listJobs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := h.DB.GetUser(userClaims.UserID)
+	// Auto-create user if they don't exist (handles new signups)
+	user, err := h.DB.GetOrCreateUser(userClaims.UserID, userClaims.Email, nil)
 	if err != nil {
-		log.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get user from database")
-		Unauthorised(w, r, "User not found")
+		log.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get or create user")
+		InternalError(w, r, err)
 		return
 	}
 
@@ -210,10 +211,11 @@ func (h *Handler) createJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := h.DB.GetUser(userClaims.UserID)
+	// Auto-create user if they don't exist (handles new signups)
+	user, err := h.DB.GetOrCreateUser(userClaims.UserID, userClaims.Email, nil)
 	if err != nil {
-		log.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get user from database")
-		Unauthorised(w, r, "User not found")
+		log.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get or create user")
+		InternalError(w, r, err)
 		return
 	}
 
@@ -280,10 +282,11 @@ func (h *Handler) getJob(w http.ResponseWriter, r *http.Request, jobID string) {
 		return
 	}
 
-	user, err := h.DB.GetUser(userClaims.UserID)
+	// Auto-create user if they don't exist (handles new signups)
+	user, err := h.DB.GetOrCreateUser(userClaims.UserID, userClaims.Email, nil)
 	if err != nil {
-		log.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get user from database")
-		Unauthorised(w, r, "User not found")
+		log.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get or create user")
+		InternalError(w, r, err)
 		return
 	}
 
@@ -349,10 +352,11 @@ func (h *Handler) updateJob(w http.ResponseWriter, r *http.Request, jobID string
 		return
 	}
 
-	user, err := h.DB.GetUser(userClaims.UserID)
+	// Auto-create user if they don't exist (handles new signups)
+	user, err := h.DB.GetOrCreateUser(userClaims.UserID, userClaims.Email, nil)
 	if err != nil {
-		log.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get user from database")
-		Unauthorised(w, r, "User not found")
+		log.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get or create user")
+		InternalError(w, r, err)
 		return
 	}
 
@@ -430,10 +434,11 @@ func (h *Handler) cancelJob(w http.ResponseWriter, r *http.Request, jobID string
 		return
 	}
 
-	user, err := h.DB.GetUser(userClaims.UserID)
+	// Auto-create user if they don't exist (handles new signups)
+	user, err := h.DB.GetOrCreateUser(userClaims.UserID, userClaims.Email, nil)
 	if err != nil {
-		log.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get user from database")
-		Unauthorised(w, r, "User not found")
+		log.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get or create user")
+		InternalError(w, r, err)
 		return
 	}
 
@@ -519,10 +524,11 @@ func (h *Handler) getJobTasks(w http.ResponseWriter, r *http.Request, jobID stri
 		return
 	}
 
-	user, err := h.DB.GetUser(userClaims.UserID)
+	// Auto-create user if they don't exist (handles new signups)
+	user, err := h.DB.GetOrCreateUser(userClaims.UserID, userClaims.Email, nil)
 	if err != nil {
-		log.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get user from database")
-		Unauthorised(w, r, "User not found")
+		log.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get or create user")
+		InternalError(w, r, err)
 		return
 	}
 
