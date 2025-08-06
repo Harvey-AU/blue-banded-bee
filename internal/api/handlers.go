@@ -299,14 +299,14 @@ func (h *Handler) WebflowWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Extract user ID from URL path: /v1/webhooks/webflow/USER_ID
+	// Extract webhook token from URL path: /v1/webhooks/webflow/WEBHOOK_TOKEN
 	pathParts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
 	if len(pathParts) < 4 || pathParts[3] == "" {
-		log.Error().Str("path", r.URL.Path).Msg("Webflow webhook missing user ID in URL")
-		BadRequest(w, r, "User ID required in URL path")
+		log.Error().Str("path", r.URL.Path).Msg("Webflow webhook missing token in URL")
+		BadRequest(w, r, "Webhook token required in URL path")
 		return
 	}
-	userID := pathParts[3]
+	webhookToken := pathParts[3]
 
 	// Parse webhook payload
 	var payload WebflowWebhookPayload
@@ -316,9 +316,18 @@ func (h *Handler) WebflowWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Get user from database using webhook token
+	user, err := h.DB.GetUserByWebhookToken(webhookToken)
+	if err != nil {
+		log.Error().Err(err).Str("webhook_token", webhookToken).Msg("Failed to get user by webhook token")
+		// Return 404 to avoid leaking information about valid tokens
+		NotFound(w, r, "Invalid webhook token")
+		return
+	}
+
 	// Log webhook received
 	log.Info().
-		Str("user_id", userID).
+		Str("user_id", user.ID).
 		Str("trigger_type", payload.TriggerType).
 		Str("published_by", payload.Payload.PublishedBy.DisplayName).
 		Strs("domains", payload.Payload.Domains).
@@ -340,14 +349,6 @@ func (h *Handler) WebflowWebhook(w http.ResponseWriter, r *http.Request) {
 
 	// Use the first domain in the list (primary/canonical domain)
 	selectedDomain := payload.Payload.Domains[0]
-
-	// Get user from database to find their organisation
-	user, err := h.DB.GetUser(userID)
-	if err != nil {
-		log.Error().Err(err).Str("user_id", userID).Msg("Failed to get user from database for webhook")
-		BadRequest(w, r, "Invalid user ID")
-		return
-	}
 
 	// Create job using shared logic with webhook defaults
 	useSitemap := true
@@ -375,7 +376,7 @@ func (h *Handler) WebflowWebhook(w http.ResponseWriter, r *http.Request) {
 	job, err := h.createJobFromRequest(r.Context(), user, req)
 	if err != nil {
 		log.Error().Err(err).
-			Str("user_id", userID).
+			Str("user_id", user.ID).
 			Str("domain", selectedDomain).
 			Msg("Failed to create job from webhook")
 		InternalError(w, r, err)
@@ -395,7 +396,7 @@ func (h *Handler) WebflowWebhook(w http.ResponseWriter, r *http.Request) {
 
 	log.Info().
 		Str("job_id", job.ID).
-		Str("user_id", userID).
+		Str("user_id", user.ID).
 		Str("org_id", orgIDStr).
 		Str("domain", selectedDomain).
 		Str("selected_from", strings.Join(payload.Payload.Domains, ", ")).
@@ -403,7 +404,7 @@ func (h *Handler) WebflowWebhook(w http.ResponseWriter, r *http.Request) {
 
 	WriteSuccess(w, r, map[string]interface{}{
 		"job_id":  job.ID,
-		"user_id": userID,
+		"user_id": user.ID,
 		"org_id":  orgIDStr,
 		"domain":  selectedDomain,
 		"status":  "created",
