@@ -51,6 +51,30 @@ func (db *DB) GetUser(userID string) (*User, error) {
 	return user, nil
 }
 
+// GetUserByWebhookToken retrieves a user by their webhook token
+func (db *DB) GetUserByWebhookToken(webhookToken string) (*User, error) {
+	user := &User{}
+
+	query := `
+		SELECT id, email, full_name, organisation_id, created_at, updated_at
+		FROM users
+		WHERE webhook_token = $1
+	`
+
+	err := db.client.QueryRow(query, webhookToken).Scan(
+		&user.ID, &user.Email, &user.FullName, &user.OrganisationID,
+		&user.CreatedAt, &user.UpdatedAt,
+	)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("user not found with webhook token")
+		}
+		return nil, fmt.Errorf("failed to get user by webhook token: %w", err)
+	}
+
+	return user, nil
+}
+
 // GetOrCreateUser retrieves a user by ID, creating them if they don't exist
 // This is used for auto-creating users from valid JWT tokens
 func (db *DB) GetOrCreateUser(userID, email string, fullName *string) (*User, error) {
