@@ -64,14 +64,14 @@ func (h *Handler) AuthRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	orgName := "Personal Organisation"
+	var orgName string
 
-	// 1. Org name if set
+	// 1. Org name if explicitly provided
 	if req.OrgName != nil && *req.OrgName != "" {
 		orgName = *req.OrgName
 	}
 
-	// 2. Domain name if not generic
+	// 2. Domain name if not generic (and org name not already set)
 	if orgName == "" {
 		result, err := verifier.Verify(req.Email)
 		if err != nil {
@@ -82,15 +82,21 @@ func (h *Handler) AuthRegister(w http.ResponseWriter, r *http.Request) {
 				domain := emailParts[1]
 				domainName := strings.Split(domain, ".")[0]
 				if len(domainName) > 0 {
-					orgName = domainName
+					// Capitalise first letter of domain name
+					orgName = strings.ToUpper(string(domainName[0])) + domainName[1:]
 				}
 			}
 		}
 	}
 
-	// 3. Person's full name
+	// 3. Person's full name as fallback
 	if orgName == "" && req.FullName != nil && *req.FullName != "" {
 		orgName = *req.FullName
+	}
+
+	// 4. Final default if nothing else worked
+	if orgName == "" {
+		orgName = "Personal Organisation"
 	}
 
 	// Create user with organisation automatically
