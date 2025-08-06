@@ -159,14 +159,11 @@ func (h *Handler) AuthProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := h.DB.GetUser(userClaims.UserID)
+	// Auto-create user if they don't exist
+	user, err := h.DB.GetOrCreateUser(userClaims.UserID, userClaims.Email, nil)
 	if err != nil {
-		if strings.Contains(err.Error(), "not found") {
-			NotFound(w, r, "User not found")
-			return
-		}
 		sentry.CaptureException(err)
-		log.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get user")
+		log.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get or create user")
 		InternalError(w, r, err)
 		return
 	}
