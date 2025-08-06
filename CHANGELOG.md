@@ -10,7 +10,15 @@ Each version represents a distinct set of changes, even if released on the same 
 
 ## [0.5.33] – 2025-08-06
 
+### Enhanced
+
+- **Webhook ID**: Created unique field on user for use in Webhook verification (Webflow) rather than using user ID
+
 ### Fixed
+
+- **Account creation**: New accounts weren't being created and org name was wrong
+  - Updated sign in or create account to create a new profile
+  - Fix logic to create org name based on domain
 
 - **Supabase / Github workflow**: Fixed schema issues with main vs. test-branch in supabase and github
   - Deleted all data from Supabase, including a gigantic job (abc.net.au) that was in an infinite loop and huge dataset and was just for testing.
@@ -18,15 +26,7 @@ Each version represents a distinct set of changes, even if released on the same 
   - Created new clean migration file for both branches
   - Setup preview branching for PRs in Github to apply migrations there for tests
 
-## [0.5.32] – 2025-08-01
-
-### Fixed
-
-- **Job Progress Counting**: Fixed database trigger causing completed_tasks to exceed total_tasks
-  - Updated `update_job_progress` trigger to recalculate total_tasks from actual task count
-  - Migration: `20250801113006_fix_update_job_progress_trigger_total_tasks.sql`
-
-## [0.5.32] – 2025-08-02
+## [0.5.33] – 2025-08-02
 
 ### Enhanced
 
@@ -36,6 +36,14 @@ Each version represents a distinct set of changes, even if released on the same 
   - Unauthorised access attempts properly rejected with 403 Forbidden responses
   - Comprehensive test coverage added for admin authentication scenarios
   - Security enhancement ensures admin functionality is protected in production
+
+## [0.5.32] – 2025-08-01
+
+### Fixed
+
+- **Job Progress Counting**: Fixed database trigger causing completed_tasks to exceed total_tasks
+  - Updated `update_job_progress` trigger to recalculate total_tasks from actual task count
+  - Migration: `20250801113006_fix_update_job_progress_trigger_total_tasks.sql`
 
 ## [0.5.31] – 2025-07-28
 
