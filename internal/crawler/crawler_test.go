@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 	"time"
 )
@@ -78,8 +79,8 @@ func TestPerformanceMetrics(t *testing.T) {
 
 func TestPerformanceMetricsWithRealURL(t *testing.T) {
 	// Skip in CI or if no internet connection
-	if testing.Short() {
-		t.Skip("Skipping test that requires internet connection")
+	if testing.Short() || os.Getenv("CI") != "" {
+		t.Skip("Skipping test that requires internet connection (unreliable in CI)")
 	}
 
 	// Use a real HTTPS URL to test DNS, TCP, and TLS metrics

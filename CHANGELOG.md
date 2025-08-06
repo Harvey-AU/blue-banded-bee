@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Multiple version updates may occur on the same date, each with its own version number.
 Each version represents a distinct set of changes, even if released on the same day.
 
+## [0.5.32] – 2025-08-01
+
+### Fixed
+
+- **Job Progress Counting**: Fixed database trigger causing completed_tasks to exceed total_tasks
+  - Updated `update_job_progress` trigger to recalculate total_tasks from actual task count
+  - Migration: `20250801113006_fix_update_job_progress_trigger_total_tasks.sql`
+
 ## [0.5.32] – 2025-08-02
 
 ### Enhanced
