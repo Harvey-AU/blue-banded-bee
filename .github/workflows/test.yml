@@ -33,7 +33,7 @@ jobs:
           
       - name: Run integration tests
         env:
-          DATABASE_URL: ${{ secrets.TEST_DATABASE_URL }}
+          DATABASE_URL: ${{ secrets.SUPABASE_DB_URL || secrets.TEST_DATABASE_URL }}
         run: |
           echo "=== Running Integration Tests ==="
           # Install tools for test reporting
