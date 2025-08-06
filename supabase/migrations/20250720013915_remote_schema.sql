@@ -1,2 +1,0 @@
--- Placeholder migration to match production history
--- This migration was applied directly to production before migration tracking was implemented
