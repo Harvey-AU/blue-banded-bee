@@ -10,6 +10,10 @@ Each version represents a distinct set of changes, even if released on the same 
 
 ## [0.5.33] – 2025-08-06
 
+### Enhanced
+
+- **Webhook ID**: Created unique field on user for use in Webhook verification (Webflow) rather than using user ID
+
 ### Fixed
 
 - **Account creation**: New accounts weren't being created and org name was wrong
