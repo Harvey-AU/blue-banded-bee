@@ -51,6 +51,37 @@ func (db *DB) GetUser(userID string) (*User, error) {
 	return user, nil
 }
 
+// GetOrCreateUser retrieves a user by ID, creating them if they don't exist
+// This is used for auto-creating users from valid JWT tokens
+func (db *DB) GetOrCreateUser(userID, email string, fullName *string) (*User, error) {
+	// First try to get the existing user
+	user, err := db.GetUser(userID)
+	if err == nil {
+		// User exists, return them
+		return user, nil
+	}
+	
+	// User doesn't exist, auto-create them with a default organisation
+	log.Info().
+		Str("user_id", userID).
+		Str("email", email).
+		Msg("Auto-creating user from JWT token")
+	
+	// Determine organisation name
+	orgName := "Personal Organisation"
+	if fullName != nil && *fullName != "" {
+		orgName = *fullName
+	}
+	
+	// Create the user
+	newUser, _, err := db.CreateUser(userID, email, fullName, orgName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to auto-create user: %w", err)
+	}
+	
+	return newUser, nil
+}
+
 // CreateOrganisation creates a new organisation
 func (db *DB) CreateOrganisation(name string) (*Organisation, error) {
 	org := &Organisation{
