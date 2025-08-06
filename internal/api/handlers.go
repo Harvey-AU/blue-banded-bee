@@ -144,11 +144,11 @@ func (h *Handler) DashboardStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get full user object from database
-	user, err := h.DB.GetUser(userClaims.UserID)
+	// Get full user object from database (auto-create if needed)
+	user, err := h.DB.GetOrCreateUser(userClaims.UserID, userClaims.Email, nil)
 	if err != nil {
-		log.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get user from database")
-		Unauthorised(w, r, "User not found")
+		log.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get or create user")
+		InternalError(w, r, err)
 		return
 	}
 
@@ -199,11 +199,11 @@ func (h *Handler) DashboardActivity(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get full user object from database
-	user, err := h.DB.GetUser(userClaims.UserID)
+	// Get full user object from database (auto-create if needed)
+	user, err := h.DB.GetOrCreateUser(userClaims.UserID, userClaims.Email, nil)
 	if err != nil {
-		log.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get user from database")
-		Unauthorised(w, r, "User not found")
+		log.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get or create user")
+		InternalError(w, r, err)
 		return
 	}
 
