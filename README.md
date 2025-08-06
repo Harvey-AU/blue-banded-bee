@@ -66,10 +66,12 @@ See our [detailed roadmap](./Roadmap.md) for more information.
 
 ## What's New
 
-- **Webflow Webhook Integration (v0.5.11)**: Automatically trigger cache warming jobs when a Webflow site is published, ensuring your cache is always fresh.
-- **Advanced Task Prioritisation (v0.5.19)**: Intelligently prioritises URLs, crawling critical homepage and header links first to warm the most important parts of your site immediately.
+- **Throttling avoidance (v0.5.31)**: Comply with robots.txt avoid and timing, and if crawler is running too fast for a domain slow down until errors subside
 - **Enhanced Performance (v0.5.22)**: Switched to the high-performance `pgx` database driver and added in-memory caching for page lookups to dramatically speed up job processing.
+- **Advanced Task Prioritisation (v0.5.19)**: Intelligently prioritises URLs, crawling critical homepage and header links first to warm the most important parts of your site immediately.
 - **Smarter Crawling (v0.5.18)**: The crawler now performs comprehensive visibility checks to avoid processing hidden links, reducing unnecessary work.
+- **Webflow Webhook Integration (v0.5.11)**: Automatically trigger cache warming jobs when a Webflow site is published, ensuring your cache is always fresh.
+- **Go 1.25 update**: Maybe wild, stupid, but went for it to utilise a few features and see how it goes.
 
 ## Tech Stack
 
