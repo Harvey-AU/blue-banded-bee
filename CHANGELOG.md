@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Multiple version updates may occur on the same date, each with its own version number.
 Each version represents a distinct set of changes, even if released on the same day.
 
+## [0.5.33] – 2025-08-06
+
+### Fixed
+
+- **Supabase / Github workflow**: Fixed schema issues with main vs. test-branch in supabase and github
+  - Deleted all data from Supabase, including a gigantic job (abc.net.au) that was in an infinite loop and huge dataset and was just for testing.
+  - Deleted all migrations
+  - Created new clean migration file for both branches
+  - Setup preview branching for PRs in Github to apply migrations there for tests
+
 ## [0.5.32] – 2025-08-01
 
 ### Fixed
