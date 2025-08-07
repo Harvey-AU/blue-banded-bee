@@ -25,6 +25,7 @@ go tool cover -html=coverage.out
 
 ## Documentation
 
+- [Test Plan](../TEST_PLAN.md) - Testing requirements checklist and coverage gaps
 - [Setup Guide](setup.md) - Configure test environment
 - [Writing Tests](writing-tests.md) - Guidelines and patterns
 - [CI/CD Pipeline](ci-cd.md) - GitHub Actions configuration

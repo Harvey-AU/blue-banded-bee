@@ -96,10 +96,11 @@ The project uses comprehensive automated testing with real database integration:
 
 ### Core Documentation
 
-- **[Architecture](docs/ARCHITECTURE.md)** - System design, components, worker pools, job lifecycle, and technical concepts
-- **[Development Guide](docs/DEVELOPMENT.md)** - Setup, local development, testing, debugging, and contributing guidelines
-- **[API Reference](docs/API.md)** - Complete REST API endpoints, authentication, and response formats
-- **[Database Reference](docs/DATABASE.md)** - PostgreSQL schema, queries, performance optimisation, and operations
+- **[Architecture](docs/architecture/ARCHITECTURE.md)** - System design, components, worker pools, job lifecycle, and technical concepts
+- **[Development Guide](docs/development/DEVELOPMENT.md)** - Setup, local development, testing, debugging, and contributing guidelines
+- **[API Reference](docs/architecture/API.md)** - Complete REST API endpoints, authentication, and response formats
+- **[Database Reference](docs/architecture/DATABASE.md)** - PostgreSQL schema, queries, performance optimisation, and operations
+- **[Test Plan](docs/TEST_PLAN.md)** - Testing requirements checklist and coverage gaps
 - **[Testing Guide](docs/testing/README.md)** - Comprehensive testing strategy, CI/CD setup, and troubleshooting
 - **[Flight Recorder](docs/flight-recorder.md)** - Performance debugging with Go's built-in flight recorder
 
