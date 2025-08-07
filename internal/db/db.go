@@ -55,18 +55,20 @@ func (c *Config) ConnectionString() string {
 
 // New creates a new PostgreSQL database connection
 func New(config *Config) (*DB, error) {
-	// Validate required fields
-	if config.Host == "" {
-		return nil, fmt.Errorf("database host is required")
-	}
-	if config.Port == "" {
-		return nil, fmt.Errorf("database port is required")
-	}
-	if config.User == "" {
-		return nil, fmt.Errorf("database user is required")
-	}
-	if config.Database == "" {
-		return nil, fmt.Errorf("database name is required")
+	// Validate required fields only if not using DATABASE_URL
+	if config.DatabaseURL == "" {
+		if config.Host == "" {
+			return nil, fmt.Errorf("database host is required")
+		}
+		if config.Port == "" {
+			return nil, fmt.Errorf("database port is required")
+		}
+		if config.User == "" {
+			return nil, fmt.Errorf("database user is required")
+		}
+		if config.Database == "" {
+			return nil, fmt.Errorf("database name is required")
+		}
 	}
 
 	// Set defaults for optional fields
