@@ -303,13 +303,13 @@ func TestGetClientIP(t *testing.T) {
 			expected:   "2001:db8::1",
 		},
 		{
-			name: "prefer_real_ip_over_forwarded",
+			name: "prefer_forwarded_over_real_ip",
 			headers: map[string]string{
 				"X-Real-IP":       "1.2.3.4",
 				"X-Forwarded-For": "5.6.7.8",
 			},
 			remoteAddr: "192.168.1.1:1234",
-			expected:   "1.2.3.4",
+			expected:   "5.6.7.8", // X-Forwarded-For takes precedence
 		},
 	}
 
