@@ -343,6 +343,13 @@ Detailed plan available in [docs/organisation-model.md](docs/plans/organisation-
 
 ## ⚪ Stage 5: Subscriptions & Monetisation
 
+### 🔴 Testing & Quality
+
+- [ ] **Comprehensive Test Coverage** - See [TEST_PLAN.md](docs/TEST_PLAN.md)
+  - [ ] Achieve 80% unit test coverage
+  - [ ] Implement critical integration tests
+  - [ ] Add performance benchmarks
+
 ### 🔴 Payment Infrastructure
 
 - [ ] **Paddle Integration**
