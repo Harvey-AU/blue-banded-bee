@@ -1,4 +1,5 @@
 #!/bin/bash
+set -euo pipefail
 
 # Tests now automatically load from .env.test via testutil.LoadTestEnv()
 

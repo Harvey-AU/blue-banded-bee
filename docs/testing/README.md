@@ -40,4 +40,14 @@ go tool cover -html=coverage.out
 
 ## Current Coverage
 
+Overall: **23.5%** (as of 2025-08-08)
+
+Key packages:
+- `internal/cache`: 100% ✅
+- `internal/util`: 81.1% ✅
+- `internal/crawler`: 63.2% ⚠️
+- `internal/api`: 34.5% ⚠️
+- `internal/db`: 14.3% ❌ (improved from 10.5%)
+- `internal/jobs`: 5.0% ❌ (improved from 1.1%)
+
 See [Codecov dashboard](https://codecov.io/github/harvey-au/blue-banded-bee) for detailed coverage reports.
