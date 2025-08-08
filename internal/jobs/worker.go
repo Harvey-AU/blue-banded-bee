@@ -167,11 +167,13 @@ func (wp *WorkerPool) Start(ctx context.Context) {
 }
 
 func (wp *WorkerPool) Stop() {
-	wp.stopping.Store(true)
-	log.Debug().Msg("Stopping worker pool")
-	close(wp.stopCh)
-	wp.wg.Wait()
-	log.Debug().Msg("Worker pool stopped")
+	// Only stop once - use atomic compare-and-swap to ensure thread safety
+	if wp.stopping.CompareAndSwap(false, true) {
+		log.Debug().Msg("Stopping worker pool")
+		close(wp.stopCh)
+		wp.wg.Wait()
+		log.Debug().Msg("Worker pool stopped")
+	}
 }
 
 // WaitForJobs waits for all active jobs to complete
