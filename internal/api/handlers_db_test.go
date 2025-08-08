@@ -20,7 +20,7 @@ func TestDatabaseHealthCheck_WithSqlMock(t *testing.T) {
 		name           string
 		setupMock      func(sqlmock.Sqlmock)
 		expectedStatus int
-		expectedBody   map[string]interface{}
+		expectedBody   map[string]any
 	}{
 		{
 			name: "healthy database",
@@ -29,7 +29,7 @@ func TestDatabaseHealthCheck_WithSqlMock(t *testing.T) {
 				mock.ExpectPing()
 			},
 			expectedStatus: http.StatusOK,
-			expectedBody: map[string]interface{}{
+			expectedBody: map[string]any{
 				"status":  "healthy",
 				"service": "postgresql",
 			},
@@ -41,7 +41,7 @@ func TestDatabaseHealthCheck_WithSqlMock(t *testing.T) {
 				mock.ExpectPing().WillReturnError(sql.ErrConnDone)
 			},
 			expectedStatus: http.StatusServiceUnavailable,
-			expectedBody: map[string]interface{}{
+			expectedBody: map[string]any{
 				"status":  "unhealthy",
 				"service": "postgresql",
 				"error":   "sql: connection is already closed",
@@ -79,7 +79,7 @@ func TestDatabaseHealthCheck_WithSqlMock(t *testing.T) {
 			assert.Equal(t, tt.expectedStatus, rec.Code)
 
 			// Check response body
-			var response map[string]interface{}
+			var response map[string]any
 			err = json.Unmarshal(rec.Body.Bytes(), &response)
 			require.NoError(t, err)
 
