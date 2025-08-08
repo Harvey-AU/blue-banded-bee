@@ -60,9 +60,8 @@ func TestCompleteJobProcessingFlow(t *testing.T) {
 			jobID := uuid.New().String()
 			job := &Job{
 				ID:        jobID,
-				DomainID:  uuid.New().String(),
-				Status:    StatusPending,
-				Type:      tt.jobType,
+				Domain:    "example.com",
+				Status:    JobStatusPending,
 				CreatedAt: time.Now(),
 			}
 			
@@ -70,11 +69,12 @@ func TestCompleteJobProcessingFlow(t *testing.T) {
 			tasks := make([]*Task, tt.tasks)
 			for i := 0; i < tt.tasks; i++ {
 				tasks[i] = &Task{
-					ID:        uuid.New().String(),
-					JobID:     jobID,
-					URL:       "https://example.com/page" + string(rune(i)),
-					Status:    StatusPending,
-					CreatedAt: time.Now(),
+					ID:         uuid.New().String(),
+					JobID:      jobID,
+					Path:       "/page" + string(rune(i)),
+					DomainName: "example.com",
+					Status:     TaskStatusPending,
+					CreatedAt:  time.Now(),
 				}
 			}
 			
@@ -82,29 +82,26 @@ func TestCompleteJobProcessingFlow(t *testing.T) {
 			processed := 0
 			for _, task := range tasks {
 				// Simulate task processing
-				task.Status = StatusRunning
-				task.StartedAt = &time.Time{}
-				*task.StartedAt = time.Now()
+				task.Status = TaskStatusRunning
+				task.StartedAt = time.Now()
 				
 				// Simulate work
 				time.Sleep(10 * time.Millisecond)
 				
 				// Mark complete
-				task.Status = StatusCompleted
-				task.CompletedAt = &time.Time{}
-				*task.CompletedAt = time.Now()
+				task.Status = TaskStatusCompleted
+				task.CompletedAt = time.Now()
 				processed++
 			}
 			
 			assert.Equal(t, tt.expectedTasks, processed, tt.description)
 			
 			// Verify job completion
-			job.Status = StatusCompleted
-			job.CompletedAt = &time.Time{}
-			*job.CompletedAt = time.Now()
+			job.Status = JobStatusCompleted
+			job.CompletedAt = time.Now()
 			
-			assert.Equal(t, StatusCompleted, job.Status)
-			assert.NotNil(t, job.CompletedAt)
+			assert.Equal(t, JobStatusCompleted, job.Status)
+			assert.NotZero(t, job.CompletedAt)
 			
 			_ = ctx // Use context
 		})
@@ -162,9 +159,8 @@ func TestWebhookTriggeredJobCreation(t *testing.T) {
 				// Create job from webhook
 				job := Job{
 					ID:        uuid.New().String(),
-					DomainID:  domain,
-					Status:    StatusPending,
-					Type:      "crawl",
+					Domain:    domain,
+					Status:    JobStatusPending,
 					CreatedAt: time.Now(),
 				}
 				jobs = append(jobs, job)
@@ -182,38 +178,38 @@ func TestWebhookTriggeredJobCreation(t *testing.T) {
 func TestJobRetryOnFailure(t *testing.T) {
 	tests := []struct {
 		name          string
-		initialStatus string
+		initialStatus TaskStatus
 		failureType   string
 		maxRetries    int
 		expectedRetries int
-		finalStatus   string
+		finalStatus   TaskStatus
 		description   string
 	}{
 		{
 			name:          "transient_failure_retry",
-			initialStatus: StatusRunning,
+			initialStatus: TaskStatusRunning,
 			failureType:   "timeout",
 			maxRetries:    3,
 			expectedRetries: 1,
-			finalStatus:   StatusCompleted,
+			finalStatus:   TaskStatusCompleted,
 			description:   "Transient failures should retry",
 		},
 		{
 			name:          "permanent_failure_no_retry",
-			initialStatus: StatusRunning,
+			initialStatus: TaskStatusRunning,
 			failureType:   "404",
 			maxRetries:    3,
 			expectedRetries: 0,
-			finalStatus:   StatusFailed,
+			finalStatus:   TaskStatusFailed,
 			description:   "Permanent failures should not retry",
 		},
 		{
 			name:          "max_retries_exceeded",
-			initialStatus: StatusRunning,
+			initialStatus: TaskStatusRunning,
 			failureType:   "timeout",
 			maxRetries:    3,
 			expectedRetries: 3,
-			finalStatus:   StatusFailed,
+			finalStatus:   TaskStatusFailed,
 			description:   "Should fail after max retries",
 		},
 	}
@@ -225,29 +221,29 @@ func TestJobRetryOnFailure(t *testing.T) {
 				JobID:      uuid.New().String(),
 				Status:     tt.initialStatus,
 				RetryCount: 0,
-				MaxRetries: tt.maxRetries,
 			}
+			maxRetries := tt.maxRetries
 			
 			// Simulate failures and retries
 			for i := 0; i < tt.expectedRetries; i++ {
 				task.RetryCount++
-				if task.RetryCount < task.MaxRetries {
-					task.Status = StatusPending // Back to queue
+				if task.RetryCount < maxRetries {
+					task.Status = TaskStatusPending // Back to queue
 				} else {
-					task.Status = StatusFailed
+					task.Status = TaskStatusFailed
 					break
 				}
 			}
 			
 			// Simulate final processing
-			if tt.finalStatus == StatusCompleted && task.Status != StatusFailed {
-				task.Status = StatusCompleted
-			} else if task.Status != StatusCompleted {
+			if tt.finalStatus == TaskStatusCompleted && task.Status != TaskStatusFailed {
+				task.Status = TaskStatusCompleted
+			} else if task.Status != TaskStatusCompleted {
 				task.Status = tt.finalStatus
 			}
 			
 			assert.Equal(t, tt.finalStatus, task.Status, tt.description)
-			assert.LessOrEqual(t, task.RetryCount, task.MaxRetries, "Should not exceed max retries")
+			assert.LessOrEqual(t, task.RetryCount, maxRetries, "Should not exceed max retries")
 		})
 	}
 }
@@ -258,7 +254,7 @@ func TestJobCancellationMidProcess(t *testing.T) {
 		tasksTotal    int
 		tasksCompleted int
 		cancelAt      int
-		expectedStatus string
+		expectedStatus JobStatus
 		description   string
 	}{
 		{
@@ -266,7 +262,7 @@ func TestJobCancellationMidProcess(t *testing.T) {
 			tasksTotal:    10,
 			tasksCompleted: 0,
 			cancelAt:      0,
-			expectedStatus: StatusCancelled,
+			expectedStatus: JobStatusCancelled,
 			description:   "Cancel before processing starts",
 		},
 		{
@@ -274,7 +270,7 @@ func TestJobCancellationMidProcess(t *testing.T) {
 			tasksTotal:    10,
 			tasksCompleted: 5,
 			cancelAt:      5,
-			expectedStatus: StatusCancelled,
+			expectedStatus: JobStatusCancelled,
 			description:   "Cancel during processing",
 		},
 		{
@@ -282,7 +278,7 @@ func TestJobCancellationMidProcess(t *testing.T) {
 			tasksTotal:    10,
 			tasksCompleted: 9,
 			cancelAt:      9,
-			expectedStatus: StatusCancelled,
+			expectedStatus: JobStatusCancelled,
 			description:   "Cancel near completion",
 		},
 	}
@@ -293,7 +289,7 @@ func TestJobCancellationMidProcess(t *testing.T) {
 			
 			job := &Job{
 				ID:     uuid.New().String(),
-				Status: StatusRunning,
+				Status: JobStatusRunning,
 			}
 			
 			tasks := make([]*Task, tt.tasksTotal)
@@ -301,7 +297,7 @@ func TestJobCancellationMidProcess(t *testing.T) {
 				tasks[i] = &Task{
 					ID:     uuid.New().String(),
 					JobID:  job.ID,
-					Status: StatusPending,
+					Status: TaskStatusPending,
 				}
 			}
 			
@@ -316,7 +312,7 @@ func TestJobCancellationMidProcess(t *testing.T) {
 				case <-ctx.Done():
 					break
 				default:
-					tasks[i].Status = StatusCompleted
+					tasks[i].Status = TaskStatusCompleted
 					tt.tasksCompleted++
 				}
 			}
@@ -411,10 +407,11 @@ func TestCrawlerIntegration(t *testing.T) {
 		case "/page2":
 			w.Write([]byte(`<html><body><h1>Page 2</h1></body></html>`))
 		case "/sitemap.xml":
+			testServer := r.Host
 			w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>
 				<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-					<url><loc>` + server.URL + `/page1</loc></url>
-					<url><loc>` + server.URL + `/page2</loc></url>
+					<url><loc>http://` + testServer + `/page1</loc></url>
+					<url><loc>http://` + testServer + `/page2</loc></url>
 				</urlset>`))
 		default:
 			w.WriteHeader(http.StatusNotFound)
@@ -499,7 +496,7 @@ func (m *MockDB) GetJob(ctx context.Context, id string) (*Job, error) {
 	return args.Get(0).(*Job), args.Error(1)
 }
 
-func (m *MockDB) UpdateJobStatus(ctx context.Context, id string, status string) error {
+func (m *MockDB) UpdateJobStatus(ctx context.Context, id string, status JobStatus) error {
 	args := m.Called(ctx, id, status)
 	return args.Error(0)
 }
@@ -519,8 +516,8 @@ func TestJobManagerWithMockDB(t *testing.T) {
 	// Test job creation
 	job := &Job{
 		ID:       uuid.New().String(),
-		DomainID: "example.com",
-		Status:   StatusPending,
+		Domain:   "example.com",
+		Status:   JobStatusPending,
 	}
 	
 	mockDB.On("CreateJob", ctx, job).Return(nil)
@@ -534,8 +531,8 @@ func TestJobManagerWithMockDB(t *testing.T) {
 	assert.Equal(t, job.ID, retrievedJob.ID)
 	
 	// Test status update
-	mockDB.On("UpdateJobStatus", ctx, job.ID, StatusRunning).Return(nil)
-	err = mockDB.UpdateJobStatus(ctx, job.ID, StatusRunning)
+	mockDB.On("UpdateJobStatus", ctx, job.ID, JobStatusRunning).Return(nil)
+	err = mockDB.UpdateJobStatus(ctx, job.ID, JobStatusRunning)
 	require.NoError(t, err)
 	
 	// Test getting pending jobs
