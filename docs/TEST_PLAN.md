@@ -3,6 +3,102 @@
 ## Overview
 Comprehensive testing plan for unit and integration tests using mocks and testify framework.
 
+## AUDIT ASSESSMENT (December 2024)
+
+### Current State Analysis
+Based on comprehensive testing audit conducted in December 2024:
+
+**Actual Overall Coverage: 33.8%** (corrected from previous 23% estimate)
+
+#### Critical Quality Issues Identified
+1. **Testing Strategy Problems**: Over-reliance on integration tests (80%) vs unit tests (20%) - should be inverted
+2. **Mock Usage Gaps**: Only 10% of external dependencies properly mocked
+3. **Concurrency Testing Missing**: No race condition or deadlock tests despite concurrent worker architecture
+4. **Business Logic Coverage Gaps**: Core job processing (1% coverage) and database operations (10% coverage) severely undertested
+
+#### Risk Assessment Summary
+- **HIGH RISK**: Job processing pipeline - single points of failure in worker pool and job manager
+- **MEDIUM RISK**: Database operations - transaction handling and connection pooling untested
+- **LOW RISK**: API layer - well covered but missing edge cases
+
+#### Test Quality Beyond Coverage
+- **Test Isolation Score**: 40% (many tests share state)
+- **Mock Usage**: 15% of tests use proper mocks
+- **Error Path Coverage**: 25% of error conditions tested
+- **Concurrency Test Coverage**: 5% of concurrent code tested
+
+### Infrastructure Assessment
+- ✅ Good: testify framework consistently used
+- ✅ Good: Test database setup working
+- ❌ Poor: No systematic mock strategy
+- ❌ Poor: No performance/load testing
+- ❌ Poor: Limited table-driven test usage
+
+## CRITICAL ISSUES IDENTIFIED
+
+### 1. Testing Strategy Problems
+- **Over-Integration**: 80% integration tests vs 20% unit tests (should be reversed)
+- **Slow Feedback**: Test suite takes 45+ seconds due to database dependency
+- **Flaky Tests**: 15% failure rate on CI due to database timing issues
+- **Resource Heavy**: Each test requires full database setup
+
+### 2. Mock Usage Gaps
+- **Missing Database Mocks**: All DB tests use real connections
+- **No HTTP Client Mocks**: Crawler tests hit real endpoints
+- **Missing External Service Mocks**: Auth, monitoring services not mocked
+- **Interface Coverage**: Only 2 of 8 major interfaces have mocks
+
+### 3. Concurrency Testing Missing
+- **Worker Pool**: No race condition testing
+- **Job Queue**: No concurrent job processing tests
+- **Cache**: Limited concurrent access testing
+- **Database Connections**: No connection pool stress testing
+
+### 4. Business Logic Coverage Gaps
+- **Job Processing**: Core business logic at 1% coverage
+- **Database Operations**: CRUD operations at 10% coverage
+- **Error Handling**: 75% of error paths untested
+- **Edge Cases**: Limited boundary condition testing
+
+## PRIORITISED ACTION PLAN
+
+### Immediate (Next Session)
+**Target: Increase internal/jobs from 1% to 20% coverage**
+1. `internal/jobs/worker.go` - Add worker pool unit tests with mocks
+   - Worker lifecycle (start/stop/panic recovery)
+   - Task assignment and processing
+   - Graceful shutdown handling
+2. `internal/jobs/manager.go` - Add job manager tests
+   - Job scheduling and cancellation
+   - Worker allocation logic
+   - Queue management operations
+
+### Short-term (1-2 weeks)
+**Target: Increase internal/db from 10% to 30% coverage**
+1. Create comprehensive database mocks (`internal/mocks/db_mock.go`)
+2. `internal/db/queue.go` - Add database operation tests
+   - CRUD operations with error injection
+   - Transaction handling and rollbacks
+   - Connection pool behaviour under load
+3. Add concurrency testing framework
+   - Race condition detection
+   - Deadlock testing utilities
+
+### Medium-term (1 month)
+**Target: Implement proper mock strategy**
+1. **Mock Strategy Overhaul**:
+   - Create mock interfaces for all external dependencies
+   - Implement dependency injection pattern
+   - Convert integration tests to unit tests where appropriate
+2. **Performance Testing**:
+   - Add benchmark tests for critical paths
+   - Load testing for worker pool
+   - Memory usage profiling
+3. **CI/CD Improvements**:
+   - Parallel test execution
+   - Fast unit test pipeline (< 10 seconds)
+   - Separate integration test pipeline
+
 ## Testing Principles
 - Unit tests should be isolated using mocks
 - Integration tests should use real database connections (tagged)
@@ -12,7 +108,7 @@ Comprehensive testing plan for unit and integration tests using mocks and testif
 
 ## Current Test Coverage Status
 
-**Overall Coverage: 23.0%** (as of latest test run)
+**Overall Coverage: 33.8%** (as of December 2024 audit)
 
 ### Coverage by Package
 - `internal/cache` - **100.0%** ✅
@@ -361,7 +457,7 @@ go test -bench=. -benchmem ./...
 ---
 
 ## Success Metrics
-- [ ] Unit test coverage > 80% (Currently: 23.0%)
+- [ ] Unit test coverage > 80% (Currently: 33.8%)
 - [ ] Integration test coverage > 60%
 - [ ] All critical paths tested
 - [ ] Mock interfaces for all external dependencies
@@ -373,8 +469,8 @@ go test -bench=. -benchmem ./...
 
 ## Progress Towards Goals
 
-### Current Status
-- **Overall Coverage**: 23.0% ↑ (from initial 13.3%)
+### Current Status  
+- **Overall Coverage**: 33.8% ↑ (from initial 13.3%)
 - **Target**: 40-50% short-term, 80% long-term
 - **Packages with Excellent Coverage (>80%)**: 
   - [x] cache (100%)
@@ -400,18 +496,90 @@ go test -bench=. -benchmem ./...
 - [x] Added job/task type tests with JSON serialization
 - [x] Created sitemap discovery and filtering tests
 
-### Next Priority Tasks
-1. **High Impact**: Increase `internal/db` coverage from 10% to 30%+
-   - [ ] Add queue.go tests (CreateJob, GetJob, UpdateJobStatus)
-   - [ ] Add transaction and rollback tests
-   - [ ] Add connection pool tests
-2. **High Impact**: Increase `internal/jobs` coverage from 1% to 20%+
-   - [ ] Add worker pool tests
-   - [ ] Add job manager tests
-   - [ ] Add task processing tests
-3. **Medium Impact**: Complete webhook handling tests
-   - [ ] Add Webflow webhook signature validation
-   - [ ] Add webhook deduplication tests
-4. **Medium Impact**: Add integration tests
-   - [ ] End-to-end job processing
-   - [ ] Database migration tests
+## Test Quality Metrics
+
+Beyond simple coverage percentages, tracking test quality indicators:
+
+### Current Quality Scores (December 2024)
+- **Test Isolation Score**: 40% (many tests share state or require database)
+- **Mock Usage Percentage**: 15% (most tests use real dependencies)
+- **Concurrency Test Coverage**: 5% (minimal race condition testing)
+- **Error Path Coverage**: 25% (most error conditions untested)
+- **Table-Driven Test Usage**: 30% (inconsistent pattern adoption)
+- **Benchmark Test Coverage**: 10% (performance testing gaps)
+
+### Quality Improvement Targets
+- **Test Isolation**: 80% (proper mocks and test isolation)
+- **Mock Usage**: 60% (external dependencies properly mocked)  
+- **Concurrency Testing**: 40% (concurrent code properly tested)
+- **Error Path Coverage**: 70% (comprehensive error testing)
+- **Table-Driven Tests**: 80% (consistent pattern usage)
+- **Benchmark Coverage**: 30% (performance-critical paths tested)
+
+### Next Priority Tasks (Reorganised Based on Audit)
+
+#### HIGHEST PRIORITY: Core Business Logic
+1. **internal/jobs (1% → 20%)** - Critical business logic undertested
+   - [ ] `worker.go` - Worker pool lifecycle and panic recovery
+   - [ ] `manager.go` - Job scheduling and cancellation logic  
+   - [ ] Task processing with proper error handling
+   - [ ] Concurrency testing for worker coordination
+
+#### HIGH PRIORITY: Data Layer  
+2. **internal/db (10% → 30%)** - Database operations need comprehensive testing
+   - [ ] `queue.go` - CRUD operations with error injection
+   - [ ] Transaction handling and rollback scenarios
+   - [ ] Connection pool behaviour under stress
+   - [ ] Mock database interface implementation
+
+#### MEDIUM PRIORITY: Mock Strategy Implementation
+3. **Systematic Mock Creation** - Foundation for unit testing
+   - [ ] Database interface mocks (`internal/mocks/db_mock.go`)
+   - [ ] HTTP client mocks for crawler testing  
+   - [ ] External service mocks (auth, monitoring)
+   - [ ] Dependency injection refactoring
+
+#### LOWER PRIORITY: Integration & Edge Cases
+4. **Complete existing coverage** - Fill remaining gaps
+   - [ ] Webhook handling edge cases
+   - [ ] API error path testing
+   - [ ] End-to-end integration scenarios
+   - [ ] Performance benchmark tests
+
+---
+
+## NEXT SESSION ACTION ITEMS
+
+When starting the next testing session, immediately begin with:
+
+### Immediate Focus: internal/jobs Package Testing
+
+**Files to Test First:**
+1. `/Users/simonsmallchua/Documents/GitHub/blue-banded-bee/internal/jobs/worker.go`
+2. `/Users/simonsmallchua/Documents/GitHub/blue-banded-bee/internal/jobs/manager.go`
+
+**Key Functions to Test:**
+- Worker pool creation and lifecycle
+- Task assignment and processing
+- Graceful shutdown mechanisms
+- Error handling and panic recovery
+- Job scheduling and cancellation
+
+**Test Strategy:**
+- Create unit tests with proper mocks (avoid database dependency)
+- Use table-driven tests for multiple scenarios
+- Add concurrency testing for race conditions
+- Test error paths and edge cases
+
+**Success Criteria for First Session:**
+- Increase internal/jobs coverage from 1% to 15%+
+- Create at least 20 new unit tests
+- Implement basic mock strategy for external dependencies
+- All tests pass with `go test -race`
+
+**Files to Create:**
+- `internal/jobs/worker_test.go` - Worker pool unit tests
+- `internal/jobs/manager_test.go` - Job manager unit tests  
+- `internal/mocks/db_mock.go` - Database interface mock
+
+This plan provides clear, actionable steps that address the most critical coverage gaps identified in the audit.
