@@ -149,10 +149,11 @@ func TestWorkerPoolGracefulShutdown(t *testing.T) {
 			// Wait briefly for cleanup
 			time.Sleep(20 * time.Millisecond)
 			
+			finalCompleted := atomic.LoadInt32(&completed)
 			if tt.activeJobs == 0 {
-				assert.Equal(t, int32(0), completed, "No jobs should complete")
+				assert.Equal(t, int32(0), finalCompleted, "No jobs should complete")
 			} else if tt.shutdownDelay >= 50*time.Millisecond {
-				assert.GreaterOrEqual(t, completed, int32(tt.expectedComplete), tt.description)
+				assert.GreaterOrEqual(t, finalCompleted, int32(tt.expectedComplete), tt.description)
 			}
 		})
 	}
@@ -209,11 +210,19 @@ func TestWorkerPoolPanicRecovery(t *testing.T) {
 						}
 					}()
 					
-					for j := 0; j < tt.totalJobs/tt.workers; j++ {
-						if tt.panicAt > 0 && j == tt.panicAt {
+					jobsPerWorker := tt.totalJobs / tt.workers
+					if workerID < tt.totalJobs%tt.workers {
+						jobsPerWorker++ // Handle remainder
+					}
+					
+					for j := 0; j < jobsPerWorker; j++ {
+						// Complete task first (simulating work)
+						atomic.AddInt32(&completed, 1)
+						
+						// Then check if we should panic after this task
+						if tt.panicAt >= 0 && j == tt.panicAt {
 							panic("test panic")
 						}
-						atomic.AddInt32(&completed, 1)
 					}
 				}(i)
 			}
@@ -224,7 +233,35 @@ func TestWorkerPoolPanicRecovery(t *testing.T) {
 				assert.Equal(t, int32(0), panics, "Should have no panics")
 				assert.GreaterOrEqual(t, completed, int32(tt.totalJobs-tt.workers), "Should complete most jobs")
 			} else {
-				assert.Greater(t, panics, int32(0), "Should have recovered from panics")
+				// When panic happens, we expect to see recovered panics
+				// The actual number depends on how many workers hit the panic point
+				expectedPanics := int32(0)
+				for i := 0; i < tt.workers; i++ {
+					jobsPerWorker := tt.totalJobs / tt.workers
+					if i < tt.totalJobs%tt.workers {
+						jobsPerWorker++
+					}
+					// If this worker will process enough jobs to hit the panic point
+					if jobsPerWorker > tt.panicAt {
+						expectedPanics++
+					}
+				}
+				
+				assert.Equal(t, expectedPanics, panics, "Should have expected number of panics")
+				// Tasks complete up to and including the panic point
+				expectedCompleted := int32(0)
+				for i := 0; i < tt.workers; i++ {
+					jobsPerWorker := tt.totalJobs / tt.workers
+					if i < tt.totalJobs%tt.workers {
+						jobsPerWorker++
+					}
+					if jobsPerWorker > tt.panicAt {
+						expectedCompleted += int32(tt.panicAt + 1) // Complete tasks up to and including panic point
+					} else {
+						expectedCompleted += int32(jobsPerWorker)
+					}
+				}
+				assert.Equal(t, expectedCompleted, completed, "Should complete expected number of tasks")
 			}
 		})
 	}
