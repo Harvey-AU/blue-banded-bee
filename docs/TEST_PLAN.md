@@ -4,35 +4,98 @@
 
 Comprehensive testing plan for unit and integration tests using mocks and testify framework.
 
+## CRITICAL TEST FIXES REQUIRED (Expert Review - Aug 2025)
+
+### P0 - CRITICAL Production Risks (Fix Immediately)
+
+- [x] **Fix health endpoint panic** - `/health/db` panics when DB is nil (handlers.go)
+  - Guard `h.DB == nil` before `h.DB.GetDB().Ping()`
+  - Return 503 with unhealthy JSON, not panic
+  - Update test to expect 503, not panic
+- [x] **Fix broken `contains()` function** in worker_advanced_test.go:347-349
+  - Current: returns true for any non-empty strings
+  - Fix: use `strings.Contains(s, substr)`
+- [ ] **Make DB mockable** - Cannot unit test DB paths
+  - Define `DBClient interface { GetDB() *sql.DB }`
+  - Or add constructor to build *DB from existing *sql.DB
+  - Add sqlmock tests for healthy/unhealthy DB
+
+### P1 - HIGH Priority Brittleness (Fix Today)
+
+- [x] **Centralise version string** - handlers_test.go hard-codes "0.4.0"
+  - Create package-level `var Version = "0.4.0"`
+  - Use in HealthCheck handler
+  - Update test to assert non-empty or use Version var
+- [x] **Replace placeholder tests** in db_operations_test.go
+  - Tests assert on local variables, not production code
+  - Add real unit tests for DSN building and pool config
+  - Or mark with `t.Skip("TODO: real tests")`
+- [ ] **Add t.Cleanup() for resource management**
+  - Use immediately after creating resources
+  - Ensure cleanup even on test failure
+  - Critical for integration tests
+- [x] **Fix timing assertions** - Remove fragile upper bounds
+  - middleware_test.go: remove `elapsed < delay+10ms`
+  - Keep only `elapsed >= delay`
+  - Add exponential backoff for polling tests
+
+### P2 - MEDIUM Testing Quality (Fix This Week)
+
+- [ ] **Add t.Parallel() to independent tests**
+  - Identify all unit tests without shared state
+  - Add `t.Parallel()` at start
+  - Don't parallelise integration tests
+- [ ] **Convert integration tests to unit tests**
+  - Identify tests that could use mocks
+  - Reduce database dependency
+  - Improve test speed (target < 10s for units)
+- [ ] **Implement proper mock strategy**
+  - Create interfaces for all external deps
+  - Use dependency injection
+  - Enable true unit testing
+- [ ] **Expand API handler tests**
+  - Add auth middleware path tests
+  - Test error shapes and contracts
+  - Add golden JSON tests
+
+### P3 - Improvements
+
+- [ ] **Add set -euo pipefail to run-tests.sh**
+- [ ] **Add exponential backoff to polling tests**
+- [ ] **Add edge cases to crawler tests**
+  - Robots.txt disallow patterns
+  - TLS errors and retries
+- [ ] **Add golden JSON tests for API responses**
+
 ## Immediate Actions and Standards (Quick Guide)
 
 This short section captures the immediate priorities and execution standards so contributors and agents can act quickly.
 
 - Immediate actions (next PRs)
-   - internal/db queue unit tests (fast, isolated):
-      - GetNextTask locking/exclusivity (concurrent callers, only one claims, second gets sql.ErrNoRows)
-      - UpdateTaskStatus transitions and retry count handling; reset started_at; set completed_at
-      - CreateTask duplicate URL idempotence and unique-constraint handling
-      - GetTasksByJobID pagination (boundaries, ordering)
-      - Execute/transaction rollback paths (simulate mid-transaction error)
-   - jobs/worker advanced behaviour tests (with mocks):
-      - recoverStaleTasks (max retries → Failed vs Pending reset) and recoverRunningJobs (resets tasks; re-adds jobs; preserves find_links)
-      - checkForPendingTasks adds missing jobs, updates job status; removes inactive jobs
-      - flushBatches single-transaction updates; no-op on empty batch
-      - evaluateJobPerformance scaling/clamping; workers scale up but clamp at global max
-      - Blocking vs retryable errors (403/429 limited retries; timeouts/5xx retried; permanent failures)
-   - crawler/link tests via httptest.Server fixtures:
-      - Redirects, timeouts, cache headers, varied content types
-      - Sectioned link extraction (header/body/footer) and homepage vs nested priorities
-      - robots.txt filtering and same/subdomain checks (`www.`, trailing slash, fragments)
-   - API negative paths and response contracts:
-      - Auth/permission matrix with mock claims; correct statuses/messages
-      - Pagination and invalid query params; consistent error payloads
-      - Golden JSON for complex responses to prevent drift
-   - Infra guardrails (tests/CI):
-      - Units run with -race, -shuffle=on, -count=1; integration split with //go:build integration
-      - Coverage floors (start with db and jobs) and PR fail on >1% regression for those packages
-      - Optional: goleak in goroutine-heavy packages (via TestMain) to detect leaks
+  - internal/db queue unit tests (fast, isolated):
+    - GetNextTask locking/exclusivity (concurrent callers, only one claims, second gets sql.ErrNoRows)
+    - UpdateTaskStatus transitions and retry count handling; reset started_at; set completed_at
+    - CreateTask duplicate URL idempotence and unique-constraint handling
+    - GetTasksByJobID pagination (boundaries, ordering)
+    - Execute/transaction rollback paths (simulate mid-transaction error)
+  - jobs/worker advanced behaviour tests (with mocks):
+    - recoverStaleTasks (max retries → Failed vs Pending reset) and recoverRunningJobs (resets tasks; re-adds jobs; preserves find_links)
+    - checkForPendingTasks adds missing jobs, updates job status; removes inactive jobs
+    - flushBatches single-transaction updates; no-op on empty batch
+    - evaluateJobPerformance scaling/clamping; workers scale up but clamp at global max
+    - Blocking vs retryable errors (403/429 limited retries; timeouts/5xx retried; permanent failures)
+  - crawler/link tests via httptest.Server fixtures:
+    - Redirects, timeouts, cache headers, varied content types
+    - Sectioned link extraction (header/body/footer) and homepage vs nested priorities
+    - robots.txt filtering and same/subdomain checks (`www.`, trailing slash, fragments)
+  - API negative paths and response contracts:
+    - Auth/permission matrix with mock claims; correct statuses/messages
+    - Pagination and invalid query params; consistent error payloads
+    - Golden JSON for complex responses to prevent drift
+  - Infra guardrails (tests/CI):
+    - Units run with -race, -shuffle=on, -count=1; integration split with //go:build integration
+    - Coverage floors (start with db and jobs) and PR fail on >1% regression for those packages
+    - Optional: goleak in goroutine-heavy packages (via TestMain) to detect leaks
 
 - Standards and execution
   - Build tags: use `//go:build integration` for integration tests only. Unit tests are untagged; use `-short` for fast runs.
@@ -40,9 +103,9 @@ This short section captures the immediate priorities and execution standards so 
   - Concurrency: run with `-race` locally and in CI for unit tests touching concurrent code.
 
 - CI and scripts
-   - Split CI: fast unit job (< 10 seconds) and a separate integration job. (Implemented)
-   - `run-tests.sh` runs unit tests with `-short` and integration tests with `-tags=integration` explicitly. (Implemented)
-   - Add coverage floors for packages `internal/db` and `internal/jobs` and block PRs on regression.
+  - Split CI: fast unit job (< 10 seconds) and a separate integration job. (Implemented)
+  - `run-tests.sh` runs unit tests with `-short` and integration tests with `-tags=integration` explicitly. (Implemented)
+  - Add coverage floors for packages `internal/db` and `internal/jobs` and block PRs on regression.
 
 - Nice to haves
   - Benchmarks for hot paths (cache, URL utils, response helpers).

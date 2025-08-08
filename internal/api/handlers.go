@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -13,6 +14,9 @@ import (
 	"github.com/Harvey-AU/blue-banded-bee/internal/jobs"
 	"github.com/rs/zerolog/log"
 )
+
+// Version is the current API version
+const Version = "0.4.0"
 
 // Handler holds dependencies for API handlers
 type Handler struct {
@@ -87,13 +91,19 @@ func (h *Handler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	WriteHealthy(w, r, "blue-banded-bee", "0.4.0")
+	WriteHealthy(w, r, "blue-banded-bee", Version)
 }
 
 // DatabaseHealthCheck handles database health check requests
 func (h *Handler) DatabaseHealthCheck(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		MethodNotAllowed(w, r)
+		return
+	}
+
+	// Guard against nil DB to prevent panic
+	if h.DB == nil {
+		WriteUnhealthy(w, r, "postgresql", fmt.Errorf("database connection not configured"))
 		return
 	}
 

@@ -39,7 +39,7 @@ func TestHealthCheckHandler(t *testing.T) {
 			expectedBody: map[string]interface{}{
 				"status":  "healthy",
 				"service": "blue-banded-bee",
-				"version": "0.4.0",
+				"version": Version,
 			},
 		},
 		{
@@ -107,9 +107,8 @@ func TestDatabaseHealthCheck_NoDatabase(t *testing.T) {
 		assert.Equal(t, http.StatusMethodNotAllowed, rec.Code)
 	})
 	
-	// Note: We can't test nil DB with GET method as it will panic
-	// This is expected behavior - the DB should be initialized before use
-	t.Run("nil_db_would_panic", func(t *testing.T) {
+	// Test nil DB returns 503 Service Unavailable
+	t.Run("nil_db_returns_503", func(t *testing.T) {
 		handler := &Handler{
 			DB: nil, // No database
 		}
@@ -117,10 +116,18 @@ func TestDatabaseHealthCheck_NoDatabase(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/health/db", nil)
 		rec := httptest.NewRecorder()
 		
-		// This would panic in real code - that's expected
-		assert.Panics(t, func() {
-			handler.DatabaseHealthCheck(rec, req)
-		})
+		// Should not panic, but return 503
+		handler.DatabaseHealthCheck(rec, req)
+		
+		assert.Equal(t, http.StatusServiceUnavailable, rec.Code)
+		
+		// Verify response contains error message
+		var response map[string]interface{}
+		err := json.Unmarshal(rec.Body.Bytes(), &response)
+		require.NoError(t, err)
+		assert.Equal(t, "unhealthy", response["status"])
+		assert.Equal(t, "postgresql", response["service"])
+		assert.Contains(t, response["error"], "database connection not configured")
 	})
 }
 

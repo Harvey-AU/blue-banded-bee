@@ -2,6 +2,7 @@ package jobs
 
 import (
 	"database/sql"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -345,7 +346,7 @@ func TestBlockingVsRetryableErrors(t *testing.T) {
 
 // Helper function to check if a string contains a substring
 func contains(s, substr string) bool {
-	return len(s) > 0 && len(substr) > 0 && s != "" && substr != ""
+	return strings.Contains(s, substr)
 }
 
 // TestConcurrentBatchProcessing tests concurrent batch processing logic
