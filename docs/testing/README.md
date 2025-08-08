@@ -1,6 +1,6 @@
 # Testing
 
-Blue Banded Bee uses integration tests with a real Supabase test database and automated CI through GitHub Actions.
+Blue Banded Bee prioritises fast, isolated unit tests by default, with opt-in integration tests against a real Supabase test database. CI is automated via GitHub Actions.
 
 ## Quick Start
 
@@ -18,17 +18,25 @@ go tool cover -html=coverage.out
 
 ## Test Structure
 
-- **Integration Tests**: Connect to real test database (most common)
-- **Unit Tests**: Use mocks, tagged with `//go:build unit`
-- **Test Database**: Supabase branch configured in `.env.test`
-- **CI Pipeline**: Automated testing on every push
+- **Unit tests (default)**: Use mocks and table-driven tests. No build tags required. Run with `-short` and `-race`.
+- **Integration tests (opt-in)**: Use real test database; must be tagged with `//go:build integration`.
+- **Test Database**: Supabase branch configured in `.env.test`.
+- **CI Pipeline**: Automated testing on every push; split fast unit job and separate integration job (see Test Plan).
 
 ## Documentation
 
-- [Setup Guide](setup.md) - Configure test environment
-- [Writing Tests](writing-tests.md) - Guidelines and patterns
-- [CI/CD Pipeline](ci-cd.md) - GitHub Actions configuration
-- [Troubleshooting](troubleshooting.md) - Common issues
+- [Test Plan](../TEST_PLAN.md) — includes Immediate Actions and Standards quick guide, coverage gaps, and priorities
+- [Setup Guide](setup.md) — Configure test environment
+- [Writing Tests](writing-tests.md) — Guidelines and patterns
+- [CI/CD Pipeline](ci-cd.md) — GitHub Actions configuration
+- [Troubleshooting](troubleshooting.md) — Common issues
+
+## Conventions and Tips
+
+- Use `testify` (`assert`/`require`) consistently.
+- Prefer table-driven tests and descriptive subtest names.
+- Mark helper functions with `t.Helper()`; use `t.Cleanup()` for teardown.
+- Use `t.Parallel()` for independent subtests to speed up execution.
 
 ## Current Coverage
 
