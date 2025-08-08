@@ -8,10 +8,31 @@ Comprehensive testing plan for unit and integration tests using mocks and testif
 
 This short section captures the immediate priorities and execution standards so contributors and agents can act quickly.
 
-- Immediate actions (next PR)
-  - Add worker pool tests: lifecycle (start/stop), context cancellation, graceful shutdown with timeout, panic recovery, and concurrency limits; run with -race.
-  - Expand job manager unit tests: scheduling and cancellation, worker allocation decisions, queue operations via mocks, and error-path/state-transition coverage.
-  - Create missing mocks: `internal/mocks/db.go`, `internal/mocks/http_client.go`, `internal/mocks/auth_client.go`.
+- Immediate actions (next PRs)
+   - internal/db queue unit tests (fast, isolated):
+      - GetNextTask locking/exclusivity (concurrent callers, only one claims, second gets sql.ErrNoRows)
+      - UpdateTaskStatus transitions and retry count handling; reset started_at; set completed_at
+      - CreateTask duplicate URL idempotence and unique-constraint handling
+      - GetTasksByJobID pagination (boundaries, ordering)
+      - Execute/transaction rollback paths (simulate mid-transaction error)
+   - jobs/worker advanced behaviour tests (with mocks):
+      - recoverStaleTasks (max retries → Failed vs Pending reset) and recoverRunningJobs (resets tasks; re-adds jobs; preserves find_links)
+      - checkForPendingTasks adds missing jobs, updates job status; removes inactive jobs
+      - flushBatches single-transaction updates; no-op on empty batch
+      - evaluateJobPerformance scaling/clamping; workers scale up but clamp at global max
+      - Blocking vs retryable errors (403/429 limited retries; timeouts/5xx retried; permanent failures)
+   - crawler/link tests via httptest.Server fixtures:
+      - Redirects, timeouts, cache headers, varied content types
+      - Sectioned link extraction (header/body/footer) and homepage vs nested priorities
+      - robots.txt filtering and same/subdomain checks (`www.`, trailing slash, fragments)
+   - API negative paths and response contracts:
+      - Auth/permission matrix with mock claims; correct statuses/messages
+      - Pagination and invalid query params; consistent error payloads
+      - Golden JSON for complex responses to prevent drift
+   - Infra guardrails (tests/CI):
+      - Units run with -race, -shuffle=on, -count=1; integration split with //go:build integration
+      - Coverage floors (start with db and jobs) and PR fail on >1% regression for those packages
+      - Optional: goleak in goroutine-heavy packages (via TestMain) to detect leaks
 
 - Standards and execution
   - Build tags: use `//go:build integration` for integration tests only. Unit tests are untagged; use `-short` for fast runs.
@@ -19,13 +40,21 @@ This short section captures the immediate priorities and execution standards so 
   - Concurrency: run with `-race` locally and in CI for unit tests touching concurrent code.
 
 - CI and scripts
-  - Split CI: fast unit job (< 10 seconds) and a separate integration job.
-  - Update `run-tests.sh` to run unit tests with `-short` and integration tests with `-tags=integration` explicitly.
+   - Split CI: fast unit job (< 10 seconds) and a separate integration job. (Implemented)
+   - `run-tests.sh` runs unit tests with `-short` and integration tests with `-tags=integration` explicitly. (Implemented)
+   - Add coverage floors for packages `internal/db` and `internal/jobs` and block PRs on regression.
 
 - Nice to haves
   - Benchmarks for hot paths (cache, URL utils, response helpers).
   - Concurrency/race harness for jobs to detect races deterministically.
   - CI coverage gates and, where beneficial, parallelised test shards.
+
+### Completed this phase (Aug 2025)
+
+- Worker pool and job manager unit tests expanded (lifecycle, concurrency, constructor validation)
+- Core mocks created: `internal/mocks/db.go`, `internal/mocks/http_client.go`, `internal/mocks/auth_client.go`
+- Test split implemented: unit (-short, -race) vs integration (-tags=integration, -race); `run-tests.sh` updated
+- Worker concurrency lifecycle tightened (WaitGroup tracking, ticker stops, clean Stop)
 
 ## AUDIT ASSESSMENT (December 2024)
 
