@@ -171,6 +171,8 @@ func InitFromEnv() (*DB, error) {
 				separator = "&"
 			}
 			url += separator + "statement_timeout=60000" // 60 seconds
+			// Persist the augmented URL back to config for consistency
+			config.DatabaseURL = url
 		}
 		
 		client, err := sql.Open("pgx", url)

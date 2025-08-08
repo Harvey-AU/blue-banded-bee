@@ -1,6 +1,7 @@
 package api
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -15,17 +16,32 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// Version is the current API version
-const Version = "0.4.0"
+// Version is the current API version (can be set via ldflags at build time)
+var Version = "0.4.0"
+
+// DBClient is an interface for database operations
+type DBClient interface {
+	GetDB() *sql.DB
+	GetOrCreateUser(userID, email string, orgID *string) (*db.User, error)
+	GetJobStats(organisationID string, startDate, endDate *time.Time) (*db.JobStats, error)
+	GetJobActivity(organisationID string, startDate, endDate *time.Time) ([]db.ActivityPoint, error)
+	GetUserByWebhookToken(token string) (*db.User, error)
+	// Additional methods used by API handlers
+	GetUser(userID string) (*db.User, error)
+	ResetSchema() error
+	CreateUser(userID, email string, fullName *string, orgName string) (*db.User, *db.Organisation, error)
+	GetOrganisation(organisationID string) (*db.Organisation, error)
+	ListJobs(organisationID string, limit, offset int, status, dateRange string) ([]db.JobWithDomain, int, error)
+}
 
 // Handler holds dependencies for API handlers
 type Handler struct {
-	DB          *db.DB
+	DB          DBClient
 	JobsManager *jobs.JobManager
 }
 
 // NewHandler creates a new API handler with dependencies
-func NewHandler(pgDB *db.DB, jobsManager *jobs.JobManager) *Handler {
+func NewHandler(pgDB DBClient, jobsManager *jobs.JobManager) *Handler {
 	return &Handler{
 		DB:          pgDB,
 		JobsManager: jobsManager,

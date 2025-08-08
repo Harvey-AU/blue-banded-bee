@@ -418,6 +418,7 @@ func TestRequestIDMiddlewareConcurrency(t *testing.T) {
 	middlewareHandler := RequestIDMiddleware(handler)
 
 	done := make(chan bool, 10)
+	results := make(chan bool, 20)
 	for i := 0; i < 10; i++ {
 		go func(index int) {
 			defer func() { done <- true }()
@@ -427,14 +428,20 @@ func TestRequestIDMiddlewareConcurrency(t *testing.T) {
 			
 			middlewareHandler.ServeHTTP(rec, req)
 			
-			assert.Equal(t, http.StatusOK, rec.Code)
-			assert.NotEmpty(t, rec.Header().Get("X-Request-ID"))
+			results <- (rec.Code == http.StatusOK)
+			results <- (rec.Header().Get("X-Request-ID") != "")
 		}(i)
 	}
 
 	// Wait for all goroutines
 	for i := 0; i < 10; i++ {
 		<-done
+	}
+
+	// Verify results on main goroutine
+	for i := 0; i < 20; i++ { // two checks per goroutine
+		ok := <-results
+		assert.True(t, ok)
 	}
 }
 

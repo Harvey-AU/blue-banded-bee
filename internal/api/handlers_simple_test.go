@@ -234,7 +234,7 @@ func TestHealthCheck(t *testing.T) {
 				
 				assert.Equal(t, "healthy", response.Status)
 				assert.Equal(t, "blue-banded-bee", response.Service)
-				assert.Equal(t, "0.4.0", response.Version)
+				assert.Equal(t, Version, response.Version)
 				assert.NotEmpty(t, response.Timestamp)
 			}
 		})
