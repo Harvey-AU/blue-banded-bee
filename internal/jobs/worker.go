@@ -211,16 +211,21 @@ func (wp *WorkerPool) AddJob(jobID string, options *JobOptions) {
 	ctx := context.Background()
 	var domainName string
 	var crawlDelay sql.NullInt64
-	err := wp.db.QueryRowContext(ctx, `
-		SELECT d.name, d.crawl_delay_seconds
+	var dbFindLinks bool
+	
+	// When options is nil (recovery mode), fetch find_links from DB
+	// Otherwise use the provided options value
+	query := `
+		SELECT d.name, d.crawl_delay_seconds, j.find_links
 		FROM domains d
 		JOIN jobs j ON j.domain_id = d.id
 		WHERE j.id = $1
-	`, jobID).Scan(&domainName, &crawlDelay)
+	`
+	err := wp.db.QueryRowContext(ctx, query, jobID).Scan(&domainName, &crawlDelay, &dbFindLinks)
 
 	if err == nil {
-		// Handle nil options by defaulting FindLinks to false
-		findLinks := false
+		// Use DB value when options is nil (recovery), otherwise use provided value
+		findLinks := dbFindLinks
 		if options != nil {
 			findLinks = options.FindLinks
 		}
@@ -915,10 +920,10 @@ func (wp *WorkerPool) scaleWorkers(ctx context.Context, targetWorkers int) {
 	for i := 0; i < workersToAdd; i++ {
 		workerID := wp.currentWorkers + i
 		wp.wg.Add(1)
-		go func() {
+		go func(id int) {
 			defer wp.wg.Done()
-			wp.worker(ctx, workerID)
-		}()
+			wp.worker(ctx, id)
+		}(workerID)
 	}
 
 	wp.currentWorkers = targetWorkers
