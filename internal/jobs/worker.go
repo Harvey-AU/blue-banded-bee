@@ -123,14 +123,18 @@ func NewWorkerPool(db *sql.DB, dbQueue *db.DbQueue, crawler *crawler.Crawler, nu
 	}
 
 	// Start the batch processor
-	wp.wg.Go(func() {
+	wp.wg.Add(1)
+	go func() {
+		defer wp.wg.Done()
 		wp.processBatches(context.Background())
-	})
+	}()
 
 	// Start the notification listener
-	wp.wg.Go(func() {
+	wp.wg.Add(1)
+	go func() {
+		defer wp.wg.Done()
 		wp.listenForNotifications(context.Background())
-	})
+	}()
 
 	return wp
 }
@@ -140,15 +144,19 @@ func (wp *WorkerPool) Start(ctx context.Context) {
 
 	for i := 0; i < wp.numWorkers; i++ {
 		i := i
-		wp.wg.Go(func() {
+		wp.wg.Add(1)
+		go func() {
+			defer wp.wg.Done()
 			wp.worker(ctx, i)
-		})
+		}()
 	}
 
 	// Start the recovery monitor
-	wp.wg.Go(func() {
+	wp.wg.Add(1)
+	go func() {
+		defer wp.wg.Done()
 		wp.recoveryMonitor(ctx)
-	})
+	}()
 
 	// Run initial cleanup
 	if err := wp.CleanupStuckJobs(ctx); err != nil {
@@ -171,6 +179,10 @@ func (wp *WorkerPool) Stop() {
 	if wp.stopping.CompareAndSwap(false, true) {
 		log.Debug().Msg("Stopping worker pool")
 		close(wp.stopCh)
+		// Stop the batch timer to prevent leaks
+		if wp.batchTimer != nil {
+			wp.batchTimer.Stop()
+		}
 		wp.wg.Wait()
 		log.Debug().Msg("Worker pool stopped")
 	}
@@ -207,9 +219,15 @@ func (wp *WorkerPool) AddJob(jobID string, options *JobOptions) {
 	`, jobID).Scan(&domainName, &crawlDelay)
 
 	if err == nil {
+		// Handle nil options by defaulting FindLinks to false
+		findLinks := false
+		if options != nil {
+			findLinks = options.FindLinks
+		}
+		
 		jobInfo := &JobInfo{
 			DomainName: domainName,
-			FindLinks:  options.FindLinks,
+			FindLinks:  findLinks,
 			CrawlDelay: 0,
 		}
 		if crawlDelay.Valid {
@@ -584,7 +602,9 @@ func (wp *WorkerPool) EnqueueURLs(ctx context.Context, jobID string, pages []db.
 // StartTaskMonitor starts a background process that monitors for pending tasks
 func (wp *WorkerPool) StartTaskMonitor(ctx context.Context) {
 	log.Info().Msg("Starting task monitor to check for pending tasks")
+	wp.wg.Add(1)
 	go func() {
+		defer wp.wg.Done()
 		ticker := time.NewTicker(30 * time.Second)
 		defer ticker.Stop()
 
@@ -848,8 +868,6 @@ func (wp *WorkerPool) recoverRunningJobs(ctx context.Context) error {
 
 // recoveryMonitor periodically checks for and recovers stale tasks
 func (wp *WorkerPool) recoveryMonitor(ctx context.Context) {
-	// Note: wp.wg.Done() is handled automatically by wp.wg.Go()
-
 	ticker := time.NewTicker(wp.recoveryInterval)
 	defer ticker.Stop()
 
@@ -896,9 +914,11 @@ func (wp *WorkerPool) scaleWorkers(ctx context.Context, targetWorkers int) {
 	// Start additional workers
 	for i := 0; i < workersToAdd; i++ {
 		workerID := wp.currentWorkers + i
-		wp.wg.Go(func() {
+		wp.wg.Add(1)
+		go func() {
+			defer wp.wg.Done()
 			wp.worker(ctx, workerID)
-		})
+		}()
 	}
 
 	wp.currentWorkers = targetWorkers
@@ -906,8 +926,6 @@ func (wp *WorkerPool) scaleWorkers(ctx context.Context, targetWorkers int) {
 
 // Batch processor goroutine
 func (wp *WorkerPool) processBatches(ctx context.Context) {
-	// Note: wp.wg.Done() is handled automatically by wp.wg.Go()
-
 	for {
 		select {
 		case <-wp.batchTimer.C:
@@ -999,7 +1017,9 @@ func (wp *WorkerPool) flushBatches(ctx context.Context) {
 
 // Add new method to start the cleanup monitor
 func (wp *WorkerPool) StartCleanupMonitor(ctx context.Context) {
-	wp.wg.Go(func() {
+	wp.wg.Add(1)
+	go func() {
+		defer wp.wg.Done()
 		ticker := time.NewTicker(wp.cleanupInterval)
 		defer ticker.Stop()
 
@@ -1015,7 +1035,7 @@ func (wp *WorkerPool) StartCleanupMonitor(ctx context.Context) {
 				}
 			}
 		}
-	})
+	}()
 	log.Info().Msg("Job cleanup monitor started")
 }
 
@@ -1423,8 +1443,6 @@ func isDocumentLink(path string) bool {
 
 // listenForNotifications sets up PostgreSQL LISTEN/NOTIFY
 func (wp *WorkerPool) listenForNotifications(ctx context.Context) {
-	// Note: wp.wg.Done() is handled automatically by wp.wg.Go()
-
 	var conn *pgx.Conn
 	var err error
 
