@@ -4,14 +4,99 @@
 
 Comprehensive testing plan for unit and integration tests using mocks and testify framework.
 
+## CRITICAL TEST FIXES REQUIRED (Expert Review - Aug 2025)
+
+### P0 - CRITICAL Production Risks (Fix Immediately)
+
+- [x] **Fix health endpoint panic** - `/health/db` panics when DB is nil (handlers.go)
+  - Guard `h.DB == nil` before `h.DB.GetDB().Ping()`
+  - Return 503 with unhealthy JSON, not panic
+  - Update test to expect 503, not panic
+- [x] **Fix broken `contains()` function** in worker_advanced_test.go:347-349
+  - Current: returns true for any non-empty strings
+  - Fix: use `strings.Contains(s, substr)`
+- [x] **Make DB mockable** - Cannot unit test DB paths
+  - Define `DBClient interface { GetDB() *sql.DB }` (expanded to match handler needs)
+  - Added constructor/wrappers to use a real \*sql.DB in tests where needed
+  - Added sqlmock tests for healthy/unhealthy DB ping in `internal/api/handlers_db_test.go`
+
+### P1 - HIGH Priority Brittleness (Fix Today)
+
+- [x] **Centralise version string** - handlers_test.go hard-codes "0.4.0"
+  - Create package-level `var Version = "0.4.0"`
+  - Use in HealthCheck handler
+  - Update test to assert non-empty or use Version var
+- [x] **Replace placeholder tests** in db_operations_test.go
+  - Tests assert on local variables, not production code
+  - Add real unit tests for DSN building and pool config
+  - Or mark with `t.Skip("TODO: real tests")`
+- [x] **Add t.Cleanup() for resource management**
+  - Use immediately after creating resources
+  - Ensure cleanup even on test failure
+  - Critical for integration tests
+  - Implemented in manager_test.go with proper LIFO ordering
+- [x] **Fix timing assertions** - Remove fragile upper bounds
+  - middleware_test.go: remove `elapsed < delay+10ms`
+  - Keep only `elapsed >= delay`
+  - Add exponential backoff for polling tests
+
+### P2 - MEDIUM Testing Quality (Fix This Week)
+
+- [ ] **Add t.Parallel() to independent tests**
+  - Identify all unit tests without shared state
+  - Add `t.Parallel()` at start
+  - Don't parallelise integration tests
+- [ ] **Convert integration tests to unit tests**
+  - Identify tests that could use mocks
+  - Reduce database dependency
+  - Improve test speed (target < 10s for units)
+- [ ] **Implement proper mock strategy**
+  - Create interfaces for all external deps
+  - Use dependency injection
+  - Enable true unit testing
+- [ ] **Expand API handler tests**
+  - Add auth middleware path tests
+  - Test error shapes and contracts
+  - Add golden JSON tests
+
+### P3 - Improvements
+
+- [x] **Add set -euo pipefail to run-tests.sh**
+- [ ] **Add exponential backoff to polling tests**
+- [ ] **Add edge cases to crawler tests**
+  - Robots.txt disallow patterns
+  - TLS errors and retries
+- [ ] **Add golden JSON tests for API responses**
+
 ## Immediate Actions and Standards (Quick Guide)
 
 This short section captures the immediate priorities and execution standards so contributors and agents can act quickly.
 
-- Immediate actions (next PR)
-  - Add worker pool tests: lifecycle (start/stop), context cancellation, graceful shutdown with timeout, panic recovery, and concurrency limits; run with -race.
-  - Expand job manager unit tests: scheduling and cancellation, worker allocation decisions, queue operations via mocks, and error-path/state-transition coverage.
-  - Create missing mocks: `internal/mocks/db.go`, `internal/mocks/http_client.go`, `internal/mocks/auth_client.go`.
+- Immediate actions (next PRs)
+  - internal/db queue unit tests (fast, isolated):
+    - GetNextTask locking/exclusivity (concurrent callers, only one claims, second gets sql.ErrNoRows)
+    - UpdateTaskStatus transitions and retry count handling; reset started_at; set completed_at
+    - CreateTask duplicate URL idempotence and unique-constraint handling
+    - GetTasksByJobID pagination (boundaries, ordering)
+    - Execute/transaction rollback paths (simulate mid-transaction error)
+  - jobs/worker advanced behaviour tests (with mocks):
+    - recoverStaleTasks (max retries → Failed vs Pending reset) and recoverRunningJobs (resets tasks; re-adds jobs; preserves find_links)
+    - checkForPendingTasks adds missing jobs, updates job status; removes inactive jobs
+    - flushBatches single-transaction updates; no-op on empty batch
+    - evaluateJobPerformance scaling/clamping; workers scale up but clamp at global max
+    - Blocking vs retryable errors (403/429 limited retries; timeouts/5xx retried; permanent failures)
+  - crawler/link tests via httptest.Server fixtures:
+    - Redirects, timeouts, cache headers, varied content types
+    - Sectioned link extraction (header/body/footer) and homepage vs nested priorities
+    - robots.txt filtering and same/subdomain checks (`www.`, trailing slash, fragments)
+  - API negative paths and response contracts:
+    - Auth/permission matrix with mock claims; correct statuses/messages
+    - Pagination and invalid query params; consistent error payloads
+    - Golden JSON for complex responses to prevent drift
+  - Infra guardrails (tests/CI):
+    - Units run with -race, -shuffle=on, -count=1; integration split with //go:build integration
+    - Coverage floors (start with db and jobs) and PR fail on >1% regression for those packages
+    - Optional: goleak in goroutine-heavy packages (via TestMain) to detect leaks
 
 - Standards and execution
   - Build tags: use `//go:build integration` for integration tests only. Unit tests are untagged; use `-short` for fast runs.
@@ -19,13 +104,21 @@ This short section captures the immediate priorities and execution standards so 
   - Concurrency: run with `-race` locally and in CI for unit tests touching concurrent code.
 
 - CI and scripts
-  - Split CI: fast unit job (< 10 seconds) and a separate integration job.
-  - Update `run-tests.sh` to run unit tests with `-short` and integration tests with `-tags=integration` explicitly.
+  - Split CI: fast unit job (< 10 seconds) and a separate integration job. (Implemented)
+  - `run-tests.sh` runs unit tests with `-short` and integration tests with `-tags=integration` explicitly. (Implemented)
+  - Add coverage floors for packages `internal/db` and `internal/jobs` and block PRs on regression.
 
 - Nice to haves
   - Benchmarks for hot paths (cache, URL utils, response helpers).
   - Concurrency/race harness for jobs to detect races deterministically.
   - CI coverage gates and, where beneficial, parallelised test shards.
+
+### Completed this phase (Aug 2025)
+
+- Worker pool and job manager unit tests expanded (lifecycle, concurrency, constructor validation)
+- Core mocks created: `internal/mocks/db.go`, `internal/mocks/http_client.go`, `internal/mocks/auth_client.go`
+- Test split implemented: unit (-short, -race) vs integration (-tags=integration, -race); `run-tests.sh` updated (strict mode enabled)
+- Worker concurrency lifecycle tightened (WaitGroup tracking, ticker stops, clean Stop)
 
 ## AUDIT ASSESSMENT (December 2024)
 
@@ -162,31 +255,31 @@ Based on comprehensive testing audit conducted in December 2024:
 - `internal/mocks` - **0.0%** (expected for mocks)
 - `internal/testutil` - **0.0%** (expected for test utilities)
 
-### Coverage by Functional Area
+### Coverage by Functional Area (Snapshot)
 
-#### 🔐 Authentication & Authorization
+#### 🔐 Authentication & Authorization (snapshot)
 
 - **Core Auth**: ⚠️ Partial (config done, JWT validation pending)
 - **Auth API**: ✅ Good (endpoints tested)
 
-#### 🗄️ Database Layer
+#### 🗄️ Database Layer (snapshot)
 
 - **Connection Management**: ⚠️ Partial (config done, operations pending)
 - **Job Queue**: ❌ Not tested
 - **Dashboard Queries**: ❌ Not tested
 
-#### 🕷️ Web Crawling
+#### 🕷️ Web Crawling (snapshot)
 
 - **Core Crawler**: ✅ Good (sitemap/robots done, HTML parsing pending)
 - **URL Processing**: ✅ Excellent (fully tested)
 
-#### 👷 Job Processing
+#### 👷 Job Processing (snapshot)
 
 - **Job Types**: ✅ Good (types tested)
 - **Worker Pool**: ❌ Not tested
 - **Job Manager**: ❌ Not tested
 
-#### 🌐 API & Web Layer
+#### 🌐 API & Web Layer (snapshot)
 
 - **Core Handlers**: ✅ Good (health/routes tested)
 - **Middleware**: ✅ Excellent (fully tested)
@@ -194,194 +287,9 @@ Based on comprehensive testing audit conducted in December 2024:
 - **Webhooks**: ❌ Not tested
 - **Dashboard API**: ⚠️ Partial (date filtering done)
 
-#### 💾 Caching
+#### 💾 Caching (snapshot)
 
 - **In-Memory Cache**: ✅ Excellent (100% coverage)
-
-### ✅ Completed Tests
-
-- [x] `internal/cache/cache_test.go` - Complete cache implementation tests with concurrency
-- [x] `internal/auth/auth_test.go` - Config validation and environment handling
-- [x] `internal/db/db_test.go` - Connection configuration and validation tests
-- [x] `internal/db/health_integration_test.go` - Database health check integration
-- [x] `internal/util/url_test.go` - URL utility functions comprehensive tests
-- [x] `internal/api/auth_test.go` - Auth endpoints testing
-- [x] `internal/api/handlers_test.go` - Handler functions comprehensive tests
-- [x] `internal/api/middleware_test.go` - Complete middleware testing
-- [x] `internal/api/response_test.go` - Response helpers comprehensive tests
-- [x] `internal/jobs/types_test.go` - Job and task types with JSON serialization
-- [x] `internal/crawler/sitemap_test.go` - Sitemap discovery and filtering
-
-### ⚠️ Partially Tested
-
-- [ ] `internal/api/handlers_simple_test.go` - Basic handlers, missing webhook logic
-- [ ] `internal/crawler/crawler_test.go` - Basic crawling, missing link extraction
-- [ ] `internal/jobs/manager_test.go` - Basic manager, missing concurrency tests
-
-### ❌ Needs More Testing
-
-- [ ] `internal/db/` - Database operations (needs more coverage beyond config)
-- [ ] `internal/jobs/` - Worker pool and job processing (only types tested)
-
----
-
-## Unit Tests by Functional Area
-
-### 🔐 Authentication & Authorization
-
-#### Core Auth (`internal/auth/`)
-
-- [x] JWT token configuration loading
-- [x] Environment variable validation
-- [x] Config validation method
-- [ ] JWT token validation with valid token
-- [ ] JWT token expiry handling
-- [ ] Malformed JWT token rejection
-- [ ] Missing auth header handling
-- [ ] User claims extraction from context
-- [ ] Organisation role permission checks
-- [ ] Mock Supabase client for auth verification
-
-#### Auth API Endpoints (`internal/api/auth.go`)
-
-- [x] Registration endpoint (POST /v1/auth/register)
-- [x] Session endpoint (POST /v1/auth/session)
-- [x] Profile endpoint (GET /v1/auth/profile)
-- [ ] Token refresh endpoint
-- [ ] Logout endpoint
-
-### 🗄️ Database Layer
-
-#### Connection Management (`internal/db/`)
-
-- [x] Connection pool initialisation
-- [x] Connection configuration and validation
-- [x] DatabaseURL vs individual field precedence
-- [x] Environment variable loading
-- [x] Health check timeout (integration test)
-- [ ] Connection retry with backoff
-- [ ] Transaction rollback on error
-- [ ] Prepared statement caching
-- [ ] Mock pgx connection for unit tests
-
-#### Job Queue Operations (`internal/db/queue.go`)
-
-- [ ] CreateJob with valid domain
-- [ ] GetJob by ID retrieval
-- [ ] UpdateJobStatus state transitions
-- [ ] GetPendingJobs priority ordering
-- [ ] CreateTask with duplicate URL
-- [ ] GetNextTask with locking
-- [ ] UpdateTaskStatus with retry count
-- [ ] GetTasksByJobID pagination
-- [ ] Mock database queries for isolation
-
-#### Dashboard Queries (`internal/db/dashboard.go`)
-
-- [ ] Stats aggregation queries
-- [ ] Activity timeline queries
-- [ ] Date range filtering in queries
-- [ ] Pagination in dashboard queries
-
-### 🕷️ Web Crawling
-
-#### Core Crawler (`internal/crawler/`)
-
-- [x] Sitemap discovery and parsing
-- [x] Robots.txt parsing
-- [x] URL filtering (include/exclude paths)
-- [ ] Link extraction from HTML
-- [ ] URL normalisation and deduplication
-- [ ] Redirect following with limits
-- [ ] Timeout handling for slow sites
-- [ ] Cache header parsing
-- [ ] Mock HTTP client for crawler tests
-
-#### URL Processing (`internal/util/`)
-
-- [x] URL normalisation functions
-- [x] Domain extraction
-- [x] Path extraction
-- [x] URL construction
-- [x] Protocol handling
-
-### 👷 Job Processing
-
-#### Job Types & Models (`internal/jobs/types.go`)
-
-- [x] Job and task type definitions
-- [x] Status constants
-- [x] JSON serialization of jobs/tasks
-
-#### Worker Pool (`internal/jobs/worker.go`)
-
-- [ ] Worker pool size adjustment
-- [ ] Graceful shutdown with timeout
-- [ ] Panic recovery in workers
-- [ ] Task processing concurrency limits
-- [ ] Worker health monitoring
-- [ ] Mock crawler for worker tests
-
-#### Job Manager (`internal/jobs/manager.go`)
-
-- [ ] Job scheduling
-- [ ] Job cancellation
-- [ ] Worker allocation
-- [ ] Queue management
-- [ ] Concurrency control
-
-### 🌐 API & Web Layer
-
-#### Core Handlers (`internal/api/handlers.go`)
-
-- [x] Health check endpoint
-- [x] Database health check endpoint
-- [x] Handler initialization
-- [x] Route setup
-- [x] Static file serving
-
-#### Middleware (`internal/api/middleware.go`)
-
-- [x] Request ID middleware
-- [x] Logging middleware
-- [x] CORS middleware
-- [x] Security headers middleware
-- [x] Cross-origin protection middleware
-
-#### Response Helpers (`internal/api/response.go`)
-
-- [x] JSON response formatting
-- [x] Success response structure
-- [x] Error response structure
-- [x] Health response structure
-- [x] No content responses
-
-#### Webhook Handling (`internal/api/webhooks.go`)
-
-- [ ] Webflow webhook signature validation
-- [ ] Webhook payload parsing errors
-- [ ] Duplicate webhook request handling
-- [ ] Webhook token authentication
-- [ ] Rate limiting for webhooks
-
-#### Dashboard API (`internal/api/dashboard.go`)
-
-- [ ] Stats endpoint aggregation
-- [ ] Activity timeline generation
-- [x] Date range filtering (calculateDateRange)
-- [ ] Pagination handling
-
-### 💾 Caching
-
-#### In-Memory Cache (`internal/cache/`)
-
-- [x] Cache implementation
-- [x] Get/Set/Delete operations
-- [x] Concurrent access safety
-- [x] Multiple key operations
-- [x] Benchmark cache operations
-
----
 
 ## Integration Tests by Functional Area
 
@@ -460,8 +368,6 @@ Based on comprehensive testing audit conducted in December 2024:
 - [ ] Graceful degradation
 - **Requirements**: Mock monitoring services
 
----
-
 ## Test Infrastructure Required
 
 ### Mocks to Create
@@ -505,8 +411,6 @@ Based on comprehensive testing audit conducted in December 2024:
    - Sample HTML responses
    - Sample sitemaps
 
----
-
 ## Testing Commands
 
 ### Run Unit Tests Only
@@ -534,8 +438,6 @@ go tool cover -html=coverage.out
 go test -bench=. -benchmem ./...
 ```
 
----
-
 ## Success Metrics
 
 - [ ] Unit test coverage > 80% (Currently: 33.8%)
@@ -545,8 +447,6 @@ go test -bench=. -benchmem ./...
 - [ ] No flaky tests
 - [x] Tests run in < 30 seconds (unit)
 - [ ] Tests run in < 2 minutes (integration)
-
----
 
 ## Progress Towards Goals
 
@@ -613,7 +513,7 @@ Beyond simple coverage percentages, tracking test quality indicators:
 
 #### HIGH PRIORITY: Data Layer
 
-2. **internal/db (10% → 30%)** - Database operations need comprehensive testing
+1. **internal/db (10% → 30%)** - Database operations need comprehensive testing
    - [ ] `queue.go` - CRUD operations with error injection
    - [ ] Transaction handling and rollback scenarios
    - [ ] Connection pool behaviour under stress
@@ -621,7 +521,7 @@ Beyond simple coverage percentages, tracking test quality indicators:
 
 #### MEDIUM PRIORITY: Mock Strategy Implementation
 
-3. **Systematic Mock Creation** - Foundation for unit testing
+1. **Systematic Mock Creation** - Foundation for unit testing
    - [ ] Database interface mocks (`internal/mocks/db_mock.go`)
    - [ ] HTTP client mocks for crawler testing
    - [ ] External service mocks (auth, monitoring)
@@ -629,13 +529,11 @@ Beyond simple coverage percentages, tracking test quality indicators:
 
 #### LOWER PRIORITY: Integration & Edge Cases
 
-4. **Complete existing coverage** - Fill remaining gaps
+1. **Complete existing coverage** - Fill remaining gaps
    - [ ] Webhook handling edge cases
    - [ ] API error path testing
    - [ ] End-to-end integration scenarios
    - [ ] Performance benchmark tests
-
----
 
 ## NEXT SESSION ACTION ITEMS
 

@@ -50,3 +50,18 @@ func (m *MockDbQueue) CreatePageRecords(ctx context.Context, dbQueue *db.DbQueue
 
 	return args.Get(0).([]int), args.Get(1).([]string), args.Error(2)
 }
+
+// GetNextTask mocks the GetNextTask method
+func (m *MockDbQueue) GetNextTask(ctx context.Context, jobID string) (*db.Task, error) {
+	args := m.Called(ctx, jobID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*db.Task), args.Error(1)
+}
+
+// UpdateTaskStatus mocks the UpdateTaskStatus method
+func (m *MockDbQueue) UpdateTaskStatus(ctx context.Context, task *db.Task) error {
+	args := m.Called(ctx, task)
+	return args.Error(0)
+}

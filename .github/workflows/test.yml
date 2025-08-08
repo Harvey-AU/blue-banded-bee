@@ -46,8 +46,8 @@ jobs:
       - name: Run unit tests
         run: |
           echo "=== Running Unit Tests ==="
-          # Run tests without integration tag (unit tests and tests without tags)
-          go test -v -coverprofile=coverage-unit.out -coverpkg=./... ./...
+          # Run tests without integration tag (unit tests and tests without tags) with race detection
+          go test -v -race -short -shuffle=on -coverprofile=coverage-unit.out -coverpkg=./... ./...
           
       - name: Run integration tests
         env:
@@ -57,9 +57,9 @@ jobs:
           # Install tools for test reporting
           go install github.com/jstemmer/go-junit-report/v2@latest
           
-          # Run only integration tests
+          # Run only integration tests with race detection
           set +e  # Don't exit on error temporarily
-          go test -v -coverprofile=coverage-integration.out -coverpkg=./... -tags=integration ./... -json > test-output.json
+          go test -v -race -coverprofile=coverage-integration.out -coverpkg=./... -tags=integration ./... -json > test-output.json
           TEST_EXIT_CODE=$?
           echo "Test exit code: $TEST_EXIT_CODE"
           set -e  # Re-enable exit on error
@@ -106,6 +106,43 @@ jobs:
           if [ -f coverage.out ]; then
             echo "=== Total Coverage ==="
             go tool cover -func=coverage.out | tail -1
+          fi
+
+      - name: Check coverage floors
+        if: always()
+        run: |
+          echo "=== Checking Coverage Floors ==="
+          
+          # Extract coverage percentages for critical packages
+          if [ -f coverage.out ]; then
+            DB_COVERAGE=$(go tool cover -func=coverage.out | grep "github.com/Harvey-AU/blue-banded-bee/internal/db" | awk '{print $3}' | sed 's/%//')
+            JOBS_COVERAGE=$(go tool cover -func=coverage.out | grep "github.com/Harvey-AU/blue-banded-bee/internal/jobs" | awk '{print $3}' | sed 's/%//')
+            
+            echo "DB Package Coverage: ${DB_COVERAGE}%"
+            echo "Jobs Package Coverage: ${JOBS_COVERAGE}%"
+            
+            # Set minimum coverage floors
+            DB_MIN=10
+            JOBS_MIN=15
+            
+            # Check if coverage meets minimum requirements
+            if [ ! -z "$DB_COVERAGE" ]; then
+              if (( $(echo "$DB_COVERAGE < $DB_MIN" | bc -l) )); then
+                echo "❌ DB package coverage ${DB_COVERAGE}% is below minimum ${DB_MIN}%"
+                exit 1
+              else
+                echo "✅ DB package coverage ${DB_COVERAGE}% meets minimum ${DB_MIN}%"
+              fi
+            fi
+            
+            if [ ! -z "$JOBS_COVERAGE" ]; then
+              if (( $(echo "$JOBS_COVERAGE < $JOBS_MIN" | bc -l) )); then
+                echo "❌ Jobs package coverage ${JOBS_COVERAGE}% is below minimum ${JOBS_MIN}%"
+                exit 1
+              else
+                echo "✅ Jobs package coverage ${JOBS_COVERAGE}% meets minimum ${JOBS_MIN}%"
+              fi
+            fi
           fi
 
       - name: Upload unit test coverage to Codecov
