@@ -1,33 +1,62 @@
 # Blue Banded Bee Test Plan
 
 ## Overview
+
 Comprehensive testing plan for unit and integration tests using mocks and testify framework.
+
+## Immediate Actions and Standards (Quick Guide)
+
+This short section captures the immediate priorities and execution standards so contributors and agents can act quickly.
+
+- Immediate actions (next PR)
+  - Add worker pool tests: lifecycle (start/stop), context cancellation, graceful shutdown with timeout, panic recovery, and concurrency limits; run with -race.
+  - Expand job manager unit tests: scheduling and cancellation, worker allocation decisions, queue operations via mocks, and error-path/state-transition coverage.
+  - Create missing mocks: `internal/mocks/db.go`, `internal/mocks/http_client.go`, `internal/mocks/auth_client.go`.
+
+- Standards and execution
+  - Build tags: use `//go:build integration` for integration tests only. Unit tests are untagged; use `-short` for fast runs.
+  - Consistency: use testify (`assert`/`require`) everywhere; prefer table-driven tests; mark helpers with `t.Helper()`; clean up with `t.Cleanup()`; use `t.Parallel()` for independent subtests.
+  - Concurrency: run with `-race` locally and in CI for unit tests touching concurrent code.
+
+- CI and scripts
+  - Split CI: fast unit job (< 10 seconds) and a separate integration job.
+  - Update `run-tests.sh` to run unit tests with `-short` and integration tests with `-tags=integration` explicitly.
+
+- Nice to haves
+  - Benchmarks for hot paths (cache, URL utils, response helpers).
+  - Concurrency/race harness for jobs to detect races deterministically.
+  - CI coverage gates and, where beneficial, parallelised test shards.
 
 ## AUDIT ASSESSMENT (December 2024)
 
 ### Current State Analysis
+
 Based on comprehensive testing audit conducted in December 2024:
 
 **Actual Overall Coverage: 33.8%** (corrected from previous 23% estimate)
 
 #### Critical Quality Issues Identified
+
 1. **Testing Strategy Problems**: Over-reliance on integration tests (80%) vs unit tests (20%) - should be inverted
 2. **Mock Usage Gaps**: Only 10% of external dependencies properly mocked
 3. **Concurrency Testing Missing**: No race condition or deadlock tests despite concurrent worker architecture
 4. **Business Logic Coverage Gaps**: Core job processing (1% coverage) and database operations (10% coverage) severely undertested
 
 #### Risk Assessment Summary
+
 - **HIGH RISK**: Job processing pipeline - single points of failure in worker pool and job manager
 - **MEDIUM RISK**: Database operations - transaction handling and connection pooling untested
 - **LOW RISK**: API layer - well covered but missing edge cases
 
 #### Test Quality Beyond Coverage
+
 - **Test Isolation Score**: 40% (many tests share state)
 - **Mock Usage**: 15% of tests use proper mocks
 - **Error Path Coverage**: 25% of error conditions tested
 - **Concurrency Test Coverage**: 5% of concurrent code tested
 
 ### Infrastructure Assessment
+
 - ✅ Good: testify framework consistently used
 - ✅ Good: Test database setup working
 - ❌ Poor: No systematic mock strategy
@@ -37,24 +66,28 @@ Based on comprehensive testing audit conducted in December 2024:
 ## CRITICAL ISSUES IDENTIFIED
 
 ### 1. Testing Strategy Problems
+
 - **Over-Integration**: 80% integration tests vs 20% unit tests (should be reversed)
 - **Slow Feedback**: Test suite takes 45+ seconds due to database dependency
 - **Flaky Tests**: 15% failure rate on CI due to database timing issues
 - **Resource Heavy**: Each test requires full database setup
 
 ### 2. Mock Usage Gaps
+
 - **Missing Database Mocks**: All DB tests use real connections
 - **No HTTP Client Mocks**: Crawler tests hit real endpoints
 - **Missing External Service Mocks**: Auth, monitoring services not mocked
 - **Interface Coverage**: Only 2 of 8 major interfaces have mocks
 
 ### 3. Concurrency Testing Missing
+
 - **Worker Pool**: No race condition testing
 - **Job Queue**: No concurrent job processing tests
 - **Cache**: Limited concurrent access testing
 - **Database Connections**: No connection pool stress testing
 
 ### 4. Business Logic Coverage Gaps
+
 - **Job Processing**: Core business logic at 1% coverage
 - **Database Operations**: CRUD operations at 10% coverage
 - **Error Handling**: 75% of error paths untested
@@ -63,7 +96,9 @@ Based on comprehensive testing audit conducted in December 2024:
 ## PRIORITISED ACTION PLAN
 
 ### Immediate (Next Session)
+
 **Target: Increase internal/jobs from 1% to 20% coverage**
+
 1. `internal/jobs/worker.go` - Add worker pool unit tests with mocks
    - Worker lifecycle (start/stop/panic recovery)
    - Task assignment and processing
@@ -74,7 +109,9 @@ Based on comprehensive testing audit conducted in December 2024:
    - Queue management operations
 
 ### Short-term (1-2 weeks)
+
 **Target: Increase internal/db from 10% to 30% coverage**
+
 1. Create comprehensive database mocks (`internal/mocks/db_mock.go`)
 2. `internal/db/queue.go` - Add database operation tests
    - CRUD operations with error injection
@@ -85,7 +122,9 @@ Based on comprehensive testing audit conducted in December 2024:
    - Deadlock testing utilities
 
 ### Medium-term (1 month)
+
 **Target: Implement proper mock strategy**
+
 1. **Mock Strategy Overhaul**:
    - Create mock interfaces for all external dependencies
    - Implement dependency injection pattern
@@ -100,6 +139,7 @@ Based on comprehensive testing audit conducted in December 2024:
    - Separate integration test pipeline
 
 ## Testing Principles
+
 - Unit tests should be isolated using mocks
 - Integration tests should use real database connections (tagged)
 - All tests use testify (assert/require) for consistency
@@ -111,6 +151,7 @@ Based on comprehensive testing audit conducted in December 2024:
 **Overall Coverage: 33.8%** (as of December 2024 audit)
 
 ### Coverage by Package
+
 - `internal/cache` - **100.0%** ✅
 - `internal/util` - **81.1%** ✅
 - `internal/crawler` - **65.5%** ⚠️
@@ -124,24 +165,29 @@ Based on comprehensive testing audit conducted in December 2024:
 ### Coverage by Functional Area
 
 #### 🔐 Authentication & Authorization
+
 - **Core Auth**: ⚠️ Partial (config done, JWT validation pending)
 - **Auth API**: ✅ Good (endpoints tested)
 
-#### 🗄️ Database Layer  
+#### 🗄️ Database Layer
+
 - **Connection Management**: ⚠️ Partial (config done, operations pending)
 - **Job Queue**: ❌ Not tested
 - **Dashboard Queries**: ❌ Not tested
 
 #### 🕷️ Web Crawling
+
 - **Core Crawler**: ✅ Good (sitemap/robots done, HTML parsing pending)
 - **URL Processing**: ✅ Excellent (fully tested)
 
 #### 👷 Job Processing
+
 - **Job Types**: ✅ Good (types tested)
 - **Worker Pool**: ❌ Not tested
 - **Job Manager**: ❌ Not tested
 
 #### 🌐 API & Web Layer
+
 - **Core Handlers**: ✅ Good (health/routes tested)
 - **Middleware**: ✅ Excellent (fully tested)
 - **Response Helpers**: ✅ Excellent (fully tested)
@@ -149,9 +195,11 @@ Based on comprehensive testing audit conducted in December 2024:
 - **Dashboard API**: ⚠️ Partial (date filtering done)
 
 #### 💾 Caching
+
 - **In-Memory Cache**: ✅ Excellent (100% coverage)
 
 ### ✅ Completed Tests
+
 - [x] `internal/cache/cache_test.go` - Complete cache implementation tests with concurrency
 - [x] `internal/auth/auth_test.go` - Config validation and environment handling
 - [x] `internal/db/db_test.go` - Connection configuration and validation tests
@@ -165,11 +213,13 @@ Based on comprehensive testing audit conducted in December 2024:
 - [x] `internal/crawler/sitemap_test.go` - Sitemap discovery and filtering
 
 ### ⚠️ Partially Tested
+
 - [ ] `internal/api/handlers_simple_test.go` - Basic handlers, missing webhook logic
 - [ ] `internal/crawler/crawler_test.go` - Basic crawling, missing link extraction
 - [ ] `internal/jobs/manager_test.go` - Basic manager, missing concurrency tests
 
 ### ❌ Needs More Testing
+
 - [ ] `internal/db/` - Database operations (needs more coverage beyond config)
 - [ ] `internal/jobs/` - Worker pool and job processing (only types tested)
 
@@ -180,6 +230,7 @@ Based on comprehensive testing audit conducted in December 2024:
 ### 🔐 Authentication & Authorization
 
 #### Core Auth (`internal/auth/`)
+
 - [x] JWT token configuration loading
 - [x] Environment variable validation
 - [x] Config validation method
@@ -192,6 +243,7 @@ Based on comprehensive testing audit conducted in December 2024:
 - [ ] Mock Supabase client for auth verification
 
 #### Auth API Endpoints (`internal/api/auth.go`)
+
 - [x] Registration endpoint (POST /v1/auth/register)
 - [x] Session endpoint (POST /v1/auth/session)
 - [x] Profile endpoint (GET /v1/auth/profile)
@@ -201,6 +253,7 @@ Based on comprehensive testing audit conducted in December 2024:
 ### 🗄️ Database Layer
 
 #### Connection Management (`internal/db/`)
+
 - [x] Connection pool initialisation
 - [x] Connection configuration and validation
 - [x] DatabaseURL vs individual field precedence
@@ -212,6 +265,7 @@ Based on comprehensive testing audit conducted in December 2024:
 - [ ] Mock pgx connection for unit tests
 
 #### Job Queue Operations (`internal/db/queue.go`)
+
 - [ ] CreateJob with valid domain
 - [ ] GetJob by ID retrieval
 - [ ] UpdateJobStatus state transitions
@@ -223,6 +277,7 @@ Based on comprehensive testing audit conducted in December 2024:
 - [ ] Mock database queries for isolation
 
 #### Dashboard Queries (`internal/db/dashboard.go`)
+
 - [ ] Stats aggregation queries
 - [ ] Activity timeline queries
 - [ ] Date range filtering in queries
@@ -231,6 +286,7 @@ Based on comprehensive testing audit conducted in December 2024:
 ### 🕷️ Web Crawling
 
 #### Core Crawler (`internal/crawler/`)
+
 - [x] Sitemap discovery and parsing
 - [x] Robots.txt parsing
 - [x] URL filtering (include/exclude paths)
@@ -242,6 +298,7 @@ Based on comprehensive testing audit conducted in December 2024:
 - [ ] Mock HTTP client for crawler tests
 
 #### URL Processing (`internal/util/`)
+
 - [x] URL normalisation functions
 - [x] Domain extraction
 - [x] Path extraction
@@ -251,11 +308,13 @@ Based on comprehensive testing audit conducted in December 2024:
 ### 👷 Job Processing
 
 #### Job Types & Models (`internal/jobs/types.go`)
+
 - [x] Job and task type definitions
 - [x] Status constants
 - [x] JSON serialization of jobs/tasks
 
 #### Worker Pool (`internal/jobs/worker.go`)
+
 - [ ] Worker pool size adjustment
 - [ ] Graceful shutdown with timeout
 - [ ] Panic recovery in workers
@@ -264,6 +323,7 @@ Based on comprehensive testing audit conducted in December 2024:
 - [ ] Mock crawler for worker tests
 
 #### Job Manager (`internal/jobs/manager.go`)
+
 - [ ] Job scheduling
 - [ ] Job cancellation
 - [ ] Worker allocation
@@ -273,6 +333,7 @@ Based on comprehensive testing audit conducted in December 2024:
 ### 🌐 API & Web Layer
 
 #### Core Handlers (`internal/api/handlers.go`)
+
 - [x] Health check endpoint
 - [x] Database health check endpoint
 - [x] Handler initialization
@@ -280,6 +341,7 @@ Based on comprehensive testing audit conducted in December 2024:
 - [x] Static file serving
 
 #### Middleware (`internal/api/middleware.go`)
+
 - [x] Request ID middleware
 - [x] Logging middleware
 - [x] CORS middleware
@@ -287,6 +349,7 @@ Based on comprehensive testing audit conducted in December 2024:
 - [x] Cross-origin protection middleware
 
 #### Response Helpers (`internal/api/response.go`)
+
 - [x] JSON response formatting
 - [x] Success response structure
 - [x] Error response structure
@@ -294,6 +357,7 @@ Based on comprehensive testing audit conducted in December 2024:
 - [x] No content responses
 
 #### Webhook Handling (`internal/api/webhooks.go`)
+
 - [ ] Webflow webhook signature validation
 - [ ] Webhook payload parsing errors
 - [ ] Duplicate webhook request handling
@@ -301,6 +365,7 @@ Based on comprehensive testing audit conducted in December 2024:
 - [ ] Rate limiting for webhooks
 
 #### Dashboard API (`internal/api/dashboard.go`)
+
 - [ ] Stats endpoint aggregation
 - [ ] Activity timeline generation
 - [x] Date range filtering (calculateDateRange)
@@ -309,6 +374,7 @@ Based on comprehensive testing audit conducted in December 2024:
 ### 💾 Caching
 
 #### In-Memory Cache (`internal/cache/`)
+
 - [x] Cache implementation
 - [x] Get/Set/Delete operations
 - [x] Concurrent access safety
@@ -322,6 +388,7 @@ Based on comprehensive testing audit conducted in December 2024:
 ### 🔄 End-to-End Workflows
 
 #### Complete Job Processing Flow
+
 - [ ] Job creation via API
 - [ ] Webhook triggering job creation
 - [ ] Job processing with real crawler
@@ -331,6 +398,7 @@ Based on comprehensive testing audit conducted in December 2024:
 - **Requirements**: Real database, mock HTTP server
 
 #### User Journey
+
 - [ ] User registration flow
 - [ ] Authentication and authorization
 - [ ] Create and monitor job
@@ -341,6 +409,7 @@ Based on comprehensive testing audit conducted in December 2024:
 ### 🗄️ Database Integration
 
 #### Migration Testing
+
 - [ ] Migration application ordering
 - [ ] Rollback functionality
 - [ ] Idempotent migration runs
@@ -348,6 +417,7 @@ Based on comprehensive testing audit conducted in December 2024:
 - **Requirements**: Test database instance
 
 #### Database Health
+
 - [x] Health check with timeout
 - [ ] Connection pool under load
 - [ ] Transaction isolation levels
@@ -357,6 +427,7 @@ Based on comprehensive testing audit conducted in December 2024:
 ### 🔐 Authentication Integration
 
 #### Supabase Integration
+
 - [ ] JWT validation end-to-end
 - [ ] Role-based access control
 - [ ] Token refresh flow
@@ -364,6 +435,7 @@ Based on comprehensive testing audit conducted in December 2024:
 - **Requirements**: Supabase test project
 
 #### API Security
+
 - [ ] Rate limiting per IP
 - [ ] Rate limiting per user
 - [ ] Rate limit headers
@@ -373,6 +445,7 @@ Based on comprehensive testing audit conducted in December 2024:
 ### 🔗 External Services
 
 #### Webhook Integration
+
 - [ ] Webflow webhook processing
 - [ ] Webhook retry on failure
 - [ ] Webhook deduplication
@@ -380,6 +453,7 @@ Based on comprehensive testing audit conducted in December 2024:
 - **Requirements**: Mock Webflow server
 
 #### Monitoring Services
+
 - [ ] Sentry error reporting
 - [ ] Performance metrics
 - [ ] Health check endpoints
@@ -391,6 +465,7 @@ Based on comprehensive testing audit conducted in December 2024:
 ## Test Infrastructure Required
 
 ### Mocks to Create
+
 1. **Database Mock** (`internal/mocks/db.go`)
    - Mock all DB interface methods
    - Support transaction testing
@@ -412,6 +487,7 @@ Based on comprehensive testing audit conducted in December 2024:
    - Role checking
 
 ### Test Helpers Needed
+
 1. **Test Database Setup** (`internal/testutil/db.go`)
    - Create test database
    - Run migrations
@@ -434,22 +510,26 @@ Based on comprehensive testing audit conducted in December 2024:
 ## Testing Commands
 
 ### Run Unit Tests Only
+
 ```bash
 go test -v -race ./... -short
 ```
 
 ### Run Integration Tests Only
+
 ```bash
 go test -v -race -tags=integration ./...
 ```
 
 ### Run All Tests with Coverage
+
 ```bash
 go test -v -race -coverprofile=coverage.out ./...
 go tool cover -html=coverage.out
 ```
 
 ### Run Benchmarks
+
 ```bash
 go test -bench=. -benchmem ./...
 ```
@@ -457,6 +537,7 @@ go test -bench=. -benchmem ./...
 ---
 
 ## Success Metrics
+
 - [ ] Unit test coverage > 80% (Currently: 33.8%)
 - [ ] Integration test coverage > 60%
 - [ ] All critical paths tested
@@ -469,10 +550,11 @@ go test -bench=. -benchmem ./...
 
 ## Progress Towards Goals
 
-### Current Status  
+### Current Status
+
 - **Overall Coverage**: 33.8% ↑ (from initial 13.3%)
 - **Target**: 40-50% short-term, 80% long-term
-- **Packages with Excellent Coverage (>80%)**: 
+- **Packages with Excellent Coverage (>80%)**:
   - [x] cache (100%)
   - [x] util (81%)
 - **Packages with Good Coverage (>40%)**:
@@ -485,6 +567,7 @@ go test -bench=. -benchmem ./...
   - [ ] jobs (1%)
 
 ### Completed in This Session
+
 - [x] Added comprehensive cache tests with concurrency
 - [x] Created auth config validation tests
 - [x] Added db connection configuration tests
@@ -501,6 +584,7 @@ go test -bench=. -benchmem ./...
 Beyond simple coverage percentages, tracking test quality indicators:
 
 ### Current Quality Scores (December 2024)
+
 - **Test Isolation Score**: 40% (many tests share state or require database)
 - **Mock Usage Percentage**: 15% (most tests use real dependencies)
 - **Concurrency Test Coverage**: 5% (minimal race condition testing)
@@ -509,8 +593,9 @@ Beyond simple coverage percentages, tracking test quality indicators:
 - **Benchmark Test Coverage**: 10% (performance testing gaps)
 
 ### Quality Improvement Targets
+
 - **Test Isolation**: 80% (proper mocks and test isolation)
-- **Mock Usage**: 60% (external dependencies properly mocked)  
+- **Mock Usage**: 60% (external dependencies properly mocked)
 - **Concurrency Testing**: 40% (concurrent code properly tested)
 - **Error Path Coverage**: 70% (comprehensive error testing)
 - **Table-Driven Tests**: 80% (consistent pattern usage)
@@ -519,13 +604,15 @@ Beyond simple coverage percentages, tracking test quality indicators:
 ### Next Priority Tasks (Reorganised Based on Audit)
 
 #### HIGHEST PRIORITY: Core Business Logic
+
 1. **internal/jobs (1% → 20%)** - Critical business logic undertested
    - [ ] `worker.go` - Worker pool lifecycle and panic recovery
-   - [ ] `manager.go` - Job scheduling and cancellation logic  
+   - [ ] `manager.go` - Job scheduling and cancellation logic
    - [ ] Task processing with proper error handling
    - [ ] Concurrency testing for worker coordination
 
-#### HIGH PRIORITY: Data Layer  
+#### HIGH PRIORITY: Data Layer
+
 2. **internal/db (10% → 30%)** - Database operations need comprehensive testing
    - [ ] `queue.go` - CRUD operations with error injection
    - [ ] Transaction handling and rollback scenarios
@@ -533,13 +620,15 @@ Beyond simple coverage percentages, tracking test quality indicators:
    - [ ] Mock database interface implementation
 
 #### MEDIUM PRIORITY: Mock Strategy Implementation
+
 3. **Systematic Mock Creation** - Foundation for unit testing
    - [ ] Database interface mocks (`internal/mocks/db_mock.go`)
-   - [ ] HTTP client mocks for crawler testing  
+   - [ ] HTTP client mocks for crawler testing
    - [ ] External service mocks (auth, monitoring)
    - [ ] Dependency injection refactoring
 
 #### LOWER PRIORITY: Integration & Edge Cases
+
 4. **Complete existing coverage** - Fill remaining gaps
    - [ ] Webhook handling edge cases
    - [ ] API error path testing
@@ -555,10 +644,12 @@ When starting the next testing session, immediately begin with:
 ### Immediate Focus: internal/jobs Package Testing
 
 **Files to Test First:**
+
 1. `/Users/simonsmallchua/Documents/GitHub/blue-banded-bee/internal/jobs/worker.go`
 2. `/Users/simonsmallchua/Documents/GitHub/blue-banded-bee/internal/jobs/manager.go`
 
 **Key Functions to Test:**
+
 - Worker pool creation and lifecycle
 - Task assignment and processing
 - Graceful shutdown mechanisms
@@ -566,20 +657,23 @@ When starting the next testing session, immediately begin with:
 - Job scheduling and cancellation
 
 **Test Strategy:**
+
 - Create unit tests with proper mocks (avoid database dependency)
 - Use table-driven tests for multiple scenarios
 - Add concurrency testing for race conditions
 - Test error paths and edge cases
 
 **Success Criteria for First Session:**
+
 - Increase internal/jobs coverage from 1% to 15%+
 - Create at least 20 new unit tests
 - Implement basic mock strategy for external dependencies
 - All tests pass with `go test -race`
 
 **Files to Create:**
+
 - `internal/jobs/worker_test.go` - Worker pool unit tests
-- `internal/jobs/manager_test.go` - Job manager unit tests  
+- `internal/jobs/manager_test.go` - Job manager unit tests
 - `internal/mocks/db_mock.go` - Database interface mock
 
 This plan provides clear, actionable steps that address the most critical coverage gaps identified in the audit.
