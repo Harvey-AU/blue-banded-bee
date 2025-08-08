@@ -846,7 +846,7 @@ func (wp *WorkerPool) recoverRunningJobs(ctx context.Context) error {
 
 // recoveryMonitor periodically checks for and recovers stale tasks
 func (wp *WorkerPool) recoveryMonitor(ctx context.Context) {
-	defer wp.wg.Done()
+	// Note: wp.wg.Done() is handled automatically by wp.wg.Go()
 
 	ticker := time.NewTicker(wp.recoveryInterval)
 	defer ticker.Stop()
@@ -904,7 +904,7 @@ func (wp *WorkerPool) scaleWorkers(ctx context.Context, targetWorkers int) {
 
 // Batch processor goroutine
 func (wp *WorkerPool) processBatches(ctx context.Context) {
-	defer wp.wg.Done()
+	// Note: wp.wg.Done() is handled automatically by wp.wg.Go()
 
 	for {
 		select {
@@ -1421,7 +1421,7 @@ func isDocumentLink(path string) bool {
 
 // listenForNotifications sets up PostgreSQL LISTEN/NOTIFY
 func (wp *WorkerPool) listenForNotifications(ctx context.Context) {
-	defer wp.wg.Done()
+	// Note: wp.wg.Done() is handled automatically by wp.wg.Go()
 
 	var conn *pgx.Conn
 	var err error

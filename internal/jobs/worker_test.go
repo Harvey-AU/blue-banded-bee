@@ -13,9 +13,12 @@ import (
 	"github.com/Harvey-AU/blue-banded-bee/internal/crawler"
 	"github.com/Harvey-AU/blue-banded-bee/internal/db"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestNewWorkerPool(t *testing.T) {
+	t.Helper()
+	
 	tests := []struct {
 		name        string
 		db          *sql.DB
@@ -90,13 +93,16 @@ func TestNewWorkerPool(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Helper()
+			t.Parallel()
+			
 			if tt.expectPanic {
 				assert.PanicsWithValue(t, tt.panicMsg, func() {
 					NewWorkerPool(tt.db, tt.dbQueue, tt.crawler, tt.numWorkers, tt.dbConfig)
 				})
 			} else {
 				wp := NewWorkerPool(tt.db, tt.dbQueue, tt.crawler, tt.numWorkers, tt.dbConfig)
-				assert.NotNil(t, wp)
+				require.NotNil(t, wp)
 				assert.Equal(t, tt.numWorkers, wp.numWorkers)
 				assert.Equal(t, tt.numWorkers, wp.baseWorkerCount)
 				assert.Equal(t, tt.numWorkers, wp.currentWorkers)
@@ -106,12 +112,19 @@ func TestNewWorkerPool(t *testing.T) {
 				assert.NotNil(t, wp.taskBatch)
 				assert.NotNil(t, wp.jobPerformance)
 				assert.NotNil(t, wp.jobInfoCache)
+				
+				t.Cleanup(func() {
+					wp.Stop()
+				})
 			}
 		})
 	}
 }
 
 func TestNewWorkerPoolInitialisation(t *testing.T) {
+	t.Helper()
+	t.Parallel()
+	
 	// Create mock dependencies
 	mockDB := &sql.DB{}
 	mockDbQueue := &db.DbQueue{}
@@ -119,7 +132,10 @@ func TestNewWorkerPoolInitialisation(t *testing.T) {
 	mockConfig := &db.Config{}
 
 	wp := NewWorkerPool(mockDB, mockDbQueue, mockCrawler, 5, mockConfig)
-	defer wp.Stop() // Clean up background goroutines
+	
+	t.Cleanup(func() {
+		wp.Stop()
+	})
 
 	// Test proper initialisation
 	assert.Equal(t, mockDB, wp.db)
@@ -154,6 +170,9 @@ func TestNewWorkerPoolInitialisation(t *testing.T) {
 }
 
 func TestWorkerPoolStopAndWait(t *testing.T) {
+	t.Helper()
+	t.Parallel()
+	
 	mockDB := &sql.DB{}
 	mockDbQueue := &db.DbQueue{}
 	mockCrawler := &crawler.Crawler{}
@@ -179,6 +198,9 @@ func TestWorkerPoolStopAndWait(t *testing.T) {
 }
 
 func TestWorkerPoolAddJobBasicTracking(t *testing.T) {
+	t.Helper()
+	t.Parallel()
+	
 	// Test the basic job tracking without database operations
 	mockDB := &sql.DB{}
 	mockDbQueue := &db.DbQueue{}
@@ -186,7 +208,10 @@ func TestWorkerPoolAddJobBasicTracking(t *testing.T) {
 	mockConfig := &db.Config{}
 
 	wp := NewWorkerPool(mockDB, mockDbQueue, mockCrawler, 2, mockConfig)
-	defer wp.Stop() // Clean up background goroutines
+	
+	t.Cleanup(func() {
+		wp.Stop()
+	})
 
 	jobID := "test-job-123"
 	
@@ -350,6 +375,9 @@ func TestWorkerPoolConcurrentJobManagement(t *testing.T) {
 }
 
 func TestIsSameOrSubDomain(t *testing.T) {
+	t.Helper()
+	t.Parallel()
+	
 	tests := []struct {
 		name         string
 		hostname     string
@@ -420,6 +448,9 @@ func TestIsSameOrSubDomain(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Helper()
+			t.Parallel()
+			
 			result := isSameOrSubDomain(tt.hostname, tt.targetDomain)
 			assert.Equal(t, tt.expected, result)
 		})
