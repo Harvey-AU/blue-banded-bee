@@ -79,7 +79,9 @@
       "mcp__supabase__list_projects",
       "mcp__supabase__list_tables",
       "mcp__supabase__execute_sql",
-      "Bash(go clean:*)"
+      "Bash(go clean:*)",
+      "Bash(time go test:*)",
+      "Bash(bash:*)"
     ],
     "deny": []
   },
