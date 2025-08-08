@@ -4,9 +4,27 @@ on:
     branches:
       - main
       - test-branch
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'LICENSE'
+      - '.gitignore'
+      - 'CHANGELOG.md'
+      - 'SECURITY.md'
+      - 'Roadmap.md'
+      - 'QandA.md'
   push:
     branches:
       - main
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'LICENSE'
+      - '.gitignore'
+      - 'CHANGELOG.md'
+      - 'SECURITY.md'
+      - 'Roadmap.md'
+      - 'QandA.md'
 
 jobs:
   test:
@@ -29,7 +47,7 @@ jobs:
         run: |
           echo "=== Running Unit Tests ==="
           # Run tests without integration tag (unit tests and tests without tags)
-          go test -v -coverprofile=coverage-unit.out -coverpkg=./... -tags='!integration' ./...
+          go test -v -coverprofile=coverage-unit.out -coverpkg=./... ./...
           
       - name: Run integration tests
         env:

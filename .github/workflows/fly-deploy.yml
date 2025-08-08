@@ -5,6 +5,15 @@ on:
   push:
     branches:
       - main
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'LICENSE'
+      - '.gitignore'
+      - 'CHANGELOG.md'
+      - 'SECURITY.md'
+      - 'Roadmap.md'
+      - 'QandA.md'
 jobs:
   deploy:
     name: Deploy app
