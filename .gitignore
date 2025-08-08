@@ -32,6 +32,7 @@ logs/
 # Testing
 coverage.out
 *.test
+*.out
 
 # Patches
 *.patch

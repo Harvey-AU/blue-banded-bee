@@ -123,14 +123,18 @@ func NewWorkerPool(db *sql.DB, dbQueue *db.DbQueue, crawler *crawler.Crawler, nu
 	}
 
 	// Start the batch processor
-	wp.wg.Go(func() {
+	wp.wg.Add(1)
+	go func() {
+		defer wp.wg.Done()
 		wp.processBatches(context.Background())
-	})
+	}()
 
 	// Start the notification listener
-	wp.wg.Go(func() {
+	wp.wg.Add(1)
+	go func() {
+		defer wp.wg.Done()
 		wp.listenForNotifications(context.Background())
-	})
+	}()
 
 	return wp
 }
@@ -140,15 +144,19 @@ func (wp *WorkerPool) Start(ctx context.Context) {
 
 	for i := 0; i < wp.numWorkers; i++ {
 		i := i
-		wp.wg.Go(func() {
+		wp.wg.Add(1)
+		go func() {
+			defer wp.wg.Done()
 			wp.worker(ctx, i)
-		})
+		}()
 	}
 
 	// Start the recovery monitor
-	wp.wg.Go(func() {
+	wp.wg.Add(1)
+	go func() {
+		defer wp.wg.Done()
 		wp.recoveryMonitor(ctx)
-	})
+	}()
 
 	// Run initial cleanup
 	if err := wp.CleanupStuckJobs(ctx); err != nil {
@@ -167,11 +175,17 @@ func (wp *WorkerPool) Start(ctx context.Context) {
 }
 
 func (wp *WorkerPool) Stop() {
-	wp.stopping.Store(true)
-	log.Debug().Msg("Stopping worker pool")
-	close(wp.stopCh)
-	wp.wg.Wait()
-	log.Debug().Msg("Worker pool stopped")
+	// Only stop once - use atomic compare-and-swap to ensure thread safety
+	if wp.stopping.CompareAndSwap(false, true) {
+		log.Debug().Msg("Stopping worker pool")
+		close(wp.stopCh)
+		// Stop the batch timer to prevent leaks
+		if wp.batchTimer != nil {
+			wp.batchTimer.Stop()
+		}
+		wp.wg.Wait()
+		log.Debug().Msg("Worker pool stopped")
+	}
 }
 
 // WaitForJobs waits for all active jobs to complete
@@ -197,17 +211,28 @@ func (wp *WorkerPool) AddJob(jobID string, options *JobOptions) {
 	ctx := context.Background()
 	var domainName string
 	var crawlDelay sql.NullInt64
-	err := wp.db.QueryRowContext(ctx, `
-		SELECT d.name, d.crawl_delay_seconds
+	var dbFindLinks bool
+	
+	// When options is nil (recovery mode), fetch find_links from DB
+	// Otherwise use the provided options value
+	query := `
+		SELECT d.name, d.crawl_delay_seconds, j.find_links
 		FROM domains d
 		JOIN jobs j ON j.domain_id = d.id
 		WHERE j.id = $1
-	`, jobID).Scan(&domainName, &crawlDelay)
+	`
+	err := wp.db.QueryRowContext(ctx, query, jobID).Scan(&domainName, &crawlDelay, &dbFindLinks)
 
 	if err == nil {
+		// Use DB value when options is nil (recovery), otherwise use provided value
+		findLinks := dbFindLinks
+		if options != nil {
+			findLinks = options.FindLinks
+		}
+		
 		jobInfo := &JobInfo{
 			DomainName: domainName,
-			FindLinks:  options.FindLinks,
+			FindLinks:  findLinks,
 			CrawlDelay: 0,
 		}
 		if crawlDelay.Valid {
@@ -582,7 +607,9 @@ func (wp *WorkerPool) EnqueueURLs(ctx context.Context, jobID string, pages []db.
 // StartTaskMonitor starts a background process that monitors for pending tasks
 func (wp *WorkerPool) StartTaskMonitor(ctx context.Context) {
 	log.Info().Msg("Starting task monitor to check for pending tasks")
+	wp.wg.Add(1)
 	go func() {
+		defer wp.wg.Done()
 		ticker := time.NewTicker(30 * time.Second)
 		defer ticker.Stop()
 
@@ -846,8 +873,6 @@ func (wp *WorkerPool) recoverRunningJobs(ctx context.Context) error {
 
 // recoveryMonitor periodically checks for and recovers stale tasks
 func (wp *WorkerPool) recoveryMonitor(ctx context.Context) {
-	defer wp.wg.Done()
-
 	ticker := time.NewTicker(wp.recoveryInterval)
 	defer ticker.Stop()
 
@@ -894,9 +919,11 @@ func (wp *WorkerPool) scaleWorkers(ctx context.Context, targetWorkers int) {
 	// Start additional workers
 	for i := 0; i < workersToAdd; i++ {
 		workerID := wp.currentWorkers + i
-		wp.wg.Go(func() {
-			wp.worker(ctx, workerID)
-		})
+		wp.wg.Add(1)
+		go func(id int) {
+			defer wp.wg.Done()
+			wp.worker(ctx, id)
+		}(workerID)
 	}
 
 	wp.currentWorkers = targetWorkers
@@ -904,8 +931,6 @@ func (wp *WorkerPool) scaleWorkers(ctx context.Context, targetWorkers int) {
 
 // Batch processor goroutine
 func (wp *WorkerPool) processBatches(ctx context.Context) {
-	defer wp.wg.Done()
-
 	for {
 		select {
 		case <-wp.batchTimer.C:
@@ -997,7 +1022,9 @@ func (wp *WorkerPool) flushBatches(ctx context.Context) {
 
 // Add new method to start the cleanup monitor
 func (wp *WorkerPool) StartCleanupMonitor(ctx context.Context) {
-	wp.wg.Go(func() {
+	wp.wg.Add(1)
+	go func() {
+		defer wp.wg.Done()
 		ticker := time.NewTicker(wp.cleanupInterval)
 		defer ticker.Stop()
 
@@ -1013,7 +1040,7 @@ func (wp *WorkerPool) StartCleanupMonitor(ctx context.Context) {
 				}
 			}
 		}
-	})
+	}()
 	log.Info().Msg("Job cleanup monitor started")
 }
 
@@ -1421,8 +1448,6 @@ func isDocumentLink(path string) bool {
 
 // listenForNotifications sets up PostgreSQL LISTEN/NOTIFY
 func (wp *WorkerPool) listenForNotifications(ctx context.Context) {
-	defer wp.wg.Done()
-
 	var conn *pgx.Conn
 	var err error
 
