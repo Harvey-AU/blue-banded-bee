@@ -343,11 +343,12 @@ Detailed plan available in [docs/organisation-model.md](docs/plans/organisation-
 
 ## ⚪ Stage 5: Subscriptions & Monetisation
 
-### 🔴 Testing & Quality
+### 🟡 Testing & Quality
 
 - [ ] **Comprehensive Test Coverage** - See [TEST_PLAN.md](docs/TEST_PLAN.md)
-  - [ ] Achieve 80% unit test coverage
-  - [ ] Implement critical integration tests
+  - [ ] Achieve 80% unit test coverage (Currently: 23.5%)
+  - [x] Implement critical integration tests
+  - [x] Fix critical test issues (P0/P1 from expert review)
   - [ ] Add performance benchmarks
 
 ### 🔴 Payment Infrastructure
@@ -467,6 +468,9 @@ Detailed plan available in [docs/organisation-model.md](docs/plans/organisation-
   - [x] Set up CI/CD with Supabase pooler URLs for IPv4 compatibility
   - [x] Fix test environment loading to use .env.test file
   - [x] Reorganise testing documentation into modular structure
+  - [x] Fix critical test issues from expert review (P0/P1 priorities)
+  - [x] Implement sqlmock tests for database operations
+  - [x] Create comprehensive mock infrastructure (MockDB, DSN helpers)
   - [ ] **Implement Comprehensive API Testing** - [Post-Launch Plan](./docs/plans/api-testing-post-launch.md)
 - [ ] **Code Quality Improvement** - [Implementation Plan](./docs/plans/code-quality-improvement.md)
   - [x] Phase 1: Automated formatting and ineffectual assignments cleanup

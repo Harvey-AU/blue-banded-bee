@@ -8,6 +8,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Multiple version updates may occur on the same date, each with its own version number.
 Each version represents a distinct set of changes, even if released on the same day.
 
+## [0.5.34] – 2025-08-08
+
+### Enhanced
+
+- **Test Infrastructure Improvements**: Comprehensive test suite enhancements
+  - Fixed critical health endpoint panic when DB is nil - now returns 503 status
+  - Made DBClient interface fully mockable for unit testing
+  - Added sqlmock tests for database health endpoint
+  - Extracted DSN augmentation logic to testable helper function
+  - Created comprehensive unit tests for worker and manager components
+  - Fixed broken `contains()` function in advanced worker tests
+  - Added proper cleanup with `t.Cleanup()` for resource management
+  - Removed fragile timing assertions in middleware tests
+  - Enabled fail-fast behaviour in test scripts with `set -euo pipefail`
+
+### Added
+
+- **Mock Infrastructure**: Complete mock implementations for testing
+  - Expanded MockDB with all DBClient interface methods
+  - Created MockDBWithRealDB wrapper for sqlmock integration
+  - Added comprehensive DSN helper tests covering URL and key=value formats
+
+### Fixed
+
+- **Test Quality Issues**: Resolved critical test suite problems
+  - Fixed placeholder tests in db_operations_test.go
+  - Centralised version string management to avoid hardcoded values
+  - Improved test coverage: db package (10.5% → 14.3%), jobs package (1.1% → 5.0%)
+  - Modernised interface{} to any throughout test files
+
 ## [0.5.33] – 2025-08-06
 
 ### Enhanced

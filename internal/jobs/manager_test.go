@@ -20,13 +20,18 @@ func setupTest(t *testing.T) *db.DB {
 
 	database, err := db.InitFromEnv()
 	require.NoError(t, err, "Failed to connect to test database")
+	
+	// Register cleanup to close database - this will run LAST (LIFO order)
+	t.Cleanup(func() {
+		database.Close()
+	})
+	
 	return database
 }
 
 func TestGetJob(t *testing.T) {
 	// 1. Connect to test database
 	database := setupTest(t)
-	defer database.Close()
 
 	// 2. Create test data using a simpler approach
 	ctx := context.Background()
@@ -46,6 +51,13 @@ func TestGetJob(t *testing.T) {
 	createdJob, err := jm.CreateJob(ctx, options)
 	require.NoError(t, err, "Failed to create test job")
 	require.NotNil(t, createdJob)
+	
+	// Register cleanup immediately after creation - runs before database close
+	t.Cleanup(func() {
+		// Delete tasks first (if any) due to foreign key constraints
+		_, _ = sqlDB.ExecContext(ctx, "DELETE FROM tasks WHERE job_id = $1", createdJob.ID)
+		_, _ = sqlDB.ExecContext(ctx, "DELETE FROM jobs WHERE id = $1", createdJob.ID)
+	})
 
 	// 3. Execute GetJob function
 	job, err := jm.GetJob(ctx, createdJob.ID)
@@ -57,16 +69,11 @@ func TestGetJob(t *testing.T) {
 	assert.Equal(t, JobStatusPending, job.Status)
 	assert.Equal(t, 5, job.Concurrency)
 	assert.True(t, job.FindLinks)
-
-	// Cleanup
-	_, err = sqlDB.ExecContext(ctx, "DELETE FROM jobs WHERE id = $1", job.ID)
-	require.NoError(t, err, "Failed to cleanup test job")
 }
 
 func TestCreateJob(t *testing.T) {
 	// Connect to test database
 	database := setupTest(t)
-	defer database.Close()
 
 	ctx := context.Background()
 	sqlDB := database.GetDB()
@@ -75,6 +82,13 @@ func TestCreateJob(t *testing.T) {
 	// For integration test, we'll use nil crawler since we're not testing sitemap functionality
 	// and nil worker pool since we'll handle cancellation differently
 	jm := NewJobManager(sqlDB, dbQueue, nil, nil)
+
+	// Register cleanup for all test-* domain jobs/tasks - runs before database close
+	t.Cleanup(func() {
+		// Delete tasks first due to foreign key constraints
+		_, _ = sqlDB.ExecContext(ctx, "DELETE FROM tasks WHERE job_id IN (SELECT id FROM jobs WHERE domain_id IN (SELECT id FROM domains WHERE name LIKE 'test-%'))")
+		_, _ = sqlDB.ExecContext(ctx, "DELETE FROM jobs WHERE domain_id IN (SELECT id FROM domains WHERE name LIKE 'test-%'))")
+	})
 
 	// Test case 1: Create a new job successfully
 	options := &JobOptions{
@@ -103,18 +117,11 @@ func TestCreateJob(t *testing.T) {
 	err = sqlDB.QueryRowContext(ctx, "SELECT COUNT(*) FROM jobs WHERE id = $1", job.ID).Scan(&count)
 	require.NoError(t, err)
 	assert.Equal(t, 1, count, "Job should exist in database")
-
-	// Cleanup - need to delete tasks first due to foreign key constraints
-	_, err = sqlDB.ExecContext(ctx, "DELETE FROM tasks WHERE job_id IN (SELECT id FROM jobs WHERE domain_id IN (SELECT id FROM domains WHERE name LIKE 'test-%'))")
-	require.NoError(t, err)
-	_, err = sqlDB.ExecContext(ctx, "DELETE FROM jobs WHERE domain_id IN (SELECT id FROM domains WHERE name LIKE 'test-%')")
-	require.NoError(t, err)
 }
 
 func TestCancelJob(t *testing.T) {
 	// Connect to test database
 	database := setupTest(t)
-	defer database.Close()
 
 	ctx := context.Background()
 	sqlDB := database.GetDB()
@@ -127,6 +134,13 @@ func TestCancelJob(t *testing.T) {
 		notifyCh: make(chan struct{}, 1),
 	}
 	jm := NewJobManager(sqlDB, dbQueue, nil, wp)
+
+	// Register cleanup for all test-* domain jobs/tasks - runs before database close
+	t.Cleanup(func() {
+		// Delete tasks first due to foreign key constraints
+		_, _ = sqlDB.ExecContext(ctx, "DELETE FROM tasks WHERE job_id IN (SELECT id FROM jobs WHERE domain_id IN (SELECT id FROM domains WHERE name LIKE 'test-%'))")
+		_, _ = sqlDB.ExecContext(ctx, "DELETE FROM jobs WHERE domain_id IN (SELECT id FROM domains WHERE name LIKE 'test-%'))")
+	})
 
 	// Test case 1: Cancel a pending job
 	options := &JobOptions{
@@ -160,18 +174,11 @@ func TestCancelJob(t *testing.T) {
 	// Test case 3: Try to cancel a non-existent job
 	err = jm.CancelJob(ctx, "non-existent-id")
 	assert.Error(t, err, "Should error when cancelling non-existent job")
-
-	// Cleanup
-	_, err = sqlDB.ExecContext(ctx, "DELETE FROM tasks WHERE job_id IN (SELECT id FROM jobs WHERE domain_id IN (SELECT id FROM domains WHERE name LIKE 'test-%'))")
-	require.NoError(t, err)
-	_, err = sqlDB.ExecContext(ctx, "DELETE FROM jobs WHERE domain_id IN (SELECT id FROM domains WHERE name LIKE 'test-%')")
-	require.NoError(t, err)
 }
 
 func TestProcessSitemapFallback(t *testing.T) {
 	// Connect to test database
 	database := setupTest(t)
-	defer database.Close()
 
 	ctx := context.Background()
 	sqlDB := database.GetDB()
@@ -204,6 +211,13 @@ func TestProcessSitemapFallback(t *testing.T) {
 	job, err := jm.CreateJob(ctx, options)
 	require.NoError(t, err, "Failed to create job")
 	require.NotNil(t, job)
+	
+	// Register cleanup immediately after creation - runs before database close
+	t.Cleanup(func() {
+		// Delete tasks first due to foreign key constraints
+		_, _ = sqlDB.ExecContext(ctx, "DELETE FROM tasks WHERE job_id = $1", job.ID)
+		_, _ = sqlDB.ExecContext(ctx, "DELETE FROM jobs WHERE id = $1", job.ID)
+	})
 
 	// Check if any tasks exist immediately after job creation
 	var initialTaskCount int
@@ -249,18 +263,11 @@ func TestProcessSitemapFallback(t *testing.T) {
 
 	assert.Equal(t, 1, taskCount, "Should have exactly one root task")
 	assert.Equal(t, "fallback", sourceType, "Root task should have 'fallback' source type")
-
-	// Cleanup
-	_, err = sqlDB.ExecContext(ctx, "DELETE FROM tasks WHERE job_id = $1", job.ID)
-	require.NoError(t, err)
-	_, err = sqlDB.ExecContext(ctx, "DELETE FROM jobs WHERE id = $1", job.ID)
-	require.NoError(t, err)
 }
 
 func TestEnqueueJobURLs(t *testing.T) {
 	// Connect to test database
 	database := setupTest(t)
-	defer database.Close()
 
 	ctx := context.Background()
 	sqlDB := database.GetDB()
@@ -281,6 +288,13 @@ func TestEnqueueJobURLs(t *testing.T) {
 	job, err := jm.CreateJob(ctx, options)
 	require.NoError(t, err, "Failed to create job")
 	require.NotNil(t, job)
+	
+	// Register cleanup immediately after creation - runs before database close
+	t.Cleanup(func() {
+		// Delete tasks first due to foreign key constraints
+		_, _ = sqlDB.ExecContext(ctx, "DELETE FROM tasks WHERE job_id = $1", job.ID)
+		_, _ = sqlDB.ExecContext(ctx, "DELETE FROM jobs WHERE id = $1", job.ID)
+	})
 
 	// Get domain ID
 	var domainID int
@@ -329,12 +343,6 @@ func TestEnqueueJobURLs(t *testing.T) {
 	`, job.ID).Scan(&taskCount)
 	require.NoError(t, err)
 	assert.Equal(t, 4, taskCount, "Should still have 4 tasks (duplicates filtered)")
-
-	// Cleanup
-	_, err = sqlDB.ExecContext(ctx, "DELETE FROM tasks WHERE job_id = $1", job.ID)
-	require.NoError(t, err)
-	_, err = sqlDB.ExecContext(ctx, "DELETE FROM jobs WHERE id = $1", job.ID)
-	require.NoError(t, err)
 }
 
 // MockCrawlerForIntegration is a simple mock for integration tests

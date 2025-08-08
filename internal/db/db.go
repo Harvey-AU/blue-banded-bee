@@ -48,9 +48,33 @@ func (c *Config) ConnectionString() string {
 		return c.DatabaseURL
 	}
 
+	// Set default SSLMode if not specified
+	sslMode := c.SSLMode
+	if sslMode == "" {
+		sslMode = "require"
+	}
+
 	// Otherwise use the individual components
 	return fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
-		c.Host, c.Port, c.User, c.Password, c.Database, c.SSLMode)
+		c.Host, c.Port, c.User, c.Password, c.Database, sslMode)
+}
+
+// Validate checks if the configuration is valid
+func (c *Config) Validate() error {
+	// If we have a DatabaseURL, that's sufficient
+	if c.DatabaseURL != "" {
+		return nil
+	}
+
+	// Otherwise, check individual fields
+	if c.Host == "" || c.Port == "" || c.User == "" || c.Password == "" || c.Database == "" {
+		if c.Host == "" && c.Port == "" && c.User == "" && c.Password == "" && c.Database == "" {
+			return fmt.Errorf("database configuration required")
+		}
+		return fmt.Errorf("incomplete database configuration")
+	}
+
+	return nil
 }
 
 // New creates a new PostgreSQL database connection
@@ -147,6 +171,8 @@ func InitFromEnv() (*DB, error) {
 				separator = "&"
 			}
 			url += separator + "statement_timeout=60000" // 60 seconds
+			// Persist the augmented URL back to config for consistency
+			config.DatabaseURL = url
 		}
 		
 		client, err := sql.Open("pgx", url)

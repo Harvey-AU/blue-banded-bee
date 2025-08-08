@@ -81,7 +81,8 @@
       "mcp__supabase__execute_sql",
       "Bash(go clean:*)",
       "Bash(time go test:*)",
-      "Bash(bash:*)"
+      "Bash(bash:*)",
+      "Bash(touch:*)"
     ],
     "deny": []
   },
