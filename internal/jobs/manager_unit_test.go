@@ -21,7 +21,7 @@ import (
 // Constructor and Initialization Tests
 // ============================================================================
 
-func TestJobManagerInitialisation(t *testing.T) {
+func TestJobManagerInitialization(t *testing.T) {
 	t.Parallel()
 	
 	mockDB := &sql.DB{}

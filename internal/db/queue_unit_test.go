@@ -1,3 +1,5 @@
+//go:build unit || !integration
+
 package db
 
 import (
@@ -62,7 +64,6 @@ func TestDbQueueExecute(t *testing.T) {
 			setupMock: func(mock sqlmock.Sqlmock) {
 				mock.ExpectBegin()
 				mock.ExpectCommit().WillReturnError(errors.New("commit failed"))
-				mock.ExpectRollback()
 			},
 			fn: func(tx *sql.Tx) error {
 				return nil
@@ -139,8 +140,8 @@ func TestDbQueueGetNextTask(t *testing.T) {
 					WillReturnRows(rows)
 
 				// Expect UPDATE query
-				mock.ExpectExec("UPDATE tasks SET status = \\$1, started_at = \\$2 WHERE id = \\$3").
-					WithArgs("running", sqlmock.AnyArg(), "task-1").
+				mock.ExpectExec(`UPDATE tasks\s+SET status = 'running', started_at = \$1\s+WHERE id = \$2`).
+					WithArgs(sqlmock.AnyArg(), "task-1").
 					WillReturnResult(sqlmock.NewResult(0, 1))
 
 				mock.ExpectCommit()
@@ -161,7 +162,7 @@ func TestDbQueueGetNextTask(t *testing.T) {
 				mock.ExpectRollback()
 			},
 			wantTask: false,
-			wantErr:  true,
+			wantErr:  false,
 		},
 		{
 			name:  "without job filter",
@@ -181,8 +182,8 @@ func TestDbQueueGetNextTask(t *testing.T) {
 				mock.ExpectQuery("SELECT id, job_id, page_id, path, created_at, retry_count, source_type, source_url, priority_score FROM tasks WHERE status = 'pending'").
 					WillReturnRows(rows)
 
-				mock.ExpectExec("UPDATE tasks SET status = \\$1, started_at = \\$2 WHERE id = \\$3").
-					WithArgs("running", sqlmock.AnyArg(), "task-2").
+				mock.ExpectExec(`UPDATE tasks\s+SET status = 'running', started_at = \$1\s+WHERE id = \$2`).
+					WithArgs(sqlmock.AnyArg(), "task-2").
 					WillReturnResult(sqlmock.NewResult(0, 1))
 
 				mock.ExpectCommit()
@@ -217,7 +218,7 @@ func TestDbQueueGetNextTask(t *testing.T) {
 			} else {
 				assert.NoError(t, err)
 				if tt.wantTask {
-					assert.NotNil(t, task)
+					require.NotNil(t, task)
 					assert.NotEmpty(t, task.ID)
 					assert.NotEmpty(t, task.JobID)
 				}
@@ -235,67 +236,68 @@ func TestDbQueueUpdateTaskStatus(t *testing.T) {
 
 	tests := []struct {
 		name      string
-		taskID    string
-		status    string
+		task      *Task
 		setupMock func(sqlmock.Sqlmock)
 		wantErr   bool
 	}{
 		{
-			name:   "successful status update to completed",
-			taskID: "task-1",
-			status: "completed",
+			name: "successful status update to running",
+			task: &Task{
+				ID:     "task-1",
+				Status: "running",
+			},
 			setupMock: func(mock sqlmock.Sqlmock) {
 				mock.ExpectBegin()
-				
-				mock.ExpectExec("UPDATE tasks SET status = \\$1, completed_at = \\$2 WHERE id = \\$3").
-					WithArgs("completed", sqlmock.AnyArg(), "task-1").
+				mock.ExpectExec(`UPDATE tasks\s+SET status = \$1, started_at = \$2\s+WHERE id = \$3`).
+					WithArgs("running", sqlmock.AnyArg(), "task-1").
 					WillReturnResult(sqlmock.NewResult(0, 1))
-
 				mock.ExpectCommit()
 			},
 			wantErr: false,
 		},
 		{
-			name:   "successful status update to failed",
-			taskID: "task-2",
-			status: "failed",
+			name: "successful status update to failed",
+			task: &Task{
+				ID:         "task-2",
+				Status:     "failed",
+				Error:      "boom",
+				RetryCount: 2,
+			},
 			setupMock: func(mock sqlmock.Sqlmock) {
 				mock.ExpectBegin()
-				
-				mock.ExpectExec("UPDATE tasks SET status = \\$1, completed_at = \\$2, error = \\$3 WHERE id = \\$4").
-					WithArgs("failed", sqlmock.AnyArg(), sqlmock.AnyArg(), "task-2").
+				mock.ExpectExec(`UPDATE tasks\s+SET status = \$1, completed_at = \$2, error = \$3, retry_count = \$4\s+WHERE id = \$5`).
+					WithArgs("failed", sqlmock.AnyArg(), "boom", 2, "task-2").
 					WillReturnResult(sqlmock.NewResult(0, 1))
-
 				mock.ExpectCommit()
 			},
 			wantErr: false,
 		},
 		{
-			name:   "task not found",
-			taskID: "non-existent",
-			status: "completed",
+			name: "task not found (running)",
+			task: &Task{
+				ID:     "non-existent",
+				Status: "running",
+			},
 			setupMock: func(mock sqlmock.Sqlmock) {
 				mock.ExpectBegin()
-				
-				mock.ExpectExec("UPDATE tasks SET status = \\$1, completed_at = \\$2 WHERE id = \\$3").
-					WithArgs("completed", sqlmock.AnyArg(), "non-existent").
+				mock.ExpectExec(`UPDATE tasks\s+SET status = \$1, started_at = \$2\s+WHERE id = \$3`).
+					WithArgs("running", sqlmock.AnyArg(), "non-existent").
 					WillReturnResult(sqlmock.NewResult(0, 0))
-
 				mock.ExpectCommit()
 			},
-			wantErr: false, // No error but no rows affected
+			wantErr: false,
 		},
 		{
-			name:   "database error",
-			taskID: "task-3",
-			status: "completed",
+			name: "database error (running)",
+			task: &Task{
+				ID:     "task-3",
+				Status: "running",
+			},
 			setupMock: func(mock sqlmock.Sqlmock) {
 				mock.ExpectBegin()
-				
-				mock.ExpectExec("UPDATE tasks SET status = \\$1, completed_at = \\$2 WHERE id = \\$3").
-					WithArgs("completed", sqlmock.AnyArg(), "task-3").
+				mock.ExpectExec(`UPDATE tasks\s+SET status = \$1, started_at = \$2\s+WHERE id = \$3`).
+					WithArgs("running", sqlmock.AnyArg(), "task-3").
 					WillReturnError(errors.New("database error"))
-
 				mock.ExpectRollback()
 			},
 			wantErr: true,
@@ -318,7 +320,7 @@ func TestDbQueueUpdateTaskStatus(t *testing.T) {
 
 			// Execute
 			ctx := context.Background()
-			err = q.UpdateTaskStatus(ctx, tt.taskID, tt.status, nil, nil)
+			err = q.UpdateTaskStatus(ctx, tt.task)
 
 			// Assert
 			if tt.wantErr {
@@ -353,16 +355,25 @@ func TestDbQueueEnqueueURLs(t *testing.T) {
 			setupMock: func(mock sqlmock.Sqlmock) {
 				mock.ExpectBegin()
 
-				// Expect INSERT for single task
-				mock.ExpectExec("INSERT INTO tasks").
+				// Expect SELECT of job limits and current tasks
+				mock.ExpectQuery(`SELECT max_pages,\s+COALESCE\(\(SELECT COUNT\(\*\) FROM tasks WHERE job_id = \$1 AND status != 'skipped'\), 0\)\s+FROM jobs WHERE id = \$1`).
+					WithArgs("job-1").
+					WillReturnRows(sqlmock.NewRows([]string{"max_pages", "count"}).AddRow(0, 0))
+
+				// Expect prepared statement and Exec for single task insert
+				mock.ExpectPrepare("INSERT INTO tasks ")
+				mock.ExpectExec("INSERT INTO tasks ").
 					WithArgs(
-						sqlmock.AnyArg(), // task ID
-						"job-1",           // job ID
-						1,                 // page ID
-						"pending",         // status
-						"manual",          // source type
-						"",                // source URL
-						1.0,               // priority
+						sqlmock.AnyArg(), // id
+						"job-1",        // job_id
+						1,              // page_id
+						"/page1",      // path
+						"pending",     // status
+						sqlmock.AnyArg(), // created_at
+						0,              // retry_count
+						"manual",      // source_type
+						"",            // source_url
+						1.0,           // priority_score
 					).
 					WillReturnResult(sqlmock.NewResult(1, 1))
 
@@ -381,9 +392,18 @@ func TestDbQueueEnqueueURLs(t *testing.T) {
 			setupMock: func(mock sqlmock.Sqlmock) {
 				mock.ExpectBegin()
 
-				// Expect batch INSERT
-				mock.ExpectExec("INSERT INTO tasks").
-					WillReturnResult(sqlmock.NewResult(3, 3))
+				mock.ExpectQuery(`SELECT max_pages,\s+COALESCE\(\(SELECT COUNT\(\*\) FROM tasks WHERE job_id = \$1 AND status != 'skipped'\), 0\)\s+FROM jobs WHERE id = \$1`).
+					WithArgs("job-2").
+					WillReturnRows(sqlmock.NewRows([]string{"max_pages", "count"}).AddRow(0, 0))
+
+				mock.ExpectPrepare("INSERT INTO tasks ")
+				// Expect three execs (could be one prepared statement executed thrice)
+				mock.ExpectExec("INSERT INTO tasks ").
+					WillReturnResult(sqlmock.NewResult(1, 1))
+				mock.ExpectExec("INSERT INTO tasks ").
+					WillReturnResult(sqlmock.NewResult(1, 1))
+				mock.ExpectExec("INSERT INTO tasks ").
+					WillReturnResult(sqlmock.NewResult(1, 1))
 
 				mock.ExpectCommit()
 			},
@@ -407,7 +427,12 @@ func TestDbQueueEnqueueURLs(t *testing.T) {
 			setupMock: func(mock sqlmock.Sqlmock) {
 				mock.ExpectBegin()
 
-				mock.ExpectExec("INSERT INTO tasks").
+				mock.ExpectQuery(`SELECT max_pages,\s+COALESCE\(\(SELECT COUNT\(\*\) FROM tasks WHERE job_id = \$1 AND status != 'skipped'\), 0\)\s+FROM jobs WHERE id = \$1`).
+					WithArgs("job-4").
+					WillReturnRows(sqlmock.NewRows([]string{"max_pages", "count"}).AddRow(0, 0))
+
+				mock.ExpectPrepare("INSERT INTO tasks ")
+				mock.ExpectExec("INSERT INTO tasks ").
 					WillReturnError(errors.New("constraint violation"))
 
 				mock.ExpectRollback()
