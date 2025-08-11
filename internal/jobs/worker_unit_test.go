@@ -2,6 +2,7 @@ package jobs
 
 import (
 	"database/sql"
+	"sync"
 	"testing"
 
 	"github.com/Harvey-AU/blue-banded-bee/internal/crawler"
@@ -154,4 +155,91 @@ func TestWorkerPoolJobTracking(t *testing.T) {
 	wp.RemoveJob("job1")
 	wp.RemoveJob("job3")
 	assert.Equal(t, 0, len(wp.jobs))
+}
+
+// Test WorkerPool.Stop() lifecycle and resource cleanup
+func TestWorkerPoolStopLifecycle(t *testing.T) {
+	t.Parallel()
+	t.Run("basic_shutdown", func(t *testing.T) {
+		// Create worker pool but don't start workers (to avoid DB calls)
+		wp := NewWorkerPool(&sql.DB{}, &db.DbQueue{}, &crawler.Crawler{}, 2, &db.Config{})
+		
+		// Verify initial state
+		assert.False(t, wp.stopping.Load(), "should not be stopping initially")
+		assert.NotNil(t, wp.stopCh, "stopCh should be initialized")
+		assert.NotNil(t, wp.batchTimer, "batchTimer should be initialized")
+		
+		// Stop should succeed
+		wp.Stop()
+		
+		// Verify shutdown state
+		assert.True(t, wp.stopping.Load(), "should be stopping after Stop()")
+		
+		// Verify stopCh is closed (reading should not block)
+		select {
+		case <-wp.stopCh:
+			// Channel is closed, this is expected
+		default:
+			t.Fatal("stopCh should be closed after Stop()")
+		}
+	})
+	
+	t.Run("idempotent_shutdown", func(t *testing.T) {
+		// Create worker pool
+		wp := NewWorkerPool(&sql.DB{}, &db.DbQueue{}, &crawler.Crawler{}, 2, &db.Config{})
+		
+		// First stop should work
+		wp.Stop()
+		assert.True(t, wp.stopping.Load(), "should be stopping after first Stop()")
+		
+		// Second stop should be safe (no-op)
+		assert.NotPanics(t, func() {
+			wp.Stop()
+		}, "multiple Stop() calls should be safe")
+		
+		// State should remain consistent
+		assert.True(t, wp.stopping.Load(), "should still be stopping after multiple Stop()")
+	})
+	
+	t.Run("concurrent_shutdown", func(t *testing.T) {
+		// Create worker pool
+		wp := NewWorkerPool(&sql.DB{}, &db.DbQueue{}, &crawler.Crawler{}, 2, &db.Config{})
+		
+		// Launch multiple concurrent Stop() calls
+		const numGoroutines = 10
+		var wg sync.WaitGroup
+		wg.Add(numGoroutines)
+		
+		for i := 0; i < numGoroutines; i++ {
+			go func() {
+				defer wg.Done()
+				wp.Stop()
+			}()
+		}
+		
+		// Wait for all goroutines to complete
+		wg.Wait()
+		
+		// Should be safely stopped
+		assert.True(t, wp.stopping.Load(), "should be stopped after concurrent calls")
+	})
+	
+	t.Run("resource_cleanup", func(t *testing.T) {
+		// Create worker pool
+		wp := NewWorkerPool(&sql.DB{}, &db.DbQueue{}, &crawler.Crawler{}, 2, &db.Config{})
+		
+		// Capture initial ticker state
+		initialTimer := wp.batchTimer
+		assert.NotNil(t, initialTimer, "batchTimer should be initialized")
+		
+		// Stop the worker pool
+		wp.Stop()
+		
+		// Verify resources are cleaned up
+		assert.True(t, wp.stopping.Load(), "should be stopping")
+		
+		// The ticker should be stopped (though we can't easily test this without
+		// implementation details, we verify the Stop() call doesn't panic)
+		// This indirectly tests that batchTimer.Stop() was called successfully
+	})
 }
