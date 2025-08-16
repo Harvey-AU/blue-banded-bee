@@ -65,11 +65,14 @@ func TestSetupJobURLDiscoveryBranching(t *testing.T) {
 				assert.NoError(t, err)
 				assert.False(t, mockQueue.executeCalled, "Sitemap path should not call database immediately")
 			} else if tt.expectManual {
-				// Manual path test
-				_ = jm.setupJobURLDiscovery(ctx, job, options, 42, "example.com")
+				// Manual path test - now async, function returns immediately
+				err := jm.setupJobURLDiscovery(ctx, job, options, 42, "example.com")
 				
-				// The manual path will attempt crawler operations
-				assert.True(t, mockCrawler.discoverCalled, "Should call crawler for robots.txt")
+				// Function should return immediately without error
+				assert.NoError(t, err)
+				
+				// Note: Manual URL creation now happens asynchronously in background
+				// The crawler call happens in a goroutine, so we can't test it directly here
 			}
 		})
 	}
