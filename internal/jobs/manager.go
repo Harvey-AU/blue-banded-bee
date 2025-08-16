@@ -342,7 +342,9 @@ func (jm *JobManager) StartJob(ctx context.Context, jobID string) error {
 	log.Info().Str("original_job_id", jobID).Str("new_job_id", newJob.ID).Msg("Created new job as restart")
 
 	// Add new job to worker pool for processing
-	jm.workerPool.AddJob(newJob.ID, newJobOptions)
+	if jm.workerPool != nil {
+		jm.workerPool.AddJob(newJob.ID, newJobOptions)
+	}
 
 	log.Debug().
 		Str("original_job_id", jobID).
@@ -499,7 +501,9 @@ func (jm *JobManager) CancelJob(ctx context.Context, jobID string) error {
 	}
 
 	// Remove job from worker pool
-	jm.workerPool.RemoveJob(job.ID)
+	if jm.workerPool != nil {
+		jm.workerPool.RemoveJob(job.ID)
+	}
 
 	// Clear processed pages for this job
 	jm.clearProcessedPages(job.ID)
