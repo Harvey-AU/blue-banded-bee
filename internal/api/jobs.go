@@ -621,6 +621,80 @@ func buildTaskQuery(jobID string, params TaskQueryParams) TaskQueryBuilder {
 	}
 }
 
+// formatTasksFromRows converts database rows into TaskResponse slice
+func formatTasksFromRows(rows *sql.Rows) ([]TaskResponse, error) {
+	var tasks []TaskResponse
+	
+	for rows.Next() {
+		var task TaskResponse
+		var domain string
+		var startedAt, completedAt, createdAt sql.NullTime
+		var statusCode, responseTime, secondResponseTime sql.NullInt32
+		var cacheStatus, secondCacheStatus, contentType, errorMsg, sourceType, sourceURL sql.NullString
+
+		err := rows.Scan(
+			&task.ID, &task.JobID, &task.Path, &domain, &task.Status,
+			&statusCode, &responseTime, &cacheStatus, &secondResponseTime, &secondCacheStatus, &contentType, &errorMsg, &sourceType, &sourceURL,
+			&createdAt, &startedAt, &completedAt, &task.RetryCount,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan task row: %w", err)
+		}
+
+		// Construct full URL from domain and path
+		task.URL = fmt.Sprintf("https://%s%s", domain, task.Path)
+
+		// Handle nullable fields
+		if statusCode.Valid {
+			sc := int(statusCode.Int32)
+			task.StatusCode = &sc
+		}
+		if responseTime.Valid {
+			rt := int(responseTime.Int32)
+			task.ResponseTime = &rt
+		}
+		if cacheStatus.Valid {
+			task.CacheStatus = &cacheStatus.String
+		}
+		if secondResponseTime.Valid {
+			srt := int(secondResponseTime.Int32)
+			task.SecondResponseTime = &srt
+		}
+		if secondCacheStatus.Valid {
+			task.SecondCacheStatus = &secondCacheStatus.String
+		}
+		if contentType.Valid {
+			task.ContentType = &contentType.String
+		}
+		if errorMsg.Valid {
+			task.Error = &errorMsg.String
+		}
+		if sourceType.Valid {
+			task.SourceType = &sourceType.String
+		}
+		if sourceURL.Valid {
+			task.SourceURL = &sourceURL.String
+		}
+		if startedAt.Valid {
+			sa := startedAt.Time.Format(time.RFC3339)
+			task.StartedAt = &sa
+		}
+		if completedAt.Valid {
+			ca := completedAt.Time.Format(time.RFC3339)
+			task.CompletedAt = &ca
+		}
+
+		// Format created_at
+		if createdAt.Valid {
+			task.CreatedAt = createdAt.Time.Format(time.RFC3339)
+		}
+
+		tasks = append(tasks, task)
+	}
+
+	return tasks, nil
+}
+
 func getClientIP(r *http.Request) string {
 	// Check for X-Forwarded-For header first (common with proxies/load balancers)
 	xff := r.Header.Get("X-Forwarded-For")
@@ -699,73 +773,12 @@ func (h *Handler) getJobTasks(w http.ResponseWriter, r *http.Request, jobID stri
 	}
 	defer rows.Close()
 
-	var tasks []TaskResponse
-	for rows.Next() {
-		var task TaskResponse
-		var domain string
-		var startedAt, completedAt, createdAt sql.NullTime
-		var statusCode, responseTime, secondResponseTime sql.NullInt32
-		var cacheStatus, secondCacheStatus, contentType, errorMsg, sourceType, sourceURL sql.NullString
-
-		err := rows.Scan(
-			&task.ID, &task.JobID, &task.Path, &domain, &task.Status,
-			&statusCode, &responseTime, &cacheStatus, &secondResponseTime, &secondCacheStatus, &contentType, &errorMsg, &sourceType, &sourceURL,
-			&createdAt, &startedAt, &completedAt, &task.RetryCount,
-		)
-		if err != nil {
-			log.Error().Err(err).Msg("Failed to scan task row")
-			continue
-		}
-
-		// Construct full URL from domain and path
-		task.URL = fmt.Sprintf("https://%s%s", domain, task.Path)
-
-		// Handle nullable fields
-		if statusCode.Valid {
-			sc := int(statusCode.Int32)
-			task.StatusCode = &sc
-		}
-		if responseTime.Valid {
-			rt := int(responseTime.Int32)
-			task.ResponseTime = &rt
-		}
-		if cacheStatus.Valid {
-			task.CacheStatus = &cacheStatus.String
-		}
-		if secondResponseTime.Valid {
-			srt := int(secondResponseTime.Int32)
-			task.SecondResponseTime = &srt
-		}
-		if secondCacheStatus.Valid {
-			task.SecondCacheStatus = &secondCacheStatus.String
-		}
-		if contentType.Valid {
-			task.ContentType = &contentType.String
-		}
-		if errorMsg.Valid {
-			task.Error = &errorMsg.String
-		}
-		if sourceType.Valid {
-			task.SourceType = &sourceType.String
-		}
-		if sourceURL.Valid {
-			task.SourceURL = &sourceURL.String
-		}
-		if startedAt.Valid {
-			sa := startedAt.Time.Format(time.RFC3339)
-			task.StartedAt = &sa
-		}
-		if completedAt.Valid {
-			ca := completedAt.Time.Format(time.RFC3339)
-			task.CompletedAt = &ca
-		}
-
-		// Format created_at
-		if createdAt.Valid {
-			task.CreatedAt = createdAt.Time.Format(time.RFC3339)
-		}
-
-		tasks = append(tasks, task)
+	// Format tasks from database rows
+	tasks, err := formatTasksFromRows(rows)
+	if err != nil {
+		log.Error().Err(err).Str("job_id", jobID).Msg("Failed to format tasks")
+		DatabaseError(w, r, err)
+		return
 	}
 
 	// Calculate pagination info
