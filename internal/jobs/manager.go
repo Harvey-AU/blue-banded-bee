@@ -932,6 +932,75 @@ func (jm *JobManager) UpdateJobStatus(ctx context.Context, jobID string, status 
 	})
 }
 
+// updateJobWithError updates a job with an error message
+func (jm *JobManager) updateJobWithError(ctx context.Context, jobID, errorMessage string) {
+	if updateErr := jm.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
+		_, err := tx.ExecContext(ctx, `
+			UPDATE jobs
+			SET error_message = $1
+			WHERE id = $2
+		`, errorMessage, jobID)
+		return err
+	}); updateErr != nil {
+		log.Error().Err(updateErr).Str("job_id", jobID).Msg("Failed to update job with error message")
+	}
+}
+
+// enqueueFallbackURL creates and enqueues a fallback root URL when no sitemap URLs are found
+func (jm *JobManager) enqueueFallbackURL(ctx context.Context, jobID, domain string) error {
+	log.Info().
+		Str("job_id", jobID).
+		Str("domain", domain).
+		Msg("No URLs found in sitemap, falling back to root page")
+
+	// Create fallback root URL
+	rootURL := fmt.Sprintf("https://%s/", domain)
+	fallbackURLs := []string{rootURL}
+
+	if err := jm.enqueueURLsForJob(ctx, jobID, domain, fallbackURLs, "fallback"); err != nil {
+		log.Error().
+			Err(err).
+			Str("job_id", jobID).
+			Str("domain", domain).
+			Msg("Failed to enqueue fallback root URL")
+
+		// Update job with error
+		jm.updateJobWithError(ctx, jobID, fmt.Sprintf("Failed to create fallback task: %v", err))
+		return err
+	}
+
+	log.Info().
+		Str("job_id", jobID).
+		Str("domain", domain).
+		Msg("Created fallback root page task - job will proceed with link discovery")
+	
+	return nil
+}
+
+// enqueueSitemapURLs enqueues discovered sitemap URLs for processing
+func (jm *JobManager) enqueueSitemapURLs(ctx context.Context, jobID, domain string, urls []string) error {
+	// Log URLs for debugging
+	for i, url := range urls {
+		log.Debug().
+			Str("job_id", jobID).
+			Str("domain", domain).
+			Int("index", i).
+			Str("url", url).
+			Msg("URL from sitemap")
+	}
+
+	if err := jm.enqueueURLsForJob(ctx, jobID, domain, urls, "sitemap"); err != nil {
+		log.Error().
+			Err(err).
+			Str("job_id", jobID).
+			Str("domain", domain).
+			Msg("Failed to enqueue sitemap URLs")
+		return err
+	}
+
+	return nil
+}
+
 // processSitemap fetches and processes a sitemap for a domain
 func (jm *JobManager) processSitemap(ctx context.Context, jobID, domain string, includePaths, excludePaths []string) {
 	// Guard against nil dependencies (e.g., in test environments)
@@ -965,17 +1034,7 @@ func (jm *JobManager) processSitemap(ctx context.Context, jobID, domain string, 
 			Str("domain", domain).
 			Msg("Failed to discover sitemaps")
 
-		// Update job with error
-		if updateErr := jm.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
-			_, err := tx.ExecContext(ctx, `
-				UPDATE jobs
-				SET error_message = $1
-				WHERE id = $2
-			`, fmt.Sprintf("Failed to discover sitemaps: %v", err), jobID)
-			return err
-		}); updateErr != nil {
-			log.Error().Err(updateErr).Str("job_id", jobID).Msg("Failed to update job with error message")
-		}
+		jm.updateJobWithError(ctx, jobID, fmt.Sprintf("Failed to discover sitemaps: %v", err))
 		return
 	}
 
@@ -987,60 +1046,14 @@ func (jm *JobManager) processSitemap(ctx context.Context, jobID, domain string, 
 
 	// Step 4: Enqueue URLs or create fallback
 	if len(urls) > 0 {
-		// Log URLs for debugging
-		for i, url := range urls {
-			log.Debug().
-				Str("job_id", jobID).
-				Str("domain", domain).
-				Int("index", i).
-				Str("url", url).
-				Msg("URL from sitemap")
-		}
-
-		if err := jm.enqueueURLsForJob(ctx, jobID, domain, urls, "sitemap"); err != nil {
+		if err := jm.enqueueSitemapURLs(ctx, jobID, domain, urls); err != nil {
 			span.SetTag("error", "true")
 			span.SetData("error.message", err.Error())
-			log.Error().
-				Err(err).
-				Str("job_id", jobID).
-				Str("domain", domain).
-				Msg("Failed to enqueue sitemap URLs")
 			return
 		}
 	} else {
-		log.Info().
-			Str("job_id", jobID).
-			Str("domain", domain).
-			Msg("No URLs found in sitemap, falling back to root page")
-
-		// Create fallback root URL
-		rootURL := fmt.Sprintf("https://%s/", domain)
-		fallbackURLs := []string{rootURL}
-
-		if err := jm.enqueueURLsForJob(ctx, jobID, domain, fallbackURLs, "fallback"); err != nil {
-			log.Error().
-				Err(err).
-				Str("job_id", jobID).
-				Str("domain", domain).
-				Msg("Failed to enqueue fallback root URL")
-
-			// Update job with error
-			if updateErr := jm.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
-				_, err := tx.ExecContext(ctx, `
-					UPDATE jobs
-					SET error_message = $1
-					WHERE id = $2
-				`, fmt.Sprintf("Failed to create fallback task: %v", err), jobID)
-				return err
-			}); updateErr != nil {
-				log.Error().Err(updateErr).Str("job_id", jobID).Msg("Failed to update job with error message")
-			}
+		if err := jm.enqueueFallbackURL(ctx, jobID, domain); err != nil {
 			return
 		}
-
-		log.Info().
-			Str("job_id", jobID).
-			Str("domain", domain).
-			Msg("Created fallback root page task - job will proceed with link discovery")
 	}
 }
