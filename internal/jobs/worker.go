@@ -1476,7 +1476,12 @@ func (wp *WorkerPool) evaluateJobPerformance(jobID string, responseTime int64) {
 			wp.workersMutex.Unlock()
 
 			if targetWorkers > wp.currentWorkers {
-				go wp.scaleWorkers(context.Background(), targetWorkers)
+				// Use detached context with timeout for worker scaling
+				scalingCtx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+				go func() {
+					defer cancel()
+					wp.scaleWorkers(scalingCtx, targetWorkers)
+				}()
 			}
 		}
 		// Note: For scaling down (boostDiff < 0), we let workers naturally exit

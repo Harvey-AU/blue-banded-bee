@@ -275,19 +275,34 @@ func (jm *JobManager) createManualRootTask(ctx context.Context, job *Job, domain
 func (jm *JobManager) setupJobURLDiscovery(ctx context.Context, job *Job, options *JobOptions, domainID int, normalisedDomain string) error {
 	if options.UseSitemap {
 		// Fetch and process sitemap in a separate goroutine
-		go jm.processSitemap(context.Background(), job.ID, normalisedDomain, options.IncludePaths, options.ExcludePaths)
+		// Use detached context with timeout for background processing
+		backgroundCtx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+		go func() {
+			defer cancel()
+			jm.processSitemap(backgroundCtx, job.ID, normalisedDomain, options.IncludePaths, options.ExcludePaths)
+		}()
 		return nil
 	}
 
-	// Manual root URL creation - validate robots.txt access
-	rootPath := "/"
-	_, err := jm.validateRootURLAccess(ctx, job, normalisedDomain, rootPath)
-	if err != nil {
-		return err // validateRootURLAccess already handled error logging and job updates
-	}
+	// Manual root URL creation - process in background for consistency  
+	// Use detached context with timeout for background processing
+	backgroundCtx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	go func() {
+		defer cancel()
+		rootPath := "/"
+		_, err := jm.validateRootURLAccess(backgroundCtx, job, normalisedDomain, rootPath)
+		if err != nil {
+			log.Error().Err(err).Str("job_id", job.ID).Msg("Failed to validate root URL access")
+			return // Error already logged and job updated by validateRootURLAccess
+		}
 
-	// Create page and task records for the root URL
-	return jm.createManualRootTask(ctx, job, domainID, rootPath)
+		// Create page and task records for the root URL
+		if err := jm.createManualRootTask(backgroundCtx, job, domainID, rootPath); err != nil {
+			log.Error().Err(err).Str("job_id", job.ID).Msg("Failed to create manual root task")
+		}
+	}()
+
+	return nil
 }
 
 // CreateJob creates a new job with the given options
