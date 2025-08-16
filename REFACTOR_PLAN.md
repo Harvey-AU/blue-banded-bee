@@ -47,79 +47,134 @@ This violates the single responsibility principle and needs further breakdown.
 - **35+ test cases** added with comprehensive coverage
 - **Zero functional regressions**
 
-### Step 2: Break Down processSitemap (111 lines) ⏳
+## COMPREHENSIVE MONSTER FUNCTION ANALYSIS
 
-**Current function structure (lines 907-1017):**
-- Sitemap discovery (~20 lines)
-- URL filtering and validation (~30 lines)  
-- Database operations (~40 lines)
-- Error handling (~21 lines)
+**Current Large Files Status:**
+- `internal/jobs/worker.go` - **1561 lines, 28 functions** (11 monsters >50 lines)
+- `internal/jobs/manager.go` - **1031 lines, 25 functions** (8 monsters >50 lines)  
+- `internal/api/jobs.go` - **801 lines, 14 functions** (7 monsters >50 lines)
+- `internal/db/db.go` - **750 lines, 14 functions** (7 monsters >50 lines)
+- `internal/crawler/crawler.go` - **669 lines, 10 functions** (2 monsters >50 lines)
 
-**Target extraction:**
+## MONSTER FUNCTIONS BY PRIORITY
 
-1. **`discoverSitemapURLs()`** - Sitemap discovery and parsing (20 lines)
-2. **`filterAndValidateURLs()`** - URL filtering against robots.txt (30 lines)
-3. **`enqueueSitemapTasks()`** - Database operations for sitemap URLs (40 lines)
-4. **`processSitemap()`** - Clean orchestrator (~15 lines)
+### 💀 **EXTREME PRIORITY (>200 lines) - System-Critical**
 
-## HIGH-IMPACT MONSTER FUNCTIONS (Next Targets)
+1. **`internal/crawler/crawler.go:WarmURL()` - 385 lines** 💀💀💀
+   - **THE BIGGEST MONSTER** in entire codebase
+   - **Risk**: Core URL crawling logic
+   - **Impact**: EXTREME - determines all crawl success/failure
+   - **Testing impact**: Would unlock massive coverage gains
+   - **Complexity**: HTTP, response analysis, link extraction, cache validation
 
-### CRITICAL PRIORITY: Core Worker Logic
+2. **`internal/db/db.go:setupSchema()` - 216 lines** 💀💀
+   - **Risk**: Database foundation setup
+   - **Impact**: HIGH - affects all database operations
+   - **Complexity**: Table creation, indexes, triggers, policies
 
-1. **`internal/jobs/worker.go:processNextTask()` - 204 lines** 🔥
-   - **Risk**: Core task processing pipeline
-   - **Impact**: Very High - worker reliability depends on this
-   - **Target**: Break into 5 functions (claim, execute, update, error handling, orchestrate)
+3. **`internal/jobs/worker.go:processNextTask()` - 204 lines** 💀💀
+   - **Risk**: Worker task processing pipeline  
+   - **Impact**: EXTREME - worker reliability depends on this
+   - **Complexity**: Task claiming, execution, state management
 
-2. **`internal/jobs/worker.go:processTask()` - 162 lines** 🔥  
-   - **Risk**: Individual task execution logic
-   - **Impact**: Very High - determines crawl success/failure
-   - **Target**: Break into 4 functions (validate, crawl, analyse, orchestrate)
+### 🔥 **CRITICAL PRIORITY (100-199 lines) - High Business Impact**
 
-### HIGH PRIORITY: Database Schema
+4. **`internal/jobs/worker.go:processTask()` - 162 lines** 🔥🔥
+   - **Risk**: Individual task execution
+   - **Impact**: EXTREME - determines crawl results
+   - **Complexity**: HTTP handling, cache validation, metrics
 
-3. **`internal/db/db.go:setupSchema()` - 216 lines** ⚠️
-   - **Risk**: Schema management complexity
-   - **Impact**: Medium - affects all database operations
-   - **Target**: Break into 4 functions (tables, indexes, policies, orchestrate)
+5. **`internal/jobs/manager.go:processSitemap()` - 111 lines** 🔥🔥
+   - **Risk**: Sitemap processing logic
+   - **Impact**: HIGH - URL discovery reliability
+   - **Complexity**: Sitemap parsing, URL filtering, database operations
 
-### MEDIUM PRIORITY: Worker Management
+6. **`internal/jobs/worker.go:checkForPendingTasks()` - 110 lines** 🔥🔥
+   - **Risk**: Worker coordination
+   - **Impact**: HIGH - scaling and performance
+   - **Complexity**: Job queue management, worker scaling
 
-4. **`internal/jobs/worker.go:checkForPendingTasks()` - 110 lines**
-   - **Impact**: Medium - affects scaling and performance
-   - **Target**: Break into 3 functions (identify, scale, cleanup)
+### ⚠️ **HIGH PRIORITY (50-99 lines) - Moderate Impact**
 
-5. **`internal/jobs/worker.go:AddJob()` - 91 lines**
-   - **Impact**: Medium - affects job startup
-   - **Target**: Break into 3 functions (validate, assign, configure)
+**25 additional functions** between 50-99 lines requiring attention:
+
+**Worker Management (internal/jobs/worker.go):**
+- `AddJob()` - 91 lines
+- `recoverRunningJobs()` - 85 lines  
+- `evaluateJobPerformance()` - 77 lines
+- `flushBatches()` - 74 lines
+- `worker()` - 61 lines
+- `NewWorkerPool()` - 61 lines
+- `listenForNotifications()` - 62 lines
+- `recoverStaleTasks()` - 57 lines
+
+**Job Management (internal/jobs/manager.go):**
+- `GetJob()` - 70 lines
+- `CancelJob()` - 69 lines
+- `enqueueURLsForJob()` - 65 lines
+- `StartJob()` - 59 lines
+- `validateRootURLAccess()` - 59 lines (just created!)
+- `EnqueueJobURLs()` - 57 lines
+- `discoverAndParseSitemaps()` - 57 lines
+
+**API Handlers (internal/api/jobs.go):**
+- `updateJob()` - 80 lines
+- `formatTasksFromRows()` - 72 lines (just created!)
+- `listJobs()` - 69 lines
+- `createJob()` - 69 lines
+- `getJob()` - 63 lines
+- `parseTaskQueryParams()` - 62 lines (just created!)
+- `getJobTasks()` - 56 lines (already refactored!)
+
+## IMMEDIATE TARGET: WarmURL() - 385 LINES 💀💀💀
+
+**Why this is the #1 priority:**
+- **Biggest monster** in entire codebase (385 lines)
+- **Core business logic** - URL crawling is the heart of the system
+- **Highest testing impact** - would enable 80-90% coverage on crawling
+- **Greatest complexity risk** - likely doing 8+ different responsibilities
+
+**Suggested breakdown strategy:**
+1. **`validateCrawlRequest()`** - URL validation and preparation (~40 lines)
+2. **`executeHTTPRequest()`** - HTTP request execution (~60 lines)
+3. **`analyseResponse()`** - Response analysis and metrics (~50 lines)
+4. **`extractLinks()`** - Link extraction logic (~80 lines)
+5. **`validateCache()`** - Cache validation logic (~50 lines)
+6. **`recordCrawlMetrics()`** - Performance and result tracking (~40 lines)
+7. **`handleCrawlErrors()`** - Error classification and handling (~30 lines)
+8. **`WarmURL()`** - Clean orchestrator (~25 lines)
 
 ## EXECUTION PLAN
 
-### Immediate (This Session)
-1. **Fix `setupJobURLDiscovery`** - Break 108 lines into 4 focused functions
-2. **Fix `processSitemap`** - Break 111 lines into 4 focused functions
-3. **Test extensively** - Follow proven pattern
-4. **Verify no regressions** - Full test suite
+### IMMEDIATE SESSION: Target WarmURL() (385 lines)
+1. **Analyse function structure** - Identify clear boundaries
+2. **Extract validation logic** - URL prep and request setup
+3. **Extract HTTP execution** - Request handling
+4. **Extract response analysis** - Response processing  
+5. **Extract link extraction** - Link discovery logic
+6. **Extract cache validation** - Cache checking
+7. **Extract metrics recording** - Performance tracking
+8. **Simplify orchestrator** - Clean coordination function
+9. **Test each extraction** - Comprehensive test coverage
+10. **Verify no regressions** - Full codebase verification
 
-### Next Session Priorities
-1. **`processNextTask()`** (204 lines) - Highest impact target
-2. **`processTask()`** (162 lines) - Critical task execution
-3. **`setupSchema()`** (216 lines) - Database foundation
+### Next Session Priorities (After WarmURL)
+1. **`setupSchema()`** (216 lines) - Database foundation
+2. **`processNextTask()`** (204 lines) - Worker pipeline  
+3. **`processTask()`** (162 lines) - Task execution
+4. **`processSitemap()`** (111 lines) - Sitemap handling
 
 ### Success Metrics
 - **Target**: Each function <50 lines
-- **Coverage**: 80-90% on extracted functions
+- **Coverage**: 80-90% on extracted functions  
 - **Quality**: Comprehensive test suites with edge cases
 - **Reliability**: Zero functional regressions
 
-## File Structure Targets
-
-**Long-term goals:**
-- `internal/jobs/manager.go`: 1017 → ~400 lines
-- `internal/jobs/worker.go`: 1561 → ~600 lines  
-- `internal/db/db.go`: 750 → ~300 lines
-
-**Strategy**: Continue the proven **Extract + Test + Commit** methodology that has delivered exceptional results.
+**Expected WarmURL breakdown impact:**
+- **385 → ~25 lines** (93% reduction)
+- **7 focused, testable functions** created
+- **Massive testing coverage** potential unlocked
+- **System reliability** dramatically improved
 
 ---
-**Status**: Ready to continue breaking down monster functions | **Next**: Fix setupJobURLDiscovery (108 lines)
+**Status**: Ready for BIGGEST IMPACT refactor | **Next**: WarmURL() breakdown (385 lines)
