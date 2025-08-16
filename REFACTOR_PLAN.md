@@ -13,6 +13,7 @@ The **Extract + Test + Commit** pattern has been successfully demonstrated:
 ### Success Pattern Established
 
 **Completed Achievements This Session:**
+
 - **`getJobTasks`**: 216 → 56 lines (74% reduction) with 4 focused functions ✅
 - **`CreateJob`**: 232 → 42 lines (82% reduction) with 4 focused functions ✅
 - **`setupJobURLDiscovery`**: 108 → 17 lines (84% reduction) with 2 focused functions ✅
@@ -24,22 +25,25 @@ The **Extract + Test + Commit** pattern has been successfully demonstrated:
 
 ## setupSchema() REFACTOR - COMPLETED ✅
 
-### Results: 216 → 27 Lines (87% Reduction) 
+### Results: 216 → 27 Lines (87% Reduction)
 
 **Functions Created:**
+
 1. ✅ **`createCoreTables()`** - Table creation (138 lines) with dependency order
 2. ✅ **`createPerformanceIndexes()`** - Index management (40 lines) with cleanup
 3. ✅ **`enableRowLevelSecurity()`** - RLS setup (18 lines) with policy integration
 4. ✅ **`setupSchema()`** - Clean orchestrator (27 lines)
 
 **Testing Achievements:**
+
 - **50+ test cases** added for database operations
 - **Comprehensive error handling** tested
-- **Table dependency order** validated  
+- **Table dependency order** validated
 - **Index creation and cleanup** verified
 - **RLS enabling process** tested
 
 **Impact:**
+
 - **Database package foundation** now fully testable
 - **87% complexity reduction** in schema setup
 - **Clear separation of concerns** for database operations
@@ -48,8 +52,9 @@ The **Extract + Test + Commit** pattern has been successfully demonstrated:
 ## COMPREHENSIVE MONSTER FUNCTION ANALYSIS
 
 **Current Large Files Status:**
+
 - `internal/jobs/worker.go` - **1561 lines, 28 functions** (11 monsters >50 lines)
-- `internal/jobs/manager.go` - **1031 lines, 25 functions** (8 monsters >50 lines)  
+- `internal/jobs/manager.go` - **1031 lines, 25 functions** (8 monsters >50 lines)
 - `internal/api/jobs.go` - **801 lines, 14 functions** (7 monsters >50 lines)
 - `internal/db/db.go` - **750 lines, 14 functions** (7 monsters >50 lines)
 - `internal/crawler/crawler.go` - **669 lines, 10 functions** (2 monsters >50 lines)
@@ -71,7 +76,7 @@ The **Extract + Test + Commit** pattern has been successfully demonstrated:
    - **Complexity**: Table creation, indexes, triggers, policies
 
 3. **`internal/jobs/worker.go:processNextTask()` - 204 lines** 💀💀
-   - **Risk**: Worker task processing pipeline  
+   - **Risk**: Worker task processing pipeline
    - **Impact**: EXTREME - worker reliability depends on this
    - **Complexity**: Task claiming, execution, state management
 
@@ -97,8 +102,9 @@ The **Extract + Test + Commit** pattern has been successfully demonstrated:
 **25 additional functions** between 50-99 lines requiring attention:
 
 **Worker Management (internal/jobs/worker.go):**
+
 - `AddJob()` - 91 lines
-- `recoverRunningJobs()` - 85 lines  
+- `recoverRunningJobs()` - 85 lines
 - `evaluateJobPerformance()` - 77 lines
 - `flushBatches()` - 74 lines
 - `worker()` - 61 lines
@@ -107,6 +113,7 @@ The **Extract + Test + Commit** pattern has been successfully demonstrated:
 - `recoverStaleTasks()` - 57 lines
 
 **Job Management (internal/jobs/manager.go):**
+
 - `GetJob()` - 70 lines
 - `CancelJob()` - 69 lines
 - `enqueueURLsForJob()` - 65 lines
@@ -116,6 +123,7 @@ The **Extract + Test + Commit** pattern has been successfully demonstrated:
 - `discoverAndParseSitemaps()` - 57 lines
 
 **API Handlers (internal/api/jobs.go):**
+
 - `updateJob()` - 80 lines
 - `formatTasksFromRows()` - 72 lines (just created!)
 - `listJobs()` - 69 lines
@@ -129,12 +137,14 @@ The **Extract + Test + Commit** pattern has been successfully demonstrated:
 ### Function Analysis (internal/db/db.go:setupSchema - 216 lines)
 
 **Current structure identification:**
+
 - Table creation statements (~80 lines)
-- Index creation for performance (~60 lines)  
+- Index creation for performance (~60 lines)
 - Row Level Security setup (~40 lines)
 - Trigger creation (~36 lines)
 
 **Target breakdown:**
+
 1. **`createCoreTables()`** - Main table creation (~80 lines)
 2. **`createPerformanceIndexes()`** - Index creation (~60 lines)
 3. **`setupRowLevelSecurity()`** - RLS policies (~40 lines)
@@ -144,13 +154,15 @@ The **Extract + Test + Commit** pattern has been successfully demonstrated:
 ### Execution Steps
 
 #### Step 1: Extract Table Creation ✅
+
 - [x] Analyse table creation section (lines 241-390)
-- [x] Create `createCoreTables(db *sql.DB) error` function 
+- [x] Create `createCoreTables(db *sql.DB) error` function
 - [x] Add comprehensive tests for table creation and dependencies
 - [x] Verify build and existing tests pass
 - [x] Commit: "Extract table creation from setupSchema"
 
 #### Step 2: Extract Index Creation ⏳
+
 - [ ] Analyse index creation section (lines ~321-380)
 - [ ] Create `createPerformanceIndexes(db *sql.DB) error` function
 - [ ] Add tests for index creation and constraints
@@ -158,6 +170,7 @@ The **Extract + Test + Commit** pattern has been successfully demonstrated:
 - [ ] Commit: "Extract index creation from setupSchema"
 
 #### Step 3: Extract RLS Setup ⏳
+
 - [ ] Analyse RLS section (lines ~381-420)
 - [ ] Create `setupRowLevelSecurity(db *sql.DB) error` function
 - [ ] Add tests for security policy creation
@@ -165,6 +178,7 @@ The **Extract + Test + Commit** pattern has been successfully demonstrated:
 - [ ] Commit: "Extract RLS setup from setupSchema"
 
 #### Step 4: Extract Trigger Creation ⏳
+
 - [ ] Analyse trigger section (lines ~421-456)
 - [ ] Create `createDatabaseTriggers(db *sql.DB) error` function
 - [ ] Add tests for trigger functionality
@@ -172,6 +186,7 @@ The **Extract + Test + Commit** pattern has been successfully demonstrated:
 - [ ] Commit: "Extract trigger creation from setupSchema"
 
 #### Step 5: Simplify Schema Orchestrator ⏳
+
 - [ ] Rewrite `setupSchema()` to coordinate extracted functions
 - [ ] Target: ~15 lines of clean orchestration
 - [ ] Add integration test for full schema setup
@@ -179,6 +194,7 @@ The **Extract + Test + Commit** pattern has been successfully demonstrated:
 - [ ] Commit: "Simplify setupSchema to orchestrator"
 
 ### Success Criteria
+
 - **216 → ~15 lines** (93% reduction)
 - **4 focused, testable functions** created
 - **Database operations fully tested** with proper mocking
@@ -190,6 +206,7 @@ The **Extract + Test + Commit** pattern has been successfully demonstrated:
 ### Priority Analysis Based on Impact vs Effort
 
 **Current Status:**
+
 - **Total coverage**: 38.9% (significant improvement)
 - **4 monster functions eliminated** this session
 - **Proven methodology** working across all complexity levels
@@ -228,17 +245,20 @@ The **Extract + Test + Commit** pattern has been successfully demonstrated:
 ### 📊 **STRATEGIC RECOMMENDATION**
 
 **Continue with WarmURL() breakdown** - Maximum impact target:
+
 - **377 lines** is the biggest remaining challenge
-- **Core business logic** - URL crawling is the heart of the system  
+- **Core business logic** - URL crawling is the heart of the system
 - **Already partially done** - validation extraction complete
 - **Clear next steps**: Response handling, cache validation, link extraction
 - **Would unlock massive coverage** in crawler package (currently 63.8%)
 
 **Expected WarmURL completion impact:**
+
 - **377 → ~25 lines** (93% reduction)
 - **6-7 more focused functions** created
 - **Crawler package** → 80-90% coverage potential
 - **System reliability** dramatically improved
 
 ---
+
 **Status**: 4 monsters eliminated, proven methodology | **Next**: Continue WarmURL breakdown (377 lines)
