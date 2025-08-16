@@ -420,18 +420,8 @@ func createPerformanceIndexes(db *sql.DB) error {
 	return nil
 }
 
-// setupSchema creates the necessary tables in PostgreSQL
-func setupSchema(db *sql.DB) error {
-	// Create all core database tables
-	if err := createCoreTables(db); err != nil {
-		return err
-	}
-
-	// Create performance indexes
-	if err := createPerformanceIndexes(db); err != nil {
-		return err
-	}
-
+// enableRowLevelSecurity enables RLS on all tables and sets up policies
+func enableRowLevelSecurity(db *sql.DB) error {
 	// Enable Row-Level Security for all tables
 	tables := []string{"organisations", "users", "domains", "pages", "jobs", "tasks"}
 	for _, table := range tables {
@@ -448,14 +438,32 @@ func setupSchema(db *sql.DB) error {
 		return fmt.Errorf("failed to setup RLS policies: %w", err)
 	}
 
+	return nil
+}
+
+// setupSchema creates the necessary tables in PostgreSQL
+func setupSchema(db *sql.DB) error {
+	// Create all core database tables
+	if err := createCoreTables(db); err != nil {
+		return err
+	}
+
+	// Create performance indexes
+	if err := createPerformanceIndexes(db); err != nil {
+		return err
+	}
+
+	// Enable Row-Level Security
+	if err := enableRowLevelSecurity(db); err != nil {
+		return err
+	}
+
 	// Create database triggers for automatic timestamp and progress management
-	err = setupTimestampTriggers(db)
-	if err != nil {
+	if err := setupTimestampTriggers(db); err != nil {
 		return fmt.Errorf("failed to setup timestamp triggers: %w", err)
 	}
 
-	err = setupProgressTriggers(db)
-	if err != nil {
+	if err := setupProgressTriggers(db); err != nil {
 		return fmt.Errorf("failed to setup progress triggers: %w", err)
 	}
 
