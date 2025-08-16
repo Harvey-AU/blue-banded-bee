@@ -17,9 +17,14 @@ type Page struct {
 	Priority float64
 }
 
+// TransactionExecutor interface for types that can execute transactions
+type TransactionExecutor interface {
+	Execute(ctx context.Context, fn func(*sql.Tx) error) error
+}
+
 // CreatePageRecords finds existing pages or creates new ones for the given URLs.
 // It returns the page IDs and their corresponding paths.
-func CreatePageRecords(ctx context.Context, q *DbQueue, domainID int, domain string, urls []string) ([]int, []string, error) {
+func CreatePageRecords(ctx context.Context, q TransactionExecutor, domainID int, domain string, urls []string) ([]int, []string, error) {
 	var pageIDs []int
 	var paths []string
 
@@ -43,23 +48,11 @@ func CreatePageRecords(ctx context.Context, q *DbQueue, domainID int, domain str
 				continue
 			}
 
-			// Check cache first
-			cacheKey := fmt.Sprintf("page:%d:%s", domainID, path)
-			if cachedID, found := q.db.Cache.Get(cacheKey); found {
-				if id, ok := cachedID.(int); ok {
-					pageIDs = append(pageIDs, id)
-					paths = append(paths, path)
-					continue // Skip database query
-				}
-			}
-
+			// Get or create the page record
 			var pageID int
 			if err := stmt.QueryRowContext(ctx, domainID, path).Scan(&pageID); err != nil {
 				return fmt.Errorf("failed to insert/get page record: %w", err)
 			}
-
-			// Store in cache
-			q.db.Cache.Set(cacheKey, pageID)
 
 			pageIDs = append(pageIDs, pageID)
 			paths = append(paths, path)

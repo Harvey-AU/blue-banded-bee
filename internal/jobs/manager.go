@@ -64,16 +64,18 @@ func (jm *JobManager) CreateJob(ctx context.Context, options *JobOptions) (*Job,
 		var existingJobStatus string
 		var existingOrgID string
 
-		err := jm.db.QueryRowContext(ctx, `
-			SELECT j.id, j.status, j.organisation_id
-			FROM jobs j
-			JOIN domains d ON j.domain_id = d.id
-			WHERE d.name = $1
-			AND j.organisation_id = $2
-			AND j.status IN ('pending', 'initializing', 'running', 'paused')
-			ORDER BY j.created_at DESC
-			LIMIT 1
-		`, normalisedDomain, *options.OrganisationID).Scan(&existingJobID, &existingJobStatus, &existingOrgID)
+		err := jm.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
+			return tx.QueryRowContext(ctx, `
+				SELECT j.id, j.status, j.organisation_id
+				FROM jobs j
+				JOIN domains d ON j.domain_id = d.id
+				WHERE d.name = $1
+				AND j.organisation_id = $2
+				AND j.status IN ('pending', 'initializing', 'running', 'paused')
+				ORDER BY j.created_at DESC
+				LIMIT 1
+			`, normalisedDomain, *options.OrganisationID).Scan(&existingJobID, &existingJobStatus, &existingOrgID)
+		})
 
 		if err == nil && existingJobID != "" {
 			// Found an existing active job for the same domain and organisation
@@ -179,10 +181,11 @@ func (jm *JobManager) CreateJob(ctx context.Context, options *JobOptions) (*Job,
 		rootPath := "/"
 
 		// Check robots.txt before creating manual root URL
-		// Use a temporary crawler to fetch robots.txt
+		// Only fetch robots.txt if we need to check path permissions
 		var robotsRules *crawler.RobotsRules
 		if jm.crawler != nil {
-			_, err := jm.crawler.DiscoverSitemapsAndRobots(ctx, normalisedDomain)
+			// Use DiscoverSitemapsAndRobots which already includes parsing
+			discoveryResult, err := jm.crawler.DiscoverSitemapsAndRobots(ctx, normalisedDomain)
 			if err != nil {
 				log.Error().
 					Err(err).
@@ -203,26 +206,12 @@ func (jm *JobManager) CreateJob(ctx context.Context, options *JobOptions) (*Job,
 				return job, fmt.Errorf("failed to fetch robots.txt: %w", err)
 			}
 
-			// Parse robots.txt for filtering
-			robotsRules, err = crawler.ParseRobotsTxt(ctx, normalisedDomain, "BlueBandedBee/1.0")
-			if err != nil {
-				log.Error().
-					Err(err).
-					Str("domain", normalisedDomain).
-					Msg("Failed to parse robots.txt for manual URL")
-
-				// Update job with error
-				if updateErr := jm.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
-					_, err := tx.ExecContext(ctx, `
-						UPDATE jobs
-						SET status = $1, error_message = $2, completed_at = $3
-						WHERE id = $4
-					`, JobStatusFailed, fmt.Sprintf("Failed to parse robots.txt: %v", err), time.Now().UTC(), job.ID)
-					return err
-				}); updateErr != nil {
-					log.Error().Err(updateErr).Str("job_id", job.ID).Msg("Failed to update job status")
-				}
-				return job, fmt.Errorf("failed to parse robots.txt: %w", err)
+			// Use the already parsed robots rules from discovery
+			robotsRules = discoveryResult.RobotsRules
+			
+			// Store crawl delay if specified in robots.txt
+			if robotsRules != nil && robotsRules.CrawlDelay > 0 {
+				jm.updateDomainCrawlDelay(ctx, normalisedDomain, robotsRules.CrawlDelay)
 			}
 		}
 
@@ -726,7 +715,7 @@ func (jm *JobManager) enqueueURLsForJob(ctx context.Context, jobID, domain strin
 	}
 
 	// Create page records and get their IDs
-	pageIDs, paths, err := db.CreatePageRecords(ctx, jm.dbQueue.(*db.DbQueue), domainID, domain, urls)
+	pageIDs, paths, err := db.CreatePageRecords(ctx, jm.dbQueue, domainID, domain, urls)
 	if err != nil {
 		return fmt.Errorf("failed to create page records: %w", err)
 	}
@@ -800,6 +789,81 @@ func (jm *JobManager) updateDomainCrawlDelay(ctx context.Context, domain string,
 			Int("crawl_delay", crawlDelay).
 			Msg("Updated domain with crawl delay from robots.txt")
 	}
+}
+
+// IsJobComplete checks if all tasks in a job are processed
+func (jm *JobManager) IsJobComplete(job *Job) bool {
+	// A job is complete when all tasks are either completed, failed, or skipped
+	// and the job is currently running
+	if job.Status != JobStatusRunning {
+		return false
+	}
+	
+	processedTasks := job.CompletedTasks + job.FailedTasks + job.SkippedTasks
+	return processedTasks >= job.TotalTasks
+}
+
+// CalculateJobProgress calculates the progress percentage of a job
+func (jm *JobManager) CalculateJobProgress(job *Job) float64 {
+	if job.TotalTasks == 0 {
+		return 0.0
+	}
+	
+	processedTasks := job.CompletedTasks + job.FailedTasks + job.SkippedTasks
+	return float64(processedTasks) / float64(job.TotalTasks) * 100.0
+}
+
+// ValidateStatusTransition checks if a status transition is valid
+func (jm *JobManager) ValidateStatusTransition(from, to JobStatus) error {
+	// Allow restarts from completed/cancelled/failed states
+	if to == JobStatusRunning && (from == JobStatusCompleted || from == JobStatusCancelled || from == JobStatusFailed) {
+		return nil
+	}
+	
+	// Normal forward transitions
+	validTransitions := map[JobStatus][]JobStatus{
+		JobStatusPending:   {JobStatusRunning, JobStatusCancelled},
+		JobStatusRunning:   {JobStatusCompleted, JobStatusFailed, JobStatusCancelled},
+		JobStatusCompleted: {JobStatusRunning}, // Restart
+		JobStatusFailed:    {JobStatusRunning}, // Retry
+		JobStatusCancelled: {JobStatusRunning}, // Restart
+	}
+	
+	allowed, exists := validTransitions[from]
+	if !exists {
+		return fmt.Errorf("invalid status transition from %s to %s", from, to)
+	}
+	
+	for _, valid := range allowed {
+		if valid == to {
+			return nil
+		}
+	}
+	
+	return fmt.Errorf("invalid status transition from %s to %s", from, to)
+}
+
+// UpdateJobStatus updates the status of a job with appropriate timestamps
+func (jm *JobManager) UpdateJobStatus(ctx context.Context, jobID string, status JobStatus) error {
+	return jm.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
+		var query string
+		var args []interface{}
+
+		switch status {
+		case JobStatusCompleted:
+			query = "UPDATE jobs SET status = $1, completed_at = $2 WHERE id = $3"
+			args = []interface{}{string(status), time.Now(), jobID}
+		case JobStatusRunning:
+			query = "UPDATE jobs SET status = $1, started_at = $2 WHERE id = $3"
+			args = []interface{}{string(status), time.Now(), jobID}
+		default:
+			query = "UPDATE jobs SET status = $1 WHERE id = $2"
+			args = []interface{}{string(status), jobID}
+		}
+
+		_, err := tx.Exec(query, args...)
+		return err
+	})
 }
 
 // processSitemap fetches and processes a sitemap for a domain

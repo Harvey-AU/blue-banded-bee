@@ -17,8 +17,8 @@ func TestNewWorkerPoolValidation(t *testing.T) {
 	tests := []struct {
 		name        string
 		db          *sql.DB
-		dbQueue     *db.DbQueue
-		crawler     *crawler.Crawler
+		dbQueue     DbQueueInterface
+		crawler     CrawlerInterface
 		numWorkers  int
 		dbConfig    *db.Config
 		expectPanic bool

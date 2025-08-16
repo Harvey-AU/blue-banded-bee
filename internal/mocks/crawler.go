@@ -55,3 +55,9 @@ func (m *MockCrawler) FilterURLs(urls []string, includePaths, excludePaths []str
 
 	return args.Get(0).([]string)
 }
+
+// GetUserAgent mocks the GetUserAgent method
+func (m *MockCrawler) GetUserAgent() string {
+	args := m.Called()
+	return args.String(0)
+}
