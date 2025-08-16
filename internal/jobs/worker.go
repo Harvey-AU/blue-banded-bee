@@ -30,9 +30,9 @@ type JobPerformance struct {
 
 type WorkerPool struct {
 	db               *sql.DB
-	dbQueue          *db.DbQueue
+	dbQueue          DbQueueInterface
 	dbConfig         *db.Config
-	crawler          *crawler.Crawler
+	crawler          CrawlerInterface
 	numWorkers       int
 	jobs             map[string]bool
 	jobsMutex        sync.RWMutex
@@ -77,7 +77,7 @@ type TaskBatch struct {
 	mu sync.Mutex
 }
 
-func NewWorkerPool(db *sql.DB, dbQueue *db.DbQueue, crawler *crawler.Crawler, numWorkers int, dbConfig *db.Config) *WorkerPool {
+func NewWorkerPool(db *sql.DB, dbQueue DbQueueInterface, crawler CrawlerInterface, numWorkers int, dbConfig *db.Config) *WorkerPool {
 	// Validate inputs
 	if db == nil {
 		panic("database connection is required")
@@ -215,13 +215,15 @@ func (wp *WorkerPool) AddJob(jobID string, options *JobOptions) {
 	
 	// When options is nil (recovery mode), fetch find_links from DB
 	// Otherwise use the provided options value
-	query := `
-		SELECT d.name, d.crawl_delay_seconds, j.find_links
-		FROM domains d
-		JOIN jobs j ON j.domain_id = d.id
-		WHERE j.id = $1
-	`
-	err := wp.db.QueryRowContext(ctx, query, jobID).Scan(&domainName, &crawlDelay, &dbFindLinks)
+	err := wp.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
+		query := `
+			SELECT d.name, d.crawl_delay_seconds, j.find_links
+			FROM domains d
+			JOIN jobs j ON j.domain_id = d.id
+			WHERE j.id = $1
+		`
+		return tx.QueryRowContext(ctx, query, jobID).Scan(&domainName, &crawlDelay, &dbFindLinks)
+	})
 
 	if err == nil {
 		// Use DB value when options is nil (recovery), otherwise use provided value
@@ -448,12 +450,14 @@ func (wp *WorkerPool) processNextTask(ctx context.Context) error {
 				var domainName string
 				var findLinks bool
 				var crawlDelay sql.NullInt64
-				err := wp.db.QueryRowContext(ctx, `
-					SELECT d.name, j.find_links, d.crawl_delay_seconds
-					FROM domains d
-					JOIN jobs j ON j.domain_id = d.id
-					WHERE j.id = $1
-				`, task.JobID).Scan(&domainName, &findLinks, &crawlDelay)
+				err := wp.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
+					return tx.QueryRowContext(ctx, `
+						SELECT d.name, j.find_links, d.crawl_delay_seconds
+						FROM domains d
+						JOIN jobs j ON j.domain_id = d.id
+						WHERE j.id = $1
+					`, task.JobID).Scan(&domainName, &findLinks, &crawlDelay)
+				})
 
 				if err != nil {
 					log.Error().Err(err).Str("job_id", task.JobID).Msg("Failed to get domain info")
@@ -598,7 +602,9 @@ func (wp *WorkerPool) EnqueueURLs(ctx context.Context, jobID string, pages []db.
 
 	// The jobManager must be set for the worker pool to function correctly.
 	if wp.jobManager == nil {
-		panic("jobManager is not set on WorkerPool")
+		err := fmt.Errorf("jobManager is not set on WorkerPool - cannot enqueue URLs")
+		log.Error().Err(err).Msg("Failed to enqueue URLs")
+		return err
 	}
 
 	return wp.jobManager.EnqueueJobURLs(ctx, jobID, pages, sourceType, sourceURL)
@@ -636,31 +642,40 @@ func (wp *WorkerPool) StartTaskMonitor(ctx context.Context) {
 // checkForPendingTasks looks for any pending tasks and adds their jobs to the pool
 func (wp *WorkerPool) checkForPendingTasks(ctx context.Context) error {
 	log.Debug().Msg("Checking database for jobs with pending tasks")
-	// Query for jobs with pending tasks
-	rows, err := wp.db.QueryContext(ctx, `
-		SELECT DISTINCT job_id FROM tasks 
-		WHERE status = $1 
-		LIMIT 100
-	`, TaskStatusPending)
+	
+	var jobIDs []string
+	err := wp.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
+		// Query for jobs with pending tasks
+		rows, err := tx.QueryContext(ctx, `
+			SELECT DISTINCT job_id FROM tasks 
+			WHERE status = $1 
+			LIMIT 100
+		`, TaskStatusPending)
+		
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		
+		for rows.Next() {
+			var jobID string
+			if err := rows.Scan(&jobID); err != nil {
+				return err
+			}
+			jobIDs = append(jobIDs, jobID)
+		}
+		return rows.Err()
+	})
 
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to query for jobs with pending tasks")
 		return err
 	}
-	defer rows.Close()
 
-	jobsFound := 0
-	foundIDs := make([]string, 0, 100)
+	jobsFound := len(jobIDs)
+	foundIDs := jobIDs
 	// For each job with pending tasks, add it to the worker pool
-	for rows.Next() {
-		jobsFound++
-		var jobID string
-		if err := rows.Scan(&jobID); err != nil {
-			log.Error().Err(err).Msg("Failed to scan job ID")
-			continue
-		}
-		foundIDs = append(foundIDs, jobID)
-
+	for _, jobID := range jobIDs {
 		// Check if already in our active jobs
 		wp.jobsMutex.RLock()
 		active := wp.jobs[jobID]
@@ -672,9 +687,11 @@ func (wp *WorkerPool) checkForPendingTasks(ctx context.Context) error {
 
 			// Get job options
 			var findLinks bool
-			err := wp.db.QueryRowContext(ctx, `
-				SELECT find_links FROM jobs WHERE id = $1
-			`, jobID).Scan(&findLinks)
+			err := wp.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
+				return tx.QueryRowContext(ctx, `
+					SELECT find_links FROM jobs WHERE id = $1
+				`, jobID).Scan(&findLinks)
+			})
 
 			if err != nil {
 				log.Error().Err(err).Str("job_id", jobID).Msg("Failed to get job options")
@@ -688,12 +705,15 @@ func (wp *WorkerPool) checkForPendingTasks(ctx context.Context) error {
 			wp.AddJob(jobID, options)
 
 			// Update job status if needed
-			_, err = wp.db.ExecContext(ctx, `
-				UPDATE jobs SET
-					status = $1,
-					started_at = CASE WHEN started_at IS NULL THEN $2 ELSE started_at END
-				WHERE id = $3 AND status = $4
-			`, JobStatusRunning, time.Now(), jobID, JobStatusPending)
+			err = wp.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
+				_, err := tx.ExecContext(ctx, `
+					UPDATE jobs SET
+						status = $1,
+						started_at = CASE WHEN started_at IS NULL THEN $2 ELSE started_at END
+					WHERE id = $3 AND status = $4
+				`, JobStatusRunning, time.Now(), jobID, JobStatusPending)
+				return err
+			})
 
 			if err != nil {
 				log.Error().Err(err).Str("job_id", jobID).Msg("Failed to update job status")
@@ -728,7 +748,7 @@ func (wp *WorkerPool) checkForPendingTasks(ctx context.Context) error {
 		wp.RemoveJob(id)
 	}
 
-	return rows.Err()
+	return nil
 }
 
 // SetJobManager sets the JobManager reference for duplicate task checking
@@ -800,28 +820,40 @@ func (wp *WorkerPool) recoverStaleTasks(ctx context.Context) error {
 func (wp *WorkerPool) recoverRunningJobs(ctx context.Context) error {
 	log.Info().Msg("Recovering jobs that were running before restart")
 
-	// Find jobs with 'running' status that have 'running' tasks
-	rows, err := wp.db.QueryContext(ctx, `
-		SELECT DISTINCT j.id
-		FROM jobs j
-		JOIN tasks t ON j.id = t.job_id
-		WHERE j.status = $1
-		AND t.status = $2
-	`, JobStatusRunning, TaskStatusRunning)
+	var jobIDs []string
+	err := wp.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
+		// Find jobs with 'running' status that have 'running' tasks
+		rows, err := tx.QueryContext(ctx, `
+			SELECT DISTINCT j.id
+			FROM jobs j
+			JOIN tasks t ON j.id = t.job_id
+			WHERE j.status = $1
+			AND t.status = $2
+		`, JobStatusRunning, TaskStatusRunning)
+		
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		
+		for rows.Next() {
+			var jobID string
+			if err := rows.Scan(&jobID); err != nil {
+				return err
+			}
+			jobIDs = append(jobIDs, jobID)
+		}
+		
+		return rows.Err()
+	})
 
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to query for running jobs with running tasks")
 		return err
 	}
-	defer rows.Close()
 
 	var recoveredJobs []string
-	for rows.Next() {
-		var jobID string
-		if err := rows.Scan(&jobID); err != nil {
-			log.Error().Err(err).Msg("Failed to scan job ID during recovery")
-			continue
-		}
+	for _, jobID := range jobIDs {
 
 		// Reset running tasks to pending for this job
 		err := wp.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
@@ -868,7 +900,7 @@ func (wp *WorkerPool) recoverRunningJobs(ctx context.Context) error {
 		log.Debug().Msg("No running jobs found to recover")
 	}
 
-	return rows.Err()
+	return nil
 }
 
 // recoveryMonitor periodically checks for and recovers stale tasks
@@ -1050,15 +1082,25 @@ func (wp *WorkerPool) CleanupStuckJobs(ctx context.Context) error {
 	span := sentry.StartSpan(ctx, "jobs.cleanup_stuck_jobs")
 	defer span.Finish()
 
-	result, err := wp.db.ExecContext(ctx, `
-		UPDATE jobs 
-		SET status = $1, 
-			completed_at = COALESCE(completed_at, $2),
-			progress = 100.0
-		WHERE (status = $3 OR status = $4)
-		AND total_tasks > 0 
-		AND total_tasks = completed_tasks + failed_tasks
-	`, JobStatusCompleted, time.Now(), JobStatusPending, JobStatusRunning)
+	var rowsAffected int64
+	err := wp.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
+		result, err := tx.ExecContext(ctx, `
+			UPDATE jobs 
+			SET status = $1, 
+				completed_at = COALESCE(completed_at, $2),
+				progress = 100.0
+			WHERE (status = $3 OR status = $4)
+			AND total_tasks > 0 
+			AND total_tasks = completed_tasks + failed_tasks
+		`, JobStatusCompleted, time.Now(), JobStatusPending, JobStatusRunning)
+		
+		if err != nil {
+			return err
+		}
+		
+		rowsAffected, err = result.RowsAffected()
+		return err
+	})
 
 	if err != nil {
 		span.SetTag("error", "true")
@@ -1066,7 +1108,6 @@ func (wp *WorkerPool) CleanupStuckJobs(ctx context.Context) error {
 		return fmt.Errorf("failed to cleanup stuck jobs: %w", err)
 	}
 
-	rowsAffected, _ := result.RowsAffected()
 	if rowsAffected > 0 {
 		log.Info().
 			Int64("jobs_fixed", rowsAffected).
@@ -1327,23 +1368,32 @@ func (wp *WorkerPool) updateTaskPriorities(ctx context.Context, jobID string, do
 		return nil
 	}
 
-	// Update all task priorities in a single query
-	result, err := wp.db.ExecContext(ctx, `
-		UPDATE tasks t
-		SET priority_score = $1
-		FROM pages p
-		WHERE t.page_id = p.id
-		AND t.job_id = $2
-		AND p.domain_id = $3
-		AND p.path = ANY($4)
-		AND t.priority_score < $1
-	`, newPriority, jobID, domainID, paths)
+	var rowsAffected int64
+	err := wp.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
+		// Update all task priorities in a single query
+		result, err := tx.ExecContext(ctx, `
+			UPDATE tasks t
+			SET priority_score = $1
+			FROM pages p
+			WHERE t.page_id = p.id
+			AND t.job_id = $2
+			AND p.domain_id = $3
+			AND p.path = ANY($4)
+			AND t.priority_score < $1
+		`, newPriority, jobID, domainID, paths)
+		
+		if err != nil {
+			return err
+		}
+		
+		rowsAffected, err = result.RowsAffected()
+		return err
+	})
 
 	if err != nil {
 		return fmt.Errorf("failed to update task priorities: %w", err)
 	}
 
-	rowsAffected, _ := result.RowsAffected()
 	if rowsAffected > 0 {
 		log.Info().
 			Str("job_id", jobID).

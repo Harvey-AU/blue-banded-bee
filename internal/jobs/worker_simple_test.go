@@ -20,20 +20,20 @@ func TestWorkerPoolConstructor(t *testing.T) {
 
 	tests := []struct {
 		name      string
-		setupFunc func() (*sql.DB, *db.DbQueue, *crawler.Crawler, int, *db.Config)
+		setupFunc func() (*sql.DB, DbQueueInterface, CrawlerInterface, int, *db.Config)
 		wantPanic bool
 		panicMsg  string
 	}{
 		{
 			name: "valid configuration",
-			setupFunc: func() (*sql.DB, *db.DbQueue, *crawler.Crawler, int, *db.Config) {
+			setupFunc: func() (*sql.DB, DbQueueInterface, CrawlerInterface, int, *db.Config) {
 				return &sql.DB{}, &db.DbQueue{}, &crawler.Crawler{}, 5, &db.Config{}
 			},
 			wantPanic: false,
 		},
 		{
 			name: "nil database",
-			setupFunc: func() (*sql.DB, *db.DbQueue, *crawler.Crawler, int, *db.Config) {
+			setupFunc: func() (*sql.DB, DbQueueInterface, CrawlerInterface, int, *db.Config) {
 				return nil, &db.DbQueue{}, &crawler.Crawler{}, 5, &db.Config{}
 			},
 			wantPanic: true,
@@ -41,7 +41,7 @@ func TestWorkerPoolConstructor(t *testing.T) {
 		},
 		{
 			name: "nil queue",
-			setupFunc: func() (*sql.DB, *db.DbQueue, *crawler.Crawler, int, *db.Config) {
+			setupFunc: func() (*sql.DB, DbQueueInterface, CrawlerInterface, int, *db.Config) {
 				return &sql.DB{}, nil, &crawler.Crawler{}, 5, &db.Config{}
 			},
 			wantPanic: true,
@@ -49,7 +49,7 @@ func TestWorkerPoolConstructor(t *testing.T) {
 		},
 		{
 			name: "nil crawler",
-			setupFunc: func() (*sql.DB, *db.DbQueue, *crawler.Crawler, int, *db.Config) {
+			setupFunc: func() (*sql.DB, DbQueueInterface, CrawlerInterface, int, *db.Config) {
 				return &sql.DB{}, &db.DbQueue{}, nil, 5, &db.Config{}
 			},
 			wantPanic: true,
@@ -57,7 +57,7 @@ func TestWorkerPoolConstructor(t *testing.T) {
 		},
 		{
 			name: "zero workers",
-			setupFunc: func() (*sql.DB, *db.DbQueue, *crawler.Crawler, int, *db.Config) {
+			setupFunc: func() (*sql.DB, DbQueueInterface, CrawlerInterface, int, *db.Config) {
 				return &sql.DB{}, &db.DbQueue{}, &crawler.Crawler{}, 0, &db.Config{}
 			},
 			wantPanic: true,
@@ -65,7 +65,7 @@ func TestWorkerPoolConstructor(t *testing.T) {
 		},
 		{
 			name: "negative workers",
-			setupFunc: func() (*sql.DB, *db.DbQueue, *crawler.Crawler, int, *db.Config) {
+			setupFunc: func() (*sql.DB, DbQueueInterface, CrawlerInterface, int, *db.Config) {
 				return &sql.DB{}, &db.DbQueue{}, &crawler.Crawler{}, -1, &db.Config{}
 			},
 			wantPanic: true,
@@ -73,7 +73,7 @@ func TestWorkerPoolConstructor(t *testing.T) {
 		},
 		{
 			name: "nil config",
-			setupFunc: func() (*sql.DB, *db.DbQueue, *crawler.Crawler, int, *db.Config) {
+			setupFunc: func() (*sql.DB, DbQueueInterface, CrawlerInterface, int, *db.Config) {
 				return &sql.DB{}, &db.DbQueue{}, &crawler.Crawler{}, 5, nil
 			},
 			wantPanic: true,

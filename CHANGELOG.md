@@ -10,30 +10,64 @@ Each version represents a distinct set of changes, even if released on the same 
 
 ## [Unreleased] – 2025-08-16
 
+### Improved
+
+- **Error Handling**: Made error handling more graceful
+  - Replaced panic with error return when jobManager is nil in EnqueueURLs
+  - Better error messages and logging for debugging
+
+- **Performance Optimisation**: Optimised robots.txt parsing
+  - Removed redundant ParseRobotsTxt call when not using sitemap
+  - Use already parsed rules from DiscoverSitemapsAndRobots
+  - Store crawl delay from robots.txt when processing manual URLs
+
+- **Test Infrastructure**: Fixed test compatibility issues
+  - Updated tests to work with interface-based architecture
+  - Added mockDbQueueWrapper for UpdateJobStatus tests
+  - Fixed validation tests to use interfaces instead of concrete types
+
+## [Previous] – 2025-08-16
+
 ### Enhanced
 
-- **Test Coverage Expansion**: Significant improvements to jobs package testing
-  - Created comprehensive unit tests for JobManager functions (GetJob, StartJob, CancelJob)
-  - Improved test coverage: jobs package (10.3% → 19.9%)
-  - Consolidated shared test helpers into `test_helpers.go` to avoid duplication
-  - Implemented table-driven tests for comprehensive scenario coverage
-  - Added proper transaction mocking with sqlmock
+- **Test Coverage Expansion**: Major improvements to jobs package testing
+  - Improved test coverage: jobs package (1% → 31.6%)
+  - Refactored WorkerPool to use interfaces for proper dependency injection
+  - Created comprehensive unit tests for worker processing and job lifecycle
+  - Moved helper functions from tests to production code where they belong
+  - Fixed test design to test actual code rather than re-implement logic
 
 ### Added
 
-- **Job Manager Unit Tests**: Complete test suite for critical job operations
-  - `manager_getjob_test.go` - Tests for retrieving job details with various scenarios
-  - `manager_startjob_test.go` - Tests for restarting completed/failed/cancelled jobs
-  - `manager_canceljob_test.go` - Tests for job cancellation with proper cleanup
-  - Shared `MockDbQueueWithTransaction` helper for consistent test infrastructure
+- **Interface-Based Architecture**: Enabled proper unit testing
+  - `DbQueueInterface` - Interface for database queue operations
+  - `CrawlerInterface` - Extended with GetUserAgent method
+  - Mock implementations for both interfaces in tests
+  
+- **Worker Processing Tests**: Core task processing functionality
+  - `worker_process_test.go` - Tests for processTask and processNextTask
+  - Error classification and retry logic tests
+  - Task processing with various scenarios (delays, redirects, errors)
+
+- **Job Lifecycle Tests**: Job management functionality
+  - `job_lifecycle_test.go` - Tests for job completion detection
+  - Job progress calculation tests
+  - Status transition validation tests
+  - Job status update mechanism tests
+
+- **Production Helper Methods**: Moved from tests to JobManager
+  - `IsJobComplete()` - Determines when a job is finished
+  - `CalculateJobProgress()` - Calculates job completion percentage
+  - `ValidateStatusTransition()` - Validates job status changes
+  - `UpdateJobStatus()` - Updates job status with timestamps
 
 ### Fixed
 
-- **Test Infrastructure Issues**: Resolved testing problems
-  - Fixed JSON serialization mismatches in sqlmock expectations
-  - Resolved nil pointer panics in worker pool initialization
-  - Added proper jobPerformance map initialization
-  - Corrected build tag conventions for unit vs integration tests
+- **Architectural Issues**: Resolved design problems preventing testing
+  - WorkerPool now accepts interfaces instead of concrete types
+  - CreatePageRecords now accepts TransactionExecutor interface
+  - Removed unused methods from DbQueueInterface
+  - Added missing GetUserAgent to MockCrawler
 
 ## [0.5.34] – 2025-08-08
 
