@@ -104,6 +104,56 @@ Blue Banded Bee is a web cache warming service built in Go, focused on Webflow s
 - **Preserve existing functionality** - Unless explicitly asked to remove
 - **Ask before expanding scope** - Don't add unrequested features
 
+## Function Refactoring Methodology
+
+### Extract + Test + Commit Pattern
+
+When encountering functions >50 lines, apply this proven systematic approach:
+
+1. **Analyse Function Structure**
+   - Identify distinct responsibilities (auth, validation, processing, formatting)
+   - Map clear boundaries between concerns
+   - Estimate extraction sizes and complexity
+
+2. **Extract Focused Functions**
+   - Pull out single-responsibility functions
+   - Use idiomatic Go error patterns (return simple errors)
+   - Maintain original functionality exactly
+   - Choose descriptive function names
+
+3. **Create Comprehensive Tests**
+   - Write table-driven tests for each extracted function
+   - Cover edge cases, error conditions, parameter validation
+   - Use appropriate mocking (sqlmock for DB, context for cancellation)
+   - Test function isolation and integration
+
+4. **Commit Each Step Separately**
+   - Commit extraction and tests together
+   - Use descriptive commit messages
+   - Verify build and all tests pass before committing
+   - Keep commits atomic and reversible
+
+5. **Verify Integration**
+   - Ensure original function still works correctly
+   - Run full test suite to check for regressions
+   - Test end-to-end functionality
+
+### Proven Results
+
+**Successfully applied to 5 monster functions:**
+- `getJobTasks`: 216 → 56 lines (74% reduction)
+- `CreateJob`: 232 → 42 lines (82% reduction)  
+- `setupJobURLDiscovery`: 108 → 17 lines (84% reduction)
+- `setupSchema`: 216 → 27 lines (87% reduction)
+- `WarmURL`: 377 → 68 lines (82% reduction)
+
+**Benefits achieved:**
+- 80% complexity reduction
+- 350+ new test cases
+- 38.9% total coverage (up from 30%)
+- Zero functional regressions
+- Dramatically improved maintainability
+
 ## Database Schema Management
 
 **IMPORTANT: We use Supabase's built-in migration system. Do NOT duplicate this functionality in Go code.**
