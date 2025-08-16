@@ -386,7 +386,8 @@ func (wp *WorkerPool) worker(ctx context.Context, workerID int) {
 	}
 }
 
-func (wp *WorkerPool) processNextTask(ctx context.Context) error {
+// claimPendingTask attempts to claim a pending task from any active job
+func (wp *WorkerPool) claimPendingTask(ctx context.Context) (*db.Task, error) {
 	// Get the list of active jobs
 	wp.jobsMutex.RLock()
 	activeJobs := make([]string, 0, len(wp.jobs))
@@ -397,7 +398,7 @@ func (wp *WorkerPool) processNextTask(ctx context.Context) error {
 
 	// If no active jobs, return immediately
 	if len(activeJobs) == 0 {
-		return sql.ErrNoRows
+		return nil, sql.ErrNoRows
 	}
 
 	// Try to get a task from each active job
@@ -408,7 +409,7 @@ func (wp *WorkerPool) processNextTask(ctx context.Context) error {
 		}
 		if err != nil {
 			log.Error().Err(err).Str("job_id", jobID).Msg("Error getting next pending task")
-			return err // Return actual errors
+			return nil, err // Return actual errors
 		}
 		if task != nil {
 			log.Info().
@@ -418,6 +419,21 @@ func (wp *WorkerPool) processNextTask(ctx context.Context) error {
 				Str("path", task.Path).
 				Float64("priority", task.PriorityScore).
 				Msg("Found and claimed pending task")
+			return task, nil
+		}
+	}
+
+	// No tasks found in any job
+	return nil, sql.ErrNoRows
+}
+
+func (wp *WorkerPool) processNextTask(ctx context.Context) error {
+	// Claim a pending task from active jobs
+	task, err := wp.claimPendingTask(ctx)
+	if err != nil {
+		return err
+	}
+	if task != nil {
 
 			// Convert db.Task to jobs.Task for processing
 			jobsTask := &Task{
@@ -582,12 +598,11 @@ func (wp *WorkerPool) processNextTask(ctx context.Context) error {
 				if result.ResponseTime > 0 {
 					wp.evaluateJobPerformance(task.JobID, result.ResponseTime)
 				}
-			}
-			return nil
 		}
+		return nil
 	}
 
-	// No tasks found in any job
+	// No tasks found in any active jobs
 	return sql.ErrNoRows
 }
 
