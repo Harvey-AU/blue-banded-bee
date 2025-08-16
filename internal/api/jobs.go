@@ -293,7 +293,7 @@ func (h *Handler) getJob(w http.ResponseWriter, r *http.Request, jobID string) {
 	var total, completed, failed, skipped int
 	var status, domain string
 	var createdAt, startedAt, completedAt sql.NullTime
-	err = h.DB.GetDB().QueryRowContext(r.Context(), `
+	err := h.DB.GetDB().QueryRowContext(r.Context(), `
 		SELECT j.total_tasks, j.completed_tasks, j.failed_tasks, j.skipped_tasks, j.status,
 		       d.name as domain, j.created_at, j.started_at, j.completed_at
 		FROM jobs j
