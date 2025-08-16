@@ -237,8 +237,8 @@ func InitFromEnv() (*DB, error) {
 	return db, nil
 }
 
-// setupSchema creates the necessary tables in PostgreSQL
-func setupSchema(db *sql.DB) error {
+// createCoreTables creates all core database tables
+func createCoreTables(db *sql.DB) error {
 	// Create organisations table first (referenced by users and jobs)
 	_, err := db.Exec(`
 		CREATE TABLE IF NOT EXISTS organisations (
@@ -268,11 +268,12 @@ func setupSchema(db *sql.DB) error {
 		return fmt.Errorf("failed to create users table: %w", err)
 	}
 
-	// Create domains lookup table
+	// Create domains table
 	_, err = db.Exec(`
 		CREATE TABLE IF NOT EXISTS domains (
 			id SERIAL PRIMARY KEY,
-			name TEXT UNIQUE NOT NULL,
+			name TEXT NOT NULL UNIQUE,
+			crawl_delay INTEGER DEFAULT 1,
 			created_at TIMESTAMP NOT NULL DEFAULT NOW()
 		)
 	`)
@@ -280,7 +281,7 @@ func setupSchema(db *sql.DB) error {
 		return fmt.Errorf("failed to create domains table: %w", err)
 	}
 
-	// Create pages lookup table
+	// Create pages table
 	_, err = db.Exec(`
 		CREATE TABLE IF NOT EXISTS pages (
 			id SERIAL PRIMARY KEY,
@@ -328,13 +329,6 @@ func setupSchema(db *sql.DB) error {
 					THEN EXTRACT(EPOCH FROM (completed_at - started_at))::INTEGER
 					ELSE NULL
 				END
-			) STORED,
-			avg_time_per_task_seconds NUMERIC GENERATED ALWAYS AS (
-				CASE 
-					WHEN started_at IS NOT NULL AND completed_at IS NOT NULL AND completed_tasks > 0 
-					THEN EXTRACT(EPOCH FROM (completed_at - started_at))::NUMERIC / completed_tasks::NUMERIC
-					ELSE NULL
-				END
 			) STORED
 		)
 	`)
@@ -342,11 +336,11 @@ func setupSchema(db *sql.DB) error {
 		return fmt.Errorf("failed to create jobs table: %w", err)
 	}
 
-	// Create tasks table
+	// Create tasks table  
 	_, err = db.Exec(`
 		CREATE TABLE IF NOT EXISTS tasks (
 			id TEXT PRIMARY KEY,
-			job_id TEXT NOT NULL,
+			job_id TEXT NOT NULL REFERENCES jobs(id),
 			page_id INTEGER NOT NULL REFERENCES pages(id),
 			path TEXT NOT NULL,
 			status TEXT NOT NULL,
@@ -373,22 +367,20 @@ func setupSchema(db *sql.DB) error {
 			second_cache_status TEXT,
 			second_content_length BIGINT,
 			second_headers JSONB,
-			second_dns_lookup_time INTEGER,
-			second_tcp_connection_time INTEGER,
-			second_tls_handshake_time INTEGER,
-			second_ttfb INTEGER,
-			second_content_transfer_time INTEGER,
-			cache_check_attempts JSONB,
-			priority_score NUMERIC(4,3) DEFAULT 0.000,
-			FOREIGN KEY (job_id) REFERENCES jobs(id)
+			priority_score REAL DEFAULT 1.0
 		)
 	`)
 	if err != nil {
 		return fmt.Errorf("failed to create tasks table: %w", err)
 	}
 
-	// Create indexes
-	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_tasks_job_id ON tasks(job_id)`)
+	return nil
+}
+
+// createPerformanceIndexes creates database indexes for optimal query performance
+func createPerformanceIndexes(db *sql.DB) error {
+	// Create basic task lookup index
+	_, err := db.Exec(`CREATE INDEX IF NOT EXISTS idx_tasks_job_id ON tasks(job_id)`)
 	if err != nil {
 		return fmt.Errorf("failed to create task job_id index: %w", err)
 	}
@@ -425,30 +417,53 @@ func setupSchema(db *sql.DB) error {
 		return fmt.Errorf("failed to create unique job/page index: %w", err)
 	}
 
+	return nil
+}
+
+// enableRowLevelSecurity enables RLS on all tables and sets up policies
+func enableRowLevelSecurity(db *sql.DB) error {
 	// Enable Row-Level Security for all tables
 	tables := []string{"organisations", "users", "domains", "pages", "jobs", "tasks"}
 	for _, table := range tables {
 		// Enable RLS on the table
-		_, err = db.Exec(fmt.Sprintf("ALTER TABLE %s ENABLE ROW LEVEL SECURITY", table))
+		_, err := db.Exec(fmt.Sprintf("ALTER TABLE %s ENABLE ROW LEVEL SECURITY", table))
 		if err != nil {
 			return fmt.Errorf("failed to enable RLS on %s table: %w", table, err)
 		}
 	}
 
 	// Set up Row Level Security policies
-	err = setupRLSPolicies(db)
+	err := setupRLSPolicies(db)
 	if err != nil {
 		return fmt.Errorf("failed to setup RLS policies: %w", err)
 	}
 
+	return nil
+}
+
+// setupSchema creates the necessary tables in PostgreSQL
+func setupSchema(db *sql.DB) error {
+	// Create all core database tables
+	if err := createCoreTables(db); err != nil {
+		return err
+	}
+
+	// Create performance indexes
+	if err := createPerformanceIndexes(db); err != nil {
+		return err
+	}
+
+	// Enable Row-Level Security
+	if err := enableRowLevelSecurity(db); err != nil {
+		return err
+	}
+
 	// Create database triggers for automatic timestamp and progress management
-	err = setupTimestampTriggers(db)
-	if err != nil {
+	if err := setupTimestampTriggers(db); err != nil {
 		return fmt.Errorf("failed to setup timestamp triggers: %w", err)
 	}
 
-	err = setupProgressTriggers(db)
-	if err != nil {
+	if err := setupProgressTriggers(db); err != nil {
 		return fmt.Errorf("failed to setup progress triggers: %w", err)
 	}
 
