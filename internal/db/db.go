@@ -377,14 +377,9 @@ func createCoreTables(db *sql.DB) error {
 	return nil
 }
 
-// setupSchema creates the necessary tables in PostgreSQL
-func setupSchema(db *sql.DB) error {
-	// Create all core database tables
-	if err := createCoreTables(db); err != nil {
-		return err
-	}
-
-	// Create indexes
+// createPerformanceIndexes creates database indexes for optimal query performance
+func createPerformanceIndexes(db *sql.DB) error {
+	// Create basic task lookup index
 	_, err := db.Exec(`CREATE INDEX IF NOT EXISTS idx_tasks_job_id ON tasks(job_id)`)
 	if err != nil {
 		return fmt.Errorf("failed to create task job_id index: %w", err)
@@ -422,18 +417,33 @@ func setupSchema(db *sql.DB) error {
 		return fmt.Errorf("failed to create unique job/page index: %w", err)
 	}
 
+	return nil
+}
+
+// setupSchema creates the necessary tables in PostgreSQL
+func setupSchema(db *sql.DB) error {
+	// Create all core database tables
+	if err := createCoreTables(db); err != nil {
+		return err
+	}
+
+	// Create performance indexes
+	if err := createPerformanceIndexes(db); err != nil {
+		return err
+	}
+
 	// Enable Row-Level Security for all tables
 	tables := []string{"organisations", "users", "domains", "pages", "jobs", "tasks"}
 	for _, table := range tables {
 		// Enable RLS on the table
-		_, err = db.Exec(fmt.Sprintf("ALTER TABLE %s ENABLE ROW LEVEL SECURITY", table))
+		_, err := db.Exec(fmt.Sprintf("ALTER TABLE %s ENABLE ROW LEVEL SECURITY", table))
 		if err != nil {
 			return fmt.Errorf("failed to enable RLS on %s table: %w", table, err)
 		}
 	}
 
 	// Set up Row Level Security policies
-	err = setupRLSPolicies(db)
+	err := setupRLSPolicies(db)
 	if err != nil {
 		return fmt.Errorf("failed to setup RLS policies: %w", err)
 	}
