@@ -185,11 +185,60 @@ The **Extract + Test + Commit** pattern has been successfully demonstrated:
 - **Zero regressions** in schema creation
 - **Improved DB package coverage** from 30.5% baseline
 
-### Next Targets (After setupSchema)
-1. **`processNextTask()`** (204 lines) - Worker pipeline critical path
-2. **`processTask()`** (162 lines) - Task execution logic
-3. **Continue WarmURL breakdown** - 7 more functions needed
-4. **`processSitemap()`** (111 lines) - Sitemap processing
+## NEXT LOGICAL SIMPLIFICATION TARGETS
+
+### Priority Analysis Based on Impact vs Effort
+
+**Current Status:**
+- **Total coverage**: 38.9% (significant improvement)
+- **4 monster functions eliminated** this session
+- **Proven methodology** working across all complexity levels
+
+### 🎯 **HIGHEST PRIORITY (Maximum Impact)**
+
+1. **`WarmURL()` - 377 lines** 💀💀💀 **RECOMMENDED NEXT**
+   - **THE BIGGEST remaining monster** in codebase
+   - **Already started** - validateCrawlRequest extracted (8 lines)
+   - **Clear sections**: HTTP execution, response handling, cache validation, link extraction
+   - **Massive testing impact** - would unlock 80-90% coverage on core crawling logic
+   - **Next extractions**: Response analysis (~80 lines), Cache validation (~120 lines)
+
+2. **`processNextTask()` - 204 lines** 💀💀
+   - **Core worker pipeline** - critical system reliability
+   - **High business impact** - determines task processing success
+   - **Clear boundaries**: Task claiming, execution, result handling, error management
+
+3. **`processTask()` - 162 lines** 🔥🔥
+   - **Individual task execution** - crawl result determination
+   - **Complements processNextTask** - natural pair for comprehensive worker testing
+   - **HTTP handling, metrics, validation** - distinct responsibilities
+
+### 🔧 **MEDIUM PRIORITY (Good Return on Investment)**
+
+4. **`processSitemap()` - 111 lines** 🔥
+   - **Already improved** with nil guards from code review
+   - **Clear sections**: Discovery, filtering, database operations
+   - **Would complete job management cleanup**
+
+5. **API Handler Functions** (60-80 lines each) ⚠️
+   - **Multiple quick wins** - 5 functions in 60-80 line range
+   - **Already started pattern** with getJobTasks success
+   - **High testing value** - API layer needs comprehensive coverage
+
+### 📊 **STRATEGIC RECOMMENDATION**
+
+**Continue with WarmURL() breakdown** - Maximum impact target:
+- **377 lines** is the biggest remaining challenge
+- **Core business logic** - URL crawling is the heart of the system  
+- **Already partially done** - validation extraction complete
+- **Clear next steps**: Response handling, cache validation, link extraction
+- **Would unlock massive coverage** in crawler package (currently 63.8%)
+
+**Expected WarmURL completion impact:**
+- **377 → ~25 lines** (93% reduction)
+- **6-7 more focused functions** created
+- **Crawler package** → 80-90% coverage potential
+- **System reliability** dramatically improved
 
 ---
-**Status**: Ready to tackle database foundation | **Next**: Extract table creation from setupSchema
+**Status**: 4 monsters eliminated, proven methodology | **Next**: Continue WarmURL breakdown (377 lines)
