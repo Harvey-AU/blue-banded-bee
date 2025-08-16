@@ -166,19 +166,10 @@ func (jm *JobManager) setupJobDatabase(ctx context.Context, job *Job, normalised
 	return domainID, nil
 }
 
-// setupJobURLDiscovery handles URL discovery for the job (sitemap or manual)
-func (jm *JobManager) setupJobURLDiscovery(ctx context.Context, job *Job, options *JobOptions, domainID int, normalisedDomain string) error {
-	if options.UseSitemap {
-		// Fetch and process sitemap in a separate goroutine
-		go jm.processSitemap(context.Background(), job.ID, normalisedDomain, options.IncludePaths, options.ExcludePaths)
-		return nil
-	}
-
-	// Manual root URL creation
-	rootPath := "/"
-
-	// Check robots.txt before creating manual root URL
+// validateRootURLAccess checks robots.txt rules and validates root URL access
+func (jm *JobManager) validateRootURLAccess(ctx context.Context, job *Job, normalisedDomain string, rootPath string) (*crawler.RobotsRules, error) {
 	var robotsRules *crawler.RobotsRules
+	
 	if jm.crawler != nil {
 		// Use DiscoverSitemapsAndRobots which already includes parsing
 		discoveryResult, err := jm.crawler.DiscoverSitemapsAndRobots(ctx, normalisedDomain)
@@ -199,7 +190,7 @@ func (jm *JobManager) setupJobURLDiscovery(ctx context.Context, job *Job, option
 			}); updateErr != nil {
 				log.Error().Err(updateErr).Str("job_id", job.ID).Msg("Failed to update job status")
 			}
-			return fmt.Errorf("failed to fetch robots.txt: %w", err)
+			return nil, fmt.Errorf("failed to fetch robots.txt: %w", err)
 		}
 
 		// Use the already parsed robots rules from discovery
@@ -230,11 +221,29 @@ func (jm *JobManager) setupJobURLDiscovery(ctx context.Context, job *Job, option
 		}); updateErr != nil {
 			log.Error().Err(updateErr).Str("job_id", job.ID).Msg("Failed to update job status")
 		}
-		return fmt.Errorf("root path is disallowed by robots.txt")
+		return nil, fmt.Errorf("root path is disallowed by robots.txt")
+	}
+
+	return robotsRules, nil
+}
+
+// setupJobURLDiscovery handles URL discovery for the job (sitemap or manual)
+func (jm *JobManager) setupJobURLDiscovery(ctx context.Context, job *Job, options *JobOptions, domainID int, normalisedDomain string) error {
+	if options.UseSitemap {
+		// Fetch and process sitemap in a separate goroutine
+		go jm.processSitemap(context.Background(), job.ID, normalisedDomain, options.IncludePaths, options.ExcludePaths)
+		return nil
+	}
+
+	// Manual root URL creation - validate robots.txt access
+	rootPath := "/"
+	_, err := jm.validateRootURLAccess(ctx, job, normalisedDomain, rootPath)
+	if err != nil {
+		return err // validateRootURLAccess already handled error logging and job updates
 	}
 
 	// Create a page record for the root URL
-	err := jm.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
+	err = jm.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
 		var pageID int
 		err := tx.QueryRowContext(ctx, `
 			INSERT INTO pages (domain_id, path)
