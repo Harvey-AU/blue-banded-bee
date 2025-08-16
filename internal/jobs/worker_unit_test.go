@@ -7,7 +7,6 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/Harvey-AU/blue-banded-bee/internal/crawler"
 	"github.com/Harvey-AU/blue-banded-bee/internal/db"
 	"github.com/stretchr/testify/assert"
 )
@@ -27,8 +26,8 @@ func TestNewWorkerPoolValidation(t *testing.T) {
 		{
 			name:        "nil database",
 			db:          nil,
-			dbQueue:     &db.DbQueue{},
-			crawler:     &crawler.Crawler{},
+			dbQueue:     &simpleDbQueueMock{},
+			crawler:     &simpleCrawlerMock{},
 			numWorkers:  5,
 			dbConfig:    &db.Config{},
 			expectPanic: true,
@@ -38,7 +37,7 @@ func TestNewWorkerPoolValidation(t *testing.T) {
 			name:        "nil dbQueue",
 			db:          &sql.DB{},
 			dbQueue:     nil,
-			crawler:     &crawler.Crawler{},
+			crawler:     &simpleCrawlerMock{},
 			numWorkers:  5,
 			dbConfig:    &db.Config{},
 			expectPanic: true,
@@ -47,7 +46,7 @@ func TestNewWorkerPoolValidation(t *testing.T) {
 		{
 			name:        "nil crawler",
 			db:          &sql.DB{},
-			dbQueue:     &db.DbQueue{},
+			dbQueue:     &simpleDbQueueMock{},
 			crawler:     nil,
 			numWorkers:  5,
 			dbConfig:    &db.Config{},
@@ -57,8 +56,8 @@ func TestNewWorkerPoolValidation(t *testing.T) {
 		{
 			name:        "zero workers",
 			db:          &sql.DB{},
-			dbQueue:     &db.DbQueue{},
-			crawler:     &crawler.Crawler{},
+			dbQueue:     &simpleDbQueueMock{},
+			crawler:     &simpleCrawlerMock{},
 			numWorkers:  0,
 			dbConfig:    &db.Config{},
 			expectPanic: true,
@@ -67,8 +66,8 @@ func TestNewWorkerPoolValidation(t *testing.T) {
 		{
 			name:        "negative workers",
 			db:          &sql.DB{},
-			dbQueue:     &db.DbQueue{},
-			crawler:     &crawler.Crawler{},
+			dbQueue:     &simpleDbQueueMock{},
+			crawler:     &simpleCrawlerMock{},
 			numWorkers:  -1,
 			dbConfig:    &db.Config{},
 			expectPanic: true,
@@ -77,8 +76,8 @@ func TestNewWorkerPoolValidation(t *testing.T) {
 		{
 			name:        "nil dbConfig",
 			db:          &sql.DB{},
-			dbQueue:     &db.DbQueue{},
-			crawler:     &crawler.Crawler{},
+			dbQueue:     &simpleDbQueueMock{},
+			crawler:     &simpleCrawlerMock{},
 			numWorkers:  5,
 			dbConfig:    nil,
 			expectPanic: true,
@@ -87,8 +86,8 @@ func TestNewWorkerPoolValidation(t *testing.T) {
 		{
 			name:        "valid configuration with 1 worker",
 			db:          &sql.DB{},
-			dbQueue:     &db.DbQueue{},
-			crawler:     &crawler.Crawler{},
+			dbQueue:     &simpleDbQueueMock{},
+			crawler:     &simpleCrawlerMock{},
 			numWorkers:  1,
 			dbConfig:    &db.Config{},
 			expectPanic: false,
@@ -96,8 +95,8 @@ func TestNewWorkerPoolValidation(t *testing.T) {
 		{
 			name:        "valid configuration with multiple workers",
 			db:          &sql.DB{},
-			dbQueue:     &db.DbQueue{},
-			crawler:     &crawler.Crawler{},
+			dbQueue:     &simpleDbQueueMock{},
+			crawler:     &simpleCrawlerMock{},
 			numWorkers:  10,
 			dbConfig:    &db.Config{},
 			expectPanic: false,
@@ -128,7 +127,7 @@ func TestNewWorkerPoolValidation(t *testing.T) {
 // Test job tracking methods using direct manipulation to avoid DB calls
 func TestWorkerPoolJobTracking(t *testing.T) {
 	// Create a worker pool with valid objects (not started)
-	wp := NewWorkerPool(&sql.DB{}, &db.DbQueue{}, &crawler.Crawler{}, 2, &db.Config{})
+	wp := NewWorkerPool(&sql.DB{}, &simpleDbQueueMock{}, &simpleCrawlerMock{}, 2, &db.Config{})
 	
 	// Test adding jobs directly to the map (bypassing AddJob which queries DB)
 	wp.jobsMutex.Lock()
@@ -164,7 +163,7 @@ func TestWorkerPoolStopLifecycle(t *testing.T) {
 	t.Parallel()
 	t.Run("basic_shutdown", func(t *testing.T) {
 		// Create worker pool but don't start workers (to avoid DB calls)
-		wp := NewWorkerPool(&sql.DB{}, &db.DbQueue{}, &crawler.Crawler{}, 2, &db.Config{})
+		wp := NewWorkerPool(&sql.DB{}, &simpleDbQueueMock{}, &simpleCrawlerMock{}, 2, &db.Config{})
 		
 		// Verify initial state
 		assert.False(t, wp.stopping.Load(), "should not be stopping initially")
@@ -188,7 +187,7 @@ func TestWorkerPoolStopLifecycle(t *testing.T) {
 	
 	t.Run("idempotent_shutdown", func(t *testing.T) {
 		// Create worker pool
-		wp := NewWorkerPool(&sql.DB{}, &db.DbQueue{}, &crawler.Crawler{}, 2, &db.Config{})
+		wp := NewWorkerPool(&sql.DB{}, &simpleDbQueueMock{}, &simpleCrawlerMock{}, 2, &db.Config{})
 		
 		// First stop should work
 		wp.Stop()
@@ -205,7 +204,7 @@ func TestWorkerPoolStopLifecycle(t *testing.T) {
 	
 	t.Run("concurrent_shutdown", func(t *testing.T) {
 		// Create worker pool
-		wp := NewWorkerPool(&sql.DB{}, &db.DbQueue{}, &crawler.Crawler{}, 2, &db.Config{})
+		wp := NewWorkerPool(&sql.DB{}, &simpleDbQueueMock{}, &simpleCrawlerMock{}, 2, &db.Config{})
 		
 		// Launch multiple concurrent Stop() calls
 		const numGoroutines = 10
@@ -228,7 +227,7 @@ func TestWorkerPoolStopLifecycle(t *testing.T) {
 	
 	t.Run("resource_cleanup", func(t *testing.T) {
 		// Create worker pool
-		wp := NewWorkerPool(&sql.DB{}, &db.DbQueue{}, &crawler.Crawler{}, 2, &db.Config{})
+		wp := NewWorkerPool(&sql.DB{}, &simpleDbQueueMock{}, &simpleCrawlerMock{}, 2, &db.Config{})
 		
 		// Capture initial ticker state
 		initialTimer := wp.batchTimer
