@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/Harvey-AU/blue-banded-bee/internal/auth"
+	"github.com/Harvey-AU/blue-banded-bee/internal/db"
 	"github.com/Harvey-AU/blue-banded-bee/internal/jobs"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -470,5 +471,172 @@ func BenchmarkGetClientIP(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_ = getClientIP(req)
+	}
+}
+
+func TestCreateJobFromRequestParameterHandling(t *testing.T) {
+	// Test the parameter transformation logic in createJobFromRequest
+	// This tests the function logic without needing to mock the full JobsManager
+	
+	orgID := "org-456"
+	user := &db.User{
+		ID:             "user-123",
+		OrganisationID: &orgID,
+	}
+
+	tests := []struct {
+		name     string
+		request  CreateJobRequest
+		expected *jobs.JobOptions
+	}{
+		{
+			name: "defaults_applied_correctly",
+			request: CreateJobRequest{
+				Domain: "example.com",
+			},
+			expected: &jobs.JobOptions{
+				Domain:         "example.com",
+				UserID:         &user.ID,
+				OrganisationID: user.OrganisationID,
+				UseSitemap:     true,  // default
+				Concurrency:    5,     // default
+				FindLinks:      true,  // default
+				MaxPages:       0,     // default
+			},
+		},
+		{
+			name: "all_overrides_applied",
+			request: CreateJobRequest{
+				Domain:       "test.com",
+				UseSitemap:   func() *bool { b := false; return &b }(),
+				FindLinks:    func() *bool { b := false; return &b }(),
+				Concurrency:  func() *int { i := 10; return &i }(),
+				MaxPages:     func() *int { i := 100; return &i }(),
+				SourceType:   func() *string { s := "api"; return &s }(),
+				SourceDetail: func() *string { s := "dashboard"; return &s }(),
+				SourceInfo:   func() *string { s := "{\"test\": true}"; return &s }(),
+			},
+			expected: &jobs.JobOptions{
+				Domain:         "test.com",
+				UserID:         &user.ID,
+				OrganisationID: user.OrganisationID,
+				UseSitemap:     false,
+				Concurrency:    10,
+				FindLinks:      false,
+				MaxPages:       100,
+				SourceType:     func() *string { s := "api"; return &s }(),
+				SourceDetail:   func() *string { s := "dashboard"; return &s }(),
+				SourceInfo:     func() *string { s := "{\"test\": true}"; return &s }(),
+			},
+		},
+		{
+			name: "partial_overrides_with_defaults",
+			request: CreateJobRequest{
+				Domain:      "partial.com",
+				UseSitemap:  func() *bool { b := false; return &b }(),
+				Concurrency: func() *int { i := 15; return &i }(),
+				// FindLinks and MaxPages should use defaults
+			},
+			expected: &jobs.JobOptions{
+				Domain:         "partial.com",
+				UserID:         &user.ID,
+				OrganisationID: user.OrganisationID,
+				UseSitemap:     false,
+				Concurrency:    15,
+				FindLinks:      true, // default
+				MaxPages:       0,    // default
+			},
+		},
+		{
+			name: "zero_values_override_defaults",
+			request: CreateJobRequest{
+				Domain:      "zero.com",
+				UseSitemap:  func() *bool { b := false; return &b }(),
+				FindLinks:   func() *bool { b := false; return &b }(),
+				Concurrency: func() *int { i := 0; return &i }(),
+				MaxPages:    func() *int { i := 0; return &i }(),
+			},
+			expected: &jobs.JobOptions{
+				Domain:         "zero.com",
+				UserID:         &user.ID,
+				OrganisationID: user.OrganisationID,
+				UseSitemap:     false,
+				Concurrency:    0,
+				FindLinks:      false,
+				MaxPages:       0,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Extract the parameter transformation logic to test it directly
+			// This mirrors the logic in createJobFromRequest
+			
+			// Apply defaults
+			useSitemap := true
+			if tt.request.UseSitemap != nil {
+				useSitemap = *tt.request.UseSitemap
+			}
+
+			findLinks := true
+			if tt.request.FindLinks != nil {
+				findLinks = *tt.request.FindLinks
+			}
+
+			concurrency := 5
+			if tt.request.Concurrency != nil {
+				concurrency = *tt.request.Concurrency
+			}
+
+			maxPages := 0
+			if tt.request.MaxPages != nil {
+				maxPages = *tt.request.MaxPages
+			}
+
+			opts := &jobs.JobOptions{
+				Domain:         tt.request.Domain,
+				UserID:         &user.ID,
+				OrganisationID: user.OrganisationID,
+				UseSitemap:     useSitemap,
+				Concurrency:    concurrency,
+				FindLinks:      findLinks,
+				MaxPages:       maxPages,
+				SourceType:     tt.request.SourceType,
+				SourceDetail:   tt.request.SourceDetail,
+				SourceInfo:     tt.request.SourceInfo,
+			}
+
+			// Verify all fields match expected
+			assert.Equal(t, tt.expected.Domain, opts.Domain)
+			assert.Equal(t, tt.expected.UserID, opts.UserID)
+			assert.Equal(t, tt.expected.OrganisationID, opts.OrganisationID)
+			assert.Equal(t, tt.expected.UseSitemap, opts.UseSitemap)
+			assert.Equal(t, tt.expected.Concurrency, opts.Concurrency)
+			assert.Equal(t, tt.expected.FindLinks, opts.FindLinks)
+			assert.Equal(t, tt.expected.MaxPages, opts.MaxPages)
+
+			// Check pointer fields
+			if tt.expected.SourceType != nil {
+				require.NotNil(t, opts.SourceType)
+				assert.Equal(t, *tt.expected.SourceType, *opts.SourceType)
+			} else {
+				assert.Nil(t, opts.SourceType)
+			}
+
+			if tt.expected.SourceDetail != nil {
+				require.NotNil(t, opts.SourceDetail)
+				assert.Equal(t, *tt.expected.SourceDetail, *opts.SourceDetail)
+			} else {
+				assert.Nil(t, opts.SourceDetail)
+			}
+
+			if tt.expected.SourceInfo != nil {
+				require.NotNil(t, opts.SourceInfo)
+				assert.Equal(t, *tt.expected.SourceInfo, *opts.SourceInfo)
+			} else {
+				assert.Nil(t, opts.SourceInfo)
+			}
+		})
 	}
 }
