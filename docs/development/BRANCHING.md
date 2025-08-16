@@ -2,19 +2,18 @@
 
 ## Branch Structure
 
-Blue Banded Bee uses a three-tier branching strategy:
+Blue Banded Bee uses a simplified branching strategy:
 
 ```
-main (production)
-  └── test-branch (staging/preview)
-       └── feature/your-feature (development)
+main (production) ← Direct PRs from feature branches
+  └── test-branch (staging/preview) ← Only for UX testing
 ```
 
 ### Branch Purposes
 
 - **main**: Production branch, deployed to live environment
-- **test-branch**: Staging branch for integration testing
-- **feature branches**: Individual development work
+- **test-branch**: Staging branch for user experience testing only
+- **feature branches**: Individual development work (deleted after merge)
 
 ## Development Workflow
 
@@ -55,15 +54,21 @@ git push origin feature/your-feature
 
 ### 4. Create Pull Request
 
-1. **First PR: feature → test-branch**
-   - Tests run automatically via GitHub Actions
-   - Supabase preview deploys with migrations
-   - Review and test in staging environment
+**Primary Workflow: Direct to Main**
 
-2. **After Testing: test-branch → main**
-   - Create second PR for production
-   - Final review before deployment
-   - Migrations apply automatically on merge
+1. **Feature → main (default)**:
+   - Create PR directly to main branch
+   - Tests run automatically via GitHub Actions
+   - Code review and approval
+   - Merge and automatically delete feature branch
+
+**Optional: User Experience Testing**
+
+2. **Feature → test-branch (when UX testing needed)**:
+   - Only use test-branch for user experience validation
+   - Supabase preview deploys with migrations
+   - Test UI/UX changes in staging environment
+   - After validation: merge test-branch → main
 
 ## Commit Message Convention
 
@@ -143,20 +148,40 @@ git checkout -b hotfix/critical-issue
 # Document why bypassing test-branch
 ```
 
-## Branch Cleanup
+## Branch Cleanup Policy
 
-After merging:
+**Mandatory**: All feature branches must be deleted after merging to keep the repository clean.
+
+### Automatic Cleanup
+
+- GitHub can auto-delete branches after PR merge (recommended setting)
+- Use "Squash and merge" for feature branches to maintain clean history
+
+### Manual Cleanup
+
+If not automated:
 
 ```bash
 # Delete local feature branch
 git branch -d feature/your-feature
 
-# Delete remote feature branch
+# Delete remote feature branch  
 git push origin --delete feature/your-feature
 
-# Prune remote branches
+# Prune stale remote references
 git remote prune origin
 ```
+
+### Branch Lifecycle
+
+1. **Create**: Branch from main for new work
+2. **Develop**: Make changes and commit
+3. **PR**: Create pull request (usually to main)
+4. **Review**: Code review and testing
+5. **Merge**: Squash and merge to target branch
+6. **Delete**: Immediately delete the feature branch
+
+**Exception**: Only `test-branch` persists for ongoing UX testing needs.
 
 ## Common Scenarios
 
