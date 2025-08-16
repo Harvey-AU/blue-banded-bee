@@ -49,6 +49,56 @@ func NewJobManager(db *sql.DB, dbQueue DbQueueProvider, crawler CrawlerInterface
 	}
 }
 
+// handleExistingJobs checks for existing active jobs and cancels them if found
+func (jm *JobManager) handleExistingJobs(ctx context.Context, domain string, organisationID *string) error {
+	if organisationID == nil || *organisationID == "" {
+		return nil // Skip check if no organisation ID
+	}
+
+	var existingJobID string
+	var existingJobStatus string
+	var existingOrgID string
+
+	err := jm.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
+		return tx.QueryRowContext(ctx, `
+			SELECT j.id, j.status, j.organisation_id
+			FROM jobs j
+			JOIN domains d ON j.domain_id = d.id
+			WHERE d.name = $1
+			AND j.organisation_id = $2
+			AND j.status IN ('pending', 'initializing', 'running', 'paused')
+			ORDER BY j.created_at DESC
+			LIMIT 1
+		`, domain, *organisationID).Scan(&existingJobID, &existingJobStatus, &existingOrgID)
+	})
+
+	if err == nil && existingJobID != "" {
+		// Found an existing active job for the same domain and organisation
+		log.Info().
+			Str("existing_job_id", existingJobID).
+			Str("existing_job_status", existingJobStatus).
+			Str("domain", domain).
+			Str("organisation_id", *organisationID).
+			Msg("Found existing active job for domain, cancelling it")
+
+		if err := jm.CancelJob(ctx, existingJobID); err != nil {
+			log.Error().
+				Err(err).
+				Str("job_id", existingJobID).
+				Msg("Failed to cancel existing job")
+			// Continue with new job creation even if cancellation fails
+		}
+	} else if err != nil && err != sql.ErrNoRows {
+		// Log query error but continue with job creation
+		log.Warn().
+			Err(err).
+			Str("domain", domain).
+			Msg("Error checking for existing jobs")
+	}
+
+	return nil // Always return nil to continue with job creation
+}
+
 // CreateJob creates a new job with the given options
 func (jm *JobManager) CreateJob(ctx context.Context, options *JobOptions) (*Job, error) {
 	span := sentry.StartSpan(ctx, "manager.create_job")
@@ -58,48 +108,9 @@ func (jm *JobManager) CreateJob(ctx context.Context, options *JobOptions) (*Job,
 
 	normalisedDomain := util.NormaliseDomain(options.Domain)
 
-	// Check for existing active jobs for the same domain and org
-	if options.OrganisationID != nil && *options.OrganisationID != "" {
-		var existingJobID string
-		var existingJobStatus string
-		var existingOrgID string
-
-		err := jm.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
-			return tx.QueryRowContext(ctx, `
-				SELECT j.id, j.status, j.organisation_id
-				FROM jobs j
-				JOIN domains d ON j.domain_id = d.id
-				WHERE d.name = $1
-				AND j.organisation_id = $2
-				AND j.status IN ('pending', 'initializing', 'running', 'paused')
-				ORDER BY j.created_at DESC
-				LIMIT 1
-			`, normalisedDomain, *options.OrganisationID).Scan(&existingJobID, &existingJobStatus, &existingOrgID)
-		})
-
-		if err == nil && existingJobID != "" {
-			// Found an existing active job for the same domain and organisation
-			log.Info().
-				Str("existing_job_id", existingJobID).
-				Str("existing_job_status", existingJobStatus).
-				Str("domain", normalisedDomain).
-				Str("organisation_id", *options.OrganisationID).
-				Msg("Found existing active job for domain, cancelling it")
-
-			if err := jm.CancelJob(ctx, existingJobID); err != nil {
-				log.Error().
-					Err(err).
-					Str("job_id", existingJobID).
-					Msg("Failed to cancel existing job")
-				// Continue with new job creation even if cancellation fails
-			}
-		} else if err != nil && err != sql.ErrNoRows {
-			// Log query error but continue with job creation
-			log.Warn().
-				Err(err).
-				Str("domain", normalisedDomain).
-				Msg("Error checking for existing jobs")
-		}
+	// Handle any existing active jobs for the same domain and organisation
+	if err := jm.handleExistingJobs(ctx, normalisedDomain, options.OrganisationID); err != nil {
+		return nil, fmt.Errorf("failed to handle existing jobs: %w", err)
 	}
 
 	// Create a new job object
