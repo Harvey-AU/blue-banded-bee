@@ -577,6 +577,50 @@ func (h *Handler) validateJobAccess(w http.ResponseWriter, r *http.Request, jobI
 	return user
 }
 
+// TaskQueryBuilder holds the SQL queries and arguments for task retrieval
+type TaskQueryBuilder struct {
+	SelectQuery string
+	CountQuery  string
+	Args        []interface{}
+}
+
+// buildTaskQuery constructs SQL queries for task retrieval with filters and pagination
+func buildTaskQuery(jobID string, params TaskQueryParams) TaskQueryBuilder {
+	baseQuery := `
+		SELECT t.id, t.job_id, p.path, d.name as domain, t.status, t.status_code, t.response_time, 
+		       t.cache_status, t.second_response_time, t.second_cache_status, t.content_type, t.error, t.source_type, t.source_url,
+		       t.created_at, t.started_at, t.completed_at, t.retry_count
+		FROM tasks t
+		JOIN pages p ON t.page_id = p.id
+		JOIN jobs j ON t.job_id = j.id
+		JOIN domains d ON j.domain_id = d.id
+		WHERE t.job_id = $1`
+
+	countQuery := `
+		SELECT COUNT(*) 
+		FROM tasks t 
+		WHERE t.job_id = $1`
+
+	args := []interface{}{jobID}
+
+	// Add status filter if provided
+	if params.Status != "" {
+		baseQuery += ` AND t.status = $2`
+		countQuery += ` AND t.status = $2`
+		args = append(args, params.Status)
+	}
+
+	// Add ordering, limit, and offset
+	baseQuery += ` ORDER BY ` + params.OrderBy + ` LIMIT $` + strconv.Itoa(len(args)+1) + ` OFFSET $` + strconv.Itoa(len(args)+2)
+	args = append(args, params.Limit, params.Offset)
+
+	return TaskQueryBuilder{
+		SelectQuery: baseQuery,
+		CountQuery:  countQuery,
+		Args:        args,
+	}
+}
+
 func getClientIP(r *http.Request) string {
 	// Check for X-Forwarded-For header first (common with proxies/load balancers)
 	xff := r.Header.Get("X-Forwarded-For")
@@ -632,44 +676,14 @@ func (h *Handler) getJobTasks(w http.ResponseWriter, r *http.Request, jobID stri
 		return // validateJobAccess already wrote the error response
 	}
 
-	// Parse query parameters
+	// Parse query parameters and build queries
 	params := parseTaskQueryParams(r)
-	limit := params.Limit
-	offset := params.Offset
-	status := params.Status
-	orderBy := params.OrderBy
-
-	// Build query with optional status filter
-	baseQuery := `
-		SELECT t.id, t.job_id, p.path, d.name as domain, t.status, t.status_code, t.response_time, 
-		       t.cache_status, t.second_response_time, t.second_cache_status, t.content_type, t.error, t.source_type, t.source_url,
-		       t.created_at, t.started_at, t.completed_at, t.retry_count
-		FROM tasks t
-		JOIN pages p ON t.page_id = p.id
-		JOIN jobs j ON t.job_id = j.id
-		JOIN domains d ON j.domain_id = d.id
-		WHERE t.job_id = $1`
-
-	countQuery := `
-		SELECT COUNT(*) 
-		FROM tasks t 
-		WHERE t.job_id = $1`
-
-	args := []interface{}{jobID}
-
-	if status != "" {
-		baseQuery += ` AND t.status = $2`
-		countQuery += ` AND t.status = $2`
-		args = append(args, status)
-	}
-
-	baseQuery += ` ORDER BY ` + orderBy + ` LIMIT $` + strconv.Itoa(len(args)+1) + ` OFFSET $` + strconv.Itoa(len(args)+2)
-	args = append(args, limit, offset)
+	queries := buildTaskQuery(jobID, params)
 
 	// Get total count
 	var total int
-	countArgs := args[:len(args)-2] // Remove limit and offset for count query
-	err := h.DB.GetDB().QueryRowContext(r.Context(), countQuery, countArgs...).Scan(&total)
+	countArgs := queries.Args[:len(queries.Args)-2] // Remove limit and offset for count query
+	err := h.DB.GetDB().QueryRowContext(r.Context(), queries.CountQuery, countArgs...).Scan(&total)
 	if err != nil {
 		log.Error().Err(err).Str("job_id", jobID).Msg("Failed to count tasks")
 		DatabaseError(w, r, err)
@@ -677,7 +691,7 @@ func (h *Handler) getJobTasks(w http.ResponseWriter, r *http.Request, jobID stri
 	}
 
 	// Get tasks
-	rows, err := h.DB.GetDB().QueryContext(r.Context(), baseQuery, args...)
+	rows, err := h.DB.GetDB().QueryContext(r.Context(), queries.SelectQuery, queries.Args...)
 	if err != nil {
 		log.Error().Err(err).Str("job_id", jobID).Msg("Failed to get tasks")
 		DatabaseError(w, r, err)
@@ -755,15 +769,15 @@ func (h *Handler) getJobTasks(w http.ResponseWriter, r *http.Request, jobID stri
 	}
 
 	// Calculate pagination info
-	hasNext := offset+limit < total
-	hasPrev := offset > 0
+	hasNext := params.Offset+params.Limit < total
+	hasPrev := params.Offset > 0
 
 	// Prepare response
 	response := map[string]interface{}{
 		"tasks": tasks,
 		"pagination": map[string]interface{}{
-			"limit":    limit,
-			"offset":   offset,
+			"limit":    params.Limit,
+			"offset":   params.Offset,
 			"total":    total,
 			"has_next": hasNext,
 			"has_prev": hasPrev,
