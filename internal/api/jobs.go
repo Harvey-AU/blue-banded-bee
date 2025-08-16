@@ -276,18 +276,10 @@ func (h *Handler) createJob(w http.ResponseWriter, r *http.Request) {
 
 // getJob handles GET /v1/jobs/:id
 func (h *Handler) getJob(w http.ResponseWriter, r *http.Request, jobID string) {
-	userClaims, ok := auth.GetUserFromContext(r.Context())
-	if !ok {
-		Unauthorised(w, r, "User information not found")
-		return
-	}
-
-	// Auto-create user if they don't exist (handles new signups)
-	user, err := h.DB.GetOrCreateUser(userClaims.UserID, userClaims.Email, nil)
-	if err != nil {
-		log.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get or create user")
-		InternalError(w, r, err)
-		return
+	// Validate user authentication and job access
+	user := h.validateJobAccess(w, r, jobID)
+	if user == nil {
+		return // validateJobAccess already wrote the error response
 	}
 
 	var total, completed, failed, skipped int
@@ -346,18 +338,10 @@ type JobActionRequest struct {
 
 // updateJob handles PUT /v1/jobs/:id for job actions
 func (h *Handler) updateJob(w http.ResponseWriter, r *http.Request, jobID string) {
-	userClaims, ok := auth.GetUserFromContext(r.Context())
-	if !ok {
-		Unauthorised(w, r, "User information not found")
-		return
-	}
-
-	// Auto-create user if they don't exist (handles new signups)
-	user, err := h.DB.GetOrCreateUser(userClaims.UserID, userClaims.Email, nil)
-	if err != nil {
-		log.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get or create user")
-		InternalError(w, r, err)
-		return
+	// Validate user authentication and job access
+	user := h.validateJobAccess(w, r, jobID)
+	if user == nil {
+		return // validateJobAccess already wrote the error response
 	}
 
 	var req JobActionRequest
@@ -366,22 +350,7 @@ func (h *Handler) updateJob(w http.ResponseWriter, r *http.Request, jobID string
 		return
 	}
 
-	// Verify job belongs to user's organisation
-	var orgID string
-	err = h.DB.GetDB().QueryRowContext(r.Context(), `
-		SELECT organisation_id FROM jobs WHERE id = $1
-	`, jobID).Scan(&orgID)
-
-	if err != nil {
-		NotFound(w, r, "Job not found")
-		return
-	}
-
-	if user.OrganisationID == nil || *user.OrganisationID != orgID {
-		Unauthorised(w, r, "Job access denied")
-		return
-	}
-
+	var err error
 	switch req.Action {
 	case "start", "restart":
 		err = h.JobsManager.StartJob(r.Context(), jobID)
@@ -428,37 +397,13 @@ func (h *Handler) updateJob(w http.ResponseWriter, r *http.Request, jobID string
 
 // cancelJob handles DELETE /v1/jobs/:id
 func (h *Handler) cancelJob(w http.ResponseWriter, r *http.Request, jobID string) {
-	userClaims, ok := auth.GetUserFromContext(r.Context())
-	if !ok {
-		Unauthorised(w, r, "User information not found")
-		return
+	// Validate user authentication and job access
+	user := h.validateJobAccess(w, r, jobID)
+	if user == nil {
+		return // validateJobAccess already wrote the error response
 	}
 
-	// Auto-create user if they don't exist (handles new signups)
-	user, err := h.DB.GetOrCreateUser(userClaims.UserID, userClaims.Email, nil)
-	if err != nil {
-		log.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get or create user")
-		InternalError(w, r, err)
-		return
-	}
-
-	// Verify job belongs to user's organisation
-	var orgID string
-	err = h.DB.GetDB().QueryRowContext(r.Context(), `
-		SELECT organisation_id FROM jobs WHERE id = $1
-	`, jobID).Scan(&orgID)
-
-	if err != nil {
-		NotFound(w, r, "Job not found")
-		return
-	}
-
-	if user.OrganisationID == nil || *user.OrganisationID != orgID {
-		Unauthorised(w, r, "Job access denied")
-		return
-	}
-
-	err = h.JobsManager.CancelJob(r.Context(), jobID)
+	err := h.JobsManager.CancelJob(r.Context(), jobID)
 	if err != nil {
 		log.Error().Err(err).Str("job_id", jobID).Msg("Failed to cancel job")
 		InternalError(w, r, err)
