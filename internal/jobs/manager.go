@@ -99,22 +99,9 @@ func (jm *JobManager) handleExistingJobs(ctx context.Context, domain string, org
 	return nil // Always return nil to continue with job creation
 }
 
-// CreateJob creates a new job with the given options
-func (jm *JobManager) CreateJob(ctx context.Context, options *JobOptions) (*Job, error) {
-	span := sentry.StartSpan(ctx, "manager.create_job")
-	defer span.Finish()
-
-	span.SetTag("domain", options.Domain)
-
-	normalisedDomain := util.NormaliseDomain(options.Domain)
-
-	// Handle any existing active jobs for the same domain and organisation
-	if err := jm.handleExistingJobs(ctx, normalisedDomain, options.OrganisationID); err != nil {
-		return nil, fmt.Errorf("failed to handle existing jobs: %w", err)
-	}
-
-	// Create a new job object
-	job := &Job{
+// createJobObject creates a new Job instance with the given options and normalized domain
+func createJobObject(options *JobOptions, normalisedDomain string) *Job {
+	return &Job{
 		ID:              uuid.New().String(),
 		Domain:          normalisedDomain,
 		UserID:          options.UserID,
@@ -137,6 +124,24 @@ func (jm *JobManager) CreateJob(ctx context.Context, options *JobOptions) (*Job,
 		SourceDetail:    options.SourceDetail,
 		SourceInfo:      options.SourceInfo,
 	}
+}
+
+// CreateJob creates a new job with the given options
+func (jm *JobManager) CreateJob(ctx context.Context, options *JobOptions) (*Job, error) {
+	span := sentry.StartSpan(ctx, "manager.create_job")
+	defer span.Finish()
+
+	span.SetTag("domain", options.Domain)
+
+	normalisedDomain := util.NormaliseDomain(options.Domain)
+
+	// Handle any existing active jobs for the same domain and organisation
+	if err := jm.handleExistingJobs(ctx, normalisedDomain, options.OrganisationID); err != nil {
+		return nil, fmt.Errorf("failed to handle existing jobs: %w", err)
+	}
+
+	// Create a new job object
+	job := createJobObject(options, normalisedDomain)
 
 	var domainID int
 
