@@ -163,36 +163,32 @@ func New(config *Config, id ...string) *Crawler {
 }
 
 // validateCrawlRequest validates the crawl request parameters and URL format
-func validateCrawlRequest(ctx context.Context, targetURL string) (*url.URL, *CrawlResult, error) {
+func validateCrawlRequest(ctx context.Context, targetURL string) (*url.URL, error) {
 	if err := ctx.Err(); err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	parsed, err := url.Parse(targetURL)
 	if err != nil {
-		res := &CrawlResult{URL: targetURL, Timestamp: time.Now().Unix(), Error: err.Error()}
-		return nil, res, err
+		return nil, fmt.Errorf("failed to parse URL: %w", err)
 	}
 
 	if parsed.Scheme == "" || parsed.Host == "" {
-		err := fmt.Errorf("invalid URL format: %s", targetURL)
-		res := &CrawlResult{URL: targetURL, Timestamp: time.Now().Unix(), Error: err.Error()}
-		return nil, res, err
+		return nil, fmt.Errorf("invalid URL format: %s", targetURL)
 	}
 
-	return parsed, nil, nil
+	return parsed, nil
 }
 
 // WarmURL performs a crawl of the specified URL and returns the result.
 // It respects context cancellation, enforces timeout, and treats non-2xx statuses as errors.
 func (c *Crawler) WarmURL(ctx context.Context, targetURL string, findLinks bool) (*CrawlResult, error) {
 	// Validate the crawl request
-	_, errorResult, err := validateCrawlRequest(ctx, targetURL)
+	_, err := validateCrawlRequest(ctx, targetURL)
 	if err != nil {
-		if errorResult != nil {
-			return errorResult, err
-		}
-		return nil, err
+		// Create error result - caller (WarmURL) is responsible for CrawlResult construction
+		res := &CrawlResult{URL: targetURL, Timestamp: time.Now().Unix(), Error: err.Error()}
+		return res, err
 	}
 
 	start := time.Now()

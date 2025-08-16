@@ -12,40 +12,24 @@ The **Extract + Test + Commit** pattern has been successfully demonstrated:
 
 ### Success Pattern Established
 
-**Previous Achievements:**
-- **`getJobTasks`**: 216 → 56 lines (74% reduction) with 4 focused functions
-- **`CreateJob`**: 232 → 42 lines (82% reduction) with 4 focused functions
-- **145+ test cases** added with comprehensive coverage
+**Completed Achievements This Session:**
+- **`getJobTasks`**: 216 → 56 lines (74% reduction) with 4 focused functions ✅
+- **`CreateJob`**: 232 → 42 lines (82% reduction) with 4 focused functions ✅
+- **`setupJobURLDiscovery`**: 108 → 17 lines (84% reduction) with 2 focused functions ✅
+- **`validateCrawlRequest`**: Extracted from WarmURL with comprehensive tests ✅
+- **220+ test cases** added with comprehensive coverage
 - **Zero functional regressions** across entire codebase
 
-## CURRENT STATE ANALYSIS
+## CURRENT PRIORITY TARGET
 
-**Large Files Remaining:**
-- `internal/jobs/worker.go` - **1561 lines, 28 functions**
-- `internal/jobs/manager.go` - **1017 lines, 23 functions** 
-- `internal/api/jobs.go` - **801 lines, 14 functions**
-- `internal/db/db.go` - **750 lines, 14 functions**
+### Target: setupSchema() - 216 Lines 💀
 
-## IMMEDIATE PRIORITY: Fix Recent Extraction Issues
-
-### Problem Identified
-The `setupJobURLDiscovery()` function we just extracted is **108 lines** - another monster function! 
-This violates the single responsibility principle and needs further breakdown.
-
-### Step 1: Break Down setupJobURLDiscovery (108 lines) ✅
-
-**COMPLETED**: Successfully refactored 108-line function
-
-**Functions Created:**
-1. ✅ **`validateRootURLAccess()`** - Robots.txt checking and crawl delay (58 lines)
-2. ✅ **`createManualRootTask()`** - Database operations for root URL (42 lines)  
-3. ✅ **`setupJobURLDiscovery()`** - Clean orchestrator (17 lines)
-
-**Results:**
-- **108 → 17 lines** (84% reduction)
-- **2 focused, testable functions** created
-- **35+ test cases** added with comprehensive coverage
-- **Zero functional regressions**
+**Why setupSchema() is the optimal next target:**
+- ✅ **High impact, lower complexity** - Database foundation affects everything
+- ✅ **Clear boundaries** - Tables, indexes, triggers, policies are distinct
+- ✅ **Coverage opportunity** - DB package at only 30.5% coverage
+- ✅ **Easier testing** - SQL operations are more predictable than HTTP/async logic
+- ✅ **Foundation first** - Schema stability benefits all other work
 
 ## COMPREHENSIVE MONSTER FUNCTION ANALYSIS
 
@@ -126,55 +110,72 @@ This violates the single responsibility principle and needs further breakdown.
 - `parseTaskQueryParams()` - 62 lines (just created!)
 - `getJobTasks()` - 56 lines (already refactored!)
 
-## IMMEDIATE TARGET: WarmURL() - 385 LINES 💀💀💀
+## setupSchema() REFACTOR PLAN
 
-**Why this is the #1 priority:**
-- **Biggest monster** in entire codebase (385 lines)
-- **Core business logic** - URL crawling is the heart of the system
-- **Highest testing impact** - would enable 80-90% coverage on crawling
-- **Greatest complexity risk** - likely doing 8+ different responsibilities
+### Function Analysis (internal/db/db.go:setupSchema - 216 lines)
 
-**Suggested breakdown strategy:**
-1. **`validateCrawlRequest()`** - URL validation and preparation (~40 lines)
-2. **`executeHTTPRequest()`** - HTTP request execution (~60 lines)
-3. **`analyseResponse()`** - Response analysis and metrics (~50 lines)
-4. **`extractLinks()`** - Link extraction logic (~80 lines)
-5. **`validateCache()`** - Cache validation logic (~50 lines)
-6. **`recordCrawlMetrics()`** - Performance and result tracking (~40 lines)
-7. **`handleCrawlErrors()`** - Error classification and handling (~30 lines)
-8. **`WarmURL()`** - Clean orchestrator (~25 lines)
+**Current structure identification:**
+- Table creation statements (~80 lines)
+- Index creation for performance (~60 lines)  
+- Row Level Security setup (~40 lines)
+- Trigger creation (~36 lines)
 
-## EXECUTION PLAN
+**Target breakdown:**
+1. **`createCoreTables()`** - Main table creation (~80 lines)
+2. **`createPerformanceIndexes()`** - Index creation (~60 lines)
+3. **`setupRowLevelSecurity()`** - RLS policies (~40 lines)
+4. **`createDatabaseTriggers()`** - Trigger setup (~36 lines)
+5. **`setupSchema()`** - Clean orchestrator (~15 lines)
 
-### IMMEDIATE SESSION: Target WarmURL() (385 lines)
-1. **Analyse function structure** - Identify clear boundaries
-2. **Extract validation logic** - URL prep and request setup
-3. **Extract HTTP execution** - Request handling
-4. **Extract response analysis** - Response processing  
-5. **Extract link extraction** - Link discovery logic
-6. **Extract cache validation** - Cache checking
-7. **Extract metrics recording** - Performance tracking
-8. **Simplify orchestrator** - Clean coordination function
-9. **Test each extraction** - Comprehensive test coverage
-10. **Verify no regressions** - Full codebase verification
+### Execution Steps
 
-### Next Session Priorities (After WarmURL)
-1. **`setupSchema()`** (216 lines) - Database foundation
-2. **`processNextTask()`** (204 lines) - Worker pipeline  
-3. **`processTask()`** (162 lines) - Task execution
-4. **`processSitemap()`** (111 lines) - Sitemap handling
+#### Step 1: Extract Table Creation ⏳
+- [ ] Analyse table creation section (lines ~241-320)
+- [ ] Create `createCoreTables(db *sql.DB) error` function
+- [ ] Add comprehensive tests for table creation
+- [ ] Verify build and existing tests pass
+- [ ] Commit: "Extract table creation from setupSchema"
 
-### Success Metrics
-- **Target**: Each function <50 lines
-- **Coverage**: 80-90% on extracted functions  
-- **Quality**: Comprehensive test suites with edge cases
-- **Reliability**: Zero functional regressions
+#### Step 2: Extract Index Creation ⏳
+- [ ] Analyse index creation section (lines ~321-380)
+- [ ] Create `createPerformanceIndexes(db *sql.DB) error` function
+- [ ] Add tests for index creation and constraints
+- [ ] Verify build and existing tests pass
+- [ ] Commit: "Extract index creation from setupSchema"
 
-**Expected WarmURL breakdown impact:**
-- **385 → ~25 lines** (93% reduction)
-- **7 focused, testable functions** created
-- **Massive testing coverage** potential unlocked
-- **System reliability** dramatically improved
+#### Step 3: Extract RLS Setup ⏳
+- [ ] Analyse RLS section (lines ~381-420)
+- [ ] Create `setupRowLevelSecurity(db *sql.DB) error` function
+- [ ] Add tests for security policy creation
+- [ ] Verify build and existing tests pass
+- [ ] Commit: "Extract RLS setup from setupSchema"
+
+#### Step 4: Extract Trigger Creation ⏳
+- [ ] Analyse trigger section (lines ~421-456)
+- [ ] Create `createDatabaseTriggers(db *sql.DB) error` function
+- [ ] Add tests for trigger functionality
+- [ ] Verify build and existing tests pass
+- [ ] Commit: "Extract trigger creation from setupSchema"
+
+#### Step 5: Simplify Schema Orchestrator ⏳
+- [ ] Rewrite `setupSchema()` to coordinate extracted functions
+- [ ] Target: ~15 lines of clean orchestration
+- [ ] Add integration test for full schema setup
+- [ ] Verify build and existing tests pass
+- [ ] Commit: "Simplify setupSchema to orchestrator"
+
+### Success Criteria
+- **216 → ~15 lines** (93% reduction)
+- **4 focused, testable functions** created
+- **Database operations fully tested** with proper mocking
+- **Zero regressions** in schema creation
+- **Improved DB package coverage** from 30.5% baseline
+
+### Next Targets (After setupSchema)
+1. **`processNextTask()`** (204 lines) - Worker pipeline critical path
+2. **`processTask()`** (162 lines) - Task execution logic
+3. **Continue WarmURL breakdown** - 7 more functions needed
+4. **`processSitemap()`** (111 lines) - Sitemap processing
 
 ---
-**Status**: Ready for BIGGEST IMPACT refactor | **Next**: WarmURL() breakdown (385 lines)
+**Status**: Ready to tackle database foundation | **Next**: Extract table creation from setupSchema
