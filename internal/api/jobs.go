@@ -540,6 +540,43 @@ func parseTaskQueryParams(r *http.Request) TaskQueryParams {
 	}
 }
 
+// validateJobAccess validates user authentication and job access permissions
+// Returns the user if validation succeeds, or writes HTTP error and returns nil
+func (h *Handler) validateJobAccess(w http.ResponseWriter, r *http.Request, jobID string) *db.User {
+	// Extract user claims from context
+	userClaims, ok := auth.GetUserFromContext(r.Context())
+	if !ok {
+		Unauthorised(w, r, "User information not found")
+		return nil
+	}
+
+	// Auto-create user if they don't exist (handles new signups)
+	user, err := h.DB.GetOrCreateUser(userClaims.UserID, userClaims.Email, nil)
+	if err != nil {
+		log.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get or create user")
+		InternalError(w, r, err)
+		return nil
+	}
+
+	// Verify job belongs to user's organisation
+	var orgID string
+	err = h.DB.GetDB().QueryRowContext(r.Context(), `
+		SELECT organisation_id FROM jobs WHERE id = $1
+	`, jobID).Scan(&orgID)
+
+	if err != nil {
+		NotFound(w, r, "Job not found")
+		return nil
+	}
+
+	if user.OrganisationID == nil || *user.OrganisationID != orgID {
+		Unauthorised(w, r, "Job access denied")
+		return nil
+	}
+
+	return user
+}
+
 func getClientIP(r *http.Request) string {
 	// Check for X-Forwarded-For header first (common with proxies/load balancers)
 	xff := r.Header.Get("X-Forwarded-For")
@@ -589,34 +626,10 @@ type TaskResponse struct {
 
 // getJobTasks handles GET /v1/jobs/:id/tasks
 func (h *Handler) getJobTasks(w http.ResponseWriter, r *http.Request, jobID string) {
-	userClaims, ok := auth.GetUserFromContext(r.Context())
-	if !ok {
-		Unauthorised(w, r, "User information not found")
-		return
-	}
-
-	// Auto-create user if they don't exist (handles new signups)
-	user, err := h.DB.GetOrCreateUser(userClaims.UserID, userClaims.Email, nil)
-	if err != nil {
-		log.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get or create user")
-		InternalError(w, r, err)
-		return
-	}
-
-	// Verify job belongs to user's organisation
-	var orgID string
-	err = h.DB.GetDB().QueryRowContext(r.Context(), `
-		SELECT organisation_id FROM jobs WHERE id = $1
-	`, jobID).Scan(&orgID)
-
-	if err != nil {
-		NotFound(w, r, "Job not found")
-		return
-	}
-
-	if user.OrganisationID == nil || *user.OrganisationID != orgID {
-		Unauthorised(w, r, "Job access denied")
-		return
+	// Validate user authentication and job access
+	user := h.validateJobAccess(w, r, jobID)
+	if user == nil {
+		return // validateJobAccess already wrote the error response
 	}
 
 	// Parse query parameters
@@ -656,7 +669,7 @@ func (h *Handler) getJobTasks(w http.ResponseWriter, r *http.Request, jobID stri
 	// Get total count
 	var total int
 	countArgs := args[:len(args)-2] // Remove limit and offset for count query
-	err = h.DB.GetDB().QueryRowContext(r.Context(), countQuery, countArgs...).Scan(&total)
+	err := h.DB.GetDB().QueryRowContext(r.Context(), countQuery, countArgs...).Scan(&total)
 	if err != nil {
 		log.Error().Err(err).Str("job_id", jobID).Msg("Failed to count tasks")
 		DatabaseError(w, r, err)
