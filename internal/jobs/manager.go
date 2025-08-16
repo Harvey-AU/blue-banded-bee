@@ -227,23 +227,9 @@ func (jm *JobManager) validateRootURLAccess(ctx context.Context, job *Job, norma
 	return robotsRules, nil
 }
 
-// setupJobURLDiscovery handles URL discovery for the job (sitemap or manual)
-func (jm *JobManager) setupJobURLDiscovery(ctx context.Context, job *Job, options *JobOptions, domainID int, normalisedDomain string) error {
-	if options.UseSitemap {
-		// Fetch and process sitemap in a separate goroutine
-		go jm.processSitemap(context.Background(), job.ID, normalisedDomain, options.IncludePaths, options.ExcludePaths)
-		return nil
-	}
-
-	// Manual root URL creation - validate robots.txt access
-	rootPath := "/"
-	_, err := jm.validateRootURLAccess(ctx, job, normalisedDomain, rootPath)
-	if err != nil {
-		return err // validateRootURLAccess already handled error logging and job updates
-	}
-
-	// Create a page record for the root URL
-	err = jm.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
+// createManualRootTask creates page and task records for the root URL
+func (jm *JobManager) createManualRootTask(ctx context.Context, job *Job, domainID int, rootPath string) error {
+	err := jm.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
 		var pageID int
 		err := tx.QueryRowContext(ctx, `
 			INSERT INTO pages (domain_id, path)
@@ -279,10 +265,29 @@ func (jm *JobManager) setupJobURLDiscovery(ctx context.Context, job *Job, option
 
 	log.Info().
 		Str("job_id", job.ID).
-		Str("domain", normalisedDomain).
+		Str("domain", job.Domain).
 		Msg("Added root URL to job queue")
 
 	return nil
+}
+
+// setupJobURLDiscovery handles URL discovery for the job (sitemap or manual)
+func (jm *JobManager) setupJobURLDiscovery(ctx context.Context, job *Job, options *JobOptions, domainID int, normalisedDomain string) error {
+	if options.UseSitemap {
+		// Fetch and process sitemap in a separate goroutine
+		go jm.processSitemap(context.Background(), job.ID, normalisedDomain, options.IncludePaths, options.ExcludePaths)
+		return nil
+	}
+
+	// Manual root URL creation - validate robots.txt access
+	rootPath := "/"
+	_, err := jm.validateRootURLAccess(ctx, job, normalisedDomain, rootPath)
+	if err != nil {
+		return err // validateRootURLAccess already handled error logging and job updates
+	}
+
+	// Create page and task records for the root URL
+	return jm.createManualRootTask(ctx, job, domainID, rootPath)
 }
 
 // CreateJob creates a new job with the given options
