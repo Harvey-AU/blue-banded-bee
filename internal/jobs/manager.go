@@ -166,6 +166,116 @@ func (jm *JobManager) setupJobDatabase(ctx context.Context, job *Job, normalised
 	return domainID, nil
 }
 
+// setupJobURLDiscovery handles URL discovery for the job (sitemap or manual)
+func (jm *JobManager) setupJobURLDiscovery(ctx context.Context, job *Job, options *JobOptions, domainID int, normalisedDomain string) error {
+	if options.UseSitemap {
+		// Fetch and process sitemap in a separate goroutine
+		go jm.processSitemap(context.Background(), job.ID, normalisedDomain, options.IncludePaths, options.ExcludePaths)
+		return nil
+	}
+
+	// Manual root URL creation
+	rootPath := "/"
+
+	// Check robots.txt before creating manual root URL
+	var robotsRules *crawler.RobotsRules
+	if jm.crawler != nil {
+		// Use DiscoverSitemapsAndRobots which already includes parsing
+		discoveryResult, err := jm.crawler.DiscoverSitemapsAndRobots(ctx, normalisedDomain)
+		if err != nil {
+			log.Error().
+				Err(err).
+				Str("domain", normalisedDomain).
+				Msg("Failed to fetch robots.txt for manual URL")
+
+			// Update job with error
+			if updateErr := jm.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
+				_, err := tx.ExecContext(ctx, `
+					UPDATE jobs
+					SET status = $1, error_message = $2, completed_at = $3
+					WHERE id = $4
+				`, JobStatusFailed, fmt.Sprintf("Failed to fetch robots.txt: %v", err), time.Now().UTC(), job.ID)
+				return err
+			}); updateErr != nil {
+				log.Error().Err(updateErr).Str("job_id", job.ID).Msg("Failed to update job status")
+			}
+			return fmt.Errorf("failed to fetch robots.txt: %w", err)
+		}
+
+		// Use the already parsed robots rules from discovery
+		robotsRules = discoveryResult.RobotsRules
+		
+		// Store crawl delay if specified in robots.txt
+		if robotsRules != nil && robotsRules.CrawlDelay > 0 {
+			jm.updateDomainCrawlDelay(ctx, normalisedDomain, robotsRules.CrawlDelay)
+		}
+	}
+
+	// Check if root path is allowed by robots.txt
+	if robotsRules != nil && !crawler.IsPathAllowed(robotsRules, rootPath) {
+		log.Warn().
+			Str("job_id", job.ID).
+			Str("domain", normalisedDomain).
+			Str("path", rootPath).
+			Msg("Root path is disallowed by robots.txt, job cannot proceed")
+
+		// Update job with error
+		if updateErr := jm.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
+			_, err := tx.ExecContext(ctx, `
+				UPDATE jobs
+				SET status = $1, error_message = $2, completed_at = $3
+				WHERE id = $4
+			`, JobStatusFailed, "Root path (/) is disallowed by robots.txt", time.Now().UTC(), job.ID)
+			return err
+		}); updateErr != nil {
+			log.Error().Err(updateErr).Str("job_id", job.ID).Msg("Failed to update job status")
+		}
+		return fmt.Errorf("root path is disallowed by robots.txt")
+	}
+
+	// Create a page record for the root URL
+	err := jm.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
+		var pageID int
+		err := tx.QueryRowContext(ctx, `
+			INSERT INTO pages (domain_id, path)
+			VALUES ($1, $2)
+			ON CONFLICT (domain_id, path) DO UPDATE SET path = EXCLUDED.path
+			RETURNING id
+		`, domainID, rootPath).Scan(&pageID)
+
+		if err != nil {
+			return fmt.Errorf("failed to create page record for root path: %w", err)
+		}
+
+		// Enqueue the root URL with its page ID
+		_, err = tx.ExecContext(ctx, `
+			INSERT INTO tasks (
+				id, job_id, page_id, path, status, created_at, retry_count,
+				source_type, source_url
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		`, uuid.New().String(), job.ID, pageID, rootPath, "pending", time.Now().UTC(), 0, "manual", "")
+
+		if err != nil {
+			return fmt.Errorf("failed to enqueue task for root path: %w", err)
+		}
+
+		jm.markPageProcessed(job.ID, pageID)
+		return nil
+	})
+
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to create and enqueue root URL")
+		return err
+	}
+
+	log.Info().
+		Str("job_id", job.ID).
+		Str("domain", normalisedDomain).
+		Msg("Added root URL to job queue")
+
+	return nil
+}
+
 // CreateJob creates a new job with the given options
 func (jm *JobManager) CreateJob(ctx context.Context, options *JobOptions) (*Job, error) {
 	span := sentry.StartSpan(ctx, "manager.create_job")
@@ -200,111 +310,11 @@ func (jm *JobManager) CreateJob(ctx context.Context, options *JobOptions) (*Job,
 		Int("max_pages", options.MaxPages).
 		Msg("Created new job")
 
-	if options.UseSitemap {
-		// Fetch and process sitemap in a separate goroutine
-		go jm.processSitemap(context.Background(), job.ID, normalisedDomain, options.IncludePaths, options.ExcludePaths)
-	} else {
-		// Prepare for manual root URL creation
-		rootPath := "/"
-
-		// Check robots.txt before creating manual root URL
-		// Only fetch robots.txt if we need to check path permissions
-		var robotsRules *crawler.RobotsRules
-		if jm.crawler != nil {
-			// Use DiscoverSitemapsAndRobots which already includes parsing
-			discoveryResult, err := jm.crawler.DiscoverSitemapsAndRobots(ctx, normalisedDomain)
-			if err != nil {
-				log.Error().
-					Err(err).
-					Str("domain", normalisedDomain).
-					Msg("Failed to fetch robots.txt for manual URL")
-
-				// Update job with error
-				if updateErr := jm.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
-					_, err := tx.ExecContext(ctx, `
-						UPDATE jobs
-						SET status = $1, error_message = $2, completed_at = $3
-						WHERE id = $4
-					`, JobStatusFailed, fmt.Sprintf("Failed to fetch robots.txt: %v", err), time.Now().UTC(), job.ID)
-					return err
-				}); updateErr != nil {
-					log.Error().Err(updateErr).Str("job_id", job.ID).Msg("Failed to update job status")
-				}
-				return job, fmt.Errorf("failed to fetch robots.txt: %w", err)
-			}
-
-			// Use the already parsed robots rules from discovery
-			robotsRules = discoveryResult.RobotsRules
-			
-			// Store crawl delay if specified in robots.txt
-			if robotsRules != nil && robotsRules.CrawlDelay > 0 {
-				jm.updateDomainCrawlDelay(ctx, normalisedDomain, robotsRules.CrawlDelay)
-			}
-		}
-
-		// Check if root path is allowed by robots.txt
-		if robotsRules != nil && !crawler.IsPathAllowed(robotsRules, rootPath) {
-			log.Warn().
-				Str("job_id", job.ID).
-				Str("domain", normalisedDomain).
-				Str("path", rootPath).
-				Msg("Root path is disallowed by robots.txt, job cannot proceed")
-
-			// Update job with error
-			if updateErr := jm.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
-				_, err := tx.ExecContext(ctx, `
-					UPDATE jobs
-					SET status = $1, error_message = $2, completed_at = $3
-					WHERE id = $4
-				`, JobStatusFailed, "Root path (/) is disallowed by robots.txt", time.Now().UTC(), job.ID)
-				return err
-			}); updateErr != nil {
-				log.Error().Err(updateErr).Str("job_id", job.ID).Msg("Failed to update job status")
-			}
-			return job, fmt.Errorf("root path is disallowed by robots.txt")
-		}
-
-		// Create a page record for the root URL
-		err := jm.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
-			var pageID int
-			err := tx.QueryRowContext(ctx, `
-				INSERT INTO pages (domain_id, path)
-				VALUES ($1, $2)
-				ON CONFLICT (domain_id, path) DO UPDATE SET path = EXCLUDED.path
-				RETURNING id
-			`, domainID, rootPath).Scan(&pageID)
-
-			if err != nil {
-				return fmt.Errorf("failed to create page record for root path: %w", err)
-			}
-
-			// Enqueue the root URL with its page ID
-			_, err = tx.ExecContext(ctx, `
-				INSERT INTO tasks (
-					id, job_id, page_id, path, status, created_at, retry_count,
-					source_type, source_url
-				) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-			`, uuid.New().String(), job.ID, pageID, rootPath, "pending", time.Now().UTC(), 0, "manual", "")
-
-			if err != nil {
-				return fmt.Errorf("failed to enqueue task for root path: %w", err)
-			}
-
-			jm.markPageProcessed(job.ID, pageID)
-
-			return nil
-		})
-
-		if err != nil {
-			span.SetTag("error", "true")
-			span.SetData("error.message", err.Error())
-			log.Error().Err(err).Msg("Failed to create and enqueue root URL")
-		} else {
-			log.Info().
-				Str("job_id", job.ID).
-				Str("domain", normalisedDomain).
-				Msg("Added root URL to job queue")
-		}
+	// Setup URL discovery (sitemap or manual root URL)
+	if err := jm.setupJobURLDiscovery(ctx, job, options, domainID, normalisedDomain); err != nil {
+		span.SetTag("error", "true")
+		span.SetData("error.message", err.Error())
+		return job, err // Return job even on URL discovery error (some errors are expected)
 	}
 
 	return job, nil
