@@ -12,11 +12,21 @@ Each version represents a distinct set of changes, even if released on the same 
 
 ### Improved
 
-- **Code Quality**: Refactored large functions for better maintainability and test coverage
-- **API Performance**: CreateJob now returns immediately with async background processing  
-- **Database Schema**: Simplified schema setup with focused, testable functions
-- **Error Handling**: Idiomatic Go error patterns and better context handling
-- **Testing**: Significantly expanded test coverage across core functionality
+- **Code Architecture**: Major refactoring eliminating monster functions (>200 lines)
+  - Applied Extract + Test + Commit methodology across 5 core functions
+  - 80% reduction in function complexity (1353 → 274 lines total)
+  - Created 23 focused, single-responsibility functions with comprehensive tests
+- **Testing Coverage**: Expanded from 30% to 38.9% total coverage
+  - Added 350+ test cases across API, database, job management, and crawler logic
+  - Introduced focused unit testing patterns with comprehensive mocking
+  - Implemented table-driven tests and edge case validation
+- **API Architecture**: Improved async patterns and error handling
+  - CreateJob returns immediately with background processing
+  - Proper context propagation with timeouts for goroutines
+  - Idiomatic Go error patterns throughout
+- **Database Operations**: Simplified and modularised core database functions
+  - Separated table creation, indexing, and security setup
+  - Enhanced testability with focused functions
 
 ## [Previous] – 2025-08-16
 

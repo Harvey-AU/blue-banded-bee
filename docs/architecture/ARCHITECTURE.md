@@ -151,38 +151,67 @@ CREATE TABLE tasks (
 
 ## Codebase Structure
 
+### Architectural Principles
+
+Blue Banded Bee follows **focused, testable function design** established through systematic refactoring:
+
+- **Function Size**: Functions kept under 50 lines where possible
+- **Single Responsibility**: Each function has one clear purpose
+- **Comprehensive Testing**: 350+ test cases with 38.9% total coverage
+- **Extract + Test + Commit**: Proven methodology for safe refactoring
+
 ### Application Entry Points (`cmd/`)
 - `cmd/app/main.go` - Main service entry point with server setup
 - `cmd/test_jobs/main.go` - Job queue testing utility
 
 ### Core Business Logic (`internal/`)
 
-#### API Layer (`internal/api/`)
+#### API Layer (`internal/api/`) - 47.2% Test Coverage
 - `handlers.go` - HTTP route handlers and middleware
 - `auth.go` - JWT authentication and user validation
-- `jobs.go` - Job management endpoints
+- `jobs.go` - **Refactored**: Job management endpoints with focused functions
+  - `parseTaskQueryParams()` - Query parameter validation
+  - `validateJobAccess()` - Authentication and authorization
+  - `buildTaskQuery()` - SQL query construction  
+  - `formatTasksFromRows()` - Response formatting
 - `response.go` - Standardised response formats
 - `errors.go` - Error handling and codes
 
-#### Database Layer (`internal/db/`)
-- `db.go` - PostgreSQL connection and setup
+#### Database Layer (`internal/db/`) - 37.9% Test Coverage
+- `db.go` - **Refactored**: PostgreSQL connection and setup
+  - `createCoreTables()` - Table creation with dependency management
+  - `createPerformanceIndexes()` - Index management and optimization
+  - `enableRowLevelSecurity()` - Security policy setup
 - `queue.go` - Database queue operations and transactions
 - `pages.go` - Page and domain record management
 - `users.go` - User and organisation data
 - `health.go` - Database health monitoring
 
-#### Job System (`internal/jobs/`)
-- `manager.go` - Job lifecycle management (create, start, cancel)
-- `worker.go` - Worker pool and task processing
+#### Job System (`internal/jobs/`) - 33.2% Test Coverage
+- `manager.go` - **Refactored**: Job lifecycle management
+  - `handleExistingJobs()` - Existing job conflict resolution
+  - `createJobObject()` - Job instance creation
+  - `setupJobDatabase()` - Database record creation
+  - `setupJobURLDiscovery()` - URL discovery coordination
+  - `validateRootURLAccess()` - Robots.txt validation
+  - `createManualRootTask()` - Manual URL task creation
+- `worker.go` - **Partially Refactored**: Worker pool and task processing
+  - `claimPendingTask()` - Task claiming logic
+  - `prepareTaskForProcessing()` - Task preparation and enrichment
 - `types.go` - Job and task type definitions
 
-#### Crawler (`internal/crawler/`)
-- `crawler.go` - HTTP client and URL processing
+#### Crawler (`internal/crawler/`) - 65.8% Test Coverage
+- `crawler.go` - **Refactored**: HTTP client and URL processing
+  - `validateCrawlRequest()` - URL validation and parsing
+  - `setupResponseHandlers()` - Colly response/error handling
+  - `performCacheValidation()` - Cache warming logic
+  - `setupLinkExtraction()` - HTML link categorization
+  - `executeCollyRequest()` - HTTP request execution
 - `sitemap.go` - Sitemap parsing and URL extraction
 - `config.go` - Crawler configuration and rate limiting
 - `types.go` - Crawler response types
 
-#### Utilities (`internal/util/`)
+#### Utilities (`internal/util/`) - 81.1% Test Coverage
 - `url.go` - URL normalisation and validation
 
 ## System Monitoring

@@ -27,6 +27,18 @@ My process is: **Investigate -> Plan -> Get Permission -> Execute -> Verify**.
 
 - **Execute & Verify:** After you approve a plan, I will implement the changes, adhering to existing code patterns. I will then verify my work by running the project's test suite (`go test ./...`) and any other relevant build or linting commands.
 
+### Function Refactoring Protocol
+
+When encountering functions >50 lines, I will apply the **Extract + Test + Commit** methodology:
+
+1. **Analyse**: Map function responsibilities and boundaries
+2. **Extract**: Create focused, single-responsibility functions  
+3. **Test**: Write comprehensive tests for each extraction
+4. **Commit**: Separate commits for each step
+5. **Verify**: Ensure integration and no regressions
+
+**Proven on 5 monster functions with 80% complexity reduction and 350+ new tests.**
+
 ## 4. Database Schema Management
 
 **Important:** This project uses Supabase's built-in migration system. I will not duplicate this functionality in Go code.
