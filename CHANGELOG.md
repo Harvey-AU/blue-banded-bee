@@ -8,6 +8,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Multiple version updates may occur on the same date, each with its own version number.
 Each version represents a distinct set of changes, even if released on the same day.
 
+## [Unreleased] – 2025-08-16
+
+### Enhanced
+
+- **Test Coverage Expansion**: Significant improvements to jobs package testing
+  - Created comprehensive unit tests for JobManager functions (GetJob, StartJob, CancelJob)
+  - Improved test coverage: jobs package (10.3% → 19.9%)
+  - Consolidated shared test helpers into `test_helpers.go` to avoid duplication
+  - Implemented table-driven tests for comprehensive scenario coverage
+  - Added proper transaction mocking with sqlmock
+
+### Added
+
+- **Job Manager Unit Tests**: Complete test suite for critical job operations
+  - `manager_getjob_test.go` - Tests for retrieving job details with various scenarios
+  - `manager_startjob_test.go` - Tests for restarting completed/failed/cancelled jobs
+  - `manager_canceljob_test.go` - Tests for job cancellation with proper cleanup
+  - Shared `MockDbQueueWithTransaction` helper for consistent test infrastructure
+
+### Fixed
+
+- **Test Infrastructure Issues**: Resolved testing problems
+  - Fixed JSON serialization mismatches in sqlmock expectations
+  - Resolved nil pointer panics in worker pool initialization
+  - Added proper jobPerformance map initialization
+  - Corrected build tag conventions for unit vs integration tests
+
 ## [0.5.34] – 2025-08-08
 
 ### Enhanced

@@ -13,14 +13,14 @@ Automatically warm site caches (especially built for [Webflow](https://www.webfl
 
 ## Key Features
 
-### Cache Warming\*\*
+### Cache Warming
 
 - 🚀 Concurrent crawling with configurable worker pools
 - 🔥 Smart warming with automatic retry on cache MISS
 - 🥇 Priority processing - homepage and critical pages first
 - 🤖 Robots.txt compliance with crawl-delay honouring
 
-### Integration & Monitoring\*\*
+### Integration & Monitoring
 
 - 🔌 Webflow webhook for automatic warming on publish
 - 📊 Real-time dashboard with job progress tracking
