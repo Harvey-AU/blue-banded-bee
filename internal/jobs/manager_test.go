@@ -384,3 +384,7 @@ func (m *MockCrawlerForIntegration) FilterURLs(urls []string, includePaths, excl
 	}
 	return urls
 }
+
+func (m *MockCrawlerForIntegration) GetUserAgent() string {
+	return "test-agent"
+}
