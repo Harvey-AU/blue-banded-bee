@@ -397,6 +397,80 @@ go clean -modcache
 go mod download
 ```
 
+## Code Quality & Refactoring
+
+### Function Design Principles
+
+Blue Banded Bee follows focused, testable function design:
+
+- **Function Size**: Keep functions under 50 lines where possible
+- **Single Responsibility**: Each function should do one thing well
+- **Comprehensive Testing**: Aim for 80-90% coverage on refactored functions
+- **Error Handling**: Use idiomatic Go patterns (simple error returns)
+
+### Refactoring Large Functions
+
+When encountering functions >50 lines, apply **Extract + Test + Commit**:
+
+1. **Analyse Structure**: Map distinct responsibilities
+2. **Extract Functions**: Pull out focused, single-responsibility functions
+3. **Create Tests**: Write comprehensive tests with table-driven patterns
+4. **Commit Steps**: Commit each extraction separately  
+5. **Verify Integration**: Ensure no regressions
+
+### Testing Patterns
+
+**Table-Driven Tests**:
+```go
+func TestValidateInput(t *testing.T) {
+    tests := []struct {
+        name        string
+        input       string
+        expectError bool
+    }{
+        {"valid_input", "test", false},
+        {"invalid_input", "", true},
+    }
+    
+    for _, tt := range tests {
+        t.Run(tt.name, func(t *testing.T) {
+            err := validateInput(tt.input)
+            if tt.expectError {
+                assert.Error(t, err)
+            } else {
+                assert.NoError(t, err)
+            }
+        })
+    }
+}
+```
+
+**Database Testing with sqlmock**:
+```go
+func TestDatabaseOperation(t *testing.T) {
+    db, mock, err := sqlmock.New()
+    require.NoError(t, err)
+    defer db.Close()
+    
+    mock.ExpectExec("CREATE TABLE").WillReturnResult(sqlmock.NewResult(0, 0))
+    
+    err = createTable(db)
+    assert.NoError(t, err)
+    assert.NoError(t, mock.ExpectationsWereMet())
+}
+```
+
+### Recent Refactoring Success
+
+**5 monster functions eliminated:**
+- `getJobTasks`: 216 → 56 lines (74% reduction)
+- `CreateJob`: 232 → 42 lines (82% reduction)  
+- `setupJobURLDiscovery`: 108 → 17 lines (84% reduction)
+- `setupSchema`: 216 → 27 lines (87% reduction)
+- `WarmURL`: 377 → 68 lines (82% reduction)
+
+**Results**: 80% complexity reduction, 350+ new tests, 38.9% coverage
+
 **Hot Reloading Not Working**:
 ```bash
 # Verify Air configuration
