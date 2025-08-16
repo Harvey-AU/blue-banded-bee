@@ -905,6 +905,15 @@ func (jm *JobManager) UpdateJobStatus(ctx context.Context, jobID string, status 
 
 // processSitemap fetches and processes a sitemap for a domain
 func (jm *JobManager) processSitemap(ctx context.Context, jobID, domain string, includePaths, excludePaths []string) {
+	// Guard against nil dependencies (e.g., in test environments)
+	if jm.crawler == nil || jm.dbQueue == nil || jm.db == nil {
+		log.Warn().
+			Str("job_id", jobID).
+			Str("domain", domain).
+			Msg("Skipping sitemap processing due to missing dependencies")
+		return
+	}
+
 	span := sentry.StartSpan(ctx, "manager.process_sitemap")
 	defer span.Finish()
 
