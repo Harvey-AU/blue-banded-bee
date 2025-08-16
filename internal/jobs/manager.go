@@ -49,22 +49,18 @@ func NewJobManager(db *sql.DB, dbQueue DbQueueProvider, crawler CrawlerInterface
 	}
 }
 
-// CreateJob creates a new job with the given options
-func (jm *JobManager) CreateJob(ctx context.Context, options *JobOptions) (*Job, error) {
-	span := sentry.StartSpan(ctx, "manager.create_job")
-	defer span.Finish()
+// handleExistingJobs checks for existing active jobs and cancels them if found
+func (jm *JobManager) handleExistingJobs(ctx context.Context, domain string, organisationID *string) error {
+	if organisationID == nil || *organisationID == "" {
+		return nil // Skip check if no organisation ID
+	}
 
-	span.SetTag("domain", options.Domain)
+	var existingJobID string
+	var existingJobStatus string
+	var existingOrgID string
 
-	normalisedDomain := util.NormaliseDomain(options.Domain)
-
-	// Check for existing active jobs for the same domain and org
-	if options.OrganisationID != nil && *options.OrganisationID != "" {
-		var existingJobID string
-		var existingJobStatus string
-		var existingOrgID string
-
-		err := jm.db.QueryRowContext(ctx, `
+	err := jm.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
+		return tx.QueryRowContext(ctx, `
 			SELECT j.id, j.status, j.organisation_id
 			FROM jobs j
 			JOIN domains d ON j.domain_id = d.id
@@ -73,35 +69,39 @@ func (jm *JobManager) CreateJob(ctx context.Context, options *JobOptions) (*Job,
 			AND j.status IN ('pending', 'initializing', 'running', 'paused')
 			ORDER BY j.created_at DESC
 			LIMIT 1
-		`, normalisedDomain, *options.OrganisationID).Scan(&existingJobID, &existingJobStatus, &existingOrgID)
+		`, domain, *organisationID).Scan(&existingJobID, &existingJobStatus, &existingOrgID)
+	})
 
-		if err == nil && existingJobID != "" {
-			// Found an existing active job for the same domain and organisation
-			log.Info().
-				Str("existing_job_id", existingJobID).
-				Str("existing_job_status", existingJobStatus).
-				Str("domain", normalisedDomain).
-				Str("organisation_id", *options.OrganisationID).
-				Msg("Found existing active job for domain, cancelling it")
+	if err == nil && existingJobID != "" {
+		// Found an existing active job for the same domain and organisation
+		log.Info().
+			Str("existing_job_id", existingJobID).
+			Str("existing_job_status", existingJobStatus).
+			Str("domain", domain).
+			Str("organisation_id", *organisationID).
+			Msg("Found existing active job for domain, cancelling it")
 
-			if err := jm.CancelJob(ctx, existingJobID); err != nil {
-				log.Error().
-					Err(err).
-					Str("job_id", existingJobID).
-					Msg("Failed to cancel existing job")
-				// Continue with new job creation even if cancellation fails
-			}
-		} else if err != nil && err != sql.ErrNoRows {
-			// Log query error but continue with job creation
-			log.Warn().
+		if err := jm.CancelJob(ctx, existingJobID); err != nil {
+			log.Error().
 				Err(err).
-				Str("domain", normalisedDomain).
-				Msg("Error checking for existing jobs")
+				Str("job_id", existingJobID).
+				Msg("Failed to cancel existing job")
+			// Continue with new job creation even if cancellation fails
 		}
+	} else if err != nil && err != sql.ErrNoRows {
+		// Log query error but continue with job creation
+		log.Warn().
+			Err(err).
+			Str("domain", domain).
+			Msg("Error checking for existing jobs")
 	}
 
-	// Create a new job object
-	job := &Job{
+	return nil // Always return nil to continue with job creation
+}
+
+// createJobObject creates a new Job instance with the given options and normalized domain
+func createJobObject(options *JobOptions, normalisedDomain string) *Job {
+	return &Job{
 		ID:              uuid.New().String(),
 		Domain:          normalisedDomain,
 		UserID:          options.UserID,
@@ -124,10 +124,13 @@ func (jm *JobManager) CreateJob(ctx context.Context, options *JobOptions) (*Job,
 		SourceDetail:    options.SourceDetail,
 		SourceInfo:      options.SourceInfo,
 	}
+}
 
+// setupJobDatabase creates domain and job records in the database
+// Returns the domain ID for use in subsequent operations
+func (jm *JobManager) setupJobDatabase(ctx context.Context, job *Job, normalisedDomain string) (int, error) {
 	var domainID int
 
-	// Use dbQueue for transaction safety
 	err := jm.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
 		// Get or create domain ID
 		err := tx.QueryRow(`
@@ -157,10 +160,175 @@ func (jm *JobManager) CreateJob(ctx context.Context, options *JobOptions) (*Job,
 	})
 
 	if err != nil {
+		return 0, fmt.Errorf("failed to create job: %w", err)
+	}
+
+	return domainID, nil
+}
+
+// validateRootURLAccess checks robots.txt rules and validates root URL access
+func (jm *JobManager) validateRootURLAccess(ctx context.Context, job *Job, normalisedDomain string, rootPath string) (*crawler.RobotsRules, error) {
+	var robotsRules *crawler.RobotsRules
+	
+	if jm.crawler != nil {
+		// Use DiscoverSitemapsAndRobots which already includes parsing
+		discoveryResult, err := jm.crawler.DiscoverSitemapsAndRobots(ctx, normalisedDomain)
+		if err != nil {
+			log.Error().
+				Err(err).
+				Str("domain", normalisedDomain).
+				Msg("Failed to fetch robots.txt for manual URL")
+
+			// Update job with error
+			if updateErr := jm.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
+				_, err := tx.ExecContext(ctx, `
+					UPDATE jobs
+					SET status = $1, error_message = $2, completed_at = $3
+					WHERE id = $4
+				`, JobStatusFailed, fmt.Sprintf("Failed to fetch robots.txt: %v", err), time.Now().UTC(), job.ID)
+				return err
+			}); updateErr != nil {
+				log.Error().Err(updateErr).Str("job_id", job.ID).Msg("Failed to update job status")
+			}
+			return nil, fmt.Errorf("failed to fetch robots.txt: %w", err)
+		}
+
+		// Use the already parsed robots rules from discovery
+		robotsRules = discoveryResult.RobotsRules
+		
+		// Store crawl delay if specified in robots.txt
+		if robotsRules != nil && robotsRules.CrawlDelay > 0 {
+			jm.updateDomainCrawlDelay(ctx, normalisedDomain, robotsRules.CrawlDelay)
+		}
+	}
+
+	// Check if root path is allowed by robots.txt
+	if robotsRules != nil && !crawler.IsPathAllowed(robotsRules, rootPath) {
+		log.Warn().
+			Str("job_id", job.ID).
+			Str("domain", normalisedDomain).
+			Str("path", rootPath).
+			Msg("Root path is disallowed by robots.txt, job cannot proceed")
+
+		// Update job with error
+		if updateErr := jm.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
+			_, err := tx.ExecContext(ctx, `
+				UPDATE jobs
+				SET status = $1, error_message = $2, completed_at = $3
+				WHERE id = $4
+			`, JobStatusFailed, "Root path (/) is disallowed by robots.txt", time.Now().UTC(), job.ID)
+			return err
+		}); updateErr != nil {
+			log.Error().Err(updateErr).Str("job_id", job.ID).Msg("Failed to update job status")
+		}
+		return nil, fmt.Errorf("root path is disallowed by robots.txt")
+	}
+
+	return robotsRules, nil
+}
+
+// createManualRootTask creates page and task records for the root URL
+func (jm *JobManager) createManualRootTask(ctx context.Context, job *Job, domainID int, rootPath string) error {
+	err := jm.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
+		var pageID int
+		err := tx.QueryRowContext(ctx, `
+			INSERT INTO pages (domain_id, path)
+			VALUES ($1, $2)
+			ON CONFLICT (domain_id, path) DO UPDATE SET path = EXCLUDED.path
+			RETURNING id
+		`, domainID, rootPath).Scan(&pageID)
+
+		if err != nil {
+			return fmt.Errorf("failed to create page record for root path: %w", err)
+		}
+
+		// Enqueue the root URL with its page ID
+		_, err = tx.ExecContext(ctx, `
+			INSERT INTO tasks (
+				id, job_id, page_id, path, status, created_at, retry_count,
+				source_type, source_url
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		`, uuid.New().String(), job.ID, pageID, rootPath, "pending", time.Now().UTC(), 0, "manual", "")
+
+		if err != nil {
+			return fmt.Errorf("failed to enqueue task for root path: %w", err)
+		}
+
+		jm.markPageProcessed(job.ID, pageID)
+		return nil
+	})
+
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to create and enqueue root URL")
+		return err
+	}
+
+	log.Info().
+		Str("job_id", job.ID).
+		Str("domain", job.Domain).
+		Msg("Added root URL to job queue")
+
+	return nil
+}
+
+// setupJobURLDiscovery handles URL discovery for the job (sitemap or manual)
+func (jm *JobManager) setupJobURLDiscovery(ctx context.Context, job *Job, options *JobOptions, domainID int, normalisedDomain string) error {
+	if options.UseSitemap {
+		// Fetch and process sitemap in a separate goroutine
+		// Use detached context with timeout for background processing
+		backgroundCtx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+		go func() {
+			defer cancel()
+			jm.processSitemap(backgroundCtx, job.ID, normalisedDomain, options.IncludePaths, options.ExcludePaths)
+		}()
+		return nil
+	}
+
+	// Manual root URL creation - process in background for consistency  
+	// Use detached context with timeout for background processing
+	backgroundCtx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	go func() {
+		defer cancel()
+		rootPath := "/"
+		_, err := jm.validateRootURLAccess(backgroundCtx, job, normalisedDomain, rootPath)
+		if err != nil {
+			log.Error().Err(err).Str("job_id", job.ID).Msg("Failed to validate root URL access")
+			return // Error already logged and job updated by validateRootURLAccess
+		}
+
+		// Create page and task records for the root URL
+		if err := jm.createManualRootTask(backgroundCtx, job, domainID, rootPath); err != nil {
+			log.Error().Err(err).Str("job_id", job.ID).Msg("Failed to create manual root task")
+		}
+	}()
+
+	return nil
+}
+
+// CreateJob creates a new job with the given options
+func (jm *JobManager) CreateJob(ctx context.Context, options *JobOptions) (*Job, error) {
+	span := sentry.StartSpan(ctx, "manager.create_job")
+	defer span.Finish()
+
+	span.SetTag("domain", options.Domain)
+
+	normalisedDomain := util.NormaliseDomain(options.Domain)
+
+	// Handle any existing active jobs for the same domain and organisation
+	if err := jm.handleExistingJobs(ctx, normalisedDomain, options.OrganisationID); err != nil {
+		return nil, fmt.Errorf("failed to handle existing jobs: %w", err)
+	}
+
+	// Create a new job object
+	job := createJobObject(options, normalisedDomain)
+
+	// Setup database records for the job
+	domainID, err := jm.setupJobDatabase(ctx, job, normalisedDomain)
+	if err != nil {
 		span.SetTag("error", "true")
 		span.SetData("error.message", err.Error())
 		sentry.CaptureException(err)
-		return nil, fmt.Errorf("failed to create job: %w", err)
+		return nil, err
 	}
 
 	log.Info().
@@ -171,124 +339,11 @@ func (jm *JobManager) CreateJob(ctx context.Context, options *JobOptions) (*Job,
 		Int("max_pages", options.MaxPages).
 		Msg("Created new job")
 
-	if options.UseSitemap {
-		// Fetch and process sitemap in a separate goroutine
-		go jm.processSitemap(context.Background(), job.ID, normalisedDomain, options.IncludePaths, options.ExcludePaths)
-	} else {
-		// Prepare for manual root URL creation
-		rootPath := "/"
-
-		// Check robots.txt before creating manual root URL
-		// Use a temporary crawler to fetch robots.txt
-		var robotsRules *crawler.RobotsRules
-		if jm.crawler != nil {
-			_, err := jm.crawler.DiscoverSitemapsAndRobots(ctx, normalisedDomain)
-			if err != nil {
-				log.Error().
-					Err(err).
-					Str("domain", normalisedDomain).
-					Msg("Failed to fetch robots.txt for manual URL")
-
-				// Update job with error
-				if updateErr := jm.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
-					_, err := tx.ExecContext(ctx, `
-						UPDATE jobs
-						SET status = $1, error_message = $2, completed_at = $3
-						WHERE id = $4
-					`, JobStatusFailed, fmt.Sprintf("Failed to fetch robots.txt: %v", err), time.Now().UTC(), job.ID)
-					return err
-				}); updateErr != nil {
-					log.Error().Err(updateErr).Str("job_id", job.ID).Msg("Failed to update job status")
-				}
-				return job, fmt.Errorf("failed to fetch robots.txt: %w", err)
-			}
-
-			// Parse robots.txt for filtering
-			robotsRules, err = crawler.ParseRobotsTxt(ctx, normalisedDomain, "BlueBandedBee/1.0")
-			if err != nil {
-				log.Error().
-					Err(err).
-					Str("domain", normalisedDomain).
-					Msg("Failed to parse robots.txt for manual URL")
-
-				// Update job with error
-				if updateErr := jm.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
-					_, err := tx.ExecContext(ctx, `
-						UPDATE jobs
-						SET status = $1, error_message = $2, completed_at = $3
-						WHERE id = $4
-					`, JobStatusFailed, fmt.Sprintf("Failed to parse robots.txt: %v", err), time.Now().UTC(), job.ID)
-					return err
-				}); updateErr != nil {
-					log.Error().Err(updateErr).Str("job_id", job.ID).Msg("Failed to update job status")
-				}
-				return job, fmt.Errorf("failed to parse robots.txt: %w", err)
-			}
-		}
-
-		// Check if root path is allowed by robots.txt
-		if robotsRules != nil && !crawler.IsPathAllowed(robotsRules, rootPath) {
-			log.Warn().
-				Str("job_id", job.ID).
-				Str("domain", normalisedDomain).
-				Str("path", rootPath).
-				Msg("Root path is disallowed by robots.txt, job cannot proceed")
-
-			// Update job with error
-			if updateErr := jm.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
-				_, err := tx.ExecContext(ctx, `
-					UPDATE jobs
-					SET status = $1, error_message = $2, completed_at = $3
-					WHERE id = $4
-				`, JobStatusFailed, "Root path (/) is disallowed by robots.txt", time.Now().UTC(), job.ID)
-				return err
-			}); updateErr != nil {
-				log.Error().Err(updateErr).Str("job_id", job.ID).Msg("Failed to update job status")
-			}
-			return job, fmt.Errorf("root path is disallowed by robots.txt")
-		}
-
-		// Create a page record for the root URL
-		err := jm.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
-			var pageID int
-			err := tx.QueryRowContext(ctx, `
-				INSERT INTO pages (domain_id, path)
-				VALUES ($1, $2)
-				ON CONFLICT (domain_id, path) DO UPDATE SET path = EXCLUDED.path
-				RETURNING id
-			`, domainID, rootPath).Scan(&pageID)
-
-			if err != nil {
-				return fmt.Errorf("failed to create page record for root path: %w", err)
-			}
-
-			// Enqueue the root URL with its page ID
-			_, err = tx.ExecContext(ctx, `
-				INSERT INTO tasks (
-					id, job_id, page_id, path, status, created_at, retry_count,
-					source_type, source_url
-				) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-			`, uuid.New().String(), job.ID, pageID, rootPath, "pending", time.Now().UTC(), 0, "manual", "")
-
-			if err != nil {
-				return fmt.Errorf("failed to enqueue task for root path: %w", err)
-			}
-
-			jm.markPageProcessed(job.ID, pageID)
-
-			return nil
-		})
-
-		if err != nil {
-			span.SetTag("error", "true")
-			span.SetData("error.message", err.Error())
-			log.Error().Err(err).Msg("Failed to create and enqueue root URL")
-		} else {
-			log.Info().
-				Str("job_id", job.ID).
-				Str("domain", normalisedDomain).
-				Msg("Added root URL to job queue")
-		}
+	// Setup URL discovery (sitemap or manual root URL)
+	if err := jm.setupJobURLDiscovery(ctx, job, options, domainID, normalisedDomain); err != nil {
+		span.SetTag("error", "true")
+		span.SetData("error.message", err.Error())
+		return job, err // Return job even on URL discovery error (some errors are expected)
 	}
 
 	return job, nil
@@ -342,7 +397,9 @@ func (jm *JobManager) StartJob(ctx context.Context, jobID string) error {
 	log.Info().Str("original_job_id", jobID).Str("new_job_id", newJob.ID).Msg("Created new job as restart")
 
 	// Add new job to worker pool for processing
-	jm.workerPool.AddJob(newJob.ID, newJobOptions)
+	if jm.workerPool != nil {
+		jm.workerPool.AddJob(newJob.ID, newJobOptions)
+	}
 
 	log.Debug().
 		Str("original_job_id", jobID).
@@ -499,7 +556,9 @@ func (jm *JobManager) CancelJob(ctx context.Context, jobID string) error {
 	}
 
 	// Remove job from worker pool
-	jm.workerPool.RemoveJob(job.ID)
+	if jm.workerPool != nil {
+		jm.workerPool.RemoveJob(job.ID)
+	}
 
 	// Clear processed pages for this job
 	jm.clearProcessedPages(job.ID)
@@ -722,7 +781,7 @@ func (jm *JobManager) enqueueURLsForJob(ctx context.Context, jobID, domain strin
 	}
 
 	// Create page records and get their IDs
-	pageIDs, paths, err := db.CreatePageRecords(ctx, jm.dbQueue.(*db.DbQueue), domainID, domain, urls)
+	pageIDs, paths, err := db.CreatePageRecords(ctx, jm.dbQueue, domainID, domain, urls)
 	if err != nil {
 		return fmt.Errorf("failed to create page records: %w", err)
 	}
@@ -798,8 +857,92 @@ func (jm *JobManager) updateDomainCrawlDelay(ctx context.Context, domain string,
 	}
 }
 
+// IsJobComplete checks if all tasks in a job are processed
+func (jm *JobManager) IsJobComplete(job *Job) bool {
+	// A job is complete when all tasks are either completed, failed, or skipped
+	// and the job is currently running
+	if job.Status != JobStatusRunning {
+		return false
+	}
+	
+	processedTasks := job.CompletedTasks + job.FailedTasks + job.SkippedTasks
+	return processedTasks >= job.TotalTasks
+}
+
+// CalculateJobProgress calculates the progress percentage of a job
+func (jm *JobManager) CalculateJobProgress(job *Job) float64 {
+	if job.TotalTasks == 0 {
+		return 0.0
+	}
+	
+	processedTasks := job.CompletedTasks + job.FailedTasks + job.SkippedTasks
+	return float64(processedTasks) / float64(job.TotalTasks) * 100.0
+}
+
+// ValidateStatusTransition checks if a status transition is valid
+func (jm *JobManager) ValidateStatusTransition(from, to JobStatus) error {
+	// Allow restarts from completed/cancelled/failed states
+	if to == JobStatusRunning && (from == JobStatusCompleted || from == JobStatusCancelled || from == JobStatusFailed) {
+		return nil
+	}
+	
+	// Normal forward transitions
+	validTransitions := map[JobStatus][]JobStatus{
+		JobStatusPending:   {JobStatusRunning, JobStatusCancelled},
+		JobStatusRunning:   {JobStatusCompleted, JobStatusFailed, JobStatusCancelled},
+		JobStatusCompleted: {JobStatusRunning}, // Restart
+		JobStatusFailed:    {JobStatusRunning}, // Retry
+		JobStatusCancelled: {JobStatusRunning}, // Restart
+	}
+	
+	allowed, exists := validTransitions[from]
+	if !exists {
+		return fmt.Errorf("invalid status transition from %s to %s", from, to)
+	}
+	
+	for _, valid := range allowed {
+		if valid == to {
+			return nil
+		}
+	}
+	
+	return fmt.Errorf("invalid status transition from %s to %s", from, to)
+}
+
+// UpdateJobStatus updates the status of a job with appropriate timestamps
+func (jm *JobManager) UpdateJobStatus(ctx context.Context, jobID string, status JobStatus) error {
+	return jm.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
+		var query string
+		var args []interface{}
+
+		switch status {
+		case JobStatusCompleted:
+			query = "UPDATE jobs SET status = $1, completed_at = $2 WHERE id = $3"
+			args = []interface{}{string(status), time.Now(), jobID}
+		case JobStatusRunning:
+			query = "UPDATE jobs SET status = $1, started_at = $2 WHERE id = $3"
+			args = []interface{}{string(status), time.Now(), jobID}
+		default:
+			query = "UPDATE jobs SET status = $1 WHERE id = $2"
+			args = []interface{}{string(status), jobID}
+		}
+
+		_, err := tx.Exec(query, args...)
+		return err
+	})
+}
+
 // processSitemap fetches and processes a sitemap for a domain
 func (jm *JobManager) processSitemap(ctx context.Context, jobID, domain string, includePaths, excludePaths []string) {
+	// Guard against nil dependencies (e.g., in test environments)
+	if jm.crawler == nil || jm.dbQueue == nil || jm.db == nil {
+		log.Warn().
+			Str("job_id", jobID).
+			Str("domain", domain).
+			Msg("Skipping sitemap processing due to missing dependencies")
+		return
+	}
+
 	span := sentry.StartSpan(ctx, "manager.process_sitemap")
 	defer span.Finish()
 

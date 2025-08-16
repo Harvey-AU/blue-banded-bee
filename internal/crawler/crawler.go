@@ -162,113 +162,26 @@ func New(config *Config, id ...string) *Crawler {
 	}
 }
 
-// WarmURL performs a crawl of the specified URL and returns the result.
-// It respects context cancellation, enforces timeout, and treats non-2xx statuses as errors.
-func (c *Crawler) WarmURL(ctx context.Context, targetURL string, findLinks bool) (*CrawlResult, error) {
+// validateCrawlRequest validates the crawl request parameters and URL format
+func validateCrawlRequest(ctx context.Context, targetURL string) (*url.URL, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 
 	parsed, err := url.Parse(targetURL)
 	if err != nil {
-		res := &CrawlResult{URL: targetURL, Timestamp: time.Now().Unix(), Error: err.Error()}
-		return res, err
+		return nil, fmt.Errorf("failed to parse URL: %w", err)
 	}
 
 	if parsed.Scheme == "" || parsed.Host == "" {
-		err := fmt.Errorf("invalid URL format: %s", targetURL)
-		res := &CrawlResult{URL: targetURL, Timestamp: time.Now().Unix(), Error: err.Error()}
-		return res, err
+		return nil, fmt.Errorf("invalid URL format: %s", targetURL)
 	}
 
-	start := time.Now()
-	res := &CrawlResult{
-		URL:       targetURL,
-		Timestamp: start.Unix(),
-		Links:     make(map[string][]string),
-	}
+	return parsed, nil
+}
 
-	log.Debug().
-		Str("url", targetURL).
-		Bool("find_links", findLinks).
-		Msg("Starting URL warming with Colly")
-
-	// Use Colly for everything - single request handles cache warming and link extraction
-	collyClone := c.colly.Clone()
-
-	// Register link extractor on the clone to ensure proper context access
-	log.Debug().
-		Msg("Registering Colly link extractor on clone")
-
-	collyClone.OnHTML("html", func(e *colly.HTMLElement) {
-		// Check if link extraction is enabled for this request
-		findLinksVal := e.Request.Ctx.GetAny("find_links")
-		if findLinksVal == nil {
-			log.Debug().
-				Str("url", e.Request.URL.String()).
-				Msg("find_links not set in context - defaulting to enabled")
-		} else if findLinks, ok := findLinksVal.(bool); ok && !findLinks {
-			log.Debug().
-				Str("url", e.Request.URL.String()).
-				Bool("find_links", findLinks).
-				Msg("Link extraction disabled for this request")
-			return
-		}
-
-		result, ok := e.Request.Ctx.GetAny("result").(*CrawlResult)
-		if !ok {
-			log.Debug().
-				Str("url", e.Request.URL.String()).
-				Msg("No result context - not collecting links")
-			return
-		}
-
-		extractLinks := func(selection *goquery.Selection, category string) {
-			selection.Find("a[href]").Each(func(i int, s *goquery.Selection) {
-				href := strings.TrimSpace(s.AttrOr("href", ""))
-				if isElementHidden(s) || href == "" || href == "#" || strings.HasPrefix(href, "javascript:") || strings.HasPrefix(href, "mailto:") {
-					return
-				}
-
-				var u string
-				if strings.HasPrefix(href, "?") {
-					base := e.Request.URL
-					base.RawQuery = ""
-					u = base.String() + href
-				} else {
-					u = e.Request.AbsoluteURL(href)
-				}
-
-				result.Links[category] = append(result.Links[category], u)
-			})
-		}
-
-		// Extract from header and footer first
-		extractLinks(e.DOM.Find("header"), "header")
-		extractLinks(e.DOM.Find("footer"), "footer")
-
-		// Remove header and footer to get body links
-		e.DOM.Find("header").Remove()
-		e.DOM.Find("footer").Remove()
-
-		// Extract remaining links as "body"
-		extractLinks(e.DOM, "body")
-
-		log.Debug().
-			Str("url", e.Request.URL.String()).
-			Int("header_links", len(result.Links["header"])).
-			Int("footer_links", len(result.Links["footer"])).
-			Int("body_links", len(result.Links["body"])).
-			Msg("Categorized links from page")
-	})
-
-	// Set up timing and result collection
-	collyClone.OnRequest(func(r *colly.Request) {
-		r.Ctx.Put("result", res)
-		r.Ctx.Put("start_time", start)
-		r.Ctx.Put("find_links", findLinks)
-	})
-
+// setupResponseHandlers configures Colly response and error handlers for crawl result collection
+func (c *Crawler) setupResponseHandlers(collyClone *colly.Collector, result *CrawlResult, startTime time.Time, targetURL string) {
 	// Handle response - collect cache headers, status, timing
 	collyClone.OnResponse(func(r *colly.Response) {
 		startTime := r.Ctx.GetAny("start_time").(time.Time)
@@ -362,7 +275,207 @@ func (c *Crawler) WarmURL(ctx context.Context, targetURL string, findLinks bool)
 			Dur("duration_ms", time.Duration(result.ResponseTime)*time.Millisecond).
 			Msg("URL warming failed")
 	})
+}
 
+// performCacheValidation handles cache warming logic if cache miss is detected
+func (c *Crawler) performCacheValidation(ctx context.Context, targetURL string, res *CrawlResult) error {
+	// Only perform cache warming if we got a MISS or BYPASS
+	if !shouldMakeSecondRequest(res.CacheStatus) {
+		log.Debug().
+			Str("url", targetURL).
+			Str("cache_status", res.CacheStatus).
+			Msg("No cache warming needed - cache already available or not cacheable")
+		return nil
+	}
+
+	// Calculate dynamic delay based on response time
+	delayMs := int(float64(res.ResponseTime) * 1.5)
+	if delayMs < 500 {
+		delayMs = 500 // Minimum 500ms delay
+	} else if delayMs > 5000 {
+		delayMs = 5000 // Maximum 5 second delay
+	}
+
+	log.Debug().
+		Str("url", targetURL).
+		Str("cache_status", res.CacheStatus).
+		Int64("initial_response_time", res.ResponseTime).
+		Int("calculated_delay_ms", delayMs).
+		Msg("Cache MISS detected, using dynamic delay based on initial response time")
+
+	// Wait for initial delay to allow CDN to process and cache
+	select {
+	case <-time.After(time.Duration(delayMs) * time.Millisecond):
+		// Continue with cache check loop
+	case <-ctx.Done():
+		// Context cancelled during wait
+		log.Debug().Str("url", targetURL).Msg("Cache warming cancelled during initial delay")
+		return nil // First request was successful, return that
+	}
+
+	// Check cache status with HEAD requests in a loop
+	maxChecks := 10
+	checkDelay := 2000 // Initial 2 seconds delay
+	cacheHit := false
+
+	for i := 0; i < maxChecks; i++ {
+		// Check cache status with HEAD request
+		cacheStatus, err := c.CheckCacheStatus(ctx, targetURL)
+
+		// Record the attempt
+		attempt := CacheCheckAttempt{
+			Attempt:     i + 1,
+			CacheStatus: cacheStatus,
+			Delay:       checkDelay,
+		}
+		res.CacheCheckAttempts = append(res.CacheCheckAttempts, attempt)
+
+		if err != nil {
+			log.Warn().
+				Err(err).
+				Str("url", targetURL).
+				Int("check_attempt", i+1).
+				Msg("Failed to check cache status")
+		} else {
+			log.Debug().
+				Str("url", targetURL).
+				Str("cache_status", cacheStatus).
+				Int("check_attempt", i+1).
+				Msg("Cache status check")
+
+			// If cache is now HIT, we can proceed with second request
+			if cacheStatus == "HIT" || cacheStatus == "STALE" || cacheStatus == "REVALIDATED" {
+				cacheHit = true
+				break
+			}
+		}
+
+		// If not the last check, wait before next attempt
+		if i < maxChecks-1 {
+			select {
+			case <-time.After(time.Duration(checkDelay) * time.Millisecond):
+				// Continue to next check
+			case <-ctx.Done():
+				log.Debug().Str("url", targetURL).Msg("Cache warming cancelled during check loop")
+				return nil
+			}
+			// Increase delay for the next iteration
+			checkDelay += 1000
+		}
+	}
+
+	// Log whether cache became available
+	if cacheHit {
+		log.Debug().
+			Str("url", targetURL).
+			Msg("Cache is now available, proceeding with second request")
+	} else {
+		log.Warn().
+			Str("url", targetURL).
+			Int("max_checks", maxChecks).
+			Msg("Cache did not become available after maximum checks")
+	}
+
+	// Perform second request to measure cached response time
+	secondResult, err := c.makeSecondRequest(ctx, targetURL)
+	if err != nil {
+		log.Warn().
+			Err(err).
+			Str("url", targetURL).
+			Msg("Second request failed, but first request succeeded")
+		// Don't return error - first request was successful
+	} else {
+		res.SecondResponseTime = secondResult.ResponseTime
+		res.SecondCacheStatus = secondResult.CacheStatus
+		res.SecondContentLength = secondResult.ContentLength
+		res.SecondHeaders = secondResult.Headers
+		res.SecondPerformance = &secondResult.Performance
+
+		// Calculate improvement ratio for pattern analysis
+		improvementRatio := float64(res.ResponseTime) / float64(res.SecondResponseTime)
+
+		log.Debug().
+			Str("url", targetURL).
+			Str("first_cache_status", res.CacheStatus).
+			Str("second_cache_status", res.SecondCacheStatus).
+			Int64("first_response_time", res.ResponseTime).
+			Int64("second_response_time", res.SecondResponseTime).
+			Int("initial_delay_ms", delayMs).
+			Float64("improvement_ratio", improvementRatio).
+			Bool("cache_hit_before_second", cacheHit).
+			Msg("Cache warming analysis - pattern data")
+	}
+
+	return nil
+}
+
+// setupLinkExtraction configures Colly HTML handler for link extraction and categorization  
+func setupLinkExtraction(collyClone *colly.Collector) {
+	collyClone.OnHTML("html", func(e *colly.HTMLElement) {
+		// Check if link extraction is enabled for this request
+		findLinksVal := e.Request.Ctx.GetAny("find_links")
+		if findLinksVal == nil {
+			log.Debug().
+				Str("url", e.Request.URL.String()).
+				Msg("find_links not set in context - defaulting to enabled")
+		} else if findLinks, ok := findLinksVal.(bool); ok && !findLinks {
+			log.Debug().
+				Str("url", e.Request.URL.String()).
+				Bool("find_links", findLinks).
+				Msg("Link extraction disabled for this request")
+			return
+		}
+
+		result, ok := e.Request.Ctx.GetAny("result").(*CrawlResult)
+		if !ok {
+			log.Debug().
+				Str("url", e.Request.URL.String()).
+				Msg("No result context - not collecting links")
+			return
+		}
+
+		extractLinks := func(selection *goquery.Selection, category string) {
+			selection.Find("a[href]").Each(func(i int, s *goquery.Selection) {
+				href := strings.TrimSpace(s.AttrOr("href", ""))
+				if isElementHidden(s) || href == "" || href == "#" || strings.HasPrefix(href, "javascript:") || strings.HasPrefix(href, "mailto:") {
+					return
+				}
+
+				var u string
+				if strings.HasPrefix(href, "?") {
+					base := e.Request.URL
+					base.RawQuery = ""
+					u = base.String() + href
+				} else {
+					u = e.Request.AbsoluteURL(href)
+				}
+
+				result.Links[category] = append(result.Links[category], u)
+			})
+		}
+
+		// Extract from header and footer first
+		extractLinks(e.DOM.Find("header"), "header")
+		extractLinks(e.DOM.Find("footer"), "footer")
+
+		// Remove header and footer to get body links
+		e.DOM.Find("header").Remove()
+		e.DOM.Find("footer").Remove()
+
+		// Extract remaining links as "body"
+		extractLinks(e.DOM, "body")
+
+		log.Debug().
+			Str("url", e.Request.URL.String()).
+			Int("header_links", len(result.Links["header"])).
+			Int("footer_links", len(result.Links["footer"])).
+			Int("body_links", len(result.Links["body"])).
+			Msg("Categorized links from page")
+	})
+}
+
+// executeCollyRequest performs the HTTP request using Colly with context cancellation support
+func executeCollyRequest(ctx context.Context, collyClone *colly.Collector, targetURL string, res *CrawlResult) error {
 	// Set up context cancellation handling
 	done := make(chan error, 1)
 
@@ -380,22 +493,68 @@ func (c *Crawler) WarmURL(ctx context.Context, targetURL string, findLinks bool)
 
 	// Wait for either completion or context cancellation
 	select {
-	case err = <-done:
+	case err := <-done:
 		if err != nil {
 			res.Error = err.Error()
 			log.Error().
 				Err(err).
 				Str("url", targetURL).
 				Msg("Colly visit failed")
-			return res, err
+			return err
 		}
+		return nil
 	case <-ctx.Done():
 		res.Error = ctx.Err().Error()
 		log.Error().
 			Err(ctx.Err()).
 			Str("url", targetURL).
 			Msg("URL warming cancelled due to context")
-		return res, ctx.Err()
+		return ctx.Err()
+	}
+}
+
+// WarmURL performs a crawl of the specified URL and returns the result.
+// It respects context cancellation, enforces timeout, and treats non-2xx statuses as errors.
+func (c *Crawler) WarmURL(ctx context.Context, targetURL string, findLinks bool) (*CrawlResult, error) {
+	// Validate the crawl request
+	_, err := validateCrawlRequest(ctx, targetURL)
+	if err != nil {
+		// Create error result - caller (WarmURL) is responsible for CrawlResult construction
+		res := &CrawlResult{URL: targetURL, Timestamp: time.Now().Unix(), Error: err.Error()}
+		return res, err
+	}
+
+	start := time.Now()
+	res := &CrawlResult{
+		URL:       targetURL,
+		Timestamp: start.Unix(),
+		Links:     make(map[string][]string),
+	}
+
+	log.Debug().
+		Str("url", targetURL).
+		Bool("find_links", findLinks).
+		Msg("Starting URL warming with Colly")
+
+	// Use Colly for everything - single request handles cache warming and link extraction
+	collyClone := c.colly.Clone()
+
+	// Set up link extraction
+	setupLinkExtraction(collyClone)
+
+	// Set up timing and result collection
+	collyClone.OnRequest(func(r *colly.Request) {
+		r.Ctx.Put("result", res)
+		r.Ctx.Put("start_time", start)
+		r.Ctx.Put("find_links", findLinks)
+	})
+
+	// Set up response and error handlers
+	c.setupResponseHandlers(collyClone, res, start, targetURL)
+
+	// Execute the HTTP request
+	if err := executeCollyRequest(ctx, collyClone, targetURL, res); err != nil {
+		return res, err
 	}
 
 	// Log results and return error if needed
@@ -417,135 +576,10 @@ func (c *Crawler) WarmURL(ctx context.Context, targetURL string, findLinks bool)
 		return res, fmt.Errorf("%s", res.Error)
 	}
 
-	// Perform cache warming if first request was a MISS
-	if shouldMakeSecondRequest(res.CacheStatus) {
-		// Dynamic delay based on initial response time (1.5x with bounds)
-		delayMs := int(float64(res.ResponseTime) * 1.5)
-		if delayMs < 2000 {
-			delayMs = 2000 // Minimum 2 seconds
-		}
-		if delayMs > 30000 {
-			delayMs = 30000 // Maximum 30 seconds
-		}
-
-		log.Debug().
-			Str("url", targetURL).
-			Str("cache_status", res.CacheStatus).
-			Int64("initial_response_time", res.ResponseTime).
-			Int("calculated_delay_ms", delayMs).
-			Msg("Cache MISS detected, using dynamic delay based on initial response time")
-
-		// Wait for initial delay to allow CDN to process and cache
-		select {
-		case <-time.After(time.Duration(delayMs) * time.Millisecond):
-			// Continue with cache check loop
-		case <-ctx.Done():
-			// Context cancelled during wait
-			log.Debug().Str("url", targetURL).Msg("Cache warming cancelled during initial delay")
-			return res, nil // First request was successful, return that
-		}
-
-		// Check cache status with HEAD requests in a loop
-		maxChecks := 10
-		checkDelay := 2000 // Initial 2 seconds delay
-		cacheHit := false
-
-		for i := 0; i < maxChecks; i++ {
-			// Check cache status with HEAD request
-			cacheStatus, err := c.CheckCacheStatus(ctx, targetURL)
-
-			// Record the attempt
-			attempt := CacheCheckAttempt{
-				Attempt:     i + 1,
-				CacheStatus: cacheStatus,
-				Delay:       checkDelay,
-			}
-			res.CacheCheckAttempts = append(res.CacheCheckAttempts, attempt)
-
-			if err != nil {
-				log.Warn().
-					Err(err).
-					Str("url", targetURL).
-					Int("check_attempt", i+1).
-					Msg("Failed to check cache status")
-			} else {
-				log.Debug().
-					Str("url", targetURL).
-					Str("cache_status", cacheStatus).
-					Int("check_attempt", i+1).
-					Msg("Cache status check")
-
-				// If cache is now HIT, we can proceed with second request
-				if cacheStatus == "HIT" || cacheStatus == "STALE" || cacheStatus == "REVALIDATED" {
-					cacheHit = true
-					break
-				}
-			}
-
-			// If not the last check, wait before next attempt
-			if i < maxChecks-1 {
-				select {
-				case <-time.After(time.Duration(checkDelay) * time.Millisecond):
-					// Continue to next check
-				case <-ctx.Done():
-					log.Debug().Str("url", targetURL).Msg("Cache warming cancelled during check loop")
-					return res, nil
-				}
-				// Increase delay for the next iteration
-				checkDelay += 1000
-			}
-		}
-
-		// Log whether cache became available
-		if cacheHit {
-			log.Debug().
-				Str("url", targetURL).
-				Msg("Cache is now available, proceeding with second request")
-		} else {
-			log.Warn().
-				Str("url", targetURL).
-				Int("max_checks", maxChecks).
-				Msg("Cache did not become available after maximum checks")
-		}
-
-		// Perform second request to measure cached response time
-		secondResult, err := c.makeSecondRequest(ctx, targetURL)
-		if err != nil {
-			log.Warn().
-				Err(err).
-				Str("url", targetURL).
-				Msg("Second request failed, but first request succeeded")
-			// Don't return error - first request was successful
-		} else {
-			res.SecondResponseTime = secondResult.ResponseTime
-			res.SecondCacheStatus = secondResult.CacheStatus
-			res.SecondContentLength = secondResult.ContentLength
-			res.SecondHeaders = secondResult.Headers
-			res.SecondPerformance = &secondResult.Performance
-
-			// Calculate improvement ratio for pattern analysis
-			improvementRatio := float64(res.ResponseTime) / float64(res.SecondResponseTime)
-
-			log.Debug().
-				Str("url", targetURL).
-				Str("first_cache_status", res.CacheStatus).
-				Str("second_cache_status", res.SecondCacheStatus).
-				Int64("first_response_time", res.ResponseTime).
-				Int64("second_response_time", res.SecondResponseTime).
-				Int("initial_delay_ms", delayMs).
-				Float64("improvement_ratio", improvementRatio).
-				Bool("cache_hit_before_second", cacheHit).
-				Msg("Cache warming analysis - pattern data")
-		}
+	// Perform cache validation and warming
+	if err := c.performCacheValidation(ctx, targetURL, res); err != nil {
+		return res, err
 	}
-
-	log.Debug().
-		Int("status", res.StatusCode).
-		Str("url", targetURL).
-		Str("cache_status", res.CacheStatus).
-		Int("links_found", len(res.Links)).
-		Dur("duration_ms", time.Duration(res.ResponseTime)*time.Millisecond).
-		Msg("URL warming completed successfully")
 
 	return res, nil
 }
