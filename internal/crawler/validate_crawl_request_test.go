@@ -3,7 +3,6 @@ package crawler
 import (
 	"context"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -15,7 +14,6 @@ func TestValidateCrawlRequest(t *testing.T) {
 		ctx            context.Context
 		targetURL      string
 		expectError    bool
-		expectResult   bool
 		expectedScheme string
 		expectedHost   string
 	}{
@@ -24,7 +22,6 @@ func TestValidateCrawlRequest(t *testing.T) {
 			ctx:            context.Background(),
 			targetURL:      "https://example.com",
 			expectError:    false,
-			expectResult:   false,
 			expectedScheme: "https",
 			expectedHost:   "example.com",
 		},
@@ -33,7 +30,6 @@ func TestValidateCrawlRequest(t *testing.T) {
 			ctx:            context.Background(),
 			targetURL:      "http://test.com",
 			expectError:    false,
-			expectResult:   false,
 			expectedScheme: "http",
 			expectedHost:   "test.com",
 		},
@@ -42,63 +38,50 @@ func TestValidateCrawlRequest(t *testing.T) {
 			ctx:            context.Background(),
 			targetURL:      "https://example.com/page?param=value",
 			expectError:    false,
-			expectResult:   false,
 			expectedScheme: "https",
 			expectedHost:   "example.com",
 		},
 		{
-			name:         "invalid_url_format",
-			ctx:          context.Background(),
-			targetURL:    "not-a-url",
-			expectError:  true,
-			expectResult: true, // Should return error result
+			name:        "invalid_url_format",
+			ctx:         context.Background(),
+			targetURL:   "not-a-url",
+			expectError: true,
 		},
 		{
-			name:         "url_missing_scheme",
-			ctx:          context.Background(),
-			targetURL:    "example.com",
-			expectError:  true,
-			expectResult: true, // Should return error result with invalid format
+			name:        "url_missing_scheme",
+			ctx:         context.Background(),
+			targetURL:   "example.com",
+			expectError: true,
 		},
 		{
-			name:         "url_missing_host",
-			ctx:          context.Background(),
-			targetURL:    "https://",
-			expectError:  true,
-			expectResult: true, // Should return error result
+			name:        "url_missing_host",
+			ctx:         context.Background(),
+			targetURL:   "https://",
+			expectError: true,
 		},
 		{
-			name:         "empty_url",
-			ctx:          context.Background(),
-			targetURL:    "",
-			expectError:  true,
-			expectResult: true, // Should return error result
+			name:        "empty_url",
+			ctx:         context.Background(),
+			targetURL:   "",
+			expectError: true,
 		},
 		{
-			name:         "malformed_url",
-			ctx:          context.Background(),
-			targetURL:    "ht!tp://bad-url",
-			expectError:  true,
-			expectResult: true, // Should return error result
+			name:        "malformed_url",
+			ctx:         context.Background(),
+			targetURL:   "ht!tp://bad-url",
+			expectError: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			parsedURL, result, err := validateCrawlRequest(tt.ctx, tt.targetURL)
+			parsedURL, err := validateCrawlRequest(tt.ctx, tt.targetURL)
 
 			if tt.expectError {
 				assert.Error(t, err)
-				if tt.expectResult {
-					require.NotNil(t, result, "Should return error result")
-					assert.Equal(t, tt.targetURL, result.URL)
-					assert.NotEmpty(t, result.Error)
-					assert.NotZero(t, result.Timestamp)
-				}
 				assert.Nil(t, parsedURL, "Should not return parsed URL on error")
 			} else {
 				assert.NoError(t, err)
-				assert.Nil(t, result, "Should not return error result on success")
 				require.NotNil(t, parsedURL, "Should return parsed URL on success")
 				assert.Equal(t, tt.expectedScheme, parsedURL.Scheme)
 				assert.Equal(t, tt.expectedHost, parsedURL.Host)
@@ -112,26 +95,44 @@ func TestValidateCrawlRequestContextCancellation(t *testing.T) {
 	cancelledCtx, cancel := context.WithCancel(context.Background())
 	cancel() // Cancel immediately
 
-	parsedURL, result, err := validateCrawlRequest(cancelledCtx, "https://example.com")
+	parsedURL, err := validateCrawlRequest(cancelledCtx, "https://example.com")
 
 	assert.Error(t, err)
 	assert.Nil(t, parsedURL)
-	assert.Nil(t, result)
 	assert.Equal(t, context.Canceled, err)
 }
 
-func TestValidateCrawlRequestTimestampAccuracy(t *testing.T) {
-	// Test that error results have accurate timestamps
-	beforeTime := time.Now().Unix()
-	
-	_, result, err := validateCrawlRequest(context.Background(), "invalid-url")
-	
-	afterTime := time.Now().Unix()
+func TestValidateCrawlRequestErrorMessages(t *testing.T) {
+	// Test that error messages are helpful and descriptive
+	tests := []struct {
+		name        string
+		url         string
+		errorContains string
+	}{
+		{
+			name:          "invalid_format_error",
+			url:           "not-a-url",
+			errorContains: "invalid URL format",
+		},
+		{
+			name:          "missing_scheme_error", 
+			url:           "example.com",
+			errorContains: "invalid URL format",
+		},
+		{
+			name:          "missing_host_error",
+			url:           "https://",
+			errorContains: "invalid URL format",
+		},
+	}
 
-	assert.Error(t, err)
-	require.NotNil(t, result)
-	assert.GreaterOrEqual(t, result.Timestamp, beforeTime)
-	assert.LessOrEqual(t, result.Timestamp, afterTime)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := validateCrawlRequest(context.Background(), tt.url)
+			assert.Error(t, err)
+			assert.Contains(t, err.Error(), tt.errorContains)
+		})
+	}
 }
 
 func TestValidateCrawlRequestURLEdgeCases(t *testing.T) {
@@ -158,14 +159,14 @@ func TestValidateCrawlRequestURLEdgeCases(t *testing.T) {
 
 	for _, tc := range edgeCases {
 		t.Run(tc.name, func(t *testing.T) {
-			_, result, err := validateCrawlRequest(context.Background(), tc.url)
+			parsedURL, err := validateCrawlRequest(context.Background(), tc.url)
 
 			if tc.shouldErr {
 				assert.Error(t, err)
-				assert.NotNil(t, result)
+				assert.Nil(t, parsedURL)
 			} else {
 				assert.NoError(t, err)
-				assert.Nil(t, result)
+				assert.NotNil(t, parsedURL)
 			}
 		})
 	}
