@@ -409,36 +409,8 @@ func (c *Crawler) performCacheValidation(ctx context.Context, targetURL string, 
 	return nil
 }
 
-// WarmURL performs a crawl of the specified URL and returns the result.
-// It respects context cancellation, enforces timeout, and treats non-2xx statuses as errors.
-func (c *Crawler) WarmURL(ctx context.Context, targetURL string, findLinks bool) (*CrawlResult, error) {
-	// Validate the crawl request
-	_, err := validateCrawlRequest(ctx, targetURL)
-	if err != nil {
-		// Create error result - caller (WarmURL) is responsible for CrawlResult construction
-		res := &CrawlResult{URL: targetURL, Timestamp: time.Now().Unix(), Error: err.Error()}
-		return res, err
-	}
-
-	start := time.Now()
-	res := &CrawlResult{
-		URL:       targetURL,
-		Timestamp: start.Unix(),
-		Links:     make(map[string][]string),
-	}
-
-	log.Debug().
-		Str("url", targetURL).
-		Bool("find_links", findLinks).
-		Msg("Starting URL warming with Colly")
-
-	// Use Colly for everything - single request handles cache warming and link extraction
-	collyClone := c.colly.Clone()
-
-	// Register link extractor on the clone to ensure proper context access
-	log.Debug().
-		Msg("Registering Colly link extractor on clone")
-
+// setupLinkExtraction configures Colly HTML handler for link extraction and categorization  
+func setupLinkExtraction(collyClone *colly.Collector) {
 	collyClone.OnHTML("html", func(e *colly.HTMLElement) {
 		// Check if link extraction is enabled for this request
 		findLinksVal := e.Request.Ctx.GetAny("find_links")
@@ -500,17 +472,10 @@ func (c *Crawler) WarmURL(ctx context.Context, targetURL string, findLinks bool)
 			Int("body_links", len(result.Links["body"])).
 			Msg("Categorized links from page")
 	})
+}
 
-	// Set up timing and result collection
-	collyClone.OnRequest(func(r *colly.Request) {
-		r.Ctx.Put("result", res)
-		r.Ctx.Put("start_time", start)
-		r.Ctx.Put("find_links", findLinks)
-	})
-
-	// Set up response and error handlers
-	c.setupResponseHandlers(collyClone, res, start, targetURL)
-
+// executeCollyRequest performs the HTTP request using Colly with context cancellation support
+func executeCollyRequest(ctx context.Context, collyClone *colly.Collector, targetURL string, res *CrawlResult) error {
 	// Set up context cancellation handling
 	done := make(chan error, 1)
 
@@ -528,22 +493,68 @@ func (c *Crawler) WarmURL(ctx context.Context, targetURL string, findLinks bool)
 
 	// Wait for either completion or context cancellation
 	select {
-	case err = <-done:
+	case err := <-done:
 		if err != nil {
 			res.Error = err.Error()
 			log.Error().
 				Err(err).
 				Str("url", targetURL).
 				Msg("Colly visit failed")
-			return res, err
+			return err
 		}
+		return nil
 	case <-ctx.Done():
 		res.Error = ctx.Err().Error()
 		log.Error().
 			Err(ctx.Err()).
 			Str("url", targetURL).
 			Msg("URL warming cancelled due to context")
-		return res, ctx.Err()
+		return ctx.Err()
+	}
+}
+
+// WarmURL performs a crawl of the specified URL and returns the result.
+// It respects context cancellation, enforces timeout, and treats non-2xx statuses as errors.
+func (c *Crawler) WarmURL(ctx context.Context, targetURL string, findLinks bool) (*CrawlResult, error) {
+	// Validate the crawl request
+	_, err := validateCrawlRequest(ctx, targetURL)
+	if err != nil {
+		// Create error result - caller (WarmURL) is responsible for CrawlResult construction
+		res := &CrawlResult{URL: targetURL, Timestamp: time.Now().Unix(), Error: err.Error()}
+		return res, err
+	}
+
+	start := time.Now()
+	res := &CrawlResult{
+		URL:       targetURL,
+		Timestamp: start.Unix(),
+		Links:     make(map[string][]string),
+	}
+
+	log.Debug().
+		Str("url", targetURL).
+		Bool("find_links", findLinks).
+		Msg("Starting URL warming with Colly")
+
+	// Use Colly for everything - single request handles cache warming and link extraction
+	collyClone := c.colly.Clone()
+
+	// Set up link extraction
+	setupLinkExtraction(collyClone)
+
+	// Set up timing and result collection
+	collyClone.OnRequest(func(r *colly.Request) {
+		r.Ctx.Put("result", res)
+		r.Ctx.Put("start_time", start)
+		r.Ctx.Put("find_links", findLinks)
+	})
+
+	// Set up response and error handlers
+	c.setupResponseHandlers(collyClone, res, start, targetURL)
+
+	// Execute the HTTP request
+	if err := executeCollyRequest(ctx, collyClone, targetURL, res); err != nil {
+		return res, err
 	}
 
 	// Log results and return error if needed
