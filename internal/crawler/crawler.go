@@ -180,6 +180,103 @@ func validateCrawlRequest(ctx context.Context, targetURL string) (*url.URL, erro
 	return parsed, nil
 }
 
+// setupResponseHandlers configures Colly response and error handlers for crawl result collection
+func (c *Crawler) setupResponseHandlers(collyClone *colly.Collector, result *CrawlResult, startTime time.Time, targetURL string) {
+	// Handle response - collect cache headers, status, timing
+	collyClone.OnResponse(func(r *colly.Response) {
+		startTime := r.Ctx.GetAny("start_time").(time.Time)
+		result := r.Ctx.GetAny("result").(*CrawlResult)
+
+		// Retrieve performance metrics from the metrics map
+		if metricsVal, ok := c.metricsMap.LoadAndDelete(r.Request.URL.String()); ok {
+			performanceMetrics := metricsVal.(*PerformanceMetrics)
+			// Content transfer time is total response time minus TTFB
+			if performanceMetrics.TTFB > 0 {
+				performanceMetrics.ContentTransferTime = time.Since(startTime).Milliseconds() - performanceMetrics.TTFB
+			}
+			result.Performance = *performanceMetrics
+		}
+
+		// Calculate response time
+		result.ResponseTime = time.Since(startTime).Milliseconds()
+		result.StatusCode = r.StatusCode
+		result.ContentType = r.Headers.Get("Content-Type")
+		result.ContentLength = int64(len(r.Body))
+		result.Headers = r.Headers.Clone()
+		result.RedirectURL = r.Request.URL.String()
+
+		// Log comprehensive Cloudflare headers for analysis
+		cfCacheStatus := r.Headers.Get("CF-Cache-Status")
+		cfRay := r.Headers.Get("CF-Ray")
+		cfDatacenter := r.Headers.Get("CF-IPCountry")
+		cfConnectingIP := r.Headers.Get("CF-Connecting-IP")
+		cfVisitor := r.Headers.Get("CF-Visitor")
+
+		log.Debug().
+			Str("url", r.Request.URL.String()).
+			Str("cf_cache_status", cfCacheStatus).
+			Str("cf_ray", cfRay).
+			Str("cf_datacenter", cfDatacenter).
+			Str("cf_connecting_ip", cfConnectingIP).
+			Str("cf_visitor", cfVisitor).
+			Int64("response_time_ms", result.ResponseTime).
+			Msg("Cloudflare headers analysis")
+
+		// Check for cache status headers from different CDNs
+		// Cloudflare
+		if cacheStatus := r.Headers.Get("CF-Cache-Status"); cacheStatus != "" {
+			result.CacheStatus = cacheStatus
+		}
+		// Fastly
+		if cacheStatus := r.Headers.Get("X-Cache"); cacheStatus != "" && result.CacheStatus == "" {
+			result.CacheStatus = cacheStatus
+		}
+		// Akamai
+		if cacheStatus := r.Headers.Get("X-Cache-Remote"); cacheStatus != "" && result.CacheStatus == "" {
+			result.CacheStatus = cacheStatus
+		}
+		// Vercel
+		if cacheStatus := r.Headers.Get("x-vercel-cache"); cacheStatus != "" && result.CacheStatus == "" {
+			result.CacheStatus = cacheStatus
+		}
+		// Standard Cache-Status header (newer standardized approach)
+		if cacheStatus := r.Headers.Get("Cache-Status"); cacheStatus != "" && result.CacheStatus == "" {
+			result.CacheStatus = cacheStatus
+		}
+		// Varnish (the presence of X-Varnish indicates it was processed by Varnish)
+		if varnishID := r.Headers.Get("X-Varnish"); varnishID != "" && result.CacheStatus == "" {
+			if strings.Contains(varnishID, " ") {
+				result.CacheStatus = "HIT" // Multiple IDs indicate a cache hit
+			} else {
+				result.CacheStatus = "MISS" // Single ID indicates a cache miss
+			}
+		}
+
+		// Set error for non-2xx status codes (to match test expectations)
+		if r.StatusCode < 200 || r.StatusCode >= 300 {
+			result.Error = fmt.Sprintf("non-success status code: %d", r.StatusCode)
+		}
+	})
+
+	// Handle errors
+	collyClone.OnError(func(r *colly.Response, err error) {
+		result := r.Ctx.GetAny("result").(*CrawlResult)
+		result.Error = err.Error()
+
+		if r != nil {
+			startTime := r.Ctx.GetAny("start_time").(time.Time)
+			result.ResponseTime = time.Since(startTime).Milliseconds()
+			result.StatusCode = r.StatusCode
+		}
+
+		log.Error().
+			Err(err).
+			Str("url", targetURL).
+			Dur("duration_ms", time.Duration(result.ResponseTime)*time.Millisecond).
+			Msg("URL warming failed")
+	})
+}
+
 // WarmURL performs a crawl of the specified URL and returns the result.
 // It respects context cancellation, enforces timeout, and treats non-2xx statuses as errors.
 func (c *Crawler) WarmURL(ctx context.Context, targetURL string, findLinks bool) (*CrawlResult, error) {
@@ -279,99 +376,8 @@ func (c *Crawler) WarmURL(ctx context.Context, targetURL string, findLinks bool)
 		r.Ctx.Put("find_links", findLinks)
 	})
 
-	// Handle response - collect cache headers, status, timing
-	collyClone.OnResponse(func(r *colly.Response) {
-		startTime := r.Ctx.GetAny("start_time").(time.Time)
-		result := r.Ctx.GetAny("result").(*CrawlResult)
-
-		// Retrieve performance metrics from the metrics map
-		if metricsVal, ok := c.metricsMap.LoadAndDelete(r.Request.URL.String()); ok {
-			performanceMetrics := metricsVal.(*PerformanceMetrics)
-			// Content transfer time is total response time minus TTFB
-			if performanceMetrics.TTFB > 0 {
-				performanceMetrics.ContentTransferTime = time.Since(startTime).Milliseconds() - performanceMetrics.TTFB
-			}
-			result.Performance = *performanceMetrics
-		}
-
-		// Calculate response time
-		result.ResponseTime = time.Since(startTime).Milliseconds()
-		result.StatusCode = r.StatusCode
-		result.ContentType = r.Headers.Get("Content-Type")
-		result.ContentLength = int64(len(r.Body))
-		result.Headers = r.Headers.Clone()
-		result.RedirectURL = r.Request.URL.String()
-
-		// Log comprehensive Cloudflare headers for analysis
-		cfCacheStatus := r.Headers.Get("CF-Cache-Status")
-		cfRay := r.Headers.Get("CF-Ray")
-		cfDatacenter := r.Headers.Get("CF-IPCountry")
-		cfConnectingIP := r.Headers.Get("CF-Connecting-IP")
-		cfVisitor := r.Headers.Get("CF-Visitor")
-
-		log.Debug().
-			Str("url", r.Request.URL.String()).
-			Str("cf_cache_status", cfCacheStatus).
-			Str("cf_ray", cfRay).
-			Str("cf_datacenter", cfDatacenter).
-			Str("cf_connecting_ip", cfConnectingIP).
-			Str("cf_visitor", cfVisitor).
-			Int64("response_time_ms", result.ResponseTime).
-			Msg("Cloudflare headers analysis")
-
-		// Check for cache status headers from different CDNs
-		// Cloudflare
-		if cacheStatus := r.Headers.Get("CF-Cache-Status"); cacheStatus != "" {
-			result.CacheStatus = cacheStatus
-		}
-		// Fastly
-		if cacheStatus := r.Headers.Get("X-Cache"); cacheStatus != "" && result.CacheStatus == "" {
-			result.CacheStatus = cacheStatus
-		}
-		// Akamai
-		if cacheStatus := r.Headers.Get("X-Cache-Remote"); cacheStatus != "" && result.CacheStatus == "" {
-			result.CacheStatus = cacheStatus
-		}
-		// Vercel
-		if cacheStatus := r.Headers.Get("x-vercel-cache"); cacheStatus != "" && result.CacheStatus == "" {
-			result.CacheStatus = cacheStatus
-		}
-		// Standard Cache-Status header (newer standardized approach)
-		if cacheStatus := r.Headers.Get("Cache-Status"); cacheStatus != "" && result.CacheStatus == "" {
-			result.CacheStatus = cacheStatus
-		}
-		// Varnish (the presence of X-Varnish indicates it was processed by Varnish)
-		if varnishID := r.Headers.Get("X-Varnish"); varnishID != "" && result.CacheStatus == "" {
-			if strings.Contains(varnishID, " ") {
-				result.CacheStatus = "HIT" // Multiple IDs indicate a cache hit
-			} else {
-				result.CacheStatus = "MISS" // Single ID indicates a cache miss
-			}
-		}
-
-		// Set error for non-2xx status codes (to match test expectations)
-		if r.StatusCode < 200 || r.StatusCode >= 300 {
-			result.Error = fmt.Sprintf("non-success status code: %d", r.StatusCode)
-		}
-	})
-
-	// Handle errors
-	collyClone.OnError(func(r *colly.Response, err error) {
-		result := r.Ctx.GetAny("result").(*CrawlResult)
-		result.Error = err.Error()
-
-		if r != nil {
-			startTime := r.Ctx.GetAny("start_time").(time.Time)
-			result.ResponseTime = time.Since(startTime).Milliseconds()
-			result.StatusCode = r.StatusCode
-		}
-
-		log.Error().
-			Err(err).
-			Str("url", targetURL).
-			Dur("duration_ms", time.Duration(result.ResponseTime)*time.Millisecond).
-			Msg("URL warming failed")
-	})
+	// Set up response and error handlers
+	c.setupResponseHandlers(collyClone, res, start, targetURL)
 
 	// Set up context cancellation handling
 	done := make(chan error, 1)
