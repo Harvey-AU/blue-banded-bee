@@ -126,26 +126,11 @@ func createJobObject(options *JobOptions, normalisedDomain string) *Job {
 	}
 }
 
-// CreateJob creates a new job with the given options
-func (jm *JobManager) CreateJob(ctx context.Context, options *JobOptions) (*Job, error) {
-	span := sentry.StartSpan(ctx, "manager.create_job")
-	defer span.Finish()
-
-	span.SetTag("domain", options.Domain)
-
-	normalisedDomain := util.NormaliseDomain(options.Domain)
-
-	// Handle any existing active jobs for the same domain and organisation
-	if err := jm.handleExistingJobs(ctx, normalisedDomain, options.OrganisationID); err != nil {
-		return nil, fmt.Errorf("failed to handle existing jobs: %w", err)
-	}
-
-	// Create a new job object
-	job := createJobObject(options, normalisedDomain)
-
+// setupJobDatabase creates domain and job records in the database
+// Returns the domain ID for use in subsequent operations
+func (jm *JobManager) setupJobDatabase(ctx context.Context, job *Job, normalisedDomain string) (int, error) {
 	var domainID int
 
-	// Use dbQueue for transaction safety
 	err := jm.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
 		// Get or create domain ID
 		err := tx.QueryRow(`
@@ -175,10 +160,36 @@ func (jm *JobManager) CreateJob(ctx context.Context, options *JobOptions) (*Job,
 	})
 
 	if err != nil {
+		return 0, fmt.Errorf("failed to create job: %w", err)
+	}
+
+	return domainID, nil
+}
+
+// CreateJob creates a new job with the given options
+func (jm *JobManager) CreateJob(ctx context.Context, options *JobOptions) (*Job, error) {
+	span := sentry.StartSpan(ctx, "manager.create_job")
+	defer span.Finish()
+
+	span.SetTag("domain", options.Domain)
+
+	normalisedDomain := util.NormaliseDomain(options.Domain)
+
+	// Handle any existing active jobs for the same domain and organisation
+	if err := jm.handleExistingJobs(ctx, normalisedDomain, options.OrganisationID); err != nil {
+		return nil, fmt.Errorf("failed to handle existing jobs: %w", err)
+	}
+
+	// Create a new job object
+	job := createJobObject(options, normalisedDomain)
+
+	// Setup database records for the job
+	domainID, err := jm.setupJobDatabase(ctx, job, normalisedDomain)
+	if err != nil {
 		span.SetTag("error", "true")
 		span.SetData("error.message", err.Error())
 		sentry.CaptureException(err)
-		return nil, fmt.Errorf("failed to create job: %w", err)
+		return nil, err
 	}
 
 	log.Info().
