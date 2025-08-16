@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Harvey-AU/blue-banded-bee/internal/crawler"
 	"github.com/Harvey-AU/blue-banded-bee/internal/db"
 	"github.com/stretchr/testify/assert"
 )
@@ -20,61 +19,61 @@ func TestWorkerPoolConstructor(t *testing.T) {
 
 	tests := []struct {
 		name      string
-		setupFunc func() (*sql.DB, *db.DbQueue, *crawler.Crawler, int, *db.Config)
+		setupFunc func() (*sql.DB, DbQueueInterface, CrawlerInterface, int, *db.Config)
 		wantPanic bool
 		panicMsg  string
 	}{
 		{
 			name: "valid configuration",
-			setupFunc: func() (*sql.DB, *db.DbQueue, *crawler.Crawler, int, *db.Config) {
-				return &sql.DB{}, &db.DbQueue{}, &crawler.Crawler{}, 5, &db.Config{}
+			setupFunc: func() (*sql.DB, DbQueueInterface, CrawlerInterface, int, *db.Config) {
+				return &sql.DB{}, &simpleDbQueueMock{}, &simpleCrawlerMock{}, 5, &db.Config{}
 			},
 			wantPanic: false,
 		},
 		{
 			name: "nil database",
-			setupFunc: func() (*sql.DB, *db.DbQueue, *crawler.Crawler, int, *db.Config) {
-				return nil, &db.DbQueue{}, &crawler.Crawler{}, 5, &db.Config{}
+			setupFunc: func() (*sql.DB, DbQueueInterface, CrawlerInterface, int, *db.Config) {
+				return nil, &simpleDbQueueMock{}, &simpleCrawlerMock{}, 5, &db.Config{}
 			},
 			wantPanic: true,
 			panicMsg:  "database connection is required",
 		},
 		{
 			name: "nil queue",
-			setupFunc: func() (*sql.DB, *db.DbQueue, *crawler.Crawler, int, *db.Config) {
-				return &sql.DB{}, nil, &crawler.Crawler{}, 5, &db.Config{}
+			setupFunc: func() (*sql.DB, DbQueueInterface, CrawlerInterface, int, *db.Config) {
+				return &sql.DB{}, nil, &simpleCrawlerMock{}, 5, &db.Config{}
 			},
 			wantPanic: true,
 			panicMsg:  "database queue is required",
 		},
 		{
 			name: "nil crawler",
-			setupFunc: func() (*sql.DB, *db.DbQueue, *crawler.Crawler, int, *db.Config) {
-				return &sql.DB{}, &db.DbQueue{}, nil, 5, &db.Config{}
+			setupFunc: func() (*sql.DB, DbQueueInterface, CrawlerInterface, int, *db.Config) {
+				return &sql.DB{}, &simpleDbQueueMock{}, nil, 5, &db.Config{}
 			},
 			wantPanic: true,
 			panicMsg:  "crawler is required",
 		},
 		{
 			name: "zero workers",
-			setupFunc: func() (*sql.DB, *db.DbQueue, *crawler.Crawler, int, *db.Config) {
-				return &sql.DB{}, &db.DbQueue{}, &crawler.Crawler{}, 0, &db.Config{}
+			setupFunc: func() (*sql.DB, DbQueueInterface, CrawlerInterface, int, *db.Config) {
+				return &sql.DB{}, &simpleDbQueueMock{}, &simpleCrawlerMock{}, 0, &db.Config{}
 			},
 			wantPanic: true,
 			panicMsg:  "numWorkers must be at least 1",
 		},
 		{
 			name: "negative workers",
-			setupFunc: func() (*sql.DB, *db.DbQueue, *crawler.Crawler, int, *db.Config) {
-				return &sql.DB{}, &db.DbQueue{}, &crawler.Crawler{}, -1, &db.Config{}
+			setupFunc: func() (*sql.DB, DbQueueInterface, CrawlerInterface, int, *db.Config) {
+				return &sql.DB{}, &simpleDbQueueMock{}, &simpleCrawlerMock{}, -1, &db.Config{}
 			},
 			wantPanic: true,
 			panicMsg:  "numWorkers must be at least 1",
 		},
 		{
 			name: "nil config",
-			setupFunc: func() (*sql.DB, *db.DbQueue, *crawler.Crawler, int, *db.Config) {
-				return &sql.DB{}, &db.DbQueue{}, &crawler.Crawler{}, 5, nil
+			setupFunc: func() (*sql.DB, DbQueueInterface, CrawlerInterface, int, *db.Config) {
+				return &sql.DB{}, &simpleDbQueueMock{}, &simpleCrawlerMock{}, 5, nil
 			},
 			wantPanic: true,
 			panicMsg:  "database configuration is required",
@@ -111,7 +110,7 @@ func TestWorkerPoolConstructor(t *testing.T) {
 func TestWorkerPoolInitialState(t *testing.T) {
 	t.Parallel()
 
-	wp := NewWorkerPool(&sql.DB{}, &db.DbQueue{}, &crawler.Crawler{}, 3, &db.Config{})
+	wp := NewWorkerPool(&sql.DB{}, &simpleDbQueueMock{}, &simpleCrawlerMock{}, 3, &db.Config{})
 
 	// Check initial state
 	assert.Equal(t, 3, wp.numWorkers)
@@ -127,7 +126,7 @@ func TestWorkerPoolInitialState(t *testing.T) {
 
 // TestWorkerPoolSimpleJobTracking tests basic job tracking without database
 func TestWorkerPoolSimpleJobTracking(t *testing.T) {
-	wp := NewWorkerPool(&sql.DB{}, &db.DbQueue{}, &crawler.Crawler{}, 2, &db.Config{})
+	wp := NewWorkerPool(&sql.DB{}, &simpleDbQueueMock{}, &simpleCrawlerMock{}, 2, &db.Config{})
 
 	// Directly manipulate the jobs map to avoid database calls
 	jobID1 := "job1"
@@ -166,7 +165,7 @@ func TestWorkerPoolSimpleJobTracking(t *testing.T) {
 func TestWorkerPoolConcurrentJobTracking(t *testing.T) {
 	t.Parallel()
 
-	wp := NewWorkerPool(&sql.DB{}, &db.DbQueue{}, &crawler.Crawler{}, 4, &db.Config{})
+	wp := NewWorkerPool(&sql.DB{}, &simpleDbQueueMock{}, &simpleCrawlerMock{}, 4, &db.Config{})
 
 	var wg sync.WaitGroup
 	numGoroutines := 10
@@ -218,7 +217,7 @@ func TestWorkerPoolConcurrentJobTracking(t *testing.T) {
 func TestWorkerPoolStopFlag(t *testing.T) {
 	t.Parallel()
 
-	wp := NewWorkerPool(&sql.DB{}, &db.DbQueue{}, &crawler.Crawler{}, 2, &db.Config{})
+	wp := NewWorkerPool(&sql.DB{}, &simpleDbQueueMock{}, &simpleCrawlerMock{}, 2, &db.Config{})
 
 	// Initially not stopping
 	assert.False(t, wp.stopping.Load())
@@ -236,7 +235,7 @@ func TestWorkerPoolStopFlag(t *testing.T) {
 func TestWorkerPoolPerformanceInit(t *testing.T) {
 	t.Parallel()
 
-	wp := NewWorkerPool(&sql.DB{}, &db.DbQueue{}, &crawler.Crawler{}, 2, &db.Config{})
+	wp := NewWorkerPool(&sql.DB{}, &simpleDbQueueMock{}, &simpleCrawlerMock{}, 2, &db.Config{})
 
 	jobID := "perf-job"
 
@@ -265,7 +264,7 @@ func TestWorkerPoolPerformanceInit(t *testing.T) {
 func TestWorkerPoolBatchInit(t *testing.T) {
 	t.Parallel()
 
-	wp := NewWorkerPool(&sql.DB{}, &db.DbQueue{}, &crawler.Crawler{}, 2, &db.Config{})
+	wp := NewWorkerPool(&sql.DB{}, &simpleDbQueueMock{}, &simpleCrawlerMock{}, 2, &db.Config{})
 
 	// Verify batch is initialized
 	assert.NotNil(t, wp.taskBatch)
@@ -277,7 +276,7 @@ func TestWorkerPoolBatchInit(t *testing.T) {
 func TestWorkerPoolJobInfoCaching(t *testing.T) {
 	t.Parallel()
 
-	wp := NewWorkerPool(&sql.DB{}, &db.DbQueue{}, &crawler.Crawler{}, 2, &db.Config{})
+	wp := NewWorkerPool(&sql.DB{}, &simpleDbQueueMock{}, &simpleCrawlerMock{}, 2, &db.Config{})
 
 	jobID := "cached-job"
 	jobInfo := &JobInfo{
@@ -310,7 +309,7 @@ func TestWorkerPoolMultipleWorkers(t *testing.T) {
 
 	for _, numWorkers := range testCases {
 		t.Run(fmt.Sprintf("%d_workers", numWorkers), func(t *testing.T) {
-			wp := NewWorkerPool(&sql.DB{}, &db.DbQueue{}, &crawler.Crawler{}, numWorkers, &db.Config{})
+			wp := NewWorkerPool(&sql.DB{}, &simpleDbQueueMock{}, &simpleCrawlerMock{}, numWorkers, &db.Config{})
 			assert.Equal(t, numWorkers, wp.numWorkers)
 			assert.Equal(t, numWorkers, wp.baseWorkerCount)
 			assert.Equal(t, numWorkers, wp.currentWorkers)

@@ -13,13 +13,15 @@ Automatically warm site caches (especially built for [Webflow](https://www.webfl
 
 ## Key Features
 
-**Cache Warming**
+### Cache Warming
+
 - 🚀 Concurrent crawling with configurable worker pools
 - 🔥 Smart warming with automatic retry on cache MISS
 - 🥇 Priority processing - homepage and critical pages first
 - 🤖 Robots.txt compliance with crawl-delay honouring
 
-**Integration & Monitoring**
+### Integration & Monitoring
+
 - 🔌 Webflow webhook for automatic warming on publish
 - 📊 Real-time dashboard with job progress tracking
 - 🔐 Multi-tenant architecture with Supabase Auth
@@ -46,13 +48,11 @@ go run ./cmd/app/main.go
 
 Currently working on Stage 5: Subscriptions & Monetisation. See [roadmap](./Roadmap.md) for details.
 
-
 ## Tech Stack
 
 - **Backend**: Go with PostgreSQL
 - **Infrastructure**: Fly.io, Cloudflare CDN, Supabase Auth
-- **Monitoring**: Sentry, Codecov (17.4% coverage)
-
+- **Monitoring**: Sentry, Codecov
 
 ## Documentation
 
@@ -65,7 +65,7 @@ Currently working on Stage 5: Subscriptions & Monetisation. See [roadmap](./Road
 
 - [Report Issues](https://github.com/Harvey-AU/blue-banded-bee/issues)
 - [Security Policy](SECURITY.md)
-- Email: hello@teamharvey.co
+- Email: <hello@teamharvey.co>
 
 ## License
 

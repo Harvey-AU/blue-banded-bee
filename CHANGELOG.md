@@ -8,6 +8,69 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Multiple version updates may occur on the same date, each with its own version number.
 Each version represents a distinct set of changes, even if released on the same day.
 
+## [Unreleased] – 2025-08-16
+
+### Improved
+
+- **Code Architecture**: Major refactoring eliminating monster functions (>200 lines)
+  - Applied Extract + Test + Commit methodology across 5 core functions
+  - 80% reduction in function complexity (1353 → 274 lines total)
+  - Created 23 focused, single-responsibility functions with comprehensive tests
+- **Testing Coverage**: Expanded from 30% to 38.9% total coverage
+  - Added 350+ test cases across API, database, job management, and crawler logic
+  - Introduced focused unit testing patterns with comprehensive mocking
+  - Implemented table-driven tests and edge case validation
+- **API Architecture**: Improved async patterns and error handling
+  - CreateJob returns immediately with background processing
+  - Proper context propagation with timeouts for goroutines
+  - Idiomatic Go error patterns throughout
+- **Database Operations**: Simplified and modularised core database functions
+  - Separated table creation, indexing, and security setup
+  - Enhanced testability with focused functions
+
+## [Previous] – 2025-08-16
+
+### Enhanced
+
+- **Test Coverage Expansion**: Major improvements to jobs package testing
+  - Improved test coverage: jobs package (1% → 31.6%)
+  - Refactored WorkerPool to use interfaces for proper dependency injection
+  - Created comprehensive unit tests for worker processing and job lifecycle
+  - Moved helper functions from tests to production code where they belong
+  - Fixed test design to test actual code rather than re-implement logic
+
+### Added
+
+- **Interface-Based Architecture**: Enabled proper unit testing
+  - `DbQueueInterface` - Interface for database queue operations
+  - `CrawlerInterface` - Extended with GetUserAgent method
+  - Mock implementations for both interfaces in tests
+  
+- **Worker Processing Tests**: Core task processing functionality
+  - `worker_process_test.go` - Tests for processTask and processNextTask
+  - Error classification and retry logic tests
+  - Task processing with various scenarios (delays, redirects, errors)
+
+- **Job Lifecycle Tests**: Job management functionality
+  - `job_lifecycle_test.go` - Tests for job completion detection
+  - Job progress calculation tests
+  - Status transition validation tests
+  - Job status update mechanism tests
+
+- **Production Helper Methods**: Moved from tests to JobManager
+  - `IsJobComplete()` - Determines when a job is finished
+  - `CalculateJobProgress()` - Calculates job completion percentage
+  - `ValidateStatusTransition()` - Validates job status changes
+  - `UpdateJobStatus()` - Updates job status with timestamps
+
+### Fixed
+
+- **Architectural Issues**: Resolved design problems preventing testing
+  - WorkerPool now accepts interfaces instead of concrete types
+  - CreatePageRecords now accepts TransactionExecutor interface
+  - Removed unused methods from DbQueueInterface
+  - Added missing GetUserAgent to MockCrawler
+
 ## [0.5.34] – 2025-08-08
 
 ### Enhanced

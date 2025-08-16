@@ -1,9 +1,13 @@
 package api
 
 import (
+	"net/http"
+	"net/http/httptest"
+	"os"
 	"testing"
 
 	"github.com/Harvey-AU/blue-banded-bee/internal/auth"
+	"github.com/Harvey-AU/blue-banded-bee/internal/mocks"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -212,6 +216,89 @@ func TestHasSystemAdminRoleWithNilClaims(t *testing.T) {
 	// Test with nil claims - should return false
 	result := hasSystemAdminRole(nil)
 	assert.False(t, result, "hasSystemAdminRole() should return false when given nil claims")
+}
+
+func TestAdminResetDatabase(t *testing.T) {
+	tests := []struct {
+		name           string
+		allowReset     bool
+		appEnv         string
+		setupMock      func(*mocks.MockDB)
+		expectedStatus int
+		expectedBody   string
+	}{
+		{
+			name:           "production environment returns 404",
+			allowReset:     true,
+			appEnv:         "production",
+			setupMock:      func(m *mocks.MockDB) {},
+			expectedStatus: http.StatusNotFound,
+			expectedBody:   "Not found",
+		},
+		{
+			name:           "database reset disabled",
+			allowReset:     false,
+			appEnv:         "development",
+			setupMock:      func(m *mocks.MockDB) {},
+			expectedStatus: http.StatusForbidden,
+			expectedBody:   "Database reset not enabled",
+		},
+		{
+			name:       "no authentication returns unauthorized",
+			allowReset: true,
+			appEnv:     "development",
+			setupMock: func(m *mocks.MockDB) {
+				// ResetSchema won't be called without auth
+			},
+			expectedStatus: http.StatusUnauthorized,
+			expectedBody:   "Authentication required",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Save original env vars
+			originalReset := os.Getenv("ALLOW_DB_RESET")
+			originalEnv := os.Getenv("APP_ENV")
+			defer func() {
+				os.Setenv("ALLOW_DB_RESET", originalReset)
+				os.Setenv("APP_ENV", originalEnv)
+			}()
+
+			// Set environment variables for test
+			if tt.allowReset {
+				os.Setenv("ALLOW_DB_RESET", "true")
+			} else {
+				os.Setenv("ALLOW_DB_RESET", "false")
+			}
+			os.Setenv("APP_ENV", tt.appEnv)
+
+			// Create mock database
+			mockDB := new(mocks.MockDB)
+			tt.setupMock(mockDB)
+
+			// Create handler with mock
+			h := &Handler{
+				DB: mockDB,
+			}
+
+			// Create request and recorder
+			req := httptest.NewRequest(http.MethodPost, "/admin/reset-db", nil)
+			rec := httptest.NewRecorder()
+
+			// Execute
+			h.AdminResetDatabase(rec, req)
+
+			// Assert status code
+			assert.Equal(t, tt.expectedStatus, rec.Code)
+
+			// Assert response body contains expected text
+			assert.Contains(t, rec.Body.String(), tt.expectedBody)
+
+			// Verify mock expectations
+			mockDB.AssertExpectations(t)
+		})
+	}
 }
 
 func TestHasSystemAdminRoleEdgeCases(t *testing.T) {

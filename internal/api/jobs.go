@@ -468,87 +468,17 @@ func (h *Handler) cancelJob(w http.ResponseWriter, r *http.Request, jobID string
 	WriteSuccess(w, r, map[string]string{"id": jobID, "status": "cancelled"}, "Job cancelled successfully")
 }
 
-// getClientIP extracts the client IP from the request
-func getClientIP(r *http.Request) string {
-	// Check for X-Forwarded-For header first (common with proxies/load balancers)
-	xff := r.Header.Get("X-Forwarded-For")
-	if xff != "" {
-		// X-Forwarded-For can contain multiple IPs, use the first one
-		if idx := strings.Index(xff, ","); idx != -1 {
-			return strings.TrimSpace(xff[:idx])
-		}
-		return strings.TrimSpace(xff)
-	}
-
-	// Check for X-Real-IP header
-	xri := r.Header.Get("X-Real-IP")
-	if xri != "" {
-		return strings.TrimSpace(xri)
-	}
-
-	// Fall back to RemoteAddr
-	ip, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr
-	}
-	return ip
+// TaskQueryParams holds parameters for task listing queries
+type TaskQueryParams struct {
+	Limit   int
+	Offset  int
+	Status  string
+	OrderBy string
 }
 
-// TaskResponse represents a task in API responses
-type TaskResponse struct {
-	ID                 string  `json:"id"`
-	JobID              string  `json:"job_id"`
-	Path               string  `json:"path"`
-	URL                string  `json:"url"`
-	Status             string  `json:"status"`
-	StatusCode         *int    `json:"status_code,omitempty"`
-	ResponseTime       *int    `json:"response_time,omitempty"`
-	CacheStatus        *string `json:"cache_status,omitempty"`
-	SecondResponseTime *int    `json:"second_response_time,omitempty"`
-	SecondCacheStatus  *string `json:"second_cache_status,omitempty"`
-	ContentType        *string `json:"content_type,omitempty"`
-	Error              *string `json:"error,omitempty"`
-	SourceType         *string `json:"source_type,omitempty"`
-	SourceURL          *string `json:"source_url,omitempty"`
-	CreatedAt          string  `json:"created_at"`
-	StartedAt          *string `json:"started_at,omitempty"`
-	CompletedAt        *string `json:"completed_at,omitempty"`
-	RetryCount         int     `json:"retry_count"`
-}
-
-// getJobTasks handles GET /v1/jobs/:id/tasks
-func (h *Handler) getJobTasks(w http.ResponseWriter, r *http.Request, jobID string) {
-	userClaims, ok := auth.GetUserFromContext(r.Context())
-	if !ok {
-		Unauthorised(w, r, "User information not found")
-		return
-	}
-
-	// Auto-create user if they don't exist (handles new signups)
-	user, err := h.DB.GetOrCreateUser(userClaims.UserID, userClaims.Email, nil)
-	if err != nil {
-		log.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get or create user")
-		InternalError(w, r, err)
-		return
-	}
-
-	// Verify job belongs to user's organisation
-	var orgID string
-	err = h.DB.GetDB().QueryRowContext(r.Context(), `
-		SELECT organisation_id FROM jobs WHERE id = $1
-	`, jobID).Scan(&orgID)
-
-	if err != nil {
-		NotFound(w, r, "Job not found")
-		return
-	}
-
-	if user.OrganisationID == nil || *user.OrganisationID != orgID {
-		Unauthorised(w, r, "Job access denied")
-		return
-	}
-
-	// Parse query parameters
+// parseTaskQueryParams extracts and validates query parameters for task listing
+func parseTaskQueryParams(r *http.Request) TaskQueryParams {
+	// Parse limit parameter
 	limit := 50 // default
 	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
 		if parsedLimit, err := strconv.Atoi(limitStr); err == nil && parsedLimit > 0 && parsedLimit <= 200 {
@@ -556,6 +486,7 @@ func (h *Handler) getJobTasks(w http.ResponseWriter, r *http.Request, jobID stri
 		}
 	}
 
+	// Parse offset parameter
 	offset := 0
 	if offsetStr := r.URL.Query().Get("offset"); offsetStr != "" {
 		if parsedOffset, err := strconv.Atoi(offsetStr); err == nil && parsedOffset >= 0 {
@@ -563,11 +494,12 @@ func (h *Handler) getJobTasks(w http.ResponseWriter, r *http.Request, jobID stri
 		}
 	}
 
-	status := r.URL.Query().Get("status")  // Optional status filter
-	sortParam := r.URL.Query().Get("sort") // Optional sort parameter
-
+	// Parse status filter
+	status := r.URL.Query().Get("status") // Optional status filter
+	
 	// Parse sort parameter
-	var orderBy string = "t.created_at DESC" // default
+	sortParam := r.URL.Query().Get("sort") // Optional sort parameter
+	orderBy := "t.created_at DESC" // default
 	if sortParam != "" {
 		// Handle sort direction prefix
 		direction := "DESC"
@@ -600,7 +532,60 @@ func (h *Handler) getJobTasks(w http.ResponseWriter, r *http.Request, jobID stri
 		}
 	}
 
-	// Build query with optional status filter
+	return TaskQueryParams{
+		Limit:   limit,
+		Offset:  offset,
+		Status:  status,
+		OrderBy: orderBy,
+	}
+}
+
+// validateJobAccess validates user authentication and job access permissions
+// Returns the user if validation succeeds, or writes HTTP error and returns nil
+func (h *Handler) validateJobAccess(w http.ResponseWriter, r *http.Request, jobID string) *db.User {
+	// Extract user claims from context
+	userClaims, ok := auth.GetUserFromContext(r.Context())
+	if !ok {
+		Unauthorised(w, r, "User information not found")
+		return nil
+	}
+
+	// Auto-create user if they don't exist (handles new signups)
+	user, err := h.DB.GetOrCreateUser(userClaims.UserID, userClaims.Email, nil)
+	if err != nil {
+		log.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get or create user")
+		InternalError(w, r, err)
+		return nil
+	}
+
+	// Verify job belongs to user's organisation
+	var orgID string
+	err = h.DB.GetDB().QueryRowContext(r.Context(), `
+		SELECT organisation_id FROM jobs WHERE id = $1
+	`, jobID).Scan(&orgID)
+
+	if err != nil {
+		NotFound(w, r, "Job not found")
+		return nil
+	}
+
+	if user.OrganisationID == nil || *user.OrganisationID != orgID {
+		Unauthorised(w, r, "Job access denied")
+		return nil
+	}
+
+	return user
+}
+
+// TaskQueryBuilder holds the SQL queries and arguments for task retrieval
+type TaskQueryBuilder struct {
+	SelectQuery string
+	CountQuery  string
+	Args        []interface{}
+}
+
+// buildTaskQuery constructs SQL queries for task retrieval with filters and pagination
+func buildTaskQuery(jobID string, params TaskQueryParams) TaskQueryBuilder {
 	baseQuery := `
 		SELECT t.id, t.job_id, p.path, d.name as domain, t.status, t.status_code, t.response_time, 
 		       t.cache_status, t.second_response_time, t.second_cache_status, t.content_type, t.error, t.source_type, t.source_url,
@@ -618,35 +603,28 @@ func (h *Handler) getJobTasks(w http.ResponseWriter, r *http.Request, jobID stri
 
 	args := []interface{}{jobID}
 
-	if status != "" {
+	// Add status filter if provided
+	if params.Status != "" {
 		baseQuery += ` AND t.status = $2`
 		countQuery += ` AND t.status = $2`
-		args = append(args, status)
+		args = append(args, params.Status)
 	}
 
-	baseQuery += ` ORDER BY ` + orderBy + ` LIMIT $` + strconv.Itoa(len(args)+1) + ` OFFSET $` + strconv.Itoa(len(args)+2)
-	args = append(args, limit, offset)
+	// Add ordering, limit, and offset
+	baseQuery += ` ORDER BY ` + params.OrderBy + ` LIMIT $` + strconv.Itoa(len(args)+1) + ` OFFSET $` + strconv.Itoa(len(args)+2)
+	args = append(args, params.Limit, params.Offset)
 
-	// Get total count
-	var total int
-	countArgs := args[:len(args)-2] // Remove limit and offset for count query
-	err = h.DB.GetDB().QueryRowContext(r.Context(), countQuery, countArgs...).Scan(&total)
-	if err != nil {
-		log.Error().Err(err).Str("job_id", jobID).Msg("Failed to count tasks")
-		DatabaseError(w, r, err)
-		return
+	return TaskQueryBuilder{
+		SelectQuery: baseQuery,
+		CountQuery:  countQuery,
+		Args:        args,
 	}
+}
 
-	// Get tasks
-	rows, err := h.DB.GetDB().QueryContext(r.Context(), baseQuery, args...)
-	if err != nil {
-		log.Error().Err(err).Str("job_id", jobID).Msg("Failed to get tasks")
-		DatabaseError(w, r, err)
-		return
-	}
-	defer rows.Close()
-
+// formatTasksFromRows converts database rows into TaskResponse slice
+func formatTasksFromRows(rows *sql.Rows) ([]TaskResponse, error) {
 	var tasks []TaskResponse
+	
 	for rows.Next() {
 		var task TaskResponse
 		var domain string
@@ -660,8 +638,7 @@ func (h *Handler) getJobTasks(w http.ResponseWriter, r *http.Request, jobID stri
 			&createdAt, &startedAt, &completedAt, &task.RetryCount,
 		)
 		if err != nil {
-			log.Error().Err(err).Msg("Failed to scan task row")
-			continue
+			return nil, fmt.Errorf("failed to scan task row: %w", err)
 		}
 
 		// Construct full URL from domain and path
@@ -715,16 +692,105 @@ func (h *Handler) getJobTasks(w http.ResponseWriter, r *http.Request, jobID stri
 		tasks = append(tasks, task)
 	}
 
+	return tasks, nil
+}
+
+func getClientIP(r *http.Request) string {
+	// Check for X-Forwarded-For header first (common with proxies/load balancers)
+	xff := r.Header.Get("X-Forwarded-For")
+	if xff != "" {
+		// X-Forwarded-For can contain multiple IPs, use the first one
+		if idx := strings.Index(xff, ","); idx != -1 {
+			return strings.TrimSpace(xff[:idx])
+		}
+		return strings.TrimSpace(xff)
+	}
+
+	// Check for X-Real-IP header
+	xri := r.Header.Get("X-Real-IP")
+	if xri != "" {
+		return strings.TrimSpace(xri)
+	}
+
+	// Fall back to RemoteAddr
+	ip, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+	return ip
+}
+
+// TaskResponse represents a task in API responses
+type TaskResponse struct {
+	ID                 string  `json:"id"`
+	JobID              string  `json:"job_id"`
+	Path               string  `json:"path"`
+	URL                string  `json:"url"`
+	Status             string  `json:"status"`
+	StatusCode         *int    `json:"status_code,omitempty"`
+	ResponseTime       *int    `json:"response_time,omitempty"`
+	CacheStatus        *string `json:"cache_status,omitempty"`
+	SecondResponseTime *int    `json:"second_response_time,omitempty"`
+	SecondCacheStatus  *string `json:"second_cache_status,omitempty"`
+	ContentType        *string `json:"content_type,omitempty"`
+	Error              *string `json:"error,omitempty"`
+	SourceType         *string `json:"source_type,omitempty"`
+	SourceURL          *string `json:"source_url,omitempty"`
+	CreatedAt          string  `json:"created_at"`
+	StartedAt          *string `json:"started_at,omitempty"`
+	CompletedAt        *string `json:"completed_at,omitempty"`
+	RetryCount         int     `json:"retry_count"`
+}
+
+// getJobTasks handles GET /v1/jobs/:id/tasks
+func (h *Handler) getJobTasks(w http.ResponseWriter, r *http.Request, jobID string) {
+	// Validate user authentication and job access
+	user := h.validateJobAccess(w, r, jobID)
+	if user == nil {
+		return // validateJobAccess already wrote the error response
+	}
+
+	// Parse query parameters and build queries
+	params := parseTaskQueryParams(r)
+	queries := buildTaskQuery(jobID, params)
+
+	// Get total count
+	var total int
+	countArgs := queries.Args[:len(queries.Args)-2] // Remove limit and offset for count query
+	err := h.DB.GetDB().QueryRowContext(r.Context(), queries.CountQuery, countArgs...).Scan(&total)
+	if err != nil {
+		log.Error().Err(err).Str("job_id", jobID).Msg("Failed to count tasks")
+		DatabaseError(w, r, err)
+		return
+	}
+
+	// Get tasks
+	rows, err := h.DB.GetDB().QueryContext(r.Context(), queries.SelectQuery, queries.Args...)
+	if err != nil {
+		log.Error().Err(err).Str("job_id", jobID).Msg("Failed to get tasks")
+		DatabaseError(w, r, err)
+		return
+	}
+	defer rows.Close()
+
+	// Format tasks from database rows
+	tasks, err := formatTasksFromRows(rows)
+	if err != nil {
+		log.Error().Err(err).Str("job_id", jobID).Msg("Failed to format tasks")
+		DatabaseError(w, r, err)
+		return
+	}
+
 	// Calculate pagination info
-	hasNext := offset+limit < total
-	hasPrev := offset > 0
+	hasNext := params.Offset+params.Limit < total
+	hasPrev := params.Offset > 0
 
 	// Prepare response
 	response := map[string]interface{}{
 		"tasks": tasks,
 		"pagination": map[string]interface{}{
-			"limit":    limit,
-			"offset":   offset,
+			"limit":    params.Limit,
+			"offset":   params.Offset,
 			"total":    total,
 			"has_next": hasNext,
 			"has_prev": hasPrev,
