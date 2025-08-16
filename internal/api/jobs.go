@@ -468,7 +468,78 @@ func (h *Handler) cancelJob(w http.ResponseWriter, r *http.Request, jobID string
 	WriteSuccess(w, r, map[string]string{"id": jobID, "status": "cancelled"}, "Job cancelled successfully")
 }
 
-// getClientIP extracts the client IP from the request
+// TaskQueryParams holds parameters for task listing queries
+type TaskQueryParams struct {
+	Limit   int
+	Offset  int
+	Status  string
+	OrderBy string
+}
+
+// parseTaskQueryParams extracts and validates query parameters for task listing
+func parseTaskQueryParams(r *http.Request) TaskQueryParams {
+	// Parse limit parameter
+	limit := 50 // default
+	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
+		if parsedLimit, err := strconv.Atoi(limitStr); err == nil && parsedLimit > 0 && parsedLimit <= 200 {
+			limit = parsedLimit
+		}
+	}
+
+	// Parse offset parameter
+	offset := 0
+	if offsetStr := r.URL.Query().Get("offset"); offsetStr != "" {
+		if parsedOffset, err := strconv.Atoi(offsetStr); err == nil && parsedOffset >= 0 {
+			offset = parsedOffset
+		}
+	}
+
+	// Parse status filter
+	status := r.URL.Query().Get("status") // Optional status filter
+	
+	// Parse sort parameter
+	sortParam := r.URL.Query().Get("sort") // Optional sort parameter
+	orderBy := "t.created_at DESC" // default
+	if sortParam != "" {
+		// Handle sort direction prefix
+		direction := "DESC"
+		column := sortParam
+		if strings.HasPrefix(sortParam, "-") {
+			direction = "DESC"
+			column = strings.TrimPrefix(sortParam, "-")
+		} else {
+			direction = "ASC"
+		}
+
+		// Map column names to actual SQL columns
+		switch column {
+		case "path":
+			orderBy = "p.path " + direction
+		case "status":
+			orderBy = "t.status " + direction
+		case "response_time":
+			orderBy = "t.response_time " + direction + " NULLS LAST"
+		case "cache_status":
+			orderBy = "t.cache_status " + direction + " NULLS LAST"
+		case "second_response_time":
+			orderBy = "t.second_response_time " + direction + " NULLS LAST"
+		case "status_code":
+			orderBy = "t.status_code " + direction + " NULLS LAST"
+		case "created_at":
+			orderBy = "t.created_at " + direction
+		default:
+			orderBy = "t.created_at DESC" // fallback to default
+		}
+	}
+
+	return TaskQueryParams{
+		Limit:   limit,
+		Offset:  offset,
+		Status:  status,
+		OrderBy: orderBy,
+	}
+}
+
 func getClientIP(r *http.Request) string {
 	// Check for X-Forwarded-For header first (common with proxies/load balancers)
 	xff := r.Header.Get("X-Forwarded-For")
@@ -549,56 +620,11 @@ func (h *Handler) getJobTasks(w http.ResponseWriter, r *http.Request, jobID stri
 	}
 
 	// Parse query parameters
-	limit := 50 // default
-	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
-		if parsedLimit, err := strconv.Atoi(limitStr); err == nil && parsedLimit > 0 && parsedLimit <= 200 {
-			limit = parsedLimit
-		}
-	}
-
-	offset := 0
-	if offsetStr := r.URL.Query().Get("offset"); offsetStr != "" {
-		if parsedOffset, err := strconv.Atoi(offsetStr); err == nil && parsedOffset >= 0 {
-			offset = parsedOffset
-		}
-	}
-
-	status := r.URL.Query().Get("status")  // Optional status filter
-	sortParam := r.URL.Query().Get("sort") // Optional sort parameter
-
-	// Parse sort parameter
-	var orderBy string = "t.created_at DESC" // default
-	if sortParam != "" {
-		// Handle sort direction prefix
-		direction := "DESC"
-		column := sortParam
-		if strings.HasPrefix(sortParam, "-") {
-			direction = "DESC"
-			column = strings.TrimPrefix(sortParam, "-")
-		} else {
-			direction = "ASC"
-		}
-
-		// Map column names to actual SQL columns
-		switch column {
-		case "path":
-			orderBy = "p.path " + direction
-		case "status":
-			orderBy = "t.status " + direction
-		case "response_time":
-			orderBy = "t.response_time " + direction + " NULLS LAST"
-		case "cache_status":
-			orderBy = "t.cache_status " + direction + " NULLS LAST"
-		case "second_response_time":
-			orderBy = "t.second_response_time " + direction + " NULLS LAST"
-		case "status_code":
-			orderBy = "t.status_code " + direction + " NULLS LAST"
-		case "created_at":
-			orderBy = "t.created_at " + direction
-		default:
-			orderBy = "t.created_at DESC" // fallback to default
-		}
-	}
+	params := parseTaskQueryParams(r)
+	limit := params.Limit
+	offset := params.Offset
+	status := params.Status
+	orderBy := params.OrderBy
 
 	// Build query with optional status filter
 	baseQuery := `
