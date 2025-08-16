@@ -427,6 +427,62 @@ func (wp *WorkerPool) claimPendingTask(ctx context.Context) (*db.Task, error) {
 	return nil, sql.ErrNoRows
 }
 
+// prepareTaskForProcessing converts db.Task to jobs.Task and enriches with job info
+func (wp *WorkerPool) prepareTaskForProcessing(ctx context.Context, task *db.Task) (*Task, error) {
+	// Convert db.Task to jobs.Task for processing
+	jobsTask := &Task{
+		ID:            task.ID,
+		JobID:         task.JobID,
+		PageID:        task.PageID,
+		Path:          task.Path,
+		Status:        TaskStatus(task.Status),
+		CreatedAt:     task.CreatedAt,
+		StartedAt:     task.StartedAt,
+		RetryCount:    task.RetryCount,
+		SourceType:    task.SourceType,
+		SourceURL:     task.SourceURL,
+		PriorityScore: task.PriorityScore,
+	}
+
+	// Get job info from cache
+	wp.jobInfoMutex.RLock()
+	jobInfo, exists := wp.jobInfoCache[task.JobID]
+	wp.jobInfoMutex.RUnlock()
+
+	if exists {
+		jobsTask.DomainName = jobInfo.DomainName
+		jobsTask.FindLinks = jobInfo.FindLinks
+		jobsTask.CrawlDelay = jobInfo.CrawlDelay
+	} else {
+		// Fallback to database if not in cache (shouldn't happen normally)
+		log.Warn().Str("job_id", task.JobID).Msg("Job info not in cache, querying database")
+
+		var domainName string
+		var findLinks bool
+		var crawlDelay sql.NullInt64
+		err := wp.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
+			return tx.QueryRowContext(ctx, `
+				SELECT d.name, j.find_links, d.crawl_delay_seconds
+				FROM domains d
+				JOIN jobs j ON j.domain_id = d.id
+				WHERE j.id = $1
+			`, task.JobID).Scan(&domainName, &findLinks, &crawlDelay)
+		})
+
+		if err != nil {
+			log.Error().Err(err).Str("job_id", task.JobID).Msg("Failed to get domain info")
+		} else {
+			jobsTask.DomainName = domainName
+			jobsTask.FindLinks = findLinks
+			if crawlDelay.Valid {
+				jobsTask.CrawlDelay = int(crawlDelay.Int64)
+			}
+		}
+	}
+
+	return jobsTask, nil
+}
+
 func (wp *WorkerPool) processNextTask(ctx context.Context) error {
 	// Claim a pending task from active jobs
 	task, err := wp.claimPendingTask(ctx)
@@ -434,57 +490,12 @@ func (wp *WorkerPool) processNextTask(ctx context.Context) error {
 		return err
 	}
 	if task != nil {
-
-			// Convert db.Task to jobs.Task for processing
-			jobsTask := &Task{
-				ID:            task.ID,
-				JobID:         task.JobID,
-				PageID:        task.PageID,
-				Path:          task.Path,
-				Status:        TaskStatus(task.Status),
-				CreatedAt:     task.CreatedAt,
-				StartedAt:     task.StartedAt,
-				RetryCount:    task.RetryCount,
-				SourceType:    task.SourceType,
-				SourceURL:     task.SourceURL,
-				PriorityScore: task.PriorityScore,
-			}
-
-			// Get job info from cache
-			wp.jobInfoMutex.RLock()
-			jobInfo, exists := wp.jobInfoCache[task.JobID]
-			wp.jobInfoMutex.RUnlock()
-
-			if exists {
-				jobsTask.DomainName = jobInfo.DomainName
-				jobsTask.FindLinks = jobInfo.FindLinks
-				jobsTask.CrawlDelay = jobInfo.CrawlDelay
-			} else {
-				// Fallback to database if not in cache (shouldn't happen normally)
-				log.Warn().Str("job_id", task.JobID).Msg("Job info not in cache, querying database")
-
-				var domainName string
-				var findLinks bool
-				var crawlDelay sql.NullInt64
-				err := wp.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
-					return tx.QueryRowContext(ctx, `
-						SELECT d.name, j.find_links, d.crawl_delay_seconds
-						FROM domains d
-						JOIN jobs j ON j.domain_id = d.id
-						WHERE j.id = $1
-					`, task.JobID).Scan(&domainName, &findLinks, &crawlDelay)
-				})
-
-				if err != nil {
-					log.Error().Err(err).Str("job_id", task.JobID).Msg("Failed to get domain info")
-				} else {
-					jobsTask.DomainName = domainName
-					jobsTask.FindLinks = findLinks
-					if crawlDelay.Valid {
-						jobsTask.CrawlDelay = int(crawlDelay.Int64)
-					}
-				}
-			}
+		// Prepare task for processing with job info
+		jobsTask, err := wp.prepareTaskForProcessing(ctx, task)
+		if err != nil {
+			log.Error().Err(err).Str("task_id", task.ID).Msg("Failed to prepare task")
+			return err
+		}
 
 			// Process the task
 			result, err := wp.processTask(ctx, jobsTask)
