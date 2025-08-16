@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
+	"github.com/Harvey-AU/blue-banded-bee/internal/crawler"
 	"github.com/Harvey-AU/blue-banded-bee/internal/db"
 )
 
@@ -60,6 +61,47 @@ func intPtr(i int) *int {
 
 func float64Ptr(f float64) *float64 {
 	return &f
+}
+
+// simpleDbQueueMock is a minimal mock implementation of DbQueueInterface for unit tests
+type simpleDbQueueMock struct{}
+
+func (m *simpleDbQueueMock) GetNextTask(ctx context.Context, jobID string) (*db.Task, error) {
+	return nil, nil
+}
+
+func (m *simpleDbQueueMock) UpdateTaskStatus(ctx context.Context, task *db.Task) error {
+	return nil
+}
+
+func (m *simpleDbQueueMock) Execute(ctx context.Context, fn func(*sql.Tx) error) error {
+	return nil
+}
+
+// simpleCrawlerMock is a minimal mock implementation of CrawlerInterface for unit tests
+type simpleCrawlerMock struct{}
+
+func (m *simpleCrawlerMock) WarmURL(ctx context.Context, url string, findLinks bool) (*crawler.CrawlResult, error) {
+	return &crawler.CrawlResult{
+		StatusCode:  200,
+		CacheStatus: "HIT",
+	}, nil
+}
+
+func (m *simpleCrawlerMock) DiscoverSitemapsAndRobots(ctx context.Context, domain string) (*crawler.SitemapDiscoveryResult, error) {
+	return &crawler.SitemapDiscoveryResult{}, nil
+}
+
+func (m *simpleCrawlerMock) ParseSitemap(ctx context.Context, sitemapURL string) ([]string, error) {
+	return []string{}, nil
+}
+
+func (m *simpleCrawlerMock) FilterURLs(urls []string, includePaths, excludePaths []string) []string {
+	return urls
+}
+
+func (m *simpleCrawlerMock) GetUserAgent() string {
+	return "test-agent"
 }
 
 // MockWorkerPool is a minimal mock implementation of WorkerPool for testing

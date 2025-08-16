@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Harvey-AU/blue-banded-bee/internal/crawler"
 	"github.com/Harvey-AU/blue-banded-bee/internal/db"
 	"github.com/stretchr/testify/assert"
 )
@@ -54,7 +53,7 @@ func TestWorkerPoolAddJobTracking(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create worker pool with minimal setup to avoid DB calls
-			wp := NewWorkerPool(&sql.DB{}, &db.DbQueue{}, &crawler.Crawler{}, 2, &db.Config{})
+			wp := NewWorkerPool(&sql.DB{}, &simpleDbQueueMock{}, &simpleCrawlerMock{}, 2, &db.Config{})
 			
 			// Since AddJob makes DB calls, we'll test the parts we can without mocking
 			// Test the job tracking aspect by directly calling the job management parts
@@ -148,7 +147,7 @@ func TestWorkerPoolAddJobScaling(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create worker pool with test configuration
-			wp := NewWorkerPool(&sql.DB{}, &db.DbQueue{}, &crawler.Crawler{}, tt.baseWorkers, &db.Config{})
+			wp := NewWorkerPool(&sql.DB{}, &simpleDbQueueMock{}, &simpleCrawlerMock{}, tt.baseWorkers, &db.Config{})
 			
 			// Set up initial state
 			wp.workersMutex.Lock()
@@ -181,7 +180,7 @@ func TestWorkerPoolAddJobScaling(t *testing.T) {
 func TestWorkerPoolAddJobConcurrency(t *testing.T) {
 	t.Parallel()
 	
-	wp := NewWorkerPool(&sql.DB{}, &db.DbQueue{}, &crawler.Crawler{}, 5, &db.Config{})
+	wp := NewWorkerPool(&sql.DB{}, &simpleDbQueueMock{}, &simpleCrawlerMock{}, 5, &db.Config{})
 	
 	// Simulate concurrent job additions (testing the parts we can without DB)
 	numJobs := 10
@@ -239,7 +238,7 @@ func TestWorkerPoolAddJobConcurrency(t *testing.T) {
 func TestWorkerPoolAddJobIdempotency(t *testing.T) {
 	t.Parallel()
 	
-	wp := NewWorkerPool(&sql.DB{}, &db.DbQueue{}, &crawler.Crawler{}, 2, &db.Config{})
+	wp := NewWorkerPool(&sql.DB{}, &simpleDbQueueMock{}, &simpleCrawlerMock{}, 2, &db.Config{})
 	jobID := "idempotent-job"
 	
 	// Add the same job multiple times (simulate the tracking parts)
