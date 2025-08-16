@@ -10,84 +10,13 @@ Each version represents a distinct set of changes, even if released on the same 
 
 ## [Unreleased] – 2025-08-16
 
-### Major Refactoring - Code Quality & Testing Revolution
+### Improved
 
-- **Monster Function Elimination**: Systematic breakdown of massive functions for improved testability
-  - **`getJobTasks`**: 216 → 56 lines (74% reduction) with 4 focused functions
-  - **`CreateJob`**: 232 → 42 lines (82% reduction) with 4 focused functions  
-  - **`setupJobURLDiscovery`**: 108 → 17 lines (84% reduction) with 2 focused functions
-  - **`setupSchema`**: 216 → 27 lines (87% reduction) with 3 focused functions
-  - **Total impact**: 772 → 142 lines (82% overall reduction)
-
-- **Comprehensive Test Coverage Expansion**: Added 280+ test cases across core functionality
-  - **API parameter handling**: Comprehensive validation and edge case testing
-  - **Database operations**: Table creation, index management, RLS setup testing
-  - **Job lifecycle**: Creation, validation, URL discovery, error handling
-  - **Error patterns**: Context cancellation, malformed inputs, database failures
-
-- **Code Review Implementation**: Applied Go best practices based on expert review
-  - **Idiomatic error handling**: Simplified function signatures (`(*url.URL, error)` pattern)
-  - **Proper async patterns**: CreateJob returns immediately, background processing with timeouts
-  - **Context propagation**: Detached contexts with timeouts for goroutines
-  - **Separation of concerns**: Each function has single responsibility
-
-### Architectural Improvements
-
-- **Extract + Test + Commit Methodology**: Proven systematic approach for safe refactoring
-  - **Zero regressions**: All existing functionality preserved
-  - **Incremental validation**: Each extraction tested before proceeding
-  - **Clean commits**: Each step separately committed and reversible
-  - **Quality over speed**: Thorough understanding before changes
-
-- **Function Complexity Reduction**: Transformed massive functions into focused, testable units
-  - **API handlers**: Parameter parsing, validation, query building, response formatting
-  - **Job management**: Existing job handling, object creation, database setup, URL discovery
-  - **Database schema**: Table creation, index management, security setup
-  - **URL validation**: Request validation with comprehensive edge case handling
-
-### Testing Infrastructure
-
-- **Database Testing**: Comprehensive sqlmock testing for database operations
-  - **Table creation order**: Dependency validation and error propagation
-  - **Index management**: Performance index creation and deprecated index cleanup  
-  - **Security setup**: Row Level Security enabling and policy integration
-  - **Error scenarios**: Database connection failures and constraint violations
-
-- **API Testing**: Thorough parameter validation and response formatting
-  - **Query parameters**: Limit/offset validation, sorting, filtering, edge cases
-  - **Authentication flows**: Context extraction, user validation, access control
-  - **Response building**: Database row scanning, JSON formatting, null handling
-  - **SQL injection safety**: Parameterized query testing and input validation
-
-### Performance & Reliability
-
-- **Async Job Processing**: Consistent background processing patterns
-  - **Immediate API responses**: CreateJob returns after database setup
-  - **Background URL discovery**: Both sitemap and manual processing async
-  - **Proper context handling**: Detached contexts with reasonable timeouts
-  - **Error logging**: Comprehensive error tracking in background processes
-
-- **Enhanced Error Handling**: Idiomatic Go error patterns throughout
-  - **Simplified signatures**: Single error return values where appropriate  
-  - **Caller responsibility**: Complex result construction in calling functions
-  - **Proper propagation**: Wrapped errors with context preservation
-  - **Graceful degradation**: Background failures don't block API responses
-
-### Legacy Improvements
-
-- **Error Handling**: Made error handling more graceful
-  - Replaced panic with error return when jobManager is nil in EnqueueURLs
-  - Better error messages and logging for debugging
-
-- **Performance Optimisation**: Optimised robots.txt parsing
-  - Removed redundant ParseRobotsTxt call when not using sitemap
-  - Use already parsed rules from DiscoverSitemapsAndRobots
-  - Store crawl delay from robots.txt when processing manual URLs
-
-- **Test Infrastructure**: Fixed test compatibility issues
-  - Updated tests to work with interface-based architecture
-  - Added mockDbQueueWrapper for UpdateJobStatus tests
-  - Fixed validation tests to use interfaces instead of concrete types
+- **Code Quality**: Refactored large functions for better maintainability and test coverage
+- **API Performance**: CreateJob now returns immediately with async background processing  
+- **Database Schema**: Simplified schema setup with focused, testable functions
+- **Error Handling**: Idiomatic Go error patterns and better context handling
+- **Testing**: Significantly expanded test coverage across core functionality
 
 ## [Previous] – 2025-08-16
 
