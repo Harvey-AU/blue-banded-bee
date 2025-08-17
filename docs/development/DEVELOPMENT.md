@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- **Go 1.25rc2** - We use Go 1.25rc2 for advanced features (see [Go 1.25 Plan](./plans/_archive/go-1.25.md))
+- **Go 1.25** - We use Go 1.25 for advanced features (see [Go 1.25 Plan](./plans/_archive/go-1.25.md))
 - **PostgreSQL** - Local instance or remote database access
 - **Air** (optional) - Hot reloading for development (`go install github.com/cosmtrek/air@latest`)
 - **Git** - Version control
@@ -235,7 +235,7 @@ GODEBUG=gctrace=1 go run ./cmd/app/main.go
 
 ### Code Quality
 
-We use a **hybrid approach** for code quality checks due to our Go 1.25rc2 usage:
+We use a **hybrid approach** for code quality checks due to our Go 1.25 usage:
 
 #### Local Development (Fast Feedback)
 Before committing, run these **local** checks:
@@ -255,7 +255,7 @@ go test -v -coverprofile=coverage.out ./...
 ```
 
 #### Why Local golangci-lint Doesn't Work
-Our project uses **Go 1.25rc2** for advanced features (container-aware GOMAXPROCS, Green Tea GC, etc.), but most golangci-lint installations are built with Go 1.24. This creates a version compatibility issue:
+Our project uses **Go 1.25** for advanced features (container-aware GOMAXPROCS, Green Tea GC, etc.). With the official release, golangci-lint should now be compatible:
 
 ```bash
 # This will fail with version error:
