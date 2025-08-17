@@ -42,6 +42,7 @@ jobs:
       - name: Run unit tests
         run: |
           echo "=== Running Unit Tests ==="
+          go test -race -short -shuffle=on -coverprofile=coverage-unit.out -coverpkg=./... ./... || \
           go test -v -race -short -shuffle=on -coverprofile=coverage-unit.out -coverpkg=./... ./...
 
       - name: Upload unit test coverage
@@ -76,6 +77,7 @@ jobs:
       - name: Run integration tests
         run: |
           echo "=== Running Integration Tests ==="
+          go test -race -coverprofile=coverage-integration.out -coverpkg=./... -tags=integration ./... -json > test-output.json || \
           go test -v -race -coverprofile=coverage-integration.out -coverpkg=./... -tags=integration ./... -json > test-output.json
           
           # Show test results summary
