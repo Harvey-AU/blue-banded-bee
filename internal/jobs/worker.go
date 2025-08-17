@@ -501,55 +501,7 @@ func (wp *WorkerPool) processNextTask(ctx context.Context) error {
 			result, err := wp.processTask(ctx, jobsTask)
 			now := time.Now()
 			if err != nil {
-				// Check if this is a blocking error (403/429)
-				if isBlockingError(err) {
-					// For blocking errors, only retry twice (less aggressive)
-					if task.RetryCount < 2 {
-						task.RetryCount++
-						task.Status = string(TaskStatusPending)
-						task.StartedAt = time.Time{} // Reset started time
-						log.Warn().
-							Err(err).
-							Str("task_id", task.ID).
-							Int("retry_count", task.RetryCount).
-							Msg("Task blocked (403/429), limited retry scheduled")
-					} else {
-						// Mark as permanently failed after 2 retries
-						task.Status = string(TaskStatusFailed)
-						task.CompletedAt = now
-						task.Error = err.Error()
-						log.Error().
-							Err(err).
-							Str("task_id", task.ID).
-							Int("retry_count", task.RetryCount).
-							Msg("Task blocked permanently after 2 retries")
-					}
-				} else if isRetryableError(err) && task.RetryCount < MaxTaskRetries {
-					// For other retryable errors, use normal retry limit
-					task.RetryCount++
-					task.Status = string(TaskStatusPending)
-					task.StartedAt = time.Time{} // Reset started time
-					log.Warn().
-						Err(err).
-						Str("task_id", task.ID).
-						Int("retry_count", task.RetryCount).
-						Msg("Task failed with retryable error, scheduling retry")
-				} else {
-					// Mark as permanently failed
-					task.Status = string(TaskStatusFailed)
-					task.CompletedAt = now
-					task.Error = err.Error()
-					log.Error().
-						Err(err).
-						Str("task_id", task.ID).
-						Int("retry_count", task.RetryCount).
-						Msg("Task failed permanently")
-				}
-				updErr := wp.dbQueue.UpdateTaskStatus(ctx, task)
-				if updErr != nil {
-					sentry.CaptureException(updErr)
-					log.Error().Err(updErr).Str("task_id", task.ID).Msg("Failed to mark task as failed")
-				}
+				return wp.handleTaskError(ctx, task, err)
 			} else {
 				// mark as completed with metrics
 				task.Status = string(TaskStatusCompleted)
@@ -1144,24 +1096,22 @@ func (wp *WorkerPool) CleanupStuckJobs(ctx context.Context) error {
 }
 
 // processTask processes an individual task
-func (wp *WorkerPool) processTask(ctx context.Context, task *Task) (*crawler.CrawlResult, error) {
-	// Construct a proper URL for processing
-	var urlStr string
-
+// constructTaskURL builds a proper URL from task path and domain information
+func constructTaskURL(path, domainName string) string {
 	// Check if path is already a full URL
-	if strings.HasPrefix(task.Path, "http://") || strings.HasPrefix(task.Path, "https://") {
-		urlStr = util.NormaliseURL(task.Path)
-	} else if task.DomainName != "" {
+	if strings.HasPrefix(path, "http://") || strings.HasPrefix(path, "https://") {
+		return util.NormaliseURL(path)
+	} else if domainName != "" {
 		// Use centralized URL construction
-		urlStr = util.ConstructURL(task.DomainName, task.Path)
+		return util.ConstructURL(domainName, path)
 	} else {
 		// Fallback case - assume path is a full URL but missing protocol
-		urlStr = util.NormaliseURL(task.Path)
+		return util.NormaliseURL(path)
 	}
+}
 
-	log.Info().Str("url", urlStr).Str("task_id", task.ID).Msg("Starting URL warm")
-
-	// Apply crawl delay if specified for this domain
+// applyCrawlDelay applies robots.txt crawl delay if specified for the task's domain
+func applyCrawlDelay(task *Task) {
 	if task.CrawlDelay > 0 {
 		log.Debug().
 			Str("task_id", task.ID).
@@ -1170,6 +1120,196 @@ func (wp *WorkerPool) processTask(ctx context.Context, task *Task) (*crawler.Cra
 			Msg("Applying crawl delay from robots.txt")
 		time.Sleep(time.Duration(task.CrawlDelay) * time.Second)
 	}
+}
+
+// processDiscoveredLinks handles link processing and enqueueing for discovered URLs
+func (wp *WorkerPool) processDiscoveredLinks(ctx context.Context, task *Task, result *crawler.CrawlResult, sourceURL string) {
+	log.Debug().
+		Str("task_id", task.ID).
+		Int("total_links_found", len(result.Links["header"])+len(result.Links["footer"])+len(result.Links["body"])).
+		Bool("find_links_enabled", task.FindLinks).
+		Msg("Starting link processing and priority assignment")
+
+	// Get domain ID for this job
+	var domainID int
+	err := wp.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
+		return tx.QueryRowContext(ctx, `
+			SELECT domain_id FROM jobs WHERE id = $1
+		`, task.JobID).Scan(&domainID)
+	})
+	if err != nil {
+		log.Error().
+			Err(err).
+			Str("job_id", task.JobID).
+			Msg("Failed to get domain ID for discovered links")
+		return
+	}
+
+	// Get robots rules from cache for URL filtering
+	var robotsRules *crawler.RobotsRules
+	wp.jobInfoMutex.RLock()
+	if jobInfo, exists := wp.jobInfoCache[task.JobID]; exists {
+		robotsRules = jobInfo.RobotsRules
+	}
+	wp.jobInfoMutex.RUnlock()
+
+	isHomepage := task.Path == "/"
+
+	processLinkCategory := func(links []string, priority float64) {
+		if len(links) == 0 {
+			return
+		}
+
+		// 1. Filter links for same-domain and robots.txt compliance
+		var filtered []string
+		var blockedCount int
+		for _, link := range links {
+			linkURL, err := url.Parse(link)
+			if err != nil {
+				continue
+			}
+			if isSameOrSubDomain(linkURL.Hostname(), task.DomainName) {
+				linkURL.Fragment = ""
+				if linkURL.Path != "/" && strings.HasSuffix(linkURL.Path, "/") {
+					linkURL.Path = strings.TrimSuffix(linkURL.Path, "/")
+				}
+
+				// Check robots.txt rules
+				if robotsRules != nil && !crawler.IsPathAllowed(robotsRules, linkURL.Path) {
+					blockedCount++
+					log.Debug().
+						Str("url", linkURL.String()).
+						Str("path", linkURL.Path).
+						Str("source", sourceURL).
+						Msg("Link blocked by robots.txt")
+					continue
+				}
+
+				filtered = append(filtered, linkURL.String())
+			}
+		}
+
+		if blockedCount > 0 {
+			log.Info().
+				Str("task_id", task.ID).
+				Int("blocked_count", blockedCount).
+				Int("allowed_count", len(filtered)).
+				Msg("Filtered discovered links against robots.txt")
+		}
+
+		if len(filtered) == 0 {
+			return
+		}
+
+		// 2. Create page records
+		pageIDs, paths, err := db.CreatePageRecords(ctx, wp.dbQueue, domainID, task.DomainName, filtered)
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to create page records for links")
+			return
+		}
+
+		// 3. Create a slice of db.Page for enqueuing
+		pagesToEnqueue := make([]db.Page, len(pageIDs))
+		for i := range pageIDs {
+			pagesToEnqueue[i] = db.Page{
+				ID:   pageIDs[i],
+				Path: paths[i],
+				// Priority will be set by the caller of processLinkCategory
+			}
+		}
+
+		// 4. Enqueue new tasks
+		if err := wp.EnqueueURLs(ctx, task.JobID, pagesToEnqueue, "link", sourceURL); err != nil {
+			log.Error().Err(err).Msg("Failed to enqueue discovered links")
+			return // Stop if enqueuing fails
+		}
+
+		// 5. Update priorities for the newly created tasks
+		if err := wp.updateTaskPriorities(ctx, task.JobID, domainID, priority, paths); err != nil {
+			log.Error().Err(err).Msg("Failed to update task priorities for discovered links")
+		}
+	}
+
+	// Apply priorities based on page type and link category
+	if isHomepage {
+		log.Debug().Str("task_id", task.ID).Msg("Processing links from HOMEPAGE")
+		processLinkCategory(result.Links["header"], 1.000)
+		processLinkCategory(result.Links["footer"], 0.990)
+		processLinkCategory(result.Links["body"], task.PriorityScore*0.9) // Children of homepage
+	} else {
+		log.Debug().Str("task_id", task.ID).Msg("Processing links from regular page")
+		// For all other pages, only process body links
+		processLinkCategory(result.Links["body"], task.PriorityScore*0.9) // Children of other pages
+	}
+}
+
+// handleTaskError processes task failures with appropriate retry logic and status updates
+func (wp *WorkerPool) handleTaskError(ctx context.Context, task *db.Task, taskErr error) error {
+	now := time.Now()
+	
+	// Check if this is a blocking error (403/429)
+	if isBlockingError(taskErr) {
+		// For blocking errors, only retry twice (less aggressive)
+		if task.RetryCount < 2 {
+			task.RetryCount++
+			task.Status = string(TaskStatusPending)
+			task.StartedAt = time.Time{} // Reset started time
+			log.Warn().
+				Err(taskErr).
+				Str("task_id", task.ID).
+				Int("retry_count", task.RetryCount).
+				Msg("Task blocked (403/429), limited retry scheduled")
+		} else {
+			// Mark as permanently failed after 2 retries
+			task.Status = string(TaskStatusFailed)
+			task.CompletedAt = now
+			task.Error = taskErr.Error()
+			log.Error().
+				Err(taskErr).
+				Str("task_id", task.ID).
+				Int("retry_count", task.RetryCount).
+				Msg("Task blocked permanently after 2 retries")
+		}
+	} else if isRetryableError(taskErr) && task.RetryCount < MaxTaskRetries {
+		// For other retryable errors, use normal retry limit
+		task.RetryCount++
+		task.Status = string(TaskStatusPending)
+		task.StartedAt = time.Time{} // Reset started time
+		log.Warn().
+			Err(taskErr).
+			Str("task_id", task.ID).
+			Int("retry_count", task.RetryCount).
+			Msg("Task failed with retryable error, scheduling retry")
+	} else {
+		// Mark as permanently failed
+		task.Status = string(TaskStatusFailed)
+		task.CompletedAt = now
+		task.Error = taskErr.Error()
+		log.Error().
+			Err(taskErr).
+			Str("task_id", task.ID).
+			Int("retry_count", task.RetryCount).
+			Msg("Task failed permanently")
+	}
+	
+	// Update task status in database
+	updErr := wp.dbQueue.UpdateTaskStatus(ctx, task)
+	if updErr != nil {
+		sentry.CaptureException(updErr)
+		log.Error().Err(updErr).Str("task_id", task.ID).Msg("Failed to mark task as failed")
+	}
+	
+	return updErr
+}
+
+func (wp *WorkerPool) processTask(ctx context.Context, task *Task) (*crawler.CrawlResult, error) {
+	// Construct a proper URL for processing
+	urlStr := constructTaskURL(task.Path, task.DomainName)
+
+	log.Info().Str("url", urlStr).Str("task_id", task.ID).Msg("Starting URL warm")
+
+	// Apply crawl delay if specified for this domain
+	applyCrawlDelay(task)
 
 	result, err := wp.crawler.WarmURL(ctx, urlStr, task.FindLinks)
 	if err != nil {
@@ -1185,123 +1325,7 @@ func (wp *WorkerPool) processTask(ctx context.Context, task *Task) (*crawler.Cra
 
 	// Process discovered links if find_links is enabled
 	if task.FindLinks && len(result.Links) > 0 {
-		log.Debug().
-			Str("task_id", task.ID).
-			Int("total_links_found", len(result.Links["header"])+len(result.Links["footer"])+len(result.Links["body"])).
-			Bool("find_links_enabled", task.FindLinks).
-			Msg("Starting link processing and priority assignment")
-
-		// Get domain ID for this job
-		var domainID int
-		err := wp.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
-			return tx.QueryRowContext(ctx, `
-				SELECT domain_id FROM jobs WHERE id = $1
-			`, task.JobID).Scan(&domainID)
-		})
-		if err != nil {
-			log.Error().
-				Err(err).
-				Str("job_id", task.JobID).
-				Msg("Failed to get domain ID for discovered links")
-			return result, nil
-		}
-
-		// Get robots rules from cache for URL filtering
-		var robotsRules *crawler.RobotsRules
-		wp.jobInfoMutex.RLock()
-		if jobInfo, exists := wp.jobInfoCache[task.JobID]; exists {
-			robotsRules = jobInfo.RobotsRules
-		}
-		wp.jobInfoMutex.RUnlock()
-
-		isHomepage := task.Path == "/"
-
-		processLinkCategory := func(links []string, priority float64) {
-			if len(links) == 0 {
-				return
-			}
-
-			// 1. Filter links for same-domain and robots.txt compliance
-			var filtered []string
-			var blockedCount int
-			for _, link := range links {
-				linkURL, err := url.Parse(link)
-				if err != nil {
-					continue
-				}
-				if isSameOrSubDomain(linkURL.Hostname(), task.DomainName) {
-					linkURL.Fragment = ""
-					if linkURL.Path != "/" && strings.HasSuffix(linkURL.Path, "/") {
-						linkURL.Path = strings.TrimSuffix(linkURL.Path, "/")
-					}
-
-					// Check robots.txt rules
-					if robotsRules != nil && !crawler.IsPathAllowed(robotsRules, linkURL.Path) {
-						blockedCount++
-						log.Debug().
-							Str("url", linkURL.String()).
-							Str("path", linkURL.Path).
-							Str("source", urlStr).
-							Msg("Link blocked by robots.txt")
-						continue
-					}
-
-					filtered = append(filtered, linkURL.String())
-				}
-			}
-
-			if blockedCount > 0 {
-				log.Info().
-					Str("task_id", task.ID).
-					Int("blocked_count", blockedCount).
-					Int("allowed_count", len(filtered)).
-					Msg("Filtered discovered links against robots.txt")
-			}
-
-			if len(filtered) == 0 {
-				return
-			}
-
-			// 2. Create page records
-			pageIDs, paths, err := db.CreatePageRecords(ctx, wp.dbQueue, domainID, task.DomainName, filtered)
-			if err != nil {
-				log.Error().Err(err).Msg("Failed to create page records for links")
-				return
-			}
-
-			// 3. Create a slice of db.Page for enqueuing
-			pagesToEnqueue := make([]db.Page, len(pageIDs))
-			for i := range pageIDs {
-				pagesToEnqueue[i] = db.Page{
-					ID:   pageIDs[i],
-					Path: paths[i],
-					// Priority will be set by the caller of processLinkCategory
-				}
-			}
-
-			// 4. Enqueue new tasks
-			if err := wp.EnqueueURLs(ctx, task.JobID, pagesToEnqueue, "link", urlStr); err != nil {
-				log.Error().Err(err).Msg("Failed to enqueue discovered links")
-				return // Stop if enqueuing fails
-			}
-
-			// 5. Update priorities for the newly created tasks
-			if err := wp.updateTaskPriorities(ctx, task.JobID, domainID, priority, paths); err != nil {
-				log.Error().Err(err).Msg("Failed to update task priorities for discovered links")
-			}
-		}
-
-		// Apply priorities based on page type and link category
-		if isHomepage {
-			log.Debug().Str("task_id", task.ID).Msg("Processing links from HOMEPAGE")
-			processLinkCategory(result.Links["header"], 1.000)
-			processLinkCategory(result.Links["footer"], 0.990)
-			processLinkCategory(result.Links["body"], task.PriorityScore*0.9) // Children of homepage
-		} else {
-			log.Debug().Str("task_id", task.ID).Msg("Processing links from regular page")
-			// For all other pages, only process body links
-			processLinkCategory(result.Links["body"], task.PriorityScore*0.9) // Children of other pages
-		}
+		wp.processDiscoveredLinks(ctx, task, result, urlStr)
 	}
 
 	return result, nil
