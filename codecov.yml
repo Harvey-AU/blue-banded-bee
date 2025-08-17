@@ -1,6 +1,8 @@
 codecov:
   require_ci_to_pass: yes
-  branch: main  # Explicitly set the default branch
+  branch:
+    - main
+    - test-branch
 
 coverage:
   precision: 2
@@ -15,7 +17,7 @@ coverage:
         base: auto
         if_ci_failed: error
         informational: false
-        only_pulls: false  # Important: Allow status checks on push events
+        only_pulls: false # Important: Allow status checks on push events
     patch:
       default:
         target: auto
@@ -23,13 +25,13 @@ coverage:
         base: auto
         if_ci_failed: error
         informational: false
-        only_pulls: false  # Important: Allow status checks on push events
+        only_pulls: false # Important: Allow status checks on push events
 
 comment:
   layout: "reach,diff,flags,files,footer"
   behavior: default
   require_changes: no
-  require_base: false  # Don't require base report for comments
+  require_base: false # Don't require base report for comments
   require_head: true
 
 # Flags group coverage reports by test type, service, etc.
@@ -39,13 +41,13 @@ flags:
     paths:
       - "**/*.go"
     carryforward: true
-  
+
   # Unit tests (tests with mocks, no DB)
   unit:
     paths:
       - "**/*.go"
     carryforward: true
-  
+
   # Integration tests (tests with real database)
   integration:
     paths:
@@ -54,38 +56,38 @@ flags:
 
 # Components group files into logical parts of your application
 component_management:
-  default_rules:  # rules that will be inherited by all components
+  default_rules: # rules that will be inherited by all components
     statuses:
       - type: project
         target: auto
         threshold: 1%
-  
+
   individual_components:
     - component_id: api
       name: API Layer
       paths:
         - "internal/api/**"
-    
+
     - component_id: crawler
       name: Web Crawler
       paths:
         - "internal/crawler/**"
-    
+
     - component_id: jobs
       name: Job Management
       paths:
         - "internal/jobs/**"
-    
+
     - component_id: database
       name: Database Layer
       paths:
         - "internal/db/**"
-    
+
     - component_id: auth
       name: Authentication
       paths:
         - "internal/auth/**"
-    
+
     - component_id: cmd
       name: Applications
       paths:
