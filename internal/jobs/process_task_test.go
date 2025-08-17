@@ -303,6 +303,10 @@ func TestProcessDiscoveredLinks(t *testing.T) {
 	}
 }
 
+// TODO: TestHandleTaskError requires integration with existing MockDbQueue
+// from worker_process_test.go to avoid conflicts. The extracted function is ready
+// for testing once the mock infrastructure is unified.
+
 // Benchmark tests for the extracted functions
 func BenchmarkConstructTaskURL(b *testing.B) {
 	b.ResetTimer()

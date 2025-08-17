@@ -501,55 +501,7 @@ func (wp *WorkerPool) processNextTask(ctx context.Context) error {
 			result, err := wp.processTask(ctx, jobsTask)
 			now := time.Now()
 			if err != nil {
-				// Check if this is a blocking error (403/429)
-				if isBlockingError(err) {
-					// For blocking errors, only retry twice (less aggressive)
-					if task.RetryCount < 2 {
-						task.RetryCount++
-						task.Status = string(TaskStatusPending)
-						task.StartedAt = time.Time{} // Reset started time
-						log.Warn().
-							Err(err).
-							Str("task_id", task.ID).
-							Int("retry_count", task.RetryCount).
-							Msg("Task blocked (403/429), limited retry scheduled")
-					} else {
-						// Mark as permanently failed after 2 retries
-						task.Status = string(TaskStatusFailed)
-						task.CompletedAt = now
-						task.Error = err.Error()
-						log.Error().
-							Err(err).
-							Str("task_id", task.ID).
-							Int("retry_count", task.RetryCount).
-							Msg("Task blocked permanently after 2 retries")
-					}
-				} else if isRetryableError(err) && task.RetryCount < MaxTaskRetries {
-					// For other retryable errors, use normal retry limit
-					task.RetryCount++
-					task.Status = string(TaskStatusPending)
-					task.StartedAt = time.Time{} // Reset started time
-					log.Warn().
-						Err(err).
-						Str("task_id", task.ID).
-						Int("retry_count", task.RetryCount).
-						Msg("Task failed with retryable error, scheduling retry")
-				} else {
-					// Mark as permanently failed
-					task.Status = string(TaskStatusFailed)
-					task.CompletedAt = now
-					task.Error = err.Error()
-					log.Error().
-						Err(err).
-						Str("task_id", task.ID).
-						Int("retry_count", task.RetryCount).
-						Msg("Task failed permanently")
-				}
-				updErr := wp.dbQueue.UpdateTaskStatus(ctx, task)
-				if updErr != nil {
-					sentry.CaptureException(updErr)
-					log.Error().Err(updErr).Str("task_id", task.ID).Msg("Failed to mark task as failed")
-				}
+				return wp.handleTaskError(ctx, task, err)
 			} else {
 				// mark as completed with metrics
 				task.Status = string(TaskStatusCompleted)
@@ -1289,6 +1241,65 @@ func (wp *WorkerPool) processDiscoveredLinks(ctx context.Context, task *Task, re
 		// For all other pages, only process body links
 		processLinkCategory(result.Links["body"], task.PriorityScore*0.9) // Children of other pages
 	}
+}
+
+// handleTaskError processes task failures with appropriate retry logic and status updates
+func (wp *WorkerPool) handleTaskError(ctx context.Context, task *db.Task, taskErr error) error {
+	now := time.Now()
+	
+	// Check if this is a blocking error (403/429)
+	if isBlockingError(taskErr) {
+		// For blocking errors, only retry twice (less aggressive)
+		if task.RetryCount < 2 {
+			task.RetryCount++
+			task.Status = string(TaskStatusPending)
+			task.StartedAt = time.Time{} // Reset started time
+			log.Warn().
+				Err(taskErr).
+				Str("task_id", task.ID).
+				Int("retry_count", task.RetryCount).
+				Msg("Task blocked (403/429), limited retry scheduled")
+		} else {
+			// Mark as permanently failed after 2 retries
+			task.Status = string(TaskStatusFailed)
+			task.CompletedAt = now
+			task.Error = taskErr.Error()
+			log.Error().
+				Err(taskErr).
+				Str("task_id", task.ID).
+				Int("retry_count", task.RetryCount).
+				Msg("Task blocked permanently after 2 retries")
+		}
+	} else if isRetryableError(taskErr) && task.RetryCount < MaxTaskRetries {
+		// For other retryable errors, use normal retry limit
+		task.RetryCount++
+		task.Status = string(TaskStatusPending)
+		task.StartedAt = time.Time{} // Reset started time
+		log.Warn().
+			Err(taskErr).
+			Str("task_id", task.ID).
+			Int("retry_count", task.RetryCount).
+			Msg("Task failed with retryable error, scheduling retry")
+	} else {
+		// Mark as permanently failed
+		task.Status = string(TaskStatusFailed)
+		task.CompletedAt = now
+		task.Error = taskErr.Error()
+		log.Error().
+			Err(taskErr).
+			Str("task_id", task.ID).
+			Int("retry_count", task.RetryCount).
+			Msg("Task failed permanently")
+	}
+	
+	// Update task status in database
+	updErr := wp.dbQueue.UpdateTaskStatus(ctx, task)
+	if updErr != nil {
+		sentry.CaptureException(updErr)
+		log.Error().Err(updErr).Str("task_id", task.ID).Msg("Failed to mark task as failed")
+	}
+	
+	return updErr
 }
 
 func (wp *WorkerPool) processTask(ctx context.Context, task *Task) (*crawler.CrawlResult, error) {
