@@ -415,6 +415,14 @@ func TestCreateJobIntegration(t *testing.T) {
 // TODO: TestUpdateJobIntegration requires sqlmock for job access validation queries
 // Will be implemented in next iteration
 
+// TODO: TestCancelJobIntegration requires sqlmock for job access validation
+// The cancelJob function performs direct SQL queries to validate job ownership
+// Will be implemented with sqlmock in next iteration
+
+// TODO: TestListJobsIntegration requires understanding exact JSON response structure  
+// The db.JobWithDomain struct has complex nested structure that needs analysis
+// Will be implemented after studying actual API response format
+
 // Helper functions
 func boolPtr(b bool) *bool {
 	return &b
