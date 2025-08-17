@@ -43,6 +43,7 @@ Assess what currently exists and what's working in the codebase.
 - Not summarising understanding back to user first
 - Failing to identify potential edge cases or assumptions
 - Overcomplicating direct questions by assuming they need alternatives or fixes
+- Never commit to Github with any mention of yourself (Claude/Gemini/etc)
 
 Only after completing ALL steps above, ask: "What would you like me to work on?"
 
@@ -141,13 +142,15 @@ When encountering functions >50 lines, apply this proven systematic approach:
 ### Proven Results
 
 **Successfully applied to 5 monster functions:**
+
 - `getJobTasks`: 216 → 56 lines (74% reduction)
-- `CreateJob`: 232 → 42 lines (82% reduction)  
+- `CreateJob`: 232 → 42 lines (82% reduction)
 - `setupJobURLDiscovery`: 108 → 17 lines (84% reduction)
 - `setupSchema`: 216 → 27 lines (87% reduction)
 - `WarmURL`: 377 → 68 lines (82% reduction)
 
 **Benefits achieved:**
+
 - 80% complexity reduction
 - 350+ new test cases
 - 38.9% total coverage (up from 30%)
