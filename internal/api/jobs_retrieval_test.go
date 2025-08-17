@@ -443,3 +443,106 @@ func TestUpdateJobIntegration(t *testing.T) {
 		})
 	}
 }
+// TestCancelJobIntegration tests the DELETE /v1/jobs/:id endpoint with sqlmock
+func TestCancelJobIntegration(t *testing.T) {
+	tests := []struct {
+		name           string
+		jobID          string
+		userID         string
+		orgID          string
+		setupSQL       func(sqlmock.Sqlmock)
+		setupMocks     func(*MockJobManager)
+		expectedStatus int
+		checkResponse  func(*testing.T, *httptest.ResponseRecorder)
+	}{
+		{
+			name:   "successful_job_cancellation",
+			jobID:  "job-123",
+			userID: "user-456",
+			orgID:  "org-789",
+			setupSQL: func(mock sqlmock.Sqlmock) {
+				// Mock job access validation query
+				rows := sqlmock.NewRows([]string{"organisation_id"}).AddRow("org-789")
+				mock.ExpectQuery(`SELECT organisation_id FROM jobs WHERE id = \$1`).
+					WithArgs("job-123").
+					WillReturnRows(rows)
+			},
+			setupMocks: func(jm *MockJobManager) {
+				// Mock successful cancellation
+				jm.On("CancelJob", mock.AnythingOfType("*context.valueCtx"), "job-123").Return(nil)
+			},
+			expectedStatus: http.StatusOK,
+			checkResponse: func(t *testing.T, rec *httptest.ResponseRecorder) {
+				var response map[string]interface{}
+				err := json.Unmarshal(rec.Body.Bytes(), &response)
+				require.NoError(t, err)
+				
+				assert.Equal(t, "success", response["status"])
+				assert.Equal(t, "Job cancelled successfully", response["message"])
+				
+				data := response["data"].(map[string]interface{})
+				assert.Equal(t, "job-123", data["id"])
+				assert.Equal(t, "cancelled", data["status"])
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create mock database
+			mockSQL, mock, err := sqlmock.New()
+			require.NoError(t, err)
+			defer mockSQL.Close()
+			
+			// Setup SQL expectations
+			tt.setupSQL(mock)
+			
+			// Create mocks
+			mockDB := new(MockDBClient)
+			mockJobsManager := new(MockJobManager)
+			
+			// Setup JobManager mocks  
+			tt.setupMocks(mockJobsManager)
+			
+			// Mock GetOrCreateUser for authentication
+			user := &db.User{
+				ID:             tt.userID,
+				Email:          "test@example.com",
+				OrganisationID: &tt.orgID,
+			}
+			mockDB.On("GetOrCreateUser", tt.userID, "test@example.com", (*string)(nil)).Return(user, nil)
+			
+			// Mock GetDB to return our sqlmock instance
+			mockDB.On("GetDB").Return(mockSQL)
+			
+			// Create handler
+			handler := NewHandler(mockDB, mockJobsManager)
+			
+			// Create authenticated request
+			req := httptest.NewRequest(http.MethodDelete, "/v1/jobs/"+tt.jobID, nil)
+			ctx := context.WithValue(req.Context(), auth.UserKey, &auth.UserClaims{
+				UserID: tt.userID,
+				Email:  "test@example.com",
+			})
+			req = req.WithContext(ctx)
+			
+			rec := httptest.NewRecorder()
+			
+			// Execute
+			handler.cancelJob(rec, req, tt.jobID)
+			
+			// Verify
+			assert.Equal(t, tt.expectedStatus, rec.Code)
+			if tt.checkResponse != nil {
+				tt.checkResponse(t, rec)
+			}
+			
+			// Verify all SQL expectations were met
+			assert.NoError(t, mock.ExpectationsWereMet())
+			
+			// Verify mocks
+			mockDB.AssertExpectations(t)
+			mockJobsManager.AssertExpectations(t)
+		})
+	}
+}
