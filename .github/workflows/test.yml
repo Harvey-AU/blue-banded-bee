@@ -147,7 +147,7 @@ jobs:
 
       - name: Upload unit test coverage to Codecov
         if: always()
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./coverage-unit.out
@@ -158,7 +158,7 @@ jobs:
 
       - name: Upload integration test coverage to Codecov
         if: always()
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./coverage-integration.out
@@ -169,7 +169,7 @@ jobs:
 
       - name: Upload combined coverage to Codecov
         if: always()
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./coverage.out
@@ -177,7 +177,6 @@ jobs:
           name: all-tests
           fail_ci_if_error: false
           verbose: true
-          slug: Harvey-AU/blue-banded-bee
 
       - name: Upload test results to Codecov
         if: ${{ !cancelled() }}
