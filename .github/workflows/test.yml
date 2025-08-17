@@ -175,8 +175,9 @@ jobs:
           files: ./coverage.out
           flags: all
           name: all-tests
-          fail_ci_if_error: true
+          fail_ci_if_error: false
           verbose: true
+          slug: Harvey-AU/blue-banded-bee
 
       - name: Upload test results to Codecov
         if: ${{ !cancelled() }}
