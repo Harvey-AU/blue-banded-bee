@@ -37,11 +37,11 @@ type DBClient interface {
 // Handler holds dependencies for API handlers
 type Handler struct {
 	DB          DBClient
-	JobsManager *jobs.JobManager
+	JobsManager jobs.JobManagerInterface
 }
 
 // NewHandler creates a new API handler with dependencies
-func NewHandler(pgDB DBClient, jobsManager *jobs.JobManager) *Handler {
+func NewHandler(pgDB DBClient, jobsManager jobs.JobManagerInterface) *Handler {
 	return &Handler{
 		DB:          pgDB,
 		JobsManager: jobsManager,
