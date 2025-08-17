@@ -546,3 +546,191 @@ func TestCancelJobIntegration(t *testing.T) {
 		})
 	}
 }
+
+// TestGetJobTasksIntegration tests the GET /v1/jobs/:id/tasks endpoint with sqlmock
+func TestGetJobTasksIntegration(t *testing.T) {
+	tests := []struct {
+		name           string
+		jobID          string
+		userID         string
+		orgID          string
+		queryParams    string
+		setupSQL       func(sqlmock.Sqlmock)
+		expectedStatus int
+		checkResponse  func(*testing.T, *httptest.ResponseRecorder)
+	}{
+		{
+			name:        "successful_tasks_retrieval",
+			jobID:       "job-123",
+			userID:      "user-456",
+			orgID:       "org-789",
+			queryParams: "",
+			setupSQL: func(mock sqlmock.Sqlmock) {
+				// Mock job access validation query (from validateJobAccess)
+				orgRows := sqlmock.NewRows([]string{"organisation_id"}).AddRow("org-789")
+				mock.ExpectQuery(`SELECT organisation_id FROM jobs WHERE id = \$1`).
+					WithArgs("job-123").
+					WillReturnRows(orgRows)
+				
+				// Mock task count query
+				countRows := sqlmock.NewRows([]string{"count"}).AddRow(2)
+				mock.ExpectQuery(`SELECT COUNT\(\*\) FROM tasks t WHERE t\.job_id = \$1`).
+					WithArgs("job-123").
+					WillReturnRows(countRows)
+				
+				// Mock tasks select query  
+				taskRows := sqlmock.NewRows([]string{
+					"id", "job_id", "path", "domain", "status", "status_code", "response_time",
+					"cache_status", "second_response_time", "second_cache_status", "content_type", 
+					"error", "source_type", "source_url", "created_at", "started_at", "completed_at", "retry_count",
+				}).AddRow(
+					"task-1", "job-123", "/page1", "example.com", "completed", 200, 150,
+					"HIT", 120, "HIT", "text/html", nil, "sitemap", nil, 
+					time.Now(), time.Now(), time.Now(), 0,
+				).AddRow(
+					"task-2", "job-123", "/page2", "example.com", "failed", 404, 300,
+					"MISS", nil, nil, "text/html", "Not found", "link", "https://example.com/page1",
+					time.Now(), time.Now(), time.Now(), 2,
+				)
+				
+				mock.ExpectQuery(`SELECT t\.id, t\.job_id, p\.path, d\.name as domain, t\.status`).
+					WithArgs("job-123", 50, 0).
+					WillReturnRows(taskRows)
+			},
+			expectedStatus: http.StatusOK,
+			checkResponse: func(t *testing.T, rec *httptest.ResponseRecorder) {
+				var response map[string]interface{}
+				err := json.Unmarshal(rec.Body.Bytes(), &response)
+				require.NoError(t, err)
+				
+				assert.Equal(t, "success", response["status"])
+				assert.Equal(t, "Tasks retrieved successfully", response["message"])
+				
+				data := response["data"].(map[string]interface{})
+				tasks := data["tasks"].([]interface{})
+				assert.Len(t, tasks, 2)
+				
+				// Check first task
+				task1 := tasks[0].(map[string]interface{})
+				assert.Equal(t, "task-1", task1["id"])
+				assert.Equal(t, "/page1", task1["path"])
+				assert.Equal(t, "https://example.com/page1", task1["url"])
+				assert.Equal(t, "completed", task1["status"])
+				assert.Equal(t, float64(200), task1["status_code"])
+				
+				// Check pagination
+				pagination := data["pagination"].(map[string]interface{})
+				assert.Equal(t, float64(50), pagination["limit"])
+				assert.Equal(t, float64(0), pagination["offset"])
+				assert.Equal(t, float64(2), pagination["total"])
+				assert.Equal(t, false, pagination["has_next"])
+			},
+		},
+		{
+			name:        "tasks_with_pagination",
+			jobID:       "job-456",
+			userID:      "user-789",
+			orgID:       "org-123",
+			queryParams: "?limit=10&offset=20",
+			setupSQL: func(mock sqlmock.Sqlmock) {
+				// Mock job access validation
+				orgRows := sqlmock.NewRows([]string{"organisation_id"}).AddRow("org-123")
+				mock.ExpectQuery(`SELECT organisation_id FROM jobs WHERE id = \$1`).
+					WithArgs("job-456").
+					WillReturnRows(orgRows)
+				
+				// Mock task count query
+				countRows := sqlmock.NewRows([]string{"count"}).AddRow(50)
+				mock.ExpectQuery(`SELECT COUNT\(\*\) FROM tasks t WHERE t\.job_id = \$1`).
+					WithArgs("job-456").
+					WillReturnRows(countRows)
+				
+				// Mock tasks select with pagination
+				taskRows := sqlmock.NewRows([]string{
+					"id", "job_id", "path", "domain", "status", "status_code", "response_time",
+					"cache_status", "second_response_time", "second_cache_status", "content_type", 
+					"error", "source_type", "source_url", "created_at", "started_at", "completed_at", "retry_count",
+				}).AddRow(
+					"task-21", "job-456", "/page21", "test.com", "completed", 200, 180,
+					"HIT", 160, "HIT", "text/html", nil, "sitemap", nil,
+					time.Now(), time.Now(), time.Now(), 0,
+				)
+				
+				mock.ExpectQuery(`SELECT t\.id, t\.job_id, p\.path, d\.name as domain, t\.status`).
+					WithArgs("job-456", 10, 20).
+					WillReturnRows(taskRows)
+			},
+			expectedStatus: http.StatusOK,
+			checkResponse: func(t *testing.T, rec *httptest.ResponseRecorder) {
+				var response map[string]interface{}
+				err := json.Unmarshal(rec.Body.Bytes(), &response)
+				require.NoError(t, err)
+				
+				data := response["data"].(map[string]interface{})
+				pagination := data["pagination"].(map[string]interface{})
+				
+				assert.Equal(t, float64(10), pagination["limit"])
+				assert.Equal(t, float64(20), pagination["offset"])
+				assert.Equal(t, float64(50), pagination["total"])
+				assert.Equal(t, true, pagination["has_next"]) // 20 + 10 = 30 < 50
+				assert.Equal(t, true, pagination["has_prev"]) // offset > 0
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create mock database
+			mockSQL, mock, err := sqlmock.New()
+			require.NoError(t, err)
+			defer mockSQL.Close()
+			
+			// Setup SQL expectations
+			tt.setupSQL(mock)
+			
+			// Create mocks
+			mockDB := new(MockDBClient)
+			mockJobsManager := new(MockJobManager)
+			
+			// Mock GetOrCreateUser for authentication
+			user := &db.User{
+				ID:             tt.userID,
+				Email:          "test@example.com",
+				OrganisationID: &tt.orgID,
+			}
+			mockDB.On("GetOrCreateUser", tt.userID, "test@example.com", (*string)(nil)).Return(user, nil)
+			
+			// Mock GetDB to return our sqlmock instance
+			mockDB.On("GetDB").Return(mockSQL)
+			
+			// Create handler
+			handler := NewHandler(mockDB, mockJobsManager)
+			
+			// Create authenticated request
+			req := httptest.NewRequest(http.MethodGet, "/v1/jobs/"+tt.jobID+"/tasks"+tt.queryParams, nil)
+			ctx := context.WithValue(req.Context(), auth.UserKey, &auth.UserClaims{
+				UserID: tt.userID,
+				Email:  "test@example.com",
+			})
+			req = req.WithContext(ctx)
+			
+			rec := httptest.NewRecorder()
+			
+			// Execute
+			handler.getJobTasks(rec, req, tt.jobID)
+			
+			// Verify
+			assert.Equal(t, tt.expectedStatus, rec.Code)
+			if tt.checkResponse != nil {
+				tt.checkResponse(t, rec)
+			}
+			
+			// Verify all SQL expectations were met
+			assert.NoError(t, mock.ExpectationsWereMet())
+			
+			// Verify mocks
+			mockDB.AssertExpectations(t)
+			mockJobsManager.AssertExpectations(t)
+		})
+	}
+}
