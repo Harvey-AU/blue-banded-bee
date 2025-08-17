@@ -1144,24 +1144,22 @@ func (wp *WorkerPool) CleanupStuckJobs(ctx context.Context) error {
 }
 
 // processTask processes an individual task
-func (wp *WorkerPool) processTask(ctx context.Context, task *Task) (*crawler.CrawlResult, error) {
-	// Construct a proper URL for processing
-	var urlStr string
-
+// constructTaskURL builds a proper URL from task path and domain information
+func constructTaskURL(path, domainName string) string {
 	// Check if path is already a full URL
-	if strings.HasPrefix(task.Path, "http://") || strings.HasPrefix(task.Path, "https://") {
-		urlStr = util.NormaliseURL(task.Path)
-	} else if task.DomainName != "" {
+	if strings.HasPrefix(path, "http://") || strings.HasPrefix(path, "https://") {
+		return util.NormaliseURL(path)
+	} else if domainName != "" {
 		// Use centralized URL construction
-		urlStr = util.ConstructURL(task.DomainName, task.Path)
+		return util.ConstructURL(domainName, path)
 	} else {
 		// Fallback case - assume path is a full URL but missing protocol
-		urlStr = util.NormaliseURL(task.Path)
+		return util.NormaliseURL(path)
 	}
+}
 
-	log.Info().Str("url", urlStr).Str("task_id", task.ID).Msg("Starting URL warm")
-
-	// Apply crawl delay if specified for this domain
+// applyCrawlDelay applies robots.txt crawl delay if specified for the task's domain
+func applyCrawlDelay(task *Task) {
 	if task.CrawlDelay > 0 {
 		log.Debug().
 			Str("task_id", task.ID).
@@ -1170,6 +1168,16 @@ func (wp *WorkerPool) processTask(ctx context.Context, task *Task) (*crawler.Cra
 			Msg("Applying crawl delay from robots.txt")
 		time.Sleep(time.Duration(task.CrawlDelay) * time.Second)
 	}
+}
+
+func (wp *WorkerPool) processTask(ctx context.Context, task *Task) (*crawler.CrawlResult, error) {
+	// Construct a proper URL for processing
+	urlStr := constructTaskURL(task.Path, task.DomainName)
+
+	log.Info().Str("url", urlStr).Str("task_id", task.ID).Msg("Starting URL warm")
+
+	// Apply crawl delay if specified for this domain
+	applyCrawlDelay(task)
 
 	result, err := wp.crawler.WarmURL(ctx, urlStr, task.FindLinks)
 	if err != nil {
