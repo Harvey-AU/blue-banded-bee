@@ -6,9 +6,11 @@ The pipeline runs on every push to main branch.
 
 ### Workflow Steps
 
-1. **Setup Go 1.25rc2**
-   ```bash
-   wget https://go.dev/dl/go1.25rc2.linux-amd64.tar.gz
+1. **Setup Go 1.25**
+   ```yaml
+   - uses: actions/setup-go@v5
+     with:
+       go-version: '1.25'
    ```
 
 2. **Code Quality Check** (golangci-lint v2.3.0)
