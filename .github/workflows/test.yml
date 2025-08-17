@@ -182,3 +182,13 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./junit.xml
+
+      - name: Upload static analysis to Codecov
+        if: always()
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_STATIC_TOKEN }}
+          flags: static-analysis
+          name: static-analysis
+          fail_ci_if_error: false
+          verbose: true
