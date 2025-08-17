@@ -82,7 +82,9 @@
       "Bash(go clean:*)",
       "Bash(time go test:*)",
       "Bash(bash:*)",
-      "Bash(touch:*)"
+      "Bash(touch:*)",
+      "Bash(git fetch:*)",
+      "Bash(git pull:*)"
     ],
     "deny": []
   },

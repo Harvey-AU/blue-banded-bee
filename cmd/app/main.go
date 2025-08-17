@@ -11,6 +11,8 @@ import (
 	"syscall"
 	"time"
 
+	"runtime/trace"
+
 	"github.com/Harvey-AU/blue-banded-bee/internal/api"
 	"github.com/Harvey-AU/blue-banded-bee/internal/crawler"
 	"github.com/Harvey-AU/blue-banded-bee/internal/db"
@@ -20,9 +22,9 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"golang.org/x/time/rate"
-	"runtime/trace"
 )
 
+// Temp
 // Config holds the application configuration loaded from environment variables
 type Config struct {
 	Port                  string // HTTP port to listen on
