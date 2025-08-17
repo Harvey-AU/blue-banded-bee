@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Harvey-AU/blue-banded-bee/internal/crawler"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -178,6 +179,128 @@ func TestApplyCrawlDelayActualSleep(t *testing.T) {
 	// Verify sleep actually occurred (with some tolerance for timing)
 	assert.GreaterOrEqual(t, elapsed, 900*time.Millisecond, "Should sleep for approximately 1 second")
 	assert.Less(t, elapsed, 1100*time.Millisecond, "Should not sleep significantly longer than 1 second")
+}
+
+func TestProcessDiscoveredLinks(t *testing.T) {
+	// Note: This function requires more complex mocking for database operations
+	// For now, we'll test the core logic patterns and add TODO for full implementation
+	
+	tests := []struct {
+		name         string
+		task         *Task
+		result       *crawler.CrawlResult
+		sourceURL    string
+		expectDBCall bool
+	}{
+		{
+			name: "no_links_found",
+			task: &Task{
+				ID:         "task-1",
+				JobID:      "job-123",
+				Path:       "/page",
+				DomainName: "example.com",
+				FindLinks:  true,
+			},
+			result: &crawler.CrawlResult{
+				Links: map[string][]string{
+					"header": {},
+					"body":   {},
+					"footer": {},
+				},
+			},
+			sourceURL:    "https://example.com/page",
+			expectDBCall: false,
+		},
+		{
+			name: "links_found_but_find_links_disabled",
+			task: &Task{
+				ID:         "task-2",
+				JobID:      "job-123", 
+				Path:       "/page",
+				DomainName: "example.com",
+				FindLinks:  false, // Disabled
+			},
+			result: &crawler.CrawlResult{
+				Links: map[string][]string{
+					"body": {"https://example.com/link1", "https://example.com/link2"},
+				},
+			},
+			sourceURL:    "https://example.com/page",
+			expectDBCall: false, // Should not be called since FindLinks is false
+		},
+		{
+			name: "homepage_with_links",
+			task: &Task{
+				ID:            "task-3",
+				JobID:         "job-123",
+				Path:          "/", // Homepage
+				DomainName:    "example.com",
+				FindLinks:     true,
+				PriorityScore: 1.0,
+			},
+			result: &crawler.CrawlResult{
+				Links: map[string][]string{
+					"header": {"https://example.com/nav1", "https://example.com/nav2"},
+					"body":   {"https://example.com/content1"},
+					"footer": {"https://example.com/footer1"},
+				},
+			},
+			sourceURL:    "https://example.com/",
+			expectDBCall: true,
+		},
+		{
+			name: "regular_page_with_links",
+			task: &Task{
+				ID:            "task-4",
+				JobID:         "job-123",
+				Path:          "/about",
+				DomainName:    "example.com", 
+				FindLinks:     true,
+				PriorityScore: 0.8,
+			},
+			result: &crawler.CrawlResult{
+				Links: map[string][]string{
+					"header": {"https://example.com/nav1"}, // Should be ignored for non-homepage
+					"body":   {"https://example.com/related1", "https://example.com/related2"},
+					"footer": {"https://example.com/footer1"}, // Should be ignored for non-homepage
+				},
+			},
+			sourceURL:    "https://example.com/about",
+			expectDBCall: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// TODO: Implement with proper mocks for WorkerPool
+			// This requires mocking:
+			// - wp.dbQueue (DbQueueProvider interface)
+			// - wp.jobInfoCache (map with RLock/RUnlock) 
+			// - wp.EnqueueURLs method
+			// - wp.updateTaskPriorities method
+			
+			// For now, verify the test structure is sound
+			assert.NotNil(t, tt.task)
+			assert.NotNil(t, tt.result)
+			assert.NotEmpty(t, tt.sourceURL)
+			
+			// Verify homepage detection logic
+			isHomepage := tt.task.Path == "/"
+			if tt.name == "homepage_with_links" {
+				assert.True(t, isHomepage)
+			} else if tt.name == "regular_page_with_links" {
+				assert.False(t, isHomepage)
+			}
+			
+			// TODO: Once WorkerPool mocking is implemented, test:
+			// - Domain ID retrieval
+			// - Robots rules cache lookup
+			// - Link category processing with correct priorities
+			// - Database page record creation
+			// - Task enqueueing
+			t.Skip("TODO: Implement with WorkerPool mocks")
+		})
+	}
 }
 
 // Benchmark tests for the extracted functions
