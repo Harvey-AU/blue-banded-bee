@@ -33,8 +33,8 @@ Blue Banded Bee is a post-publish quality assurance tool that automatically craw
 1. **Webhook-triggered scanning** (instant post-publish vs scheduled)
 2. **Full-site crawling** (all pages vs spot checks)
 3. **Cache warming** (unique for Webflow)
-4. **Aggressive pricing** ($9 for unlimited webhook scans)
-5. **Actionable fixes** (not just problem identification)
+4. **Aggressive pricing** ($5 entry point)
+5. **Ease of Use & Actionable Fixes** (brand trust and simplicity are the long-term moat)
 
 ## Pricing Strategy
 
@@ -48,14 +48,14 @@ Blue Banded Bee is a post-publish quality assurance tool that automatically craw
 
 **Starter ($5/month)**
 
-- Unlimited webhook-triggered scans
+- **50 scans / month**
 - Up to 250 pages per scan
 - Basic broken link reports
 - Email alerts
 
 **Growth ($15/month)**
 
-- Unlimited webhook-triggered scans
+- **250 scans / month**
 - Up to 1,000 pages per scan
 - Broken links + performance metrics
 - Cache warming (Webflow)
@@ -63,7 +63,7 @@ Blue Banded Bee is a post-publish quality assurance tool that automatically craw
 
 **Scale ($35/month)**
 
-- Unlimited webhook-triggered scans
+- **1,000 scans / month**
 - Up to 5,000 pages per scan
 - Advanced metrics (TTFB, LCP)
 - API access
@@ -72,32 +72,29 @@ Blue Banded Bee is a post-publish quality assurance tool that automatically craw
 
 ### Pricing Rationale
 
-- **No free tier** eliminates freeloaders and support burden
-- **$5 entry point** is low enough to not worry about, high enough to ensure commitment
-- **7-day trial** proves value without enabling permanent free usage
-- Acts as a filter: if someone won't pay $5/month, they're not a good customer
-- Limits both frequency (scans) and depth (pages per scan) to prevent abuse
-- Still competitive with Ablestar ($9) while offering more value
+- **No free tier** eliminates freeloaders and support burden.
+- **$5 entry point** is low enough to be a no-brainer, high enough to ensure commitment.
+- **7-day trial** proves value without enabling permanent free usage.
+- **Metered usage** (scan allowances) protects infrastructure from abuse while being generous.
+- **Value-based tiers:** Cache warming and performance metrics are kept to higher tiers, so we don't have to educate the lowest-price users on more complex features.
 
 ## Platform-Specific Positioning
 
 ### Webflow
 
-**Lead Message:** "Your deploys are slow. We make them instant."
+**Lead Message:** "Make every Webflow publish instantly fast."
 
-- Cache warming is the killer feature
-- Broken link checking is the bonus
-- Target agencies managing multiple client sites
-- Technical audience understands cache value
+- Frame as an essential final step in the publishing workflow.
+- Cache warming is the killer feature, broken link checking is the bonus.
+- Target agencies managing multiple client sites.
 
 ### Shopify
 
-**Lead Message:** "Find broken links before customers do"
+**Lead Message:** "Find broken links before they cost you sales."
 
-- Broken link detection is primary
-- Performance monitoring is the bonus
-- Target stores with 300+ products
-- Focus on revenue protection angle
+- Broken link detection is the primary painkiller.
+- Performance monitoring is the bonus.
+- Target stores with 300+ products and frequent updates.
 
 ## Target Customer Profile
 
@@ -105,6 +102,7 @@ Blue Banded Bee is a post-publish quality assurance tool that automatically craw
 
 - **Size:** 300-400+ pages (where manual checking fails)
 - **Update Frequency:** Publishing/updating weekly or more
+- **Business Impact:** Site quality is directly tied to revenue or client satisfaction.
 - **Type:**
   - Webflow agencies/freelancers
   - High-SKU Shopify stores
@@ -113,142 +111,118 @@ Blue Banded Bee is a post-publish quality assurance tool that automatically craw
 
 ### Customer Segments (Priority Order)
 
-1. **Webflow Agencies** - Understand technical value, can bundle into maintenance
-2. **High-Update Shopify Stores** - Frequent product changes, broken links = lost sales
-3. **Marketing Teams** - Campaign landing pages, need confidence in deploys
+1. **Webflow Agencies** - Understand technical value, can bundle into maintenance.
+2. **High-Update Shopify Stores** - Frequent product changes, broken links = lost sales.
+3. **Marketing Teams** - Launching campaign landing pages, need confidence in deploys.
 
 ## Go-to-Market Strategy
 
 ### Phase 1: Months 1-3 (Target: 50 customers)
 
-- Launch with Webflow integration
-- Manual outreach to agencies
-- Get 20-30 early customers for reviews
-- Refine based on feedback
+- Launch with Webflow integration.
+- Manual outreach to agencies.
+- **Prioritise social proof:** Get 20-30 early customers for case studies and testimonials. Incentivise reviews (e.g., one free month).
+- Refine based on feedback.
 
 ### Phase 2: Months 4-6 (Target: 200 customers)
 
-- Shopify app launch
-- Content marketing (case studies from Phase 1)
-- Comparison content vs Ablestar
-- Early SEO efforts
+- Shopify app launch.
+- Content marketing (case studies from Phase 1).
+- Comparison content vs Ablestar.
+- Early SEO efforts.
 
 ### Phase 3: Months 7-12 (Target: 500 customers)
 
-- App store optimization
-- Affiliate/referral program
-- Scale content marketing
-- Add integration partnerships
+- App store optimization.
+- Affiliate/referral program.
+- Scale content marketing.
+- Add integration partnerships.
 
 ### Phase 4: Months 13-18 (Target: 1,000 customers)
 
-- Compound growth from all channels
-- Potential feature expansion based on user feedback
-- Consider additional platforms
+- Compound growth from all channels.
+- Potential feature expansion based on user feedback.
+- Consider additional platforms.
 
 ## Messaging Framework
 
 ### Core Messages
 
-**Primary:** "Never let customers find your broken links"
+**Primary:** "The simplest way to QA your site after every publish."
+- Emphasises ease of use and automation.
+- Focuses on the workflow trigger ("after every publish").
 
-- Proactive quality assurance
-- Automatic post-publish checking
-- Peace of mind for developers
+**For Shopify:** "Automatically find broken links before they cost you sales."
+- Leads with the universal, high-impact pain point.
 
-**Secondary:** "Ship fast sites, not slow ones"
+**For Webflow:** "Ship fast sites, not slow ones."
+- Leads with the high-value "bonus" for the more technical audience.
 
-- Cache warming eliminates first-visitor penalty
-- Instant performance after deploy
-- Measurable speed improvements
+### Persona-Specific Lines
+- **For Agencies:** "Automate QA across all your client sites."
+- **For Marketers:** "Launch campaigns with confidence."
+- **For Stores:** "Protect your customer's path to purchase."
 
 ### Supporting Proof Points & Quantifiable Impact
+*This data connects our features to tangible business results and should be used in marketing materials.*
 
-This data connects our features to the tangible business results our customers care about.
+- **Boost Conversions:** A 1-second page load delay can reduce conversions by 7%. A broken link is a guaranteed lost sale for that session.
+- **Improve SEO:** Eliminate 404s to maximise your crawl budget. A faster site improves Core Web Vitals, a known Google ranking factor.
+- **Increase Speed:** Slash server response time (TTFB) by up to 90% on new content by eliminating the "first load penalty."
 
-#### **Boost Your Conversion Rate (CRO)**
-*   **The 1-Second Rule:** A 1-second delay in page load time can lead to a **7% reduction in conversions**.
-*   **The Bounce Effect:** Page load time going from 1s to 3s increases the probability of a user bouncing by **32%**.
-*   **The Bottom Line:** A fast, reliable site builds trust and removes friction from the path to purchase. A broken link isn't an error; it's a guaranteed lost sale for that user's session.
+## Roadmap
 
-#### **Improve Your SEO Rankings**
-*   **Core Web Vitals:** Google uses Core Web Vitals (CWV) as a ranking factor. A faster site directly contributes to better LCP and FID scores.
-*   **Maximise Crawl Budget:** Every 404 error is a wasted request from Googlebot. By eliminating these, you ensure Google spends its time indexing your most important content, not chasing dead ends.
-*   **User Experience Signals:** A low bounce rate and high time-on-page are positive user signals that Google rewards. Speed and reliability are the foundation for this.
-
-#### **Dramatically Increase Website Speed**
-*   **Slash Server Response Time:** Our Instant Post-Publish Speed can reduce Time to First Byte (TTFB) from over 1,000ms to **under 100ms** on new content.
-*   **Eliminate the "First Load Penalty":** We ensure the very first visitor to a new page gets the same lightning-fast, cached experience as every subsequent visitor.
-
-### Feature Hierarchy
-
-**Must Have (Launch)**
+### Short-Term (Launch / Must-Haves)
 
 - Webhook-triggered crawling
-- Visual broken link reports
-- One-click fix suggestions
+- Best-in-class broken link reporting (clear, visual, actionable)
 - Email/Slack alerts
-- Simple, clear pricing
+- Simple, clear pricing & usage dashboard
 
-**Should Have (3-6 months)**
+### Mid-Term (3-9 Months / Should-Haves)
 
 - Cache warming (Webflow specific)
 - Performance metrics (simplified)
-- Historical tracking
+- Historical tracking & reports
 - Bulk redirect management
+- Portfolio / Multi-site management for agencies
 
-**Nice to Have (6+ months)**
+### Long-Term (9+ Months / Nice-to-Haves)
 
 - API access
 - White-label reports
 - Advanced performance analytics
-- Multi-site management
-
-## Success Metrics
-
-### Key Targets
-
-- **Month 3:** 50 paying customers
-- **Month 6:** 200 paying customers
-- **Month 12:** 500 paying customers
-- **Month 18:** 1,000 paying customers
-
-### Unit Economics (Projected)
-
-- **ARPU:** $15-20/month (mix of tiers)
-- **Churn:** 5-7% monthly (improving over time)
-- **LTV:** $250-350
-- **CAC:** Target <$100 through organic/content
+- Integrations (Vercel, Netlify, other CMS platforms)
 
 ## Critical Success Factors
 
-1. **Clear differentiation from "monitoring"** - Position as QA automation, not another monitoring tool
-2. **Education on cache warming** - Webflow users need to understand the value
-3. **Social proof early** - Get those first 20-30 customers leaving reviews
-4. **Focus on 300+ page sites** - Below this, manual works; above this, you're essential
-5. **Webhook integration adoption** - This is your moat vs scheduled scanners
+1. **Lead with Broken Links:** This is the universal painkiller. Position as QA automation, not another monitoring tool.
+2. **Nail the Niche:** Focus relentlessly on 300+ page sites with frequent updates where manual QA fails.
+3. **Social Proof is Everything:** Get those first 20-30 customers leaving reviews to build trust.
+4. **Webhook Adoption:** This is the core technical moat vs. scheduled scanners.
+5. **Ease of Use:** The long-term differentiator will be brand trust and a simple, intuitive user experience.
 
 ## Risks & Mitigation
 
 ### Risks
 
-- Platform API changes breaking webhook integration
-- Competitors adding webhook triggers
-- Market education burden for cache warming
-- Infrastructure costs if abuse isn't prevented
+- Platform API changes breaking webhook integration.
+- Competitors adding webhook triggers.
+- Market education burden for cache warming.
+- Infrastructure costs if abuse isn't prevented.
 
 ### Mitigation
 
-- Multiple trigger options (webhook + scheduled fallback)
-- Build additional differentiators beyond triggers
-- Lead with broken links, educate on cache warming later
-- Per-scan page limits prevent abuse
+- Multiple trigger options (webhook + scheduled fallback).
+- Build brand and ease-of-use as differentiators beyond just features.
+- Lead with broken links, educate on cache warming to qualified users.
+- Per-scan page and monthly scan limits prevent abuse.
 
 ## Bottom Line
 
 Blue Banded Bee can realistically achieve 1,000 paying customers in 12-18 months by:
 
-- Starting narrow (Webflow agencies) then expanding (Shopify stores)
-- Leading with understood value (broken links) while educating on advanced features (cache warming)
-- Maintaining aggressive pricing while preventing abuse
-- Focusing on sites where manual QA fails (300+ pages, frequent updates)
+- Starting narrow (Webflow agencies) then expanding (Shopify stores).
+- Leading with understood value (broken links) while educating on advanced features (cache warming).
+- Maintaining aggressive, but metered, pricing.
+- Focusing on sites where manual QA is a clear and present pain.
