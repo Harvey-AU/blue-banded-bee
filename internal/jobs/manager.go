@@ -25,6 +25,25 @@ type DbQueueProvider interface {
 	CleanupStuckJobs(ctx context.Context) error
 }
 
+// JobManagerInterface defines the interface for job management operations
+type JobManagerInterface interface {
+	// Core job operations used by API layer
+	CreateJob(ctx context.Context, options *JobOptions) (*Job, error)
+	StartJob(ctx context.Context, jobID string) error
+	CancelJob(ctx context.Context, jobID string) error
+	GetJobStatus(ctx context.Context, jobID string) (*Job, error)
+	
+	// Additional job operations
+	GetJob(ctx context.Context, jobID string) (*Job, error)
+	EnqueueJobURLs(ctx context.Context, jobID string, pages []db.Page, sourceType string, sourceURL string) error
+	
+	// Job utility methods
+	IsJobComplete(job *Job) bool
+	CalculateJobProgress(job *Job) float64
+	ValidateStatusTransition(from, to JobStatus) error
+	UpdateJobStatus(ctx context.Context, jobID string, status JobStatus) error
+}
+
 // JobManager handles job creation and lifecycle management
 type JobManager struct {
 	db      *sql.DB
