@@ -1,10 +1,12 @@
 package jobs
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 
 	"github.com/Harvey-AU/blue-banded-bee/internal/crawler"
+	"github.com/Harvey-AU/blue-banded-bee/internal/db"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -332,5 +334,94 @@ func BenchmarkApplyCrawlDelayZero(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		applyCrawlDelay(task)
+	}
+}
+func TestHandleTaskSuccess(t *testing.T) {
+	tests := []struct {
+		name                string
+		task                *db.Task
+		result              *crawler.CrawlResult
+		expectDBUpdate      bool
+		expectPerfEval      bool
+		expectJSONMarshall  bool
+	}{
+		{
+			name: "successful_basic_task_completion",
+			task: &db.Task{
+				ID:     "task-1",
+				JobID:  "job-123",
+				Status: "running",
+			},
+			result: &crawler.CrawlResult{
+				StatusCode:   200,
+				ResponseTime: 150,
+				CacheStatus:  "HIT",
+				ContentType:  "text/html",
+				Performance: crawler.PerformanceMetrics{
+					DNSLookupTime:        10,
+					TCPConnectionTime:    20,
+					TLSHandshakeTime:     30,
+					TTFB:                 100,
+					ContentTransferTime:  50,
+				},
+				Headers: map[string][]string{
+					"Content-Type": {"text/html"},
+				},
+			},
+			expectDBUpdate:     true,
+			expectPerfEval:     true, // ResponseTime > 0
+			expectJSONMarshall: true,
+		},
+		{
+			name: "task_with_zero_response_time",
+			task: &db.Task{
+				ID:     "task-3",
+				JobID:  "job-789",
+				Status: "running",
+			},
+			result: &crawler.CrawlResult{
+				StatusCode:   500,
+				ResponseTime: 0, // Zero response time
+				CacheStatus:  "MISS",
+				Performance:  crawler.PerformanceMetrics{},
+			},
+			expectDBUpdate:     true,
+			expectPerfEval:     false, // ResponseTime == 0
+			expectJSONMarshall: false, // No headers
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// TODO: Implement with proper WorkerPool mock
+			// This requires mocking:
+			// - wp.dbQueue.UpdateTaskStatus (DbQueueProvider interface)
+			// - wp.evaluateJobPerformance method
+			
+			// For now, verify the test structure and data mapping logic
+			assert.NotNil(t, tt.task)
+			assert.NotNil(t, tt.result)
+			
+			// Verify performance metrics structure
+			assert.GreaterOrEqual(t, tt.result.Performance.TTFB, int64(0))
+			
+			// Verify JSON marshalling requirements
+			if tt.expectJSONMarshall {
+				if tt.result.Headers != nil {
+					_, err := json.Marshal(tt.result.Headers)
+					assert.NoError(t, err, "Headers should be marshallable")
+				}
+			}
+			
+			// TODO: Once WorkerPool mocking is implemented, test:
+			// - Task status set to TaskStatusCompleted
+			// - All metrics fields populated correctly
+			// - Performance metrics mapped properly
+			// - Second request metrics handled conditionally
+			// - JSON marshalling errors handled gracefully  
+			// - Database update called with correct task
+			// - Performance evaluation called when ResponseTime > 0
+			t.Skip("TODO: Implement with WorkerPool mocks")
+		})
 	}
 }

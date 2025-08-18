@@ -499,70 +499,11 @@ func (wp *WorkerPool) processNextTask(ctx context.Context) error {
 
 			// Process the task
 			result, err := wp.processTask(ctx, jobsTask)
-			now := time.Now()
 			if err != nil {
 				return wp.handleTaskError(ctx, task, err)
 			} else {
-				// mark as completed with metrics
-				task.Status = string(TaskStatusCompleted)
-				task.CompletedAt = now
-				task.StatusCode = result.StatusCode
-				task.ResponseTime = result.ResponseTime
-				task.CacheStatus = result.CacheStatus
-				task.ContentType = result.ContentType
-				task.ContentLength = result.ContentLength
-				task.RedirectURL = result.RedirectURL
-
-				// Performance metrics
-				task.DNSLookupTime = result.Performance.DNSLookupTime
-				task.TCPConnectionTime = result.Performance.TCPConnectionTime
-				task.TLSHandshakeTime = result.Performance.TLSHandshakeTime
-				task.TTFB = result.Performance.TTFB
-				task.ContentTransferTime = result.Performance.ContentTransferTime
-
-				// Second request metrics
-				task.SecondResponseTime = result.SecondResponseTime
-				task.SecondCacheStatus = result.SecondCacheStatus
-				if result.SecondPerformance != nil {
-					task.SecondContentLength = result.SecondContentLength
-					task.SecondDNSLookupTime = result.SecondPerformance.DNSLookupTime
-					task.SecondTCPConnectionTime = result.SecondPerformance.TCPConnectionTime
-					task.SecondTLSHandshakeTime = result.SecondPerformance.TLSHandshakeTime
-					task.SecondTTFB = result.SecondPerformance.TTFB
-					task.SecondContentTransferTime = result.SecondPerformance.ContentTransferTime
-				}
-
-				// Marshal JSONB fields
-				var err error
-				task.Headers, err = json.Marshal(result.Headers)
-				if err != nil {
-					log.Error().Err(err).Str("task_id", task.ID).Msg("Failed to marshal headers")
-				}
-				if result.SecondHeaders != nil {
-					task.SecondHeaders, err = json.Marshal(result.SecondHeaders)
-					if err != nil {
-						log.Error().Err(err).Str("task_id", task.ID).Msg("Failed to marshal second headers")
-					}
-				}
-				if result.CacheCheckAttempts != nil {
-					task.CacheCheckAttempts, err = json.Marshal(result.CacheCheckAttempts)
-					if err != nil {
-						log.Error().Err(err).Str("task_id", task.ID).Msg("Failed to marshal cache check attempts")
-					}
-				}
-
-				updErr := wp.dbQueue.UpdateTaskStatus(ctx, task)
-				if updErr != nil {
-					sentry.CaptureException(updErr)
-					log.Error().Err(updErr).Str("task_id", task.ID).Msg("Failed to mark task as completed")
-				}
-
-				// Evaluate job performance for scaling
-				if result.ResponseTime > 0 {
-					wp.evaluateJobPerformance(task.JobID, result.ResponseTime)
-				}
-		}
-		return nil
+				return wp.handleTaskSuccess(ctx, task, result)
+			}
 	}
 
 	// No tasks found in any active jobs
@@ -1297,6 +1238,73 @@ func (wp *WorkerPool) handleTaskError(ctx context.Context, task *db.Task, taskEr
 	if updErr != nil {
 		sentry.CaptureException(updErr)
 		log.Error().Err(updErr).Str("task_id", task.ID).Msg("Failed to mark task as failed")
+	}
+	
+	return updErr
+}
+
+// handleTaskSuccess processes successful task completion with metrics and database updates
+func (wp *WorkerPool) handleTaskSuccess(ctx context.Context, task *db.Task, result *crawler.CrawlResult) error {
+	now := time.Now()
+	
+	// Mark as completed with basic metrics
+	task.Status = string(TaskStatusCompleted)
+	task.CompletedAt = now
+	task.StatusCode = result.StatusCode
+	task.ResponseTime = result.ResponseTime
+	task.CacheStatus = result.CacheStatus
+	task.ContentType = result.ContentType
+	task.ContentLength = result.ContentLength
+	task.RedirectURL = result.RedirectURL
+
+	// Performance metrics
+	task.DNSLookupTime = result.Performance.DNSLookupTime
+	task.TCPConnectionTime = result.Performance.TCPConnectionTime
+	task.TLSHandshakeTime = result.Performance.TLSHandshakeTime
+	task.TTFB = result.Performance.TTFB
+	task.ContentTransferTime = result.Performance.ContentTransferTime
+
+	// Second request metrics
+	task.SecondResponseTime = result.SecondResponseTime
+	task.SecondCacheStatus = result.SecondCacheStatus
+	if result.SecondPerformance != nil {
+		task.SecondContentLength = result.SecondContentLength
+		task.SecondDNSLookupTime = result.SecondPerformance.DNSLookupTime
+		task.SecondTCPConnectionTime = result.SecondPerformance.TCPConnectionTime
+		task.SecondTLSHandshakeTime = result.SecondPerformance.TLSHandshakeTime
+		task.SecondTTFB = result.SecondPerformance.TTFB
+		task.SecondContentTransferTime = result.SecondPerformance.ContentTransferTime
+	}
+
+	// Marshal JSONB fields
+	var err error
+	task.Headers, err = json.Marshal(result.Headers)
+	if err != nil {
+		log.Error().Err(err).Str("task_id", task.ID).Msg("Failed to marshal headers")
+	}
+	if result.SecondHeaders != nil {
+		task.SecondHeaders, err = json.Marshal(result.SecondHeaders)
+		if err != nil {
+			log.Error().Err(err).Str("task_id", task.ID).Msg("Failed to marshal second headers")
+		}
+	}
+	if result.CacheCheckAttempts != nil {
+		task.CacheCheckAttempts, err = json.Marshal(result.CacheCheckAttempts)
+		if err != nil {
+			log.Error().Err(err).Str("task_id", task.ID).Msg("Failed to marshal cache check attempts")
+		}
+	}
+
+	// Update task status in database
+	updErr := wp.dbQueue.UpdateTaskStatus(ctx, task)
+	if updErr != nil {
+		sentry.CaptureException(updErr)
+		log.Error().Err(updErr).Str("task_id", task.ID).Msg("Failed to mark task as completed")
+	}
+
+	// Evaluate job performance for scaling
+	if result.ResponseTime > 0 {
+		wp.evaluateJobPerformance(task.JobID, result.ResponseTime)
 	}
 	
 	return updErr
