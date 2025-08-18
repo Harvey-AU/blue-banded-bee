@@ -377,6 +377,84 @@ func TestUpdateJobIntegration(t *testing.T) {
 				assert.Contains(t, response["message"].(string), "Invalid action")
 			},
 		},
+		{
+			name:   "invalid_json_payload",
+			jobID:  "job-123",
+			userID: "user-456",
+			orgID:  "org-789",
+			action: "invalid-json",
+			setupSQL: func(mock sqlmock.Sqlmock) {
+				// No SQL expectations - should fail before DB access
+			},
+			setupMocks: func(jm *MockJobManager) {
+				// No JobManager expectations - should fail before JobManager calls
+			},
+			expectedStatus: http.StatusBadRequest,
+			checkResponse: func(t *testing.T, rec *httptest.ResponseRecorder) {
+				var response map[string]interface{}
+				err := json.Unmarshal(rec.Body.Bytes(), &response)
+				require.NoError(t, err)
+				
+				assert.Equal(t, float64(400), response["status"])
+				assert.Equal(t, "BAD_REQUEST", response["code"])
+				assert.Equal(t, "Invalid JSON request body", response["message"])
+			},
+		},
+		{
+			name:   "start_job_manager_failure",
+			jobID:  "job-123",
+			userID: "user-456",
+			orgID:  "org-789",
+			action: "start",
+			setupSQL: func(mock sqlmock.Sqlmock) {
+				// Mock job access validation (should pass)
+				rows := sqlmock.NewRows([]string{"organisation_id"}).AddRow("org-789")
+				mock.ExpectQuery(`SELECT organisation_id FROM jobs WHERE id = \$1`).
+					WithArgs("job-123").
+					WillReturnRows(rows)
+			},
+			setupMocks: func(jm *MockJobManager) {
+				// Mock StartJob failure
+				jm.On("StartJob", mock.AnythingOfType("*context.valueCtx"), "job-123").Return(assert.AnError)
+			},
+			expectedStatus: http.StatusInternalServerError,
+			checkResponse: func(t *testing.T, rec *httptest.ResponseRecorder) {
+				var response map[string]interface{}
+				err := json.Unmarshal(rec.Body.Bytes(), &response)
+				require.NoError(t, err)
+				
+				assert.Equal(t, float64(500), response["status"])
+				assert.Equal(t, "INTERNAL_ERROR", response["code"])
+			},
+		},
+		{
+			name:   "get_status_failure_after_success",
+			jobID:  "job-123",
+			userID: "user-456",
+			orgID:  "org-789",
+			action: "start",
+			setupSQL: func(mock sqlmock.Sqlmock) {
+				// Mock job access validation (should pass)
+				rows := sqlmock.NewRows([]string{"organisation_id"}).AddRow("org-789")
+				mock.ExpectQuery(`SELECT organisation_id FROM jobs WHERE id = \$1`).
+					WithArgs("job-123").
+					WillReturnRows(rows)
+			},
+			setupMocks: func(jm *MockJobManager) {
+				// Mock successful start but failed status retrieval
+				jm.On("StartJob", mock.AnythingOfType("*context.valueCtx"), "job-123").Return(nil)
+				jm.On("GetJobStatus", mock.AnythingOfType("*context.valueCtx"), "job-123").Return(nil, assert.AnError)
+			},
+			expectedStatus: http.StatusInternalServerError,
+			checkResponse: func(t *testing.T, rec *httptest.ResponseRecorder) {
+				var response map[string]interface{}
+				err := json.Unmarshal(rec.Body.Bytes(), &response)
+				require.NoError(t, err)
+				
+				assert.Equal(t, float64(500), response["status"])
+				assert.Equal(t, "INTERNAL_ERROR", response["code"])
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -396,7 +474,7 @@ func TestUpdateJobIntegration(t *testing.T) {
 			// Setup JobManager mocks
 			tt.setupMocks(mockJobsManager)
 			
-			// Mock GetOrCreateUser for authentication
+			// Mock authentication for all tests (auth happens before JSON parsing)
 			user := &db.User{
 				ID:             tt.userID,
 				Email:          "test@example.com",
@@ -404,16 +482,24 @@ func TestUpdateJobIntegration(t *testing.T) {
 			}
 			mockDB.On("GetOrCreateUser", tt.userID, "test@example.com", (*string)(nil)).Return(user, nil)
 			
-			// Mock GetDB to return our sqlmock instance
-			mockDB.On("GetDB").Return(mockSQL)
+			// Mock GetDB only for tests that reach SQL queries
+			if tt.name != "invalid_json_payload" {
+				mockDB.On("GetDB").Return(mockSQL)
+			}
 			
 			// Create handler
 			handler := NewHandler(mockDB, mockJobsManager)
 			
 			// Create request with action
-			requestBody := map[string]string{"action": tt.action}
-			bodyBytes, err := json.Marshal(requestBody)
-			require.NoError(t, err)
+			var bodyBytes []byte
+			if tt.name == "invalid_json_payload" {
+				// Send invalid JSON
+				bodyBytes = []byte("{invalid json}")
+			} else {
+				requestBody := map[string]string{"action": tt.action}
+				bodyBytes, err = json.Marshal(requestBody)
+				require.NoError(t, err)
+			}
 			
 			req := createAuthenticatedRequest(http.MethodPut, "/v1/jobs/"+tt.jobID, bodyBytes)
 			// Override user context for this specific test
@@ -434,8 +520,10 @@ func TestUpdateJobIntegration(t *testing.T) {
 				tt.checkResponse(t, rec)
 			}
 			
-			// Verify all SQL expectations were met
-			assert.NoError(t, mock.ExpectationsWereMet())
+			// Verify all SQL expectations were met (if any were set)
+			if tt.name != "invalid_json_payload" {
+				assert.NoError(t, mock.ExpectationsWereMet())
+			}
 			
 			// Verify mocks
 			mockDB.AssertExpectations(t)
@@ -485,6 +573,53 @@ func TestCancelJobIntegration(t *testing.T) {
 				assert.Equal(t, "cancelled", data["status"])
 			},
 		},
+		{
+			name:   "cancel_user_creation_error",
+			jobID:  "job-123",
+			userID: "user-456",
+			orgID:  "org-789",
+			setupSQL: func(mock sqlmock.Sqlmock) {
+				// No SQL expectations - should fail before DB access
+			},
+			setupMocks: func(jm *MockJobManager) {
+				// No JobManager expectations - should fail before JobManager calls
+			},
+			expectedStatus: http.StatusInternalServerError,
+			checkResponse: func(t *testing.T, rec *httptest.ResponseRecorder) {
+				var response map[string]interface{}
+				err := json.Unmarshal(rec.Body.Bytes(), &response)
+				require.NoError(t, err)
+				
+				assert.Equal(t, float64(500), response["status"])
+				assert.Equal(t, "INTERNAL_ERROR", response["code"])
+			},
+		},
+		{
+			name:   "cancel_manager_error",
+			jobID:  "job-123",
+			userID: "user-456",
+			orgID:  "org-789",
+			setupSQL: func(mock sqlmock.Sqlmock) {
+				// Mock job access validation (should pass)
+				rows := sqlmock.NewRows([]string{"organisation_id"}).AddRow("org-789")
+				mock.ExpectQuery(`SELECT organisation_id FROM jobs WHERE id = \$1`).
+					WithArgs("job-123").
+					WillReturnRows(rows)
+			},
+			setupMocks: func(jm *MockJobManager) {
+				// Mock CancelJob failure
+				jm.On("CancelJob", mock.AnythingOfType("*context.valueCtx"), "job-123").Return(assert.AnError)
+			},
+			expectedStatus: http.StatusInternalServerError,
+			checkResponse: func(t *testing.T, rec *httptest.ResponseRecorder) {
+				var response map[string]interface{}
+				err := json.Unmarshal(rec.Body.Bytes(), &response)
+				require.NoError(t, err)
+				
+				assert.Equal(t, float64(500), response["status"])
+				assert.Equal(t, "INTERNAL_ERROR", response["code"])
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -504,16 +639,18 @@ func TestCancelJobIntegration(t *testing.T) {
 			// Setup JobManager mocks  
 			tt.setupMocks(mockJobsManager)
 			
-			// Mock GetOrCreateUser for authentication
-			user := &db.User{
-				ID:             tt.userID,
-				Email:          "test@example.com",
-				OrganisationID: &tt.orgID,
+			// Mock GetOrCreateUser based on test case
+			if tt.name == "cancel_user_creation_error" {
+				mockDB.On("GetOrCreateUser", tt.userID, "test@example.com", (*string)(nil)).Return(nil, assert.AnError)
+			} else {
+				user := &db.User{
+					ID:             tt.userID,
+					Email:          "test@example.com",
+					OrganisationID: &tt.orgID,
+				}
+				mockDB.On("GetOrCreateUser", tt.userID, "test@example.com", (*string)(nil)).Return(user, nil)
+				mockDB.On("GetDB").Return(mockSQL)
 			}
-			mockDB.On("GetOrCreateUser", tt.userID, "test@example.com", (*string)(nil)).Return(user, nil)
-			
-			// Mock GetDB to return our sqlmock instance
-			mockDB.On("GetDB").Return(mockSQL)
 			
 			// Create handler
 			handler := NewHandler(mockDB, mockJobsManager)
@@ -537,8 +674,10 @@ func TestCancelJobIntegration(t *testing.T) {
 				tt.checkResponse(t, rec)
 			}
 			
-			// Verify all SQL expectations were met
-			assert.NoError(t, mock.ExpectationsWereMet())
+			// Verify all SQL expectations were met (only for tests that access DB)
+			if tt.name != "cancel_user_creation_error" {
+				assert.NoError(t, mock.ExpectationsWereMet())
+			}
 			
 			// Verify mocks
 			mockDB.AssertExpectations(t)
