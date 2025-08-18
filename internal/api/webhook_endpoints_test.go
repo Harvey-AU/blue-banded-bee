@@ -181,3 +181,111 @@ func TestWebflowWebhookIntegration(t *testing.T) {
 		})
 	}
 }
+// TestWebflowWebhookEdgeCases tests additional edge cases for comprehensive coverage
+func TestWebflowWebhookEdgeCases(t *testing.T) {
+	tests := []struct {
+		name           string
+		path           string
+		requestBody    interface{} // Use interface{} for invalid JSON testing
+		setupMocks     func(*MockDBClient, *MockJobManager)
+		expectedStatus int
+		checkResponse  func(*testing.T, *httptest.ResponseRecorder)
+	}{
+		{
+			name: "webhook_non_site_publish_trigger",
+			path: "/v1/webhooks/webflow/test-token",
+			requestBody: map[string]interface{}{
+				"triggerType": "form_submission", // Not site_publish
+				"payload": map[string]interface{}{
+					"domains": []string{"example.com"},
+				},
+			},
+			setupMocks: func(mockDB *MockDBClient, jm *MockJobManager) {
+				user := &db.User{
+					ID:             "webhook-user-123",
+					Email:          "webhook@example.com",
+					OrganisationID: stringPtr("webhook-org-456"),
+				}
+				mockDB.On("GetUserByWebhookToken", "test-token").Return(user, nil)
+				// No JobManager mocks - should be ignored
+			},
+			expectedStatus: http.StatusOK,
+			checkResponse: func(t *testing.T, rec *httptest.ResponseRecorder) {
+				var response map[string]interface{}
+				err := json.Unmarshal(rec.Body.Bytes(), &response)
+				require.NoError(t, err)
+				
+				assert.Equal(t, "success", response["status"])
+				assert.Contains(t, response["message"].(string), "ignored")
+			},
+		},
+		{
+			name: "webhook_job_creation_failure",
+			path: "/v1/webhooks/webflow/test-token",
+			requestBody: map[string]interface{}{
+				"triggerType": "site_publish",
+				"payload": map[string]interface{}{
+					"domains": []string{"example.com"},
+					"publishedBy": map[string]interface{}{
+						"displayName": "Test Publisher",
+					},
+				},
+			},
+			setupMocks: func(mockDB *MockDBClient, jm *MockJobManager) {
+				user := &db.User{
+					ID:             "webhook-user-123",
+					Email:          "webhook@example.com",
+					OrganisationID: stringPtr("webhook-org-456"),
+				}
+				mockDB.On("GetUserByWebhookToken", "test-token").Return(user, nil)
+				
+				// Mock job creation failure
+				jm.On("CreateJob", mock.Anything, mock.AnythingOfType("*jobs.JobOptions")).Return(nil, assert.AnError)
+			},
+			expectedStatus: http.StatusInternalServerError,
+			checkResponse: func(t *testing.T, rec *httptest.ResponseRecorder) {
+				var response map[string]interface{}
+				err := json.Unmarshal(rec.Body.Bytes(), &response)
+				require.NoError(t, err)
+				
+				assert.Equal(t, float64(500), response["status"])
+				assert.Equal(t, "INTERNAL_ERROR", response["code"])
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			handler, mockDB, mockJobsManager := createTestHandler()
+			
+			// Setup mocks
+			tt.setupMocks(mockDB, mockJobsManager)
+			
+			// Create request
+			var req *http.Request
+			if tt.name == "webhook_invalid_json_payload" {
+				// Send invalid JSON
+				req = httptest.NewRequest(http.MethodPost, tt.path, bytes.NewBufferString("{invalid json}"))
+			} else {
+				requestBody, err := json.Marshal(tt.requestBody)
+				require.NoError(t, err)
+				req = httptest.NewRequest(http.MethodPost, tt.path, bytes.NewBuffer(requestBody))
+			}
+			req.Header.Set("Content-Type", "application/json")
+			rec := httptest.NewRecorder()
+			
+			// Execute
+			handler.WebflowWebhook(rec, req)
+			
+			// Verify
+			assert.Equal(t, tt.expectedStatus, rec.Code)
+			if tt.checkResponse != nil {
+				tt.checkResponse(t, rec)
+			}
+			
+			// Verify mocks
+			mockDB.AssertExpectations(t)
+			mockJobsManager.AssertExpectations(t)
+		})
+	}
+}
