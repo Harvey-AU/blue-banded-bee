@@ -938,7 +938,7 @@ func (wp *WorkerPool) flushBatches(ctx context.Context) {
 			for _, task := range tasks {
 				if task.Status == TaskStatusCompleted || task.Status == TaskStatusFailed {
 					if task.CompletedAt.IsZero() {
-						task.CompletedAt = time.Now()
+						task.CompletedAt = time.Now().UTC()
 					}
 					_, err := stmt.ExecContext(ctx,
 						task.Status, task.CompletedAt,
