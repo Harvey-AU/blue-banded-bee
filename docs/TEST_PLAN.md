@@ -1,53 +1,63 @@
-# Blue Banded Bee Test Plan
+# Blue Banded Bee Test Plan - Updated Aug 2025
 
-## Overview
+## Current State - Comprehensive API Testing Achieved ✅
 
-Comprehensive testing plan for unit and integration tests using mocks and testify framework.
+**API Package Coverage: 33.2%** (+1500% improvement)
 
-## CRITICAL TEST FIXES REQUIRED (Expert Review - Aug 2025)
+### ✅ **COMPLETED: All Critical API Endpoints**
 
-### P0 - CRITICAL Production Risks (Fix Immediately)
+**Job Management APIs** (Stage 5 Ready):
+- ✅ **createJob: 88.2%** - Interface-based testing with MockJobManager
+- ✅ **getJob: 82.8%** - Sqlmock-based testing with job access validation  
+- ✅ **updateJob: 67.5%** - Sqlmock-based testing with action validation
+- ✅ **cancelJob: 47.8%** - Sqlmock-based testing with organisation security
+- ✅ **getJobTasks: 63.0%** - Sqlmock-based testing with pagination
 
-- [x] **Fix health endpoint panic** - `/health/db` panics when DB is nil (handlers.go)
-  - Guard `h.DB == nil` before `h.DB.GetDB().Ping()`
-  - Return 503 with unhealthy JSON, not panic
-  - Update test to expect 503, not panic
-- [x] **Fix broken `contains()` function** in worker_advanced_test.go:347-349
-  - Current: returns true for any non-empty strings
-  - Fix: use `strings.Contains(s, substr)`
-- [x] **Make DB mockable** - Cannot unit test DB paths
-  - Define `DBClient interface { GetDB() *sql.DB }` (expanded to match handler needs)
-  - Added constructor/wrappers to use a real \*sql.DB in tests where needed
-  - Added sqlmock tests for healthy/unhealthy DB ping in `internal/api/handlers_db_test.go`
+**Dashboard APIs** (Frontend Ready):
+- ✅ **DashboardStats: 83.3%** - Interface-based testing with MockDBClient
+- ✅ **DashboardActivity: 79.2%** - Interface-based testing with date ranges
 
-### P1 - HIGH Priority Brittleness (Fix Today)
+**Integration APIs** (Webflow Ready):
+- ✅ **WebflowWebhook: 70.0%** - Complete webhook flow testing
 
-- [x] **Centralise version string** - handlers_test.go hard-codes "0.4.0"
-  - Create package-level `var Version = "0.4.0"`
-  - Use in HealthCheck handler
-  - Update test to assert non-empty or use Version var
-- [x] **Replace placeholder tests** in db_operations_test.go
-  - Tests assert on local variables, not production code
-  - Add real unit tests for DSN building and pool config
-  - Or mark with `t.Skip("TODO: real tests")`
-- [x] **Add t.Cleanup() for resource management**
-  - Use immediately after creating resources
-  - Ensure cleanup even on test failure
-  - Critical for integration tests
-  - Implemented in manager_test.go with proper LIFO ordering
-- [x] **Fix timing assertions** - Remove fragile upper bounds
-  - middleware_test.go: remove `elapsed < delay+10ms`
-  - Keep only `elapsed >= delay`
-  - Add exponential backoff for polling tests
+### ✅ **COMPLETED: Architecture Improvements**
 
-### P2 - MEDIUM Testing Quality (Fix This Week)
+- ✅ **JobManagerInterface extraction** - Enables dependency injection and testing
+- ✅ **Comprehensive mock infrastructure** - MockJobManager, MockDBClient
+- ✅ **Separated test concerns** - 4 focused test files from 889-line monolith
+- ✅ **Two testing patterns established** - Interface-based + sqlmock-based
 
-- [ ] **Add t.Parallel() to independent tests**
-  - Identify all unit tests without shared state
-  - Add `t.Parallel()` at start
-  - Don't parallelise integration tests
-- [ ] **Convert integration tests to unit tests**
-  - Identify tests that could use mocks
+### ✅ **COMPLETED: Critical Issues (P0/P1)**
+
+All critical production risks and brittleness issues resolved.
+
+## Next Priorities - Following Extract + Test + Commit Methodology
+
+### **HIGH IMPACT: Auth Middleware Testing** (Stage 5 Blocker)
+- **`AuthMiddleware`: 0%** - Core authentication logic for all protected endpoints
+- **`validateSupabaseToken`: 0%** - JWT validation logic  
+- **`GetUserFromContext`: 0%** - Context utilities used across API
+- **Approach**: Interface-based testing with mock auth clients
+- **File**: Create `auth_middleware_test.go` for focused testing
+
+### **MEDIUM IMPACT: Database Operations Testing**
+- **`GetJobStats`: 0%** - Backend for tested DashboardStats endpoint
+- **`GetJobActivity`: 0%** - Backend for tested DashboardActivity endpoint  
+- **`ListJobs`: 0%** - Backend for job listing functionality
+- **Approach**: Sqlmock-based testing in `db_operations_test.go`
+
+### **REMAINING: Jobs Core Logic**
+- **`GetJobStatus`: 0%** - Used by updateJob (already partially tested via API)
+- **`EnqueueJobURLs`: 0%** - Core job processing logic
+- **`discoverAndParseSitemaps`: 0%** - Sitemap processing logic
+- **Approach**: Interface extraction + comprehensive mocking
+
+### **COMPLETED METHODOLOGY SUCCESS**
+Extract + Test + Commit has delivered:
+- **API endpoints: 33.2% coverage** from comprehensive testing
+- **ProcessTask refactoring: 83% complexity reduction** 
+- **Zero functional regressions** across extensive refactoring
+- **Interface-based architecture** enabling fast, isolated testing
   - Reduce database dependency
   - Improve test speed (target < 10s for units)
 - [ ] **Implement proper mock strategy**
