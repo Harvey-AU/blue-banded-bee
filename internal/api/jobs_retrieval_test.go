@@ -278,8 +278,8 @@ func TestUpdateJobIntegration(t *testing.T) {
 					FailedTasks:    0,
 					SkippedTasks:   0,
 					Progress:       40.0,
-					CreatedAt:      time.Now(),
-					CompletedAt:    time.Now(),
+					CreatedAt:      time.Now().UTC(),
+					CompletedAt:    time.Now().UTC(),
 				}
 				jm.On("GetJobStatus", mock.AnythingOfType("*context.valueCtx"), "job-456").Return(job, nil)
 			},

@@ -1022,6 +1022,76 @@
           justify-content: center;
         }
       }
+
+      /* Analysis sections styles */
+      .bb-analysis-section {
+        background: white;
+        border-radius: 8px;
+        padding: 24px;
+        margin-bottom: 24px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      }
+
+      .bb-analysis-card {
+        border: 1px solid #e5e7eb;
+        border-radius: 6px;
+        padding: 16px;
+        margin-bottom: 12px;
+        background: #fafbfc;
+      }
+
+      .bb-analysis-card:last-child {
+        margin-bottom: 0;
+      }
+
+      .bb-analysis-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 8px;
+      }
+
+      .bb-analysis-url {
+        font-family: 'Monaco', 'Consolas', monospace;
+        font-size: 0.9rem;
+        font-weight: 500;
+        color: #1f2937;
+        word-break: break-all;
+      }
+
+      .bb-analysis-metric {
+        font-size: 0.9rem;
+        color: #6b7280;
+        white-space: nowrap;
+      }
+
+      .bb-analysis-details {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 0.85rem;
+        color: #9ca3af;
+      }
+
+      .bb-analysis-domain {
+        color: #059669;
+        font-weight: 500;
+      }
+
+      .bb-redirect-url {
+        font-family: 'Monaco', 'Consolas', monospace;
+        font-size: 0.85rem;
+        color: #dc2626;
+        word-break: break-all;
+        margin-top: 4px;
+      }
+
+      .bb-analysis-empty {
+        text-align: center;
+        color: #6b7280;
+        font-style: italic;
+        padding: 32px 16px;
+      }
     </style>
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-D990P29YMF"></script>
@@ -1174,6 +1244,64 @@
                   </button>
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Slow Pages Analysis Section -->
+        <div class="bb-analysis-section">
+          <div class="bb-section-header">
+            <h3>Slow Pages Analysis</h3>
+            <div class="bb-section-actions">
+              <button class="bb-btn bb-btn-secondary" bb-action="refresh-slow-pages"><span>↻</span> Refresh</button>
+            </div>
+          </div>
+          <div class="bb-analysis-list">
+            <!-- Slow Page Template -->
+            <div class="bb-analysis-card" data-bb-template="slow_page">
+              <div class="bb-analysis-header">
+                <div class="bb-analysis-url" data-bb-bind="url">https://example.com/slow-page</div>
+                <div class="bb-analysis-metric">
+                  <span data-bb-bind="second_response_time">0</span>ms
+                </div>
+              </div>
+              <div class="bb-analysis-details">
+                <span class="bb-analysis-domain" data-bb-bind="domain">example.com</span>
+                <span data-bb-bind="completed_at">2024-01-01T12:00:00Z</span>
+              </div>
+            </div>
+            <!-- Empty state -->
+            <div class="bb-analysis-empty" data-bb-show-if="slow_pages.length=0">
+              No slow pages found in the selected time period.
+            </div>
+          </div>
+        </div>
+
+        <!-- External Redirects Analysis Section -->
+        <div class="bb-analysis-section">
+          <div class="bb-section-header">
+            <h3>External Redirects</h3>
+            <div class="bb-section-actions">
+              <button class="bb-btn bb-btn-secondary" bb-action="refresh-redirects"><span>↻</span> Refresh</button>
+            </div>
+          </div>
+          <div class="bb-analysis-list">
+            <!-- External Redirect Template -->
+            <div class="bb-analysis-card" data-bb-template="external_redirect">
+              <div class="bb-analysis-header">
+                <div class="bb-analysis-url" data-bb-bind="url">https://example.com/redirect</div>
+              </div>
+              <div class="bb-redirect-url">
+                → <span data-bb-bind="redirect_url">https://external-site.com/target</span>
+              </div>
+              <div class="bb-analysis-details">
+                <span class="bb-analysis-domain" data-bb-bind="domain">example.com</span>
+                <span data-bb-bind="completed_at">2024-01-01T12:00:00Z</span>
+              </div>
+            </div>
+            <!-- Empty state -->
+            <div class="bb-analysis-empty" data-bb-show-if="external_redirects.length=0">
+              No external redirects found in the selected time period.
             </div>
           </div>
         </div>
@@ -1581,8 +1709,32 @@
               started_at_formatted: job.started_at ? new Date(job.started_at).toLocaleString() : "-",
             }));
 
-            // Bind jobs to template
-            this.bindTemplates({ job: processedJobs });
+            // Load slow pages data
+            const slowPagesResponse = await this.fetchData("/v1/dashboard/slow-pages?range=today");
+            const slowPages = slowPagesResponse.slow_pages || [];
+
+            // Process slow pages data for better display
+            const processedSlowPages = slowPages.map((page) => ({
+              ...page,
+              completed_at: page.completed_at ? new Date(page.completed_at).toLocaleString() : "-",
+            }));
+
+            // Load external redirects data
+            const redirectsResponse = await this.fetchData("/v1/dashboard/external-redirects?range=today");
+            const externalRedirects = redirectsResponse.external_redirects || [];
+
+            // Process external redirects data for better display
+            const processedRedirects = externalRedirects.map((redirect) => ({
+              ...redirect,
+              completed_at: redirect.completed_at ? new Date(redirect.completed_at).toLocaleString() : "-",
+            }));
+
+            // Bind all templates
+            this.bindTemplates({ 
+              job: processedJobs,
+              slow_page: processedSlowPages,
+              external_redirect: processedRedirects
+            });
 
             // Show empty state if no jobs
             if (processedJobs.length === 0) {
@@ -1765,6 +1917,12 @@
         switch (action) {
           case "refresh-dashboard":
             refreshDashboard();
+            break;
+          case "refresh-slow-pages":
+            refreshSlowPages();
+            break;
+          case "refresh-redirects":
+            refreshExternalRedirects();
             break;
           case "create-job":
             createJob();
@@ -2151,6 +2309,42 @@
           }, 2000);
         });
 
+        dataBinder.refresh();
+      }
+
+      function refreshSlowPages() {
+        // Add loading state to refresh buttons
+        document.querySelectorAll('[bb-action="refresh-slow-pages"]').forEach((btn) => {
+          const originalText = btn.innerHTML;
+          btn.innerHTML = "<span>⟳</span> Refreshing...";
+          btn.disabled = true;
+
+          // Reset button after refresh completes
+          setTimeout(() => {
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+          }, 2000);
+        });
+
+        // Refresh slow pages data
+        dataBinder.refresh();
+      }
+
+      function refreshExternalRedirects() {
+        // Add loading state to refresh buttons
+        document.querySelectorAll('[bb-action="refresh-redirects"]').forEach((btn) => {
+          const originalText = btn.innerHTML;
+          btn.innerHTML = "<span>⟳</span> Refreshing...";
+          btn.disabled = true;
+
+          // Reset button after refresh completes
+          setTimeout(() => {
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+          }, 2000);
+        });
+
+        // Refresh external redirects data
         dataBinder.refresh();
       }
 

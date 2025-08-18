@@ -147,7 +147,7 @@ func TestJobLifecycleCompletion(t *testing.T) {
 			// If complete, update status
 			if isComplete && job.Status == JobStatusRunning {
 				job.Status = JobStatusCompleted
-				job.CompletedAt = time.Now()
+				job.CompletedAt = time.Now().UTC()
 			}
 
 			assert.Equal(t, tt.expectedStatus, job.Status)
