@@ -25,6 +25,8 @@ type DBClient interface {
 	GetOrCreateUser(userID, email string, orgID *string) (*db.User, error)
 	GetJobStats(organisationID string, startDate, endDate *time.Time) (*db.JobStats, error)
 	GetJobActivity(organisationID string, startDate, endDate *time.Time) ([]db.ActivityPoint, error)
+	GetSlowPages(organisationID string, startDate, endDate *time.Time) ([]db.SlowPage, error)
+	GetExternalRedirects(organisationID string, startDate, endDate *time.Time) ([]db.ExternalRedirect, error)
 	GetUserByWebhookToken(token string) (*db.User, error)
 	// Additional methods used by API handlers
 	GetUser(userID string) (*db.User, error)
@@ -61,6 +63,8 @@ func (h *Handler) SetupRoutes(mux *http.ServeMux) {
 	// Dashboard API routes (require auth)
 	mux.Handle("/v1/dashboard/stats", auth.AuthMiddleware(http.HandlerFunc(h.DashboardStats)))
 	mux.Handle("/v1/dashboard/activity", auth.AuthMiddleware(http.HandlerFunc(h.DashboardActivity)))
+	mux.Handle("/v1/dashboard/slow-pages", auth.AuthMiddleware(http.HandlerFunc(h.DashboardSlowPages)))
+	mux.Handle("/v1/dashboard/external-redirects", auth.AuthMiddleware(http.HandlerFunc(h.DashboardExternalRedirects)))
 
 	// Authentication routes (no auth middleware)
 	mux.HandleFunc("/v1/auth/register", h.AuthRegister)
@@ -305,6 +309,108 @@ func calculateDateRange(dateRange string) (*time.Time, *time.Time) {
 	}
 
 	return startDate, endDate
+}
+
+// DashboardSlowPages handles requests for slow-loading pages analysis
+func (h *Handler) DashboardSlowPages(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		MethodNotAllowed(w, r)
+		return
+	}
+
+	// Get user claims from context
+	userClaims, ok := auth.GetUserFromContext(r.Context())
+	if !ok || userClaims == nil {
+		Unauthorised(w, r, "Authentication required")
+		return
+	}
+
+	// Get full user object from database (auto-create if needed)
+	user, err := h.DB.GetOrCreateUser(userClaims.UserID, userClaims.Email, nil)
+	if err != nil {
+		log.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get or create user")
+		InternalError(w, r, err)
+		return
+	}
+
+	// Get query parameters
+	dateRange := r.URL.Query().Get("range")
+	if dateRange == "" {
+		dateRange = "last7"
+	}
+
+	// Calculate date range for query
+	startDate, endDate := calculateDateRange(dateRange)
+
+	// Get slow pages data
+	orgID := ""
+	if user.OrganisationID != nil {
+		orgID = *user.OrganisationID
+	}
+	slowPages, err := h.DB.GetSlowPages(orgID, startDate, endDate)
+	if err != nil {
+		DatabaseError(w, r, err)
+		return
+	}
+
+	WriteSuccess(w, r, map[string]interface{}{
+		"slow_pages":   slowPages,
+		"date_range":   dateRange,
+		"period_start": startDate,
+		"period_end":   endDate,
+		"count":        len(slowPages),
+	}, "Slow pages analysis retrieved successfully")
+}
+
+// DashboardExternalRedirects handles requests for external redirect analysis
+func (h *Handler) DashboardExternalRedirects(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		MethodNotAllowed(w, r)
+		return
+	}
+
+	// Get user claims from context
+	userClaims, ok := auth.GetUserFromContext(r.Context())
+	if !ok || userClaims == nil {
+		Unauthorised(w, r, "Authentication required")
+		return
+	}
+
+	// Get full user object from database (auto-create if needed)
+	user, err := h.DB.GetOrCreateUser(userClaims.UserID, userClaims.Email, nil)
+	if err != nil {
+		log.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get or create user")
+		InternalError(w, r, err)
+		return
+	}
+
+	// Get query parameters
+	dateRange := r.URL.Query().Get("range")
+	if dateRange == "" {
+		dateRange = "last7"
+	}
+
+	// Calculate date range for query
+	startDate, endDate := calculateDateRange(dateRange)
+
+	// Get external redirects data
+	orgID := ""
+	if user.OrganisationID != nil {
+		orgID = *user.OrganisationID
+	}
+	redirects, err := h.DB.GetExternalRedirects(orgID, startDate, endDate)
+	if err != nil {
+		DatabaseError(w, r, err)
+		return
+	}
+
+	WriteSuccess(w, r, map[string]interface{}{
+		"external_redirects": redirects,
+		"date_range":         dateRange,
+		"period_start":       startDate,
+		"period_end":         endDate,
+		"count":              len(redirects),
+	}, "External redirects analysis retrieved successfully")
 }
 
 // WebflowWebhookPayload represents the structure of Webflow's site publish webhook

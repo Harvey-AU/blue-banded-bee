@@ -129,3 +129,9 @@ func (m *MockDBWithRealDB) GetOrganisation(organisationID string) (*db.Organisat
 func (m *MockDBWithRealDB) ListJobs(organisationID string, limit, offset int, status, dateRange string) ([]db.JobWithDomain, int, error) {
 	return nil, 0, nil
 }
+func (m *MockDBWithRealDB) GetSlowPages(organisationID string, startDate, endDate *time.Time) ([]db.SlowPage, error) {
+	return nil, nil
+}
+func (m *MockDBWithRealDB) GetExternalRedirects(organisationID string, startDate, endDate *time.Time) ([]db.ExternalRedirect, error) {
+	return nil, nil
+}
