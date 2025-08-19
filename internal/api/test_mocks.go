@@ -131,6 +131,22 @@ func (m *MockDBClient) GetJobActivity(organisationID string, startDate, endDate 
 	return args.Get(0).([]db.ActivityPoint), args.Error(1)
 }
 
+func (m *MockDBClient) GetSlowPages(organisationID string, startDate, endDate *time.Time) ([]db.SlowPage, error) {
+	args := m.Called(organisationID, startDate, endDate)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]db.SlowPage), args.Error(1)
+}
+
+func (m *MockDBClient) GetExternalRedirects(organisationID string, startDate, endDate *time.Time) ([]db.ExternalRedirect, error) {
+	args := m.Called(organisationID, startDate, endDate)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]db.ExternalRedirect), args.Error(1)
+}
+
 func (m *MockDBClient) GetUser(userID string) (*db.User, error) {
 	args := m.Called(userID)
 	if args.Get(0) == nil {
