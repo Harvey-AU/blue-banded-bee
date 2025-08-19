@@ -45,6 +45,15 @@ jobs:
             echo "Review app already exists: $APP_NAME"
           fi
           
+          # Copy secrets from production app to review app
+          echo "Copying secrets from production to review app..."
+          flyctl secrets list --app blue-banded-bee --json | \
+          jq -r 'to_entries[] | "\(.key)=\(.value)"' | \
+          while IFS='=' read -r key value; do
+            echo "Setting secret: $key"
+            echo "$value" | flyctl secrets set "$key" --app $APP_NAME --stage
+          done
+          
           # Deploy to review app
           flyctl deploy \
             --app $APP_NAME \
