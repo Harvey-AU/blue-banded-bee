@@ -33,10 +33,13 @@ func (m *MockAuthClient) ExtractTokenFromRequest(r *http.Request) (string, error
 
 func (m *MockAuthClient) SetUserInContext(r *http.Request, user *auth.UserClaims) *http.Request {
 	args := m.Called(r, user)
-	if args.Get(0) == nil {
-		return nil
+	if req := args.Get(0); req != nil {
+		if httpReq, ok := req.(*http.Request); ok {
+			return httpReq
+		}
 	}
-	return args.Get(0).(*http.Request)
+	// Return the original request if mock doesn't specify otherwise
+	return r
 }
 
 // TestAuthMiddleware tests the core authentication middleware logic
@@ -60,10 +63,12 @@ func TestAuthMiddleware(t *testing.T) {
 					UserID: "user-123",
 					Email:  "test@example.com",
 				}
-				mac.On("ValidateToken", mock.AnythingOfType("*context.valueCtx"), "valid-jwt-token").Return(userClaims, nil)
+				mac.On("ValidateToken", mock.Anything, "valid-jwt-token").Return(userClaims, nil)
 				
-				// Mock context setting
-				mac.On("SetUserInContext", mock.AnythingOfType("*http.Request"), userClaims).Return(&http.Request{})
+				// Mock context setting - return the modified request
+				mac.On("SetUserInContext", mock.AnythingOfType("*http.Request"), userClaims).Return((*http.Request)(nil)).Run(func(args mock.Arguments) {
+					// Mock will return the original request from the fallback logic
+				})
 			},
 			requestHeaders: map[string]string{
 				"Authorization": "Bearer valid-jwt-token",
@@ -99,7 +104,7 @@ func TestAuthMiddleware(t *testing.T) {
 				mac.On("ExtractTokenFromRequest", mock.AnythingOfType("*http.Request")).Return("invalid-token", nil)
 				
 				// Mock failed token validation
-				mac.On("ValidateToken", mock.AnythingOfType("*context.valueCtx"), "invalid-token").Return(nil, assert.AnError)
+				mac.On("ValidateToken", mock.Anything, "invalid-token").Return(nil, assert.AnError)
 			},
 			requestHeaders: map[string]string{
 				"Authorization": "Bearer invalid-token",
@@ -119,22 +124,40 @@ func TestAuthMiddleware(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// TODO: This requires interface extraction from auth middleware
-			// Currently auth middleware uses concrete types, preventing mocking
-			// 
-			// Required changes:
-			// 1. Extract AuthClientInterface from concrete auth.Client
-			// 2. Update middleware to accept interface
-			// 3. Test with MockAuthClient
-			//
-			// For now, verify test structure and mock expectations
+			// Create mock auth client and set up expectations
 			mockAuthClient := new(MockAuthClient)
 			tt.setupMocks(mockAuthClient)
 			
-			// Verify mock expectations structure
-			assert.NotNil(t, mockAuthClient)
+			// Create test handler that returns success
+			testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusOK)
+				w.Write([]byte("authenticated"))
+			})
 			
-			t.Skip("TODO: Requires AuthClientInterface extraction for full testing")
+			// Create middleware with mock client
+			middleware := auth.AuthMiddlewareWithClient(mockAuthClient)
+			handler := middleware(testHandler)
+			
+			// Create test request
+			req := httptest.NewRequest(http.MethodGet, "/test", nil)
+			for key, value := range tt.requestHeaders {
+				req.Header.Set(key, value)
+			}
+			rec := httptest.NewRecorder()
+			
+			// Execute request
+			handler.ServeHTTP(rec, req)
+			
+			// Check status code
+			assert.Equal(t, tt.expectedStatus, rec.Code)
+			
+			// Run custom response checks if provided
+			if tt.checkResponse != nil {
+				tt.checkResponse(t, rec)
+			}
+			
+			// Verify all mock expectations were met
+			mockAuthClient.AssertExpectations(t)
 		})
 	}
 }
