@@ -37,19 +37,19 @@ jobs:
           # Create review app name
           APP_NAME="blue-banded-bee-pr-${{ github.event.number }}"
           
-          # Use Fly's built-in review app deployment
+          # Check if app exists, create if not
+          if ! flyctl apps list | grep -q "$APP_NAME"; then
+            echo "Creating new review app: $APP_NAME"
+            flyctl apps create $APP_NAME --org personal
+          else
+            echo "Review app already exists: $APP_NAME"
+          fi
+          
+          # Deploy to review app
           flyctl deploy \
             --app $APP_NAME \
             --config .fly/review_apps.toml \
-            --remote-only \
-            --auto-confirm \
-            --build-only || \
-          flyctl apps create $APP_NAME --copy-config && \
-          flyctl deploy \
-            --app $APP_NAME \
-            --config .fly/review_apps.toml \
-            --remote-only \
-            --auto-confirm
+            --remote-only
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
