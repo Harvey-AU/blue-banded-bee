@@ -123,6 +123,24 @@ func (m *MockDB) GetJobActivity(organisationID string, startDate, endDate *time.
 	return args.Get(0).([]db.ActivityPoint), args.Error(1)
 }
 
+// GetSlowPages mocks the GetSlowPages method
+func (m *MockDB) GetSlowPages(organisationID string, startDate, endDate *time.Time) ([]db.SlowPage, error) {
+	args := m.Called(organisationID, startDate, endDate)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]db.SlowPage), args.Error(1)
+}
+
+// GetExternalRedirects mocks the GetExternalRedirects method
+func (m *MockDB) GetExternalRedirects(organisationID string, startDate, endDate *time.Time) ([]db.ExternalRedirect, error) {
+	args := m.Called(organisationID, startDate, endDate)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]db.ExternalRedirect), args.Error(1)
+}
+
 // GetUserByWebhookToken mocks the GetUserByWebhookToken method
 func (m *MockDB) GetUserByWebhookToken(token string) (*db.User, error) {
 	args := m.Called(token)

@@ -346,3 +346,185 @@ func calculateDateRangeForList(dateRange string) (*time.Time, *time.Time) {
 
 	return startDate, endDate
 }
+
+// SlowPage represents a slow-loading page for dashboard analysis
+type SlowPage struct {
+	URL                string `json:"url"`
+	Domain             string `json:"domain"`
+	Path               string `json:"path"`
+	SecondResponseTime int64  `json:"second_response_time"` // milliseconds after cache retry
+	JobID              string `json:"job_id"`
+	CompletedAt        string `json:"completed_at"`
+}
+
+// ExternalRedirect represents a page that redirects to an external domain
+type ExternalRedirect struct {
+	URL         string `json:"url"`
+	Domain      string `json:"domain"`
+	Path        string `json:"path"`
+	RedirectURL string `json:"redirect_url"`
+	JobID       string `json:"job_id"`
+	CompletedAt string `json:"completed_at"`
+}
+
+// GetSlowPages retrieves the slowest pages after cache retry attempts
+// Returns top 10 absolute slowest and 10% slowest from user's organisation
+func (db *DB) GetSlowPages(organisationID string, startDate, endDate *time.Time) ([]SlowPage, error) {
+	query := `
+		WITH user_tasks AS (
+			SELECT 
+				t.url,
+				d.domain,
+				p.path,
+				t.second_response_time,
+				t.job_id,
+				t.completed_at
+			FROM tasks t
+			JOIN jobs j ON t.job_id = j.id
+			JOIN pages p ON t.page_id = p.id
+			JOIN domains d ON p.domain_id = d.id
+			WHERE j.organisation_id = $1
+				AND t.status = 'completed'
+				AND t.second_response_time IS NOT NULL
+				AND t.second_response_time > 0
+				AND ($2::timestamp IS NULL OR t.completed_at >= $2)
+				AND ($3::timestamp IS NULL OR t.completed_at <= $3)
+		),
+		top_10_absolute AS (
+			SELECT *, 'absolute' as category
+			FROM user_tasks
+			ORDER BY second_response_time DESC
+			LIMIT 10
+		),
+		slowest_percentile AS (
+			SELECT *, 'percentile' as category
+			FROM user_tasks
+			WHERE second_response_time >= (
+				SELECT PERCENTILE_CONT(0.9) WITHIN GROUP (ORDER BY second_response_time)
+				FROM user_tasks
+			)
+			ORDER BY second_response_time DESC
+			LIMIT 10
+		)
+		SELECT DISTINCT 
+			url, domain, path, second_response_time, job_id, 
+			completed_at::timestamp AT TIME ZONE 'UTC' as completed_at
+		FROM (
+			SELECT * FROM top_10_absolute
+			UNION ALL
+			SELECT * FROM slowest_percentile
+		) combined
+		ORDER BY second_response_time DESC
+		LIMIT 20;
+	`
+
+	rows, err := db.client.Query(query, organisationID, startDate, endDate)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to query slow pages")
+		return nil, err
+	}
+	defer rows.Close()
+
+	var slowPages []SlowPage
+	for rows.Next() {
+		var page SlowPage
+		var completedAt sql.NullTime
+
+		err := rows.Scan(
+			&page.URL,
+			&page.Domain,
+			&page.Path,
+			&page.SecondResponseTime,
+			&page.JobID,
+			&completedAt,
+		)
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to scan slow page row")
+			return nil, err
+		}
+
+		if completedAt.Valid {
+			page.CompletedAt = completedAt.Time.Format(time.RFC3339)
+		}
+
+		slowPages = append(slowPages, page)
+	}
+
+	if err = rows.Err(); err != nil {
+		log.Error().Err(err).Msg("Error iterating slow pages rows")
+		return nil, err
+	}
+
+	return slowPages, nil
+}
+
+// GetExternalRedirects retrieves pages that redirect to external domains
+func (db *DB) GetExternalRedirects(organisationID string, startDate, endDate *time.Time) ([]ExternalRedirect, error) {
+	query := `
+		SELECT 
+			t.url,
+			d.domain,
+			p.path,
+			t.redirect_url,
+			t.job_id,
+			t.completed_at::timestamp AT TIME ZONE 'UTC' as completed_at
+		FROM tasks t
+		JOIN jobs j ON t.job_id = j.id
+		JOIN pages p ON t.page_id = p.id
+		JOIN domains d ON p.domain_id = d.id
+		WHERE j.organisation_id = $1
+			AND t.status = 'completed'
+			AND t.redirect_url IS NOT NULL
+			AND t.redirect_url != ''
+			-- Check if redirect URL is external (different domain)
+			AND NOT (
+				t.redirect_url LIKE 'http://' || d.domain || '%' OR
+				t.redirect_url LIKE 'https://' || d.domain || '%' OR
+				t.redirect_url LIKE '//%' || d.domain || '%' OR
+				t.redirect_url LIKE '/' || '%'  -- relative paths
+			)
+			AND ($2::timestamp IS NULL OR t.completed_at >= $2)
+			AND ($3::timestamp IS NULL OR t.completed_at <= $3)
+		ORDER BY t.completed_at DESC
+		LIMIT 100;
+	`
+
+	rows, err := db.client.Query(query, organisationID, startDate, endDate)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to query external redirects")
+		return nil, err
+	}
+	defer rows.Close()
+
+	var redirects []ExternalRedirect
+	for rows.Next() {
+		var redirect ExternalRedirect
+		var completedAt sql.NullTime
+
+		err := rows.Scan(
+			&redirect.URL,
+			&redirect.Domain,
+			&redirect.Path,
+			&redirect.RedirectURL,
+			&redirect.JobID,
+			&completedAt,
+		)
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to scan external redirect row")
+			return nil, err
+		}
+
+		if completedAt.Valid {
+			redirect.CompletedAt = completedAt.Time.Format(time.RFC3339)
+		}
+
+		redirects = append(redirects, redirect)
+	}
+
+	if err = rows.Err(); err != nil {
+		log.Error().Err(err).Msg("Error iterating external redirects rows")
+		return nil, err
+	}
+
+	return redirects, nil
+}
