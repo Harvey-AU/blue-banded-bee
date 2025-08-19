@@ -37,7 +37,14 @@ jobs:
           # Create review app name
           APP_NAME="blue-banded-bee-pr-${{ github.event.number }}"
           
-          # Deploy with review app configuration
+          # Use Fly's built-in review app deployment
+          flyctl deploy \
+            --app $APP_NAME \
+            --config .fly/review_apps.toml \
+            --remote-only \
+            --auto-confirm \
+            --build-only || \
+          flyctl apps create $APP_NAME --copy-config && \
           flyctl deploy \
             --app $APP_NAME \
             --config .fly/review_apps.toml \
