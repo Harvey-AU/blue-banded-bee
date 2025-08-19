@@ -93,6 +93,7 @@ func (h *Handler) SetupRoutes(mux *http.ServeMux) {
 	}))
 
 	// Static files
+	mux.HandleFunc("/", h.ServeHomepage)  // Marketing homepage
 	mux.HandleFunc("/test-login.html", h.ServeTestLogin)
 	mux.HandleFunc("/test-components.html", h.ServeTestComponents)
 	mux.HandleFunc("/test-data-components.html", h.ServeTestDataComponents)
@@ -158,6 +159,16 @@ func (h *Handler) ServeDashboard(w http.ResponseWriter, r *http.Request) {
 // ServeNewDashboard serves the new Web Components dashboard page
 func (h *Handler) ServeNewDashboard(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, "dashboard.html")
+}
+
+// ServeHomepage serves the marketing homepage
+func (h *Handler) ServeHomepage(w http.ResponseWriter, r *http.Request) {
+	// Only serve homepage for exact root path
+	if r.URL.Path != "/" {
+		http.NotFound(w, r)
+		return
+	}
+	http.ServeFile(w, r, "homepage.html")
 }
 
 // DashboardStats handles dashboard statistics requests
