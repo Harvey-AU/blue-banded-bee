@@ -45,17 +45,11 @@ jobs:
             echo "Review app already exists: $APP_NAME"
           fi
           
-          # Copy secrets from production app to review app
-          echo "Copying secrets from production to review app..."
-          flyctl secrets list --app blue-banded-bee --json | \
-          jq -r 'keys[]' | \
-          while read -r secret_name; do
-            echo "Copying secret: $secret_name"
-            secret_value=$(flyctl secrets list --app blue-banded-bee --json | jq -r --arg name "$secret_name" '.[$name]')
-            if [ "$secret_value" != "null" ] && [ "$secret_value" != "" ]; then
-              echo "$secret_value" | flyctl secrets set "$secret_name" --app $APP_NAME
-            fi
-          done
+          # Set essential secrets for review app
+          echo "Setting database connection for review app..."
+          
+          # Just set the DATABASE_URL from GitHub secrets (same as production for testing)
+          flyctl secrets set DATABASE_URL="${{ secrets.DATABASE_URL }}" --app $APP_NAME
           
           # Deploy to review app
           flyctl deploy \
