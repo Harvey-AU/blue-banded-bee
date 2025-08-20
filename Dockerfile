@@ -28,6 +28,7 @@ COPY --from=builder /app/main .
 
 # Copy static files
 COPY --from=builder /app/dashboard.html .
+COPY --from=builder /app/homepage.html .
 COPY --from=builder /app/web/dist ./web/dist
 
 # Add healthcheck

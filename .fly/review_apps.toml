@@ -1,0 +1,47 @@
+# Fly Review Apps Configuration
+# See: https://fly.io/docs/reference/fly-review-apps/
+
+[review_apps]
+# Enable automatic deployment for PRs targeting test-branch
+auto_deploy = true
+# Automatically destroy when PR is closed/merged
+auto_destroy = true
+
+# Base branch for review apps (PRs must target this branch)
+base_branch = "test-branch"
+
+# Optional: Custom subdomain pattern
+# Will create URLs like: blue-banded-bee-pr-123.fly.dev
+app_name_pattern = "blue-banded-bee-pr-{pr_number}"
+
+# Environment overrides for staging
+[env]
+APP_ENV = "staging"
+
+# Explicitly source DATABASE_URL from secrets
+DATABASE_URL = { from_secret = "DATABASE_URL" }
+
+# Use same machine config as production but smaller
+[vm]
+memory = '512mb'  # Smaller than production for cost savings
+cpu_kind = 'shared'
+cpus = 1
+
+# Same health checks as production
+[http_service]
+internal_port = 8080
+force_https = true
+auto_stop_machines = 'stop'
+auto_start_machines = true
+min_machines_running = 1
+
+[[http_service.checks]]
+grace_period = "30s"
+interval = "15s"
+method = "GET"
+path = "/health"
+protocol = "http"
+timeout = "10s"
+
+[http_service.checks.headers]
+Content-Type = "text/plain"
