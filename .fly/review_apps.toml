@@ -18,6 +18,9 @@ app_name_pattern = "blue-banded-bee-pr-{pr_number}"
 [env]
 APP_ENV = "staging"
 
+# Explicitly source DATABASE_URL from secrets
+DATABASE_URL = { from_secret = "DATABASE_URL" }
+
 # Use same machine config as production but smaller
 [vm]
 memory = '512mb'  # Smaller than production for cost savings
