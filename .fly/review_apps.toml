@@ -17,7 +17,6 @@ app_name_pattern = "blue-banded-bee-pr-{pr_number}"
 # Environment overrides for staging
 [env]
 APP_ENV = "staging"
-DATABASE_URL = "env://DATABASE_URL"
 
 # Explicitly source DATABASE_URL from secrets
 DATABASE_URL = { from_secret = "DATABASE_URL" }
