@@ -1,0 +1,100 @@
+name: Deploy Review App
+
+on:
+  pull_request:
+    branches:
+      - test-branch
+    types: [opened, synchronize, reopened]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'LICENSE'
+      - '.gitignore'
+      - 'CHANGELOG.md'
+      - 'SECURITY.md'
+      - 'Roadmap.md'
+
+jobs:
+  deploy-review:
+    name: Deploy Review App
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.draft == false
+    permissions:
+      pull-requests: write
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+
+      - name: Setup Fly.io CLI
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Deploy Review App
+        run: |
+          # Create review app name
+          APP_NAME="blue-banded-bee-pr-${{ github.event.number }}"
+          
+          # Check if app exists, create if not
+          if ! flyctl apps list | grep -q "$APP_NAME"; then
+            echo "Creating new review app: $APP_NAME"
+            flyctl apps create $APP_NAME --org personal
+          else
+            echo "Review app already exists: $APP_NAME"
+          fi
+          
+          # Set DB Secret for Review App (Phase 1: Shared test database)
+          echo "Setting test database connection for review app..."
+          flyctl secrets set DATABASE_URL="${{ secrets.TEST_DATABASE_URL }}" --app $APP_NAME
+          
+          # Deploy to review app
+          flyctl deploy \
+            --app $APP_NAME \
+            --config .fly/review_apps.toml \
+            --remote-only
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+      - name: Comment PR with app URL
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const appName = `blue-banded-bee-pr-${{ github.event.number }}`;
+            const appUrl = `https://${appName}.fly.dev`;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `🐝 **Review App Deployed!**
+              
+              **Test URL**: ${appUrl}
+              
+              📋 **Test the new onboarding flow:**
+              1. Visit homepage: ${appUrl}/
+              2. Enter a domain and click "Start Warming"
+              3. Complete sign-up flow
+              4. Verify job creation and dashboard
+              
+              ⚠️ *This is a staging environment - data will be cleaned up when PR is merged.*`
+            });
+
+  cleanup-review:
+    name: Cleanup Review App
+    runs-on: ubuntu-latest
+    if: github.event.action == 'closed'
+    
+    steps:
+      - name: Setup Fly.io CLI
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Destroy Review App
+        run: |
+          APP_NAME="blue-banded-bee-pr-${{ github.event.number }}"
+          flyctl apps destroy $APP_NAME --yes || echo "App may not exist"
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}# Force redeploy
