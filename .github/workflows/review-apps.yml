@@ -19,6 +19,8 @@ jobs:
     name: Deploy Review App
     runs-on: ubuntu-latest
     if: github.event.pull_request.draft == false
+    permissions:
+      pull-requests: write
     
     steps:
       - name: Checkout code
