@@ -50,7 +50,7 @@ jobs:
           flyctl secrets set DATABASE_URL="${{ secrets.TEST_DATABASE_URL }}" --app $APP_NAME
           
           # Unset the env var from the toml file to avoid conflicts during deploy
-          flyctl config unset DATABASE_URL --app $APP_NAME --config .fly/review_apps.toml
+          flyctl config unset DATABASE_URL --config .fly/review_apps.toml
 
           # Deploy to review app
           flyctl deploy \
