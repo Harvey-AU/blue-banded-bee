@@ -84,7 +84,10 @@
       "Bash(bash:*)",
       "Bash(touch:*)",
       "Bash(git fetch:*)",
-      "Bash(git pull:*)"
+      "Bash(git pull:*)",
+      "Bash(fly status:*)",
+      "WebSearch",
+      "WebFetch(domain:codingforseo.com)"
     ],
     "deny": []
   },

@@ -1113,12 +1113,6 @@
           Blue Banded Bee
         </h1>
 
-        <nav class="page-nav">
-          <a href="/dashboard" class="nav-link active">Dashboard</a>
-          <a href="/jobs" class="nav-link">Jobs</a>
-          <a href="/settings" class="nav-link">Settings</a>
-          <a href="/help" class="nav-link">Help</a>
-        </nav>
 
         <div class="user-menu">
           <div class="status-indicator">
@@ -1143,6 +1137,56 @@
 
     <!-- Main Content -->
     <main class="main-content">
+      <!-- Job Creation Form -->
+      <div style="background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1); margin-bottom: 24px; padding: 24px;">
+        <h2 style="margin: 0 0 16px 0; font-size: 1.25rem; font-weight: 600; color: #374151;">Start Cache Warming</h2>
+        
+        <form id="dashboardJobForm" style="display: grid; grid-template-columns: 1fr 120px 120px auto; gap: 16px; align-items: end;">
+          <div>
+            <label style="display: block; margin-bottom: 6px; font-weight: 500; color: #374151; font-size: 14px;">Domain</label>
+            <input 
+              type="text" 
+              id="dashboardDomain" 
+              name="domain" 
+              required 
+              placeholder="example.com" 
+              style="width: 100%; padding: 12px 16px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; background: white; color: #374151; box-sizing: border-box;"
+            />
+          </div>
+          
+          <div>
+            <label style="display: block; margin-bottom: 6px; font-weight: 500; color: #374151; font-size: 14px;">Max Pages</label>
+            <input 
+              type="number" 
+              id="dashboardMaxPages" 
+              name="max_pages" 
+              min="0" 
+              max="10000" 
+              value="0" 
+              style="width: 100%; padding: 12px 16px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; background: white; color: #374151; box-sizing: border-box;"
+            />
+          </div>
+          
+          <div>
+            <label style="display: block; margin-bottom: 6px; font-weight: 500; color: #374151; font-size: 14px;">Refresh</label>
+            <select class="filter-select" id="refreshInterval" style="width: 100%; padding: 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; background: white;">
+              <option value="0">Manual</option>
+              <option value="10" selected>10 seconds</option>
+              <option value="30">30 seconds</option>
+              <option value="60">1 minute</option>
+            </select>
+          </div>
+          
+          <button 
+            type="submit" 
+            class="bb-button bb-button-primary" 
+            style="padding: 12px 24px; white-space: nowrap;"
+          >
+            Start Crawl
+          </button>
+        </form>
+      </div>
+      
       <!-- Dashboard Controls -->
       <div class="dashboard-actions">
         <div class="dashboard-filters">
@@ -1156,27 +1200,35 @@
               <option value="all">All Time</option>
             </select>
           </div>
-
-
-          <div class="filter-group">
-            <label class="filter-label">Refresh</label>
-            <select class="filter-select" id="refreshInterval">
-              <option value="0">Manual</option>
-              <option value="10" selected>10 seconds</option>
-              <option value="30">30 seconds</option>
-              <option value="60">1 minute</option>
-            </select>
-          </div>
         </div>
 
         <div class="page-actions">
           <button class="bb-btn bb-btn-secondary" bb-action="refresh-dashboard"><span>↻</span> Refresh</button>
-          <button class="bb-btn bb-btn-primary" bb-action="create-job"><span>+</span> New Job</button>
         </div>
       </div>
 
-      <!-- Dashboard Content -->
-      <div id="dashboardContent">
+      <!-- Login Interface for Unauthenticated Users -->
+      <div id="loginContent" data-bb-auth="guest">
+        <div style="max-width: 400px; margin: 80px auto; padding: 40px; background: white; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
+          <div style="text-align: center; margin-bottom: 32px;">
+            <div style="font-size: 48px; margin-bottom: 16px;">🐝</div>
+            <h1 style="font-size: 1.875rem; font-weight: 700; margin-bottom: 8px; color: #1a1a1a;">Blue Banded Bee</h1>
+            <p style="color: #6b7280; font-size: 14px;">Cache warming service dashboard</p>
+          </div>
+          
+          <div style="display: flex; gap: 12px; margin-bottom: 24px;">
+            <button id="showLoginBtn" class="bb-button bb-button-primary" style="flex: 1;">Sign In</button>
+            <button id="showSignupBtn" class="bb-button bb-button-outline" style="flex: 1;">Create Account</button>
+          </div>
+          
+          <div style="text-align: center; color: #6b7280; font-size: 14px;">
+            Sign in to access your dashboard
+          </div>
+        </div>
+      </div>
+
+      <!-- Dashboard Content for Authenticated Users -->
+      <div id="dashboardContent" data-bb-auth="required" style="display: none;">
         <!-- Stats Overview Cards -->
         <div class="bb-stats-grid">
           <div class="bb-stat-card">
@@ -1658,6 +1710,10 @@
 
         // Update user info in header
         updateUserInfo();
+        
+        // Set initial auth state
+        const { data: { session } } = await supabase.auth.getSession();
+        updateAuthState(!!session?.user);
 
         // Set up auth state change listener to update user info
         if (supabase) {
@@ -1669,8 +1725,16 @@
               await registerUserWithBackend(session.user);
             }
             
+            // Update auth state in UI
+            updateAuthState(!!session?.user);
+            
             // Wait a moment for the data binder to update its auth manager
             setTimeout(updateUserInfo, 100);
+            
+            // Handle pending domain after successful auth
+            if (session?.user) {
+              await handlePendingDomain();
+            }
           });
         }
 
@@ -1680,9 +1744,19 @@
           isAuthenticated: dataBinder.authManager?.isAuthenticated,
           user: dataBinder.authManager?.user?.email,
         });
+        
+        // Update auth state after data binder init
+        const currentSession = await supabase.auth.getSession();
+        updateAuthState(!!currentSession.data.session?.user);
 
         // Override the refresh method to load dashboard data
         dataBinder.refresh = async function () {
+          // Only load dashboard data if user is authenticated
+          if (!this.authManager || !this.authManager.isAuthenticated) {
+            console.log("User not authenticated, skipping dashboard data load");
+            return;
+          }
+          
           try {
             console.log("Refreshing dashboard data...");
 
@@ -1693,13 +1767,33 @@
             }
 
             // Load stats and jobs data
-            const data = await this.loadAndBind({
-              stats: "/v1/dashboard/stats?range=today",
-            });
+            let data;
+            try {
+              data = await this.loadAndBind({
+                stats: "/v1/dashboard/stats?range=today",
+              });
+            } catch (error) {
+              // Handle stats API errors gracefully
+              console.log("Stats API error (likely no data yet):", error);
+              data = {
+                stats: {
+                  total_jobs: 0,
+                  running_jobs: 0,
+                  completed_jobs: 0,
+                  failed_jobs: 0,
+                }
+              };
+            }
 
             // Load jobs separately for template binding
-            const jobsResponse = await this.fetchData("/v1/jobs?limit=10&range=today");
-            const jobs = jobsResponse.jobs || [];
+            let jobsResponse, jobs;
+            try {
+              jobsResponse = await this.fetchData("/v1/jobs?limit=10&range=today");
+              jobs = jobsResponse.jobs || [];
+            } catch (error) {
+              console.log("Jobs API error (likely no jobs yet):", error);
+              jobs = [];
+            }
 
             // Process jobs data for better display
             const processedJobs = jobs.map((job) => ({
@@ -1710,8 +1804,14 @@
             }));
 
             // Load slow pages data
-            const slowPagesResponse = await this.fetchData("/v1/dashboard/slow-pages?range=today");
-            const slowPages = slowPagesResponse.slow_pages || [];
+            let slowPagesResponse, slowPages;
+            try {
+              slowPagesResponse = await this.fetchData("/v1/dashboard/slow-pages?range=today");
+              slowPages = slowPagesResponse.slow_pages || [];
+            } catch (error) {
+              console.log("Slow pages API error (likely no data yet):", error);
+              slowPages = [];
+            }
 
             // Process slow pages data for better display
             const processedSlowPages = slowPages.map((page) => ({
@@ -1720,8 +1820,14 @@
             }));
 
             // Load external redirects data
-            const redirectsResponse = await this.fetchData("/v1/dashboard/external-redirects?range=today");
-            const externalRedirects = redirectsResponse.external_redirects || [];
+            let redirectsResponse, externalRedirects;
+            try {
+              redirectsResponse = await this.fetchData("/v1/dashboard/external-redirects?range=today");
+              externalRedirects = redirectsResponse.external_redirects || [];
+            } catch (error) {
+              console.log("Redirects API error (likely no data yet):", error);
+              externalRedirects = [];
+            }
 
             // Process external redirects data for better display
             const processedRedirects = externalRedirects.map((redirect) => ({
@@ -1736,18 +1842,15 @@
               external_redirect: processedRedirects
             });
 
-            // Show empty state if no jobs
+            // Show simple empty state if no jobs
             if (processedJobs.length === 0) {
               const jobsList = document.querySelector(".bb-jobs-list");
               if (jobsList) {
                 jobsList.innerHTML = `
                 <div style="text-align: center; padding: 40px 20px; color: #6b7280;">
                   <div style="font-size: 48px; margin-bottom: 16px;">🐝</div>
-                  <h3 style="margin: 0 0 8px 0; color: #374151;">No jobs found</h3>
-                  <p style="margin: 0; font-size: 14px;">Create your first cache warming job to get started.</p>
-                  <button class="bb-btn bb-btn-primary" bb-action="create-job" style="margin-top: 16px;">
-                    <span>+</span> Create Job
-                  </button>
+                  <h3 style="margin: 0 0 8px 0; color: #374151;">No jobs yet</h3>
+                  <p style="margin: 0; font-size: 14px;">Use the form above to start your first cache warming job</p>
                 </div>
               `;
               }
@@ -1763,18 +1866,32 @@
           } catch (error) {
             console.error("Dashboard refresh failed:", error);
 
-            // Show user-friendly error message
-            showDashboardError("Unable to refresh dashboard data. Please check your connection and try again.");
+            // Only show error if it's not a 404 or empty data response
+            if (error.status !== 404 && !error.message?.includes('No jobs found')) {
+              showDashboardError("Unable to refresh dashboard data. Please check your connection and try again.");
+            }
 
-            // Set error state for stats
-            this.updateElements({
-              stats: {
-                total_jobs: "–",
-                running_jobs: "–",
-                completed_jobs: "–",
-                failed_jobs: "–",
-              },
-            });
+            // Set error state for stats only if there's a real error
+            if (error.status !== 404) {
+              this.updateElements({
+                stats: {
+                  total_jobs: "–",
+                  running_jobs: "–",
+                  completed_jobs: "–",
+                  failed_jobs: "–",
+                },
+              });
+            } else {
+              // For 404/no data, show zero stats instead of error state
+              this.updateElements({
+                stats: {
+                  total_jobs: "0",
+                  running_jobs: "0",
+                  completed_jobs: "0",
+                  failed_jobs: "0",
+                },
+              });
+            }
           } finally {
             // Reset status indicator
             const statusIndicator = document.querySelector(".status-indicator");
@@ -1804,17 +1921,141 @@
         // Set up modal functionality
         setupModal();
 
-        // Initial load
+        // Check for pending domain from domain-first flow
+        await handlePendingDomain();
+        
+        // Initial load (only if authenticated)
         await dataBinder.refresh();
 
         // Setup authentication event handlers
         setupAuthHandlers();
+        
+        // Setup login page handlers
+        setupLoginPageHandlers();
+        
+        // Setup dashboard form handler
+        setupDashboardFormHandler();
 
         // Set up network status monitoring
         setupNetworkMonitoring();
 
         console.log("Enhanced dashboard initialized");
       });
+      
+      // Setup dashboard form handler
+      function setupDashboardFormHandler() {
+        const dashboardForm = document.getElementById('dashboardJobForm');
+        if (dashboardForm) {
+          dashboardForm.addEventListener('submit', handleDashboardJobCreation);
+        }
+      }
+      
+      // Handle dashboard job creation form
+      async function handleDashboardJobCreation(event) {
+        event.preventDefault();
+        const formData = new FormData(event.target);
+        
+        const domain = formData.get('domain');
+        const maxPages = parseInt(formData.get('max_pages'));
+        
+        // Basic validation
+        if (!domain) {
+          showDashboardError('Domain is required');
+          return;
+        }
+        
+        if (maxPages < 0 || maxPages > 10000) {
+          showDashboardError('Maximum pages must be between 0 and 10000');
+          return;
+        }
+        
+        try {
+          console.log('Creating job from dashboard form:', { domain, maxPages });
+          
+          const response = await dataBinder.fetchData('/v1/jobs', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              domain: domain,
+              max_pages: maxPages,
+              concurrency: 5,
+              use_sitemap: true,
+              find_links: true
+            })
+          });
+          
+          console.log('Dashboard job created successfully:', response);
+          
+          // Clear the form
+          document.getElementById('dashboardDomain').value = '';
+          document.getElementById('dashboardMaxPages').value = '0';
+          
+          // Refresh dashboard to show new job
+          await dataBinder.refresh();
+          
+          // Show success message
+          showSuccessMessage(`Job created successfully for ${domain}`);
+          
+        } catch (error) {
+          console.error('Failed to create dashboard job:', error);
+          showDashboardError(error.message || 'Failed to create job. Please try again.');
+        }
+      }
+      
+      // Handle pending domain after authentication
+      async function handlePendingDomain() {
+        const pendingDomain = sessionStorage.getItem('bb_pending_domain');
+        if (pendingDomain && dataBinder.authManager?.isAuthenticated) {
+          console.log('Found pending domain after auth:', pendingDomain);
+          
+          // Clear the stored domain
+          sessionStorage.removeItem('bb_pending_domain');
+          
+          // Auto-create job
+          try {
+            const response = await dataBinder.fetchData('/v1/jobs', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                domain: pendingDomain,
+                use_sitemap: true,
+                find_links: true,
+                max_pages: 0,
+                concurrency: 5
+              })
+            });
+            
+            showSuccessMessage(`Started crawling ${pendingDomain}! Your cache warming has begun.`);
+            
+            // Refresh dashboard to show new job
+            await dataBinder.refresh();
+          } catch (error) {
+            console.error('Failed to create job from pending domain:', error);
+            showDashboardError(`Failed to start crawling ${pendingDomain}. Please try creating the job manually.`);
+          }
+        }
+      }
+      
+      // Setup login page event handlers
+      function setupLoginPageHandlers() {
+        // Login page buttons
+        const showLoginBtn = document.getElementById('showLoginBtn');
+        const showSignupBtn = document.getElementById('showSignupBtn');
+        
+        if (showLoginBtn) {
+          showLoginBtn.addEventListener('click', () => {
+            showAuthModal();
+            showAuthForm('login');
+          });
+        }
+        
+        if (showSignupBtn) {
+          showSignupBtn.addEventListener('click', () => {
+            showAuthModal();
+            showAuthForm('signup');
+          });
+        }
+      }
 
       function setupNetworkMonitoring() {
         // Check initial network status
@@ -1874,6 +2115,31 @@
           console.error("Failed to update user info:", error);
           userEmailElement.textContent = "Error";
           userAvatarElement.textContent = "?";
+        }
+      }
+      
+      // Update UI elements based on authentication state
+      function updateAuthState(isAuthenticated) {
+        console.log('Updating auth state:', isAuthenticated);
+        
+        // Show/hide elements based on authentication
+        const guestElements = document.querySelectorAll('[data-bb-auth="guest"]');
+        const requiredElements = document.querySelectorAll('[data-bb-auth="required"]');
+        
+        guestElements.forEach(el => {
+          el.style.display = isAuthenticated ? 'none' : el.dataset.originalDisplay || 'block';
+        });
+        
+        requiredElements.forEach(el => {
+          if (!isAuthenticated) {
+            el.dataset.originalDisplay = el.style.display || 'block';
+          }
+          el.style.display = isAuthenticated ? (el.dataset.originalDisplay || 'block') : 'none';
+        });
+        
+        // If user just authenticated, load dashboard data
+        if (isAuthenticated && dataBinder) {
+          setTimeout(() => dataBinder.refresh(), 100);
         }
       }
 
@@ -3113,9 +3379,15 @@
 
           // Update user info immediately
           updateUserInfo();
+          
+          // Update auth state
+          updateAuthState(true);
 
           // Refresh dashboard data
           await dataBinder.refresh();
+          
+          // Handle any pending domain
+          await handlePendingDomain();
         } catch (error) {
           console.error("Email login error:", error);
           showAuthError(error.message || "Login failed. Please check your credentials.");
@@ -3170,7 +3442,9 @@
             closeAuthModal();
             // Update user info and refresh dashboard
             updateUserInfo();
+            updateAuthState(true);
             await dataBinder.refresh();
+            await handlePendingDomain();
           }
         } catch (error) {
           console.error("Email signup error:", error);
