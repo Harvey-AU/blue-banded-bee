@@ -4,6 +4,7 @@ package jobs
 
 import (
 	"context"
+	"os"
 	"testing"
 	"time"
 
@@ -17,6 +18,11 @@ import (
 func setupTest(t *testing.T) *db.DB {
 	t.Helper()
 	testutil.LoadTestEnv(t)
+
+	// Skip if no DATABASE_URL is set
+	if os.Getenv("DATABASE_URL") == "" {
+		t.Skip("DATABASE_URL not set, skipping integration test")
+	}
 
 	database, err := db.InitFromEnv()
 	require.NoError(t, err, "Failed to connect to test database")
