@@ -865,6 +865,7 @@
 
       let supabase;
       let captchaToken = null;
+      let authHandled = false;
 
       // Initialize Supabase
       function initializeSupabase() {
@@ -884,11 +885,26 @@
         }
       };
 
-      document.addEventListener("DOMContentLoaded", () => {
+      document.addEventListener("DOMContentLoaded", async () => {
         if (!initializeSupabase()) {
           console.error("Supabase not available");
           return;
         }
+
+        // Check if user is already authenticated (e.g., after OAuth redirect)
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
+          // User is already authenticated, handle pending domain
+          await handleAuthSuccess(session.user);
+        }
+
+        // Set up auth state listener for future auth changes
+        supabase.auth.onAuthStateChange(async (event, session) => {
+          if ((event === 'SIGNED_IN' || event === 'USER_UPDATED') && session?.user) {
+            // Handle successful authentication
+            await handleAuthSuccess(session.user);
+          }
+        });
 
         // Marketing form handler
         const marketingForm = document.getElementById("marketingForm");
@@ -1084,6 +1100,10 @@
       }
 
       async function handleAuthSuccess(user) {
+        // Prevent multiple calls
+        if (authHandled) return;
+        authHandled = true;
+        
         // Register user with backend
         await registerUserWithBackend(user);
         

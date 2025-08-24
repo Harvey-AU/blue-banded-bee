@@ -2126,14 +2126,19 @@
         const requiredElements = document.querySelectorAll('[data-bb-auth="required"]');
         
         guestElements.forEach(el => {
-          el.style.display = isAuthenticated ? 'none' : el.dataset.originalDisplay || 'block';
+          // Store original display value if not already stored
+          if (!el.dataset.originalDisplay) {
+            el.dataset.originalDisplay = window.getComputedStyle(el).display;
+          }
+          el.style.display = isAuthenticated ? 'none' : (el.dataset.originalDisplay !== 'none' ? el.dataset.originalDisplay : 'block');
         });
         
         requiredElements.forEach(el => {
-          if (!isAuthenticated) {
-            el.dataset.originalDisplay = el.style.display || 'block';
+          // Store original display value if not already stored
+          if (!el.dataset.originalDisplay) {
+            el.dataset.originalDisplay = window.getComputedStyle(el).display;
           }
-          el.style.display = isAuthenticated ? (el.dataset.originalDisplay || 'block') : 'none';
+          el.style.display = isAuthenticated ? (el.dataset.originalDisplay !== 'none' ? el.dataset.originalDisplay : 'block') : 'none';
         });
         
         // If user just authenticated, load dashboard data
