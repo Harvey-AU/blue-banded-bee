@@ -1712,7 +1712,6 @@
         updateUserInfo();
         
         // Set initial auth state
-        const { data: { session } } = await supabase.auth.getSession();
         updateAuthState(!!session?.user);
 
         // Set up auth state change listener to update user info
