@@ -885,35 +885,16 @@
       };
 
       document.addEventListener("DOMContentLoaded", () => {
+        // Always set up form handler, regardless of Supabase availability
+        setupFormHandler();
+        
         if (!initializeSupabase()) {
-          console.error("Supabase not available");
-          return;
+          console.error("Supabase not available - form will work but auth will fail");
+          // Don't return - still set up other handlers
+        } else {
+          // Setup auth handlers only if Supabase is available
+          setupAuthHandlers();
         }
-
-        // Marketing form handler
-        const marketingForm = document.getElementById("marketingForm");
-        marketingForm.addEventListener("submit", (e) => {
-          e.preventDefault();
-          const domain = document.getElementById("marketingDomain").value.trim();
-          
-          if (!domain) {
-            showError("Please enter a domain");
-            return;
-          }
-
-          // Validate domain format
-          const domainRegex = /^[a-zA-Z0-9][a-zA-Z0-9-]{0,61}[a-zA-Z0-9]?\\.[a-zA-Z]{2,}$/;
-          const cleanDomain = domain.replace(/^https?:\\/\\//, '').replace(/\\/$/, '');
-          
-          if (!domainRegex.test(cleanDomain)) {
-            showError('Please enter a valid domain (e.g., example.com)');
-            return;
-          }
-          
-          // Store domain and show signup
-          sessionStorage.setItem('bb_pending_domain', cleanDomain);
-          showAuthModal();
-        });
 
         // Header sign in button
         document.getElementById("headerSignInBtn").addEventListener("click", (e) => {
@@ -936,10 +917,40 @@
             behavior: "smooth"
           });
         });
-
-        // Setup auth form handlers
-        setupAuthHandlers();
       });
+
+      function setupFormHandler() {
+        // Marketing form handler - always works regardless of Supabase
+        const marketingForm = document.getElementById("marketingForm");
+        if (!marketingForm) {
+          console.error("Marketing form not found");
+          return;
+        }
+        
+        marketingForm.addEventListener("submit", (e) => {
+          e.preventDefault();
+          const domain = document.getElementById("marketingDomain").value.trim();
+          
+          if (!domain) {
+            showError("Please enter a domain");
+            return;
+          }
+
+          // Validate domain format (fixed regex)
+          const domainRegex = /^[a-zA-Z0-9][a-zA-Z0-9-]{0,61}[a-zA-Z0-9]?\.[a-zA-Z]{2,}$/;
+          const cleanDomain = domain.replace(/^https?:\/\//, '').replace(/\/$/, '');
+          
+          if (!domainRegex.test(cleanDomain)) {
+            showError('Please enter a valid domain (e.g., example.com)');
+            return;
+          }
+          
+          // Store domain and show signup
+          sessionStorage.setItem('bb_pending_domain', cleanDomain);
+          console.log('Domain stored:', cleanDomain); // Debug log
+          showAuthModal();
+        });
+      }
 
       function showAuthModal() {
         document.getElementById("authModal").classList.add("show");
