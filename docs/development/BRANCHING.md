@@ -6,14 +6,13 @@ Blue Banded Bee uses a simplified branching strategy:
 
 ```
 main (production) ← Direct PRs from feature branches
-  └── test-branch (staging/preview) ← Only for UX testing
 ```
 
 ### Branch Purposes
 
 - **main**: Production branch, deployed to live environment
-- **test-branch**: Staging branch for user experience testing only
 - **feature branches**: Individual development work (deleted after merge)
+- **PR preview apps**: Isolated testing environments with dedicated databases
 
 ## Development Workflow
 
@@ -54,21 +53,15 @@ git push origin feature/your-feature
 
 ### 4. Create Pull Request
 
-**Primary Workflow: Direct to Main**
+**Streamlined Workflow: Feature → Main**
 
-1. **Feature → main (default)**:
-   - Create PR directly to main branch
+1. **Create PR to main branch**:
+   - PR automatically triggers preview app deployment
+   - Preview app gets isolated Supabase database with migrations applied
    - Tests run automatically via GitHub Actions
+   - Test your changes on preview URL: `blue-banded-bee-pr-[number].fly.dev`
    - Code review and approval
    - Merge and automatically delete feature branch
-
-**Optional: User Experience Testing**
-
-2. **Feature → test-branch (when UX testing needed)**:
-   - Only use test-branch for user experience validation
-   - Supabase preview deploys with migrations
-   - Test UI/UX changes in staging environment
-   - After validation: merge test-branch → main
 
 ## Commit Message Convention
 
@@ -126,13 +119,12 @@ When your PR includes database changes:
    ```
 
 3. **Push with feature branch**:
-   - Migrations auto-apply to test-branch preview
-   - Review schema changes in Supabase dashboard
+   - Migrations auto-apply to PR preview branch
+   - Review schema changes in isolated preview database
 
 ## Merge Strategy
 
-- **Feature → test-branch**: Squash and merge (clean history)
-- **test-branch → main**: Create merge commit (preserve context)
+- **Feature → main**: Squash and merge (clean history)
 
 ## Emergency Fixes
 
@@ -145,7 +137,7 @@ git checkout -b hotfix/critical-issue
 
 # Fix and test
 # Create PR directly to main
-# Document why bypassing test-branch
+# Will get preview app for immediate testing
 ```
 
 ## Branch Cleanup Policy
@@ -181,7 +173,7 @@ git remote prune origin
 5. **Merge**: Squash and merge to target branch
 6. **Delete**: Immediately delete the feature branch
 
-**Exception**: Only `test-branch` persists for ongoing UX testing needs.
+All feature branches are deleted after merge - no persistent staging branches needed.
 
 ## Common Scenarios
 
@@ -212,7 +204,8 @@ git rebase main
 The branching workflow integrates with:
 
 1. **GitHub Actions**: Tests run on PR creation
-2. **Supabase Previews**: Database changes deploy to test branches
-3. **Fly.io Deployment**: Main branch auto-deploys
+2. **Supabase Preview Branches**: Isolated databases with migrations for each PR
+3. **Fly.io Preview Apps**: Temporary apps for PR testing
+4. **Fly.io Production**: Main branch auto-deploys to production
 
 See [CI/CD Documentation](./testing/ci-cd.md) for details.
