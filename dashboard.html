@@ -1360,146 +1360,8 @@
       </div>
     </main>
 
-    <!-- Authentication Modal -->
-    <div id="authModal" class="bb-modal">
-      <div class="bb-modal-content" style="max-width: 480px">
-        <div class="bb-modal-header">
-          <h2 class="bb-modal-title" id="authModalTitle">Sign In</h2>
-          <button class="bb-modal-close" bb-action="close-auth-modal">&times;</button>
-        </div>
-
-        <!-- Login Form -->
-        <div id="loginForm" class="bb-auth-form">
-          <form id="emailLoginForm">
-            <div class="bb-form-group">
-              <label for="loginEmail">Email</label>
-              <input type="email" id="loginEmail" name="email" required placeholder="Enter your email" class="bb-form-input" />
-            </div>
-
-            <div class="bb-form-group">
-              <label for="loginPassword">Password</label>
-              <input type="password" id="loginPassword" name="password" required placeholder="Enter your password" class="bb-form-input" />
-            </div>
-
-            <button type="submit" class="bb-button bb-button-primary bb-button-full">Sign In</button>
-          </form>
-
-          <div class="bb-auth-divider">
-            <span>or continue with</span>
-          </div>
-
-          <div class="bb-social-buttons">
-            <button type="button" class="bb-button bb-button-outline bb-button-full bb-social-btn" data-provider="google">
-              <span class="bb-social-icon">G</span>
-              Google
-            </button>
-            <button type="button" class="bb-button bb-button-outline bb-button-full bb-social-btn" data-provider="github">
-              <span class="bb-social-icon">⚡</span>
-              GitHub
-            </button>
-          </div>
-
-          <div class="bb-auth-links">
-            <a href="#" bb-action="show-signup">Don't have an account? Sign up</a>
-            <a href="#" bb-action="forgot-password">Forgot password?</a>
-          </div>
-        </div>
-
-        <!-- Signup Form -->
-        <div id="signupForm" class="bb-auth-form" style="display: none">
-          <form id="emailSignupForm">
-            <div class="bb-form-group">
-              <label for="signupEmail">Email</label>
-              <input type="email" id="signupEmail" name="email" required placeholder="Enter your email" class="bb-form-input" />
-            </div>
-
-            <div class="bb-form-group">
-              <label for="signupPassword">Password</label>
-              <input
-                type="password"
-                id="signupPassword"
-                name="password"
-                required
-                placeholder="Create a password (min 8 characters)"
-                class="bb-form-input"
-                minlength="8"
-              />
-              <!-- Password strength indicator -->
-              <div class="bb-password-strength" id="passwordStrength" style="display: none">
-                <div class="bb-strength-meter">
-                  <div class="bb-strength-fill" id="strengthFill"></div>
-                </div>
-                <div class="bb-strength-text" id="strengthText">Password strength</div>
-                <div class="bb-strength-feedback" id="strengthFeedback"></div>
-              </div>
-            </div>
-
-            <div class="bb-form-group">
-              <label for="signupPasswordConfirm">Confirm Password</label>
-              <input
-                type="password"
-                id="signupPasswordConfirm"
-                name="passwordConfirm"
-                required
-                placeholder="Confirm your password"
-                class="bb-form-input"
-                minlength="6"
-              />
-            </div>
-
-            <div class="bb-form-group">
-              <div class="cf-turnstile" data-sitekey="0x4AAAAAABfi3Cv35Nhu4sN4" data-callback="onTurnstileSuccess"></div>
-            </div>
-
-            <button type="submit" class="bb-button bb-button-primary bb-button-full" id="signupSubmitBtn" disabled>Create Account</button>
-          </form>
-
-          <div class="bb-auth-divider">
-            <span>or continue with</span>
-          </div>
-
-          <div class="bb-social-buttons">
-            <button type="button" class="bb-button bb-button-outline bb-button-full bb-social-btn" data-provider="google">
-              <span class="bb-social-icon">G</span>
-              Google
-            </button>
-            <button type="button" class="bb-button bb-button-outline bb-button-full bb-social-btn" data-provider="github">
-              <span class="bb-social-icon">⚡</span>
-              GitHub
-            </button>
-          </div>
-
-          <div class="bb-auth-links">
-            <a href="#" bb-action="show-login">Already have an account? Sign in</a>
-          </div>
-        </div>
-
-        <!-- Reset Password Form -->
-        <div id="resetForm" class="bb-auth-form" style="display: none">
-          <form id="passwordResetForm">
-            <div class="bb-form-group">
-              <label for="resetEmail">Email</label>
-              <input type="email" id="resetEmail" name="email" required placeholder="Enter your email" class="bb-form-input" />
-            </div>
-
-            <button type="submit" class="bb-button bb-button-primary bb-button-full">Send Reset Link</button>
-          </form>
-
-          <div class="bb-auth-links">
-            <a href="#" bb-action="show-login">Back to sign in</a>
-          </div>
-        </div>
-
-        <!-- Loading State -->
-        <div id="authLoading" class="bb-auth-loading" style="display: none">
-          <div class="bb-spinner"></div>
-          <p>Processing...</p>
-        </div>
-
-        <!-- Error Message -->
-        <div id="authError" class="bb-auth-error" style="display: none"></div>
-      </div>
-    </div>
+    <!-- Load shared authentication modal -->
+    <div id="authModalContainer"></div>
 
     <!-- Job Details Modal -->
     <div id="jobDetailsModal" class="bb-modal">
@@ -1667,6 +1529,24 @@
       // Wait for Supabase to be available, then create client
       let supabase;
 
+      // Load the shared authentication modal
+      async function loadAuthModal() {
+        try {
+          const response = await fetch('/auth-modal.html');
+          const modalHTML = await response.text();
+          document.getElementById('authModalContainer').innerHTML = modalHTML;
+          
+          // Set default to login form for dashboard
+          setTimeout(() => {
+            if (window.showLoginForm) {
+              showLoginForm();
+            }
+          }, 10);
+        } catch (error) {
+          console.error('Failed to load auth modal:', error);
+        }
+      }
+
       function initializeSupabase() {
         if (window.supabase && window.supabase.createClient) {
           supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -1682,6 +1562,9 @@
 
       document.addEventListener("DOMContentLoaded", async () => {
         console.log("Enhanced dashboard initializing...");
+
+        // Load the shared authentication modal
+        await loadAuthModal();
 
         // Ensure Supabase is ready
         if (!initializeSupabase()) {
