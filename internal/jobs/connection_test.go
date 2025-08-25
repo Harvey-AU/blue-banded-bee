@@ -17,8 +17,14 @@ func TestDatabaseConnection(t *testing.T) {
 	// Load test environment
 	testutil.LoadTestEnv(t)
 
+	// Skip if no DATABASE_URL is set
+	databaseURL := os.Getenv("DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("DATABASE_URL not set, skipping integration test")
+	}
+
 	// This test verifies that the test database is properly configured
-	t.Logf("Attempting to connect with DATABASE_URL: %s", os.Getenv("DATABASE_URL"))
+	t.Logf("Attempting to connect with DATABASE_URL: %s", databaseURL)
 
 	database, err := db.InitFromEnv()
 	if err != nil {

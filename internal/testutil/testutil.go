@@ -12,8 +12,8 @@ import (
 func LoadTestEnv(t *testing.T) {
 	t.Helper()
 
-	// If DATABASE_URL is already set (e.g., in CI), use it
-	if os.Getenv("DATABASE_URL") != "" {
+	// If DATABASE_URL is already set and not empty (e.g., in CI), use it
+	if databaseURL := os.Getenv("DATABASE_URL"); databaseURL != "" {
 		t.Log("DATABASE_URL already set in environment")
 		return
 	}

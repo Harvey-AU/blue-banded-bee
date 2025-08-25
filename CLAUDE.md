@@ -178,8 +178,8 @@ That's it! Migrations apply automatically through our GitHub integration.
 
 ### How Migrations Work
 
-- **Feature branch → test-branch**: Migrations apply automatically to test environment
-- **test-branch → main**: Migrations apply automatically to production
+- **Feature branch → PR to main**: Migrations apply automatically to isolated preview database
+- **PR merge to main**: Migrations apply automatically to production
 - **No manual steps required** - Supabase GitHub integration handles everything
 
 ### Migration Files

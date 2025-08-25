@@ -63,8 +63,6 @@ jobs:
   integration-tests:
     name: Integration Tests
     runs-on: ubuntu-latest
-    env:
-      DATABASE_URL: ${{ secrets.SUPABASE_DB_URL || secrets.TEST_DATABASE_URL }}
     steps:
       - uses: actions/checkout@v4
 
@@ -73,6 +71,11 @@ jobs:
         with:
           go-version: '1.25'
           cache: true
+
+      - name: Skip database setup for dynamic preview branches
+        run: |
+          echo "Skipping database setup - using Supabase preview branches per PR"
+          echo "Integration tests will run on deployed review apps with their own database"
 
       - name: Run integration tests
         run: |
