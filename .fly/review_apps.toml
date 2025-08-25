@@ -8,7 +8,7 @@ auto_deploy = true
 auto_destroy = true
 
 # Base branch for review apps (PRs must target this branch)
-base_branch = "test-branch"
+base_branch = "main"
 
 # Optional: Custom subdomain pattern
 # Will create URLs like: blue-banded-bee-pr-123.fly.dev
