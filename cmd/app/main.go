@@ -24,7 +24,6 @@ import (
 	"golang.org/x/time/rate"
 )
 
-// CI nudge
 // Config holds the application configuration loaded from environment variables
 type Config struct {
 	Port                  string // HTTP port to listen on
