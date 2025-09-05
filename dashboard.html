@@ -1532,9 +1532,21 @@
       // Load the shared authentication modal
       async function loadAuthModal() {
         try {
+          console.log('Loading auth modal...');
           const response = await fetch('/auth-modal.html');
+          
+          if (!response.ok) {
+            throw new Error(`Failed to fetch auth modal: ${response.status} ${response.statusText}`);
+          }
+          
           const modalHTML = await response.text();
+          console.log('Auth modal HTML loaded, length:', modalHTML.length);
+          
           document.getElementById('authModalContainer').innerHTML = modalHTML;
+          
+          // Verify the modal was inserted
+          const authModal = document.getElementById('authModal');
+          console.log('Auth modal element after insertion:', authModal);
           
           // Set default to login form for dashboard
           setTimeout(() => {
