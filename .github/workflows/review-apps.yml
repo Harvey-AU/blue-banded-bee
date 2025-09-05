@@ -3,7 +3,7 @@ name: Deploy Review App
 on:
   pull_request:
     branches:
-      - test-branch
+      - main
     types: [opened, synchronize, reopened]
     paths-ignore:
       - '**.md'
@@ -74,13 +74,14 @@ jobs:
               
               **Test URL**: ${appUrl}
               
-              📋 **Test the new onboarding flow:**
+              📋 **Test Features:**
               1. Visit homepage: ${appUrl}/
-              2. Enter a domain and click "Start Warming"
-              3. Complete sign-up flow
-              4. Verify job creation and dashboard
+              2. Test authentication and job creation flow
+              3. Check dashboard functionality
+              4. Verify database operations work correctly
               
-              ⚠️ *This is a staging environment - data will be cleaned up when PR is merged.*`
+              🗄️ **Database**: Isolated Supabase preview branch with all migrations applied
+              ⚠️ *Preview environment - app and database cleaned up when PR closes*`
             });
 
   cleanup-review:
