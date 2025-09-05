@@ -1565,6 +1565,9 @@
 
         // Load the shared authentication modal
         await loadAuthModal();
+        
+        // Wait for auth modal DOM to be ready
+        await new Promise(resolve => setTimeout(resolve, 50));
 
         // Ensure Supabase is ready
         if (!initializeSupabase()) {
