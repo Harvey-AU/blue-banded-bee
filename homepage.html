@@ -787,10 +787,16 @@
 
           console.log("Auth modal script executed");
 
-          // Set default to signup form for homepage
+          // Set default to signup form for homepage and ensure handlers are set up
           setTimeout(() => {
             if (window.showSignupForm) {
               showSignupForm();
+            }
+            
+            // Ensure social login handlers are attached
+            if (window.setupAuthHandlers) {
+              setupAuthHandlers();
+              console.log("Auth handlers set up after script execution");
             }
           }, 100);
         } catch (error) {
