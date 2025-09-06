@@ -753,12 +753,22 @@
         // Set up page-specific event handlers
         setupHomepageHandlers();
         
-        // Set up authentication handlers from the modal (with small delay to ensure script is loaded)
+        // Set up authentication handlers from the modal (with delay to ensure script is loaded)
         setTimeout(() => {
           if (window.setupAuthHandlers) {
             setupAuthHandlers();
+            console.log('Auth handlers set up successfully');
+          } else {
+            console.error('setupAuthHandlers not available');
           }
-        }, 50);
+          
+          // Check if modal functions are available
+          if (typeof showAuthModal === 'function') {
+            console.log('Auth modal functions are available');
+          } else {
+            console.error('Auth modal functions not available');
+          }
+        }, 200);
       });
 
       // Load the shared authentication modal
@@ -804,12 +814,17 @@
             // Store domain and show signup
             sessionStorage.setItem('bb_pending_domain', cleanDomain);
             console.log('Domain stored:', cleanDomain);
-            if (window.showAuthModal) {
+            
+            // Try to show auth modal
+            try {
               showAuthModal();
               // Default to signup for new users
               setTimeout(() => {
-                if (window.showSignupForm) showSignupForm();
-              }, 10);
+                showSignupForm();
+              }, 100);
+            } catch (error) {
+              console.error('Auth modal not available:', error);
+              alert('Please try again - authentication modal is loading...');
             }
           });
         }
@@ -819,9 +834,12 @@
         if (headerSignInBtn) {
           headerSignInBtn.addEventListener("click", (e) => {
             e.preventDefault();
-            if (window.showAuthModal && window.showLoginForm) {
+            try {
               showAuthModal();
               showLoginForm();
+            } catch (error) {
+              console.error('Auth modal not available:', error);
+              alert('Please try again - authentication modal is loading...');
             }
           });
         }
@@ -831,9 +849,12 @@
         if (existingUserLink) {
           existingUserLink.addEventListener("click", (e) => {
             e.preventDefault();
-            if (window.showAuthModal && window.showLoginForm) {
+            try {
               showAuthModal();
               showLoginForm();
+            } catch (error) {
+              console.error('Auth modal not available:', error);
+              alert('Please try again - authentication modal is loading...');
             }
           });
         }
