@@ -752,40 +752,35 @@
         
         // Set up page-specific event handlers
         setupHomepageHandlers();
-        
-        // Set up authentication handlers from the modal (with delay to ensure script is loaded)
-        setTimeout(() => {
-          if (window.setupAuthHandlers) {
-            setupAuthHandlers();
-            console.log('Auth handlers set up successfully');
-          } else {
-            console.error('setupAuthHandlers not available');
-          }
-          
-          // Check if modal functions are available
-          if (typeof showAuthModal === 'function') {
-            console.log('Auth modal functions are available');
-          } else {
-            console.error('Auth modal functions not available');
-          }
-        }, 200);
       });
 
       // Load the shared authentication modal
       async function loadAuthModal() {
         try {
-          const response = await fetch('/auth-modal.html');
+          console.log("Loading auth modal...");
+          const response = await fetch("/auth-modal.html");
+
+          if (!response.ok) {
+            throw new Error(`Failed to fetch auth modal: ${response.status} ${response.statusText}`);
+          }
+
           const modalHTML = await response.text();
-          document.getElementById('authModalContainer').innerHTML = modalHTML;
-          
-          // Set default to signup form for homepage conversion flow
+          console.log("Auth modal HTML loaded, length:", modalHTML.length);
+
+          document.getElementById("authModalContainer").innerHTML = modalHTML;
+
+          // Verify the modal was inserted
+          const authModal = document.getElementById("authModal");
+          console.log("Auth modal element after insertion:", authModal);
+
+          // Set default to signup form for homepage
           setTimeout(() => {
             if (window.showSignupForm) {
               showSignupForm();
             }
           }, 10);
         } catch (error) {
-          console.error('Failed to load auth modal:', error);
+          console.error("Failed to load auth modal:", error);
         }
       }
 
