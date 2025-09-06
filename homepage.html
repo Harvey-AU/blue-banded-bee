@@ -757,18 +757,50 @@
       // Load the shared authentication modal
       async function loadAuthModal() {
         try {
-          const response = await fetch('/auth-modal.html');
+          console.log("Loading auth modal...");
+          const response = await fetch("/auth-modal.html");
+
+          if (!response.ok) {
+            throw new Error(`Failed to fetch auth modal: ${response.status} ${response.statusText}`);
+          }
+
           const modalHTML = await response.text();
-          document.getElementById('authModalContainer').innerHTML = modalHTML;
-          
-          // Set default to signup form for homepage conversion flow
+          console.log("Auth modal HTML loaded, length:", modalHTML.length);
+
+          document.getElementById("authModalContainer").innerHTML = modalHTML;
+
+          // Verify the modal was inserted
+          const authModal = document.getElementById("authModal");
+          console.log("Auth modal element after insertion:", authModal);
+
+          // Execute the script from auth-modal.html
+          const scripts = document.getElementById("authModalContainer").querySelectorAll("script");
+          scripts.forEach(script => {
+            const newScript = document.createElement("script");
+            if (script.src) {
+              newScript.src = script.src;
+            } else {
+              newScript.textContent = script.textContent;
+            }
+            document.head.appendChild(newScript);
+          });
+
+          console.log("Auth modal script executed");
+
+          // Set default to signup form for homepage and ensure handlers are set up
           setTimeout(() => {
-            if (window.showSignupForm) {
+            if (typeof showSignupForm === 'function') {
               showSignupForm();
             }
-          }, 10);
+            
+            // Ensure social login handlers are attached
+            if (typeof setupAuthHandlers === 'function') {
+              setupAuthHandlers();
+              console.log("Auth handlers set up after script execution");
+            }
+          }, 100);
         } catch (error) {
-          console.error('Failed to load auth modal:', error);
+          console.error("Failed to load auth modal:", error);
         }
       }
 
@@ -797,12 +829,17 @@
             // Store domain and show signup
             sessionStorage.setItem('bb_pending_domain', cleanDomain);
             console.log('Domain stored:', cleanDomain);
-            if (window.showAuthModal) {
+            
+            // Try to show auth modal
+            try {
               showAuthModal();
               // Default to signup for new users
               setTimeout(() => {
-                if (window.showSignupForm) showSignupForm();
-              }, 10);
+                showSignupForm();
+              }, 100);
+            } catch (error) {
+              console.error('Auth modal not available:', error);
+              alert('Please try again - authentication modal is loading...');
             }
           });
         }
@@ -812,9 +849,12 @@
         if (headerSignInBtn) {
           headerSignInBtn.addEventListener("click", (e) => {
             e.preventDefault();
-            if (window.showAuthModal && window.showLoginForm) {
+            try {
               showAuthModal();
               showLoginForm();
+            } catch (error) {
+              console.error('Auth modal not available:', error);
+              alert('Please try again - authentication modal is loading...');
             }
           });
         }
@@ -824,9 +864,12 @@
         if (existingUserLink) {
           existingUserLink.addEventListener("click", (e) => {
             e.preventDefault();
-            if (window.showAuthModal && window.showLoginForm) {
+            try {
               showAuthModal();
               showLoginForm();
+            } catch (error) {
+              console.error('Auth modal not available:', error);
+              alert('Please try again - authentication modal is loading...');
             }
           });
         }

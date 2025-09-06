@@ -7,8 +7,8 @@ cmd = "go build -o ./tmp/main.exe ./cmd/app"
 bin = "tmp/main.exe" 
 
 # Mac/Linux configuration (comment above, uncomment below when on Mac/Linux):
-cmd = "GOEXPERIMENT=greenteagc go build -o ./tmp/main ./cmd/app"
-bin = "tmp/main"
+# cmd = "GOEXPERIMENT=greenteagc go build -o ./tmp/main ./cmd/app"
+# bin = "tmp/main"
 
 include_ext = ["go", "env"]
 exclude_dir = ["tmp", "vendor", "testdata"]
