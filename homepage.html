@@ -789,12 +789,12 @@
 
           // Set default to signup form for homepage and ensure handlers are set up
           setTimeout(() => {
-            if (window.showSignupForm) {
+            if (typeof showSignupForm === 'function') {
               showSignupForm();
             }
             
             // Ensure social login handlers are attached
-            if (window.setupAuthHandlers) {
+            if (typeof setupAuthHandlers === 'function') {
               setupAuthHandlers();
               console.log("Auth handlers set up after script execution");
             }

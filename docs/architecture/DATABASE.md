@@ -29,7 +29,7 @@ DB_HOST=localhost
 DB_PORT=5432
 DB_USER=your_user
 DB_PASSWORD=your_password
-DB_NAME=bluebandedbeee
+DB_NAME=bluebandedbee
 DB_SSLMODE=prefer
 ```
 
@@ -425,12 +425,15 @@ WHERE schemaname = 'public';
 ### Creating Migrations
 
 1. **Generate migration file**:
+
    ```bash
    supabase migration new your_migration_name
    ```
+
    This creates a timestamped file in `supabase/migrations/`
 
 2. **Write migration SQL**:
+
    ```sql
    -- Add new columns safely
    ALTER TABLE jobs
@@ -445,6 +448,7 @@ WHERE schemaname = 'public';
    ```
 
 3. **Test locally** (optional):
+
    ```bash
    supabase start
    supabase db reset  # Applies all migrations
@@ -458,6 +462,7 @@ WHERE schemaname = 'public';
 ### Migration Files
 
 All migrations are in `supabase/migrations/`:
+
 - `20240101000000_initial_schema.sql` - Base schema creation
 - `20250720013915_remote_schema.sql` - Initial remote state
 - `20250727212804_add_job_duration_fields.sql` - Calculated duration fields
@@ -521,10 +526,10 @@ SELECT COUNT(*) FROM users;
 
 ```bash
 # Create local database
-createdb bluebandedbeee
+createdb bluebandedbee
 
 # Set environment variables
-export DATABASE_URL="postgres://localhost/bluebandedbeee"
+export DATABASE_URL="postgres://localhost/bluebandedbee"
 
 # Run application (creates schema automatically)
 go run ./cmd/app/main.go
@@ -534,7 +539,7 @@ go run ./cmd/app/main.go
 
 ```bash
 # Run with test database
-export DATABASE_URL="postgres://localhost/bluebandedbeee_test"
+export DATABASE_URL="postgres://localhost/bluebandedbee_test"
 export RUN_INTEGRATION_TESTS=true
 go test ./...
 ```
