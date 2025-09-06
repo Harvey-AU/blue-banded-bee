@@ -33,6 +33,7 @@ logs/
 coverage.out
 *.test
 *.out
+coverage.html
 
 # Patches
 *.patch

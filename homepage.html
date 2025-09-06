@@ -8,11 +8,10 @@
     <!-- Supabase CDN -->
     <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 
-    <!-- Password strength library -->
-    <script src="https://cdn.jsdelivr.net/npm/zxcvbn@4.4.2/dist/zxcvbn.js"></script>
-
-    <!-- Cloudflare Turnstile CAPTCHA -->
-    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+    <!-- Unified Auth Components -->
+    <script src="/web/src/auth.js"></script>
+    <script src="/js/bb-data-binder.min.js"></script>
+    <script src="/web/src/bb-auth-extension.js"></script>
 
     <style>
       * {
@@ -81,6 +80,45 @@
 
       .nav-link:hover {
         color: white;
+      }
+
+      .auth-buttons {
+        display: flex;
+        gap: 8px;
+      }
+
+      .header-btn {
+        padding: 8px 16px;
+        border-radius: 6px;
+        border: none;
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+      }
+
+      .header-btn-primary {
+        background: white;
+        color: #667eea;
+      }
+
+      .header-btn-primary:hover {
+        background: #f9fafb;
+        transform: translateY(-1px);
+      }
+
+      .header-btn-outline {
+        background: transparent;
+        color: white;
+        border: 1px solid rgba(255, 255, 255, 0.3);
+      }
+
+      .header-btn-outline:hover {
+        background: rgba(255, 255, 255, 0.1);
+        border-color: rgba(255, 255, 255, 0.5);
       }
 
       /* Hero Section */
@@ -187,6 +225,7 @@
       .form-note a {
         color: #3b82f6;
         text-decoration: none;
+        cursor: pointer;
       }
 
       .form-note a:hover {
@@ -200,28 +239,33 @@
       }
 
       .features h2 {
-        text-align: center;
         font-size: 2.5rem;
         font-weight: 700;
+        text-align: center;
         margin-bottom: 16px;
         color: #1a1a1a;
       }
 
       .features-subtitle {
+        font-size: 1.25rem;
         text-align: center;
-        font-size: 1.125rem;
         color: #6b7280;
         margin-bottom: 64px;
+        max-width: 600px;
+        margin-left: auto;
+        margin-right: auto;
       }
 
       .features-grid {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-        gap: 48px;
+        gap: 40px;
+        margin-bottom: 80px;
       }
 
       .feature {
         text-align: center;
+        padding: 40px 20px;
       }
 
       .feature-icon {
@@ -238,53 +282,13 @@
 
       .feature p {
         color: #6b7280;
+        font-size: 1.125rem;
         line-height: 1.7;
-      }
-
-      /* Social Proof */
-      .social-proof {
-        background: #f9fafb;
-        padding: 64px 0;
-        text-align: center;
-      }
-
-      .social-proof h2 {
-        font-size: 2rem;
-        font-weight: 700;
-        margin-bottom: 32px;
-        color: #1a1a1a;
-      }
-
-      .stats {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-        gap: 32px;
-        max-width: 800px;
-        margin: 0 auto;
-      }
-
-      .stat {
-        background: white;
-        padding: 32px;
-        border-radius: 12px;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-      }
-
-      .stat-number {
-        font-size: 2.5rem;
-        font-weight: 800;
-        color: #3b82f6;
-        margin-bottom: 8px;
-      }
-
-      .stat-label {
-        color: #6b7280;
-        font-weight: 500;
       }
 
       /* CTA Section */
       .final-cta {
-        background: linear-gradient(135deg, #1f2937, #111827);
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         padding: 80px 0;
         text-align: center;
         color: white;
@@ -293,23 +297,70 @@
       .final-cta h2 {
         font-size: 2.5rem;
         font-weight: 700;
-        margin-bottom: 24px;
+        margin-bottom: 16px;
       }
 
       .final-cta p {
         font-size: 1.25rem;
-        margin-bottom: 48px;
+        margin-bottom: 40px;
         opacity: 0.9;
+        max-width: 600px;
+        margin-left: auto;
+        margin-right: auto;
       }
 
-      /* Mobile Responsive */
+      .final-cta-button {
+        display: inline-block;
+        padding: 20px 40px;
+        background: white;
+        color: #667eea;
+        border: none;
+        border-radius: 12px;
+        font-size: 1.125rem;
+        font-weight: 600;
+        text-decoration: none;
+        transition: all 0.2s ease;
+      }
+
+      .final-cta-button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 15px 30px rgba(0, 0, 0, 0.2);
+      }
+
+      /* Footer */
+      .footer {
+        background: #1a1a1a;
+        color: white;
+        padding: 40px 0;
+        text-align: center;
+      }
+
+      .footer p {
+        color: #9ca3af;
+        margin-bottom: 16px;
+      }
+
+      .footer-links {
+        display: flex;
+        justify-content: center;
+        gap: 32px;
+        margin-bottom: 24px;
+      }
+
+      .footer-links a {
+        color: #9ca3af;
+        text-decoration: none;
+        transition: color 0.2s ease;
+      }
+
+      .footer-links a:hover {
+        color: white;
+      }
+
+      /* Responsive Design */
       @media (max-width: 768px) {
         .hero h1 {
           font-size: 2.5rem;
-        }
-
-        .hero .subtitle {
-          font-size: 1.25rem;
         }
 
         .conversion-form {
@@ -321,294 +372,48 @@
           flex-direction: column;
         }
 
-        .domain-input,
-        .cta-button {
-          width: 100%;
+        .features h2 {
+          font-size: 2rem;
         }
 
-        .features-grid {
-          grid-template-columns: 1fr;
-          gap: 32px;
+        .final-cta h2 {
+          font-size: 2rem;
         }
 
-        .stats {
-          grid-template-columns: 1fr;
-          gap: 24px;
+        .header-nav {
+          display: none;
+        }
+
+        .footer-links {
+          flex-direction: column;
+          gap: 16px;
         }
       }
 
-      /* Auth Modal Styles - Reuse from dashboard */
-      .bb-modal {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: rgba(0, 0, 0, 0.5);
-        display: none;
-        align-items: center;
-        justify-content: center;
-        z-index: 1000;
-      }
-
-      .bb-modal.show {
-        display: flex;
-      }
-
-      .bb-modal-content {
-        background: white;
-        border-radius: 12px;
-        padding: 32px;
-        max-width: 480px;
-        width: 90%;
-        max-height: 80vh;
-        overflow-y: auto;
-        box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
-      }
-
-      .bb-modal-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 24px;
-        padding-bottom: 16px;
-        border-bottom: 1px solid #e5e7eb;
-      }
-
-      .bb-modal-title {
-        font-size: 1.5rem;
-        font-weight: 600;
-        margin: 0;
-      }
-
-      .bb-modal-close {
-        background: none;
-        border: none;
-        font-size: 24px;
-        cursor: pointer;
-        color: #6b7280;
-      }
-
-      .bb-modal-close:hover {
-        color: #374151;
-      }
-
-      .bb-auth-form {
-        padding: 8px 0;
-      }
-
-      .bb-form-group {
-        margin-bottom: 20px;
-      }
-
-      .bb-form-group label {
-        display: block;
-        margin-bottom: 6px;
-        font-weight: 500;
-        color: #374151;
-        font-size: 14px;
-      }
-
-      .bb-form-input {
-        width: 100%;
+      /* Error/Success States */
+      .form-message {
         padding: 12px 16px;
-        border: 1px solid #d1d5db;
-        border-radius: 6px;
-        font-size: 14px;
-        background: white;
-        color: #374151;
-        box-sizing: border-box;
-      }
-
-      .bb-form-input:focus {
-        outline: none;
-        border-color: #3b82f6;
-        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-      }
-
-      .bb-button {
-        padding: 12px 24px;
-        border-radius: 6px;
-        border: none;
-        font-weight: 500;
-        cursor: pointer;
-        transition: all 0.2s ease;
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        text-decoration: none;
-        font-size: 14px;
-      }
-
-      .bb-button-primary {
-        background: #3b82f6;
-        color: white;
-      }
-
-      .bb-button-primary:hover {
-        background: #2563eb;
-      }
-
-      .bb-button-outline {
-        background: transparent;
-        color: #6b7280;
-        border: 1px solid #d1d5db;
-      }
-
-      .bb-button-outline:hover {
-        background: #f9fafb;
-        border-color: #9ca3af;
-      }
-
-      .bb-button-full {
-        width: 100%;
-        justify-content: center;
-        margin-bottom: 16px;
-      }
-
-      .bb-auth-divider {
-        text-align: center;
-        margin: 24px 0;
-        position: relative;
-        color: #6b7280;
-        font-size: 14px;
-      }
-
-      .bb-auth-divider::before {
-        content: "";
-        position: absolute;
-        top: 50%;
-        left: 0;
-        right: 0;
-        height: 1px;
-        background: #e5e7eb;
-        z-index: 1;
-      }
-
-      .bb-auth-divider span {
-        background: white;
-        padding: 0 16px;
-        position: relative;
-        z-index: 2;
-      }
-
-      .bb-social-buttons {
-        display: flex;
-        flex-direction: column;
-        gap: 12px;
-        margin-bottom: 24px;
-      }
-
-      .bb-social-btn {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 12px;
-        position: relative;
-      }
-
-      .bb-social-icon {
-        width: 20px;
-        height: 20px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-weight: bold;
-        font-size: 12px;
-      }
-
-      .bb-auth-links {
-        text-align: center;
-      }
-
-      .bb-auth-links a {
-        color: #3b82f6;
-        text-decoration: none;
-        font-size: 14px;
-        display: block;
-        margin-bottom: 8px;
-      }
-
-      .bb-auth-links a:hover {
-        text-decoration: underline;
-      }
-
-      .bb-auth-loading {
-        text-align: center;
-        padding: 40px 20px;
-      }
-
-      .bb-spinner {
-        width: 32px;
-        height: 32px;
-        border: 3px solid #e5e7eb;
-        border-top: 3px solid #3b82f6;
-        border-radius: 50%;
-        animation: spin 1s linear infinite;
-        margin: 0 auto 16px;
-      }
-
-      @keyframes spin {
-        0% {
-          transform: rotate(0deg);
-        }
-        100% {
-          transform: rotate(360deg);
-        }
-      }
-
-      .bb-auth-error {
-        background: #fee2e2;
-        color: #dc2626;
-        padding: 12px 16px;
-        border-radius: 6px;
-        margin-bottom: 16px;
-        font-size: 14px;
-        border: 1px solid #fecaca;
-      }
-
-      /* Notification styles */
-      .bb-notification {
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        max-width: 400px;
-        z-index: 10000;
-        transform: translateX(100%);
-        transition: transform 0.3s ease;
-        opacity: 0;
-      }
-
-      .bb-notification-show {
-        transform: translateX(0);
-        opacity: 1;
-      }
-
-      .bb-notification-content {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        padding: 16px 20px;
         border-radius: 8px;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        margin-bottom: 16px;
         font-size: 14px;
         font-weight: 500;
+        text-align: center;
       }
 
-      .bb-notification-error .bb-notification-content {
+      .form-message-error {
         background: #fee2e2;
         color: #dc2626;
         border: 1px solid #fecaca;
       }
 
-      .bb-notification-success .bb-notification-content {
+      .form-message-success {
         background: #dcfce7;
         color: #16a34a;
         border: 1px solid #bbf7d0;
       }
     </style>
 
-    <!-- Google tag (gtag.js) -->
+    <!-- Google Analytics -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-D990P29YMF"></script>
     <script>
       window.dataLayer = window.dataLayer || [];
@@ -627,10 +432,22 @@
             <span>🐝</span>
             Blue Banded Bee
           </a>
+
           <nav class="header-nav">
-            <a href="/dashboard" class="nav-link">Dashboard</a>
             <a href="#features" class="nav-link">Features</a>
-            <a href="#" id="headerSignInBtn" class="nav-link">Sign In</a>
+            <a href="/dashboard" class="nav-link">Dashboard</a>
+            
+            <!-- Show when not authenticated -->
+            <div data-bb-auth="guest" class="auth-buttons">
+              <button data-bb-action="show-login" class="header-btn header-btn-outline">Sign In</button>
+              <button data-bb-action="show-signup" class="header-btn header-btn-primary">Get Started</button>
+            </div>
+
+            <!-- Show when authenticated -->
+            <div data-bb-auth="required" class="auth-buttons">
+              <a href="/dashboard" class="header-btn header-btn-primary">Dashboard</a>
+              <button data-bb-action="sign-out" class="header-btn header-btn-outline">Sign Out</button>
+            </div>
           </nav>
         </div>
       </div>
@@ -639,11 +456,11 @@
     <!-- Hero Section -->
     <section class="hero">
       <div class="container">
-        <h1>Speed up your site now</h1>
-        <p class="subtitle">Cache warming for lightning-fast websites</p>
+        <h1>Speed Up Your Site Now</h1>
+        <p class="subtitle">Professional cache warming for lightning-fast websites</p>
         <p class="description">
-          Automatically warm your site's cache after publishing to eliminate slow page loads. 
-          Built for Webflow, Shopify, and any website that needs instant performance.
+          Boost your site performance with intelligent cache warming. 
+          Perfect for Webflow sites and any website that needs to load faster.
         </p>
 
         <!-- Conversion Form -->
@@ -651,13 +468,15 @@
           <h2 class="form-title">Get started in 30 seconds</h2>
           <p class="form-subtitle">Enter your website to see how much faster it could be</p>
           
-          <form id="marketingForm" class="domain-form">
+          <form data-bb-form="start-crawling" data-bb-auth-required="true" class="domain-form">
             <input 
               type="text" 
-              id="marketingDomain" 
+              name="domain" 
               placeholder="yourdomain.com" 
               class="domain-input"
               required
+              pattern="^[a-zA-Z0-9][a-zA-Z0-9-]{0,61}[a-zA-Z0-9]?\.[a-zA-Z]{2,}$"
+              title="Please enter a valid domain (e.g., example.com)"
             />
             <button type="submit" class="cta-button">
               Start Warming
@@ -666,7 +485,7 @@
           
           <p class="form-note">
             Free account • No credit card required • 
-            <a href="#" id="existingUserLink">Already have an account?</a>
+            <a data-bb-action="show-login">Already have an account?</a>
           </p>
         </div>
       </div>
@@ -682,50 +501,57 @@
         
         <div class="features-grid">
           <div class="feature">
-            <div class="feature-icon">🚀</div>
-            <h3>Instant Page Loads</h3>
-            <p>Automatically crawl and warm your entire site after publishing, ensuring every page loads instantly for your visitors.</p>
+            <div class="feature-icon">⚡</div>
+            <h3>Lightning Fast</h3>
+            <p>
+              Pre-warm your cache to ensure every visitor gets blazing fast load times, 
+              even on their first visit to your site.
+            </p>
           </div>
           
           <div class="feature">
-            <div class="feature-icon">🤖</div>
-            <h3>Smart Automation</h3>
-            <p>Connects with Webflow and Shopify webhooks to automatically warm your cache whenever you publish changes.</p>
+            <div class="feature-icon">🔍</div>
+            <h3>Smart Discovery</h3>
+            <p>
+              Automatically discovers all your pages through sitemaps and intelligent crawling. 
+              No manual setup required.
+            </p>
           </div>
           
           <div class="feature">
             <div class="feature-icon">📊</div>
-            <h3>Performance Insights</h3>
-            <p>See exactly which pages are slow, monitor cache performance, and get detailed crawl reports for optimization.</p>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- Social Proof Section -->
-    <section class="social-proof">
-      <div class="container">
-        <h2>Trusted by fast websites</h2>
-        
-        <div class="stats">
-          <div class="stat">
-            <div class="stat-number">10M+</div>
-            <div class="stat-label">Pages warmed</div>
+            <h3>Real-time Monitoring</h3>
+            <p>
+              Track warming progress, response times, and cache performance with detailed 
+              analytics and reporting.
+            </p>
           </div>
           
-          <div class="stat">
-            <div class="stat-number">500+</div>
-            <div class="stat-label">Happy customers</div>
+          <div class="feature">
+            <div class="feature-icon">🔧</div>
+            <h3>Zero Configuration</h3>
+            <p>
+              Works perfectly with Webflow, WordPress, Shopify, and any website. 
+              Just enter your domain and we'll handle the rest.
+            </p>
           </div>
           
-          <div class="stat">
-            <div class="stat-number">99.9%</div>
-            <div class="stat-label">Uptime</div>
+          <div class="feature">
+            <div class="feature-icon">🚀</div>
+            <h3>Boost Conversions</h3>
+            <p>
+              Faster sites convert better. Reduce bounce rates and improve user experience 
+              with consistent performance.
+            </p>
           </div>
           
-          <div class="stat">
-            <div class="stat-number">2.3s</div>
-            <div class="stat-label">Avg. speed boost</div>
+          <div class="feature">
+            <div class="feature-icon">🛡️</div>
+            <h3>Gentle & Safe</h3>
+            <p>
+              Respectful crawling that won't overload your server. Configurable concurrency 
+              and intelligent rate limiting.
+            </p>
           </div>
         </div>
       </div>
@@ -735,112 +561,103 @@
     <section class="final-cta">
       <div class="container">
         <h2>Ready to speed up your site?</h2>
-        <p>Join hundreds of websites that never have slow page loads</p>
-        <button id="finalCtaBtn" class="cta-button" style="font-size: 20px; padding: 20px 40px;">
-          Get Started Free
+        <p>
+          Join thousands of websites already using Blue Banded Bee to deliver 
+          lightning-fast experiences to their visitors.
+        </p>
+        <button data-bb-action="show-signup" class="final-cta-button">
+          Start Free Cache Warming
         </button>
       </div>
     </section>
 
-    <!-- Load shared authentication modal -->
+    <!-- Footer -->
+    <footer class="footer">
+      <div class="container">
+        <p>🐝 Blue Banded Bee - Professional Cache Warming Service</p>
+        <div class="footer-links">
+          <a href="/privacy">Privacy Policy</a>
+          <a href="/terms">Terms of Service</a>
+          <a href="/contact">Contact</a>
+          <a href="/docs">Documentation</a>
+        </div>
+        <p>&copy; 2024 Blue Banded Bee. All rights reserved.</p>
+      </div>
+    </footer>
+
+    <!-- Auth Modal Container -->
     <div id="authModalContainer"></div>
 
     <script>
-      document.addEventListener("DOMContentLoaded", async () => {
-        // Load the shared authentication modal
-        await loadAuthModal();
-        
-        // Set up page-specific event handlers
-        setupHomepageHandlers();
-      });
+      // Initialize unified auth system for homepage
+      document.addEventListener('DOMContentLoaded', async () => {
+        console.log('Initializing unified homepage...');
 
-      // Load the shared authentication modal
-      async function loadAuthModal() {
-        try {
-          const response = await fetch('/auth-modal.html');
-          const modalHTML = await response.text();
-          document.getElementById('authModalContainer').innerHTML = modalHTML;
-          
-          // Set default to signup form for homepage conversion flow
+        // Create data binder with auth extension
+        const dataBinder = new BBDataBinder({
+          apiBaseUrl: '',
+          debug: true,
+          auth: {
+            autoLoadAuthModal: true,
+            authModalUrl: '/auth-modal.html'
+          }
+        });
+
+        // Initialize the system
+        await dataBinder.init();
+
+        // Smooth scrolling for anchor links
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+          anchor.addEventListener('click', function (e) {
+            e.preventDefault();
+            const target = document.querySelector(this.getAttribute('href'));
+            if (target) {
+              target.scrollIntoView({
+                behavior: 'smooth',
+                block: 'start'
+              });
+            }
+          });
+        });
+
+        // Domain validation helper
+        function validateDomain(domain) {
+          const domainRegex = /^[a-zA-Z0-9][a-zA-Z0-9-]{0,61}[a-zA-Z0-9]?\.[a-zA-Z]{2,}$/;
+          const cleanDomain = domain.replace(/^https?:\/\//, '').replace(/\/$/, '');
+          return domainRegex.test(cleanDomain) ? cleanDomain : null;
+        }
+
+        // Show form message
+        function showFormMessage(form, message, type) {
+          // Remove existing messages
+          const existingMessage = form.querySelector('.form-message');
+          if (existingMessage) {
+            existingMessage.remove();
+          }
+
+          // Create new message
+          const messageDiv = document.createElement('div');
+          messageDiv.className = `form-message form-message-${type}`;
+          messageDiv.textContent = message;
+
+          // Insert at the beginning of the form
+          form.insertBefore(messageDiv, form.firstChild);
+
+          // Auto-remove after 5 seconds
           setTimeout(() => {
-            if (window.showSignupForm) {
-              showSignupForm();
+            if (messageDiv.parentElement) {
+              messageDiv.remove();
             }
-          }, 10);
-        } catch (error) {
-          console.error('Failed to load auth modal:', error);
-        }
-      }
-
-      function setupHomepageHandlers() {
-        // Marketing form handler
-        const marketingForm = document.getElementById("marketingForm");
-        if (marketingForm) {
-          marketingForm.addEventListener("submit", (e) => {
-            e.preventDefault();
-            const domain = document.getElementById("marketingDomain").value.trim();
-            
-            if (!domain) {
-              if (window.showError) showError("Please enter a domain");
-              return;
-            }
-
-            // Validate domain format
-            const domainRegex = /^[a-zA-Z0-9][a-zA-Z0-9-]{0,61}[a-zA-Z0-9]?\.[a-zA-Z]{2,}$/;
-            const cleanDomain = domain.replace(/^https?:\/\//, '').replace(/\/$/, '');
-            
-            if (!domainRegex.test(cleanDomain)) {
-              if (window.showError) showError('Please enter a valid domain (e.g., example.com)');
-              return;
-            }
-            
-            // Store domain and show signup
-            sessionStorage.setItem('bb_pending_domain', cleanDomain);
-            console.log('Domain stored:', cleanDomain);
-            if (window.showAuthModal) {
-              showAuthModal();
-              // Default to signup for new users
-              setTimeout(() => {
-                if (window.showSignupForm) showSignupForm();
-              }, 10);
-            }
-          });
+          }, 5000);
         }
 
-        // Header sign in button
-        const headerSignInBtn = document.getElementById("headerSignInBtn");
-        if (headerSignInBtn) {
-          headerSignInBtn.addEventListener("click", (e) => {
-            e.preventDefault();
-            if (window.showAuthModal && window.showLoginForm) {
-              showAuthModal();
-              showLoginForm();
-            }
-          });
-        }
+        // Store globally for debugging
+        window.dataBinder = dataBinder;
+        window.showFormMessage = showFormMessage;
+        window.validateDomain = validateDomain;
 
-        // Existing user link
-        const existingUserLink = document.getElementById("existingUserLink");
-        if (existingUserLink) {
-          existingUserLink.addEventListener("click", (e) => {
-            e.preventDefault();
-            if (window.showAuthModal && window.showLoginForm) {
-              showAuthModal();
-              showLoginForm();
-            }
-          });
-        }
-
-        // Final CTA button
-        const finalCtaBtn = document.getElementById("finalCtaBtn");
-        if (finalCtaBtn) {
-          finalCtaBtn.addEventListener("click", () => {
-            document.querySelector(".conversion-form").scrollIntoView({
-              behavior: "smooth"
-            });
-          });
-        }
-      }
+        console.log('Unified homepage initialized');
+      });
     </script>
   </body>
 </html>

@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Unified Auth System Test - Blue Banded Bee</title>
+    
+    <!-- Supabase CDN -->
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    
+    <!-- Unified Auth Components -->
+    <script src="/web/src/auth.js"></script>
+    <script src="/js/bb-data-binder.min.js"></script>
+    <script src="/web/src/bb-auth-extension.js"></script>
+    
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 40px 20px;
+            background: #f5f7fa;
+        }
+        
+        .test-section {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 24px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+        
+        .test-section h2 {
+            margin: 0 0 16px 0;
+            color: #1a1a1a;
+        }
+        
+        .test-section p {
+            margin: 0 0 16px 0;
+            color: #6b7280;
+        }
+        
+        .button {
+            padding: 8px 16px;
+            border-radius: 6px;
+            border: none;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            margin-right: 8px;
+            margin-bottom: 8px;
+        }
+        
+        .button-primary {
+            background: #3b82f6;
+            color: white;
+        }
+        
+        .button-outline {
+            background: transparent;
+            color: #6b7280;
+            border: 1px solid #d1d5db;
+        }
+        
+        .form-group {
+            margin-bottom: 16px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 6px;
+            font-weight: 500;
+            color: #374151;
+        }
+        
+        .form-input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+        
+        .form-input:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+        
+        .auth-status {
+            padding: 12px 16px;
+            border-radius: 6px;
+            margin-bottom: 16px;
+            font-weight: 500;
+        }
+        
+        .auth-status.authenticated {
+            background: #dcfce7;
+            color: #16a34a;
+            border: 1px solid #bbf7d0;
+        }
+        
+        .auth-status.unauthenticated {
+            background: #fee2e2;
+            color: #dc2626;
+            border: 1px solid #fecaca;
+        }
+        
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <h1>🐝 Unified Auth System Test</h1>
+    
+    <!-- Auth Status Display -->
+    <div class="test-section">
+        <h2>Authentication Status</h2>
+        <div id="authStatus" class="auth-status unauthenticated">
+            Checking authentication...
+        </div>
+        <div data-bb-auth="required">
+            <p>✅ You are authenticated as: <span data-bb-bind="user.email">unknown</span></p>
+            <p>User initials: <span data-bb-bind="user.initials">?</span></p>
+        </div>
+        <div data-bb-auth="guest">
+            <p>❌ You are not authenticated</p>
+        </div>
+    </div>
+    
+    <!-- Auth Actions -->
+    <div class="test-section">
+        <h2>Authentication Actions</h2>
+        <p>Test the unified auth action system:</p>
+        
+        <div data-bb-auth="guest">
+            <button data-bb-action="show-login" class="button button-primary">Show Login Modal</button>
+            <button data-bb-action="show-signup" class="button button-outline">Show Signup Modal</button>
+            <button data-bb-action="oauth-google" class="button button-outline">Google OAuth</button>
+            <button data-bb-action="oauth-github" class="button button-outline">GitHub OAuth</button>
+        </div>
+        
+        <div data-bb-auth="required">
+            <button data-bb-action="sign-out" class="button button-outline">Sign Out</button>
+        </div>
+    </div>
+    
+    <!-- Auth-Protected Form -->
+    <div class="test-section">
+        <h2>Auth-Protected Form</h2>
+        <p>This form requires authentication and will show the auth modal if user is not signed in:</p>
+        
+        <form data-bb-form="start-crawling" data-bb-auth-required="true">
+            <div class="form-group">
+                <label>Domain</label>
+                <input type="text" name="domain" placeholder="example.com" class="form-input" required>
+            </div>
+            <div class="form-group">
+                <label>Max Pages</label>
+                <input type="number" name="max_pages" value="0" min="0" max="10000" class="form-input">
+            </div>
+            <button type="submit" class="button button-primary">Start Crawling (Requires Auth)</button>
+        </form>
+    </div>
+    
+    <!-- Regular Form -->
+    <div class="test-section">
+        <h2>Regular Form</h2>
+        <p>This form does not require authentication and should work regardless of auth state:</p>
+        
+        <form data-bb-form="test-form">
+            <div class="form-group">
+                <label>Test Input</label>
+                <input type="text" name="test_field" placeholder="Enter some test data" class="form-input">
+            </div>
+            <button type="submit" class="button button-primary">Submit Test Form</button>
+        </form>
+    </div>
+    
+    <!-- Data Binding Test -->
+    <div class="test-section" data-bb-auth="required">
+        <h2>Data Binding Test</h2>
+        <p>Test data binding with authentication context:</p>
+        
+        <div style="background: #f9fafb; padding: 16px; border-radius: 6px; margin-bottom: 16px;">
+            <p><strong>User Email:</strong> <span data-bb-bind="user.email">Loading...</span></p>
+            <p><strong>User Initials:</strong> <span data-bb-bind="user.initials">?</span></p>
+            <p><strong>Is Authenticated:</strong> <span data-bb-bind="auth.isAuthenticated">false</span></p>
+        </div>
+    </div>
+    
+    <!-- Loading State Test -->
+    <div class="test-section">
+        <h2>Loading States</h2>
+        <div data-bb-auth="loading">
+            <p>🔄 Loading authentication state...</p>
+        </div>
+        <div data-bb-auth="required">
+            <p>✅ Authentication loaded - user is signed in</p>
+        </div>
+        <div data-bb-auth="guest">
+            <p>✅ Authentication loaded - user is not signed in</p>
+        </div>
+    </div>
+    
+    <!-- Auth Modal Container -->
+    <div id="authModalContainer"></div>
+    
+    <script>
+        // Initialize unified auth system for testing
+        document.addEventListener('DOMContentLoaded', async () => {
+            console.log('Initializing unified auth test...');
+            
+            // Create data binder with auth extension
+            const dataBinder = new BBDataBinder({
+                apiBaseUrl: '',
+                debug: true,
+                auth: {
+                    autoLoadAuthModal: true,
+                    authModalUrl: '/auth-modal.html'
+                }
+            });
+            
+            // Initialize the system
+            await dataBinder.init();
+            
+            // Update auth status display
+            function updateAuthStatus() {
+                const statusDiv = document.getElementById('authStatus');
+                const isAuthenticated = dataBinder.authManager?.isAuthenticated || false;
+                const userEmail = dataBinder.authManager?.user?.email || 'Unknown';
+                
+                if (isAuthenticated) {
+                    statusDiv.className = 'auth-status authenticated';
+                    statusDiv.textContent = `✅ Authenticated as: ${userEmail}`;
+                } else {
+                    statusDiv.className = 'auth-status unauthenticated';
+                    statusDiv.textContent = '❌ Not authenticated';
+                }
+                
+                // Update data binding context
+                if (dataBinder.authManager?.user) {
+                    const email = dataBinder.authManager.user.email;
+                    const initials = getInitials(email);
+                    dataBinder.updateElements({
+                        user: {
+                            email: email,
+                            initials: initials
+                        },
+                        auth: {
+                            isAuthenticated: isAuthenticated
+                        }
+                    });
+                }
+            }
+            
+            // Helper function for initials
+            function getInitials(email) {
+                if (!email) return '?';
+                const emailPrefix = email.split('@')[0];
+                if (emailPrefix.includes('.')) {
+                    const parts = emailPrefix.split('.');
+                    return parts.map(part => part.charAt(0).toUpperCase()).slice(0, 2).join('');
+                } else if (emailPrefix.includes('_')) {
+                    const parts = emailPrefix.split('_');
+                    return parts.map(part => part.charAt(0).toUpperCase()).slice(0, 2).join('');
+                } else {
+                    return emailPrefix.slice(0, 2).toUpperCase();
+                }
+            }
+            
+            // Listen for auth state changes
+            if (dataBinder.authManager) {
+                dataBinder.authManager.onAuthStateChange(() => {
+                    setTimeout(updateAuthStatus, 100);
+                });
+            }
+            
+            // Initial status update
+            setTimeout(updateAuthStatus, 500);
+            
+            // Handle test form submission
+            dataBinder.handleFormSubmit = async function(form, action) {
+                if (action === 'test-form') {
+                    console.log('Test form submitted');
+                    alert('Test form submitted successfully!');
+                    return;
+                }
+                
+                // Call parent method for other forms
+                return BBDataBinder.prototype.handleFormSubmit.call(this, form, action);
+            };
+            
+            // Store globally for debugging
+            window.dataBinder = dataBinder;
+            window.updateAuthStatus = updateAuthStatus;
+            
+            console.log('Unified auth test initialized');
+        });
+    </script>
+</body>
+</html>
