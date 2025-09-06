@@ -773,12 +773,26 @@
           const authModal = document.getElementById("authModal");
           console.log("Auth modal element after insertion:", authModal);
 
+          // Execute the script from auth-modal.html
+          const scripts = document.getElementById("authModalContainer").querySelectorAll("script");
+          scripts.forEach(script => {
+            const newScript = document.createElement("script");
+            if (script.src) {
+              newScript.src = script.src;
+            } else {
+              newScript.textContent = script.textContent;
+            }
+            document.head.appendChild(newScript);
+          });
+
+          console.log("Auth modal script executed");
+
           // Set default to signup form for homepage
           setTimeout(() => {
             if (window.showSignupForm) {
               showSignupForm();
             }
-          }, 10);
+          }, 100);
         } catch (error) {
           console.error("Failed to load auth modal:", error);
         }
