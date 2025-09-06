@@ -752,6 +752,13 @@
         
         // Set up page-specific event handlers
         setupHomepageHandlers();
+        
+        // Set up authentication handlers from the modal (with small delay to ensure script is loaded)
+        setTimeout(() => {
+          if (window.setupAuthHandlers) {
+            setupAuthHandlers();
+          }
+        }, 50);
       });
 
       // Load the shared authentication modal
