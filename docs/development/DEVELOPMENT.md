@@ -27,13 +27,13 @@ Edit `.env` with your settings:
 
 ```bash
 # Database Configuration
-DATABASE_URL="postgres://user:password@localhost:5432/bluebandedbeee"
+DATABASE_URL="postgres://user:password@localhost:5432/bluebandedbee"
 # OR individual settings
 DB_HOST=localhost
 DB_PORT=5432
 DB_USER=your_user
 DB_PASSWORD=your_password
-DB_NAME=bluebandedbeee
+DB_NAME=bluebandedbee
 DB_SSLMODE=prefer
 
 # Application Settings
@@ -58,7 +58,7 @@ supabase start  # Starts local Supabase instance
 supabase db reset  # Creates tables from migrations
 
 # Or for standalone PostgreSQL
-createdb bluebandedbeee
+createdb bluebandedbee
 # The application will automatically create tables on first run
 go run ./cmd/app/main.go
 ```
@@ -66,6 +66,7 @@ go run ./cmd/app/main.go
 ### 4. Database Migrations
 
 **Creating new migrations**:
+
 ```bash
 # Generate a new migration file
 supabase migration new your_migration_name
@@ -76,6 +77,7 @@ supabase db reset
 ```
 
 **Deployment process**:
+
 1. Push changes to feature branch
 2. Create PR to `test-branch` - migrations apply automatically
 3. After testing, merge to `main` - migrations apply automatically
@@ -109,12 +111,14 @@ go run ./cmd/app/main.go
 ## Testing
 
 See the comprehensive [Testing Documentation](./testing/README.md) for:
+
 - Test environment setup
 - Writing and running tests
 - CI/CD pipeline details
 - Troubleshooting guide
 
 Quick commands:
+
 ```bash
 # Run all tests
 ./run-tests.sh
@@ -171,16 +175,19 @@ internal/
 ### Development Patterns
 
 #### Error Handling
+
 - Use wrapped errors: `fmt.Errorf("context: %w", err)`
 - Log errors with context: `log.Error().Err(err).Str("job_id", id).Msg("Failed to process")`
 - Capture critical errors in Sentry: `sentry.CaptureException(err)`
 
 #### Database Operations
+
 - Use PostgreSQL-style parameters: `$1, $2, $3`
 - Wrap operations in transactions via `dbQueue.Execute()`
 - Handle connection pooling automatically
 
 #### Testing
+
 - Place tests alongside implementation: `file_test.go`
 - Use table-driven tests for multiple scenarios
 - Mock external dependencies (HTTP, database)
@@ -190,6 +197,7 @@ internal/
 ### Log Levels
 
 Set `LOG_LEVEL` in `.env`:
+
 - `debug` - Verbose logging for development
 - `info` - Standard operational logging
 - `warn` - Warning conditions
@@ -238,6 +246,7 @@ GODEBUG=gctrace=1 go run ./cmd/app/main.go
 We use a **hybrid approach** for code quality checks due to our Go 1.25 usage:
 
 #### Local Development (Fast Feedback)
+
 Before committing, run these **local** checks:
 
 ```bash
@@ -255,6 +264,7 @@ go test -v -coverprofile=coverage.out ./...
 ```
 
 #### Why Local golangci-lint Doesn't Work
+
 Our project uses **Go 1.25** for advanced features (container-aware GOMAXPROCS, Green Tea GC, etc.). With the official release, golangci-lint should now be compatible:
 
 ```bash
@@ -264,6 +274,7 @@ golangci-lint run --config .golangci.yml
 ```
 
 #### CI-Based Comprehensive Linting ✅
+
 Our **GitHub Actions CI** uses golangci-lint v2.3.0 built with Go 1.25 support:
 
 - **Runs automatically** on every push/PR
@@ -272,6 +283,7 @@ Our **GitHub Actions CI** uses golangci-lint v2.3.0 built with Go 1.25 support:
 - **Blocks problematic code** from merging
 
 #### Recommended Workflow
+
 ```bash
 # 1. 🏠 Local development - fast iteration
 go fmt ./... && go vet ./... && go test ./...
@@ -281,13 +293,14 @@ git add . && git commit -m "feat: new feature" && git push
 
 # 3. ⚡ GitHub CI provides comprehensive feedback
 # - Formatting issues
-# - Security vulnerabilities  
+# - Security vulnerabilities
 # - Performance problems
 # - Code complexity issues
 # - Documentation gaps
 ```
 
 #### Pre-Submission Checklist
+
 - [ ] Code formatted with `go fmt ./...`
 - [ ] No issues from `go vet ./...`
 - [ ] All tests pass with `./run-tests.sh`
@@ -300,6 +313,7 @@ git add . && git commit -m "feat: new feature" && git push
 See [BRANCHING.md](./BRANCHING.md) for comprehensive Git workflow.
 
 Quick reference:
+
 ```bash
 # Create feature branch from main
 git checkout -b feature/your-feature
@@ -315,6 +329,7 @@ git push origin feature/your-feature
 ### Commit Messages
 
 Use conventional commits:
+
 - `feat:` - New feature
 - `fix:` - Bug fix
 - `docs:` - Documentation changes
@@ -355,12 +370,14 @@ docker run --env-file .env -p 8080:8080 blue-banded-bee
 ### Environment-Specific Configs
 
 **Development**:
+
 - Hot reloading enabled
 - Verbose logging
 - 100% Sentry trace sampling
 - Debug mode enabled
 
 **Production**:
+
 - Optimised builds
 - Error-level logging
 - 10% Sentry trace sampling
@@ -371,15 +388,17 @@ docker run --env-file .env -p 8080:8080 blue-banded-bee
 ### Common Issues
 
 **Database Connection Errors**:
+
 ```bash
 # Check PostgreSQL is running
 pg_isready -h localhost -p 5432
 
 # Verify credentials
-psql -h localhost -U your_user -d bluebandedbeee
+psql -h localhost -U your_user -d bluebandedbee
 ```
 
 **Port Already in Use**:
+
 ```bash
 # Find process using port 8080
 lsof -i :8080
@@ -389,6 +408,7 @@ kill -9 <PID>
 ```
 
 **Module Dependencies**:
+
 ```bash
 # Clean module cache
 go clean -modcache
@@ -415,12 +435,13 @@ When encountering functions >50 lines, apply **Extract + Test + Commit**:
 1. **Analyse Structure**: Map distinct responsibilities
 2. **Extract Functions**: Pull out focused, single-responsibility functions
 3. **Create Tests**: Write comprehensive tests with table-driven patterns
-4. **Commit Steps**: Commit each extraction separately  
+4. **Commit Steps**: Commit each extraction separately
 5. **Verify Integration**: Ensure no regressions
 
 ### Testing Patterns
 
 **Table-Driven Tests**:
+
 ```go
 func TestValidateInput(t *testing.T) {
     tests := []struct {
@@ -431,7 +452,7 @@ func TestValidateInput(t *testing.T) {
         {"valid_input", "test", false},
         {"invalid_input", "", true},
     }
-    
+
     for _, tt := range tests {
         t.Run(tt.name, func(t *testing.T) {
             err := validateInput(tt.input)
@@ -446,14 +467,15 @@ func TestValidateInput(t *testing.T) {
 ```
 
 **Database Testing with sqlmock**:
+
 ```go
 func TestDatabaseOperation(t *testing.T) {
     db, mock, err := sqlmock.New()
     require.NoError(t, err)
     defer db.Close()
-    
+
     mock.ExpectExec("CREATE TABLE").WillReturnResult(sqlmock.NewResult(0, 0))
-    
+
     err = createTable(db)
     assert.NoError(t, err)
     assert.NoError(t, mock.ExpectationsWereMet())
@@ -463,8 +485,9 @@ func TestDatabaseOperation(t *testing.T) {
 ### Recent Refactoring Success
 
 **5 monster functions eliminated:**
+
 - `getJobTasks`: 216 → 56 lines (74% reduction)
-- `CreateJob`: 232 → 42 lines (82% reduction)  
+- `CreateJob`: 232 → 42 lines (82% reduction)
 - `setupJobURLDiscovery`: 108 → 17 lines (84% reduction)
 - `setupSchema`: 216 → 27 lines (87% reduction)
 - `WarmURL`: 377 → 68 lines (82% reduction)
@@ -472,6 +495,7 @@ func TestDatabaseOperation(t *testing.T) {
 **Results**: 80% complexity reduction, 350+ new tests, 38.9% coverage
 
 **Hot Reloading Not Working**:
+
 ```bash
 # Verify Air configuration
 cat .air.toml
@@ -483,11 +507,13 @@ go install github.com/cosmtrek/air@latest
 ### Performance Issues
 
 **High Memory Usage**:
+
 - Check for goroutine leaks with `go tool pprof`
 - Monitor database connection pool usage
 - Verify proper cleanup of HTTP clients
 
 **Slow Database Queries**:
+
 - Enable query logging in PostgreSQL
 - Use `EXPLAIN ANALYZE` for query performance
 - Check connection pool settings
@@ -495,6 +521,7 @@ go install github.com/cosmtrek/air@latest
 ### Flight Recorder
 
 For detailed performance debugging, see [Flight Recorder Documentation](flight-recorder.md). The flight recorder provides runtime trace data that can help diagnose:
+
 - Goroutine scheduling issues
 - Memory allocation patterns
 - CPU usage hotspots
