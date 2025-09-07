@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/getsentry/sentry-go"
@@ -14,6 +15,8 @@ import (
 // DbQueue is a PostgreSQL implementation of a job queue
 type DbQueue struct {
 	db *DB
+	// Mutex to prevent concurrent cleanup operations that cause prepared statement conflicts
+	cleanupMutex sync.Mutex
 }
 
 // NewDbQueue creates a PostgreSQL job queue
@@ -254,6 +257,10 @@ func (q *DbQueue) EnqueueURLs(ctx context.Context, jobID string, pages []Page, s
 // CleanupStuckJobs finds and fixes jobs that are stuck in pending/running state
 // despite having all their tasks completed
 func (q *DbQueue) CleanupStuckJobs(ctx context.Context) error {
+	// Serialize cleanup operations to prevent prepared statement conflicts
+	q.cleanupMutex.Lock()
+	defer q.cleanupMutex.Unlock()
+	
 	span := sentry.StartSpan(ctx, "db.cleanup_stuck_jobs")
 	defer span.Finish()
 
