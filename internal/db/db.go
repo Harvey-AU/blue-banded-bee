@@ -109,8 +109,10 @@ func New(config *Config) (*DB, error) {
 		config.MaxLifetime = 10 * time.Minute  // Reduced from 20 minutes
 	}
 
-	// Add statement timeout to connection string
+	// Add connection configuration to prevent prepared statement conflicts
 	connStr := config.ConnectionString()
+	
+	// Add statement timeout if not present
 	if !strings.Contains(connStr, "statement_timeout") {
 		// Check if we're using URL format or key=value format
 		if strings.HasPrefix(connStr, "postgres://") || strings.HasPrefix(connStr, "postgresql://") {
@@ -125,6 +127,41 @@ func New(config *Config) (*DB, error) {
 			connStr += " statement_timeout=60000" // 60 seconds
 		}
 	}
+	
+	// Disable automatic prepared statements to prevent cache conflicts
+	// Use multiple parameters to ensure pgx disables statement caching
+	paramList := []string{
+		"default_query_exec_mode=simple_protocol",
+		"prefer_simple_protocol=true",
+		"statement_cache_capacity=0",
+	}
+	
+	for _, param := range paramList {
+		if !strings.Contains(connStr, strings.Split(param, "=")[0]) {
+			if strings.HasPrefix(connStr, "postgres://") || strings.HasPrefix(connStr, "postgresql://") {
+				// URL format - use query parameters
+				separator := "?"
+				if strings.Contains(connStr, "?") {
+					separator = "&"
+				}
+				connStr += separator + param
+			} else {
+				// Key=value format - append as another key=value pair
+				connStr += " " + param
+			}
+		}
+	}
+	
+	// Debug: Log the connection string (without credentials)
+	logConnStr := connStr
+	if strings.Contains(logConnStr, "@") {
+		// Remove credentials from log
+		parts := strings.Split(logConnStr, "@")
+		if len(parts) > 1 {
+			logConnStr = "postgres://***:***@" + parts[1]
+		}
+	}
+	log.Info().Str("connection_string", logConnStr).Msg("Opening PostgreSQL connection with prepared statement cache disabled")
 	
 	client, err := sql.Open("pgx", connStr)
 	if err != nil {
@@ -157,23 +194,60 @@ func New(config *Config) (*DB, error) {
 func InitFromEnv() (*DB, error) {
 	// If DATABASE_URL is provided, use it with default config
 	if url := os.Getenv("DATABASE_URL"); url != "" {
+		// Reduce connection limits for development when using shared database
+		maxOpen := 180
+		maxIdle := 50
+		if os.Getenv("APP_ENV") == "development" {
+			maxOpen = 15  // Reduced for local development
+			maxIdle = 5   // Reduced for local development
+		}
+		
 		config := &Config{
 			DatabaseURL:  url,
-			MaxIdleConns: 50,   // Increased from 30
-			MaxOpenConns: 150,  // Increased from 75 for 49 workers  
+			MaxIdleConns: maxIdle,
+			MaxOpenConns: maxOpen,
 			MaxLifetime:  10 * time.Minute,  // Reduced from 20 minutes
 		}
 
-		// Add statement timeout to DATABASE_URL if not present
+		// Add statement timeout and disable prepared statements to prevent cache conflicts
 		if !strings.Contains(url, "statement_timeout") {
 			separator := "?"
 			if strings.Contains(url, "?") {
 				separator = "&"
 			}
 			url += separator + "statement_timeout=60000" // 60 seconds
-			// Persist the augmented URL back to config for consistency
-			config.DatabaseURL = url
 		}
+		
+		// Disable automatic prepared statements to prevent cache conflicts
+		paramList := []string{
+			"default_query_exec_mode=simple_protocol",
+			"prefer_simple_protocol=true", 
+			"statement_cache_capacity=0",
+		}
+		
+		for _, param := range paramList {
+			if !strings.Contains(url, strings.Split(param, "=")[0]) {
+				separator := "?"
+				if strings.Contains(url, "?") {
+					separator = "&"
+				}
+				url += separator + param
+			}
+		}
+		
+		// Persist the augmented URL back to config for consistency
+		config.DatabaseURL = url
+		
+		// Debug: Log the connection string (without credentials)
+		logURL := url
+		if strings.Contains(logURL, "@") {
+			// Remove credentials from log
+			parts := strings.Split(logURL, "@")
+			if len(parts) > 1 {
+				logURL = "postgres://***:***@" + parts[1]
+			}
+		}
+		log.Info().Str("database_url", logURL).Msg("Opening PostgreSQL connection via DATABASE_URL with prepared statement cache disabled")
 		
 		client, err := sql.Open("pgx", url)
 		if err != nil {
