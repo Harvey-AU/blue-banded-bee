@@ -5,26 +5,26 @@ on:
       - main
       - test-branch
     paths-ignore:
-      - '**.md'
-      - 'docs/**'
-      - 'LICENSE'
-      - '.gitignore'
-      - 'CHANGELOG.md'
-      - 'SECURITY.md'
-      - 'Roadmap.md'
-      - 'QandA.md'
+      - "**.md"
+      - "docs/**"
+      - "LICENSE"
+      - ".gitignore"
+      - "CHANGELOG.md"
+      - "SECURITY.md"
+      - "Roadmap.md"
+      - "QandA.md"
   push:
     branches:
       - main
     paths-ignore:
-      - '**.md'
-      - 'docs/**'
-      - 'LICENSE'
-      - '.gitignore'
-      - 'CHANGELOG.md'
-      - 'SECURITY.md'
-      - 'Roadmap.md'
-      - 'QandA.md'
+      - "**.md"
+      - "docs/**"
+      - "LICENSE"
+      - ".gitignore"
+      - "CHANGELOG.md"
+      - "SECURITY.md"
+      - "Roadmap.md"
+      - "QandA.md"
 
 jobs:
   unit-tests:
@@ -36,14 +36,14 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.25'
+          go-version: "1.25"
           cache: true
 
       - name: Run unit tests
         run: |
           echo "=== Running Unit Tests ==="
-          go test -race -short -shuffle=on -coverprofile=coverage-unit.out -coverpkg=./... ./... || \
-          go test -v -race -short -shuffle=on -coverprofile=coverage-unit.out -coverpkg=./... ./...
+          go test -race -short -shuffle=on -covermode=atomic -coverprofile=coverage-unit.out -coverpkg=./... ./... || \
+          go test -v -race -short -shuffle=on -covermode=atomic -coverprofile=coverage-unit.out -coverpkg=./... ./...
 
       - name: Upload unit test coverage
         uses: actions/upload-artifact@v4
@@ -69,7 +69,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.25'
+          go-version: "1.25"
           cache: true
 
       - name: Skip database setup for dynamic preview branches
@@ -80,9 +80,9 @@ jobs:
       - name: Run integration tests
         run: |
           echo "=== Running Integration Tests ==="
-          go test -race -coverprofile=coverage-integration.out -coverpkg=./... -tags=integration ./... -json > test-output.json || \
-          go test -v -race -coverprofile=coverage-integration.out -coverpkg=./... -tags=integration ./... -json > test-output.json
-          
+          go test -race -covermode=atomic -coverprofile=coverage-integration.out -coverpkg=./... -tags=integration ./... -json > test-output.json || \
+          go test -v -race -covermode=atomic -coverprofile=coverage-integration.out -coverpkg=./... -tags=integration ./... -json > test-output.json
+
           # Show test results summary
           echo "=== Test Results ==="
           if grep -q '"Action":"fail"' test-output.json; then
@@ -140,7 +140,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.25'
+          go-version: "1.25"
           cache: true
 
       - name: Download coverage files
@@ -153,7 +153,7 @@ jobs:
         run: |
           echo "=== Merging Coverage Reports ==="
           go install github.com/wadey/gocovmerge@latest
-          
+
           # Merge unit and integration coverage
           if [ -f coverage-unit.out ] && [ -f coverage-integration.out ]; then
             $(go env GOPATH)/bin/gocovmerge coverage-unit.out coverage-integration.out > coverage.out
@@ -162,7 +162,7 @@ jobs:
           elif [ -f coverage-integration.out ]; then
             cp coverage-integration.out coverage.out
           fi
-          
+
           # Show total coverage
           if [ -f coverage.out ]; then
             echo "=== Total Coverage ==="
@@ -172,7 +172,7 @@ jobs:
       - name: Check coverage floors
         run: |
           echo "=== Checking Coverage Floors ==="
-          
+
           # Extract coverage percentages for critical packages
           if [ -f coverage.out ]; then
             # Calculate package-level coverage from function-level coverage
