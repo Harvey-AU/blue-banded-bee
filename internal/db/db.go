@@ -195,11 +195,11 @@ func InitFromEnv() (*DB, error) {
 	// If DATABASE_URL is provided, use it with default config
 	if url := os.Getenv("DATABASE_URL"); url != "" {
 		// Reduce connection limits for development when using shared database
-		maxOpen := 150
+		maxOpen := 180
 		maxIdle := 50
 		if os.Getenv("APP_ENV") == "development" {
-			maxOpen = 25  // Reduced for local development
-			maxIdle = 10  // Reduced for local development
+			maxOpen = 15  // Reduced for local development
+			maxIdle = 5   // Reduced for local development
 		}
 		
 		config := &Config{
