@@ -80,8 +80,8 @@ jobs:
       - name: Run integration tests
         run: |
           echo "=== Running Integration Tests ==="
-          go test -race -coverprofile=coverage-integration.out -coverpkg=./... -tags=integration ./... -json > test-output.json || \
-          go test -v -race -coverprofile=coverage-integration.out -coverpkg=./... -tags=integration ./... -json > test-output.json
+          go test -race -covermode=atomic -coverprofile=coverage-integration.out -coverpkg=./... -tags=integration ./... -json > test-output.json || \
+          go test -v -race -covermode=atomic -coverprofile=coverage-integration.out -coverpkg=./... -tags=integration ./... -json > test-output.json
 
           # Show test results summary
           echo "=== Test Results ==="
