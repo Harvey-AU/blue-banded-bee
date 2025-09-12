@@ -197,6 +197,32 @@ function updateAuthState(isAuthenticated) {
   if (isAuthenticated && window.dataBinder) {
     setTimeout(() => window.dataBinder.refresh(), 100);
   }
+  
+  // Re-setup logout handler after elements become visible
+  if (isAuthenticated) {
+    setTimeout(() => {
+      const logoutBtn = document.getElementById("logoutBtn");
+      if (logoutBtn && !logoutBtn.hasAttribute("data-logout-handler-attached")) {
+        logoutBtn.addEventListener("click", async () => {
+          try {
+            const { error } = await supabase.auth.signOut();
+            if (error) {
+              console.error("Logout error:", error);
+              alert("Logout failed. Please try again.");
+            } else {
+              console.log("Logout successful");
+              window.location.reload();
+            }
+          } catch (error) {
+            console.error("Logout error:", error);
+            alert("Logout failed. Please try again.");
+          }
+        });
+        logoutBtn.setAttribute("data-logout-handler-attached", "true");
+        console.log("Logout handler attached to visible button");
+      }
+    }, 150);
+  }
 }
 
 /**
