@@ -100,6 +100,7 @@ func (h *Handler) SetupRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/dashboard", h.ServeDashboard)
 	mux.HandleFunc("/dashboard-new", h.ServeNewDashboard)
 	mux.HandleFunc("/auth-modal.html", h.ServeAuthModal)
+	mux.HandleFunc("/debug-auth.html", h.ServeDebugAuth)
 
 	// Web Components static files
 	mux.Handle("/js/", http.StripPrefix("/js/", http.FileServer(http.Dir("./web/dist/"))))
@@ -165,6 +166,11 @@ func (h *Handler) ServeNewDashboard(w http.ResponseWriter, r *http.Request) {
 // ServeAuthModal serves the shared authentication modal
 func (h *Handler) ServeAuthModal(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, "auth-modal.html")
+}
+
+// ServeDebugAuth serves the debug auth test page
+func (h *Handler) ServeDebugAuth(w http.ResponseWriter, r *http.Request) {
+	http.ServeFile(w, r, "debug-auth.html")
 }
 
 // ServeHomepage serves the marketing homepage
