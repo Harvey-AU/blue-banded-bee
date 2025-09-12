@@ -373,8 +373,8 @@ func (db *DB) GetSlowPages(organisationID string, startDate, endDate *time.Time)
 	query := `
 		WITH user_tasks AS (
 			SELECT 
-				t.url,
-				d.domain,
+				'https://' || d.name || p.path as url,
+				d.name as domain,
 				p.path,
 				t.second_response_time,
 				t.job_id,
@@ -462,8 +462,8 @@ func (db *DB) GetSlowPages(organisationID string, startDate, endDate *time.Time)
 func (db *DB) GetExternalRedirects(organisationID string, startDate, endDate *time.Time) ([]ExternalRedirect, error) {
 	query := `
 		SELECT 
-			t.url,
-			d.domain,
+			'https://' || d.name || p.path as url,
+			d.name as domain,
 			p.path,
 			t.redirect_url,
 			t.job_id,
@@ -478,9 +478,9 @@ func (db *DB) GetExternalRedirects(organisationID string, startDate, endDate *ti
 			AND t.redirect_url != ''
 			-- Check if redirect URL is external (different domain)
 			AND NOT (
-				t.redirect_url LIKE 'http://' || d.domain || '%' OR
-				t.redirect_url LIKE 'https://' || d.domain || '%' OR
-				t.redirect_url LIKE '//%' || d.domain || '%' OR
+				t.redirect_url LIKE 'http://' || d.name || '%' OR
+				t.redirect_url LIKE 'https://' || d.name || '%' OR
+				t.redirect_url LIKE '//%' || d.name || '%' OR
 				t.redirect_url LIKE '/' || '%'  -- relative paths
 			)
 			AND ($2::timestamp IS NULL OR t.completed_at >= $2)
