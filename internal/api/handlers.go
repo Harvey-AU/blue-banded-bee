@@ -103,7 +103,7 @@ func (h *Handler) SetupRoutes(mux *http.ServeMux) {
 
 	// Web Components static files
 	mux.Handle("/js/", http.StripPrefix("/js/", http.FileServer(http.Dir("./web/dist/"))))
-	mux.Handle("/web/", http.StripPrefix("/web/", http.FileServer(http.Dir("./web/"))))
+	mux.Handle("/web/", http.StripPrefix("/web/", h.jsFileServer(http.Dir("./web/"))))
 }
 
 // HealthCheck handles basic health check requests
@@ -326,6 +326,20 @@ func calculateDateRange(dateRange string) (*time.Time, *time.Time) {
 	}
 
 	return startDate, endDate
+}
+
+// jsFileServer creates a file server that sets correct MIME types for JavaScript files
+func (h *Handler) jsFileServer(root http.FileSystem) http.Handler {
+	fileServer := http.FileServer(root)
+	
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Set correct MIME type for JavaScript files
+		if strings.HasSuffix(r.URL.Path, ".js") {
+			w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
+		}
+		
+		fileServer.ServeHTTP(w, r)
+	})
 }
 
 // DashboardSlowPages handles requests for slow-loading pages analysis
