@@ -153,22 +153,12 @@ jobs:
         run: |
           echo "=== Merging Coverage Reports ==="
           
-          # Use Go's native coverage merge (Go 1.20+) which handles overlaps better
-          if [ -f coverage-unit.out ] && [ -f coverage-integration.out ]; then
-            echo "Both coverage files found, merging with go tool covdata"
-            # Convert to new format and merge
-            mkdir -p unit-cov integration-cov merged-cov
-            go tool covdata textfmt -i=unit-cov -o=coverage-unit-text.out 2>/dev/null || cp coverage-unit.out coverage-unit-text.out
-            go tool covdata textfmt -i=integration-cov -o=coverage-integration-text.out 2>/dev/null || cp coverage-integration.out coverage-integration-text.out
-            
-            # Use simple concatenation and deduplication for overlapping files
-            echo "mode: atomic" > coverage.out
-            (cat coverage-unit-text.out coverage-integration-text.out | grep -v "mode:" | sort -u) >> coverage.out
-          elif [ -f coverage-unit.out ]; then
-            echo "Only unit coverage found"
+          # Simple approach - use unit tests coverage primarily  
+          if [ -f coverage-unit.out ]; then
+            echo "Using unit coverage as primary"
             cp coverage-unit.out coverage.out
           elif [ -f coverage-integration.out ]; then
-            echo "Only integration coverage found"  
+            echo "Using integration coverage as fallback"  
             cp coverage-integration.out coverage.out
           else
             echo "No coverage files found"
