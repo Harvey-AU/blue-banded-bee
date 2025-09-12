@@ -100,10 +100,10 @@ func New(config *Config) (*DB, error) {
 		config.SSLMode = "disable"
 	}
 	if config.MaxIdleConns == 0 {
-		config.MaxIdleConns = 50  // Increased from 30
+		config.MaxIdleConns = 10  // Reduced for Supabase connection limits
 	}
 	if config.MaxOpenConns == 0 {
-		config.MaxOpenConns = 150  // Increased from 75 for 49 workers
+		config.MaxOpenConns = 25  // Reduced for Supabase connection limits
 	}
 	if config.MaxLifetime == 0 {
 		config.MaxLifetime = 10 * time.Minute  // Reduced from 20 minutes
