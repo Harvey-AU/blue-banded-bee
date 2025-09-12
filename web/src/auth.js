@@ -74,6 +74,22 @@ async function loadAuthModal() {
  */
 async function handleAuthCallback() {
   try {
+    // Check for error parameters in URL (from OAuth failures)
+    const urlParams = new URLSearchParams(window.location.search);
+    const error = urlParams.get("error");
+    const errorDescription = urlParams.get("error_description");
+    
+    if (error) {
+      console.error("OAuth error:", error, errorDescription);
+      // Clear error from URL
+      history.replaceState(null, null, window.location.pathname);
+      // Show error to user
+      if (window.showAuthError) {
+        showAuthError("Authentication failed. Please try again.");
+      }
+      return false;
+    }
+
     // Check if we have auth tokens in the URL hash
     const hashParams = new URLSearchParams(window.location.hash.substring(1));
     const accessToken = hashParams.get("access_token");
@@ -793,6 +809,8 @@ function setupAuthHandlers() {
   const loginBtn = document.getElementById("loginBtn");
   const logoutBtn = document.getElementById("logoutBtn");
 
+  console.log("Setting up auth handlers - loginBtn:", !!loginBtn, "logoutBtn:", !!logoutBtn);
+
   // Show auth modal instead of immediate OAuth
   if (loginBtn) {
     loginBtn.addEventListener("click", () => {
@@ -802,7 +820,9 @@ function setupAuthHandlers() {
 
   // Logout functionality
   if (logoutBtn) {
+    console.log("Attaching logout handler to button");
     logoutBtn.addEventListener("click", async () => {
+      console.log("Logout button clicked");
       try {
         const { error } = await supabase.auth.signOut();
         if (error) {
@@ -810,8 +830,6 @@ function setupAuthHandlers() {
           alert("Logout failed. Please try again.");
         } else {
           console.log("Logout successful");
-          // The auth state change listener will update the UI automatically
-          // Refresh the page to ensure clean state
           window.location.reload();
         }
       } catch (error) {
@@ -819,6 +837,8 @@ function setupAuthHandlers() {
         alert("Logout failed. Please try again.");
       }
     });
+  } else {
+    console.log("Logout button not found when setupAuthHandlers called");
   }
 
   // Set up modal form handlers
