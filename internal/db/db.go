@@ -179,11 +179,8 @@ func New(config *Config) (*DB, error) {
 		return nil, fmt.Errorf("failed to ping PostgreSQL: %w", err)
 	}
 
-	// Initialize schema
-	if err := setupSchema(client); err != nil {
-		return nil, fmt.Errorf("failed to setup schema: %w", err)
-	}
-
+	// Schema is managed by Supabase migrations - no setup required
+	
 	// Create the cache
 	dbCache := cache.NewInMemoryCache()
 
@@ -265,11 +262,8 @@ func InitFromEnv() (*DB, error) {
 			return nil, fmt.Errorf("failed to ping PostgreSQL via DATABASE_URL: %w", err)
 		}
 
-		// Initialise schema
-		if err := setupSchema(client); err != nil {
-			return nil, fmt.Errorf("failed to setup schema: %w", err)
-		}
-
+		// Schema is managed by Supabase migrations - no setup required
+		
 		// Create the cache
 		dbCache := cache.NewInMemoryCache()
 
