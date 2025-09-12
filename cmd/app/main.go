@@ -184,6 +184,7 @@ func main() {
 	// Add middleware in reverse order (outermost first)
 	handler = api.LoggingMiddleware(handler)
 	handler = api.RequestIDMiddleware(handler)
+	handler = api.SecurityHeadersMiddleware(handler)
 	handler = api.CrossOriginProtectionMiddleware(handler)
 	handler = api.CORSMiddleware(handler)
 
@@ -277,8 +278,8 @@ type IPRateLimiter struct {
 func newRateLimiter() *RateLimiter {
 	return &RateLimiter{
 		limits:   make(map[string]*IPRateLimiter),
-		rate:     rate.Limit(5), // 5 requests per second
-		capacity: 5,             // 5 burst capacity
+		rate:     rate.Limit(20), // 20 requests per second for dashboard
+		capacity: 10,             // 10 burst capacity
 	}
 }
 
