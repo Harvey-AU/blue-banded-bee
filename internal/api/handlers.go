@@ -17,7 +17,7 @@ import (
 )
 
 // Version is the current API version (can be set via ldflags at build time)
-var Version = "0.4.0"
+var Version = "0.4.1"
 
 // DBClient is an interface for database operations
 type DBClient interface {
