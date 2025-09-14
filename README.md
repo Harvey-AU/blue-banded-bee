@@ -34,15 +34,24 @@ Automatically warm site caches (especially built for [Webflow](https://www.webfl
 git clone https://github.com/Harvey-AU/blue-banded-bee.git
 cd blue-banded-bee
 
-# Start development environment (requires Docker Desktop + Supabase CLI)
-air
+# Start development environment
+# Windows:
+dev              # Clean output (info level)
+dev debug        # Verbose output (debug level)
+
+# Mac/Linux:
+./dev.sh         # Clean output (info level)
+./dev.sh mac debug  # Verbose output (debug level)
 ```
 
-That's it! One command starts everything:
-- 🐳 Local Supabase database
-- 🔄 Auto-applies migrations  
-- 🔥 Hot reloading
-- 🚀 Isolated from production
+One command starts everything:
+- ✅ Checks prerequisites (Docker + Supabase CLI)
+- 🐳 Starts local Supabase database
+- 🔄 Auto-applies migrations
+- 🔥 Hot reloading on port 8847
+- 📊 Displays helpful URLs for homepage, dashboard, and Supabase Studio
+- 🚀 Completely isolated from production
+- 🔇 Clean logging by default, verbose mode available
 
 ## Status
 
