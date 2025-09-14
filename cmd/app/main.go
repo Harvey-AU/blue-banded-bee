@@ -34,8 +34,8 @@ type Config struct {
 }
 
 func main() {
-	// Load .env file if it exists
-	godotenv.Load()
+	// Load .env files - .env.local takes priority for development
+	godotenv.Load(".env.local", ".env")
 
 	// Load configuration
 	config := &Config{

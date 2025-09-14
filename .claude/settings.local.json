@@ -87,7 +87,8 @@
       "Bash(git pull:*)",
       "Bash(fly status:*)",
       "WebSearch",
-      "WebFetch(domain:codingforseo.com)"
+      "WebFetch(domain:codingforseo.com)",
+      "Bash(air)"
     ],
     "deny": []
   },

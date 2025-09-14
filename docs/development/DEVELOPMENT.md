@@ -3,8 +3,9 @@
 ## Prerequisites
 
 - **Go 1.25** - We use Go 1.25 for advanced features (see [Go 1.25 Plan](./plans/_archive/go-1.25.md))
-- **PostgreSQL** - Local instance or remote database access
-- **Air** (optional) - Hot reloading for development (`go install github.com/cosmtrek/air@latest`)
+- **Docker Desktop** - Required for local Supabase instance ([Download here](https://docs.docker.com/desktop/))
+- **Supabase CLI** - Database management (`npm install -g supabase` or `brew install supabase/tap/supabase`)
+- **Air** - Hot reloading for development (`go install github.com/cosmtrek/air@latest`)
 - **Git** - Version control
 - **golangci-lint** (optional) - Code quality checks (`brew install golangci-lint`)
 
@@ -16,51 +17,52 @@
 # Fork and clone the repository
 git clone https://github.com/[your-username]/blue-banded-bee.git
 cd blue-banded-bee
-
-# Copy environment template
-cp .env.example .env
 ```
 
-### 2. Configure Environment
+### 2. Start Development Environment
 
-Edit `.env` with your settings:
+**That's it!** Just run:
 
 ```bash
-# Database Configuration
-DATABASE_URL="postgres://user:password@localhost:5432/bluebandedbee"
-# OR individual settings
-DB_HOST=localhost
-DB_PORT=5432
-DB_USER=your_user
-DB_PASSWORD=your_password
-DB_NAME=bluebandedbee
-DB_SSLMODE=prefer
+air
+```
 
-# Application Settings
-PORT=8080
+This single command will:
+- ✅ Start local Supabase instance (if not running)
+- ✅ Apply all database migrations automatically  
+- ✅ Connect to isolated local database
+- ✅ Start the app with hot reloading
+- ✅ No production database interference
+
+### 3. Environment Configuration (Automatic)
+
+The app automatically uses `.env.local` for development, which provides:
+
+```bash
+# Local Supabase Configuration (auto-configured)
+DATABASE_URL=postgresql://postgres:postgres@localhost:54322/postgres
+SUPABASE_URL=http://localhost:54321
 APP_ENV=development
 LOG_LEVEL=debug
 
-# Sentry (optional for development)
-SENTRY_DSN=your_sentry_dsn
-
-# Supabase Auth (for API testing)
-SUPABASE_JWT_SECRET=your_jwt_secret
-SUPABASE_URL=your_supabase_url
-SUPABASE_ANON_KEY=your_anon_key
+# Production uses .env (different database)
+# No manual configuration required!
 ```
 
-### 3. Database Setup
+### 4. Prerequisites Check
+
+If `air` fails, ensure you have:
 
 ```bash
-# For local development with Supabase
-supabase start  # Starts local Supabase instance
-supabase db reset  # Creates tables from migrations
+# Check Docker Desktop is running
+docker ps
 
-# Or for standalone PostgreSQL
-createdb bluebandedbee
-# The application will automatically create tables on first run
-go run ./cmd/app/main.go
+# Check Supabase CLI is installed
+supabase --version
+
+# Install if missing:
+# Windows: npm install -g supabase
+# Mac: brew install supabase/tap/supabase
 ```
 
 ### 4. Database Migrations
