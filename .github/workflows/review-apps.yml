@@ -4,15 +4,15 @@ on:
   pull_request:
     branches:
       - main
-    types: [opened, synchronize, reopened]
+    types: [opened, synchronize, reopened, closed]
     paths-ignore:
-      - '**.md'
-      - 'docs/**'
-      - 'LICENSE'
-      - '.gitignore'
-      - 'CHANGELOG.md'
-      - 'SECURITY.md'
-      - 'Roadmap.md'
+      - "**.md"
+      - "docs/**"
+      - "LICENSE"
+      - ".gitignore"
+      - "CHANGELOG.md"
+      - "SECURITY.md"
+      - "Roadmap.md"
 
 jobs:
   deploy-review:
@@ -21,7 +21,7 @@ jobs:
     if: github.event.pull_request.draft == false
     permissions:
       pull-requests: write
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -29,7 +29,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.25'
+          go-version: "1.25"
 
       - name: Setup Fly.io CLI
         uses: superfly/flyctl-actions/setup-flyctl@master
@@ -38,7 +38,7 @@ jobs:
         run: |
           # Create review app name
           APP_NAME="blue-banded-bee-pr-${{ github.event.number }}"
-          
+
           # Check if app exists, create if not
           if ! flyctl apps list | grep -q "$APP_NAME"; then
             echo "Creating new review app: $APP_NAME"
@@ -46,11 +46,11 @@ jobs:
           else
             echo "Review app already exists: $APP_NAME"
           fi
-          
+
           # Set DB Secret for Review App (Phase 1: Shared test database)
           echo "Setting test database connection for review app..."
           flyctl secrets set DATABASE_URL="${{ secrets.TEST_DATABASE_URL }}" --app $APP_NAME
-          
+
           # Deploy to review app
           flyctl deploy \
             --app $APP_NAME \
@@ -65,7 +65,7 @@ jobs:
           script: |
             const appName = `blue-banded-bee-pr-${{ github.event.number }}`;
             const appUrl = `https://${appName}.fly.dev`;
-            
+
             github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
@@ -88,7 +88,7 @@ jobs:
     name: Cleanup Review App
     runs-on: ubuntu-latest
     if: github.event.action == 'closed'
-    
+
     steps:
       - name: Setup Fly.io CLI
         uses: superfly/flyctl-actions/setup-flyctl@master
