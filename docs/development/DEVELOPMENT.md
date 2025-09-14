@@ -38,7 +38,7 @@ This single command will:
 - ✅ Check prerequisites (Docker Desktop + Supabase CLI)
 - ✅ Start local Supabase instance (if not running)
 - ✅ Apply all database migrations automatically
-- ✅ **Watch for migration changes and auto-reset database**
+- ✅ Watch for migration changes and auto-reset database
 - ✅ Configure Air for your platform automatically
 - ✅ Connect to isolated local database on port 54322
 - ✅ Start the app with hot reloading on port 8847
@@ -79,16 +79,19 @@ supabase --version
 
 ### 4. Database Migrations
 
-**Creating new migrations**:
+**Creating new migrations (fully automatic)**:
 
 ```bash
-# Generate a new migration file
+# 1. Generate a new migration file
 supabase migration new your_migration_name
 
-# Edit the file in supabase/migrations/
-# Test locally
-supabase db reset
+# 2. Edit the file in supabase/migrations/
+# 3. Save the file
+# 🎉 Database automatically resets and applies the migration!
+# 🎉 Go app automatically restarts with the new schema!
 ```
+
+**No manual steps required** - the `dev` script watches for migration changes and automatically runs `supabase db reset` when you save any `.sql` file in the migrations folder.
 
 **Deployment process**:
 
