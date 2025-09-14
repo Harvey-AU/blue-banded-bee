@@ -1276,22 +1276,49 @@ func (wp *WorkerPool) handleTaskSuccess(ctx context.Context, task *db.Task, resu
 		task.SecondContentTransferTime = result.SecondPerformance.ContentTransferTime
 	}
 
-	// Marshal JSONB fields
-	var err error
-	task.Headers, err = json.Marshal(result.Headers)
-	if err != nil {
-		log.Error().Err(err).Str("task_id", task.ID).Msg("Failed to marshal headers")
-	}
-	if result.SecondHeaders != nil {
-		task.SecondHeaders, err = json.Marshal(result.SecondHeaders)
-		if err != nil {
-			log.Error().Err(err).Str("task_id", task.ID).Msg("Failed to marshal second headers")
+	// Marshal JSONB fields - ensure all marshaling succeeds before updating task
+	// Always provide safe defaults for all JSON fields
+	task.Headers = []byte("{}")
+	task.SecondHeaders = []byte("{}")
+	task.CacheCheckAttempts = []byte("[]")
+	
+	// Only attempt marshaling if data exists and is non-empty
+	if result.Headers != nil && len(result.Headers) > 0 {
+		if headerBytes, err := json.Marshal(result.Headers); err == nil {
+			// Validate that the marshaled JSON is valid
+			if json.Valid(headerBytes) {
+				task.Headers = headerBytes
+			} else {
+				log.Warn().Str("task_id", task.ID).Msg("Headers produced invalid JSON, using empty object")
+			}
+		} else {
+			log.Error().Err(err).Str("task_id", task.ID).Interface("headers", result.Headers).Msg("Failed to marshal headers")
 		}
 	}
-	if result.CacheCheckAttempts != nil {
-		task.CacheCheckAttempts, err = json.Marshal(result.CacheCheckAttempts)
-		if err != nil {
-			log.Error().Err(err).Str("task_id", task.ID).Msg("Failed to marshal cache check attempts")
+	
+	if result.SecondHeaders != nil && len(result.SecondHeaders) > 0 {
+		if secondHeaderBytes, err := json.Marshal(result.SecondHeaders); err == nil {
+			// Validate that the marshaled JSON is valid
+			if json.Valid(secondHeaderBytes) {
+				task.SecondHeaders = secondHeaderBytes
+			} else {
+				log.Warn().Str("task_id", task.ID).Msg("Second headers produced invalid JSON, using empty object")
+			}
+		} else {
+			log.Error().Err(err).Str("task_id", task.ID).Interface("second_headers", result.SecondHeaders).Msg("Failed to marshal second headers")
+		}
+	}
+	
+	if result.CacheCheckAttempts != nil && len(result.CacheCheckAttempts) > 0 {
+		if attemptsBytes, err := json.Marshal(result.CacheCheckAttempts); err == nil {
+			// Validate that the marshaled JSON is valid
+			if json.Valid(attemptsBytes) {
+				task.CacheCheckAttempts = attemptsBytes
+			} else {
+				log.Warn().Str("task_id", task.ID).Msg("Cache check attempts produced invalid JSON, using empty array")
+			}
+		} else {
+			log.Error().Err(err).Str("task_id", task.ID).Interface("cache_attempts", result.CacheCheckAttempts).Msg("Failed to marshal cache check attempts")
 		}
 	}
 

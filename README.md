@@ -34,13 +34,15 @@ Automatically warm site caches (especially built for [Webflow](https://www.webfl
 git clone https://github.com/Harvey-AU/blue-banded-bee.git
 cd blue-banded-bee
 
-# Set up environment
-cp .env.example .env
-# Edit .env with your credentials
-
-# Run the service
-go run ./cmd/app/main.go
+# Start development environment (requires Docker Desktop + Supabase CLI)
+air
 ```
+
+That's it! One command starts everything:
+- 🐳 Local Supabase database
+- 🔄 Auto-applies migrations  
+- 🔥 Hot reloading
+- 🚀 Isolated from production
 
 ## Status
 
