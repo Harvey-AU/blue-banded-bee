@@ -1,8 +1,27 @@
 @echo off
-set PLATFORM=%1
-if "%PLATFORM%"=="" set PLATFORM=pc
 
-echo Starting Blue Banded Bee development environment (platform: %PLATFORM%)...
+REM Smart parameter detection
+set DEBUG_MODE=
+set PLATFORM=pc
+
+if /i "%1"=="debug" set DEBUG_MODE=debug
+if /i "%2"=="debug" set DEBUG_MODE=debug
+
+if /i "%1"=="pc" set PLATFORM=pc
+if /i "%2"=="pc" set PLATFORM=pc
+if /i "%1"=="mac" set PLATFORM=mac
+if /i "%2"=="mac" set PLATFORM=mac
+
+REM If first param is debug and no platform specified, default to pc
+if /i "%1"=="debug" if "%PLATFORM%"=="" set PLATFORM=pc
+
+if /i "%DEBUG_MODE%"=="debug" (
+    echo Starting Blue Banded Bee development environment ^(platform: %PLATFORM%, debug mode^)...
+    set LOG_LEVEL=debug
+) else (
+    echo Starting Blue Banded Bee development environment ^(platform: %PLATFORM%^)...
+    set LOG_LEVEL=info
+)
 
 REM Check if Docker is running
 docker ps >nul 2>&1
@@ -36,6 +55,12 @@ REM Start Supabase (will be no-op if already running)
 echo Starting local Supabase...
 supabase start
 
-REM Start Air with hot reloading
+REM Start Air with hot reloading and migration watching
 echo Starting development server with hot reloading...
-air
+echo Watching for migration changes - will auto-reset database when needed...
+
+REM Start Air in background and watch for migration changes
+start /b air
+
+REM Watch for migration changes and auto-reset database
+powershell -Command "$lastWrite = (Get-ChildItem supabase/migrations/*.sql | Sort-Object LastWriteTime -Descending | Select-Object -First 1).LastWriteTime; while($true) { Start-Sleep 2; $newWrite = (Get-ChildItem supabase/migrations/*.sql | Sort-Object LastWriteTime -Descending | Select-Object -First 1).LastWriteTime; if($newWrite -gt $lastWrite) { Write-Host 'Migration change detected - resetting database...'; supabase db reset; $lastWrite = $newWrite } }"

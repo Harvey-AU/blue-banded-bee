@@ -5,7 +5,7 @@
 - **Go 1.25** - We use Go 1.25 for advanced features (see [Go 1.25 Plan](./plans/_archive/go-1.25.md))
 - **Docker Desktop** - Required for local Supabase instance ([Download here](https://docs.docker.com/desktop/))
 - **Supabase CLI** - Database management (`npm install -g supabase` or `brew install supabase/tap/supabase`)
-- **Air** - Hot reloading for development (`go install github.com/cosmtrek/air@latest`)
+- **Air** - Hot reloading for development (`go install github.com/air-verse/air@latest`)
 - **Git** - Version control
 - **golangci-lint** (optional) - Code quality checks (`brew install golangci-lint`)
 
@@ -24,15 +24,27 @@ cd blue-banded-bee
 **That's it!** Just run:
 
 ```bash
-air
+# Windows:
+dev              # Clean output (PC platform)
+dev debug        # Verbose output (PC platform)
+
+# Mac/Linux:
+./dev.sh         # Clean output (Mac platform)
+./dev.sh debug   # Verbose output (Mac platform)
 ```
 
 This single command will:
+
+- ✅ Check prerequisites (Docker Desktop + Supabase CLI)
 - ✅ Start local Supabase instance (if not running)
-- ✅ Apply all database migrations automatically  
-- ✅ Connect to isolated local database
-- ✅ Start the app with hot reloading
-- ✅ No production database interference
+- ✅ Apply all database migrations automatically
+- ✅ **Watch for migration changes and auto-reset database**
+- ✅ Configure Air for your platform automatically
+- ✅ Connect to isolated local database on port 54322
+- ✅ Start the app with hot reloading on port 8847
+- ✅ Display helpful URLs for easy access
+- ✅ Use clean logging by default (info level)
+- ✅ Zero production database interference
 
 ### 3. Environment Configuration (Automatic)
 
@@ -81,8 +93,7 @@ supabase db reset
 **Deployment process**:
 
 1. Push changes to feature branch
-2. Create PR to `test-branch` - migrations apply automatically
-3. After testing, merge to `main` - migrations apply automatically
+2. After testing, merge to `main` - migrations apply automatically
 
 **Note**: Supabase GitHub integration handles all migration deployment. Never run `supabase db push` manually.
 
@@ -92,7 +103,7 @@ supabase db reset
 
 ```bash
 # Install Air if not already installed
-go install github.com/cosmtrek/air@latest
+go install github.com/air-verse/air@latest
 
 # Start development server with hot reloading
 air
@@ -108,7 +119,7 @@ go build ./cmd/app && ./app
 go run ./cmd/app/main.go
 ```
 
-### Server will start on `http://localhost:8080`
+### Server will start on `http://localhost:8847`
 
 ## Testing
 
@@ -138,10 +149,10 @@ Use the provided HTTP test file:
 pip install httpie
 
 # Test health endpoint
-http GET localhost:8080/health
+http GET localhost:8847/health
 
 # Test job creation (requires auth token)
-http POST localhost:8080/v1/jobs \
+http POST localhost:8847/v1/jobs \
   Authorization:"Bearer your-jwt-token" \
   domain=example.com \
   use_sitemap:=true
@@ -160,19 +171,17 @@ go run ./cmd/test_jobs/main.go
 
 ### Package Structure
 
-```
 cmd/
-├── app/           # Main application entry point
-└── test_jobs/     # Job queue testing utility
+├── app/ # Main application entry point
+└── test_jobs/ # Job queue testing utility
 
 internal/
-├── api/           # HTTP handlers and middleware
-├── auth/          # Authentication logic
-├── crawler/       # Web crawling functionality
-├── db/            # Database operations
-├── jobs/          # Job queue and worker management
-└── util/          # Shared utilities
-```
+├── api/ # HTTP handlers and middleware
+├── auth/ # Authentication logic
+├── crawler/ # Web crawling functionality
+├── db/ # Database operations
+├── jobs/ # Job queue and worker management
+└── util/ # Shared utilities
 
 ### Development Patterns
 
@@ -366,7 +375,7 @@ GOOS=linux GOARCH=amd64 go build ./cmd/app
 docker build -t blue-banded-bee .
 
 # Run with database link
-docker run --env-file .env -p 8080:8080 blue-banded-bee
+docker run --env-file .env -p 8847:8847 blue-banded-bee
 ```
 
 ### Environment-Specific Configs
@@ -402,8 +411,8 @@ psql -h localhost -U your_user -d bluebandedbee
 **Port Already in Use**:
 
 ```bash
-# Find process using port 8080
-lsof -i :8080
+# Find process using port 8847
+lsof -i :8847
 
 # Kill process
 kill -9 <PID>
@@ -503,7 +512,7 @@ func TestDatabaseOperation(t *testing.T) {
 cat .air.toml
 
 # Reinstall Air
-go install github.com/cosmtrek/air@latest
+go install github.com/air-verse/air@latest
 ```
 
 ### Performance Issues
