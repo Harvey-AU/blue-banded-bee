@@ -73,8 +73,8 @@ func TestRateLimiter(t *testing.T) {
 	req1, _ := http.NewRequest("GET", "/test", nil)
 	req1.Header.Set("X-Forwarded-For", "192.168.1.1")
 
-	// Test basic allowance
-	for i := 0; i < 5; i++ {
+	// Test basic allowance - should allow up to burst capacity (10)
+	for i := 0; i < 10; i++ {
 		ip := getClientIP(req1)
 		rLimiter := limiter.getLimiter(ip)
 		if !rLimiter.Allow() {
@@ -82,11 +82,11 @@ func TestRateLimiter(t *testing.T) {
 		}
 	}
 
-	// This should be blocked
+	// This should be blocked (11th request exceeds burst capacity)
 	ip := getClientIP(req1)
 	rLimiter := limiter.getLimiter(ip)
 	if rLimiter.Allow() {
-		t.Errorf("Request should be blocked after rate limit")
+		t.Errorf("Request should be blocked after burst capacity exceeded")
 	}
 
 	// Different IP should be allowed
