@@ -100,10 +100,10 @@ func New(config *Config) (*DB, error) {
 		config.SSLMode = "disable"
 	}
 	if config.MaxIdleConns == 0 {
-		config.MaxIdleConns = 10  // Reduced for Supabase connection limits
+		config.MaxIdleConns = 30  // Optimised for job processing workload
 	}
 	if config.MaxOpenConns == 0 {
-		config.MaxOpenConns = 25  // Reduced for Supabase connection limits
+		config.MaxOpenConns = 120  // Supports multiple concurrent jobs with workers
 	}
 	if config.MaxLifetime == 0 {
 		config.MaxLifetime = 10 * time.Minute  // Reduced from 20 minutes
@@ -174,12 +174,12 @@ func New(config *Config) (*DB, error) {
 func InitFromEnv() (*DB, error) {
 	// If DATABASE_URL is provided, use it with default config
 	if url := os.Getenv("DATABASE_URL"); url != "" {
-		// Reduce connection limits for development when using shared database
-		maxOpen := 180
-		maxIdle := 50
+		// Optimise connection limits based on environment
+		maxOpen := 120  // Production: support multiple concurrent jobs
+		maxIdle := 30   // Production: keep connections warm
 		if os.Getenv("APP_ENV") == "development" {
-			maxOpen = 15  // Reduced for local development
-			maxIdle = 5   // Reduced for local development
+			maxOpen = 20  // Development: modest limits for local testing
+			maxIdle = 10  // Development: fewer idle connections
 		}
 		
 		config := &Config{
