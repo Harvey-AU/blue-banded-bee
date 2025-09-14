@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"net/http"
 	"os"
@@ -34,8 +35,8 @@ type Config struct {
 }
 
 func main() {
-	// Load .env file if it exists
-	godotenv.Load()
+	// Load .env files - .env.local takes priority for development
+	godotenv.Load(".env.local", ".env")
 
 	// Load configuration
 	config := &Config{
@@ -221,6 +222,17 @@ func main() {
 
 	// Start the server
 	log.Info().Str("port", config.Port).Msg("Starting server")
+
+	// Print helpful development URLs
+	baseURL := fmt.Sprintf("http://localhost:%s", config.Port)
+	log.Info().Msg("🚀 Blue Banded Bee Development Server Ready!")
+	log.Info().Str("homepage", baseURL).Msg("📱 Open Homepage")
+	log.Info().Str("dashboard", baseURL+"/dashboard").Msg("📊 Open Dashboard")
+	log.Info().Str("health", baseURL+"/health").Msg("🔍 Health Check")
+	if config.Env == "development" {
+		log.Info().Str("supabase_studio", "http://localhost:54323").Msg("🗄️  Open Supabase Studio")
+	}
+
 	if err := server.ListenAndServe(); err != http.ErrServerClosed {
 		sentry.CaptureException(err)
 		log.Fatal().Err(err).Msg("Server error")
