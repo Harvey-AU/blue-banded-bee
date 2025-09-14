@@ -2,12 +2,12 @@ root = "."
 tmp_dir = "tmp"
 
 [build]
-# Windows configuration:
+# Windows configuration (change for Mac/Linux)
 cmd = "go build -o ./tmp/main.exe ./cmd/app"
-bin = "tmp/main.exe" 
+bin = "tmp/main.exe"
 
-# Mac/Linux configuration (comment above, uncomment below when on Mac/Linux):
-# cmd = "GOEXPERIMENT=greenteagc go build -o ./tmp/main ./cmd/app"
+# Mac/Linux configuration (uncomment and comment above when on Mac/Linux):
+# cmd = "go build -o ./tmp/main ./cmd/app"
 # bin = "tmp/main"
 
 include_ext = ["go", "env"]

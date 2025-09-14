@@ -3,8 +3,9 @@
 ## Prerequisites
 
 - **Go 1.25** - We use Go 1.25 for advanced features (see [Go 1.25 Plan](./plans/_archive/go-1.25.md))
-- **PostgreSQL** - Local instance or remote database access
-- **Air** (optional) - Hot reloading for development (`go install github.com/cosmtrek/air@latest`)
+- **Docker Desktop** - Required for local Supabase instance ([Download here](https://docs.docker.com/desktop/))
+- **Supabase CLI** - Database management (`npm install -g supabase` or `brew install supabase/tap/supabase`)
+- **Air** - Hot reloading for development (`go install github.com/air-verse/air@latest`)
 - **Git** - Version control
 - **golangci-lint** (optional) - Code quality checks (`brew install golangci-lint`)
 
@@ -16,71 +17,86 @@
 # Fork and clone the repository
 git clone https://github.com/[your-username]/blue-banded-bee.git
 cd blue-banded-bee
-
-# Copy environment template
-cp .env.example .env
 ```
 
-### 2. Configure Environment
+### 2. Start Development Environment
 
-Edit `.env` with your settings:
+**That's it!** Just run:
 
 ```bash
-# Database Configuration
-DATABASE_URL="postgres://user:password@localhost:5432/bluebandedbee"
-# OR individual settings
-DB_HOST=localhost
-DB_PORT=5432
-DB_USER=your_user
-DB_PASSWORD=your_password
-DB_NAME=bluebandedbee
-DB_SSLMODE=prefer
+# Windows:
+dev              # Clean output (PC platform)
+dev debug        # Verbose output (PC platform)
 
-# Application Settings
-PORT=8080
+# Mac/Linux:
+./dev.sh         # Clean output (Mac platform)
+./dev.sh debug   # Verbose output (Mac platform)
+```
+
+This single command will:
+
+- ✅ Check prerequisites (Docker Desktop + Supabase CLI)
+- ✅ Start local Supabase instance (if not running)
+- ✅ Apply all database migrations automatically
+- ✅ Watch for migration changes and auto-reset database
+- ✅ Configure Air for your platform automatically
+- ✅ Connect to isolated local database on port 54322
+- ✅ Start the app with hot reloading on port 8847
+- ✅ Display helpful URLs for easy access
+- ✅ Use clean logging by default (info level)
+- ✅ Zero production database interference
+
+### 3. Environment Configuration (Automatic)
+
+The app automatically uses `.env.local` for development, which provides:
+
+```bash
+# Local Supabase Configuration (auto-configured)
+DATABASE_URL=postgresql://postgres:postgres@localhost:54322/postgres
+SUPABASE_URL=http://localhost:54321
 APP_ENV=development
 LOG_LEVEL=debug
 
-# Sentry (optional for development)
-SENTRY_DSN=your_sentry_dsn
-
-# Supabase Auth (for API testing)
-SUPABASE_JWT_SECRET=your_jwt_secret
-SUPABASE_URL=your_supabase_url
-SUPABASE_ANON_KEY=your_anon_key
+# Production uses .env (different database)
+# No manual configuration required!
 ```
 
-### 3. Database Setup
+### 4. Prerequisites Check
+
+If `air` fails, ensure you have:
 
 ```bash
-# For local development with Supabase
-supabase start  # Starts local Supabase instance
-supabase db reset  # Creates tables from migrations
+# Check Docker Desktop is running
+docker ps
 
-# Or for standalone PostgreSQL
-createdb bluebandedbee
-# The application will automatically create tables on first run
-go run ./cmd/app/main.go
+# Check Supabase CLI is installed
+supabase --version
+
+# Install if missing:
+# Windows: npm install -g supabase
+# Mac: brew install supabase/tap/supabase
 ```
 
 ### 4. Database Migrations
 
-**Creating new migrations**:
+**Creating new migrations (fully automatic)**:
 
 ```bash
-# Generate a new migration file
+# 1. Generate a new migration file
 supabase migration new your_migration_name
 
-# Edit the file in supabase/migrations/
-# Test locally
-supabase db reset
+# 2. Edit the file in supabase/migrations/
+# 3. Save the file
+# 🎉 Database automatically resets and applies the migration!
+# 🎉 Go app automatically restarts with the new schema!
 ```
+
+**No manual steps required** - the `dev` script watches for migration changes and automatically runs `supabase db reset` when you save any `.sql` file in the migrations folder.
 
 **Deployment process**:
 
 1. Push changes to feature branch
-2. Create PR to `test-branch` - migrations apply automatically
-3. After testing, merge to `main` - migrations apply automatically
+2. After testing, merge to `main` - migrations apply automatically
 
 **Note**: Supabase GitHub integration handles all migration deployment. Never run `supabase db push` manually.
 
@@ -90,7 +106,7 @@ supabase db reset
 
 ```bash
 # Install Air if not already installed
-go install github.com/cosmtrek/air@latest
+go install github.com/air-verse/air@latest
 
 # Start development server with hot reloading
 air
@@ -106,7 +122,7 @@ go build ./cmd/app && ./app
 go run ./cmd/app/main.go
 ```
 
-### Server will start on `http://localhost:8080`
+### Server will start on `http://localhost:8847`
 
 ## Testing
 
@@ -136,10 +152,10 @@ Use the provided HTTP test file:
 pip install httpie
 
 # Test health endpoint
-http GET localhost:8080/health
+http GET localhost:8847/health
 
 # Test job creation (requires auth token)
-http POST localhost:8080/v1/jobs \
+http POST localhost:8847/v1/jobs \
   Authorization:"Bearer your-jwt-token" \
   domain=example.com \
   use_sitemap:=true
@@ -158,19 +174,17 @@ go run ./cmd/test_jobs/main.go
 
 ### Package Structure
 
-```
 cmd/
-├── app/           # Main application entry point
-└── test_jobs/     # Job queue testing utility
+├── app/ # Main application entry point
+└── test_jobs/ # Job queue testing utility
 
 internal/
-├── api/           # HTTP handlers and middleware
-├── auth/          # Authentication logic
-├── crawler/       # Web crawling functionality
-├── db/            # Database operations
-├── jobs/          # Job queue and worker management
-└── util/          # Shared utilities
-```
+├── api/ # HTTP handlers and middleware
+├── auth/ # Authentication logic
+├── crawler/ # Web crawling functionality
+├── db/ # Database operations
+├── jobs/ # Job queue and worker management
+└── util/ # Shared utilities
 
 ### Development Patterns
 
@@ -364,7 +378,7 @@ GOOS=linux GOARCH=amd64 go build ./cmd/app
 docker build -t blue-banded-bee .
 
 # Run with database link
-docker run --env-file .env -p 8080:8080 blue-banded-bee
+docker run --env-file .env -p 8847:8847 blue-banded-bee
 ```
 
 ### Environment-Specific Configs
@@ -400,8 +414,8 @@ psql -h localhost -U your_user -d bluebandedbee
 **Port Already in Use**:
 
 ```bash
-# Find process using port 8080
-lsof -i :8080
+# Find process using port 8847
+lsof -i :8847
 
 # Kill process
 kill -9 <PID>
@@ -501,7 +515,7 @@ func TestDatabaseOperation(t *testing.T) {
 cat .air.toml
 
 # Reinstall Air
-go install github.com/cosmtrek/air@latest
+go install github.com/air-verse/air@latest
 ```
 
 ### Performance Issues

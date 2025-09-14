@@ -100,10 +100,10 @@ func New(config *Config) (*DB, error) {
 		config.SSLMode = "disable"
 	}
 	if config.MaxIdleConns == 0 {
-		config.MaxIdleConns = 10  // Reduced for Supabase connection limits
+		config.MaxIdleConns = 30  // Optimised for job processing workload
 	}
 	if config.MaxOpenConns == 0 {
-		config.MaxOpenConns = 25  // Reduced for Supabase connection limits
+		config.MaxOpenConns = 120  // Supports multiple concurrent jobs with workers
 	}
 	if config.MaxLifetime == 0 {
 		config.MaxLifetime = 10 * time.Minute  // Reduced from 20 minutes
@@ -128,40 +128,23 @@ func New(config *Config) (*DB, error) {
 		}
 	}
 	
-	// Disable automatic prepared statements to prevent cache conflicts
-	// Use multiple parameters to ensure pgx disables statement caching
-	paramList := []string{
-		"default_query_exec_mode=simple_protocol",
-		"prefer_simple_protocol=true",
-		"statement_cache_capacity=0",
-	}
-	
-	for _, param := range paramList {
-		if !strings.Contains(connStr, strings.Split(param, "=")[0]) {
+	// Add minimal prepared statement parameter for pooler connections
+	if strings.Contains(connStr, "pooler.supabase.com") {
+		if !strings.Contains(connStr, "default_query_exec_mode=") {
 			if strings.HasPrefix(connStr, "postgres://") || strings.HasPrefix(connStr, "postgresql://") {
-				// URL format - use query parameters
 				separator := "?"
 				if strings.Contains(connStr, "?") {
 					separator = "&"
 				}
-				connStr += separator + param
+				connStr += separator + "default_query_exec_mode=simple_protocol"
 			} else {
-				// Key=value format - append as another key=value pair
-				connStr += " " + param
+				connStr += " default_query_exec_mode=simple_protocol"
 			}
+			log.Info().Msg("Added minimal prepared statement disabling for pooler connection")
 		}
 	}
-	
-	// Debug: Log the connection string (without credentials)
-	logConnStr := connStr
-	if strings.Contains(logConnStr, "@") {
-		// Remove credentials from log
-		parts := strings.Split(logConnStr, "@")
-		if len(parts) > 1 {
-			logConnStr = "postgres://***:***@" + parts[1]
-		}
-	}
-	log.Info().Str("connection_string", logConnStr).Msg("Opening PostgreSQL connection with prepared statement cache disabled")
+
+	log.Info().Msg("Opening PostgreSQL connection")
 	
 	client, err := sql.Open("pgx", connStr)
 	if err != nil {
@@ -191,12 +174,12 @@ func New(config *Config) (*DB, error) {
 func InitFromEnv() (*DB, error) {
 	// If DATABASE_URL is provided, use it with default config
 	if url := os.Getenv("DATABASE_URL"); url != "" {
-		// Reduce connection limits for development when using shared database
-		maxOpen := 180
-		maxIdle := 50
+		// Optimise connection limits based on environment
+		maxOpen := 120  // Production: support multiple concurrent jobs
+		maxIdle := 30   // Production: keep connections warm
 		if os.Getenv("APP_ENV") == "development" {
-			maxOpen = 15  // Reduced for local development
-			maxIdle = 5   // Reduced for local development
+			maxOpen = 20  // Development: modest limits for local testing
+			maxIdle = 10  // Development: fewer idle connections
 		}
 		
 		config := &Config{
@@ -215,36 +198,22 @@ func InitFromEnv() (*DB, error) {
 			url += separator + "statement_timeout=60000" // 60 seconds
 		}
 		
-		// Disable automatic prepared statements to prevent cache conflicts
-		paramList := []string{
-			"default_query_exec_mode=simple_protocol",
-			"prefer_simple_protocol=true", 
-			"statement_cache_capacity=0",
-		}
-		
-		for _, param := range paramList {
-			if !strings.Contains(url, strings.Split(param, "=")[0]) {
+		// Add minimal prepared statement parameter for pooler connections
+		if strings.Contains(url, "pooler.supabase.com") {
+			if !strings.Contains(url, "default_query_exec_mode=") {
 				separator := "?"
 				if strings.Contains(url, "?") {
 					separator = "&"
 				}
-				url += separator + param
+				url += separator + "default_query_exec_mode=simple_protocol"
+				log.Info().Msg("Added minimal prepared statement disabling for pooler connection")
 			}
 		}
 		
 		// Persist the augmented URL back to config for consistency
 		config.DatabaseURL = url
 		
-		// Debug: Log the connection string (without credentials)
-		logURL := url
-		if strings.Contains(logURL, "@") {
-			// Remove credentials from log
-			parts := strings.Split(logURL, "@")
-			if len(parts) > 1 {
-				logURL = "postgres://***:***@" + parts[1]
-			}
-		}
-		log.Info().Str("database_url", logURL).Msg("Opening PostgreSQL connection via DATABASE_URL with prepared statement cache disabled")
+		log.Info().Str("connection_url", url).Msg("Opening PostgreSQL connection via DATABASE_URL")
 		
 		client, err := sql.Open("pgx", url)
 		if err != nil {
