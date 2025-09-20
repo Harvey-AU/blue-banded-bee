@@ -11,7 +11,7 @@ As of 26th July 2025 we manage database schema/setup via migrations.
 Blue Banded Bee uses Supabase GitHub integration for automatic migration deployment:
 
 1. **Create Migration Files**: Place new `.sql` files in `supabase/migrations/` with timestamp prefix
-2. **Push to GitHub**: Migrations apply automatically when merged to `test-branch` or `main`
+2. **Push to GitHub**: Migrations apply automatically on Supabase preview branches for PRs and on `main`
 3. **No Manual Steps**: Supabase handles all migration execution via GitHub integration
 
 **Important**: Do NOT run `supabase db push` manually - let the GitHub integration handle it.
@@ -456,8 +456,9 @@ WHERE schemaname = 'public';
 
 4. **Deploy via GitHub**:
    - Push to feature branch
-   - Create PR to `test-branch` (migrations auto-apply)
-   - After testing, merge to `main` (migrations auto-apply)
+   - Open a PR targeting `main`
+   - Supabase automatically provisions a preview branch for the PR and the workflow deploys to a Fly review app using that database
+   - After testing, merge to `main` (migrations auto-apply to production)
 
 ### Migration Files
 

@@ -336,9 +336,11 @@ git checkout -b feature/your-feature
 git add .
 git commit -m "feat: add new feature"
 
-# Push and create PR to test-branch
+# Push and open PR targeting main
 git push origin feature/your-feature
 ```
+
+Every pull request targeting `main` automatically provisions a Supabase preview branch and a matching Fly review app. The GitHub Actions workflow reads the per-PR `SUPABASE_DB_URL` secret that Supabase injects and deploys against that isolated database.
 
 ### Commit Messages
 

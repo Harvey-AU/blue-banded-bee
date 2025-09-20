@@ -21,6 +21,10 @@ jobs:
     if: github.event.pull_request.draft == false
     permissions:
       pull-requests: write
+    environment:
+      name: supabase-preview
+    env:
+      APP_NAME: blue-banded-bee-pr-${{ github.event.number }}
 
     steps:
       - name: Checkout code
@@ -34,26 +38,34 @@ jobs:
       - name: Setup Fly.io CLI
         uses: superfly/flyctl-actions/setup-flyctl@master
 
-      - name: Deploy Review App
+      - name: Ensure review app exists
         run: |
-          # Create review app name
-          APP_NAME="blue-banded-bee-pr-${{ github.event.number }}"
-
-          # Check if app exists, create if not
-          if ! flyctl apps list | grep -q "$APP_NAME"; then
-            echo "Creating new review app: $APP_NAME"
-            flyctl apps create $APP_NAME --org personal
+          if ! flyctl apps show "${APP_NAME}" >/dev/null 2>&1; then
+            echo "Creating new review app: ${APP_NAME}"
+            flyctl apps create "${APP_NAME}" --org personal
           else
-            echo "Review app already exists: $APP_NAME"
+            echo "Review app already exists: ${APP_NAME}"
+          fi
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+      - name: Configure Supabase preview database
+        run: |
+          if [ -z "${SUPABASE_DB_URL}" ]; then
+            echo "Supabase preview database secret (SUPABASE_DB_URL) is not available." >&2
+            exit 1
           fi
 
-          # Set DB Secret for Review App (Phase 1: Shared test database)
-          echo "Setting test database connection for review app..."
-          flyctl secrets set DATABASE_URL="${{ secrets.TEST_DATABASE_URL }}" --app $APP_NAME
+          echo "Setting Supabase preview database URL for ${APP_NAME}"
+          flyctl secrets set DATABASE_URL="${SUPABASE_DB_URL}" --app "${APP_NAME}"
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
 
-          # Deploy to review app
+      - name: Deploy Review App
+        run: |
           flyctl deploy \
-            --app $APP_NAME \
+            --app "${APP_NAME}" \
             --config .fly/review_apps.toml \
             --remote-only
         env:
@@ -71,16 +83,16 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               body: `🐝 **Review App Deployed!**
-              
+
               **Test URL**: ${appUrl}
-              
+
               📋 **Test Features:**
               1. Visit homepage: ${appUrl}/
               2. Test authentication and job creation flow
               3. Check dashboard functionality
               4. Verify database operations work correctly
-              
-              🗄️ **Database**: Isolated Supabase preview branch with all migrations applied
+
+              🗄️ **Database**: Supabase preview branch for this PR
               ⚠️ *Preview environment - app and database cleaned up when PR closes*`
             });
 
@@ -98,4 +110,4 @@ jobs:
           APP_NAME="blue-banded-bee-pr-${{ github.event.number }}"
           flyctl apps destroy $APP_NAME --yes || echo "App may not exist"
         env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}# Force redeploy
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}

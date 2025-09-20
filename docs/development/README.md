@@ -23,7 +23,7 @@ Setup guides, workflow processes, and debugging tools for Blue Banded Bee develo
 1. Create feature branch from `main`
 2. Develop and test locally
 3. Push to feature branch
-4. Create PR to `test-branch` for testing
+4. Open a PR targeting `main` to trigger Supabase preview and Fly review environments
 5. After approval, merge to `main`
 
 See [BRANCHING.md](./BRANCHING.md) for detailed Git workflow.
