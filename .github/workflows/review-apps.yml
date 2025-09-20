@@ -17,7 +17,7 @@ on:
 jobs:
   deploy-review:
     name: Deploy Review App
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     if: github.event.pull_request.draft == false
     permissions:
       pull-requests: write
@@ -86,7 +86,7 @@ jobs:
 
   cleanup-review:
     name: Cleanup Review App
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     if: github.event.action == 'closed'
 
     steps:
