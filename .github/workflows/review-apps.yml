@@ -80,7 +80,7 @@ jobs:
               3. Check dashboard functionality
               4. Verify database operations work correctly
               
-              🗄️ **Database**: Isolated Supabase preview branch with all migrations applied
+              🗄️ **Database**: Shared test database
               ⚠️ *Preview environment - app and database cleaned up when PR closes*`
             });
 
