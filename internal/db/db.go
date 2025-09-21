@@ -173,7 +173,8 @@ func New(config *Config) (*DB, error) {
 // InitFromEnv creates a PostgreSQL connection using environment variables
 func InitFromEnv() (*DB, error) {
 	// If DATABASE_URL is provided, use it with default config
-	if url := os.Getenv("DATABASE_URL"); url != "" {
+	// Trim whitespace as it causes pgx to ignore the URL and fall back to Unix socket
+	if url := strings.TrimSpace(os.Getenv("DATABASE_URL")); url != "" {
 		// Optimise connection limits based on environment
 		maxOpen := 120  // Production: support multiple concurrent jobs
 		maxIdle := 30   // Production: keep connections warm
