@@ -34,6 +34,9 @@ jobs:
       - name: Setup Fly.io CLI
         uses: superfly/flyctl-actions/setup-flyctl@master
 
+      - name: Build Docker image locally
+        run: docker build -t blue-banded-bee:pr-${{ github.event.number }} .
+
       - name: Deploy Review App
         run: |
           # Create review app name
@@ -51,11 +54,12 @@ jobs:
           echo "Setting test database connection for review app..."
           flyctl secrets set DATABASE_URL="${{ secrets.TEST_DATABASE_URL }}" --app $APP_NAME
 
-          # Deploy to review app
+          # Deploy to review app with local image
           flyctl deploy \
             --app $APP_NAME \
             --config .fly/review_apps.toml \
-            --remote-only
+            --local-only \
+            --image blue-banded-bee:pr-${{ github.event.number }}
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
