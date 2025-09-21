@@ -28,12 +28,12 @@ type ActivityPoint struct {
 // GetJobStats retrieves job statistics for the dashboard
 func (db *DB) GetJobStats(organisationID string, startDate, endDate *time.Time) (*JobStats, error) {
 	query := `
-		SELECT 
+		SELECT
 			COUNT(*) as total_jobs,
-			SUM(CASE WHEN status = 'running' THEN 1 ELSE 0 END) as running_jobs,
-			SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed_jobs,
-			SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed_jobs,
-			SUM(COALESCE(total_tasks, 0)) as total_tasks,
+			COALESCE(SUM(CASE WHEN status = 'running' THEN 1 ELSE 0 END), 0) as running_jobs,
+			COALESCE(SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END), 0) as completed_jobs,
+			COALESCE(SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END), 0) as failed_jobs,
+			COALESCE(SUM(COALESCE(total_tasks, 0)), 0) as total_tasks,
 			AVG(
 				CASE WHEN status = 'completed' AND started_at IS NOT NULL AND completed_at IS NOT NULL 
 				THEN EXTRACT(EPOCH FROM (completed_at - started_at))
