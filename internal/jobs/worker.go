@@ -497,13 +497,13 @@ func (wp *WorkerPool) processNextTask(ctx context.Context) error {
 			return err
 		}
 
-			// Process the task
-			result, err := wp.processTask(ctx, jobsTask)
-			if err != nil {
-				return wp.handleTaskError(ctx, task, err)
-			} else {
-				return wp.handleTaskSuccess(ctx, task, result)
-			}
+		// Process the task
+		result, err := wp.processTask(ctx, jobsTask)
+		if err != nil {
+			return wp.handleTaskError(ctx, task, err)
+		} else {
+			return wp.handleTaskSuccess(ctx, task, result)
+		}
 	}
 
 	// No tasks found in any active jobs
