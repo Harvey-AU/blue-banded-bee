@@ -21,8 +21,6 @@ jobs:
     if: github.event.pull_request.draft == false
     permissions:
       pull-requests: write
-    environment:
-      name: supabase-preview
     env:
       APP_NAME: blue-banded-bee-pr-${{ github.event.number }}
 
@@ -38,6 +36,11 @@ jobs:
       - name: Setup Fly.io CLI
         uses: superfly/flyctl-actions/setup-flyctl@master
 
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
       - name: Ensure review app exists
         run: |
           if ! flyctl apps show "${APP_NAME}" >/dev/null 2>&1; then
@@ -49,18 +52,67 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
-      - name: Configure Supabase preview database
+      - name: Fetch Supabase preview database URL
+        id: supabase-preview
         run: |
-          if [ -z "${SUPABASE_DB_URL}" ]; then
-            echo "Supabase preview database secret (SUPABASE_DB_URL) is not available." >&2
+          set -eo pipefail
+
+          if [ -z "${SUPABASE_ACCESS_TOKEN}" ] || [ -z "${SUPABASE_PROJECT_REF}" ]; then
+            echo "Supabase credentials (SUPABASE_ACCESS_TOKEN / SUPABASE_PROJECT_REF) are required." >&2
             exit 1
           fi
 
-          echo "Setting Supabase preview database URL for ${APP_NAME}"
-          flyctl secrets set DATABASE_URL="${SUPABASE_DB_URL}" --app "${APP_NAME}"
+          supabase login --token "${SUPABASE_ACCESS_TOKEN}" >/dev/null
+
+          BRANCH_NAME="${PR_BRANCH}"
+          echo "Waiting for Supabase preview branch for ${BRANCH_NAME}"
+
+          for attempt in $(seq 1 12); do
+            supabase branches list --project-ref "${SUPABASE_PROJECT_REF}" --output json > branches.json
+
+            BRANCH_JSON=$(jq -c --arg name "${BRANCH_NAME}" '
+              map(select(
+                (.name // "") == $name or
+                (.name // "" | sub("^preview/"; "")) == $name or
+                (.git_branch // "") == $name or
+                (.git_branch // "" | sub("^refs/heads/"; "")) == $name or
+                ((.pull_request_number // 0) == ($name | tonumber?))
+              )) | first' branches.json)
+
+            if [ -n "${BRANCH_JSON}" ] && [ "${BRANCH_JSON}" != "null" ]; then
+              BRANCH_ID=$(echo "${BRANCH_JSON}" | jq -r '.id')
+
+              DB_URL=$(supabase branches get "${BRANCH_ID}" --project-ref "${SUPABASE_PROJECT_REF}" --output env | grep -m1 '^DATABASE_URL=' | cut -d= -f2-)
+
+              if [ -n "${DB_URL}" ]; then
+                echo "::add-mask::${DB_URL}"
+                echo "database_url=${DB_URL}" >> "${GITHUB_OUTPUT}"
+                rm -f branches.json
+                supabase logout >/dev/null 2>&1 || true
+                exit 0
+              fi
+            fi
+
+            echo "Preview branch not ready yet (attempt ${attempt}/12). Retrying in 10s..."
+            sleep 10
+          done
+
+          echo "Failed to obtain Supabase preview DATABASE_URL after waiting." >&2
+          jq '.' branches.json || true
+          rm -f branches.json
+          supabase logout >/dev/null 2>&1 || true
+          exit 1
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+          PR_BRANCH: ${{ github.head_ref }}
+
+      - name: Configure Supabase preview database
+        run: |
+          flyctl secrets set DATABASE_URL="${DATABASE_URL}" --app "${APP_NAME}"
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          DATABASE_URL: ${{ steps.supabase-preview.outputs.database_url }}
 
       - name: Deploy Review App
         run: |

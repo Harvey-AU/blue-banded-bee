@@ -26,6 +26,11 @@ Setup guides, workflow processes, and debugging tools for Blue Banded Bee develo
 4. Open a PR targeting `main` to trigger Supabase preview and Fly review environments
 5. After approval, merge to `main`
 
+### CI Secrets
+- `SUPABASE_ACCESS_TOKEN` – Supabase personal access token used by the workflow to query preview branches
+- `SUPABASE_PROJECT_REF` – Project reference (e.g. `abcdefg1234`) for the Supabase project
+- `FLY_API_TOKEN` – Fly org token with Machines/Secrets permissions
+
 See [BRANCHING.md](./BRANCHING.md) for detailed Git workflow.
 
 ## 🔗 Related Documentation

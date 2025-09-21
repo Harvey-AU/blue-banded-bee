@@ -457,7 +457,7 @@ WHERE schemaname = 'public';
 4. **Deploy via GitHub**:
    - Push to feature branch
    - Open a PR targeting `main`
-   - Supabase automatically provisions a preview branch for the PR and the workflow deploys to a Fly review app using that database
+   - Supabase automatically provisions a preview branch for the PR and the workflow waits for that branch’s credentials via the Supabase CLI before deploying the Fly review app against it
    - After testing, merge to `main` (migrations auto-apply to production)
 
 ### Migration Files

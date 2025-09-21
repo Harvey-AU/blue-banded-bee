@@ -340,7 +340,7 @@ git commit -m "feat: add new feature"
 git push origin feature/your-feature
 ```
 
-Every pull request targeting `main` automatically provisions a Supabase preview branch and a matching Fly review app. The GitHub Actions workflow reads the per-PR `SUPABASE_DB_URL` secret that Supabase injects and deploys against that isolated database.
+Every pull request targeting `main` automatically provisions a Supabase preview branch and a matching Fly review app. The GitHub Actions workflow uses the Supabase CLI (authenticated via `SUPABASE_ACCESS_TOKEN` and `SUPABASE_PROJECT_REF` repository secrets) to wait for the preview branch, pull its `DATABASE_URL`, and deploy against that isolated database.
 
 ### Commit Messages
 
