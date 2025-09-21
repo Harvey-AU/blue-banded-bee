@@ -50,11 +50,11 @@ jobs:
             echo "Review app already exists: $APP_NAME"
           fi
 
-          # Set DB Secret for Review App (Phase 1: Shared test database)
+          # Set DB Secret for Review App WITHOUT triggering deployment
           echo "Setting test database connection for review app..."
-          flyctl secrets set DATABASE_URL="${{ secrets.TEST_DATABASE_URL }}" --app $APP_NAME
+          flyctl secrets set DATABASE_URL="${{ secrets.TEST_DATABASE_URL }}" --app $APP_NAME --stage
 
-          # Deploy to review app with local image
+          # Deploy to review app with local image (this will apply staged secrets)
           flyctl deploy \
             --app $APP_NAME \
             --config .fly/review_apps.toml \
