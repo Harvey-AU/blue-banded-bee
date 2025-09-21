@@ -70,6 +70,7 @@ jobs:
           echo "Waiting for Supabase preview branch for ${BRANCH_NAME}"
 
           for attempt in $(seq 1 12); do
+            rm -f /tmp/branch-env.log
             supabase branches list --project-ref "${SUPABASE_PROJECT_REF}" --output json > branches.json
 
             echo "Known Supabase preview branches:"
@@ -94,9 +95,10 @@ jobs:
               )) | first' branches.json)
 
             if [ -n "${BRANCH_JSON}" ] && [ "${BRANCH_JSON}" != "null" ]; then
-              BRANCH_ID=$(echo "${BRANCH_JSON}" | jq -r '.id')
+              BRANCH_ID=$(echo "${BRANCH_JSON}" | jq -r '.id // .name // ""')
 
-              DB_URL=$(supabase branches get "${BRANCH_ID}" --project-ref "${SUPABASE_PROJECT_REF}" --output env | grep -m1 '^DATABASE_URL=' | cut -d= -f2-)
+              DB_ENV=$(supabase branches get "${BRANCH_ID}" --project-ref "${SUPABASE_PROJECT_REF}" --output env 2>/tmp/branch-env.log || true)
+              DB_URL=$(echo "${DB_ENV}" | grep -m1 '^DATABASE_URL=' | cut -d= -f2-)
 
               if [ -n "${DB_URL}" ]; then
                 echo "::add-mask::${DB_URL}"
@@ -104,6 +106,9 @@ jobs:
                 rm -f branches.json
                 supabase logout >/dev/null 2>&1 || true
                 exit 0
+              else
+                echo "Preview branch found but connection string not ready yet: ${BRANCH_ID}"
+                cat /tmp/branch-env.log || true
               fi
             fi
 
