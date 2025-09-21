@@ -65,18 +65,32 @@ jobs:
           supabase login --token "${SUPABASE_ACCESS_TOKEN}" >/dev/null
 
           BRANCH_NAME="${PR_BRANCH}"
+          PR_NUM="${PR_NUMBER:-0}"
+          BRANCH_SLUG=$(echo "${BRANCH_NAME}" | tr '/' '-')
           echo "Waiting for Supabase preview branch for ${BRANCH_NAME}"
 
           for attempt in $(seq 1 12); do
             supabase branches list --project-ref "${SUPABASE_PROJECT_REF}" --output json > branches.json
 
-            BRANCH_JSON=$(jq -c --arg name "${BRANCH_NAME}" '
+            echo "Known Supabase preview branches:"
+            jq -r '.[].name' branches.json | sed 's/^/  - /'
+
+            BRANCH_JSON=$(jq -c \
+              --arg name "${BRANCH_NAME}" \
+              --arg slug "${BRANCH_SLUG}" \
+              --arg base "preview/${BRANCH_SLUG}" \
+              --argjson pr "${PR_NUM}" '
               map(select(
                 (.name // "") == $name or
+                (.name // "") == $slug or
+                (.name // "") == $base or
                 (.name // "" | sub("^preview/"; "")) == $name or
+                (.name // "" | sub("^preview/"; "")) == $slug or
                 (.git_branch // "") == $name or
+                (.git_branch // "") == $slug or
                 (.git_branch // "" | sub("^refs/heads/"; "")) == $name or
-                ((.pull_request_number // 0) == ($name | tonumber?))
+                (.git_branch // "" | sub("^refs/heads/"; "")) == $slug or
+                (.pull_request_number // 0) == $pr
               )) | first' branches.json)
 
             if [ -n "${BRANCH_JSON}" ] && [ "${BRANCH_JSON}" != "null" ]; then
@@ -106,6 +120,7 @@ jobs:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
           PR_BRANCH: ${{ github.head_ref }}
+          PR_NUMBER: ${{ github.event.number }}
 
       - name: Configure Supabase preview database
         run: |
