@@ -17,6 +17,7 @@ app_name_pattern = "blue-banded-bee-pr-{pr_number}"
 # Environment overrides for staging
 [env]
 APP_ENV = "staging"
+PORT = "8080"
 
 # Explicitly source DATABASE_URL from secrets
 DATABASE_URL = { from_secret = "DATABASE_URL" }
@@ -36,12 +37,12 @@ auto_start_machines = true
 min_machines_running = 1
 
 [[http_service.checks]]
-grace_period = "30s"
-interval = "15s"
+grace_period = "10s"  # Reduced from 30s for faster deployments
+interval = "10s"      # Reduced from 15s for quicker health checks
 method = "GET"
 path = "/health"
 protocol = "http"
-timeout = "10s"
+timeout = "5s"        # Reduced from 10s
 
 [http_service.checks.headers]
 Content-Type = "text/plain"
