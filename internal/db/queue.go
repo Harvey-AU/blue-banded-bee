@@ -329,9 +329,23 @@ func (q *DbQueue) UpdateTaskStatus(ctx context.Context, task *Task) error {
 			`, task.Status, task.StartedAt, task.ID)
 
 		case "completed":
+			// Ensure JSONB fields are never nil
+			headers := task.Headers
+			if headers == nil {
+				headers = []byte("{}")
+			}
+			secondHeaders := task.SecondHeaders
+			if secondHeaders == nil {
+				secondHeaders = []byte("{}")
+			}
+			cacheCheckAttempts := task.CacheCheckAttempts
+			if cacheCheckAttempts == nil {
+				cacheCheckAttempts = []byte("[]")
+			}
+
 			_, err = tx.ExecContext(ctx, `
-				UPDATE tasks 
-				SET status = $1, completed_at = $2, status_code = $3, 
+				UPDATE tasks
+				SET status = $1, completed_at = $2, status_code = $3,
 					response_time = $4, cache_status = $5, content_type = $6,
 					content_length = $7, headers = $8, redirect_url = $9,
 					dns_lookup_time = $10, tcp_connection_time = $11, tls_handshake_time = $12,
@@ -345,15 +359,15 @@ func (q *DbQueue) UpdateTaskStatus(ctx context.Context, task *Task) error {
 				WHERE id = $26
 			`, task.Status, task.CompletedAt, task.StatusCode,
 				task.ResponseTime, task.CacheStatus, task.ContentType,
-				task.ContentLength, task.Headers, task.RedirectURL,
+				task.ContentLength, headers, task.RedirectURL,
 				task.DNSLookupTime, task.TCPConnectionTime, task.TLSHandshakeTime,
 				task.TTFB, task.ContentTransferTime,
 				task.SecondResponseTime, task.SecondCacheStatus,
-				task.SecondContentLength, task.SecondHeaders,
+				task.SecondContentLength, secondHeaders,
 				task.SecondDNSLookupTime, task.SecondTCPConnectionTime,
 				task.SecondTLSHandshakeTime, task.SecondTTFB,
 				task.SecondContentTransferTime,
-				task.RetryCount, task.CacheCheckAttempts, task.ID)
+				task.RetryCount, cacheCheckAttempts, task.ID)
 
 		case "failed":
 			_, err = tx.ExecContext(ctx, `
