@@ -404,6 +404,11 @@ async function initializeDashboard(config = {}) {
     refreshInterval: autoRefresh ? refreshInterval : 0, // Disable auto-refresh if not wanted
   });
 
+  // Expose the binder globally so shared handlers (e.g. auth, forms) can reuse the instance
+  if (typeof window !== "undefined") {
+    window.dataBinder = dataBinder;
+  }
+
   // Initialise auth with data binder integration
   await initializeAuthWithDataBinder(dataBinder, { debug, autoRefresh, networkMonitoring });
 
