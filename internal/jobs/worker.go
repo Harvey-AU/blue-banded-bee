@@ -248,6 +248,10 @@ func (wp *WorkerPool) AddJob(jobID string, options *JobOptions) {
 				Err(err).
 				Str("domain", domainName).
 				Msg("Failed to parse robots.txt, proceeding without restrictions")
+			// Only capture to Sentry if it's not a 404 (which is normal)
+			if !strings.Contains(err.Error(), "404") {
+				sentry.CaptureMessage(fmt.Sprintf("Failed to parse robots.txt for %s: %v", domainName, err))
+			}
 			jobInfo.RobotsRules = &crawler.RobotsRules{} // Empty rules = no restrictions
 		} else {
 			jobInfo.RobotsRules = robotsRules
@@ -265,6 +269,7 @@ func (wp *WorkerPool) AddJob(jobID string, options *JobOptions) {
 			Msg("Cached job info with robots rules")
 	} else {
 		log.Error().Err(err).Str("job_id", jobID).Msg("Failed to cache job info")
+		sentry.CaptureException(fmt.Errorf("failed to cache job info for job %s: %w", jobID, err))
 	}
 
 	// Simple scaling: add 5 workers per job, maximum of 50 total

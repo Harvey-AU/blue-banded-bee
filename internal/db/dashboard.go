@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/getsentry/sentry-go"
 	"github.com/rs/zerolog/log"
 )
 
@@ -71,6 +72,7 @@ func (db *DB) GetJobStats(organisationID string, startDate, endDate *time.Time) 
 
 	if err != nil {
 		log.Error().Err(err).Str("organisation_id", organisationID).Msg("Failed to get job stats")
+		sentry.CaptureException(fmt.Errorf("dashboard stats query failed for org %s: %w", organisationID, err))
 		return nil, err
 	}
 
