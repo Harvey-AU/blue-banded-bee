@@ -154,6 +154,70 @@ func main() {
 				}
 			}
 			rows.Close()
+
+			// Check for stuck jobs (running >5 min with 0% progress)
+			stuckJobRows, err := pgDB.GetDB().Query(`
+				SELECT id, domain_id, created_at, started_at, progress
+				FROM jobs j
+				JOIN domains d ON j.domain_id = d.id
+				WHERE j.status = 'running'
+				  AND j.progress = 0
+				  AND j.started_at < NOW() - INTERVAL '5 minutes'
+			`)
+			if err != nil {
+				sentry.CaptureException(err)
+				log.Error().Err(err).Msg("Failed to check for stuck jobs")
+			} else {
+				for stuckJobRows.Next() {
+					var jobID string
+					var domainID int
+					var createdAt, startedAt time.Time
+					var progress float64
+					if err := stuckJobRows.Scan(&jobID, &domainID, &createdAt, &startedAt, &progress); err == nil {
+						// Critical alert: Job stuck without progress
+						sentry.CaptureException(fmt.Errorf("job stuck without progress for >5min: %s (domain_id: %d, started: %v)",
+							jobID, domainID, startedAt))
+						log.Error().
+							Str("job_id", jobID).
+							Int("domain_id", domainID).
+							Time("started_at", startedAt).
+							Float64("progress", progress).
+							Msg("CRITICAL: Job stuck without progress for >5 minutes")
+					}
+				}
+				stuckJobRows.Close()
+			}
+
+			// Check for tasks stuck in running state >3 minutes
+			stuckTaskRows, err := pgDB.GetDB().Query(`
+				SELECT t.id, t.job_id, t.started_at, p.path
+				FROM tasks t
+				JOIN pages p ON t.page_id = p.id
+				WHERE t.status = 'running'
+				  AND t.started_at < NOW() - INTERVAL '3 minutes'
+				LIMIT 5
+			`)
+			if err != nil {
+				sentry.CaptureException(err)
+				log.Error().Err(err).Msg("Failed to check for stuck tasks")
+			} else {
+				for stuckTaskRows.Next() {
+					var taskID, jobID, path string
+					var startedAt time.Time
+					if err := stuckTaskRows.Scan(&taskID, &jobID, &startedAt, &path); err == nil {
+						// Critical alert: Task stuck in running state
+						sentry.CaptureException(fmt.Errorf("task stuck in running state for >3min: %s (job: %s, path: %s, started: %v)",
+							taskID, jobID, path, startedAt))
+						log.Error().
+							Str("task_id", taskID).
+							Str("job_id", jobID).
+							Str("path", path).
+							Time("started_at", startedAt).
+							Msg("CRITICAL: Task stuck in running state for >3 minutes")
+					}
+				}
+				stuckTaskRows.Close()
+			}
 		}
 	}()
 
