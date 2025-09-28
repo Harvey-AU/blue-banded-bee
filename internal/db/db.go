@@ -100,13 +100,13 @@ func New(config *Config) (*DB, error) {
 		config.SSLMode = "disable"
 	}
 	if config.MaxIdleConns == 0 {
-		config.MaxIdleConns = 30  // Optimised for job processing workload
+		config.MaxIdleConns = 10  // Conservative for Supabase pool limits
 	}
 	if config.MaxOpenConns == 0 {
-		config.MaxOpenConns = 120  // Supports multiple concurrent jobs with workers
+		config.MaxOpenConns = 25  // Stay under Supabase's 30 connection pool limit
 	}
 	if config.MaxLifetime == 0 {
-		config.MaxLifetime = 10 * time.Minute  // Reduced from 20 minutes
+		config.MaxLifetime = 5 * time.Minute  // Shorter lifetime for pooler compatibility
 	}
 
 	// Add connection configuration to prevent prepared statement conflicts
@@ -176,18 +176,18 @@ func InitFromEnv() (*DB, error) {
 	// Trim whitespace as it causes pgx to ignore the URL and fall back to Unix socket
 	if url := strings.TrimSpace(os.Getenv("DATABASE_URL")); url != "" {
 		// Optimise connection limits based on environment
-		maxOpen := 120  // Production: support multiple concurrent jobs
-		maxIdle := 30   // Production: keep connections warm
+		maxOpen := 25  // Production: stay under Supabase's 30 connection pool limit
+		maxIdle := 10  // Production: conservative to prevent pool exhaustion
 		if os.Getenv("APP_ENV") == "development" {
-			maxOpen = 20  // Development: modest limits for local testing
-			maxIdle = 10  // Development: fewer idle connections
+			maxOpen = 15  // Development: modest limits for local testing
+			maxIdle = 5   // Development: fewer idle connections
 		}
 		
 		config := &Config{
 			DatabaseURL:  url,
 			MaxIdleConns: maxIdle,
 			MaxOpenConns: maxOpen,
-			MaxLifetime:  10 * time.Minute,  // Reduced from 20 minutes
+			MaxLifetime:  5 * time.Minute,  // Shorter lifetime for pooler compatibility
 		}
 
 		// Add statement timeout and disable prepared statements to prevent cache conflicts
@@ -247,9 +247,9 @@ func InitFromEnv() (*DB, error) {
 		Password:     os.Getenv("POSTGRES_PASSWORD"),
 		Database:     os.Getenv("POSTGRES_DB"),
 		SSLMode:      os.Getenv("POSTGRES_SSL_MODE"),
-		MaxIdleConns: 30,
-		MaxOpenConns: 75,
-		MaxLifetime:  20 * time.Minute,
+		MaxIdleConns: 10,
+		MaxOpenConns: 25,
+		MaxLifetime:  5 * time.Minute,
 	}
 
 	// Use defaults if not set
