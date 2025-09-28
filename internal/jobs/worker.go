@@ -724,6 +724,8 @@ func (wp *WorkerPool) recoverStaleTasks(ctx context.Context) error {
 			}
 
 			if err != nil {
+				// Critical: Database connection failure preventing task recovery
+				sentry.CaptureException(fmt.Errorf("failed to update stale task %s: %w", taskID, err))
 				log.Error().Err(err).
 					Str("task_id", taskID).
 					Msg("Failed to update stale task")
