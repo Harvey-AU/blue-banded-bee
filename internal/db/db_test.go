@@ -144,9 +144,9 @@ func TestNew_DefaultValues(t *testing.T) {
 	_, _ = New(config)
 
 	assert.Equal(t, "disable", config.SSLMode)
-	assert.Equal(t, 30, config.MaxIdleConns)
-	assert.Equal(t, 120, config.MaxOpenConns)
-	assert.Equal(t, 10*time.Minute, config.MaxLifetime)
+	assert.Equal(t, 10, config.MaxIdleConns)
+	assert.Equal(t, 25, config.MaxOpenConns)
+	assert.Equal(t, 5*time.Minute, config.MaxLifetime)
 }
 
 func TestNew_PreservesCustomValues(t *testing.T) {
