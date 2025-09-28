@@ -248,6 +248,10 @@ func (wp *WorkerPool) AddJob(jobID string, options *JobOptions) {
 				Err(err).
 				Str("domain", domainName).
 				Msg("Failed to parse robots.txt, proceeding without restrictions")
+			// Only capture to Sentry if it's not a 404 (which is normal)
+			if !strings.Contains(err.Error(), "404") {
+				sentry.CaptureMessage(fmt.Sprintf("Failed to parse robots.txt for %s: %v", domainName, err))
+			}
 			jobInfo.RobotsRules = &crawler.RobotsRules{} // Empty rules = no restrictions
 		} else {
 			jobInfo.RobotsRules = robotsRules
@@ -265,6 +269,7 @@ func (wp *WorkerPool) AddJob(jobID string, options *JobOptions) {
 			Msg("Cached job info with robots rules")
 	} else {
 		log.Error().Err(err).Str("job_id", jobID).Msg("Failed to cache job info")
+		sentry.CaptureException(fmt.Errorf("failed to cache job info for job %s: %w", jobID, err))
 	}
 
 	// Simple scaling: add 5 workers per job, maximum of 50 total
@@ -664,6 +669,17 @@ func (wp *WorkerPool) checkForPendingTasks(ctx context.Context) error {
 	wp.jobsMutex.RUnlock()
 	for _, id := range toRemove {
 		log.Info().Str("job_id", id).Msg("Job has no pending tasks, removing from worker pool")
+
+		// Check if job actually completed or is stuck
+		var status string
+		err := wp.dbQueue.Execute(context.Background(), func(tx *sql.Tx) error {
+			return tx.QueryRow("SELECT status FROM jobs WHERE id = $1", id).Scan(&status)
+		})
+		if err == nil && status != "completed" {
+			// Job removed but not completed - potential issue
+			sentry.CaptureMessage(fmt.Sprintf("Job %s removed from pool without completion (status: %s)", id, status))
+		}
+
 		wp.RemoveJob(id)
 	}
 
@@ -724,6 +740,10 @@ func (wp *WorkerPool) recoverStaleTasks(ctx context.Context) error {
 			}
 
 			if err != nil {
+				// Capture critical database connection issues
+				if strings.Contains(err.Error(), "bad connection") {
+					sentry.CaptureException(fmt.Errorf("critical DB connection failure in CleanupStuckJobs: %w", err))
+				}
 				log.Error().Err(err).
 					Str("task_id", taskID).
 					Msg("Failed to update stale task")
