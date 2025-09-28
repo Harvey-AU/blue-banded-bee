@@ -23,7 +23,10 @@ func TestCheckHealth_Integration(t *testing.T) {
 	
 	// Connect to database using DATABASE_URL
 	config := &Config{
-		DatabaseURL: databaseURL,
+		DatabaseURL:  databaseURL,
+		MaxOpenConns: 50, // Higher limit for integration tests
+		MaxIdleConns: 15, // Higher limit for integration tests
+		MaxLifetime:  5 * time.Minute,
 	}
 	db, err := New(config)
 	require.NoError(t, err)
