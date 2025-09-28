@@ -79,7 +79,7 @@ jobs:
               **Test URL**: ${appUrl}
               
               📋 **Test Features:**
-              1. Visit homepage: ${appUrl}/
+              1. Visit dashboard: ${appUrl}/dashboard
               2. Test authentication and job creation flow
               3. Check dashboard functionality
               4. Verify database operations work correctly
