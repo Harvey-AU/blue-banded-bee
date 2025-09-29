@@ -73,7 +73,7 @@ function handleDashboardAction(action, element) {
       break;
 
     case "toggle-export-menu":
-      const menu = document.getElementById("exportDropdown");
+      const menu = document.getElementById("exportDropdownMenu");
       if (menu) {
         menu.style.display = menu.style.display === "block" ? "none" : "block";
       }
@@ -99,6 +99,22 @@ function handleDashboardAction(action, element) {
       if (cancelJobId) {
         cancelJob(cancelJobId);
       }
+      break;
+
+    case "create-job":
+      openCreateJobModal();
+      break;
+
+    case "close-create-job-modal":
+      closeCreateJobModal();
+      break;
+
+    case "refresh-slow-pages":
+      refreshSlowPages();
+      break;
+
+    case "refresh-redirects":
+      refreshExternalRedirects();
       break;
 
     default:
@@ -415,6 +431,46 @@ async function exportTasks(type) {
   } catch (error) {
     console.error("Failed to export tasks:", error);
     showDashboardError("Failed to export tasks");
+  }
+}
+
+/**
+ * Open create job modal
+ */
+function openCreateJobModal() {
+  const modal = document.getElementById("createJobModal");
+  if (modal) {
+    modal.style.display = "flex";
+  }
+}
+
+/**
+ * Close create job modal
+ */
+function closeCreateJobModal() {
+  const modal = document.getElementById("createJobModal");
+  if (modal) {
+    modal.style.display = "none";
+  }
+}
+
+/**
+ * Refresh slow pages section
+ */
+async function refreshSlowPages() {
+  if (window.dataBinder) {
+    // Trigger refresh of slow pages data
+    await window.dataBinder.refresh();
+  }
+}
+
+/**
+ * Refresh external redirects section
+ */
+async function refreshExternalRedirects() {
+  if (window.dataBinder) {
+    // Trigger refresh of redirects data
+    await window.dataBinder.refresh();
   }
 }
 
