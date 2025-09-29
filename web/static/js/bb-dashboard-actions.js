@@ -170,39 +170,46 @@
       document.getElementById("modal-started-at").textContent = startedAt ? startedAt.toLocaleString() : "-";
       document.getElementById("modal-completed-at").textContent = completedAt ? completedAt.toLocaleString() : "-";
 
-      // Calculate total time
+      // Use database-calculated values with proper formatting
       let totalTimeText = "-";
       let avgTimeText = "-";
 
-      if (startedAt && completedAt) {
-        const totalMs = completedAt - startedAt;
-        const totalMinutes = Math.round(totalMs / 60000);
-        const hours = Math.floor(totalMinutes / 60);
-        const minutes = totalMinutes % 60;
+      // Format total duration (from database duration_seconds)
+      if (job.duration_seconds != null) {
+        const totalSeconds = job.duration_seconds;
+        const hours = Math.floor(totalSeconds / 3600);
+        const minutes = Math.floor((totalSeconds % 3600) / 60);
+        const seconds = totalSeconds % 60;
 
         if (hours > 0) {
-          totalTimeText = `${hours}h ${minutes}m`;
+          totalTimeText = `${hours}h ${minutes}m ${seconds}s`;
+        } else if (minutes > 0) {
+          totalTimeText = `${minutes}m ${seconds}s`;
         } else {
-          totalTimeText = `${minutes}m`;
+          totalTimeText = `${seconds}s`;
         }
+      }
 
-        // Calculate average time per completed task
-        const completedTasks = job.completed_tasks || 0;
-        if (completedTasks > 0) {
-          const avgMs = totalMs / completedTasks;
-          const avgSeconds = Math.round(avgMs / 1000);
-          if (avgSeconds < 60) {
-            avgTimeText = `${avgSeconds}s`;
-          } else {
-            const avgMin = Math.floor(avgSeconds / 60);
-            const avgSec = avgSeconds % 60;
-            avgTimeText = `${avgMin}m ${avgSec}s`;
-          }
+      // Format average time per task (from database avg_time_per_task_seconds)
+      if (job.avg_time_per_task_seconds != null) {
+        const avgSeconds = parseFloat(job.avg_time_per_task_seconds);
+
+        if (avgSeconds >= 60) {
+          const avgMin = Math.floor(avgSeconds / 60);
+          const avgSec = (avgSeconds % 60).toFixed(2);
+          avgTimeText = `${avgMin}m ${avgSec}s`;
+        } else {
+          avgTimeText = `${avgSeconds.toFixed(2)}s`;
         }
       }
 
       document.getElementById("modal-total-time").textContent = totalTimeText;
       document.getElementById("modal-avg-time").textContent = avgTimeText;
+
+      // Display additional stats if available
+      if (job.stats) {
+        displayJobStats(job.stats);
+      }
 
       // Show/hide action buttons
       const restartBtn = document.getElementById("modal-restart-btn");
@@ -233,6 +240,254 @@
       }
       showDashboardError("Failed to load job details. Please check your connection and try again.");
     }
+  }
+
+  /**
+   * Display job statistics from database
+   */
+  function displayJobStats(stats) {
+    if (!stats) return;
+
+    // Find or create stats container in modal
+    let statsContainer = document.getElementById("modal-stats-container");
+    if (!statsContainer) {
+      // Create stats container after the job info grid
+      const infoGrid = document.querySelector(".bb-job-info-grid");
+      if (!infoGrid) return;
+
+      statsContainer = document.createElement("div");
+      statsContainer.id = "modal-stats-container";
+      statsContainer.className = "bb-modal-section";
+
+      // Insert after the parent of info grid
+      infoGrid.parentElement.insertAdjacentElement("afterend", statsContainer);
+    }
+
+    let statsHTML = '<div class="bb-modal-section-title">Performance Statistics</div>';
+
+    // Slow Page Buckets
+    if (stats.slow_page_buckets) {
+      const buckets = stats.slow_page_buckets;
+      statsHTML += '<div style="margin-bottom: 24px;">';
+      statsHTML += '<h4 style="font-size: 14px; font-weight: 600; margin-bottom: 12px;">Response Time Distribution</h4>';
+      statsHTML += '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px;">';
+
+      if (buckets.over_10s > 0) {
+        statsHTML += `<div class="bb-info-item" style="background: #fee2e2;">
+        <div class="bb-info-label">Over 10s</div>
+        <div class="bb-info-value" style="color: #dc2626;">${buckets.over_10s}</div>
+      </div>`;
+      }
+      if (buckets['5_to_10s'] > 0) {
+        statsHTML += `<div class="bb-info-item" style="background: #fed7aa;">
+        <div class="bb-info-label">5-10s</div>
+        <div class="bb-info-value" style="color: #ea580c;">${buckets['5_to_10s']}</div>
+      </div>`;
+      }
+      if (buckets['3_to_5s'] > 0) {
+        statsHTML += `<div class="bb-info-item" style="background: #fef3c7;">
+        <div class="bb-info-label">3-5s</div>
+        <div class="bb-info-value" style="color: #d97706;">${buckets['3_to_5s']}</div>
+      </div>`;
+      }
+      if (buckets['2_to_3s'] > 0) {
+        statsHTML += `<div class="bb-info-item">
+        <div class="bb-info-label">2-3s</div>
+        <div class="bb-info-value">${buckets['2_to_3s']}</div>
+      </div>`;
+      }
+      if (buckets['1_5_to_2s'] > 0) {
+        statsHTML += `<div class="bb-info-item">
+        <div class="bb-info-label">1.5-2s</div>
+        <div class="bb-info-value">${buckets['1_5_to_2s']}</div>
+      </div>`;
+      }
+      if (buckets['1_to_1_5s'] > 0) {
+        statsHTML += `<div class="bb-info-item">
+        <div class="bb-info-label">1-1.5s</div>
+        <div class="bb-info-value">${buckets['1_to_1_5s']}</div>
+      </div>`;
+      }
+      statsHTML += `<div class="bb-info-item">
+      <div class="bb-info-label">500ms-1s</div>
+      <div class="bb-info-value">${buckets['500ms_to_1s'] || 0}</div>
+    </div>`;
+      statsHTML += `<div class="bb-info-item" style="background: #dcfce7;">
+      <div class="bb-info-label">Under 500ms</div>
+      <div class="bb-info-value" style="color: #16a34a;">${buckets.under_500ms || 0}</div>
+    </div>`;
+
+      // Show total slow pages if any
+      if (buckets.total_slow_over_3s > 0) {
+        statsHTML += `<div class="bb-info-item" style="grid-column: span 2; background: #fee2e2;">
+        <div class="bb-info-label">Total Slow (>3s)</div>
+        <div class="bb-info-value" style="color: #dc2626; font-size: 20px;">${buckets.total_slow_over_3s}</div>
+      </div>`;
+      }
+
+      statsHTML += '</div></div>';
+    }
+
+    // Cache Performance
+    if (stats.cache_stats || stats.cache_warming_effect) {
+      statsHTML += '<div style="margin-bottom: 24px;">';
+      statsHTML += '<h4 style="font-size: 14px; font-weight: 600; margin-bottom: 12px;">Cache Performance</h4>';
+      statsHTML += '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px;">';
+
+      if (stats.cache_stats) {
+        statsHTML += `<div class="bb-info-item">
+        <div class="bb-info-label">Cache Hits</div>
+        <div class="bb-info-value">${stats.cache_stats.hits}</div>
+      </div>`;
+        statsHTML += `<div class="bb-info-item">
+        <div class="bb-info-label">Cache Misses</div>
+        <div class="bb-info-value">${stats.cache_stats.misses}</div>
+      </div>`;
+        if (stats.cache_stats.hit_rate) {
+          statsHTML += `<div class="bb-info-item" style="background: ${stats.cache_stats.hit_rate > 80 ? '#dcfce7' : '#f9fafb'};">
+          <div class="bb-info-label">Hit Rate</div>
+          <div class="bb-info-value" style="color: ${stats.cache_stats.hit_rate > 80 ? '#16a34a' : '#1f2937'};">${stats.cache_stats.hit_rate}%</div>
+        </div>`;
+        }
+      }
+
+      if (stats.cache_warming_effect) {
+        const effect = stats.cache_warming_effect;
+        if (effect.total_time_saved_seconds > 0) {
+          statsHTML += `<div class="bb-info-item" style="background: #dbeafe;">
+          <div class="bb-info-label">Time Saved</div>
+          <div class="bb-info-value" style="color: #1d4ed8;">${effect.total_time_saved_seconds}s</div>
+        </div>`;
+        }
+        if (effect.avg_time_saved_per_page_ms > 0) {
+          statsHTML += `<div class="bb-info-item">
+          <div class="bb-info-label">Avg Saved/Page</div>
+          <div class="bb-info-value">${Math.round(effect.avg_time_saved_per_page_ms)}ms</div>
+        </div>`;
+        }
+        if (effect.improvement_rate > 0) {
+          statsHTML += `<div class="bb-info-item">
+          <div class="bb-info-label">Improvement Rate</div>
+          <div class="bb-info-value">${effect.improvement_rate}%</div>
+        </div>`;
+        }
+      }
+
+      statsHTML += '</div></div>';
+    }
+
+    // Response Time Percentiles
+    if (stats.response_times) {
+      const times = stats.response_times;
+      statsHTML += '<div style="margin-bottom: 24px;">';
+      statsHTML += '<h4 style="font-size: 14px; font-weight: 600; margin-bottom: 12px;">Response Time Percentiles</h4>';
+      statsHTML += '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px;">';
+
+      statsHTML += `<div class="bb-info-item">
+      <div class="bb-info-label">P25</div>
+      <div class="bb-info-value">${Math.round(times.p25_ms)}ms</div>
+    </div>`;
+      statsHTML += `<div class="bb-info-item">
+      <div class="bb-info-label">Median</div>
+      <div class="bb-info-value">${Math.round(times.median_ms)}ms</div>
+    </div>`;
+      statsHTML += `<div class="bb-info-item">
+      <div class="bb-info-label">P75</div>
+      <div class="bb-info-value">${Math.round(times.p75_ms)}ms</div>
+    </div>`;
+      statsHTML += `<div class="bb-info-item">
+      <div class="bb-info-label">P90</div>
+      <div class="bb-info-value">${Math.round(times.p90_ms)}ms</div>
+    </div>`;
+      statsHTML += `<div class="bb-info-item">
+      <div class="bb-info-label">P95</div>
+      <div class="bb-info-value">${Math.round(times.p95_ms)}ms</div>
+    </div>`;
+      statsHTML += `<div class="bb-info-item">
+      <div class="bb-info-label">P99</div>
+      <div class="bb-info-value">${Math.round(times.p99_ms)}ms</div>
+    </div>`;
+
+      statsHTML += '</div></div>';
+    }
+
+    // Issues Found
+    if (stats.total_broken_links > 0 || stats.total_404s > 0 || stats.redirect_stats) {
+      statsHTML += '<div style="margin-bottom: 24px;">';
+      statsHTML += '<h4 style="font-size: 14px; font-weight: 600; margin-bottom: 12px;">Issues Found</h4>';
+      statsHTML += '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px;">';
+
+      if (stats.total_broken_links > 0) {
+        statsHTML += `<div class="bb-info-item" style="background: #fee2e2;">
+        <div class="bb-info-label">Broken Links</div>
+        <div class="bb-info-value" style="color: #dc2626;">${stats.total_broken_links}</div>
+      </div>`;
+      }
+      if (stats.total_404s > 0) {
+        statsHTML += `<div class="bb-info-item" style="background: #fee2e2;">
+        <div class="bb-info-label">404 Errors</div>
+        <div class="bb-info-value" style="color: #dc2626;">${stats.total_404s}</div>
+      </div>`;
+      }
+      if (stats.total_server_errors > 0) {
+        statsHTML += `<div class="bb-info-item" style="background: #fee2e2;">
+        <div class="bb-info-label">Server Errors</div>
+        <div class="bb-info-value" style="color: #dc2626;">${stats.total_server_errors}</div>
+      </div>`;
+      }
+
+      if (stats.redirect_stats && stats.redirect_stats.total > 0) {
+        statsHTML += `<div class="bb-info-item">
+        <div class="bb-info-label">Total Redirects</div>
+        <div class="bb-info-value">${stats.redirect_stats.total}</div>
+      </div>`;
+        if (stats.redirect_stats['301_permanent'] > 0) {
+          statsHTML += `<div class="bb-info-item">
+          <div class="bb-info-label">301 Permanent</div>
+          <div class="bb-info-value">${stats.redirect_stats['301_permanent']}</div>
+        </div>`;
+        }
+        if (stats.redirect_stats['302_temporary'] > 0) {
+          statsHTML += `<div class="bb-info-item">
+          <div class="bb-info-label">302 Temporary</div>
+          <div class="bb-info-value">${stats.redirect_stats['302_temporary']}</div>
+        </div>`;
+        }
+      }
+
+      statsHTML += '</div></div>';
+    }
+
+    // Discovery Sources
+    if (stats.discovery_sources) {
+      const sources = stats.discovery_sources;
+      statsHTML += '<div style="margin-bottom: 24px;">';
+      statsHTML += '<h4 style="font-size: 14px; font-weight: 600; margin-bottom: 12px;">URL Discovery</h4>';
+      statsHTML += '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px;">';
+
+      if (sources.sitemap > 0) {
+        statsHTML += `<div class="bb-info-item">
+        <div class="bb-info-label">From Sitemap</div>
+        <div class="bb-info-value">${sources.sitemap}</div>
+      </div>`;
+      }
+      if (sources.discovered > 0) {
+        statsHTML += `<div class="bb-info-item">
+        <div class="bb-info-label">Discovered</div>
+        <div class="bb-info-value">${sources.discovered}</div>
+      </div>`;
+      }
+      if (sources.manual > 0) {
+        statsHTML += `<div class="bb-info-item">
+        <div class="bb-info-label">Manual</div>
+        <div class="bb-info-value">${sources.manual}</div>
+      </div>`;
+      }
+
+      statsHTML += '</div></div>';
+    }
+
+    statsContainer.innerHTML = statsHTML;
   }
 
   /**
