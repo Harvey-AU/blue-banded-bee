@@ -31,5 +31,19 @@ export default [
       }),
       terser()
     ]
+  },
+  // Dashboard Actions build
+  {
+    input: 'src/bb-dashboard-actions.js',
+    output: {
+      file: 'dist/bb-dashboard-actions.js',
+      format: 'iife'
+    },
+    plugins: [
+      nodeResolve({
+        browser: true,
+        preferBuiltins: false
+      })
+    ]
   }
 ];

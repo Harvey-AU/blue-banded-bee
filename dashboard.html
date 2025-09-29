@@ -1582,6 +1582,9 @@
     <script src="/js/auth.js"></script>
     <script src="/js/bb-auth-extension.js"></script>
 
+    <!-- Include dashboard actions handler -->
+    <script src="/js/bb-dashboard-actions.js"></script>
+
     <script>
       // Initialize dashboard with unified authentication system
       document.addEventListener("DOMContentLoaded", async () => {
@@ -1594,7 +1597,12 @@
             autoRefresh: true,
             networkMonitoring: true
           });
-          
+
+          // Setup dashboard action handlers
+          if (window.setupDashboardActions) {
+            window.setupDashboardActions();
+          }
+
           console.log("Dashboard initialized successfully with unified auth system");
         } catch (error) {
           console.error("Failed to initialize dashboard:", error);
