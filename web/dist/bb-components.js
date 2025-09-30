@@ -5,9 +5,9 @@
    * API utility for Blue Banded Bee components
    */
 
-  const API_BASE = window.location.hostname === 'localhost' 
+  const API_BASE = window.location.hostname === 'localhost'
     ? 'http://localhost:8080'
-    : 'https://app.bluebandedbee.co';
+    : window.location.origin;
 
   class BBApi {
     constructor() {
