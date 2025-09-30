@@ -1430,50 +1430,80 @@
         </div>
 
         <div class="bb-modal-section">
-          <div class="bb-job-info-grid">
+          <div class="bb-job-info-grid" id="modal-job-data">
             <div class="bb-info-item">
               <div class="bb-info-label">Job ID</div>
-              <div class="bb-info-value" id="modal-job-id" style="font-family: monospace; font-size: 12px">-</div>
+              <div class="bb-info-value" data-bb-bind="id" style="font-family: monospace; font-size: 12px">-</div>
             </div>
             <div class="bb-info-item">
               <div class="bb-info-label">Domain</div>
-              <div class="bb-info-value" id="modal-domain">-</div>
+              <div class="bb-info-value" data-bb-bind="domain">-</div>
             </div>
             <div class="bb-info-item">
               <div class="bb-info-label">Status</div>
-              <div class="bb-info-value" id="modal-status">-</div>
+              <div class="bb-info-value" data-bb-bind="status">-</div>
             </div>
             <div class="bb-info-item">
               <div class="bb-info-label">Progress</div>
-              <div class="bb-info-value" id="modal-progress">-</div>
+              <div class="bb-info-value" data-bb-bind="progress_formatted">-</div>
             </div>
             <div class="bb-info-item">
               <div class="bb-info-label">Total Tasks</div>
-              <div class="bb-info-value" id="modal-total-tasks">-</div>
+              <div class="bb-info-value" data-bb-bind="total_tasks">-</div>
             </div>
             <div class="bb-info-item">
               <div class="bb-info-label">Completed</div>
-              <div class="bb-info-value" id="modal-completed-tasks">-</div>
+              <div class="bb-info-value" data-bb-bind="completed_tasks">-</div>
             </div>
             <div class="bb-info-item">
               <div class="bb-info-label">Failed</div>
-              <div class="bb-info-value" id="modal-failed-tasks">-</div>
+              <div class="bb-info-value" data-bb-bind="failed_tasks">-</div>
             </div>
             <div class="bb-info-item">
               <div class="bb-info-label">Start Time</div>
-              <div class="bb-info-value" id="modal-started-at">-</div>
+              <div class="bb-info-value" data-bb-bind="started_at_formatted">-</div>
             </div>
             <div class="bb-info-item">
               <div class="bb-info-label">End Time</div>
-              <div class="bb-info-value" id="modal-completed-at">-</div>
+              <div class="bb-info-value" data-bb-bind="completed_at_formatted">-</div>
             </div>
             <div class="bb-info-item">
               <div class="bb-info-label">Total Time</div>
-              <div class="bb-info-value" id="modal-total-time">-</div>
+              <div class="bb-info-value" data-bb-bind="duration_formatted">-</div>
             </div>
             <div class="bb-info-item">
               <div class="bb-info-label">Avg Time/Task</div>
-              <div class="bb-info-value" id="modal-avg-time">-</div>
+              <div class="bb-info-value" data-bb-bind="avg_time_formatted">-</div>
+            </div>
+
+            <!-- Additional Stats - these will auto-populate if stats exist -->
+            <div class="bb-info-item">
+              <div class="bb-info-label">Cache Hit Rate</div>
+              <div class="bb-info-value" data-bb-bind="stats.cache_stats.hit_rate">-</div>
+            </div>
+            <div class="bb-info-item">
+              <div class="bb-info-label">Time Saved</div>
+              <div class="bb-info-value" data-bb-bind="stats.cache_warming_effect.total_time_saved_seconds">-</div>
+            </div>
+            <div class="bb-info-item">
+              <div class="bb-info-label">Broken Links</div>
+              <div class="bb-info-value" data-bb-bind="stats.total_broken_links">-</div>
+            </div>
+            <div class="bb-info-item">
+              <div class="bb-info-label">404 Errors</div>
+              <div class="bb-info-value" data-bb-bind="stats.total_404s">-</div>
+            </div>
+            <div class="bb-info-item">
+              <div class="bb-info-label">Slow Pages (>3s)</div>
+              <div class="bb-info-value" data-bb-bind="stats.slow_page_buckets.total_slow_over_3s">-</div>
+            </div>
+            <div class="bb-info-item">
+              <div class="bb-info-label">Avg Response Time</div>
+              <div class="bb-info-value" data-bb-bind="stats.response_times.avg_ms">-</div>
+            </div>
+            <div class="bb-info-item">
+              <div class="bb-info-label">P95 Response Time</div>
+              <div class="bb-info-value" data-bb-bind="stats.response_times.p95_ms">-</div>
             </div>
           </div>
         </div>
