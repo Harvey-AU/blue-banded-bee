@@ -1,24 +1,20 @@
 {
   "name": "@bluebandedbee/web-components",
   "version": "1.0.0",
-  "type": "module",
   "description": "Web Components for Blue Banded Bee dashboard integration",
-  "main": "dist/bb-components.js",
+  "main": "static/js/bb-components.js",
   "scripts": {
-    "build": "rollup -c",
-    "dev": "rollup -c -w",
-    "serve": "serve dist",
-    "test": "web-test-runner"
+    "serve": "serve static"
   },
-  "keywords": ["webflow", "web-components", "cache-warming", "dashboard"],
+  "keywords": [
+    "webflow",
+    "web-components",
+    "cache-warming",
+    "dashboard"
+  ],
   "author": "Blue Banded Bee",
   "license": "MIT",
   "devDependencies": {
-    "rollup": "^4.0.0",
-    "@rollup/plugin-node-resolve": "^15.0.0",
-    "@rollup/plugin-terser": "^0.4.0",
-    "serve": "^14.0.0",
-    "@web/test-runner": "^0.18.0"
-  },
-  "dependencies": {}
+    "serve": "^14.0.0"
+  }
 }

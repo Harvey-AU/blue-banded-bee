@@ -30,7 +30,7 @@ COPY --from=builder /app/main .
 COPY --from=builder /app/dashboard.html .
 COPY --from=builder /app/homepage.html .
 COPY --from=builder /app/auth-modal.html .
-COPY --from=builder /app/web/dist ./web/dist
+COPY --from=builder /app/web/static ./web/static
 
 # Add healthcheck
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
