@@ -539,7 +539,7 @@ async function handlePasswordReset(event) {
 
   try {
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: "https://app.bluebandedbee.co/dashboard",
+      redirectTo: `${window.location.origin}/dashboard`,
     });
 
     if (error) throw error;
@@ -568,7 +568,7 @@ async function handleSocialLogin(provider) {
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider,
       options: {
-        redirectTo: "https://app.bluebandedbee.co/dashboard",
+        redirectTo: `${window.location.origin}/dashboard`,
       },
     });
 
