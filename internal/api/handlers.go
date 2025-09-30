@@ -103,7 +103,7 @@ func (h *Handler) SetupRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/debug-auth.html", h.ServeDebugAuth)
 
 	// Web Components static files
-	mux.Handle("/js/", http.StripPrefix("/js/", http.FileServer(http.Dir("./web/dist/"))))
+	mux.Handle("/js/", http.StripPrefix("/js/", http.FileServer(http.Dir("./web/static/js/"))))
 	mux.Handle("/web/", http.StripPrefix("/web/", h.jsFileServer(http.Dir("./web/"))))
 }
 
