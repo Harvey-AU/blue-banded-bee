@@ -1,539 +1,576 @@
-(function () {
-  'use strict';
+/**
+ * Dashboard Actions Handler
+ * Restores functionality for dashboard button actions that was lost during refactoring
+ */
 
-  /**
-   * Dashboard Actions Handler
-   * Restores functionality for dashboard button actions that was lost during refactoring
-   */
+// Global state for modal management
+let currentJobId = null;
+let tasksCurrentPage = 0;
+let tasksSortColumn = "created_at";
+let tasksSortDirection = "desc";
+let tasksHasNext = false;
 
-  // Global state for modal management
-  let currentJobId = null;
-  let tasksCurrentPage = 0;
-  let tasksSortColumn = "created_at";
-  let tasksSortDirection = "desc";
-  let tasksHasNext = false;
+/**
+ * Helper function to get nested value from object
+ */
+function getNestedValue(obj, path) {
+  return path.split('.').reduce((current, key) => current?.[key], obj);
+}
 
-  /**
-   * Setup action handlers for dashboard
-   * This sets up event delegation for all bb-action attributes
-   */
-  function setupDashboardActions() {
-    // Set up attribute-based event handling using event delegation
-    document.addEventListener("click", (e) => {
-      const element = e.target.closest("[bb-action]");
-      if (element) {
-        const action = element.getAttribute("bb-action");
-        if (action) {
-          e.preventDefault();
-          handleDashboardAction(action, element);
-        }
+/**
+ * Setup action handlers for dashboard
+ * This sets up event delegation for all bb-action attributes
+ */
+function setupDashboardActions() {
+  // Set up attribute-based event handling using event delegation
+  document.addEventListener("click", (e) => {
+    const element = e.target.closest("[bb-action]");
+    if (element) {
+      const action = element.getAttribute("bb-action");
+      if (action) {
+        e.preventDefault();
+        handleDashboardAction(action, element);
       }
-    });
+    }
+  });
 
-    console.log("Dashboard action handlers initialized");
+  // Set up filter tab click handlers for the modal
+  document.addEventListener("click", (e) => {
+    const filterTab = e.target.closest("#modalTaskFilterTabs .filter-tab");
+    if (filterTab) {
+      e.preventDefault();
+      handleFilterTabClick(filterTab);
+    }
+  });
+
+  console.log("Dashboard action handlers initialized");
+}
+
+/**
+ * Handle dashboard actions
+ */
+function handleDashboardAction(action, element) {
+  switch (action) {
+    case "refresh-dashboard":
+      if (window.dataBinder) {
+        window.dataBinder.refresh();
+      }
+      break;
+
+    case "view-job-details":
+      const jobId = element.getAttribute("bb-data-job-id");
+      if (jobId) {
+        viewJobDetails(jobId);
+      }
+      break;
+
+    case "close-modal":
+      closeModal();
+      break;
+
+    case "refresh-tasks":
+      if (currentJobId) {
+        loadJobTasks(currentJobId);
+      }
+      break;
+
+    case "tasks-prev-page":
+      if (tasksCurrentPage > 0) {
+        tasksCurrentPage--;
+        loadJobTasks(currentJobId);
+      }
+      break;
+
+    case "tasks-next-page":
+      if (tasksHasNext) {
+        tasksCurrentPage++;
+        loadJobTasks(currentJobId);
+      }
+      break;
+
+    case "toggle-export-menu":
+      const menu = document.getElementById("exportDropdownMenu");
+      if (menu) {
+        menu.style.display = menu.style.display === "block" ? "none" : "block";
+      }
+      break;
+
+    case "export-job":
+    case "export-broken-links":
+    case "export-slow-pages":
+      exportTasks(action.replace("export-", ""));
+      break;
+
+    case "restart-job":
+    case "restart-job-modal":
+      const restartJobId = element.getAttribute("bb-data-job-id") || currentJobId;
+      if (restartJobId) {
+        restartJob(restartJobId);
+      }
+      break;
+
+    case "cancel-job":
+    case "cancel-job-modal":
+      const cancelJobId = element.getAttribute("bb-data-job-id") || currentJobId;
+      if (cancelJobId) {
+        cancelJob(cancelJobId);
+      }
+      break;
+
+    case "create-job":
+      openCreateJobModal();
+      break;
+
+    case "close-create-job-modal":
+      closeCreateJobModal();
+      break;
+
+    case "refresh-slow-pages":
+      refreshSlowPages();
+      break;
+
+    case "refresh-redirects":
+      refreshExternalRedirects();
+      break;
+
+    default:
+      console.log("Unhandled action:", action);
+  }
+}
+
+/**
+ * View job details in modal
+ */
+async function viewJobDetails(jobId) {
+  if (!jobId) {
+    console.error("No job ID provided");
+    return;
   }
 
-  /**
-   * Handle dashboard actions
-   */
-  function handleDashboardAction(action, element) {
-    switch (action) {
-      case "refresh-dashboard":
-        if (window.dataBinder) {
-          window.dataBinder.refresh();
-        }
-        break;
+  currentJobId = jobId;
 
-      case "view-job-details":
-        const jobId = element.getAttribute("bb-data-job-id");
-        if (jobId) {
-          viewJobDetails(jobId);
-        }
-        break;
+  // Reset pagination state
+  tasksCurrentPage = 0;
+  tasksSortColumn = "created_at";
+  tasksSortDirection = "desc";
 
-      case "close-modal":
-        closeModal();
-        break;
-
-      case "refresh-tasks":
-        if (currentJobId) {
-          loadJobTasks(currentJobId);
-        }
-        break;
-
-      case "tasks-prev-page":
-        if (tasksCurrentPage > 0) {
-          tasksCurrentPage--;
-          loadJobTasks(currentJobId);
-        }
-        break;
-
-      case "tasks-next-page":
-        if (tasksHasNext) {
-          tasksCurrentPage++;
-          loadJobTasks(currentJobId);
-        }
-        break;
-
-      case "toggle-export-menu":
-        const menu = document.getElementById("exportDropdownMenu");
-        if (menu) {
-          menu.style.display = menu.style.display === "block" ? "none" : "block";
-        }
-        break;
-
-      case "export-job":
-      case "export-broken-links":
-      case "export-slow-pages":
-        exportTasks(action.replace("export-", ""));
-        break;
-
-      case "restart-job":
-      case "restart-job-modal":
-        const restartJobId = element.getAttribute("bb-data-job-id") || currentJobId;
-        if (restartJobId) {
-          restartJob(restartJobId);
-        }
-        break;
-
-      case "cancel-job":
-      case "cancel-job-modal":
-        const cancelJobId = element.getAttribute("bb-data-job-id") || currentJobId;
-        if (cancelJobId) {
-          cancelJob(cancelJobId);
-        }
-        break;
-
-      case "create-job":
-        openCreateJobModal();
-        break;
-
-      case "close-create-job-modal":
-        closeCreateJobModal();
-        break;
-
-      case "refresh-slow-pages":
-        refreshSlowPages();
-        break;
-
-      case "refresh-redirects":
-        refreshExternalRedirects();
-        break;
-
-      default:
-        console.log("Unhandled action:", action);
+  // Reset filter tabs to "All"
+  const modalTabs = document.querySelectorAll("#modalTaskFilterTabs .filter-tab");
+  modalTabs.forEach((tab) => {
+    tab.classList.remove("active");
+    if (tab.dataset.status === "") {
+      tab.classList.add("active");
     }
-  }
+  });
 
-  /**
-   * View job details in modal
-   */
-  async function viewJobDetails(jobId) {
-    if (!jobId) {
-      console.error("No job ID provided");
-      return;
-    }
+  try {
+    // Load job details using dataBinder
+    const job = await window.dataBinder.fetchData(`/v1/jobs/${jobId}`);
 
-    currentJobId = jobId;
+    // Add formatted fields for display
+    job.id = jobId;
+    job.progress_formatted = `${Math.round(job.progress || 0)}%`;
 
-    // Reset pagination state
-    tasksCurrentPage = 0;
-    tasksSortColumn = "created_at";
-    tasksSortDirection = "desc";
+    // Format time fields
+    const startedAt = job.started_at ? new Date(job.started_at) : null;
+    const completedAt = job.completed_at ? new Date(job.completed_at) : null;
 
-    // Reset filter tabs to "All"
-    const modalTabs = document.querySelectorAll("#modalTaskFilterTabs .filter-tab");
-    modalTabs.forEach((tab) => {
-      tab.classList.remove("active");
-      if (tab.dataset.status === "") {
-        tab.classList.add("active");
-      }
-    });
+    job.started_at_formatted = startedAt ? startedAt.toLocaleString() : "-";
+    job.completed_at_formatted = completedAt ? completedAt.toLocaleString() : "-";
 
-    try {
-      // Load job details using dataBinder
-      const job = await window.dataBinder.fetchData(`/v1/jobs/${jobId}`);
+    // Format total duration (from database duration_seconds)
+    if (job.duration_seconds != null) {
+      const totalSeconds = job.duration_seconds;
+      const hours = Math.floor(totalSeconds / 3600);
+      const minutes = Math.floor((totalSeconds % 3600) / 60);
+      const seconds = totalSeconds % 60;
 
-      // Update modal content
-      document.getElementById("modal-job-id").textContent = jobId;
-      document.getElementById("modal-domain").textContent = job.domain || "-";
-      document.getElementById("modal-status").textContent = job.status || "-";
-      document.getElementById("modal-progress").textContent = `${Math.round(job.progress || 0)}%`;
-      document.getElementById("modal-total-tasks").textContent = job.total_tasks || 0;
-      document.getElementById("modal-completed-tasks").textContent = job.completed_tasks || 0;
-      document.getElementById("modal-failed-tasks").textContent = job.failed_tasks || 0;
-
-      // Format time fields
-      const startedAt = job.started_at ? new Date(job.started_at) : null;
-      const completedAt = job.completed_at ? new Date(job.completed_at) : null;
-
-      document.getElementById("modal-started-at").textContent = startedAt ? startedAt.toLocaleString() : "-";
-      document.getElementById("modal-completed-at").textContent = completedAt ? completedAt.toLocaleString() : "-";
-
-      // Use database-calculated values with proper formatting
-      let totalTimeText = "-";
-      let avgTimeText = "-";
-
-      // Format total duration (from database duration_seconds)
-      if (job.duration_seconds != null) {
-        const totalSeconds = job.duration_seconds;
-        const hours = Math.floor(totalSeconds / 3600);
-        const minutes = Math.floor((totalSeconds % 3600) / 60);
-        const seconds = totalSeconds % 60;
-
-        if (hours > 0) {
-          totalTimeText = `${hours}h ${minutes}m ${seconds}s`;
-        } else if (minutes > 0) {
-          totalTimeText = `${minutes}m ${seconds}s`;
-        } else {
-          totalTimeText = `${seconds}s`;
-        }
-      }
-
-      // Format average time per task (from database avg_time_per_task_seconds)
-      if (job.avg_time_per_task_seconds != null) {
-        const avgSeconds = parseFloat(job.avg_time_per_task_seconds);
-
-        if (avgSeconds >= 60) {
-          const avgMin = Math.floor(avgSeconds / 60);
-          const avgSec = (avgSeconds % 60).toFixed(2);
-          avgTimeText = `${avgMin}m ${avgSec}s`;
-        } else {
-          avgTimeText = `${avgSeconds.toFixed(2)}s`;
-        }
-      }
-
-      document.getElementById("modal-total-time").textContent = totalTimeText;
-      document.getElementById("modal-avg-time").textContent = avgTimeText;
-
-      // Display additional stats if available
-      if (job.stats) {
-        displayJobStats(job.stats);
-      }
-
-      // Show/hide action buttons
-      const restartBtn = document.getElementById("modal-restart-btn");
-      const cancelBtn = document.getElementById("modal-cancel-btn");
-
-      if (["completed", "failed", "cancelled"].includes(job.status)) {
-        restartBtn.style.display = "inline-block";
-        cancelBtn.style.display = "none";
-      } else if (["running", "pending"].includes(job.status)) {
-        restartBtn.style.display = "none";
-        cancelBtn.style.display = "inline-block";
+      if (hours > 0) {
+        job.duration_formatted = `${hours}h ${minutes}m ${seconds}s`;
+      } else if (minutes > 0) {
+        job.duration_formatted = `${minutes}m ${seconds}s`;
       } else {
-        restartBtn.style.display = "none";
-        cancelBtn.style.display = "none";
+        job.duration_formatted = `${seconds}s`;
       }
-
-      // Load tasks
-      await loadJobTasks(jobId);
-
-      // Show modal
-      showModal();
-    } catch (error) {
-      console.error("Failed to load job details:", error);
-      if (window.Sentry) {
-        window.Sentry.captureException(error, {
-          tags: { component: 'dashboard', action: 'view_job_details' }
-        });
-      }
-      showDashboardError("Failed to load job details. Please check your connection and try again.");
+    } else {
+      job.duration_formatted = "-";
     }
+
+    // Format average time per task (from database avg_time_per_task_seconds)
+    if (job.avg_time_per_task_seconds != null) {
+      const avgSeconds = parseFloat(job.avg_time_per_task_seconds);
+
+      if (avgSeconds >= 60) {
+        const avgMin = Math.floor(avgSeconds / 60);
+        const avgSec = (avgSeconds % 60).toFixed(2);
+        job.avg_time_formatted = `${avgMin}m ${avgSec}s`;
+      } else {
+        job.avg_time_formatted = `${avgSeconds.toFixed(2)}s`;
+      }
+    } else {
+      job.avg_time_formatted = "-";
+    }
+
+    // Format stats fields if they exist
+    if (job.stats) {
+      if (job.stats.cache_stats && job.stats.cache_stats.hit_rate) {
+        job.stats.cache_stats.hit_rate = `${job.stats.cache_stats.hit_rate}%`;
+      }
+      if (job.stats.cache_warming_effect && job.stats.cache_warming_effect.total_time_saved_seconds) {
+        job.stats.cache_warming_effect.total_time_saved_seconds = `${job.stats.cache_warming_effect.total_time_saved_seconds}s`;
+      }
+      if (job.stats.response_times) {
+        if (job.stats.response_times.avg_ms) {
+          job.stats.response_times.avg_ms = `${Math.round(job.stats.response_times.avg_ms)}ms`;
+        }
+        if (job.stats.response_times.p95_ms) {
+          job.stats.response_times.p95_ms = `${Math.round(job.stats.response_times.p95_ms)}ms`;
+        }
+      }
+    }
+
+    // Update all data-bound elements in the modal automatically
+    const modalContainer = document.getElementById("modal-job-data");
+    if (modalContainer && window.dataBinder) {
+      // Find all data-bb-bind elements within the modal
+      const bindElements = modalContainer.querySelectorAll('[data-bb-bind]');
+      bindElements.forEach(el => {
+        const path = el.getAttribute('data-bb-bind');
+        const value = getNestedValue(job, path);
+        if (value !== undefined && value !== null) {
+          el.textContent = value;
+        }
+      });
+    }
+
+    // Display additional stats if available
+    if (job.stats) {
+      displayJobStats(job.stats);
+    }
+
+    // Show/hide action buttons
+    const restartBtn = document.getElementById("modal-restart-btn");
+    const cancelBtn = document.getElementById("modal-cancel-btn");
+
+    if (["completed", "failed", "cancelled"].includes(job.status)) {
+      restartBtn.style.display = "inline-block";
+      cancelBtn.style.display = "none";
+    } else if (["running", "pending"].includes(job.status)) {
+      restartBtn.style.display = "none";
+      cancelBtn.style.display = "inline-block";
+    } else {
+      restartBtn.style.display = "none";
+      cancelBtn.style.display = "none";
+    }
+
+    // Load tasks
+    await loadJobTasks(jobId);
+
+    // Show modal
+    showModal();
+  } catch (error) {
+    console.error("Failed to load job details:", error);
+    if (window.Sentry) {
+      window.Sentry.captureException(error, {
+        tags: { component: 'dashboard', action: 'view_job_details' }
+      });
+    }
+    showDashboardError("Failed to load job details. Please check your connection and try again.");
+  }
+}
+
+/**
+ * Display job statistics from database
+ */
+function displayJobStats(stats) {
+  if (!stats) return;
+
+  // Find or create stats container in modal
+  let statsContainer = document.getElementById("modal-stats-container");
+  if (!statsContainer) {
+    // Create stats container after the job info grid
+    const infoGrid = document.querySelector(".bb-job-info-grid");
+    if (!infoGrid) return;
+
+    statsContainer = document.createElement("div");
+    statsContainer.id = "modal-stats-container";
+    statsContainer.className = "bb-modal-section";
+
+    // Insert after the parent of info grid
+    infoGrid.parentElement.insertAdjacentElement("afterend", statsContainer);
   }
 
-  /**
-   * Display job statistics from database
-   */
-  function displayJobStats(stats) {
-    if (!stats) return;
+  let statsHTML = '<div class="bb-modal-section-title">Performance Statistics</div>';
 
-    // Find or create stats container in modal
-    let statsContainer = document.getElementById("modal-stats-container");
-    if (!statsContainer) {
-      // Create stats container after the job info grid
-      const infoGrid = document.querySelector(".bb-job-info-grid");
-      if (!infoGrid) return;
+  // Slow Page Buckets
+  if (stats.slow_page_buckets) {
+    const buckets = stats.slow_page_buckets;
+    statsHTML += '<div style="margin-bottom: 24px;">';
+    statsHTML += '<h4 style="font-size: 14px; font-weight: 600; margin-bottom: 12px;">Response Time Distribution</h4>';
+    statsHTML += '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px;">';
 
-      statsContainer = document.createElement("div");
-      statsContainer.id = "modal-stats-container";
-      statsContainer.className = "bb-modal-section";
-
-      // Insert after the parent of info grid
-      infoGrid.parentElement.insertAdjacentElement("afterend", statsContainer);
-    }
-
-    let statsHTML = '<div class="bb-modal-section-title">Performance Statistics</div>';
-
-    // Slow Page Buckets
-    if (stats.slow_page_buckets) {
-      const buckets = stats.slow_page_buckets;
-      statsHTML += '<div style="margin-bottom: 24px;">';
-      statsHTML += '<h4 style="font-size: 14px; font-weight: 600; margin-bottom: 12px;">Response Time Distribution</h4>';
-      statsHTML += '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px;">';
-
-      if (buckets.over_10s > 0) {
-        statsHTML += `<div class="bb-info-item" style="background: #fee2e2;">
+    if (buckets.over_10s > 0) {
+      statsHTML += `<div class="bb-info-item" style="background: #fee2e2;">
         <div class="bb-info-label">Over 10s</div>
         <div class="bb-info-value" style="color: #dc2626;">${buckets.over_10s}</div>
       </div>`;
-      }
-      if (buckets['5_to_10s'] > 0) {
-        statsHTML += `<div class="bb-info-item" style="background: #fed7aa;">
+    }
+    if (buckets['5_to_10s'] > 0) {
+      statsHTML += `<div class="bb-info-item" style="background: #fed7aa;">
         <div class="bb-info-label">5-10s</div>
         <div class="bb-info-value" style="color: #ea580c;">${buckets['5_to_10s']}</div>
       </div>`;
-      }
-      if (buckets['3_to_5s'] > 0) {
-        statsHTML += `<div class="bb-info-item" style="background: #fef3c7;">
+    }
+    if (buckets['3_to_5s'] > 0) {
+      statsHTML += `<div class="bb-info-item" style="background: #fef3c7;">
         <div class="bb-info-label">3-5s</div>
         <div class="bb-info-value" style="color: #d97706;">${buckets['3_to_5s']}</div>
       </div>`;
-      }
-      if (buckets['2_to_3s'] > 0) {
-        statsHTML += `<div class="bb-info-item">
+    }
+    if (buckets['2_to_3s'] > 0) {
+      statsHTML += `<div class="bb-info-item">
         <div class="bb-info-label">2-3s</div>
         <div class="bb-info-value">${buckets['2_to_3s']}</div>
       </div>`;
-      }
-      if (buckets['1_5_to_2s'] > 0) {
-        statsHTML += `<div class="bb-info-item">
+    }
+    if (buckets['1_5_to_2s'] > 0) {
+      statsHTML += `<div class="bb-info-item">
         <div class="bb-info-label">1.5-2s</div>
         <div class="bb-info-value">${buckets['1_5_to_2s']}</div>
       </div>`;
-      }
-      if (buckets['1_to_1_5s'] > 0) {
-        statsHTML += `<div class="bb-info-item">
+    }
+    if (buckets['1_to_1_5s'] > 0) {
+      statsHTML += `<div class="bb-info-item">
         <div class="bb-info-label">1-1.5s</div>
         <div class="bb-info-value">${buckets['1_to_1_5s']}</div>
       </div>`;
-      }
-      statsHTML += `<div class="bb-info-item">
+    }
+    statsHTML += `<div class="bb-info-item">
       <div class="bb-info-label">500ms-1s</div>
       <div class="bb-info-value">${buckets['500ms_to_1s'] || 0}</div>
     </div>`;
-      statsHTML += `<div class="bb-info-item" style="background: #dcfce7;">
+    statsHTML += `<div class="bb-info-item" style="background: #dcfce7;">
       <div class="bb-info-label">Under 500ms</div>
       <div class="bb-info-value" style="color: #16a34a;">${buckets.under_500ms || 0}</div>
     </div>`;
 
-      // Show total slow pages if any
-      if (buckets.total_slow_over_3s > 0) {
-        statsHTML += `<div class="bb-info-item" style="grid-column: span 2; background: #fee2e2;">
+    // Show total slow pages if any
+    if (buckets.total_slow_over_3s > 0) {
+      statsHTML += `<div class="bb-info-item" style="grid-column: span 2; background: #fee2e2;">
         <div class="bb-info-label">Total Slow (>3s)</div>
         <div class="bb-info-value" style="color: #dc2626; font-size: 20px;">${buckets.total_slow_over_3s}</div>
       </div>`;
-      }
-
-      statsHTML += '</div></div>';
     }
 
-    // Cache Performance
-    if (stats.cache_stats || stats.cache_warming_effect) {
-      statsHTML += '<div style="margin-bottom: 24px;">';
-      statsHTML += '<h4 style="font-size: 14px; font-weight: 600; margin-bottom: 12px;">Cache Performance</h4>';
-      statsHTML += '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px;">';
+    statsHTML += '</div></div>';
+  }
 
-      if (stats.cache_stats) {
-        statsHTML += `<div class="bb-info-item">
+  // Cache Performance
+  if (stats.cache_stats || stats.cache_warming_effect) {
+    statsHTML += '<div style="margin-bottom: 24px;">';
+    statsHTML += '<h4 style="font-size: 14px; font-weight: 600; margin-bottom: 12px;">Cache Performance</h4>';
+    statsHTML += '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px;">';
+
+    if (stats.cache_stats) {
+      statsHTML += `<div class="bb-info-item">
         <div class="bb-info-label">Cache Hits</div>
         <div class="bb-info-value">${stats.cache_stats.hits}</div>
       </div>`;
-        statsHTML += `<div class="bb-info-item">
+      statsHTML += `<div class="bb-info-item">
         <div class="bb-info-label">Cache Misses</div>
         <div class="bb-info-value">${stats.cache_stats.misses}</div>
       </div>`;
-        if (stats.cache_stats.hit_rate) {
-          statsHTML += `<div class="bb-info-item" style="background: ${stats.cache_stats.hit_rate > 80 ? '#dcfce7' : '#f9fafb'};">
+      if (stats.cache_stats.hit_rate) {
+        statsHTML += `<div class="bb-info-item" style="background: ${stats.cache_stats.hit_rate > 80 ? '#dcfce7' : '#f9fafb'};">
           <div class="bb-info-label">Hit Rate</div>
           <div class="bb-info-value" style="color: ${stats.cache_stats.hit_rate > 80 ? '#16a34a' : '#1f2937'};">${stats.cache_stats.hit_rate}%</div>
         </div>`;
-        }
       }
+    }
 
-      if (stats.cache_warming_effect) {
-        const effect = stats.cache_warming_effect;
-        if (effect.total_time_saved_seconds > 0) {
-          statsHTML += `<div class="bb-info-item" style="background: #dbeafe;">
+    if (stats.cache_warming_effect) {
+      const effect = stats.cache_warming_effect;
+      if (effect.total_time_saved_seconds > 0) {
+        statsHTML += `<div class="bb-info-item" style="background: #dbeafe;">
           <div class="bb-info-label">Time Saved</div>
           <div class="bb-info-value" style="color: #1d4ed8;">${effect.total_time_saved_seconds}s</div>
         </div>`;
-        }
-        if (effect.avg_time_saved_per_page_ms > 0) {
-          statsHTML += `<div class="bb-info-item">
+      }
+      if (effect.avg_time_saved_per_page_ms > 0) {
+        statsHTML += `<div class="bb-info-item">
           <div class="bb-info-label">Avg Saved/Page</div>
           <div class="bb-info-value">${Math.round(effect.avg_time_saved_per_page_ms)}ms</div>
         </div>`;
-        }
-        if (effect.improvement_rate > 0) {
-          statsHTML += `<div class="bb-info-item">
+      }
+      if (effect.improvement_rate > 0) {
+        statsHTML += `<div class="bb-info-item">
           <div class="bb-info-label">Improvement Rate</div>
           <div class="bb-info-value">${effect.improvement_rate}%</div>
         </div>`;
-        }
       }
-
-      statsHTML += '</div></div>';
     }
 
-    // Response Time Percentiles
-    if (stats.response_times) {
-      const times = stats.response_times;
-      statsHTML += '<div style="margin-bottom: 24px;">';
-      statsHTML += '<h4 style="font-size: 14px; font-weight: 600; margin-bottom: 12px;">Response Time Percentiles</h4>';
-      statsHTML += '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px;">';
+    statsHTML += '</div></div>';
+  }
 
-      statsHTML += `<div class="bb-info-item">
+  // Response Time Percentiles
+  if (stats.response_times) {
+    const times = stats.response_times;
+    statsHTML += '<div style="margin-bottom: 24px;">';
+    statsHTML += '<h4 style="font-size: 14px; font-weight: 600; margin-bottom: 12px;">Response Time Percentiles</h4>';
+    statsHTML += '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px;">';
+
+    statsHTML += `<div class="bb-info-item">
       <div class="bb-info-label">P25</div>
       <div class="bb-info-value">${Math.round(times.p25_ms)}ms</div>
     </div>`;
-      statsHTML += `<div class="bb-info-item">
+    statsHTML += `<div class="bb-info-item">
       <div class="bb-info-label">Median</div>
       <div class="bb-info-value">${Math.round(times.median_ms)}ms</div>
     </div>`;
-      statsHTML += `<div class="bb-info-item">
+    statsHTML += `<div class="bb-info-item">
       <div class="bb-info-label">P75</div>
       <div class="bb-info-value">${Math.round(times.p75_ms)}ms</div>
     </div>`;
-      statsHTML += `<div class="bb-info-item">
+    statsHTML += `<div class="bb-info-item">
       <div class="bb-info-label">P90</div>
       <div class="bb-info-value">${Math.round(times.p90_ms)}ms</div>
     </div>`;
-      statsHTML += `<div class="bb-info-item">
+    statsHTML += `<div class="bb-info-item">
       <div class="bb-info-label">P95</div>
       <div class="bb-info-value">${Math.round(times.p95_ms)}ms</div>
     </div>`;
-      statsHTML += `<div class="bb-info-item">
+    statsHTML += `<div class="bb-info-item">
       <div class="bb-info-label">P99</div>
       <div class="bb-info-value">${Math.round(times.p99_ms)}ms</div>
     </div>`;
 
-      statsHTML += '</div></div>';
-    }
+    statsHTML += '</div></div>';
+  }
 
-    // Issues Found
-    if (stats.total_broken_links > 0 || stats.total_404s > 0 || stats.redirect_stats) {
-      statsHTML += '<div style="margin-bottom: 24px;">';
-      statsHTML += '<h4 style="font-size: 14px; font-weight: 600; margin-bottom: 12px;">Issues Found</h4>';
-      statsHTML += '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px;">';
+  // Issues Found
+  if (stats.total_broken_links > 0 || stats.total_404s > 0 || stats.redirect_stats) {
+    statsHTML += '<div style="margin-bottom: 24px;">';
+    statsHTML += '<h4 style="font-size: 14px; font-weight: 600; margin-bottom: 12px;">Issues Found</h4>';
+    statsHTML += '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px;">';
 
-      if (stats.total_broken_links > 0) {
-        statsHTML += `<div class="bb-info-item" style="background: #fee2e2;">
+    if (stats.total_broken_links > 0) {
+      statsHTML += `<div class="bb-info-item" style="background: #fee2e2;">
         <div class="bb-info-label">Broken Links</div>
         <div class="bb-info-value" style="color: #dc2626;">${stats.total_broken_links}</div>
       </div>`;
-      }
-      if (stats.total_404s > 0) {
-        statsHTML += `<div class="bb-info-item" style="background: #fee2e2;">
+    }
+    if (stats.total_404s > 0) {
+      statsHTML += `<div class="bb-info-item" style="background: #fee2e2;">
         <div class="bb-info-label">404 Errors</div>
         <div class="bb-info-value" style="color: #dc2626;">${stats.total_404s}</div>
       </div>`;
-      }
-      if (stats.total_server_errors > 0) {
-        statsHTML += `<div class="bb-info-item" style="background: #fee2e2;">
+    }
+    if (stats.total_server_errors > 0) {
+      statsHTML += `<div class="bb-info-item" style="background: #fee2e2;">
         <div class="bb-info-label">Server Errors</div>
         <div class="bb-info-value" style="color: #dc2626;">${stats.total_server_errors}</div>
       </div>`;
-      }
+    }
 
-      if (stats.redirect_stats && stats.redirect_stats.total > 0) {
-        statsHTML += `<div class="bb-info-item">
+    if (stats.redirect_stats && stats.redirect_stats.total > 0) {
+      statsHTML += `<div class="bb-info-item">
         <div class="bb-info-label">Total Redirects</div>
         <div class="bb-info-value">${stats.redirect_stats.total}</div>
       </div>`;
-        if (stats.redirect_stats['301_permanent'] > 0) {
-          statsHTML += `<div class="bb-info-item">
+      if (stats.redirect_stats['301_permanent'] > 0) {
+        statsHTML += `<div class="bb-info-item">
           <div class="bb-info-label">301 Permanent</div>
           <div class="bb-info-value">${stats.redirect_stats['301_permanent']}</div>
         </div>`;
-        }
-        if (stats.redirect_stats['302_temporary'] > 0) {
-          statsHTML += `<div class="bb-info-item">
+      }
+      if (stats.redirect_stats['302_temporary'] > 0) {
+        statsHTML += `<div class="bb-info-item">
           <div class="bb-info-label">302 Temporary</div>
           <div class="bb-info-value">${stats.redirect_stats['302_temporary']}</div>
         </div>`;
-        }
       }
-
-      statsHTML += '</div></div>';
     }
 
-    // Discovery Sources
-    if (stats.discovery_sources) {
-      const sources = stats.discovery_sources;
-      statsHTML += '<div style="margin-bottom: 24px;">';
-      statsHTML += '<h4 style="font-size: 14px; font-weight: 600; margin-bottom: 12px;">URL Discovery</h4>';
-      statsHTML += '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px;">';
+    statsHTML += '</div></div>';
+  }
 
-      if (sources.sitemap > 0) {
-        statsHTML += `<div class="bb-info-item">
+  // Discovery Sources
+  if (stats.discovery_sources) {
+    const sources = stats.discovery_sources;
+    statsHTML += '<div style="margin-bottom: 24px;">';
+    statsHTML += '<h4 style="font-size: 14px; font-weight: 600; margin-bottom: 12px;">URL Discovery</h4>';
+    statsHTML += '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px;">';
+
+    if (sources.sitemap > 0) {
+      statsHTML += `<div class="bb-info-item">
         <div class="bb-info-label">From Sitemap</div>
         <div class="bb-info-value">${sources.sitemap}</div>
       </div>`;
-      }
-      if (sources.discovered > 0) {
-        statsHTML += `<div class="bb-info-item">
+    }
+    if (sources.discovered > 0) {
+      statsHTML += `<div class="bb-info-item">
         <div class="bb-info-label">Discovered</div>
         <div class="bb-info-value">${sources.discovered}</div>
       </div>`;
-      }
-      if (sources.manual > 0) {
-        statsHTML += `<div class="bb-info-item">
+    }
+    if (sources.manual > 0) {
+      statsHTML += `<div class="bb-info-item">
         <div class="bb-info-label">Manual</div>
         <div class="bb-info-value">${sources.manual}</div>
       </div>`;
-      }
-
-      statsHTML += '</div></div>';
     }
 
-    statsContainer.innerHTML = statsHTML;
+    statsHTML += '</div></div>';
   }
 
-  /**
-   * Load job tasks for modal
-   */
-  async function loadJobTasks(jobId) {
-    const tasksContent = document.getElementById("tasksContent");
-    const pagination = document.getElementById("tasksPagination");
-    const limitSelect = document.getElementById("tasksLimit");
+  statsContainer.innerHTML = statsHTML;
+}
 
-    tasksContent.innerHTML = '<div class="bb-loading">Loading tasks...</div>';
-    pagination.style.display = "none";
+/**
+ * Load job tasks for modal
+ */
+async function loadJobTasks(jobId) {
+  const tasksContent = document.getElementById("tasksContent");
+  const pagination = document.getElementById("tasksPagination");
+  const limitSelect = document.getElementById("tasksLimit");
 
-    try {
-      const limit = limitSelect ? parseInt(limitSelect.value) : 50;
-      const offset = tasksCurrentPage * limit;
-      const sort = tasksSortDirection === "desc" ? "-" + tasksSortColumn : tasksSortColumn;
+  tasksContent.innerHTML = '<div class="bb-loading">Loading tasks...</div>';
+  pagination.style.display = "none";
 
-      // Get current status filter
-      const activeTab = document.querySelector("#modalTaskFilterTabs .filter-tab.active");
-      const statusFilter = activeTab ? activeTab.dataset.status : "";
+  try {
+    const limit = limitSelect ? parseInt(limitSelect.value) : 50;
+    const offset = tasksCurrentPage * limit;
+    const sort = tasksSortDirection === "desc" ? "-" + tasksSortColumn : tasksSortColumn;
 
-      // Build URL with status filter
-      let url = `/v1/jobs/${jobId}/tasks?limit=${limit}&offset=${offset}&sort=${sort}`;
-      if (statusFilter) {
-        url += `&status=${statusFilter}`;
+    // Get current status filter
+    const activeTab = document.querySelector("#modalTaskFilterTabs .filter-tab.active");
+    const statusFilter = activeTab ? activeTab.dataset.status : "";
+
+    // Build URL with status filter
+    let url = `/v1/jobs/${jobId}/tasks?limit=${limit}&offset=${offset}&sort=${sort}`;
+    if (statusFilter) {
+      url += `&status=${statusFilter}`;
+    }
+
+    const response = await window.dataBinder.fetchData(url);
+    const tasks = response.tasks || [];
+
+    if (tasks.length === 0 && tasksCurrentPage === 0) {
+      tasksContent.innerHTML = '<div class="bb-loading">No tasks found</div>';
+      return;
+    }
+
+    // Build sortable table header
+    const getSortIcon = (column) => {
+      if (tasksSortColumn === column) {
+        return tasksSortDirection === "desc" ? " ↓" : " ↑";
       }
+      return "";
+    };
 
-      const response = await window.dataBinder.fetchData(url);
-      const tasks = response.tasks || [];
-
-      if (tasks.length === 0 && tasksCurrentPage === 0) {
-        tasksContent.innerHTML = '<div class="bb-loading">No tasks found</div>';
-        return;
-      }
-
-      // Build sortable table header
-      const getSortIcon = (column) => {
-        if (tasksSortColumn === column) {
-          return tasksSortDirection === "desc" ? " ↓" : " ↑";
-        }
-        return "";
-      };
-
-      // Build tasks table with sortable headers
-      let tableHTML = `
+    // Build tasks table with sortable headers and data-binding support
+    let tableHTML = `
     <table class="bb-tasks-table">
       <thead>
         <tr>
@@ -545,223 +582,252 @@
           <th style="cursor: pointer;" onclick="sortTasks('status_code')">Status Code${getSortIcon("status_code")}</th>
         </tr>
       </thead>
-      <tbody>
+      <tbody id="tasks-table-body">
     `;
 
-      tasks.forEach((task) => {
-        const statusClass = `bb-status-${task.status}`;
+    tasks.forEach((task, index) => {
+      const statusClass = `bb-status-${task.status}`;
 
-        // Format second request data (just response time, no cache status)
-        const secondRequest = task.second_response_time ? `${task.second_response_time}ms` : "-";
+      // Format display values
+      task.response_time_formatted = task.response_time ? `${task.response_time}ms` : "-";
+      task.second_response_time_formatted = task.second_response_time ? `${task.second_response_time}ms` : "-";
+      task.cache_status_display = task.cache_status || "-";
+      task.status_code_display = task.status_code || "-";
+      task.error_tooltip = task.error ? task.error.substring(0, 50) + (task.error.length > 50 ? "..." : "") : "";
 
-        tableHTML += `
-        <tr>
-          <td><a href="${task.url}" target="_blank"><code class="bb-task-path">${task.path}</code></a></td>
-          <td><span class="bb-task-status ${statusClass}" ${task.error ? `title="${task.error.substring(0, 50)}${task.error.length > 50 ? "..." : ""}"` : ""}>${task.status}</span></td>
-          <td>${task.response_time ? `${task.response_time}ms` : "-"}</td>
-          <td ${task.error ? `title="${task.error.substring(0, 50)}${task.error.length > 50 ? "..." : ""}"` : ""}>${task.cache_status || "-"}</td>
-          <td>${secondRequest}</td>
-          <td>${task.status_code || "-"}</td>
+      tableHTML += `
+        <tr data-task-index="${index}">
+          <td><a href="${task.url}" target="_blank"><code class="bb-task-path" data-bb-bind="tasks.${index}.path">${task.path}</code></a></td>
+          <td><span class="bb-task-status ${statusClass}" data-bb-bind="tasks.${index}.status" ${task.error_tooltip ? `title="${task.error_tooltip}"` : ""}>${task.status}</span></td>
+          <td data-bb-bind="tasks.${index}.response_time_formatted">${task.response_time_formatted}</td>
+          <td data-bb-bind="tasks.${index}.cache_status_display" ${task.error_tooltip ? `title="${task.error_tooltip}"` : ""}>${task.cache_status_display}</td>
+          <td data-bb-bind="tasks.${index}.second_response_time_formatted">${task.second_response_time_formatted}</td>
+          <td data-bb-bind="tasks.${index}.status_code_display">${task.status_code_display}</td>
         </tr>
       `;
-      });
+    });
 
-      tableHTML += "</tbody></table>";
-      tasksContent.innerHTML = tableHTML;
+    tableHTML += "</tbody></table>";
+    tasksContent.innerHTML = tableHTML;
 
-      // Update pagination
-      if (response.pagination) {
-        const { total, has_next, has_prev } = response.pagination;
-        tasksHasNext = has_next;
-
-        const startItem = offset + 1;
-        const endItem = Math.min(offset + parseInt(limit), total);
-
-        document.getElementById("tasksPageInfo").textContent = `${startItem}-${endItem} of ${total} tasks`;
-
-        document.getElementById("prevTasksBtn").disabled = !has_prev;
-        document.getElementById("nextTasksBtn").disabled = !has_next;
-
-        pagination.style.display = total > limit ? "block" : "none";
-      }
-    } catch (error) {
-      console.error("Failed to load tasks:", error);
-      tasksContent.innerHTML = '<div class="bb-error">Failed to load tasks</div>';
-    }
-  }
-
-  /**
-   * Sort tasks table
-   */
-  function sortTasks(column) {
-    if (tasksSortColumn === column) {
-      tasksSortDirection = tasksSortDirection === "desc" ? "asc" : "desc";
+    // Store tasks data for potential data-binding updates
+    if (window.currentTasksData) {
+      window.currentTasksData.tasks = tasks;
     } else {
-      tasksSortColumn = column;
-      tasksSortDirection = "desc";
+      window.currentTasksData = { tasks };
     }
+
+    // Update pagination
+    if (response.pagination) {
+      const { total, has_next, has_prev } = response.pagination;
+      tasksHasNext = has_next;
+
+      const startItem = offset + 1;
+      const endItem = Math.min(offset + parseInt(limit), total);
+
+      document.getElementById("tasksPageInfo").textContent = `${startItem}-${endItem} of ${total} tasks`;
+
+      document.getElementById("prevTasksBtn").disabled = !has_prev;
+      document.getElementById("nextTasksBtn").disabled = !has_next;
+
+      pagination.style.display = total > limit ? "block" : "none";
+    }
+  } catch (error) {
+    console.error("Failed to load tasks:", error);
+    tasksContent.innerHTML = '<div class="bb-error">Failed to load tasks</div>';
+  }
+}
+
+/**
+ * Handle filter tab clicks
+ */
+function handleFilterTabClick(tab) {
+  // Remove active class from all tabs
+  const allTabs = document.querySelectorAll("#modalTaskFilterTabs .filter-tab");
+  allTabs.forEach(t => t.classList.remove("active"));
+
+  // Add active class to clicked tab
+  tab.classList.add("active");
+
+  // Reset page to 0 when filter changes
+  tasksCurrentPage = 0;
+
+  // Reload tasks with new filter
+  if (currentJobId) {
     loadJobTasks(currentJobId);
   }
+}
 
-  /**
-   * Show modal
-   */
-  function showModal() {
-    const modal = document.getElementById("jobDetailsModal");
-    if (modal) {
-      modal.style.display = "flex";
-    }
+/**
+ * Sort tasks table
+ */
+function sortTasks(column) {
+  if (tasksSortColumn === column) {
+    tasksSortDirection = tasksSortDirection === "desc" ? "asc" : "desc";
+  } else {
+    tasksSortColumn = column;
+    tasksSortDirection = "desc";
   }
+  loadJobTasks(currentJobId);
+}
 
-  /**
-   * Close modal
-   */
-  function closeModal() {
-    const modal = document.getElementById("jobDetailsModal");
-    if (modal) {
-      modal.style.display = "none";
-    }
-    currentJobId = null;
+/**
+ * Show modal
+ */
+function showModal() {
+  const modal = document.getElementById("jobDetailsModal");
+  if (modal) {
+    modal.style.display = "flex";
   }
+}
 
-  /**
-   * Restart job
-   */
-  async function restartJob(jobId) {
-    if (!jobId) return;
-
-    try {
-      await window.dataBinder.fetchData(`/v1/jobs/${jobId}/restart`, { method: "POST" });
-
-      // Close modal and refresh dashboard
-      closeModal();
-      if (window.dataBinder) {
-        window.dataBinder.refresh();
-      }
-    } catch (error) {
-      console.error("Failed to restart job:", error);
-      showDashboardError("Failed to restart job");
-    }
+/**
+ * Close modal
+ */
+function closeModal() {
+  const modal = document.getElementById("jobDetailsModal");
+  if (modal) {
+    modal.style.display = "none";
   }
+  currentJobId = null;
+}
 
-  /**
-   * Cancel job
-   */
-  async function cancelJob(jobId) {
-    if (!jobId) return;
+/**
+ * Restart job
+ */
+async function restartJob(jobId) {
+  if (!jobId) return;
 
-    try {
-      await window.dataBinder.fetchData(`/v1/jobs/${jobId}/cancel`, { method: "POST" });
+  try {
+    await window.dataBinder.fetchData(`/v1/jobs/${jobId}/restart`, { method: "POST" });
 
-      // Close modal and refresh dashboard
-      closeModal();
-      if (window.dataBinder) {
-        window.dataBinder.refresh();
-      }
-    } catch (error) {
-      console.error("Failed to cancel job:", error);
-      showDashboardError("Failed to cancel job");
-    }
-  }
-
-  /**
-   * Export tasks
-   */
-  async function exportTasks(type) {
-    if (!currentJobId) return;
-
-    try {
-      let url = `/v1/jobs/${currentJobId}/export`;
-      if (type !== "job") {
-        url += `?type=${type}`;
-      }
-
-      const response = await window.dataBinder.fetchData(url);
-
-      // Create download link
-      const blob = new Blob([JSON.stringify(response, null, 2)], { type: "application/json" });
-      const downloadUrl = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = downloadUrl;
-      a.download = `${currentJobId}-${type}.json`;
-      a.click();
-      URL.revokeObjectURL(downloadUrl);
-    } catch (error) {
-      console.error("Failed to export tasks:", error);
-      showDashboardError("Failed to export tasks");
-    }
-  }
-
-  /**
-   * Open create job modal
-   */
-  function openCreateJobModal() {
-    const modal = document.getElementById("createJobModal");
-    if (modal) {
-      modal.style.display = "flex";
-    }
-  }
-
-  /**
-   * Close create job modal
-   */
-  function closeCreateJobModal() {
-    const modal = document.getElementById("createJobModal");
-    if (modal) {
-      modal.style.display = "none";
-    }
-  }
-
-  /**
-   * Refresh slow pages section
-   */
-  async function refreshSlowPages() {
+    // Close modal and refresh dashboard
+    closeModal();
     if (window.dataBinder) {
-      // Trigger refresh of slow pages data
-      await window.dataBinder.refresh();
+      window.dataBinder.refresh();
     }
+  } catch (error) {
+    console.error("Failed to restart job:", error);
+    showDashboardError("Failed to restart job");
   }
+}
 
-  /**
-   * Refresh external redirects section
-   */
-  async function refreshExternalRedirects() {
+/**
+ * Cancel job
+ */
+async function cancelJob(jobId) {
+  if (!jobId) return;
+
+  try {
+    await window.dataBinder.fetchData(`/v1/jobs/${jobId}/cancel`, { method: "POST" });
+
+    // Close modal and refresh dashboard
+    closeModal();
     if (window.dataBinder) {
-      // Trigger refresh of redirects data
-      await window.dataBinder.refresh();
+      window.dataBinder.refresh();
     }
+  } catch (error) {
+    console.error("Failed to cancel job:", error);
+    showDashboardError("Failed to cancel job");
   }
+}
 
-  /**
-   * Show dashboard error
-   */
-  function showDashboardError(message) {
-    const errorNotification = document.createElement("div");
-    errorNotification.style.cssText = `
+/**
+ * Export tasks
+ */
+async function exportTasks(type) {
+  if (!currentJobId) return;
+
+  try {
+    let url = `/v1/jobs/${currentJobId}/export`;
+    if (type !== "job") {
+      url += `?type=${type}`;
+    }
+
+    const response = await window.dataBinder.fetchData(url);
+
+    // Create download link
+    const blob = new Blob([JSON.stringify(response, null, 2)], { type: "application/json" });
+    const downloadUrl = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = downloadUrl;
+    a.download = `${currentJobId}-${type}.json`;
+    a.click();
+    URL.revokeObjectURL(downloadUrl);
+  } catch (error) {
+    console.error("Failed to export tasks:", error);
+    showDashboardError("Failed to export tasks");
+  }
+}
+
+/**
+ * Open create job modal
+ */
+function openCreateJobModal() {
+  const modal = document.getElementById("createJobModal");
+  if (modal) {
+    modal.style.display = "flex";
+  }
+}
+
+/**
+ * Close create job modal
+ */
+function closeCreateJobModal() {
+  const modal = document.getElementById("createJobModal");
+  if (modal) {
+    modal.style.display = "none";
+  }
+}
+
+/**
+ * Refresh slow pages section
+ */
+async function refreshSlowPages() {
+  if (window.dataBinder) {
+    // Trigger refresh of slow pages data
+    await window.dataBinder.refresh();
+  }
+}
+
+/**
+ * Refresh external redirects section
+ */
+async function refreshExternalRedirects() {
+  if (window.dataBinder) {
+    // Trigger refresh of redirects data
+    await window.dataBinder.refresh();
+  }
+}
+
+/**
+ * Show dashboard error
+ */
+function showDashboardError(message) {
+  const errorNotification = document.createElement("div");
+  errorNotification.style.cssText = `
     position: fixed; top: 20px; right: 20px; z-index: 10000;
     background: #fee2e2; color: #dc2626; border: 1px solid #fecaca;
     padding: 16px 20px; border-radius: 8px; max-width: 400px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   `;
-    errorNotification.innerHTML = `
+  errorNotification.innerHTML = `
     <div style="display: flex; align-items: center; gap: 12px;">
       <span>⚠️</span>
       <span>${message}</span>
       <button onclick="this.parentElement.parentElement.remove()" style="background: none; border: none; font-size: 18px; cursor: pointer;">×</button>
     </div>
   `;
-    document.body.appendChild(errorNotification);
+  document.body.appendChild(errorNotification);
 
-    // Auto-remove after 5 seconds
-    setTimeout(() => errorNotification.remove(), 5000);
-  }
+  // Auto-remove after 5 seconds
+  setTimeout(() => errorNotification.remove(), 5000);
+}
 
-  // Export functions for global use
-  if (typeof window !== "undefined") {
-    window.setupDashboardActions = setupDashboardActions;
-    window.sortTasks = sortTasks;
-    window.viewJobDetails = viewJobDetails;
-    window.loadJobTasks = loadJobTasks;
-  }
-
-})();
+// Export functions for global use
+if (typeof window !== "undefined") {
+  window.setupDashboardActions = setupDashboardActions;
+  window.sortTasks = sortTasks;
+  window.viewJobDetails = viewJobDetails;
+  window.loadJobTasks = loadJobTasks;
+}

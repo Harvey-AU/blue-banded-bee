@@ -37,14 +37,16 @@ func TestGetJobIntegration(t *testing.T) {
 			setupSQL: func(mock sqlmock.Sqlmock) {
 				// Mock the job query that getJob performs
 				rows := sqlmock.NewRows([]string{
-					"total_tasks", "completed_tasks", "failed_tasks", "skipped_tasks", 
+					"total_tasks", "completed_tasks", "failed_tasks", "skipped_tasks",
 					"status", "domain", "created_at", "started_at", "completed_at",
+					"duration_seconds", "avg_time_per_task_seconds", "stats",
 				}).AddRow(
 					100, 85, 10, 5, // task counts
 					"completed", "example.com", // status and domain
 					time.Now(), time.Now().Add(-time.Hour), time.Now(), // timestamps
+					3600, 42.35, nil, // duration_seconds, avg_time_per_task_seconds, stats (nil for now)
 				)
-				
+
 				mock.ExpectQuery(`SELECT j\.total_tasks, j\.completed_tasks, j\.failed_tasks, j\.skipped_tasks, j\.status`).
 					WithArgs("job-123", "org-789").
 					WillReturnRows(rows)
@@ -54,11 +56,15 @@ func TestGetJobIntegration(t *testing.T) {
 				var response map[string]interface{}
 				err := json.Unmarshal(rec.Body.Bytes(), &response)
 				require.NoError(t, err)
-				
+
 				assert.Equal(t, "success", response["status"])
 				assert.Equal(t, "Job retrieved successfully", response["message"])
-				
-				data := response["data"].(map[string]interface{})
+
+				// Safely assert data exists before type assertion
+				require.NotNil(t, response["data"], "Response data should not be nil")
+				data, ok := response["data"].(map[string]interface{})
+				require.True(t, ok, "Response data should be a map")
+
 				assert.Equal(t, "job-123", data["id"])
 				assert.Equal(t, "example.com", data["domain"])
 				assert.Equal(t, "completed", data["status"])
@@ -68,6 +74,10 @@ func TestGetJobIntegration(t *testing.T) {
 				assert.Equal(t, float64(5), data["skipped_tasks"])
 				// Progress should be (85+10)/(100-5) = 95/95 = 100%
 				assert.Equal(t, float64(100), data["progress"])
+
+				// Check new fields exist
+				assert.NotNil(t, data["duration_seconds"])
+				assert.NotNil(t, data["avg_time_per_task_seconds"])
 			},
 		},
 		{
