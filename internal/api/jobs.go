@@ -48,6 +48,9 @@ func (h *Handler) JobHandler(w http.ResponseWriter, r *http.Request) {
 		case "tasks":
 			h.getJobTasks(w, r, jobID)
 			return
+		case "export":
+			h.exportJobTasks(w, r, jobID)
+			return
 		default:
 			NotFound(w, r, "Endpoint not found")
 			return
@@ -80,17 +83,21 @@ type CreateJobRequest struct {
 
 // JobResponse represents a job in API responses
 type JobResponse struct {
-	ID             string  `json:"id"`
-	Domain         string  `json:"domain"`
-	Status         string  `json:"status"`
-	TotalTasks     int     `json:"total_tasks"`
-	CompletedTasks int     `json:"completed_tasks"`
-	FailedTasks    int     `json:"failed_tasks"`
-	SkippedTasks   int     `json:"skipped_tasks"`
-	Progress       float64 `json:"progress"`
-	CreatedAt      string  `json:"created_at"`
-	StartedAt      *string `json:"started_at,omitempty"`
-	CompletedAt    *string `json:"completed_at,omitempty"`
+	ID             string                 `json:"id"`
+	Domain         string                 `json:"domain"`
+	Status         string                 `json:"status"`
+	TotalTasks     int                    `json:"total_tasks"`
+	CompletedTasks int                    `json:"completed_tasks"`
+	FailedTasks    int                    `json:"failed_tasks"`
+	SkippedTasks   int                    `json:"skipped_tasks"`
+	Progress       float64                `json:"progress"`
+	CreatedAt      string                 `json:"created_at"`
+	StartedAt      *string                `json:"started_at,omitempty"`
+	CompletedAt    *string                `json:"completed_at,omitempty"`
+	// Additional fields for dashboard
+	DurationSeconds       *int                   `json:"duration_seconds,omitempty"`
+	AvgTimePerTaskSeconds *float64               `json:"avg_time_per_task_seconds,omitempty"`
+	Stats                 map[string]interface{} `json:"stats,omitempty"`
 }
 
 // listJobs handles GET /v1/jobs
@@ -293,13 +300,21 @@ func (h *Handler) getJob(w http.ResponseWriter, r *http.Request, jobID string) {
 	var total, completed, failed, skipped int
 	var status, domain string
 	var createdAt, startedAt, completedAt sql.NullTime
+	var durationSeconds sql.NullInt64
+	var avgTimePerTaskSeconds sql.NullFloat64
+	var statsJSON []byte
 	err = h.DB.GetDB().QueryRowContext(r.Context(), `
 		SELECT j.total_tasks, j.completed_tasks, j.failed_tasks, j.skipped_tasks, j.status,
-		       d.name as domain, j.created_at, j.started_at, j.completed_at
+		       d.name as domain, j.created_at, j.started_at, j.completed_at,
+		       EXTRACT(EPOCH FROM (j.completed_at - j.started_at))::INTEGER as duration_seconds,
+		       CASE WHEN j.completed_tasks > 0 THEN
+		           EXTRACT(EPOCH FROM (j.completed_at - j.started_at)) / j.completed_tasks
+		       END as avg_time_per_task_seconds,
+		       j.stats
 		FROM jobs j
 		JOIN domains d ON j.domain_id = d.id
 		WHERE j.id = $1 AND j.organisation_id = $2
-	`, jobID, user.OrganisationID).Scan(&total, &completed, &failed, &skipped, &status, &domain, &createdAt, &startedAt, &completedAt)
+	`, jobID, user.OrganisationID).Scan(&total, &completed, &failed, &skipped, &status, &domain, &createdAt, &startedAt, &completedAt, &durationSeconds, &avgTimePerTaskSeconds, &statsJSON)
 
 	if err != nil {
 		NotFound(w, r, "Job not found")
@@ -321,6 +336,24 @@ func (h *Handler) getJob(w http.ResponseWriter, r *http.Request, jobID string) {
 		FailedTasks:    failed,
 		SkippedTasks:   skipped,
 		Progress:       progress,
+	}
+
+	// Add duration and average time if available
+	if durationSeconds.Valid {
+		duration := int(durationSeconds.Int64)
+		response.DurationSeconds = &duration
+	}
+	if avgTimePerTaskSeconds.Valid {
+		avgTime := avgTimePerTaskSeconds.Float64
+		response.AvgTimePerTaskSeconds = &avgTime
+	}
+
+	// Parse and add stats if available
+	if len(statsJSON) > 0 {
+		var stats map[string]interface{}
+		if err := json.Unmarshal(statsJSON, &stats); err == nil {
+			response.Stats = stats
+		}
 	}
 
 	// Add timestamps if available
@@ -798,4 +831,99 @@ func (h *Handler) getJobTasks(w http.ResponseWriter, r *http.Request, jobID stri
 	}
 
 	WriteSuccess(w, r, response, "Tasks retrieved successfully")
+}
+
+// exportJobTasks handles GET /v1/jobs/:id/export
+func (h *Handler) exportJobTasks(w http.ResponseWriter, r *http.Request, jobID string) {
+	// Validate user authentication and job access
+	user := h.validateJobAccess(w, r, jobID)
+	if user == nil {
+		return // validateJobAccess already wrote the error response
+	}
+
+	// Get export type from query parameter
+	exportType := r.URL.Query().Get("type")
+	if exportType == "" {
+		exportType = "job" // Default to all tasks
+	}
+
+	// Build query based on export type
+	var whereClause string
+	var args []interface{}
+	args = append(args, jobID)
+
+	switch exportType {
+	case "broken-links":
+		whereClause = " AND t.status = 'failed'"
+	case "slow-pages":
+		whereClause = " AND t.response_time > 3000"
+	case "job":
+		// Export all tasks
+		whereClause = ""
+	default:
+		BadRequest(w, r, fmt.Sprintf("Invalid export type: %s", exportType))
+		return
+	}
+
+	// Query tasks
+	query := fmt.Sprintf(`
+		SELECT
+			t.id, t.job_id, p.path, d.name as domain,
+			t.status, t.status_code, t.response_time, t.cache_status,
+			t.second_response_time, t.second_cache_status,
+			t.content_type, t.error, t.source_type, t.source_url,
+			t.created_at, t.started_at, t.completed_at, t.retry_count
+		FROM tasks t
+		JOIN pages p ON t.page_id = p.id
+		JOIN domains d ON p.domain_id = d.id
+		WHERE t.job_id = $1%s
+		ORDER BY t.created_at DESC
+		LIMIT 10000
+	`, whereClause)
+
+	rows, err := h.DB.GetDB().QueryContext(r.Context(), query, args...)
+	if err != nil {
+		log.Error().Err(err).Str("job_id", jobID).Msg("Failed to export tasks")
+		DatabaseError(w, r, err)
+		return
+	}
+	defer rows.Close()
+
+	// Format tasks from database rows
+	tasks, err := formatTasksFromRows(rows)
+	if err != nil {
+		log.Error().Err(err).Str("job_id", jobID).Msg("Failed to format export tasks")
+		DatabaseError(w, r, err)
+		return
+	}
+
+	// Get job details
+	var domain, status string
+	var createdAt time.Time
+	err = h.DB.GetDB().QueryRowContext(r.Context(), `
+		SELECT d.name, j.status, j.created_at
+		FROM jobs j
+		JOIN domains d ON j.domain_id = d.id
+		WHERE j.id = $1
+	`, jobID).Scan(&domain, &status, &createdAt)
+
+	if err != nil {
+		log.Error().Err(err).Str("job_id", jobID).Msg("Failed to get job details for export")
+		DatabaseError(w, r, err)
+		return
+	}
+
+	// Prepare export response
+	response := map[string]interface{}{
+		"job_id":      jobID,
+		"domain":      domain,
+		"status":      status,
+		"created_at":  createdAt.Format(time.RFC3339),
+		"export_type": exportType,
+		"export_time": time.Now().UTC().Format(time.RFC3339),
+		"total_tasks": len(tasks),
+		"tasks":       tasks,
+	}
+
+	WriteSuccess(w, r, response, fmt.Sprintf("Exported %d tasks for job %s", len(tasks), jobID))
 }
