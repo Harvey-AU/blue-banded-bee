@@ -34,6 +34,15 @@ function setupDashboardActions() {
     }
   });
 
+  // Set up filter tab click handlers for the modal
+  document.addEventListener("click", (e) => {
+    const filterTab = e.target.closest("#modalTaskFilterTabs .filter-tab");
+    if (filterTab) {
+      e.preventDefault();
+      handleFilterTabClick(filterTab);
+    }
+  });
+
   console.log("Dashboard action handlers initialized");
 }
 
@@ -626,6 +635,26 @@ async function loadJobTasks(jobId) {
   } catch (error) {
     console.error("Failed to load tasks:", error);
     tasksContent.innerHTML = '<div class="bb-error">Failed to load tasks</div>';
+  }
+}
+
+/**
+ * Handle filter tab clicks
+ */
+function handleFilterTabClick(tab) {
+  // Remove active class from all tabs
+  const allTabs = document.querySelectorAll("#modalTaskFilterTabs .filter-tab");
+  allTabs.forEach(t => t.classList.remove("active"));
+
+  // Add active class to clicked tab
+  tab.classList.add("active");
+
+  // Reset page to 0 when filter changes
+  tasksCurrentPage = 0;
+
+  // Reload tasks with new filter
+  if (currentJobId) {
+    loadJobTasks(currentJobId);
   }
 }
 

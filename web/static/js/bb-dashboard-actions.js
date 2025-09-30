@@ -14,6 +14,13 @@
   let tasksHasNext = false;
 
   /**
+   * Helper function to get nested value from object
+   */
+  function getNestedValue(obj, path) {
+    return path.split('.').reduce((current, key) => current?.[key], obj);
+  }
+
+  /**
    * Setup action handlers for dashboard
    * This sets up event delegation for all bb-action attributes
    */
@@ -27,6 +34,15 @@
           e.preventDefault();
           handleDashboardAction(action, element);
         }
+      }
+    });
+
+    // Set up filter tab click handlers for the modal
+    document.addEventListener("click", (e) => {
+      const filterTab = e.target.closest("#modalTaskFilterTabs .filter-tab");
+      if (filterTab) {
+        e.preventDefault();
+        handleFilterTabClick(filterTab);
       }
     });
 
@@ -154,25 +170,16 @@
       // Load job details using dataBinder
       const job = await window.dataBinder.fetchData(`/v1/jobs/${jobId}`);
 
-      // Update modal content
-      document.getElementById("modal-job-id").textContent = jobId;
-      document.getElementById("modal-domain").textContent = job.domain || "-";
-      document.getElementById("modal-status").textContent = job.status || "-";
-      document.getElementById("modal-progress").textContent = `${Math.round(job.progress || 0)}%`;
-      document.getElementById("modal-total-tasks").textContent = job.total_tasks || 0;
-      document.getElementById("modal-completed-tasks").textContent = job.completed_tasks || 0;
-      document.getElementById("modal-failed-tasks").textContent = job.failed_tasks || 0;
+      // Add formatted fields for display
+      job.id = jobId;
+      job.progress_formatted = `${Math.round(job.progress || 0)}%`;
 
       // Format time fields
       const startedAt = job.started_at ? new Date(job.started_at) : null;
       const completedAt = job.completed_at ? new Date(job.completed_at) : null;
 
-      document.getElementById("modal-started-at").textContent = startedAt ? startedAt.toLocaleString() : "-";
-      document.getElementById("modal-completed-at").textContent = completedAt ? completedAt.toLocaleString() : "-";
-
-      // Use database-calculated values with proper formatting
-      let totalTimeText = "-";
-      let avgTimeText = "-";
+      job.started_at_formatted = startedAt ? startedAt.toLocaleString() : "-";
+      job.completed_at_formatted = completedAt ? completedAt.toLocaleString() : "-";
 
       // Format total duration (from database duration_seconds)
       if (job.duration_seconds != null) {
@@ -182,12 +189,14 @@
         const seconds = totalSeconds % 60;
 
         if (hours > 0) {
-          totalTimeText = `${hours}h ${minutes}m ${seconds}s`;
+          job.duration_formatted = `${hours}h ${minutes}m ${seconds}s`;
         } else if (minutes > 0) {
-          totalTimeText = `${minutes}m ${seconds}s`;
+          job.duration_formatted = `${minutes}m ${seconds}s`;
         } else {
-          totalTimeText = `${seconds}s`;
+          job.duration_formatted = `${seconds}s`;
         }
+      } else {
+        job.duration_formatted = "-";
       }
 
       // Format average time per task (from database avg_time_per_task_seconds)
@@ -197,14 +206,45 @@
         if (avgSeconds >= 60) {
           const avgMin = Math.floor(avgSeconds / 60);
           const avgSec = (avgSeconds % 60).toFixed(2);
-          avgTimeText = `${avgMin}m ${avgSec}s`;
+          job.avg_time_formatted = `${avgMin}m ${avgSec}s`;
         } else {
-          avgTimeText = `${avgSeconds.toFixed(2)}s`;
+          job.avg_time_formatted = `${avgSeconds.toFixed(2)}s`;
+        }
+      } else {
+        job.avg_time_formatted = "-";
+      }
+
+      // Format stats fields if they exist
+      if (job.stats) {
+        if (job.stats.cache_stats && job.stats.cache_stats.hit_rate) {
+          job.stats.cache_stats.hit_rate = `${job.stats.cache_stats.hit_rate}%`;
+        }
+        if (job.stats.cache_warming_effect && job.stats.cache_warming_effect.total_time_saved_seconds) {
+          job.stats.cache_warming_effect.total_time_saved_seconds = `${job.stats.cache_warming_effect.total_time_saved_seconds}s`;
+        }
+        if (job.stats.response_times) {
+          if (job.stats.response_times.avg_ms) {
+            job.stats.response_times.avg_ms = `${Math.round(job.stats.response_times.avg_ms)}ms`;
+          }
+          if (job.stats.response_times.p95_ms) {
+            job.stats.response_times.p95_ms = `${Math.round(job.stats.response_times.p95_ms)}ms`;
+          }
         }
       }
 
-      document.getElementById("modal-total-time").textContent = totalTimeText;
-      document.getElementById("modal-avg-time").textContent = avgTimeText;
+      // Update all data-bound elements in the modal automatically
+      const modalContainer = document.getElementById("modal-job-data");
+      if (modalContainer && window.dataBinder) {
+        // Find all data-bb-bind elements within the modal
+        const bindElements = modalContainer.querySelectorAll('[data-bb-bind]');
+        bindElements.forEach(el => {
+          const path = el.getAttribute('data-bb-bind');
+          const value = getNestedValue(job, path);
+          if (value !== undefined && value !== null) {
+            el.textContent = value;
+          }
+        });
+      }
 
       // Display additional stats if available
       if (job.stats) {
@@ -532,7 +572,7 @@
         return "";
       };
 
-      // Build tasks table with sortable headers
+      // Build tasks table with sortable headers and data-binding support
       let tableHTML = `
     <table class="bb-tasks-table">
       <thead>
@@ -545,29 +585,40 @@
           <th style="cursor: pointer;" onclick="sortTasks('status_code')">Status Code${getSortIcon("status_code")}</th>
         </tr>
       </thead>
-      <tbody>
+      <tbody id="tasks-table-body">
     `;
 
-      tasks.forEach((task) => {
+      tasks.forEach((task, index) => {
         const statusClass = `bb-status-${task.status}`;
 
-        // Format second request data (just response time, no cache status)
-        const secondRequest = task.second_response_time ? `${task.second_response_time}ms` : "-";
+        // Format display values
+        task.response_time_formatted = task.response_time ? `${task.response_time}ms` : "-";
+        task.second_response_time_formatted = task.second_response_time ? `${task.second_response_time}ms` : "-";
+        task.cache_status_display = task.cache_status || "-";
+        task.status_code_display = task.status_code || "-";
+        task.error_tooltip = task.error ? task.error.substring(0, 50) + (task.error.length > 50 ? "..." : "") : "";
 
         tableHTML += `
-        <tr>
-          <td><a href="${task.url}" target="_blank"><code class="bb-task-path">${task.path}</code></a></td>
-          <td><span class="bb-task-status ${statusClass}" ${task.error ? `title="${task.error.substring(0, 50)}${task.error.length > 50 ? "..." : ""}"` : ""}>${task.status}</span></td>
-          <td>${task.response_time ? `${task.response_time}ms` : "-"}</td>
-          <td ${task.error ? `title="${task.error.substring(0, 50)}${task.error.length > 50 ? "..." : ""}"` : ""}>${task.cache_status || "-"}</td>
-          <td>${secondRequest}</td>
-          <td>${task.status_code || "-"}</td>
+        <tr data-task-index="${index}">
+          <td><a href="${task.url}" target="_blank"><code class="bb-task-path" data-bb-bind="tasks.${index}.path">${task.path}</code></a></td>
+          <td><span class="bb-task-status ${statusClass}" data-bb-bind="tasks.${index}.status" ${task.error_tooltip ? `title="${task.error_tooltip}"` : ""}>${task.status}</span></td>
+          <td data-bb-bind="tasks.${index}.response_time_formatted">${task.response_time_formatted}</td>
+          <td data-bb-bind="tasks.${index}.cache_status_display" ${task.error_tooltip ? `title="${task.error_tooltip}"` : ""}>${task.cache_status_display}</td>
+          <td data-bb-bind="tasks.${index}.second_response_time_formatted">${task.second_response_time_formatted}</td>
+          <td data-bb-bind="tasks.${index}.status_code_display">${task.status_code_display}</td>
         </tr>
       `;
       });
 
       tableHTML += "</tbody></table>";
       tasksContent.innerHTML = tableHTML;
+
+      // Store tasks data for potential data-binding updates
+      if (window.currentTasksData) {
+        window.currentTasksData.tasks = tasks;
+      } else {
+        window.currentTasksData = { tasks };
+      }
 
       // Update pagination
       if (response.pagination) {
@@ -587,6 +638,26 @@
     } catch (error) {
       console.error("Failed to load tasks:", error);
       tasksContent.innerHTML = '<div class="bb-error">Failed to load tasks</div>';
+    }
+  }
+
+  /**
+   * Handle filter tab clicks
+   */
+  function handleFilterTabClick(tab) {
+    // Remove active class from all tabs
+    const allTabs = document.querySelectorAll("#modalTaskFilterTabs .filter-tab");
+    allTabs.forEach(t => t.classList.remove("active"));
+
+    // Add active class to clicked tab
+    tab.classList.add("active");
+
+    // Reset page to 0 when filter changes
+    tasksCurrentPage = 0;
+
+    // Reload tasks with new filter
+    if (currentJobId) {
+      loadJobTasks(currentJobId);
     }
   }
 
