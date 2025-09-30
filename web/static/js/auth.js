@@ -1,7 +1,7 @@
 /**
  * Blue Banded Bee Unified Authentication System
  * Core authentication logic extracted from dashboard.html
- * 
+ *
  * Handles:
  * - Supabase authentication integration
  * - Email/password authentication
@@ -12,6 +12,7 @@
  * - Auth state management
  * - Modal management
  * - Pending domain flow
+ * - Sentry error tracking for auth failures
  */
 
 // Supabase configuration
@@ -65,6 +66,11 @@ async function loadAuthModal() {
     }, 10);
   } catch (error) {
     console.error("Failed to load auth modal:", error);
+    if (window.Sentry) {
+      window.Sentry.captureException(error, {
+        tags: { component: 'auth', action: 'load_modal' }
+      });
+    }
   }
 }
 
@@ -132,6 +138,11 @@ async function handleAuthCallback() {
     return false;
   } catch (error) {
     console.error("Auth callback processing error:", error);
+    if (window.Sentry) {
+      window.Sentry.captureException(error, {
+        tags: { component: 'auth', action: 'process_callback' }
+      });
+    }
     return false;
   }
 }
@@ -183,6 +194,12 @@ async function registerUserWithBackend(user) {
     return true;
   } catch (error) {
     console.error("Failed to register user with backend:", error);
+    if (window.Sentry) {
+      window.Sentry.captureException(error, {
+        tags: { component: 'auth', action: 'backend_registration' },
+        level: 'error'
+      });
+    }
     return false;
   }
 }
@@ -426,6 +443,12 @@ async function handleEmailLogin(event) {
     await handlePendingDomain();
   } catch (error) {
     console.error("Email login error:", error);
+    if (window.Sentry) {
+      window.Sentry.captureException(error, {
+        tags: { component: 'auth', action: 'email_login' },
+        level: 'warning'
+      });
+    }
     showAuthError(error.message || "Login failed. Please check your credentials.");
   } finally {
     hideAuthLoading();
@@ -490,6 +513,12 @@ async function handleEmailSignup(event) {
     }
   } catch (error) {
     console.error("Email signup error:", error);
+    if (window.Sentry) {
+      window.Sentry.captureException(error, {
+        tags: { component: 'auth', action: 'email_signup' },
+        level: 'warning'
+      });
+    }
     showAuthError(error.message || "Signup failed. Please try again.");
   } finally {
     hideAuthLoading();
@@ -548,6 +577,12 @@ async function handleSocialLogin(provider) {
     // OAuth will redirect, so no need to handle success here
   } catch (error) {
     console.error("Social login error:", error);
+    if (window.Sentry) {
+      window.Sentry.captureException(error, {
+        tags: { component: 'auth', action: 'social_login', provider: provider },
+        level: 'warning'
+      });
+    }
     showAuthError(error.message || `${provider} login failed.`);
     hideAuthLoading();
   }
