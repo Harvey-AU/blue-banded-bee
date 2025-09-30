@@ -73,6 +73,12 @@ All endpoints under `/v1/` require authentication except:
 - `/health`
 - `/v1/auth/*` (registration, session validation)
 
+### Future: Platform Authentication
+- Planning to support Shopify and Webflow app authentication
+- Will use organisation-based data isolation
+- Each platform store/site maps to an organisation
+- See `/plans/platform-auth-architecture.md` for details
+
 ## Standard Response Format
 
 ### Success Response

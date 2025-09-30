@@ -341,6 +341,39 @@ Organisation model implemented:
   - [ ] `/crawl help` - Show available commands
   - [ ] Simple installation and setup documentation
 
+## ⚪ Stage 4.5: Platform Integration Foundation
+
+### 🔴 Multi-Platform Authentication Architecture
+
+- [ ] **Organisation-Based Data Model**
+  - [ ] Implement many-to-many user-organisation relationships
+  - [ ] Add store/site entity linked to single organisation
+  - [ ] Create organisation context switching logic
+  - [ ] Implement data isolation between organisations
+- [ ] **Platform Authentication Adapters**
+  - [ ] Shopify OAuth and session management
+  - [ ] Webflow OAuth and site context handling
+  - [ ] Map platform stores/sites to BB organisations
+  - [ ] Progressive account creation for platform users
+- [ ] **Unified User System**
+  - [ ] Single BB user accessible via multiple platforms
+  - [ ] Platform context determines visible organisation
+  - [ ] Shadow accounts for store staff (auto-created on action)
+  - [ ] Account claiming and upgrade flows
+
+### 🔴 Platform SDK Development
+
+- [ ] **Core JavaScript SDK**
+  - [ ] Extract data-binding system into standalone library
+  - [ ] Create platform-agnostic API client
+  - [ ] Implement organisation context management
+  - [ ] Add platform-specific authentication handlers
+- [ ] **Platform Adapters**
+  - [ ] Shopify app bridge integration
+  - [ ] Webflow designer API integration
+  - [ ] Platform-specific UI component adapters
+  - [ ] Event handling for platform contexts
+
 ## ⚪ Stage 5: Subscriptions & Monetisation
 
 ### ✅ Testing & Quality

@@ -22,10 +22,10 @@ Automatically warm site caches (especially built for [Webflow](https://www.webfl
 
 ### Integration & Monitoring
 
-- 🔌 Webflow webhook for automatic warming on publish
 - 📊 Real-time dashboard with job progress tracking
 - 🔐 Multi-tenant architecture with Supabase Auth
-- 🎨 Template-based integration for Webflow
+- 🎨 Template-based integration (ready for Webflow/Shopify apps)
+- 🔌 API-first architecture for platform integrations
 
 ## Quick Start
 
@@ -55,9 +55,9 @@ One command starts everything:
 
 ## Status
 
-**Stage 4 of 7** ✅ Complete - Core Authentication & MVP Interface
+**Stage 4 of 7** - Core Authentication & MVP Interface (mostly complete)
 
-Currently working on Stage 5: Subscriptions & Monetisation. See [roadmap](./Roadmap.md) for details.
+Next up: Platform integrations (Webflow/Shopify apps) and subscriptions. See [roadmap](./Roadmap.md) for details.
 
 ## Tech Stack
 
