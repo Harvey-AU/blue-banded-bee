@@ -326,6 +326,12 @@ Blue Banded Bee uses a template-based approach that allows flexible HTML layouts
 - **Protected Endpoints**: Requires authentication for job operations
 - **Row Level Security**: PostgreSQL RLS policies for data isolation
 
+### Planned: Multi-Platform Support
+- Extending beyond direct dashboard access
+- Shopify and Webflow apps will authenticate through their platforms
+- Organisation-based context switching
+- See `/plans/platform-auth-architecture.md` for architectural approach
+
 ### Rate Limiting
 - **IP-Based Limiting**: Token bucket algorithm (5 requests/second default)
 - **Client IP Detection**: Supports X-Forwarded-For headers for proxies
