@@ -746,18 +746,80 @@ async function exportTasks(type) {
 
     const response = await window.dataBinder.fetchData(url);
 
+    // Convert JSON to CSV
+    const csv = convertToCSV(response);
+
     // Create download link
-    const blob = new Blob([JSON.stringify(response, null, 2)], { type: "application/json" });
+    const blob = new Blob([csv], { type: "text/csv" });
     const downloadUrl = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = downloadUrl;
-    a.download = `${currentJobId}-${type}.json`;
+    a.download = `${currentJobId}-${type}.csv`;
     a.click();
     URL.revokeObjectURL(downloadUrl);
   } catch (error) {
     console.error("Failed to export tasks:", error);
     showDashboardError("Failed to export tasks");
   }
+}
+
+/**
+ * Convert JSON data to CSV format
+ */
+function convertToCSV(data) {
+  // Handle different response formats
+  let tasks = [];
+  if (Array.isArray(data)) {
+    tasks = data;
+  } else if (data.tasks && Array.isArray(data.tasks)) {
+    tasks = data.tasks;
+  } else {
+    throw new Error("Unexpected data format");
+  }
+
+  if (tasks.length === 0) {
+    return "No data to export";
+  }
+
+  // Get all unique keys from all tasks
+  const headers = new Set();
+  tasks.forEach(task => {
+    Object.keys(task).forEach(key => headers.add(key));
+  });
+  const headerArray = Array.from(headers);
+
+  // Build CSV header row
+  const csvRows = [];
+  csvRows.push(headerArray.map(h => escapeCSVValue(h)).join(","));
+
+  // Build CSV data rows
+  tasks.forEach(task => {
+    const row = headerArray.map(header => {
+      const value = task[header];
+      return escapeCSVValue(value);
+    });
+    csvRows.push(row.join(","));
+  });
+
+  return csvRows.join("\n");
+}
+
+/**
+ * Escape CSV values properly
+ */
+function escapeCSVValue(value) {
+  if (value === null || value === undefined) {
+    return "";
+  }
+
+  const stringValue = String(value);
+
+  // If value contains comma, quote, or newline, wrap in quotes and escape internal quotes
+  if (stringValue.includes(",") || stringValue.includes('"') || stringValue.includes("\n")) {
+    return '"' + stringValue.replace(/"/g, '""') + '"';
+  }
+
+  return stringValue;
 }
 
 /**
