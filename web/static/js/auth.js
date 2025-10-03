@@ -841,40 +841,35 @@ function setupPasswordStrength() {
  * Setup authentication event handlers
  */
 function setupAuthHandlers() {
-  const loginBtn = document.getElementById("loginBtn");
-  const logoutBtn = document.getElementById("logoutBtn");
+  console.log("Setting up auth handlers...");
 
-  console.log("Setting up auth handlers - loginBtn:", !!loginBtn, "logoutBtn:", !!logoutBtn);
+  // Use event delegation for main auth buttons that might not exist initially
+  document.addEventListener("click", (e) => {
+    const target = e.target;
 
-  // Show auth modal instead of immediate OAuth
-  if (loginBtn) {
-    loginBtn.addEventListener("click", () => {
+    // Handle login button clicks (various IDs)
+    if (target.id === "loginBtn" || target.id === "showLoginBtn") {
+      e.preventDefault();
+      console.log("Login button clicked via delegation");
       showAuthModal();
-    });
-  }
+      showAuthForm("login");
+    }
 
-  // Logout functionality
-  if (logoutBtn) {
-    console.log("Attaching logout handler to button");
-    logoutBtn.addEventListener("click", async () => {
-      console.log("Logout button clicked");
-      try {
-        const { error } = await supabase.auth.signOut();
-        if (error) {
-          console.error("Logout error:", error);
-          alert("Logout failed. Please try again.");
-        } else {
-          console.log("Logout successful");
-          window.location.reload();
-        }
-      } catch (error) {
-        console.error("Logout error:", error);
-        alert("Logout failed. Please try again.");
-      }
-    });
-  } else {
-    console.log("Logout button not found when setupAuthHandlers called");
-  }
+    // Handle signup button clicks
+    if (target.id === "showSignupBtn") {
+      e.preventDefault();
+      console.log("Signup button clicked via delegation");
+      showAuthModal();
+      showAuthForm("signup");
+    }
+
+    // Handle logout button clicks
+    if (target.id === "logoutBtn") {
+      e.preventDefault();
+      console.log("Logout button clicked via delegation");
+      handleLogout();
+    }
+  });
 
   // Set up modal form handlers
   setupAuthModalHandlers();
@@ -884,34 +879,60 @@ function setupAuthHandlers() {
 }
 
 /**
+ * Handle logout action
+ */
+async function handleLogout() {
+  try {
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      console.error("Logout error:", error);
+      alert("Logout failed. Please try again.");
+    } else {
+      console.log("Logout successful");
+      window.location.reload();
+    }
+  } catch (error) {
+    console.error("Logout error:", error);
+    alert("Logout failed. Please try again.");
+  }
+}
+
+/**
  * Setup authentication modal form handlers
  */
 function setupAuthModalHandlers() {
-  // Email login form
-  const emailLoginForm = document.getElementById("emailLoginForm");
-  if (emailLoginForm) {
-    emailLoginForm.addEventListener("submit", handleEmailLogin);
-  }
+  // Use event delegation to handle form submissions even when modal loads later
+  document.addEventListener("submit", (e) => {
+    if (e.target.id === "emailLoginForm") {
+      e.preventDefault();
+      handleEmailLogin(e);
+    } else if (e.target.id === "emailSignupForm") {
+      e.preventDefault();
+      handleEmailSignup(e);
+    } else if (e.target.id === "passwordResetForm") {
+      e.preventDefault();
+      handlePasswordReset(e);
+    }
+  });
 
-  // Email signup form
-  const emailSignupForm = document.getElementById("emailSignupForm");
-  if (emailSignupForm) {
-    emailSignupForm.addEventListener("submit", handleEmailSignup);
-  }
-
-  // Password reset form
-  const passwordResetForm = document.getElementById("passwordResetForm");
-  if (passwordResetForm) {
-    passwordResetForm.addEventListener("submit", handlePasswordReset);
-  }
-
-  // Social login buttons
-  const socialButtons = document.querySelectorAll(".bb-social-btn[data-provider]");
-  socialButtons.forEach((button) => {
-    button.addEventListener("click", (e) => {
-      const provider = e.currentTarget.dataset.provider;
+  // Use event delegation for social login buttons
+  document.addEventListener("click", (e) => {
+    if (e.target.closest(".bb-social-btn[data-provider]")) {
+      e.preventDefault();
+      const button = e.target.closest(".bb-social-btn[data-provider]");
+      const provider = button.dataset.provider;
       handleSocialLogin(provider);
-    });
+    }
+
+    // Handle modal close
+    if (e.target.closest(".bb-modal-close") || e.target.id === "authModal") {
+      if (e.target.id === "authModal" && e.target === e.currentTarget) {
+        // Only close if clicking the backdrop
+        closeAuthModal();
+      } else if (e.target.closest(".bb-modal-close")) {
+        closeAuthModal();
+      }
+    }
   });
 }
 
@@ -919,23 +940,9 @@ function setupAuthModalHandlers() {
  * Setup login page handlers (for homepage integration)
  */
 function setupLoginPageHandlers() {
-  // Login page buttons
-  const showLoginBtn = document.getElementById("showLoginBtn");
-  const showSignupBtn = document.getElementById("showSignupBtn");
-
-  if (showLoginBtn) {
-    showLoginBtn.addEventListener("click", () => {
-      showAuthModal();
-      showAuthForm("login");
-    });
-  }
-
-  if (showSignupBtn) {
-    showSignupBtn.addEventListener("click", () => {
-      showAuthModal();
-      showAuthForm("signup");
-    });
-  }
+  // This is now handled by event delegation in setupAuthHandlers()
+  // No need for direct element handlers since they're covered by delegation
+  console.log("Login page handlers setup - using event delegation");
 }
 
 // CAPTCHA success callback (global function)
@@ -973,7 +980,8 @@ if (typeof module !== 'undefined' && module.exports) {
     setupPasswordStrength,
     setupAuthHandlers,
     setupAuthModalHandlers,
-    setupLoginPageHandlers
+    setupLoginPageHandlers,
+    handleLogout
   };
 } else {
   // Browser environment - make functions globally available
@@ -1000,7 +1008,8 @@ if (typeof module !== 'undefined' && module.exports) {
     setupPasswordStrength,
     setupAuthHandlers,
     setupAuthModalHandlers,
-    setupLoginPageHandlers
+    setupLoginPageHandlers,
+    handleLogout
   };
 
   // Also make individual functions available globally for backward compatibility
@@ -1027,6 +1036,7 @@ if (typeof module !== 'undefined' && module.exports) {
   window.setupAuthHandlers = setupAuthHandlers;
   window.setupAuthModalHandlers = setupAuthModalHandlers;
   window.setupLoginPageHandlers = setupLoginPageHandlers;
+  window.handleLogout = handleLogout;
   
   // Convenience functions for common auth form actions
   window.showLoginForm = () => showAuthForm("login");
