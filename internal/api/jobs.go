@@ -856,7 +856,8 @@ func (h *Handler) exportJobTasks(w http.ResponseWriter, r *http.Request, jobID s
 	case "broken-links":
 		whereClause = " AND t.status = 'failed'"
 	case "slow-pages":
-		whereClause = " AND t.response_time > 3000"
+		// Use second_response_time (cache HIT) when available, fallback to response_time
+		whereClause = " AND COALESCE(t.second_response_time, t.response_time) > 3000"
 	case "job":
 		// Export all tasks
 		whereClause = ""
