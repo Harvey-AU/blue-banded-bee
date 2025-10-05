@@ -8,6 +8,60 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Multiple version updates may occur on the same date, each with its own version number.
 Each version represents a distinct set of changes, even if released on the same day.
 
+## [Unreleased]
+
+## [0.6.0] – 2025-10-05
+
+### Fixed
+
+- **Database Security**: Resolved ambiguous column references in RLS policies
+  - Fixed "column reference 'id' is ambiguous" errors preventing job cleanup
+  - Qualified all column names with table names in RLS policy subqueries
+  - Jobs no longer stuck in pending status due to SQL errors
+- **Performance Metrics**: Corrected P95 response time display showing as NaN
+  - Removed premature string conversion causing Math.round() to fail
+  - P95 metric now displays correctly in job modal
+- **Dashboard Authentication**: Fixed event delegation issues
+  - Resolved authentication errors when accessing dashboard endpoints
+  - Improved token handling and validation
+
+### Changed
+
+- **Failed Pages Metric**: Replaced broken links metric with failed pages count
+  - Now counts tasks with `status='failed'` instead of HTTP 4xx codes only
+  - Captures crawler errors that don't set HTTP status codes
+  - Renamed `total_broken_links` to `total_failed_pages` for clarity
+  - Removed `total_404s` metric entirely (redundant with failed pages)
+  - Updated dashboard UI labels and export button text
+  - Statistics calculation version bumped to v3.0
+- **Performance Statistics**: Switched to second response time for cache effectiveness
+  - Job statistics now use `second_response_time` (after cache warming) for all metrics
+  - Provides more accurate representation of user-facing performance
+  - First response time still tracked separately for cache improvement analysis
+
+### Added
+
+- **Metadata Tooltips**: Added help information for all job metrics
+  - Info icon (🛈) displays contextual help for each statistic
+  - Covers cache metrics, response times, failed pages, slow pages, redirects
+  - Improved user understanding of dashboard metrics
+- **CSP Headers**: Enhanced Content Security Policy for analytics
+  - Added Google Tag Manager (GTM) to script-src and img-src
+  - Added Google Analytics domains to connect-src
+  - Added gstatic.com for Google services resources
+- **CSV Export**: Improved data export functionality
+  - Export buttons now correctly labelled (Failed Pages, Slow Pages)
+  - CSV exports match updated metric definitions
+
+### Improved
+
+- **Dashboard Data Binding**: Enhanced attribute system for cleaner HTML
+  - Updated from `data-*` to `bbb-*` attributes across dashboard
+  - Backwards compatibility maintained during transition
+  - Improved separation of concerns in frontend code
+- **External Links**: Dashboard preview links in PR comments open in new tabs
+  - Added `target="_blank"` for better user experience
+
 ## [Unreleased] – 2025-08-18
 
 ### Enhanced
