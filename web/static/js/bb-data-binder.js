@@ -890,15 +890,33 @@ class BBDataBinder {
       }
     });
 
-    // Handle attribute bindings (new format: bbb-id, bbb-href, etc.)
-    const shorthandAttrs = ['id', 'href', 'src', 'alt', 'title', 'placeholder', 'value'];
-    instance.querySelectorAll('[bbb-id], [bbb-href], [bbb-src], [bbb-alt], [bbb-title], [bbb-placeholder], [bbb-value]').forEach(el => {
-      shorthandAttrs.forEach(attrName => {
-        if (el.hasAttribute(`bbb-${attrName}`)) {
-          const template = el.getAttribute(`bbb-${attrName}`);
+    // Handle data binding attributes (bbb-href, bbb-src, etc.) - these set actual HTML attributes
+    const bindingAttrs = ['href', 'src', 'alt', 'title', 'placeholder'];
+    bindingAttrs.forEach(attrName => {
+      const bbbAttr = `bbb-${attrName}`;
+      instance.querySelectorAll(`[${bbbAttr}]`).forEach(el => {
+        if (el.hasAttribute(bbbAttr)) {
+          const template = el.getAttribute(bbbAttr);
           const value = this.processTemplate(template, data);
           if (value !== null) {
+            // Set the actual HTML attribute
             el.setAttribute(attrName, value);
+          }
+        }
+      });
+    });
+
+    // Handle data storage attributes (bbb-id, bbb-value) - these stay as bbb-* with interpolated values
+    const storageAttrs = ['id', 'value'];
+    storageAttrs.forEach(attrName => {
+      const bbbAttr = `bbb-${attrName}`;
+      instance.querySelectorAll(`[${bbbAttr}]`).forEach(el => {
+        if (el.hasAttribute(bbbAttr)) {
+          const template = el.getAttribute(bbbAttr);
+          const value = this.processTemplate(template, data);
+          if (value !== null) {
+            // Keep as bbb-* attribute with interpolated value for handlers to read
+            el.setAttribute(bbbAttr, value);
           }
         }
       });

@@ -217,6 +217,16 @@ function setupDashboardRefresh(dataBinder) {
       }
 
       console.log("Dashboard data refreshed", { stats: data.stats, jobs: processedJobs.length });
+
+      // Load metrics metadata after successful data load (only once)
+      if (window.metricsMetadata && !window.metricsMetadata.isLoaded()) {
+        try {
+          await window.metricsMetadata.load();
+          window.metricsMetadata.initializeInfoIcons();
+        } catch (metadataError) {
+          console.warn("Failed to load metrics metadata (non-critical):", metadataError);
+        }
+      }
     } catch (error) {
       console.error("Dashboard refresh failed:", error);
 

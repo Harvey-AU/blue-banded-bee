@@ -205,27 +205,5 @@ class MetricsMetadata {
 // Create global instance
 window.metricsMetadata = new MetricsMetadata();
 
-// Auto-initialize after dataBinder is ready
-// Note: dataBinder initialization happens in dashboard, so we wait for it
-if (document.readyState === 'loading') {
-  document.addEventListener("DOMContentLoaded", initMetadata);
-} else {
-  // DOM already loaded, wait a bit for dataBinder
-  setTimeout(initMetadata, 100);
-}
-
-async function initMetadata() {
-  // Wait for dataBinder to exist
-  let retries = 0;
-  while (!window.dataBinder && retries < 50) {
-    await new Promise(resolve => setTimeout(resolve, 100));
-    retries++;
-  }
-
-  if (window.dataBinder) {
-    await window.metricsMetadata.load();
-    window.metricsMetadata.initializeInfoIcons();
-  } else {
-    console.warn('dataBinder not available, skipping metadata initialization');
-  }
-}
+// Metadata will be loaded by dashboard after authentication
+// No auto-initialization - auth is required for /v1/metadata/metrics endpoint
