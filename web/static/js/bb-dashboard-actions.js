@@ -769,7 +769,11 @@ async function exportTasks(type) {
 function convertToCSV(data) {
   // Handle different response formats
   let tasks = [];
-  if (Array.isArray(data)) {
+
+  // Check for standardised API response format
+  if (data.data && data.data.tasks && Array.isArray(data.data.tasks)) {
+    tasks = data.data.tasks;
+  } else if (Array.isArray(data)) {
     tasks = data;
   } else if (data.tasks && Array.isArray(data.tasks)) {
     tasks = data.tasks;
