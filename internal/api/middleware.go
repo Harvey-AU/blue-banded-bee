@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -135,7 +136,22 @@ func SecurityHeadersMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("X-Frame-Options", "DENY")
-		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com https://unpkg.com https://cdn.jsdelivr.net https://www.googletagmanager.com https://browser.sentry-cdn.com; style-src 'self' 'unsafe-inline'; connect-src 'self' https://challenges.cloudflare.com https://cdn.jsdelivr.net https://www.google-analytics.com https://auth.bluebandedbee.co https://*.sentry.io https://*.ingest.sentry.io https://browser.sentry-cdn.com; frame-src https://challenges.cloudflare.com; img-src 'self' data: https://www.google-analytics.com;")
+
+		// Content Security Policy
+		csp := `
+			default-src 'self';
+			script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com https://unpkg.com https://cdn.jsdelivr.net https://www.googletagmanager.com https://browser.sentry-cdn.com;
+			style-src 'self' 'unsafe-inline';
+			connect-src 'self' https://challenges.cloudflare.com https://cdn.jsdelivr.net https://www.google-analytics.com https://www.googletagmanager.com https://analytics.google.com https://auth.bluebandedbee.co https://*.sentry.io https://*.ingest.sentry.io https://browser.sentry-cdn.com;
+			frame-src https://challenges.cloudflare.com;
+			img-src 'self' data: https://www.google-analytics.com https://www.googletagmanager.com https://ssl.gstatic.com;
+			font-src 'self' data:;
+			object-src 'none';
+			base-uri 'self';
+			form-action 'self';
+		`
+		w.Header().Set("Content-Security-Policy", strings.ReplaceAll(csp, "\n", " "))
+
 		w.Header().Set("Strict-Transport-Security", "max-age=63072000; includeSubDomains")
 		next.ServeHTTP(w, r)
 	})
