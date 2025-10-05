@@ -677,7 +677,7 @@ func setupRLSPolicies(db *sql.DB) error {
 		CREATE POLICY "Users can access own organisation" ON organisations
 		FOR ALL USING (
 			id IN (
-				SELECT organisation_id FROM users WHERE id = auth.uid()
+				SELECT organisation_id FROM users WHERE users.id = auth.uid()
 			)
 		);
 	`)
@@ -691,7 +691,7 @@ func setupRLSPolicies(db *sql.DB) error {
 		CREATE POLICY "Organisation members can access jobs" ON jobs
 		FOR ALL USING (
 			organisation_id IN (
-				SELECT organisation_id FROM users WHERE id = auth.uid()
+				SELECT organisation_id FROM users WHERE users.id = auth.uid()
 			)
 		);
 	`)
@@ -705,8 +705,8 @@ func setupRLSPolicies(db *sql.DB) error {
 		CREATE POLICY "Organisation members can access tasks" ON tasks
 		FOR ALL USING (
 			job_id IN (
-				SELECT id FROM jobs WHERE organisation_id IN (
-					SELECT organisation_id FROM users WHERE id = auth.uid()
+				SELECT jobs.id FROM jobs WHERE organisation_id IN (
+					SELECT organisation_id FROM users WHERE users.id = auth.uid()
 				)
 			)
 		);

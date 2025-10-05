@@ -1543,19 +1543,19 @@
         <div class="bb-modal-section">
           <div class="bb-job-info-grid" id="modal-job-data">
             <div class="bb-info-item">
-              <div class="bb-info-label">Job ID</div>
+              <div class="bb-info-label" bbb-help="job_id">Job ID</div>
               <div class="bb-info-value" bbb-text="id" style="font-family: monospace; font-size: 12px">-</div>
             </div>
             <div class="bb-info-item">
-              <div class="bb-info-label">Domain</div>
+              <div class="bb-info-label" bbb-help="job_domain">Domain</div>
               <div class="bb-info-value" bbb-text="domain">-</div>
             </div>
             <div class="bb-info-item">
-              <div class="bb-info-label">Status</div>
+              <div class="bb-info-label" bbb-help="job_status">Status</div>
               <div class="bb-info-value" bbb-text="status">-</div>
             </div>
             <div class="bb-info-item">
-              <div class="bb-info-label">Progress</div>
+              <div class="bb-info-label" bbb-help="job_progress">Progress</div>
               <div class="bb-info-value" bbb-text="progress_formatted">-</div>
             </div>
             <div class="bb-info-item">
@@ -1563,27 +1563,27 @@
               <div class="bb-info-value" bbb-text="total_tasks">-</div>
             </div>
             <div class="bb-info-item">
-              <div class="bb-info-label">Completed</div>
+              <div class="bb-info-label" bbb-help="completed_tasks">Completed</div>
               <div class="bb-info-value" bbb-text="completed_tasks">-</div>
             </div>
             <div class="bb-info-item">
-              <div class="bb-info-label">Failed</div>
+              <div class="bb-info-label" bbb-help="failed_tasks">Failed</div>
               <div class="bb-info-value" bbb-text="failed_tasks">-</div>
             </div>
             <div class="bb-info-item">
-              <div class="bb-info-label">Start Time</div>
+              <div class="bb-info-label" bbb-help="start_time">Start Time</div>
               <div class="bb-info-value" bbb-text="started_at_formatted">-</div>
             </div>
             <div class="bb-info-item">
-              <div class="bb-info-label">End Time</div>
+              <div class="bb-info-label" bbb-help="end_time">End Time</div>
               <div class="bb-info-value" bbb-text="completed_at_formatted">-</div>
             </div>
             <div class="bb-info-item">
-              <div class="bb-info-label">Total Time</div>
+              <div class="bb-info-label" bbb-help="total_time">Total Time</div>
               <div class="bb-info-value" bbb-text="duration_formatted">-</div>
             </div>
             <div class="bb-info-item">
-              <div class="bb-info-label">Avg Time/Task</div>
+              <div class="bb-info-label" bbb-help="avg_time_per_task">Avg Time/Task</div>
               <div class="bb-info-value" bbb-text="avg_time_formatted">-</div>
             </div>
 
@@ -1593,19 +1593,15 @@
               <div class="bb-info-value" bbb-text="stats.cache_stats.hit_rate">-</div>
             </div>
             <div class="bb-info-item">
-              <div class="bb-info-label">Time Saved</div>
+              <div class="bb-info-label" bbb-help="time_saved">Time Saved</div>
               <div class="bb-info-value" bbb-text="stats.cache_warming_effect.total_time_saved_seconds">-</div>
             </div>
             <div class="bb-info-item">
-              <div class="bb-info-label">Broken Links</div>
-              <div class="bb-info-value" bbb-text="stats.total_broken_links">-</div>
+              <div class="bb-info-label" bbb-help="total_failed_pages">Failed Pages</div>
+              <div class="bb-info-value" bbb-text="stats.total_failed_pages">-</div>
             </div>
             <div class="bb-info-item">
-              <div class="bb-info-label">404 Errors</div>
-              <div class="bb-info-value" bbb-text="stats.total_404s">-</div>
-            </div>
-            <div class="bb-info-item">
-              <div class="bb-info-label">Slow Pages (>3s)</div>
+              <div class="bb-info-label" bbb-help="slow_pages_over_3s">Slow Pages (>3s)</div>
               <div class="bb-info-value" bbb-text="stats.slow_page_buckets.total_slow_over_3s">-</div>
             </div>
             <div class="bb-info-item">
@@ -1634,7 +1630,7 @@
                 <button class="bb-btn bb-btn-secondary" style="font-size: 12px" bbb-action="toggle-export-menu">Export ▼</button>
                 <div class="bb-dropdown-menu" id="exportDropdownMenu">
                   <button class="bb-dropdown-item" bbb-action="export-job">All Tasks</button>
-                  <button class="bb-dropdown-item" bbb-action="export-broken-links">Broken Links</button>
+                  <button class="bb-dropdown-item" bbb-action="export-broken-links">Failed Pages</button>
                   <button class="bb-dropdown-item" bbb-action="export-slow-pages">Slow Pages</button>
                 </div>
               </div>
