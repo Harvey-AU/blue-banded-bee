@@ -589,7 +589,7 @@ async function loadJobTasks(jobId) {
       const statusClass = `bb-status-${task.status}`;
 
       // Format display values
-      task.response_time_formatted = task.response_time ? `${task.response_time}ms` : "-";
+      task.response_time_formatted = task.second_response_time ? `${task.second_response_time}ms` : (task.response_time ? `${task.response_time}ms` : "-");
       task.second_response_time_formatted = task.second_response_time ? `${task.second_response_time}ms` : "-";
       task.cache_status_display = task.cache_status || "-";
       task.status_code_display = task.status_code || "-";
