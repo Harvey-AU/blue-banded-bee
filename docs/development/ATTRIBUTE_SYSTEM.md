@@ -44,8 +44,8 @@ Blue Banded Bee uses a custom attribute system for data binding, templating, and
 
 ### Metadata & Help
 
-| Attribute     | Purpose                | Example                                       | Behavior                                      |
-| ------------- | ---------------------- | --------------------------------------------- | --------------------------------------------- |
+| Attribute     | Purpose                | Example                                       | Behavior                                     |
+| ------------- | ---------------------- | --------------------------------------------- | -------------------------------------------- |
 | `bbb-help`    | Reference metadata key | `<div bbb-help="cache_hit_rate">Label</div>`  | Adds (i) icon with tooltip from metadata API |
 | `bbb-tooltip` | Direct tooltip text    | `<div bbb-tooltip="Helpful text">Label</div>` | Adds (i) icon with literal text              |
 
@@ -112,9 +112,7 @@ Blue Banded Bee uses a custom attribute system for data binding, templating, and
 
 <!-- Conditional visibility -->
 <button bbb-show="status=completed,failed">Restart</button>
-<div bbb-if="stats.failed_jobs>0">
-  <span bbb-text="stats.failed_jobs">0</span> jobs failed
-</div>
+<div bbb-if="stats.failed_jobs>0"><span bbb-text="stats.failed_jobs">0</span> jobs failed</div>
 ```
 
 ### Interactions
@@ -164,6 +162,7 @@ Blue Banded Bee uses a custom attribute system for data binding, templating, and
 See `/dashboard.html` for a full working implementation showing all patterns in context.
 
 Key sections to review:
+
 - **Stats cards** (lines ~1407-1419) - Data binding with `bbb-text`
 - **Job cards** (lines ~1436-1467) - Templates with `bbb-template`
 - **Task table** - Dynamic table generation (rendered in JavaScript)
@@ -188,16 +187,19 @@ Key sections to review:
 ### Migration Strategy
 
 **Phase 1: Update JavaScript** (backwards compatible)
+
 - Modify `bb-data-binder.js` to recognise both old and new attributes
 - Update `bb-dashboard-actions.js` action delegation
 - Update `bb-metadata.js` to use `bbb-help`
 
 **Phase 2: Migrate HTML** (incremental)
+
 - Update one section at a time
 - Test thoroughly after each section
 - Keep old attributes working during migration
 
 **Phase 3: Cleanup** (once migration complete)
+
 - Remove old attribute support from JavaScript
 - Verify all HTML uses new attributes
 
@@ -214,17 +216,20 @@ Key sections to review:
 ## Technical Details
 
 **Performance:**
+
 - Metadata loaded once on page load and cached
 - Templates cloned efficiently using `cloneNode()`
 - Event delegation for actions (single listener per page)
 - Minimal DOM queries using attribute selectors
 
 **Browser Support:**
+
 - Modern browsers with ES6 support
 - Custom attributes work in all browsers
 - Graceful degradation: Static content shows without JavaScript
 
 **Resources:**
+
 - Implementation: `/web/static/js/bb-data-binder.js`
 - Actions: `/web/static/js/bb-dashboard-actions.js`
 - Metadata: `/web/static/js/bb-metadata.js`, `/internal/api/metadata.go`

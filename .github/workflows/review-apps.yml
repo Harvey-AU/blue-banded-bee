@@ -78,10 +78,10 @@ jobs:
               repo: context.repo.repo,
               body: `🐝 **Review App Deployed!**
               
-              **Test URL**: ${appUrl}
+              <a href="${appUrl}" target="_blank">Homepage: ${appUrl}</a>
               
               📋 **Test Features:**
-              1. Visit dashboard: ${appUrl}/dashboard
+              1. <a href="${appUrl}/dashboard" target="_blank">Visit dashboard: ${appUrl}/dashboard</a>
               2. Test authentication and job creation flow
               3. Check dashboard functionality
               4. Verify database operations work correctly

@@ -223,14 +223,6 @@ async function viewJobDetails(jobId) {
       if (job.stats.cache_warming_effect && job.stats.cache_warming_effect.total_time_saved_seconds) {
         job.stats.cache_warming_effect.total_time_saved_seconds = `${job.stats.cache_warming_effect.total_time_saved_seconds}s`;
       }
-      if (job.stats.response_times) {
-        if (job.stats.response_times.avg_ms) {
-          job.stats.response_times.avg_ms = `${Math.round(job.stats.response_times.avg_ms)}ms`;
-        }
-        if (job.stats.response_times.p95_ms) {
-          job.stats.response_times.p95_ms = `${Math.round(job.stats.response_times.p95_ms)}ms`;
-        }
-      }
     }
 
     // Update all data-bound elements in the modal automatically
@@ -316,53 +308,53 @@ function displayJobStats(stats) {
 
     if (buckets.over_10s > 0) {
       statsHTML += `<div class="bb-info-item" style="background: #fee2e2;">
-        <div class="bb-info-label">Over 10s</div>
+        <div class="bb-info-label" bbb-help="response_time_over_10s">Over 10s</div>
         <div class="bb-info-value" style="color: #dc2626;">${buckets.over_10s}</div>
       </div>`;
     }
     if (buckets['5_to_10s'] > 0) {
       statsHTML += `<div class="bb-info-item" style="background: #fed7aa;">
-        <div class="bb-info-label">5-10s</div>
+        <div class="bb-info-label" bbb-help="response_time_5_to_10s">5-10s</div>
         <div class="bb-info-value" style="color: #ea580c;">${buckets['5_to_10s']}</div>
       </div>`;
     }
     if (buckets['3_to_5s'] > 0) {
       statsHTML += `<div class="bb-info-item" style="background: #fef3c7;">
-        <div class="bb-info-label">3-5s</div>
+        <div class="bb-info-label" bbb-help="response_time_3_to_5s">3-5s</div>
         <div class="bb-info-value" style="color: #d97706;">${buckets['3_to_5s']}</div>
       </div>`;
     }
     if (buckets['2_to_3s'] > 0) {
       statsHTML += `<div class="bb-info-item">
-        <div class="bb-info-label">2-3s</div>
+        <div class="bb-info-label" bbb-help="response_time_2_to_3s">2-3s</div>
         <div class="bb-info-value">${buckets['2_to_3s']}</div>
       </div>`;
     }
     if (buckets['1_5_to_2s'] > 0) {
       statsHTML += `<div class="bb-info-item">
-        <div class="bb-info-label">1.5-2s</div>
+        <div class="bb-info-label" bbb-help="response_time_1_5_to_2s">1.5-2s</div>
         <div class="bb-info-value">${buckets['1_5_to_2s']}</div>
       </div>`;
     }
     if (buckets['1_to_1_5s'] > 0) {
       statsHTML += `<div class="bb-info-item">
-        <div class="bb-info-label">1-1.5s</div>
+        <div class="bb-info-label" bbb-help="response_time_1_to_1_5s">1-1.5s</div>
         <div class="bb-info-value">${buckets['1_to_1_5s']}</div>
       </div>`;
     }
     statsHTML += `<div class="bb-info-item">
-      <div class="bb-info-label">500ms-1s</div>
+      <div class="bb-info-label" bbb-help="response_time_500ms_to_1s">500ms-1s</div>
       <div class="bb-info-value">${buckets['500ms_to_1s'] || 0}</div>
     </div>`;
     statsHTML += `<div class="bb-info-item" style="background: #dcfce7;">
-      <div class="bb-info-label">Under 500ms</div>
+      <div class="bb-info-label" bbb-help="response_time_under_500ms">Under 500ms</div>
       <div class="bb-info-value" style="color: #16a34a;">${buckets.under_500ms || 0}</div>
     </div>`;
 
     // Show total slow pages if any
     if (buckets.total_slow_over_3s > 0) {
       statsHTML += `<div class="bb-info-item" style="grid-column: span 2; background: #fee2e2;">
-        <div class="bb-info-label">Total Slow (>3s)</div>
+        <div class="bb-info-label" bbb-help="total_slow_over_3s">Total Slow (>3s)</div>
         <div class="bb-info-value" style="color: #dc2626; font-size: 20px;">${buckets.total_slow_over_3s}</div>
       </div>`;
     }
@@ -378,16 +370,16 @@ function displayJobStats(stats) {
 
     if (stats.cache_stats) {
       statsHTML += `<div class="bb-info-item">
-        <div class="bb-info-label">Cache Hits</div>
+        <div class="bb-info-label" bbb-help="cache_hits">Cache Hits</div>
         <div class="bb-info-value">${stats.cache_stats.hits}</div>
       </div>`;
       statsHTML += `<div class="bb-info-item">
-        <div class="bb-info-label">Cache Misses</div>
+        <div class="bb-info-label" bbb-help="cache_misses">Cache Misses</div>
         <div class="bb-info-value">${stats.cache_stats.misses}</div>
       </div>`;
       if (stats.cache_stats.hit_rate) {
         statsHTML += `<div class="bb-info-item" style="background: ${stats.cache_stats.hit_rate > 80 ? '#dcfce7' : '#f9fafb'};">
-          <div class="bb-info-label">Hit Rate</div>
+          <div class="bb-info-label" bbb-help="hit_rate">Hit Rate</div>
           <div class="bb-info-value" style="color: ${stats.cache_stats.hit_rate > 80 ? '#16a34a' : '#1f2937'};">${stats.cache_stats.hit_rate}%</div>
         </div>`;
       }
@@ -397,19 +389,19 @@ function displayJobStats(stats) {
       const effect = stats.cache_warming_effect;
       if (effect.total_time_saved_seconds > 0) {
         statsHTML += `<div class="bb-info-item" style="background: #dbeafe;">
-          <div class="bb-info-label">Time Saved</div>
+          <div class="bb-info-label" bbb-help="time_saved">Time Saved</div>
           <div class="bb-info-value" style="color: #1d4ed8;">${effect.total_time_saved_seconds}s</div>
         </div>`;
       }
       if (effect.avg_time_saved_per_page_ms > 0) {
         statsHTML += `<div class="bb-info-item">
-          <div class="bb-info-label">Avg Saved/Page</div>
+          <div class="bb-info-label" bbb-help="avg_saved_per_page">Avg Saved/Page</div>
           <div class="bb-info-value">${Math.round(effect.avg_time_saved_per_page_ms)}ms</div>
         </div>`;
       }
       if (effect.improvement_rate > 0) {
         statsHTML += `<div class="bb-info-item">
-          <div class="bb-info-label">Improvement Rate</div>
+          <div class="bb-info-label" bbb-help="improvement_rate">Improvement Rate</div>
           <div class="bb-info-value">${effect.improvement_rate}%</div>
         </div>`;
       }
@@ -426,27 +418,27 @@ function displayJobStats(stats) {
     statsHTML += '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px;">';
 
     statsHTML += `<div class="bb-info-item">
-      <div class="bb-info-label">P25</div>
+      <div class="bb-info-label" bbb-help="p25">P25</div>
       <div class="bb-info-value">${Math.round(times.p25_ms)}ms</div>
     </div>`;
     statsHTML += `<div class="bb-info-item">
-      <div class="bb-info-label">Median</div>
+      <div class="bb-info-label" bbb-help="median">Median</div>
       <div class="bb-info-value">${Math.round(times.median_ms)}ms</div>
     </div>`;
     statsHTML += `<div class="bb-info-item">
-      <div class="bb-info-label">P75</div>
+      <div class="bb-info-label" bbb-help="p75">P75</div>
       <div class="bb-info-value">${Math.round(times.p75_ms)}ms</div>
     </div>`;
     statsHTML += `<div class="bb-info-item">
-      <div class="bb-info-label">P90</div>
+      <div class="bb-info-label" bbb-help="p90">P90</div>
       <div class="bb-info-value">${Math.round(times.p90_ms)}ms</div>
     </div>`;
     statsHTML += `<div class="bb-info-item">
-      <div class="bb-info-label">P95</div>
+      <div class="bb-info-label" bbb-help="p95">P95</div>
       <div class="bb-info-value">${Math.round(times.p95_ms)}ms</div>
     </div>`;
     statsHTML += `<div class="bb-info-item">
-      <div class="bb-info-label">P99</div>
+      <div class="bb-info-label" bbb-help="p99">P99</div>
       <div class="bb-info-value">${Math.round(times.p99_ms)}ms</div>
     </div>`;
 
@@ -454,21 +446,15 @@ function displayJobStats(stats) {
   }
 
   // Issues Found
-  if (stats.total_broken_links > 0 || stats.total_404s > 0 || stats.redirect_stats) {
+  if (stats.total_failed_pages > 0 || stats.redirect_stats) {
     statsHTML += '<div style="margin-bottom: 24px;">';
     statsHTML += '<h4 style="font-size: 14px; font-weight: 600; margin-bottom: 12px;">Issues Found</h4>';
     statsHTML += '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px;">';
 
-    if (stats.total_broken_links > 0) {
+    if (stats.total_failed_pages > 0) {
       statsHTML += `<div class="bb-info-item" style="background: #fee2e2;">
-        <div class="bb-info-label">Broken Links</div>
-        <div class="bb-info-value" style="color: #dc2626;">${stats.total_broken_links}</div>
-      </div>`;
-    }
-    if (stats.total_404s > 0) {
-      statsHTML += `<div class="bb-info-item" style="background: #fee2e2;">
-        <div class="bb-info-label">404 Errors</div>
-        <div class="bb-info-value" style="color: #dc2626;">${stats.total_404s}</div>
+        <div class="bb-info-label">Failed Pages</div>
+        <div class="bb-info-value" style="color: #dc2626;">${stats.total_failed_pages}</div>
       </div>`;
     }
     if (stats.total_server_errors > 0) {
@@ -530,6 +516,11 @@ function displayJobStats(stats) {
   }
 
   statsContainer.innerHTML = statsHTML;
+
+  // Refresh metadata tooltips for dynamically added elements
+  if (window.metricsMetadata && window.metricsMetadata.isLoaded()) {
+    window.metricsMetadata.refresh();
+  }
 }
 
 /**
