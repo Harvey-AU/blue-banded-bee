@@ -19,14 +19,15 @@ function getNestedValue(obj, path) {
 
 /**
  * Setup action handlers for dashboard
- * This sets up event delegation for all bb-action attributes
+ * Supports both bb-action and bbb-action attributes
  */
 function setupDashboardActions() {
   // Set up attribute-based event handling using event delegation
+  // Support both old (bb-action) and new (bbb-action) formats
   document.addEventListener("click", (e) => {
-    const element = e.target.closest("[bb-action]");
+    const element = e.target.closest("[bb-action], [bbb-action]");
     if (element) {
-      const action = element.getAttribute("bb-action");
+      const action = element.getAttribute("bbb-action") || element.getAttribute("bb-action");
       if (action) {
         e.preventDefault();
         handleDashboardAction(action, element);
@@ -58,7 +59,8 @@ function handleDashboardAction(action, element) {
       break;
 
     case "view-job-details":
-      const jobId = element.getAttribute("bb-data-job-id");
+      // Support both old (bb-data-job-id) and new (bbb-id) formats
+      const jobId = element.getAttribute("bbb-id") || element.getAttribute("bb-data-job-id");
       if (jobId) {
         viewJobDetails(jobId);
       }
@@ -103,7 +105,8 @@ function handleDashboardAction(action, element) {
 
     case "restart-job":
     case "restart-job-modal":
-      const restartJobId = element.getAttribute("bb-data-job-id") || currentJobId;
+      // Support both old (bb-data-job-id) and new (bbb-id) formats
+      const restartJobId = element.getAttribute("bbb-id") || element.getAttribute("bb-data-job-id") || currentJobId;
       if (restartJobId) {
         restartJob(restartJobId);
       }
@@ -111,7 +114,8 @@ function handleDashboardAction(action, element) {
 
     case "cancel-job":
     case "cancel-job-modal":
-      const cancelJobId = element.getAttribute("bb-data-job-id") || currentJobId;
+      // Support both old (bb-data-job-id) and new (bbb-id) formats
+      const cancelJobId = element.getAttribute("bbb-id") || element.getAttribute("bb-data-job-id") || currentJobId;
       if (cancelJobId) {
         cancelJob(cancelJobId);
       }
@@ -232,10 +236,11 @@ async function viewJobDetails(jobId) {
     // Update all data-bound elements in the modal automatically
     const modalContainer = document.getElementById("modal-job-data");
     if (modalContainer && window.dataBinder) {
-      // Find all data-bb-bind elements within the modal
-      const bindElements = modalContainer.querySelectorAll('[data-bb-bind]');
+      // Find all data binding elements (both old and new formats)
+      const bindElements = modalContainer.querySelectorAll('[data-bb-bind], [bbb-text]');
       bindElements.forEach(el => {
-        const path = el.getAttribute('data-bb-bind');
+        // Support both old (data-bb-bind) and new (bbb-text) formats
+        const path = el.getAttribute('bbb-text') || el.getAttribute('data-bb-bind');
         const value = getNestedValue(job, path);
         if (value !== undefined && value !== null) {
           el.textContent = value;
@@ -574,12 +579,12 @@ async function loadJobTasks(jobId) {
     <table class="bb-tasks-table">
       <thead>
         <tr>
-          <th style="cursor: pointer;" onclick="sortTasks('path')" data-bb-info="task_path">Path${getSortIcon("path")}</th>
-          <th style="cursor: pointer;" onclick="sortTasks('status')" data-bb-info="task_status">Status${getSortIcon("status")}</th>
-          <th style="cursor: pointer;" onclick="sortTasks('response_time')" data-bb-info="task_response_time">Response Time${getSortIcon("response_time")}</th>
-          <th style="cursor: pointer;" onclick="sortTasks('cache_status')" data-bb-info="task_cache_status">Cache Status${getSortIcon("cache_status")}</th>
-          <th style="cursor: pointer;" onclick="sortTasks('second_response_time')" data-bb-info="task_second_request">2nd Request${getSortIcon("second_response_time")}</th>
-          <th style="cursor: pointer;" onclick="sortTasks('status_code')" data-bb-info="task_status_code">Status Code${getSortIcon("status_code")}</th>
+          <th style="cursor: pointer;" onclick="sortTasks('path')" bbb-help="task_path">Path${getSortIcon("path")}</th>
+          <th style="cursor: pointer;" onclick="sortTasks('status')" bbb-help="task_status">Status${getSortIcon("status")}</th>
+          <th style="cursor: pointer;" onclick="sortTasks('response_time')" bbb-help="task_response_time">Response Time${getSortIcon("response_time")}</th>
+          <th style="cursor: pointer;" onclick="sortTasks('cache_status')" bbb-help="task_cache_status">Cache Status${getSortIcon("cache_status")}</th>
+          <th style="cursor: pointer;" onclick="sortTasks('second_response_time')" bbb-help="task_second_request">2nd Request${getSortIcon("second_response_time")}</th>
+          <th style="cursor: pointer;" onclick="sortTasks('status_code')" bbb-help="task_status_code">Status Code${getSortIcon("status_code")}</th>
         </tr>
       </thead>
       <tbody id="tasks-table-body">
@@ -597,12 +602,12 @@ async function loadJobTasks(jobId) {
 
       tableHTML += `
         <tr data-task-index="${index}">
-          <td><a href="${task.url}" target="_blank"><code class="bb-task-path" data-bb-bind="tasks.${index}.path">${task.path}</code></a></td>
-          <td><span class="bb-task-status ${statusClass}" data-bb-bind="tasks.${index}.status" ${task.error_tooltip ? `title="${task.error_tooltip}"` : ""}>${task.status}</span></td>
-          <td data-bb-bind="tasks.${index}.response_time_formatted">${task.response_time_formatted}</td>
-          <td data-bb-bind="tasks.${index}.cache_status_display" ${task.error_tooltip ? `title="${task.error_tooltip}"` : ""}>${task.cache_status_display}</td>
-          <td data-bb-bind="tasks.${index}.second_response_time_formatted">${task.second_response_time_formatted}</td>
-          <td data-bb-bind="tasks.${index}.status_code_display">${task.status_code_display}</td>
+          <td><a href="${task.url}" target="_blank"><code class="bb-task-path" bbb-text="tasks.${index}.path">${task.path}</code></a></td>
+          <td><span class="bb-task-status ${statusClass}" bbb-text="tasks.${index}.status" ${task.error_tooltip ? `title="${task.error_tooltip}"` : ""}>${task.status}</span></td>
+          <td bbb-text="tasks.${index}.response_time_formatted">${task.response_time_formatted}</td>
+          <td bbb-text="tasks.${index}.cache_status_display" ${task.error_tooltip ? `title="${task.error_tooltip}"` : ""}>${task.cache_status_display}</td>
+          <td bbb-text="tasks.${index}.second_response_time_formatted">${task.second_response_time_formatted}</td>
+          <td bbb-text="tasks.${index}.status_code_display">${task.status_code_display}</td>
         </tr>
       `;
     });
