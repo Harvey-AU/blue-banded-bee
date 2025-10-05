@@ -88,7 +88,7 @@ class MetricsMetadata {
 
   /**
    * Initialize info icons on the page
-   * Scans for elements with data-bb-info attribute and adds info icons with tooltips
+   * Scans for elements with bbb-help or data-bb-info attributes and adds info icons with tooltips
    */
   initializeInfoIcons() {
     if (!this.isLoaded()) {
@@ -96,11 +96,12 @@ class MetricsMetadata {
       return;
     }
 
-    // Find all elements with data-bb-info attribute
-    const elements = document.querySelectorAll("[data-bb-info]");
+    // Find all elements with info attributes (both old and new formats)
+    const elements = document.querySelectorAll("[data-bb-info], [bbb-help]");
 
     elements.forEach(element => {
-      const metricKey = element.getAttribute("data-bb-info");
+      // Support both old (data-bb-info) and new (bbb-help) formats
+      const metricKey = element.getAttribute("bbb-help") || element.getAttribute("data-bb-info");
       const info = this.getInfo(metricKey);
 
       if (!info) {
@@ -117,7 +118,7 @@ class MetricsMetadata {
       const infoIcon = document.createElement("span");
       infoIcon.className = "bb-info-icon";
       infoIcon.innerHTML = "ⓘ";
-      infoIcon.setAttribute("data-bb-tooltip", info);
+      infoIcon.setAttribute("data-bbb-tooltip", info);
       infoIcon.setAttribute("aria-label", "More information");
 
       // Add click handler for mobile
@@ -138,7 +139,7 @@ class MetricsMetadata {
     // Remove any existing tooltips
     document.querySelectorAll(".bb-tooltip-popup").forEach(t => t.remove());
 
-    const tooltipContent = iconElement.getAttribute("data-bb-tooltip");
+    const tooltipContent = iconElement.getAttribute("data-bbb-tooltip");
     if (!tooltipContent) return;
 
     // Create tooltip popup
