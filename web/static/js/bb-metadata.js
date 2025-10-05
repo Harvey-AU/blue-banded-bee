@@ -46,12 +46,12 @@ class MetricsMetadata {
     try {
       const response = await window.dataBinder.fetchData("/v1/metadata/metrics");
 
-      // API returns {status, data, message}
-      if (response.data) {
-        return response.data;
+      // fetchData already unwraps the data field
+      if (response) {
+        return response;
       }
 
-      console.warn("Metadata response missing data field:", response);
+      console.warn("Metadata response is empty:", response);
       return {};
     } catch (error) {
       console.error("Failed to load metrics metadata:", error);
