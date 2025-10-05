@@ -258,11 +258,6 @@ func GetMetricsMetadata() map[string]MetricInfo {
 			Description: "Pages with response time over 3 seconds",
 			InfoHTML:    "The total number of pages that take more than 3 seconds to load on the second (cached) request. These pages may benefit from optimization.",
 		},
-		"slow_pages_over_3s": {
-			Name:        "Slow Pages (>3s)",
-			Description: "Pages loading over 3 seconds",
-			InfoHTML:    "Pages taking more than 3 seconds on the second request. This threshold represents the point where users may notice slowness.",
-		},
 		"slow_pages_over_5s": {
 			Name:        "Very Slow Pages (>5s)",
 			Description: "Pages loading over 5 seconds",
