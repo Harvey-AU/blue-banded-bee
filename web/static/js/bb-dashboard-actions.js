@@ -446,21 +446,15 @@ function displayJobStats(stats) {
   }
 
   // Issues Found
-  if (stats.total_broken_links > 0 || stats.total_404s > 0 || stats.redirect_stats) {
+  if (stats.total_failed_pages > 0 || stats.redirect_stats) {
     statsHTML += '<div style="margin-bottom: 24px;">';
     statsHTML += '<h4 style="font-size: 14px; font-weight: 600; margin-bottom: 12px;">Issues Found</h4>';
     statsHTML += '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px;">';
 
-    if (stats.total_broken_links > 0) {
+    if (stats.total_failed_pages > 0) {
       statsHTML += `<div class="bb-info-item" style="background: #fee2e2;">
-        <div class="bb-info-label">Broken Links</div>
-        <div class="bb-info-value" style="color: #dc2626;">${stats.total_broken_links}</div>
-      </div>`;
-    }
-    if (stats.total_404s > 0) {
-      statsHTML += `<div class="bb-info-item" style="background: #fee2e2;">
-        <div class="bb-info-label">404 Errors</div>
-        <div class="bb-info-value" style="color: #dc2626;">${stats.total_404s}</div>
+        <div class="bb-info-label">Failed Pages</div>
+        <div class="bb-info-value" style="color: #dc2626;">${stats.total_failed_pages}</div>
       </div>`;
     }
     if (stats.total_server_errors > 0) {
