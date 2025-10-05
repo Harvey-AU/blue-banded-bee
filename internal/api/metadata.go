@@ -60,6 +60,11 @@ func GetMetricsMetadata() map[string]MetricInfo {
 			Description: "Number of tasks that failed during processing",
 			InfoHTML:    "The number of URLs that failed to be processed. Common reasons include 404 errors, timeouts, or server errors.",
 		},
+		"total_failed_pages": {
+			Name:        "Failed Pages",
+			Description: "Pages that failed during processing",
+			InfoHTML:    "The number of pages that failed to be processed. Include 404 errors, timeouts, or server errors.",
+		},
 		"start_time": {
 			Name:        "Start Time",
 			Description: "When the job started processing",
