@@ -574,12 +574,12 @@ async function loadJobTasks(jobId) {
     <table class="bb-tasks-table">
       <thead>
         <tr>
-          <th style="cursor: pointer;" onclick="sortTasks('path')">Path${getSortIcon("path")}</th>
-          <th style="cursor: pointer;" onclick="sortTasks('status')">Status${getSortIcon("status")}</th>
-          <th style="cursor: pointer;" onclick="sortTasks('response_time')">Response Time${getSortIcon("response_time")}</th>
-          <th style="cursor: pointer;" onclick="sortTasks('cache_status')">Cache Status${getSortIcon("cache_status")}</th>
-          <th style="cursor: pointer;" onclick="sortTasks('second_response_time')">2nd Request${getSortIcon("second_response_time")}</th>
-          <th style="cursor: pointer;" onclick="sortTasks('status_code')">Status Code${getSortIcon("status_code")}</th>
+          <th style="cursor: pointer;" onclick="sortTasks('path')" data-bb-info="task_path">Path${getSortIcon("path")}</th>
+          <th style="cursor: pointer;" onclick="sortTasks('status')" data-bb-info="task_status">Status${getSortIcon("status")}</th>
+          <th style="cursor: pointer;" onclick="sortTasks('response_time')" data-bb-info="task_response_time">Response Time${getSortIcon("response_time")}</th>
+          <th style="cursor: pointer;" onclick="sortTasks('cache_status')" data-bb-info="task_cache_status">Cache Status${getSortIcon("cache_status")}</th>
+          <th style="cursor: pointer;" onclick="sortTasks('second_response_time')" data-bb-info="task_second_request">2nd Request${getSortIcon("second_response_time")}</th>
+          <th style="cursor: pointer;" onclick="sortTasks('status_code')" data-bb-info="task_status_code">Status Code${getSortIcon("status_code")}</th>
         </tr>
       </thead>
       <tbody id="tasks-table-body">
@@ -609,6 +609,11 @@ async function loadJobTasks(jobId) {
 
     tableHTML += "</tbody></table>";
     tasksContent.innerHTML = tableHTML;
+
+    // Refresh info icons for dynamically added table headers
+    if (window.metricsMetadata) {
+      window.metricsMetadata.refresh();
+    }
 
     // Store tasks data for potential data-binding updates
     if (window.currentTasksData) {
