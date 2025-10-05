@@ -66,6 +66,9 @@ func (h *Handler) SetupRoutes(mux *http.ServeMux) {
 	mux.Handle("/v1/dashboard/slow-pages", auth.AuthMiddleware(http.HandlerFunc(h.DashboardSlowPages)))
 	mux.Handle("/v1/dashboard/external-redirects", auth.AuthMiddleware(http.HandlerFunc(h.DashboardExternalRedirects)))
 
+	// Metadata routes (require auth)
+	mux.Handle("/v1/metadata/metrics", auth.AuthMiddleware(http.HandlerFunc(h.MetadataHandler)))
+
 	// Authentication routes (no auth middleware)
 	mux.HandleFunc("/v1/auth/register", h.AuthRegister)
 	mux.HandleFunc("/v1/auth/session", h.AuthSession)

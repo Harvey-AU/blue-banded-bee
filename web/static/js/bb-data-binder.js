@@ -72,53 +72,61 @@ class BBDataBinder {
 
   /**
    * Scan the DOM and bind all data binding attributes
+   * Supports both old (data-bb-*) and new (bbb-*) attribute formats
    */
   scanAndBind() {
     this.log('Scanning DOM for data binding attributes...');
-    
-    // Find all elements with data binding attributes
-    const bindElements = document.querySelectorAll('[data-bb-bind]');
-    const styleElements = document.querySelectorAll('[data-bb-bind-style]');
-    const attrElements = document.querySelectorAll('[data-bb-bind-attr]');
-    const templateElements = document.querySelectorAll('[data-bb-template]');
-    const authElements = document.querySelectorAll('[data-bb-auth]');
-    const formElements = document.querySelectorAll('[data-bb-form]');
-    
+
+    // Find all elements with data binding attributes (both old and new formats)
+    const bindElements = document.querySelectorAll('[data-bb-bind], [bbb-text]');
+    const styleElements = document.querySelectorAll('[data-bb-bind-style], [bbb-style]');
+    const attrElements = document.querySelectorAll('[data-bb-bind-attr], [bbb-class], [bbb-href], [bbb-attr\\:]');
+    const templateElements = document.querySelectorAll('[data-bb-template], [bbb-template]');
+    const authElements = document.querySelectorAll('[data-bb-auth], [bbb-auth]');
+    const formElements = document.querySelectorAll('[data-bb-form], [bbb-form]');
+    const showElements = document.querySelectorAll('[data-bb-show-if], [bbb-show], [bbb-hide], [bbb-if]');
+
     this.log('Found elements', {
       bind: bindElements.length,
       style: styleElements.length,
       attr: attrElements.length,
       template: templateElements.length,
       auth: authElements.length,
-      forms: formElements.length
+      forms: formElements.length,
+      conditional: showElements.length
     });
-    
+
     // Process data binding elements
     bindElements.forEach(el => this.registerBindElement(el));
     styleElements.forEach(el => this.registerStyleElement(el));
     attrElements.forEach(el => this.registerAttrElement(el));
-    
+
     // Process template elements
     templateElements.forEach(el => this.registerTemplate(el));
-    
+
     // Process auth elements
     authElements.forEach(el => this.updateAuthElement(el));
-    
+
+    // Process conditional visibility elements
+    showElements.forEach(el => this.updateConditionalElement(el));
+
     // Process form elements
     formElements.forEach(el => this.registerForm(el));
   }
 
   /**
    * Register an element for data binding
+   * Supports both data-bb-bind and bbb-text
    */
   registerBindElement(element) {
-    const bindPath = element.getAttribute('data-bb-bind');
+    // Check for both old and new attribute formats
+    const bindPath = element.getAttribute('bbb-text') || element.getAttribute('data-bb-bind');
     if (!bindPath) return;
-    
+
     if (!this.boundElements.has(bindPath)) {
       this.boundElements.set(bindPath, []);
     }
-    
+
     this.boundElements.get(bindPath).push({
       element,
       type: 'text',
@@ -130,26 +138,45 @@ class BBDataBinder {
 
   /**
    * Register an element for style binding
+   * Supports both data-bb-bind-style and bbb-style:prop
    */
   registerStyleElement(element) {
-    const styleBinding = element.getAttribute('data-bb-bind-style');
-    if (!styleBinding) return;
-    
-    // Parse style binding format: "width:{progress}%"
-    const match = styleBinding.match(/^([^:]+):(.+)$/);
-    if (!match) return;
-    
-    const [, property, template] = match;
+    // Check for old format: data-bb-bind-style="width:{progress}%"
+    const oldStyleBinding = element.getAttribute('data-bb-bind-style');
+
+    if (oldStyleBinding) {
+      // Parse style binding format: "width:{progress}%"
+      const match = oldStyleBinding.match(/^([^:]+):(.+)$/);
+      if (match) {
+        const [, property, template] = match;
+        this._registerStyleBinding(element, property, template);
+      }
+    }
+
+    // Check for new format: bbb-style:width="{progress}%"
+    Array.from(element.attributes).forEach(attr => {
+      if (attr.name.startsWith('bbb-style:')) {
+        const property = attr.name.substring('bbb-style:'.length);
+        const template = attr.value;
+        this._registerStyleBinding(element, property, template);
+      }
+    });
+  }
+
+  /**
+   * Internal helper to register a style binding
+   */
+  _registerStyleBinding(element, property, template) {
     const pathMatches = template.match(/\{([^}]+)\}/g);
-    
+
     if (pathMatches) {
       pathMatches.forEach(pathMatch => {
         const path = pathMatch.slice(1, -1); // Remove { }
-        
+
         if (!this.boundElements.has(path)) {
           this.boundElements.set(path, []);
         }
-        
+
         this.boundElements.get(path).push({
           element,
           type: 'style',
@@ -159,32 +186,60 @@ class BBDataBinder {
         });
       });
     }
-    
+
     this.log('Registered style element', { property, template, element });
   }
 
   /**
    * Register an element for attribute binding
+   * Supports data-bb-bind-attr, bbb-class, bbb-href, bbb-attr:name
    */
   registerAttrElement(element) {
-    const attrBinding = element.getAttribute('data-bb-bind-attr');
-    if (!attrBinding) return;
-    
-    // Parse attribute binding format: "href:{url}"
-    const match = attrBinding.match(/^([^:]+):(.+)$/);
-    if (!match) return;
-    
-    const [, attribute, template] = match;
+    // Check for old format: data-bb-bind-attr="class:bb-status-{status}"
+    const oldAttrBinding = element.getAttribute('data-bb-bind-attr');
+
+    if (oldAttrBinding) {
+      // Parse attribute binding format: "class:bb-status-{status}"
+      const match = oldAttrBinding.match(/^([^:]+):(.+)$/);
+      if (match) {
+        const [, attribute, template] = match;
+        this._registerAttrBinding(element, attribute, template);
+      }
+    }
+
+    // Check for new shorthand formats: bbb-class, bbb-href, etc.
+    const shorthandAttrs = ['class', 'href', 'src', 'alt', 'title', 'placeholder', 'value'];
+    shorthandAttrs.forEach(attrName => {
+      const attrValue = element.getAttribute(`bbb-${attrName}`);
+      if (attrValue) {
+        this._registerAttrBinding(element, attrName, attrValue);
+      }
+    });
+
+    // Check for new explicit format: bbb-attr:data-id="{id}"
+    Array.from(element.attributes).forEach(attr => {
+      if (attr.name.startsWith('bbb-attr:')) {
+        const attribute = attr.name.substring('bbb-attr:'.length);
+        const template = attr.value;
+        this._registerAttrBinding(element, attribute, template);
+      }
+    });
+  }
+
+  /**
+   * Internal helper to register an attribute binding
+   */
+  _registerAttrBinding(element, attribute, template) {
     const pathMatches = template.match(/\{([^}]+)\}/g);
-    
+
     if (pathMatches) {
       pathMatches.forEach(pathMatch => {
         const path = pathMatch.slice(1, -1); // Remove { }
-        
+
         if (!this.boundElements.has(path)) {
           this.boundElements.set(path, []);
         }
-        
+
         this.boundElements.get(path).push({
           element,
           type: 'attribute',
@@ -194,45 +249,50 @@ class BBDataBinder {
         });
       });
     }
-    
+
     this.log('Registered attribute element', { attribute, template, element });
   }
 
   /**
    * Register a template element for repeated content
+   * Supports both data-bb-template and bbb-template
    */
   registerTemplate(element) {
-    const templateName = element.getAttribute('data-bb-template');
+    // Check for both old and new attribute formats
+    const templateName = element.getAttribute('bbb-template') || element.getAttribute('data-bb-template');
     if (!templateName) return;
-    
+
     // Store the template
     this.templates.set(templateName, {
       element,
       originalHTML: element.outerHTML,
       parent: element.parentElement
     });
-    
+
     // Hide the template element
     element.style.display = 'none';
-    
+
     this.log('Registered template', { name: templateName, element });
   }
 
   /**
    * Update authentication-conditional elements
+   * Supports both data-bb-auth and bbb-auth
    */
   updateAuthElements() {
-    const authElements = document.querySelectorAll('[data-bb-auth]');
+    const authElements = document.querySelectorAll('[data-bb-auth], [bbb-auth]');
     authElements.forEach(el => this.updateAuthElement(el));
   }
 
   /**
    * Update a single auth element
+   * Supports both data-bb-auth and bbb-auth
    */
   updateAuthElement(element) {
-    const authCondition = element.getAttribute('data-bb-auth');
+    // Check for both old and new attribute formats
+    const authCondition = element.getAttribute('bbb-auth') || element.getAttribute('data-bb-auth');
     let shouldShow = false;
-    
+
     switch (authCondition) {
       case 'required':
         shouldShow = this.authManager?.isAuthenticated || false;
@@ -243,19 +303,39 @@ class BBDataBinder {
       default:
         shouldShow = true;
     }
-    
+
     element.style.display = shouldShow ? '' : 'none';
   }
 
   /**
+   * Update conditional visibility element
+   * Supports data-bb-show-if, bbb-show, bbb-hide, bbb-if
+   */
+  updateConditionalElement(element) {
+    // Check for all conditional attribute formats
+    const showIf = element.getAttribute('bbb-show') || element.getAttribute('data-bb-show-if');
+    const hideIf = element.getAttribute('bbb-hide');
+    const renderIf = element.getAttribute('bbb-if');
+
+    // For now, just handle show/hide based on existence
+    // Full implementation would evaluate conditions against data
+    // This is a placeholder that maintains current functionality
+    if (showIf || hideIf || renderIf) {
+      this.log('Conditional element registered', { element, showIf, hideIf, renderIf });
+    }
+  }
+
+  /**
    * Register a form for handling
+   * Supports both data-bb-form and bbb-form
    */
   registerForm(form) {
-    const formAction = form.getAttribute('data-bb-form');
+    // Check for both old and new attribute formats
+    const formAction = form.getAttribute('bbb-form') || form.getAttribute('data-bb-form');
     if (!formAction) return;
-    
+
     this.log('Registering form', { action: formAction, form });
-    
+
     // Set up form submission handler
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
