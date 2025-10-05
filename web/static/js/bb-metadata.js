@@ -99,7 +99,7 @@ class MetricsMetadata {
     // Find all elements with info attributes (both old and new formats)
     const elements = document.querySelectorAll("[data-bb-info], [bbb-help]");
 
-    elements.forEach(element => {
+    elements.forEach((element) => {
       // Support both old (data-bb-info) and new (bbb-help) formats
       const metricKey = element.getAttribute("bbb-help") || element.getAttribute("data-bb-info");
       const info = this.getInfo(metricKey);
@@ -117,7 +117,7 @@ class MetricsMetadata {
       // Create info icon
       const infoIcon = document.createElement("span");
       infoIcon.className = "bb-info-icon";
-      infoIcon.innerHTML = "ⓘ";
+      infoIcon.innerHTML = "🛈";
       infoIcon.setAttribute("data-bbb-tooltip", info);
       infoIcon.setAttribute("aria-label", "More information");
 
@@ -137,7 +137,7 @@ class MetricsMetadata {
    */
   _showTooltip(iconElement) {
     // Remove any existing tooltips
-    document.querySelectorAll(".bb-tooltip-popup").forEach(t => t.remove());
+    document.querySelectorAll(".bb-tooltip-popup").forEach((t) => t.remove());
 
     const tooltipContent = iconElement.getAttribute("data-bbb-tooltip");
     if (!tooltipContent) return;
@@ -163,7 +163,7 @@ class MetricsMetadata {
 
     // Position below icon by default
     let top = iconRect.bottom + 8;
-    let left = iconRect.left - (tooltipRect.width / 2) + (iconRect.width / 2);
+    let left = iconRect.left - tooltipRect.width / 2 + iconRect.width / 2;
 
     // Adjust if off-screen
     if (left + tooltipRect.width > window.innerWidth - 16) {
