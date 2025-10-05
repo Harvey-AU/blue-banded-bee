@@ -223,14 +223,6 @@ async function viewJobDetails(jobId) {
       if (job.stats.cache_warming_effect && job.stats.cache_warming_effect.total_time_saved_seconds) {
         job.stats.cache_warming_effect.total_time_saved_seconds = `${job.stats.cache_warming_effect.total_time_saved_seconds}s`;
       }
-      if (job.stats.response_times) {
-        if (job.stats.response_times.avg_ms) {
-          job.stats.response_times.avg_ms = `${Math.round(job.stats.response_times.avg_ms)}ms`;
-        }
-        if (job.stats.response_times.p95_ms) {
-          job.stats.response_times.p95_ms = `${Math.round(job.stats.response_times.p95_ms)}ms`;
-        }
-      }
     }
 
     // Update all data-bound elements in the modal automatically
