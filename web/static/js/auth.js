@@ -211,9 +211,20 @@ async function registerUserWithBackend(user) {
 function updateAuthState(isAuthenticated) {
   console.log("Updating auth state:", isAuthenticated);
 
-  // Show/hide elements based on authentication
-  const guestElements = document.querySelectorAll('[data-bb-auth="guest"]');
-  const requiredElements = document.querySelectorAll('[data-bb-auth="required"]');
+  // Show/hide elements based on authentication (support both old and new attributes)
+  const allAuthElements = document.querySelectorAll('[data-bb-auth], [bbb-auth]');
+
+  const guestElements = [];
+  const requiredElements = [];
+
+  allAuthElements.forEach(el => {
+    const authValue = el.getAttribute('bbb-auth') || el.getAttribute('data-bb-auth');
+    if (authValue === 'guest') {
+      guestElements.push(el);
+    } else if (authValue === 'required') {
+      requiredElements.push(el);
+    }
+  });
 
   guestElements.forEach((el) => {
     el.style.display = isAuthenticated ? "none" : el.dataset.originalDisplay || "block";
