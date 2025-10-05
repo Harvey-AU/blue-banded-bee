@@ -818,27 +818,31 @@ class BBDataBinder {
     const tempDiv = document.createElement('div');
     tempDiv.innerHTML = template.originalHTML;
     const instance = tempDiv.firstElementChild;
-    
+
     if (!instance) return null;
-    
+
+    // Get template name from either old or new attribute
+    const templateName = template.element.getAttribute('bbb-template') || template.element.getAttribute('data-bb-template');
+
     // Mark as template instance
-    instance.setAttribute('data-bb-template-instance', template.element.getAttribute('data-bb-template'));
+    instance.setAttribute('data-bb-template-instance', templateName);
     instance.removeAttribute('data-bb-template');
+    instance.removeAttribute('bbb-template');
     instance.style.display = '';
-    
-    // Bind data to instance elements
-    const bindElements = instance.querySelectorAll('[data-bb-bind]');
+
+    // Bind data to instance elements (support both old and new attributes)
+    const bindElements = instance.querySelectorAll('[data-bb-bind], [bbb-text]');
     bindElements.forEach(el => {
-      const path = el.getAttribute('data-bb-bind');
+      const path = el.getAttribute('bbb-text') || el.getAttribute('data-bb-bind');
       const value = this.getValueByPath(data, path);
       if (value !== undefined) {
         el.textContent = value;
       }
     });
-    
-    // Handle style bindings
-    const styleElements = instance.querySelectorAll('[data-bb-bind-style]');
-    styleElements.forEach(el => {
+
+    // Handle style bindings (old format: data-bb-bind-style)
+    const oldStyleElements = instance.querySelectorAll('[data-bb-bind-style]');
+    oldStyleElements.forEach(el => {
       const styleBinding = el.getAttribute('data-bb-bind-style');
       const match = styleBinding.match(/^([^:]+):(.+)$/);
       if (match) {
@@ -849,10 +853,32 @@ class BBDataBinder {
         }
       }
     });
-    
-    // Handle attribute bindings
-    const attrElements = instance.querySelectorAll('[data-bb-bind-attr]');
-    attrElements.forEach(el => {
+
+    // Handle style bindings (new format: bbb-style:property)
+    const styleAttrs = instance.attributes;
+    for (let i = 0; i < styleAttrs.length; i++) {
+      const attr = styleAttrs[i];
+      if (attr.name.startsWith('bbb-style:')) {
+        const property = attr.name.substring(10); // Remove 'bbb-style:' prefix
+        const value = this.processTemplate(attr.value, data);
+        if (value !== null) {
+          instance.style[property] = value;
+        }
+      }
+    }
+
+    // Handle class binding (new format: bbb-class)
+    if (instance.hasAttribute('bbb-class')) {
+      const classTemplate = instance.getAttribute('bbb-class');
+      const classValue = this.processTemplate(classTemplate, data);
+      if (classValue !== null) {
+        instance.setAttribute('class', classValue);
+      }
+    }
+
+    // Handle attribute bindings (old format: data-bb-bind-attr)
+    const oldAttrElements = instance.querySelectorAll('[data-bb-bind-attr]');
+    oldAttrElements.forEach(el => {
       const attrBinding = el.getAttribute('data-bb-bind-attr');
       const match = attrBinding.match(/^([^:]+):(.+)$/);
       if (match) {
@@ -863,8 +889,82 @@ class BBDataBinder {
         }
       }
     });
-    
+
+    // Handle attribute bindings (new format: bbb-id, bbb-href, etc.)
+    const shorthandAttrs = ['id', 'href', 'src', 'alt', 'title', 'placeholder', 'value'];
+    instance.querySelectorAll('[bbb-id], [bbb-href], [bbb-src], [bbb-alt], [bbb-title], [bbb-placeholder], [bbb-value]').forEach(el => {
+      shorthandAttrs.forEach(attrName => {
+        if (el.hasAttribute(`bbb-${attrName}`)) {
+          const template = el.getAttribute(`bbb-${attrName}`);
+          const value = this.processTemplate(template, data);
+          if (value !== null) {
+            el.setAttribute(attrName, value);
+          }
+        }
+      });
+    });
+
+    // Handle conditional visibility (bbb-show, bbb-hide, bbb-if, data-bb-show-if)
+    instance.querySelectorAll('[bbb-show], [bbb-hide], [bbb-if], [data-bb-show-if]').forEach(el => {
+      const showCondition = el.getAttribute('bbb-show') || el.getAttribute('data-bb-show-if');
+      const hideCondition = el.getAttribute('bbb-hide');
+      const ifCondition = el.getAttribute('bbb-if');
+
+      let shouldShow = true;
+
+      if (showCondition) {
+        shouldShow = this.evaluateCondition(showCondition, data);
+      } else if (hideCondition) {
+        shouldShow = !this.evaluateCondition(hideCondition, data);
+      } else if (ifCondition) {
+        shouldShow = this.evaluateCondition(ifCondition, data);
+      }
+
+      if (shouldShow) {
+        el.style.display = '';
+      } else {
+        el.style.display = 'none';
+      }
+    });
+
     return instance;
+  }
+
+  /**
+   * Evaluate a conditional expression
+   * Supports: field=value, field=value1,value2, field>value, field<value, field!=value
+   */
+  evaluateCondition(condition, data) {
+    // Handle equality with multiple values: status=completed,failed,cancelled
+    if (condition.includes('=') && !condition.includes('!=')) {
+      const [path, values] = condition.split('=');
+      const fieldValue = this.getValueByPath(data, path.trim());
+      const allowedValues = values.split(',').map(v => v.trim());
+      return allowedValues.includes(String(fieldValue));
+    }
+
+    // Handle not equal: status!=pending
+    if (condition.includes('!=')) {
+      const [path, value] = condition.split('!=');
+      const fieldValue = this.getValueByPath(data, path.trim());
+      return String(fieldValue) !== value.trim();
+    }
+
+    // Handle greater than: count>0
+    if (condition.includes('>')) {
+      const [path, value] = condition.split('>');
+      const fieldValue = this.getValueByPath(data, path.trim());
+      return Number(fieldValue) > Number(value.trim());
+    }
+
+    // Handle less than: count<10
+    if (condition.includes('<')) {
+      const [path, value] = condition.split('<');
+      const fieldValue = this.getValueByPath(data, path.trim());
+      return Number(fieldValue) < Number(value.trim());
+    }
+
+    return false;
   }
 
   /**
