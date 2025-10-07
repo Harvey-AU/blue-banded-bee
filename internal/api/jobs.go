@@ -950,12 +950,13 @@ func (h *Handler) exportJobTasks(w http.ResponseWriter, r *http.Request, jobID s
 	// Get job details
 	var domain, status string
 	var createdAt time.Time
+	var completedAt sql.NullTime
 	err = h.DB.GetDB().QueryRowContext(r.Context(), `
-		SELECT d.name, j.status, j.created_at
+		SELECT d.name, j.status, j.created_at, j.completed_at
 		FROM jobs j
 		JOIN domains d ON j.domain_id = d.id
 		WHERE j.id = $1
-	`, jobID).Scan(&domain, &status, &createdAt)
+	`, jobID).Scan(&domain, &status, &createdAt, &completedAt)
 
 	if err != nil {
 		log.Error().Err(err).Str("job_id", jobID).Msg("Failed to get job details for export")
@@ -974,6 +975,11 @@ func (h *Handler) exportJobTasks(w http.ResponseWriter, r *http.Request, jobID s
 		"total_tasks": len(tasks),
 		"columns":     taskExportColumns(exportType),
 		"tasks":       tasks,
+	}
+	if completedAt.Valid {
+		response["completed_at"] = completedAt.Time.Format(time.RFC3339)
+	} else {
+		response["completed_at"] = nil
 	}
 
 	WriteSuccess(w, r, response, fmt.Sprintf("Exported %d tasks for job %s", len(tasks), jobID))
