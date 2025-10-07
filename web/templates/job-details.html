@@ -1,0 +1,464 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Job Details · Blue Banded Bee</title>
+
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+
+    <style>
+      :root {
+        color-scheme: light;
+      }
+
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        margin: 0;
+        background: #f5f7fa;
+        color: #1f2937;
+      }
+
+      a {
+        color: inherit;
+      }
+
+      header {
+        background: white;
+        border-bottom: 1px solid #e5e7eb;
+        position: sticky;
+        top: 0;
+        z-index: 10;
+      }
+
+      header .container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 20px 24px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 16px;
+      }
+
+      .back-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        color: #6b7280;
+        text-decoration: none;
+        font-size: 14px;
+        font-weight: 500;
+      }
+
+      .back-link:hover {
+        color: #2563eb;
+      }
+
+      .user-meta {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        font-size: 14px;
+      }
+
+      .bb-btn {
+        padding: 8px 16px;
+        border-radius: 6px;
+        border: 1px solid #d1d5db;
+        background: white;
+        color: #1f2937;
+        font-weight: 500;
+        cursor: pointer;
+        transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+      }
+
+      .bb-btn:hover {
+        background: #f3f4f6;
+      }
+
+      .bb-btn-primary {
+        background: #2563eb;
+        border-color: #2563eb;
+        color: white;
+      }
+
+      .bb-btn-primary:hover {
+        background: #1d4ed8;
+        border-color: #1d4ed8;
+      }
+
+      main {
+        max-width: 1200px;
+        margin: 32px auto;
+        padding: 0 24px 48px;
+        display: flex;
+        flex-direction: column;
+        gap: 24px;
+      }
+
+      section {
+        background: white;
+        border-radius: 12px;
+        border: 1px solid #e5e7eb;
+        box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+        padding: 24px;
+      }
+
+      section header {
+        border: none;
+        position: static;
+        padding: 0;
+      }
+
+      .section-title {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 16px;
+      }
+
+      .section-title h2 {
+        margin: 0;
+        font-size: 20px;
+      }
+
+      .overview-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 16px;
+      }
+
+      .info-card {
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        padding: 16px;
+        background: #f9fafb;
+      }
+
+      .info-card h3 {
+        margin: 0 0 8px;
+        font-size: 13px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: #6b7280;
+      }
+
+      .info-card p {
+        margin: 0;
+        font-size: 16px;
+        font-weight: 600;
+        word-break: break-word;
+      }
+
+      .stats-container {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 16px;
+      }
+
+      .stats-group {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .stats-group h3 {
+        margin: 0;
+        font-size: 14px;
+        font-weight: 600;
+        color: #374151;
+      }
+
+      .stat-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 8px 12px;
+        border-radius: 6px;
+        border: 1px solid #e5e7eb;
+        background: #f9fafb;
+        font-size: 13px;
+      }
+
+      .tasks-controls {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .filter-tabs {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        border-radius: 6px;
+        background: #f3f4f6;
+        padding: 4px;
+      }
+
+      .filter-tabs button {
+        border: none;
+        background: transparent;
+        padding: 6px 12px;
+        border-radius: 4px;
+        font-size: 13px;
+        cursor: pointer;
+        color: #6b7280;
+      }
+
+      .filter-tabs button.active {
+        background: white;
+        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.12);
+        color: #1f2937;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 16px;
+      }
+
+      .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        border: 0;
+      }
+
+      thead th {
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.6px;
+        color: #6b7280;
+        text-align: left;
+        padding: 12px;
+        background: #f9fafb;
+        border-bottom: 1px solid #e5e7eb;
+        cursor: pointer;
+        user-select: none;
+      }
+
+      tbody td {
+        padding: 12px;
+        border-bottom: 1px solid #f1f5f9;
+        font-size: 13px;
+        vertical-align: top;
+      }
+
+      tbody tr:hover {
+        background: #f8fafc;
+      }
+
+      code {
+        font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+        font-size: 12px;
+      }
+
+      .status-pill {
+        display: inline-flex;
+        align-items: center;
+        padding: 2px 8px;
+        border-radius: 12px;
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+      }
+
+      .status-pill.completed {
+        background: #dcfce7;
+        color: #15803d;
+      }
+
+      .status-pill.failed {
+        background: #fee2e2;
+        color: #dc2626;
+      }
+
+      .status-pill.pending,
+      .status-pill.running {
+        background: #dbeafe;
+        color: #1d4ed8;
+      }
+
+      .status-pill.cancelled {
+        background: #f3f4f6;
+        color: #4b5563;
+      }
+
+      .pagination {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: 16px;
+      }
+
+      .toast {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: #111827;
+        color: white;
+        padding: 12px 16px;
+        border-radius: 6px;
+        box-shadow: 0 8px 16px rgba(15, 23, 42, 0.15);
+        z-index: 1000;
+        font-size: 14px;
+      }
+
+      @media (max-width: 768px) {
+        header .container {
+          flex-direction: column;
+          align-items: flex-start;
+        }
+
+        main {
+          padding: 0 16px 32px;
+        }
+      }
+    </style>
+  </head>
+
+  <body>
+    <header>
+      <div class="container">
+        <div>
+          <a href="/dashboard" class="back-link">← Back to Dashboard</a>
+          <h1 style="margin: 8px 0 0; font-size: 24px; font-weight: 700" id="pageTitle">Job Details</h1>
+        </div>
+
+        <div class="user-meta" id="userMeta">
+          <span id="userEmail">Loading…</span>
+          <button id="shareJobBtn" class="bb-btn" aria-label="Copy shareable link">Copy Link</button>
+          <button id="logoutBtn" class="bb-btn" aria-label="Sign out of Blue Banded Bee">Sign Out</button>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <section>
+        <div class="section-title">
+          <div>
+            <h2 id="jobDomain">—</h2>
+            <p style="margin: 4px 0 0; color: #6b7280; font-size: 14px">
+              Job ID: <span id="jobId">—</span>
+            </p>
+          </div>
+          <div style="display: flex; gap: 8px">
+            <button id="restartJobBtn" class="bb-btn bb-btn-primary" style="display: none" aria-label="Restart job">Restart Job</button>
+            <button id="cancelJobBtn" class="bb-btn bb-btn-primary" style="display: none" aria-label="Cancel job">Cancel Job</button>
+          </div>
+        </div>
+
+        <div class="overview-grid" id="overviewGrid">
+          <div class="info-card">
+            <h3>Status</h3>
+            <p id="jobStatusValue">—</p>
+          </div>
+          <div class="info-card">
+            <h3>Progress</h3>
+            <p id="jobProgress">—</p>
+          </div>
+          <div class="info-card">
+            <h3>Total Tasks</h3>
+            <p id="jobTotalTasks">—</p>
+          </div>
+          <div class="info-card">
+            <h3>Completed</h3>
+            <p id="jobCompletedTasks">—</p>
+          </div>
+          <div class="info-card">
+            <h3>Failed</h3>
+            <p id="jobFailedTasks">—</p>
+          </div>
+          <div class="info-card">
+            <h3>Started At</h3>
+            <p id="jobStartedAt">—</p>
+          </div>
+          <div class="info-card">
+            <h3>Completed At</h3>
+            <p id="jobCompletedAt">—</p>
+          </div>
+          <div class="info-card">
+            <h3>Total Duration</h3>
+            <p id="jobDuration">—</p>
+          </div>
+          <div class="info-card">
+            <h3>Average Per Task</h3>
+            <p id="jobAvgTime">—</p>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <div class="section-title">
+          <h2>Performance Summary</h2>
+          <button class="bb-btn" id="refreshJobBtn" aria-label="Refresh job overview">↻ Refresh</button>
+        </div>
+        <div id="statsContainer" class="stats-container"></div>
+      </section>
+
+      <section>
+        <div class="section-title">
+          <h2>Tasks</h2>
+          <div class="tasks-controls">
+            <label for="tasksLimit" class="sr-only" aria-hidden="true">Tasks per page</label>
+            <select id="tasksLimit" class="bb-btn" aria-label="Tasks per page">
+              <option value="25">25</option>
+              <option value="50" selected>50</option>
+              <option value="100">100</option>
+              <option value="200">200</option>
+            </select>
+            <div class="filter-tabs" id="taskFilters">
+              <button data-status="" class="active">All</button>
+              <button data-status="completed">Completed</button>
+              <button data-status="pending">In Progress</button>
+              <button data-status="failed">Failed</button>
+            </div>
+            <div class="bb-dropdown">
+              <button class="bb-btn" id="exportMenuToggle">Export ▼</button>
+              <div
+                class="bb-dropdown-menu"
+                id="exportMenu"
+                style="display: none; position: absolute; background: white; border: 1px solid #e5e7eb; border-radius: 6px; margin-top: 4px; min-width: 220px; box-shadow: 0 4px 12px rgba(15, 23, 42, 0.12);"
+              >
+                <button class="bb-btn" data-type="job" data-format="csv" style="width: 100%; text-align: left">All Tasks (CSV)</button>
+                <button class="bb-btn" data-type="broken-links" data-format="csv" style="width: 100%; text-align: left">Failed Pages (CSV)</button>
+                <button class="bb-btn" data-type="slow-pages" data-format="csv" style="width: 100%; text-align: left">Slow Pages (CSV)</button>
+                <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 6px 0" />
+                <button class="bb-btn" data-type="job" data-format="json" style="width: 100%; text-align: left">All Tasks (JSON)</button>
+                <button class="bb-btn" data-type="broken-links" data-format="json" style="width: 100%; text-align: left">Failed Pages (JSON)</button>
+                <button class="bb-btn" data-type="slow-pages" data-format="json" style="width: 100%; text-align: left">Slow Pages (JSON)</button>
+              </div>
+            </div>
+              <button class="bb-btn" id="refreshTasksBtn" aria-label="Refresh task list">↻ Refresh Tasks</button>
+            </div>
+          </div>
+
+        <div id="tasksContainer">
+          <div style="text-align: center; padding: 24px; color: #6b7280" id="tasksLoading">Loading tasks…</div>
+          <div style="overflow-x: auto">
+            <table id="tasksTable" style="display: none" role="table" aria-label="Job tasks">
+              <thead></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <div class="pagination" id="tasksPagination" style="display: none">
+            <button class="bb-btn" id="prevTasksBtn" aria-label="Previous page of tasks">← Previous</button>
+            <span id="tasksPageInfo" style="font-size: 13px; color: #6b7280"></span>
+            <button class="bb-btn" id="nextTasksBtn" aria-label="Next page of tasks">Next →</button>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script src="/js/auth.js"></script>
+    <script src="/js/bb-metadata.js"></script>
+    <script src="/js/job-page.js"></script>
+  </body>
+</html>
