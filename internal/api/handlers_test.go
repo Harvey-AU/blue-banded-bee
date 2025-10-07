@@ -17,9 +17,9 @@ func TestNewHandler(t *testing.T) {
 	// Create mock dependencies
 	mockDB := &db.DB{}
 	mockJobsManager := &jobs.JobManager{}
-	
+
 	handler := NewHandler(mockDB, mockJobsManager)
-	
+
 	assert.NotNil(t, handler)
 	assert.Equal(t, mockDB, handler.DB)
 	assert.Equal(t, mockJobsManager, handler.JobsManager)
@@ -61,31 +61,31 @@ func TestHealthCheckHandler(t *testing.T) {
 			expectedBody:   nil,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			handler := &Handler{}
-			
+
 			req := httptest.NewRequest(tt.method, "/health", nil)
 			rec := httptest.NewRecorder()
-			
+
 			handler.HealthCheck(rec, req)
-			
+
 			assert.Equal(t, tt.expectedStatus, rec.Code)
-			
+
 			if tt.expectedBody != nil {
 				assert.Equal(t, "application/json", rec.Header().Get("Content-Type"))
-				
+
 				// Parse response body
 				var response map[string]interface{}
 				err := parseJSONResponse(rec, &response)
 				require.NoError(t, err)
-				
+
 				// Check expected fields
 				for key, expectedValue := range tt.expectedBody {
 					assert.Equal(t, expectedValue, response[key])
 				}
-				
+
 				// Timestamp should be present
 				assert.NotEmpty(t, response["timestamp"])
 			}
@@ -98,29 +98,29 @@ func TestDatabaseHealthCheck_NoDatabase(t *testing.T) {
 		handler := &Handler{
 			DB: nil, // No database
 		}
-		
+
 		req := httptest.NewRequest(http.MethodPost, "/health/db", nil)
 		rec := httptest.NewRecorder()
-		
+
 		handler.DatabaseHealthCheck(rec, req)
-		
+
 		assert.Equal(t, http.StatusMethodNotAllowed, rec.Code)
 	})
-	
+
 	// Test nil DB returns 503 Service Unavailable
 	t.Run("nil_db_returns_503", func(t *testing.T) {
 		handler := &Handler{
 			DB: nil, // No database
 		}
-		
+
 		req := httptest.NewRequest(http.MethodGet, "/health/db", nil)
 		rec := httptest.NewRecorder()
-		
+
 		// Should not panic, but return 503
 		handler.DatabaseHealthCheck(rec, req)
-		
+
 		assert.Equal(t, http.StatusServiceUnavailable, rec.Code)
-		
+
 		// Verify response contains error message
 		var response map[string]interface{}
 		err := json.Unmarshal(rec.Body.Bytes(), &response)
@@ -133,8 +133,8 @@ func TestDatabaseHealthCheck_NoDatabase(t *testing.T) {
 
 type mockDBWithPing struct {
 	*db.DB
-	mockDB   *sql.DB
-	pingErr  error
+	mockDB  *sql.DB
+	pingErr error
 }
 
 func (m *mockDBWithPing) GetDB() *sql.DB {
@@ -152,7 +152,7 @@ func (m *mockSQLDB) Ping() error {
 
 func TestServeStaticFiles(t *testing.T) {
 	handler := &Handler{}
-	
+
 	tests := []struct {
 		name           string
 		path           string
@@ -190,12 +190,12 @@ func TestServeStaticFiles(t *testing.T) {
 			expectedStatus: http.StatusNotFound,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest(tt.method, tt.path, nil)
 			rec := httptest.NewRecorder()
-			
+
 			// Call the appropriate handler based on path
 			switch tt.path {
 			case "/test-login.html":
@@ -209,22 +209,45 @@ func TestServeStaticFiles(t *testing.T) {
 			case "/dashboard-new":
 				handler.ServeNewDashboard(rec, req)
 			}
-			
+
 			// In test environment, files don't exist so we expect 404
 			assert.Equal(t, tt.expectedStatus, rec.Code)
 		})
 	}
 }
 
+func TestServeJobDetails(t *testing.T) {
+	handler := &Handler{}
+
+	t.Run("get_method_serves_template", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/jobs/example", nil)
+		rec := httptest.NewRecorder()
+
+		handler.ServeJobDetails(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+		assert.Contains(t, rec.Body.String(), "Job Details")
+	})
+
+	t.Run("non_get_returns_method_not_allowed", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/jobs/example", nil)
+		rec := httptest.NewRecorder()
+
+		handler.ServeJobDetails(rec, req)
+
+		assert.Equal(t, http.StatusMethodNotAllowed, rec.Code)
+	})
+}
+
 func TestSetupRoutes(t *testing.T) {
 	handler := &Handler{}
 	mux := http.NewServeMux()
-	
+
 	// Test that SetupRoutes doesn't panic
 	assert.NotPanics(t, func() {
 		handler.SetupRoutes(mux)
 	})
-	
+
 	// Test that routes are registered (by trying to access them)
 	// Only test routes that don't require DB access
 	routes := []string{
@@ -234,17 +257,17 @@ func TestSetupRoutes(t *testing.T) {
 		"/v1/auth/session",
 		// Other routes require auth middleware or DB access
 	}
-	
+
 	for _, route := range routes {
 		t.Run(route, func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodGet, route, nil)
 			rec := httptest.NewRecorder()
-			
+
 			// This will not panic if route is registered
 			assert.NotPanics(t, func() {
 				mux.ServeHTTP(rec, req)
 			})
-			
+
 			// We're not testing the actual response, just that the route exists
 			// Response might be 401 (unauthorized), 405 (method not allowed), or 200
 			// Routes may return various status codes based on method and auth
@@ -254,7 +277,7 @@ func TestSetupRoutes(t *testing.T) {
 
 func TestHealthCheckHandlerConcurrency(t *testing.T) {
 	handler := &Handler{}
-	
+
 	// Run multiple health checks concurrently
 	results := make(chan int, 10)
 	for i := 0; i < 10; i++ {
@@ -278,53 +301,53 @@ func TestHandlerWithNilDependencies(t *testing.T) {
 		DB:          nil,
 		JobsManager: nil,
 	}
-	
+
 	t.Run("health_check_works_without_dependencies", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/health", nil)
 		rec := httptest.NewRecorder()
-		
+
 		handler.HealthCheck(rec, req)
-		
+
 		assert.Equal(t, http.StatusOK, rec.Code)
 	})
-	
+
 	t.Run("database_health_check_panics_without_db", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/health/db", nil)
 		rec := httptest.NewRecorder()
-		
-	// Should not panic; should return 503 with an error payload
-	handler.DatabaseHealthCheck(rec, req)
-	assert.Equal(t, http.StatusServiceUnavailable, rec.Code)
-	var response map[string]interface{}
-	err := json.Unmarshal(rec.Body.Bytes(), &response)
-	require.NoError(t, err)
-	assert.Equal(t, "unhealthy", response["status"])
-	assert.Equal(t, "postgresql", response["service"])
-	assert.Contains(t, response["error"], "database connection not configured")
+
+		// Should not panic; should return 503 with an error payload
+		handler.DatabaseHealthCheck(rec, req)
+		assert.Equal(t, http.StatusServiceUnavailable, rec.Code)
+		var response map[string]interface{}
+		err := json.Unmarshal(rec.Body.Bytes(), &response)
+		require.NoError(t, err)
+		assert.Equal(t, "unhealthy", response["status"])
+		assert.Equal(t, "postgresql", response["service"])
+		assert.Contains(t, response["error"], "database connection not configured")
 	})
 }
 
 func TestHealthCheckHandlerHeaders(t *testing.T) {
 	handler := &Handler{}
-	
+
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
 	rec := httptest.NewRecorder()
-	
+
 	// Set some custom headers before the handler
 	rec.Header().Set("X-Custom-Header", "custom-value")
-	
+
 	handler.HealthCheck(rec, req)
-	
+
 	// Check that standard headers are set
 	assert.Equal(t, "application/json", rec.Header().Get("Content-Type"))
-	
+
 	// Check that custom headers are preserved
 	assert.Equal(t, "custom-value", rec.Header().Get("X-Custom-Header"))
 }
 
 func TestMethodNotAllowedCases(t *testing.T) {
 	handler := &Handler{}
-	
+
 	methods := []string{
 		http.MethodPost,
 		http.MethodPut,
@@ -335,14 +358,14 @@ func TestMethodNotAllowedCases(t *testing.T) {
 		http.MethodTrace,
 		http.MethodConnect,
 	}
-	
+
 	for _, method := range methods {
 		t.Run(method, func(t *testing.T) {
 			req := httptest.NewRequest(method, "/health", nil)
 			rec := httptest.NewRecorder()
-			
+
 			handler.HealthCheck(rec, req)
-			
+
 			if method != http.MethodGet {
 				assert.Equal(t, http.StatusMethodNotAllowed, rec.Code)
 			}
@@ -353,7 +376,7 @@ func TestMethodNotAllowedCases(t *testing.T) {
 // Benchmark tests
 func BenchmarkHealthCheckHandler(b *testing.B) {
 	handler := &Handler{}
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		req := httptest.NewRequest(http.MethodGet, "/health", nil)
@@ -364,7 +387,7 @@ func BenchmarkHealthCheckHandler(b *testing.B) {
 
 func BenchmarkSetupRoutes(b *testing.B) {
 	handler := &Handler{}
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		mux := http.NewServeMux()

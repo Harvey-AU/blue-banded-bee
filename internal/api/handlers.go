@@ -96,7 +96,7 @@ func (h *Handler) SetupRoutes(mux *http.ServeMux) {
 	}))
 
 	// Static files
-	mux.HandleFunc("/", h.ServeHomepage)  // Marketing homepage
+	mux.HandleFunc("/", h.ServeHomepage) // Marketing homepage
 	mux.HandleFunc("/test-login.html", h.ServeTestLogin)
 	mux.HandleFunc("/test-components.html", h.ServeTestComponents)
 	mux.HandleFunc("/test-data-components.html", h.ServeTestDataComponents)
@@ -104,6 +104,7 @@ func (h *Handler) SetupRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/dashboard-new", h.ServeNewDashboard)
 	mux.HandleFunc("/auth-modal.html", h.ServeAuthModal)
 	mux.HandleFunc("/debug-auth.html", h.ServeDebugAuth)
+	mux.Handle("/jobs/", auth.AuthMiddleware(http.HandlerFunc(h.ServeJobDetails)))
 
 	// Web Components static files
 	mux.Handle("/js/", http.StripPrefix("/js/", http.FileServer(http.Dir("./web/static/js/"))))
@@ -174,6 +175,16 @@ func (h *Handler) ServeAuthModal(w http.ResponseWriter, r *http.Request) {
 // ServeDebugAuth serves the debug auth test page
 func (h *Handler) ServeDebugAuth(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, "debug-auth.html")
+}
+
+// ServeJobDetails serves the standalone job details page
+func (h *Handler) ServeJobDetails(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		MethodNotAllowed(w, r)
+		return
+	}
+
+	http.ServeFile(w, r, "web/templates/job-details.html")
 }
 
 // ServeHomepage serves the marketing homepage
@@ -340,13 +351,13 @@ func calculateDateRange(dateRange string) (*time.Time, *time.Time) {
 // jsFileServer creates a file server that sets correct MIME types for JavaScript files
 func (h *Handler) jsFileServer(root http.FileSystem) http.Handler {
 	fileServer := http.FileServer(root)
-	
+
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Set correct MIME type for JavaScript files
 		if strings.HasSuffix(r.URL.Path, ".js") {
 			w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
 		}
-		
+
 		fileServer.ServeHTTP(w, r)
 	})
 }
