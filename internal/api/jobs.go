@@ -83,17 +83,17 @@ type CreateJobRequest struct {
 
 // JobResponse represents a job in API responses
 type JobResponse struct {
-	ID             string                 `json:"id"`
-	Domain         string                 `json:"domain"`
-	Status         string                 `json:"status"`
-	TotalTasks     int                    `json:"total_tasks"`
-	CompletedTasks int                    `json:"completed_tasks"`
-	FailedTasks    int                    `json:"failed_tasks"`
-	SkippedTasks   int                    `json:"skipped_tasks"`
-	Progress       float64                `json:"progress"`
-	CreatedAt      string                 `json:"created_at"`
-	StartedAt      *string                `json:"started_at,omitempty"`
-	CompletedAt    *string                `json:"completed_at,omitempty"`
+	ID             string  `json:"id"`
+	Domain         string  `json:"domain"`
+	Status         string  `json:"status"`
+	TotalTasks     int     `json:"total_tasks"`
+	CompletedTasks int     `json:"completed_tasks"`
+	FailedTasks    int     `json:"failed_tasks"`
+	SkippedTasks   int     `json:"skipped_tasks"`
+	Progress       float64 `json:"progress"`
+	CreatedAt      string  `json:"created_at"`
+	StartedAt      *string `json:"started_at,omitempty"`
+	CompletedAt    *string `json:"completed_at,omitempty"`
 	// Additional fields for dashboard
 	DurationSeconds       *int                   `json:"duration_seconds,omitempty"`
 	AvgTimePerTaskSeconds *float64               `json:"avg_time_per_task_seconds,omitempty"`
@@ -529,10 +529,10 @@ func parseTaskQueryParams(r *http.Request) TaskQueryParams {
 
 	// Parse status filter
 	status := r.URL.Query().Get("status") // Optional status filter
-	
+
 	// Parse sort parameter
 	sortParam := r.URL.Query().Get("sort") // Optional sort parameter
-	orderBy := "t.created_at DESC" // default
+	orderBy := "t.created_at DESC"         // default
 	if sortParam != "" {
 		// Handle sort direction prefix
 		direction := "DESC"
@@ -657,7 +657,7 @@ func buildTaskQuery(jobID string, params TaskQueryParams) TaskQueryBuilder {
 // formatTasksFromRows converts database rows into TaskResponse slice
 func formatTasksFromRows(rows *sql.Rows) ([]TaskResponse, error) {
 	var tasks []TaskResponse
-	
+
 	for rows.Next() {
 		var task TaskResponse
 		var domain string
@@ -773,6 +773,55 @@ type TaskResponse struct {
 	StartedAt          *string `json:"started_at,omitempty"`
 	CompletedAt        *string `json:"completed_at,omitempty"`
 	RetryCount         int     `json:"retry_count"`
+}
+
+// ExportColumn describes a column in exported task datasets
+type ExportColumn struct {
+	Key   string `json:"key"`
+	Label string `json:"label"`
+}
+
+func taskExportColumns(exportType string) []ExportColumn {
+	switch exportType {
+	case "broken-links":
+		return []ExportColumn{
+			{Key: "source_url", Label: "Found on"},
+			{Key: "url", Label: "Broken link"},
+			{Key: "status", Label: "Status"},
+			{Key: "created_at", Label: "Date"},
+			{Key: "source_type", Label: "Source Type"},
+		}
+	case "slow-pages":
+		return []ExportColumn{
+			{Key: "url", Label: "Page"},
+			{Key: "content_type", Label: "Content Type"},
+			{Key: "cache_status", Label: "Cache Status"},
+			{Key: "response_time", Label: "Load Time (ms)"},
+			{Key: "second_response_time", Label: "Load Time 2nd try (ms)"},
+			{Key: "created_at", Label: "Date"},
+		}
+	default: // "job" (all tasks)
+		return []ExportColumn{
+			{Key: "id", Label: "Task ID"},
+			{Key: "job_id", Label: "Job ID"},
+			{Key: "path", Label: "Page path"},
+			{Key: "url", Label: "Page URL"},
+			{Key: "content_type", Label: "Content Type"},
+			{Key: "status", Label: "Status"},
+			{Key: "cache_status", Label: "Cache Status"},
+			{Key: "status_code", Label: "Status Code"},
+			{Key: "response_time", Label: "Load Time (ms)"},
+			{Key: "second_cache_status", Label: "Second Cache Status"},
+			{Key: "second_response_time", Label: "Load Response Time (ms)"},
+			{Key: "retry_count", Label: "Retry Count"},
+			{Key: "error", Label: "Error"},
+			{Key: "source_type", Label: "Source"},
+			{Key: "source_url", Label: "Source page"},
+			{Key: "created_at", Label: "Created At"},
+			{Key: "started_at", Label: "Started At"},
+			{Key: "completed_at", Label: "Completed At"},
+		}
+	}
 }
 
 // getJobTasks handles GET /v1/jobs/:id/tasks
@@ -923,6 +972,7 @@ func (h *Handler) exportJobTasks(w http.ResponseWriter, r *http.Request, jobID s
 		"export_type": exportType,
 		"export_time": time.Now().UTC().Format(time.RFC3339),
 		"total_tasks": len(tasks),
+		"columns":     taskExportColumns(exportType),
 		"tasks":       tasks,
 	}
 
