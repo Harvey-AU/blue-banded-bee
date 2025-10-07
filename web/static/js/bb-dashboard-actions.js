@@ -759,20 +759,46 @@ async function exportTasks(type, format = "csv") {
     const typeForFilename = sanitizeForFilename(type);
     const baseFilename = `${typeForFilename}-${domainForFilename}-${dateStamp}-${randomSuffix}`;
 
+    const { keys, headers } = prepareExportColumns(columns, tasks);
+
     if (format === "json") {
-      const jsonContent = JSON.stringify(payload ?? { tasks }, null, 2);
+      const filteredTasks = tasks.map((task) => {
+        const row = {};
+        keys.forEach((key) => {
+          row[key] = task && Object.prototype.hasOwnProperty.call(task, key) ? task[key] : null;
+        });
+        return row;
+      });
+
+      const jsonPayload = {
+        columns: Array.isArray(columns)
+          ? columns
+          : keys.map((key, idx) => ({ key, label: headers[idx] || key })),
+        rows: filteredTasks,
+        metadata: {
+          job_id: payload?.job_id || currentJobId,
+          domain: payload?.domain || currentJobDomain || null,
+          status: payload?.status || null,
+          completed_at: payload?.completed_at || null,
+          created_at: payload?.created_at || null,
+          export_time: payload?.export_time || new Date().toISOString(),
+          export_type: payload?.export_type || type,
+          total_tasks: filteredTasks.length,
+        },
+      };
+
+      const jsonContent = JSON.stringify(jsonPayload, null, 2);
       triggerFileDownload(jsonContent, "application/json", `${baseFilename}.json`);
       return;
     }
 
-    const csv = convertToCSV(tasks, columns);
+    const csv = convertToCSVFromPrepared(tasks, keys, headers);
 
     if (!csv) {
       showDashboardError("No data available to export for this job.");
       return;
     }
 
-    // Create download link
     triggerFileDownload(csv, "text/csv", `${baseFilename}.csv`);
   } catch (error) {
     console.error("Failed to export tasks:", error);
@@ -783,13 +809,7 @@ async function exportTasks(type, format = "csv") {
 /**
  * Convert JSON data to CSV format
  */
-function convertToCSV(tasks, columns) {
-  if (!Array.isArray(tasks)) {
-    throw new Error("Unexpected data format");
-  }
-
-  const { keys, headers } = prepareExportColumns(columns, tasks);
-
+function convertToCSVFromPrepared(tasks, keys, headers) {
   if (keys.length === 0) {
     return "";
   }
