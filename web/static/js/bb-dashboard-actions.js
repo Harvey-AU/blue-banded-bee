@@ -100,9 +100,11 @@ function handleDashboardAction(action, element) {
 
     case "export-job":
     case "export-broken-links":
-    case "export-slow-pages":
-      exportTasks(action.replace("export-", ""));
+    case "export-slow-pages": {
+      const format = element.getAttribute("data-format") || element.getAttribute("bbb-format") || "csv";
+      exportTasks(action.replace("export-", ""), format);
       break;
+    }
 
     case "restart-job":
     case "restart-job-modal":
@@ -739,7 +741,7 @@ async function cancelJob(jobId) {
 /**
  * Export tasks
  */
-async function exportTasks(type) {
+async function exportTasks(type, format = "csv") {
   if (!currentJobId) return;
 
   try {
@@ -749,23 +751,55 @@ async function exportTasks(type) {
     }
 
     const response = await window.dataBinder.fetchData(url);
+    const { payload, tasks, columns } = normaliseExportPayload(response);
 
-    // Convert JSON to CSV
-    const csv = convertToCSV(response);
-
-    const domainForFilename = sanitizeForFilename(response?.domain || currentJobDomain || "domain");
-    const dateStamp = new Date().toISOString().slice(0, 10);
+    const domainForFilename = sanitizeForFilename(payload?.domain || currentJobDomain || "domain");
+    const dateStamp = formatCompletionTimestampForFilename(payload?.completed_at, payload?.export_time);
     const randomSuffix = generateRandomSuffix(4);
     const typeForFilename = sanitizeForFilename(type);
+    const baseFilename = `${typeForFilename}-${domainForFilename}-${dateStamp}-${randomSuffix}`;
 
-    // Create download link
-    const blob = new Blob([csv], { type: "text/csv" });
-    const downloadUrl = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = downloadUrl;
-    a.download = `${typeForFilename}-${domainForFilename}-${dateStamp}-${randomSuffix}.csv`;
-    a.click();
-    URL.revokeObjectURL(downloadUrl);
+    const { keys, headers } = prepareExportColumns(columns, tasks);
+
+    if (format === "json") {
+      const filteredTasks = tasks.map((task) => {
+        const row = {};
+        keys.forEach((key) => {
+          row[key] = task && Object.prototype.hasOwnProperty.call(task, key) ? task[key] : null;
+        });
+        return row;
+      });
+
+      const jsonPayload = {
+        columns: Array.isArray(columns)
+          ? columns
+          : keys.map((key, idx) => ({ key, label: headers[idx] || key })),
+        rows: filteredTasks,
+        metadata: {
+          job_id: payload?.job_id || currentJobId,
+          domain: payload?.domain || currentJobDomain || null,
+          status: payload?.status || null,
+          completed_at: payload?.completed_at || null,
+          created_at: payload?.created_at || null,
+          export_time: payload?.export_time || new Date().toISOString(),
+          export_type: payload?.export_type || type,
+          total_tasks: filteredTasks.length,
+        },
+      };
+
+      const jsonContent = JSON.stringify(jsonPayload, null, 2);
+      triggerFileDownload(jsonContent, "application/json", `${baseFilename}.json`);
+      return;
+    }
+
+    const csv = convertToCSVFromPrepared(tasks, keys, headers);
+
+    if (!csv) {
+      showDashboardError("No data available to export for this job.");
+      return;
+    }
+
+    triggerFileDownload(csv, "text/csv", `${baseFilename}.csv`);
   } catch (error) {
     console.error("Failed to export tasks:", error);
     showDashboardError("Failed to export tasks");
@@ -775,40 +809,17 @@ async function exportTasks(type) {
 /**
  * Convert JSON data to CSV format
  */
-function convertToCSV(data) {
-  // Handle different response formats
-  let tasks = [];
-
-  // Check for standardised API response format
-  if (data.data && data.data.tasks && Array.isArray(data.data.tasks)) {
-    tasks = data.data.tasks;
-  } else if (Array.isArray(data)) {
-    tasks = data;
-  } else if (data.tasks && Array.isArray(data.tasks)) {
-    tasks = data.tasks;
-  } else {
-    throw new Error("Unexpected data format");
+function convertToCSVFromPrepared(tasks, keys, headers) {
+  if (keys.length === 0) {
+    return "";
   }
 
-  if (tasks.length === 0) {
-    return "No data to export";
-  }
-
-  // Get all unique keys from all tasks
-  const headers = new Set();
-  tasks.forEach(task => {
-    Object.keys(task).forEach(key => headers.add(key));
-  });
-  const headerArray = Array.from(headers);
-
-  // Build CSV header row
   const csvRows = [];
-  csvRows.push(headerArray.map(h => escapeCSVValue(h)).join(","));
+  csvRows.push(headers.map((header) => escapeCSVValue(header)).join(","));
 
-  // Build CSV data rows
-  tasks.forEach(task => {
-    const row = headerArray.map(header => {
-      const value = task[header];
+  tasks.forEach((task) => {
+    const row = keys.map((key) => {
+      const value = task != null ? task[key] : "";
       return escapeCSVValue(value);
     });
     csvRows.push(row.join(","));
@@ -858,6 +869,117 @@ function sanitizeForFilename(value) {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "") || "data";
+}
+
+/**
+ * Format completion timestamp for filenames (YYYY-MM-DD-HH-MM)
+ */
+function formatCompletionTimestampForFilename(completedAt, fallback) {
+  const parse = (value) => {
+    if (!value) return null;
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? null : date;
+  };
+
+  const date =
+    parse(completedAt) ||
+    parse(fallback) ||
+    new Date();
+
+  const pad = (num) => String(num).padStart(2, "0");
+
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}-${pad(date.getHours())}-${pad(date.getMinutes())}`;
+}
+
+/**
+ * Normalise export payloads into tasks + column definitions
+ */
+function normaliseExportPayload(data) {
+  let payload = data;
+  if (payload && payload.data) {
+    payload = payload.data;
+  }
+
+  let tasks = [];
+  if (Array.isArray(payload?.tasks)) {
+    tasks = payload.tasks;
+  } else if (Array.isArray(payload)) {
+    tasks = payload;
+  }
+
+  const columns = Array.isArray(payload?.columns) ? payload.columns : null;
+
+  return {
+    payload,
+    tasks,
+    columns,
+  };
+}
+
+/**
+ * Determine ordered columns for export output
+ */
+function prepareExportColumns(columns, tasks) {
+  if (Array.isArray(columns) && columns.length > 0) {
+    const keys = columns.map((col) => col.key);
+    const headers = columns.map((col) => col.label || formatColumnLabel(col.key));
+    return { keys, headers };
+  }
+
+  const keySet = new Set();
+  tasks.forEach((task) => {
+    if (!task) return;
+    Object.keys(task).forEach((key) => keySet.add(key));
+  });
+
+  const keys = Array.from(keySet);
+  const headers = keys.map((key) => formatColumnLabel(key));
+
+  return { keys, headers };
+}
+
+/**
+ * Convert snake_case keys into title-cased labels
+ */
+function formatColumnLabel(key) {
+  if (!key) return "";
+
+  const overrides = {
+    id: "Task ID",
+    job_id: "Job ID",
+    url: "URL",
+    ms: "ms",
+  };
+
+  if (overrides[key]) {
+    return overrides[key];
+  }
+
+  return key
+    .toString()
+    .replace(/_/g, " ")
+    .trim()
+    .split(" ")
+    .map((part) => {
+      if (overrides[part]) {
+        return overrides[part];
+      }
+      return part.charAt(0).toUpperCase() + part.slice(1);
+    })
+    .join(" ");
+}
+
+/**
+ * Trigger a file download with the provided content
+ */
+function triggerFileDownload(content, mimeType, filename) {
+  const blob = new Blob([content], { type: mimeType });
+  const downloadUrl = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = downloadUrl;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(downloadUrl);
 }
 
 /**
@@ -930,5 +1052,6 @@ if (typeof window !== "undefined") {
   window.sortTasks = sortTasks;
   window.viewJobDetails = viewJobDetails;
   window.loadJobTasks = loadJobTasks;
+  window.exportTasks = exportTasks;
+  window.showDashboardError = showDashboardError;
 }
-    currentJobDomain = job.domain || job.domain_name || job?.domains?.name || job?.domain?.name || null;

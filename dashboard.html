@@ -1037,6 +1037,12 @@
         border-radius: 0 0 5px 5px;
       }
 
+      .bb-dropdown-divider {
+        height: 1px;
+        background: #e5e7eb;
+        margin: 6px 0;
+      }
+
       @media (max-width: 768px) {
         .page-header .container {
           padding: 0 16px;
@@ -1580,9 +1586,13 @@
               <div class="bb-dropdown">
                 <button class="bb-btn bb-btn-secondary" style="font-size: 12px" bbb-action="toggle-export-menu">Export ▼</button>
                 <div class="bb-dropdown-menu" id="exportDropdownMenu">
-                  <button class="bb-dropdown-item" bbb-action="export-job">All Tasks</button>
-                  <button class="bb-dropdown-item" bbb-action="export-broken-links">Failed Pages</button>
-                  <button class="bb-dropdown-item" bbb-action="export-slow-pages">Slow Pages</button>
+                  <button class="bb-dropdown-item" data-format="csv" bbb-action="export-job">All Tasks (CSV)</button>
+                  <button class="bb-dropdown-item" data-format="csv" bbb-action="export-broken-links">Failed Pages (CSV)</button>
+                  <button class="bb-dropdown-item" data-format="csv" bbb-action="export-slow-pages">Slow Pages (CSV)</button>
+                  <div class="bb-dropdown-divider"></div>
+                  <button class="bb-dropdown-item" data-format="json" bbb-action="export-job">All Tasks (JSON)</button>
+                  <button class="bb-dropdown-item" data-format="json" bbb-action="export-broken-links">Failed Pages (JSON)</button>
+                  <button class="bb-dropdown-item" data-format="json" bbb-action="export-slow-pages">Slow Pages (JSON)</button>
                 </div>
               </div>
               <button class="bb-btn bb-btn-secondary" style="font-size: 12px" bbb-action="refresh-tasks">↻ Refresh</button>
