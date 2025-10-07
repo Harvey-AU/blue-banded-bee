@@ -5,6 +5,7 @@
 
 // Global state for modal management
 let currentJobId = null;
+let currentJobDomain = null;
 let tasksCurrentPage = 0;
 let tasksSortColumn = "created_at";
 let tasksSortDirection = "desc";
@@ -152,6 +153,7 @@ async function viewJobDetails(jobId) {
   }
 
   currentJobId = jobId;
+  currentJobDomain = null;
 
   // Reset pagination state
   tasksCurrentPage = 0;
@@ -691,6 +693,7 @@ function closeModal() {
     modal.style.display = "none";
   }
   currentJobId = null;
+  currentJobDomain = null;
 }
 
 /**
@@ -750,12 +753,17 @@ async function exportTasks(type) {
     // Convert JSON to CSV
     const csv = convertToCSV(response);
 
+    const domainForFilename = sanitizeForFilename(response?.domain || currentJobDomain || "domain");
+    const dateStamp = new Date().toISOString().slice(0, 10);
+    const randomSuffix = generateRandomSuffix(4);
+    const typeForFilename = sanitizeForFilename(type);
+
     // Create download link
     const blob = new Blob([csv], { type: "text/csv" });
     const downloadUrl = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = downloadUrl;
-    a.download = `${currentJobId}-${type}.csv`;
+    a.download = `${typeForFilename}-${domainForFilename}-${dateStamp}-${randomSuffix}.csv`;
     a.click();
     URL.revokeObjectURL(downloadUrl);
   } catch (error) {
@@ -825,6 +833,31 @@ function escapeCSVValue(value) {
   }
 
   return stringValue;
+}
+
+/**
+ * Generate a short random suffix for filenames
+ */
+function generateRandomSuffix(length = 4) {
+  const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
+  let result = "";
+  for (let i = 0; i < length; i++) {
+    const idx = Math.floor(Math.random() * chars.length);
+    result += chars[idx];
+  }
+  return result;
+}
+
+/**
+ * Sanitise strings for safe filename usage
+ */
+function sanitizeForFilename(value) {
+  return (value || "")
+    .toString()
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "") || "data";
 }
 
 /**
@@ -898,3 +931,4 @@ if (typeof window !== "undefined") {
   window.viewJobDetails = viewJobDetails;
   window.loadJobTasks = loadJobTasks;
 }
+    currentJobDomain = job.domain || job.domain_name || job?.domains?.name || job?.domain?.name || null;
