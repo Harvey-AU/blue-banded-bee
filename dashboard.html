@@ -1138,14 +1138,25 @@
 
       /* Info Icon & Tooltip Styles */
       .bb-info-icon {
-        display: inline-block;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 16px;
+        height: 16px;
         margin-left: 6px;
         color: #6b7280;
-        font-size: 14px;
         cursor: help;
         user-select: none;
         transition: color 0.2s;
         vertical-align: middle;
+        line-height: 0;
+      }
+
+      .bb-info-icon svg {
+        width: 100%;
+        height: 100%;
+        display: block;
+        fill: currentColor;
       }
 
       .bb-info-icon:hover {
