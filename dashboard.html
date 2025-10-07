@@ -6,12 +6,11 @@
     <title>Blue Banded Bee - Dashboard</title>
 
     <!-- Sentry Error Monitoring & Performance -->
-    <script src="https://browser.sentry-cdn.com/8.45.0/bundle.tracing.replay.min.js"
-            crossorigin="anonymous"></script>
+    <script src="https://browser.sentry-cdn.com/8.45.0/bundle.tracing.replay.min.js" crossorigin="anonymous"></script>
     <script>
       Sentry.init({
         dsn: "https://04f57d1dedc67f307cef525b1b1551a6@o4509113950928896.ingest.us.sentry.io/4509113952370688",
-        environment: window.location.hostname === 'app.bluebandedbee.co' ? 'production' : 'development',
+        environment: window.location.hostname === "app.bluebandedbee.co" ? "production" : "development",
 
         // Performance Monitoring
         tracesSampleRate: 0.1, // 10% of transactions
@@ -23,7 +22,7 @@
         // User context
         beforeSend(event) {
           // Add user email if logged in
-          const userEmail = localStorage.getItem('userEmail');
+          const userEmail = localStorage.getItem("userEmail");
           if (userEmail) {
             event.user = { email: userEmail };
           }
@@ -33,13 +32,13 @@
         // Ignore certain errors
         ignoreErrors: [
           // Browser extensions
-          'ResizeObserver loop limit exceeded',
-          'Non-Error promise rejection captured',
+          "ResizeObserver loop limit exceeded",
+          "Non-Error promise rejection captured",
           // Network errors that are expected
           /Failed to fetch/,
           /NetworkError/,
-          /Load failed/
-        ]
+          /Load failed/,
+        ],
       });
     </script>
 
@@ -1141,9 +1140,10 @@
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        width: 16px;
-        height: 16px;
-        margin-left: 6px;
+        width: 1em;
+        height: 1em;
+        margin-left: 0.2em;
+        margin-top: -0.7em;
         color: #6b7280;
         cursor: help;
         user-select: none;
@@ -1170,7 +1170,9 @@
         border-radius: 8px;
         padding: 16px;
         max-width: 360px;
-        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        box-shadow:
+          0 10px 15px -3px rgba(0, 0, 0, 0.1),
+          0 4px 6px -2px rgba(0, 0, 0, 0.05);
         z-index: 10000;
         font-size: 14px;
         line-height: 1.6;
@@ -1408,9 +1410,7 @@
                   <div class="bb-progress-fill" bbb-style:width="{progress}%"></div>
                 </div>
                 <div class="bb-job-details">
-                  <span bbb-text="completed_tasks">0</span> / <span bbb-text="total_tasks">0</span> tasks (<span bbb-text="progress"
-                    >0</span
-                  >%)
+                  <span bbb-text="completed_tasks">0</span> / <span bbb-text="total_tasks">0</span> tasks (<span bbb-text="progress">0</span>%)
                 </div>
               </div>
               <div class="bb-job-footer">
@@ -1420,17 +1420,8 @@
                 </div>
                 <div class="bb-job-actions">
                   <button class="bb-job-link" bbb-action="view-job-details" bbb-id="{id}">View Details</button>
-                  <button
-                    class="bb-job-link"
-                    bbb-action="restart-job"
-                    bbb-id="{id}"
-                    bbb-show="status=completed,failed,cancelled"
-                  >
-                    Restart
-                  </button>
-                  <button class="bb-job-link" bbb-action="cancel-job" bbb-id="{id}" bbb-show="status=running,pending">
-                    Cancel
-                  </button>
+                  <button class="bb-job-link" bbb-action="restart-job" bbb-id="{id}" bbb-show="status=completed,failed,cancelled">Restart</button>
+                  <button class="bb-job-link" bbb-action="cancel-job" bbb-id="{id}" bbb-show="status=running,pending">Cancel</button>
                 </div>
               </div>
             </div>
@@ -1483,9 +1474,7 @@
               </div>
             </div>
             <!-- Empty state -->
-            <div class="bb-analysis-empty" bbb-show="external_redirects.length=0">
-              No external redirects found in the selected time period.
-            </div>
+            <div class="bb-analysis-empty" bbb-show="external_redirects.length=0">No external redirects found in the selected time period.</div>
           </div>
         </div>
       </div>
@@ -1697,7 +1686,7 @@
             refreshInterval: 10, // Auto-refresh every 10 seconds
             apiBaseUrl: "", // Production config
             autoRefresh: true,
-            networkMonitoring: true
+            networkMonitoring: true,
           });
 
           // Setup dashboard action handlers
@@ -1708,7 +1697,7 @@
           console.log("Dashboard initialized successfully with unified auth system");
         } catch (error) {
           console.error("Failed to initialize dashboard:", error);
-          
+
           // Show error message to user
           const errorNotification = document.createElement("div");
           errorNotification.style.cssText = `
