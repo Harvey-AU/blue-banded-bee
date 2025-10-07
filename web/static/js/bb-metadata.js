@@ -10,6 +10,12 @@ class MetricsMetadata {
     this.metadata = null;
     this.loading = false;
     this.loadPromise = null;
+    this.activeTooltip = null;
+    this.activeTrigger = null;
+    this.activeIcon = null;
+    this._outsideClickHandler = null;
+    this._hoverCleanup = null;
+    this._hoverTimeout = null;
   }
 
   /**
@@ -125,6 +131,11 @@ class MetricsMetadata {
       infoIcon.setAttribute("data-bbb-tooltip", info);
       infoIcon.setAttribute("aria-label", "More information");
 
+      // Show rich tooltip on hover
+      infoIcon.addEventListener("mouseenter", () => {
+        this._showTooltip(infoIcon, { trigger: "hover" });
+      });
+
       // Add click handler for mobile
       infoIcon.addEventListener("click", (e) => {
         e.stopPropagation();
@@ -137,11 +148,43 @@ class MetricsMetadata {
   }
 
   /**
-   * Show tooltip (for mobile/click interaction)
+   * Remove the currently visible tooltip (if any)
    */
-  _showTooltip(iconElement) {
-    // Remove any existing tooltips
-    document.querySelectorAll(".bb-tooltip-popup").forEach((t) => t.remove());
+  _removeTooltip() {
+    if (this._hoverCleanup) {
+      this._hoverCleanup();
+      this._hoverCleanup = null;
+    }
+
+    if (this._hoverTimeout) {
+      clearTimeout(this._hoverTimeout);
+      this._hoverTimeout = null;
+    }
+
+    if (this.activeTooltip && this.activeTooltip.parentElement) {
+      this.activeTooltip.remove();
+    }
+
+    if (this._outsideClickHandler) {
+      document.removeEventListener("click", this._outsideClickHandler);
+      this._outsideClickHandler = null;
+    }
+
+    this.activeTooltip = null;
+    this.activeTrigger = null;
+    this.activeIcon = null;
+  }
+
+  /**
+   * Show tooltip (hover and click interaction)
+   * @param {HTMLElement} iconElement
+   * @param {Object} options
+   */
+  _showTooltip(iconElement, options = {}) {
+    const trigger = options.trigger || "click";
+
+    // Remove any existing tooltip first
+    this._removeTooltip();
 
     const tooltipContent = iconElement.getAttribute("data-bbb-tooltip");
     if (!tooltipContent) return;
@@ -149,6 +192,7 @@ class MetricsMetadata {
     // Create tooltip popup
     const tooltip = document.createElement("div");
     tooltip.className = "bb-tooltip-popup";
+    tooltip.dataset.trigger = trigger;
     tooltip.innerHTML = tooltipContent;
 
     // Add close button
@@ -156,7 +200,7 @@ class MetricsMetadata {
     closeBtn.className = "bb-tooltip-close";
     closeBtn.innerHTML = "×";
     closeBtn.setAttribute("aria-label", "Close");
-    closeBtn.addEventListener("click", () => tooltip.remove());
+    closeBtn.addEventListener("click", () => this._removeTooltip());
     tooltip.appendChild(closeBtn);
 
     // Position tooltip
@@ -184,16 +228,56 @@ class MetricsMetadata {
     tooltip.style.top = `${top}px`;
     tooltip.style.left = `${left}px`;
 
+    // Track active tooltip state
+    this.activeTooltip = tooltip;
+    this.activeTrigger = trigger;
+    this.activeIcon = iconElement;
+
     // Close on click outside
-    const closeOnClickOutside = (e) => {
-      if (!tooltip.contains(e.target) && e.target !== iconElement) {
-        tooltip.remove();
-        document.removeEventListener("click", closeOnClickOutside);
+    this._outsideClickHandler = (e) => {
+      if (!this.activeTooltip) return;
+      if (!this.activeTooltip.contains(e.target) && e.target !== this.activeIcon) {
+        this._removeTooltip();
       }
     };
     setTimeout(() => {
-      document.addEventListener("click", closeOnClickOutside);
+      document.addEventListener("click", this._outsideClickHandler);
     }, 0);
+
+    // Additional handling for hover-triggered tooltips
+    if (trigger === "hover") {
+      const cancelRemoval = () => {
+        if (this._hoverTimeout) {
+          clearTimeout(this._hoverTimeout);
+          this._hoverTimeout = null;
+        }
+      };
+
+      const scheduleRemoval = () => {
+        cancelRemoval();
+        this._hoverTimeout = setTimeout(() => {
+          const iconHovered = this.activeIcon?.matches(":hover");
+          const tooltipHovered = this.activeTooltip?.matches(":hover");
+          if (!iconHovered && !tooltipHovered) {
+            this._removeTooltip();
+          }
+        }, 150);
+      };
+
+      iconElement.addEventListener("mouseleave", scheduleRemoval);
+      tooltip.addEventListener("mouseleave", scheduleRemoval);
+      iconElement.addEventListener("mouseenter", cancelRemoval);
+      tooltip.addEventListener("mouseenter", cancelRemoval);
+
+      // Store cleanup so we can remove listeners when tooltip closes
+      this._hoverCleanup = () => {
+        iconElement.removeEventListener("mouseleave", scheduleRemoval);
+        tooltip.removeEventListener("mouseleave", scheduleRemoval);
+        iconElement.removeEventListener("mouseenter", cancelRemoval);
+        tooltip.removeEventListener("mouseenter", cancelRemoval);
+        cancelRemoval();
+      };
+    }
   }
 
   /**
