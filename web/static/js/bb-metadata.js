@@ -117,6 +117,7 @@ class MetricsMetadata {
       // Create info icon
       const infoIcon = document.createElement("span");
       infoIcon.className = "bb-info-icon";
+      infoIcon.textContent = "ℹ";
       infoIcon.setAttribute("data-bbb-tooltip", info);
       infoIcon.setAttribute("aria-label", "More information");
 
