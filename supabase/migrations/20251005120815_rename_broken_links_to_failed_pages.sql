@@ -50,12 +50,12 @@ BEGIN
 
                 -- Second request performance (for cache warming validation)
                 AVG(second_response_time) FILTER (WHERE second_response_time IS NOT NULL) AS avg_second_response_time_ms,
-                COUNT(*) FILTER (WHERE second_response_time IS NOT NULL) AS total_second_requests,
-                COUNT(*) FILTER (WHERE second_response_time < response_time) AS total_improved_on_second,
+                COUNT(*) FILTER (WHERE second_response_time IS NOT NULL AND cache_status = 'MISS') AS total_second_requests,
+                COUNT(*) FILTER (WHERE second_response_time IS NOT NULL AND cache_status = 'MISS' AND second_response_time < response_time) AS total_improved_on_second,
 
                 -- Total cache time savings calculation
-                SUM(GREATEST(0, response_time - second_response_time)) FILTER (WHERE second_response_time IS NOT NULL) AS total_time_saved_ms,
-                AVG(GREATEST(0, response_time - second_response_time)) FILTER (WHERE second_response_time IS NOT NULL) AS avg_time_saved_per_page_ms,
+                SUM(GREATEST(0, response_time - second_response_time)) FILTER (WHERE second_response_time IS NOT NULL AND cache_status = 'MISS') AS total_time_saved_ms,
+                AVG(GREATEST(0, response_time - second_response_time)) FILTER (WHERE second_response_time IS NOT NULL AND cache_status = 'MISS') AS avg_time_saved_per_page_ms,
 
                 -- Task completion metrics
                 COUNT(*) AS total_tasks_processed,
