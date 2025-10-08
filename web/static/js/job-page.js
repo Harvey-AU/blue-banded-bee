@@ -12,7 +12,14 @@ function hasNonNullValue(obj) {
   return Object.values(obj).some((value) => value !== null && value !== undefined);
 }
 
-const hasNonNullValue = (obj) => !!obj && Object.values(obj).some((value) => value != null);
+function escapeHTML(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
 
 function formatCount(value) {
   const numeric = Number(value);
@@ -130,8 +137,9 @@ function applyMetricsVisibility(metrics) {
     anyVisible = true;
 
     groupEl.querySelectorAll("[data-metric-field]").forEach((row) => {
-      const fieldPath = row.getAttribute("data-metric-field");
-      const shouldShow = resolvePath(metrics, fieldPath);
+      const fieldPath = row.getAttribute("data-metric-field") || "";
+      const path = fieldPath.startsWith("metrics.") ? fieldPath.slice("metrics.".length) : fieldPath;
+      const shouldShow = resolvePath(metrics, path);
       row.style.display = shouldShow === false ? "none" : "";
     });
   });
@@ -392,12 +400,16 @@ function renderTasksTable(tasks) {
     .map(
       (task) => `
         <tr>
-          <td><a href="${task.url}" target="_blank" rel="noopener noreferrer"><code>${task.path}</code></a></td>
-          <td><span class="status-pill ${task.status}">${task.status_label}</span></td>
-          <td>${task.response_time}</td>
-          <td>${task.cache_status}</td>
-          <td>${task.second_response_time}</td>
-          <td>${task.status_code}</td>
+          <td>
+            <a href="${escapeHTML(task.url)}" target="_blank" rel="noopener noreferrer">
+              <code>${escapeHTML(task.path)}</code>
+            </a>
+          </td>
+          <td><span class="status-pill ${escapeHTML(task.status)}">${escapeHTML(task.status_label)}</span></td>
+          <td>${escapeHTML(task.response_time)}</td>
+          <td>${escapeHTML(task.cache_status)}</td>
+          <td>${escapeHTML(task.second_response_time)}</td>
+          <td>${escapeHTML(task.status_code)}</td>
         </tr>
       `,
     )
@@ -754,7 +766,7 @@ async function loadTasks(state) {
   renderTaskHeader(state);
 
   const formattedTasks = formatTasksForBinding(tasks, state.domain);
-  state.binder.renderTemplate("task", formattedTasks);
+  renderTasksTable(formattedTasks);
 
   updateTasksTableVisibility(formattedTasks.length);
   updatePagination(pagination, state);
