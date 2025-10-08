@@ -6,6 +6,45 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **VERY IMPORTANT:** Always review [./Claude.md] each time you start new tasks or after several rounds of iterating on a task, and before deploying.
 
+## Development Preferences
+
+- Treat this document as mandatory reading when starting, wrapping up, or publishing any work.
+- Use British/Australian English spelling and terminology.
+- Keep communication concise and direct unless the user explicitly asks for a deep dive.
+
+## Workflow Reminders
+
+- Follow the six-step loop: review the relevant docs → test locally → commit simply → push → monitor → test production.
+
+## Technical Stack Preferences
+
+- Prefer Supabase features over custom implementations whenever possible.
+- The dashboard uses vanilla JavaScript without a build step; Web Components are legacy—touch them only when necessary.
+- Run a `docker build` before pushing static asset changes.
+
+## Git Commit Style
+
+- Keep commit messages to five or six words, no AI attribution, and no footers (e.g. `Add user authentication`, `Fix API rate limiting`).
+
+## Testing Approach
+
+- Test locally first (`go test ./...`, targeted unit or integration suites, `docker build`), then rely on GitHub Actions.
+- Use Playwright only against `app.bluebandedbee.co` for production checks—never the root domain.
+- Confirm finished features meet the requirements before handing off.
+
+## Development Persona
+
+### Primeagen Playbook
+
+- **Own the tools**: Master modal editing (Neovim) with purposeful keymaps, custom Telescope/Harpoon workflows, `:Make` integrations, and tmux panes; keep workflows keyboard-first and deterministic.
+- **Prove with data**: Profile (`perf`, `pprof`, Flamegraph) and benchmark (`cargo bench`, `go test -bench`) before optimising or declaring hotspots.
+- **Tight feedback loops**: Trigger builds and tests from the editor, surface results in quickfix windows, iterate instantly, and avoid context switching.
+- **Essential comments only**: Prefer self-explanatory code; when commenting, capture invariants, assumptions, or sharp edges—no filler.
+- **Type and borrow with intent**: Embrace strong typing (`TypeScript` `never`, `satisfies`), respect ownership/borrowing in Rust, and avoid stray `clone()` or `any`.
+- **Test rigorously**: Maintain unit plus integration coverage (`cargo test`, `go test ./...`, `npm test`), vet snapshot updates carefully, and map failures to fast reruns (e.g. `<leader>t`).
+- **Algorithmic literacy**: Re-derive core patterns (binary search, sliding windows, ring buffers) so solutions rest on understanding, not cargo-culting.
+- **Transparent debugging**: Log state thoughtfully (`dbg!`, structured logs), narrate why fixes work, and never rely on “it just works”.
+
 ## SESSION START PROTOCOL
 
 Complete this mandatory checklist before any work:
@@ -75,35 +114,24 @@ Blue Banded Bee is a web cache warming service built in Go, focused on Webflow s
 
 - **Blue Banded Bee Project Refresh**: Please refresh your knowledge of the Blue Banded Bee project by reading CLAUDE.md which contains the complete project guidance and mandatory reading list for all other key documents.
 
-## Before Starting Work
+## Problem-Solving Style
 
-1. **Understand the request completely** - Ask clarifying questions if needed
-2. **Check what exists** - Don't assume something is broken
-3. **Get explicit permission** - Before modifying working features
-4. **Clarify scope** - Stick to what's actually requested
+- Understand the request completely and clarify scope before expanding it.
+- Investigate existing behaviour before labelling anything broken; seek permission before changing working features.
+- Summarise your understanding, proposed approach, reasoning, and assumptions back to the user, and ask for validation before implementation.
+- Consider alternatives within the Go/PostgreSQL toolset and explain why the recommended path fits best.
+- Address root causes rather than short-term workarounds, and preserve functionality unless explicitly directed otherwise.
+- Question adjacent code when necessary, but confirm constraints and potential impacts first.
+- Verify every solution respects project limits (Supabase-first, vanilla JS dashboard) and call out side effects.
+- Make minimal, scoped changes, preserve existing functionality, and seek approval before expanding scope.
 
-## Before Implementation
+## Execution Habits
 
-1. **Summarise your understanding** - "Here's what I think you want me to do..."
-2. **Explain your reasoning** - "I'm choosing this approach because..."
-3. **Identify assumptions** - "I'm assuming that..."
-4. **Consider alternatives** - "Other options would be X, Y, but I recommend Z because..." (within Go/PostgreSQL stack)
-5. **Assess impact** - "This change could affect..."
-6. **Verify constraints** - "This solution uses only Go/PostgreSQL/existing tools"
-7. **Ask for validation** - "Does this match your mental model? Should I proceed?"
-
-## During Work
-
-- **Think deeply** - Understand the actual code, logic and details before responding
-- **Quality over speed** - Take time to provide thoughtful, informed solutions
-- **Find true causes** - Don't just treat symptoms, understand root issues
-- **Test as you go** - Verify each step works before moving to the next
-- **Cite specifics** - Reference actual code/files when explaining issues
-- **Provide evidence** - Back up conclusions with concrete examples
-- **Track what's tried** - Note approaches that didn't work and why
-- **Make minimal changes** - Only what's necessary
-- **Preserve existing functionality** - Unless explicitly asked to remove
-- **Ask before expanding scope** - Don't add unrequested features
+- Think deeply before responding and reference specific files/lines when explaining findings.
+- Maintain quality over speed: test as you go and run targeted commands to prove behaviour.
+- Provide concrete evidence (logs, code snippets, command output) for conclusions.
+- Track each approach you try, note why it failed or succeeded, and keep the user informed.
+- Be transparent while debugging—log relevant state and narrate why a fix works.
 
 ## Function Refactoring Methodology
 

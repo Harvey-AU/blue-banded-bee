@@ -10,6 +10,26 @@ Each version represents a distinct set of changes, even if released on the same 
 
 ## [Unreleased]
 
+### In Progress
+
+- **Public Share Links**: Backend endpoints and job page hooks ready; front-end share controls still to be completed.
+
+## [0.6.2] – 2025-10-08
+
+### Fixed
+
+- **Worker Resilience**: Added per-task timeouts, panic recovery, and transient connection retries so stuck tasks and “bad connection” alerts recover automatically.
+
+## [0.6.1] – 2025-10-08
+
+### Added
+
+- **Standalone Job Page**: Split the dashboard modal into `/jobs/{id}` with binder-driven stats, exports, metadata tooltips and pagination parity.
+
+### Improved
+
+- **Dashboard Binding Helpers**: Hardened metric visibility, tooltip loading, and task table rendering for the new job page.
+
 ## [0.6.0] – 2025-10-05
 
 ### Fixed
