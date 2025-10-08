@@ -5,6 +5,13 @@ const integerFormatter = new Intl.NumberFormat("en-AU", { maximumFractionDigits:
 const decimalFormatter = new Intl.NumberFormat("en-AU", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 const METRIC_GROUP_KEYS = ["cache", "warming", "performance", "distribution", "reliability", "discovery", "redirects"];
 
+function hasNonNullValue(obj) {
+  if (!obj) {
+    return false;
+  }
+  return Object.values(obj).some((value) => value !== null && value !== undefined);
+}
+
 const hasNonNullValue = (obj) => !!obj && Object.values(obj).some((value) => value != null);
 
 function formatCount(value) {
@@ -125,7 +132,7 @@ function applyMetricsVisibility(metrics) {
     groupEl.querySelectorAll("[data-metric-field]").forEach((row) => {
       const fieldPath = row.getAttribute("data-metric-field");
       const shouldShow = resolvePath(metrics, fieldPath);
-      row.style.display = shouldShow ? "" : "none";
+      row.style.display = shouldShow === false ? "none" : "";
     });
   });
 
@@ -349,13 +356,54 @@ function formatTasksForBinding(tasks, defaultDomain) {
       path: task.path || "/",
       url: buildTaskUrl(task, defaultDomain),
       status: statusRaw,
-      status_label: statusRaw.replace(/_/g, " "),
+      status_label: statusRaw.replace(/_/g, " ").toUpperCase(),
       response_time: formatMilliseconds(task.response_time, { empty: "—" }),
       cache_status: task.cache_status || "—",
       second_response_time: formatMilliseconds(task.second_response_time, { empty: "—" }),
       status_code: task.status_code != null ? String(task.status_code) : "—",
     };
   });
+}
+
+function renderTasksTable(tasks) {
+  const table = document.getElementById("tasksTable");
+  const tbody = document.getElementById("tasksTableBody");
+  const emptyEl = document.getElementById("tasksEmpty");
+
+  if (!table || !tbody) {
+    return;
+  }
+
+  if (!tasks.length) {
+    table.style.display = "none";
+    if (emptyEl) {
+      emptyEl.style.display = "block";
+    }
+    tbody.innerHTML = "";
+    return;
+  }
+
+  table.style.display = "table";
+  if (emptyEl) {
+    emptyEl.style.display = "none";
+  }
+
+  const rowsHtml = tasks
+    .map(
+      (task) => `
+        <tr>
+          <td><a href="${task.url}" target="_blank" rel="noopener noreferrer"><code>${task.path}</code></a></td>
+          <td><span class="status-pill ${task.status}">${task.status_label}</span></td>
+          <td>${task.response_time}</td>
+          <td>${task.cache_status}</td>
+          <td>${task.second_response_time}</td>
+          <td>${task.status_code}</td>
+        </tr>
+      `,
+    )
+    .join("");
+
+  tbody.innerHTML = rowsHtml;
 }
 
 function renderTaskHeader(state) {
