@@ -3,8 +3,8 @@ package api
 import (
 	"context"
 	"database/sql"
-"encoding/json"
-"errors"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -320,13 +320,15 @@ func (h *Handler) getJob(w http.ResponseWriter, r *http.Request, jobID string) {
 		return
 	}
 
-		response, err := h.fetchJobResponse(r.Context(), jobID, user.OrganisationID)
+	response, err := h.fetchJobResponse(r.Context(), jobID, user.OrganisationID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			NotFound(w, r, "Job not found")
-		} else {
-			InternalError(w, r, err)
+			return
 		}
+
+		log.Error().Err(err).Str("job_id", jobID).Msg("Failed to fetch job details")
+		InternalError(w, r, err)
 		return
 	}
 
@@ -413,7 +415,6 @@ func (h *Handler) fetchJobResponse(ctx context.Context, jobID string, organisati
 
 	return response, nil
 }
-
 
 // JobActionRequest represents actions that can be performed on jobs
 type JobActionRequest struct {
@@ -927,19 +928,14 @@ func (h *Handler) getJobTasks(w http.ResponseWriter, r *http.Request, jobID stri
 
 // exportJobTasks handles GET /v1/jobs/:id/export
 func (h *Handler) exportJobTasks(w http.ResponseWriter, r *http.Request, jobID string) {
-	user := h.validateJobAccess(w, r, jobID)
-	if user == nil {
-		return
-	}
-
-	h.serveJobExport(w, r, jobID)
+	h.serveJobExport(w, r, jobID, true)
 }
 
-func (h *Handler) serveJobExport(w http.ResponseWriter, r *http.Request, jobID string) {
-	// Validate user authentication and job access
-	user := h.validateJobAccess(w, r, jobID)
-	if user == nil {
-		return // validateJobAccess already wrote the error response
+func (h *Handler) serveJobExport(w http.ResponseWriter, r *http.Request, jobID string, requireAuth bool) {
+	if requireAuth {
+		if h.validateJobAccess(w, r, jobID) == nil {
+			return
+		}
 	}
 
 	// Get export type from query parameter
@@ -950,8 +946,6 @@ func (h *Handler) serveJobExport(w http.ResponseWriter, r *http.Request, jobID s
 
 	// Build query based on export type
 	var whereClause string
-	var args []interface{}
-	args = append(args, jobID)
 
 	switch exportType {
 	case "broken-links":
@@ -983,7 +977,7 @@ func (h *Handler) serveJobExport(w http.ResponseWriter, r *http.Request, jobID s
 		LIMIT 10000
 	`, whereClause)
 
-	rows, err := h.DB.GetDB().QueryContext(r.Context(), query, args...)
+	rows, err := h.DB.GetDB().QueryContext(r.Context(), query, jobID)
 	if err != nil {
 		log.Error().Err(err).Str("job_id", jobID).Msg("Failed to export tasks")
 		DatabaseError(w, r, err)

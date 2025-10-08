@@ -673,7 +673,9 @@
     handleLinkClick(linkType, data, element) {
       switch (linkType) {
         case 'job-details':
-          window.location.href = `/jobs?id=${data.id}`;
+          if (data?.id) {
+            window.location.href = `/jobs/${data.id}`;
+          }
           break;
         case 'cancel-job':
           this.cancelJob(data.id);
