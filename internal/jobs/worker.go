@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"net/url"
@@ -20,6 +21,8 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/rs/zerolog/log"
 )
+
+const taskProcessingTimeout = 2 * time.Minute
 
 // JobPerformance tracks performance metrics for a specific job
 type JobPerformance struct {
@@ -212,7 +215,7 @@ func (wp *WorkerPool) AddJob(jobID string, options *JobOptions) {
 	var domainName string
 	var crawlDelay sql.NullInt64
 	var dbFindLinks bool
-	
+
 	// When options is nil (recovery mode), fetch find_links from DB
 	// Otherwise use the provided options value
 	err := wp.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
@@ -231,7 +234,7 @@ func (wp *WorkerPool) AddJob(jobID string, options *JobOptions) {
 		if options != nil {
 			findLinks = options.FindLinks
 		}
-		
+
 		jobInfo := &JobInfo{
 			DomainName: domainName,
 			FindLinks:  findLinks,
@@ -488,7 +491,26 @@ func (wp *WorkerPool) prepareTaskForProcessing(ctx context.Context, task *db.Tas
 	return jobsTask, nil
 }
 
-func (wp *WorkerPool) processNextTask(ctx context.Context) error {
+func (wp *WorkerPool) processNextTask(ctx context.Context) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			stack := debug.Stack()
+			recoveredErr := fmt.Errorf("panic in processNextTask: %v", r)
+			if hub := sentry.CurrentHub(); hub != nil {
+				hub.Recover(r)
+			} else {
+				sentry.CaptureException(recoveredErr)
+			}
+			log.Error().
+				Interface("panic", r).
+				Bytes("stack", stack).
+				Msg("Recovered from panic in processNextTask")
+			if err == nil {
+				err = recoveredErr
+			}
+		}
+	}()
+
 	// Claim a pending task from active jobs
 	task, err := wp.claimPendingTask(ctx)
 	if err != nil {
@@ -503,7 +525,10 @@ func (wp *WorkerPool) processNextTask(ctx context.Context) error {
 		}
 
 		// Process the task
-		result, err := wp.processTask(ctx, jobsTask)
+		taskCtx, cancel := context.WithTimeout(ctx, taskProcessingTimeout)
+		defer cancel()
+
+		result, err := wp.processTask(taskCtx, jobsTask)
 		if err != nil {
 			return wp.handleTaskError(ctx, task, err)
 		} else {
@@ -566,7 +591,7 @@ func (wp *WorkerPool) StartTaskMonitor(ctx context.Context) {
 // checkForPendingTasks looks for any pending tasks and adds their jobs to the pool
 func (wp *WorkerPool) checkForPendingTasks(ctx context.Context) error {
 	log.Debug().Msg("Checking database for jobs with pending tasks")
-	
+
 	var jobIDs []string
 	err := wp.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
 		// Query for jobs with pending tasks
@@ -575,12 +600,12 @@ func (wp *WorkerPool) checkForPendingTasks(ctx context.Context) error {
 			WHERE status = $1 
 			LIMIT 100
 		`, TaskStatusPending)
-		
+
 		if err != nil {
 			return err
 		}
 		defer rows.Close()
-		
+
 		for rows.Next() {
 			var jobID string
 			if err := rows.Scan(&jobID); err != nil {
@@ -693,64 +718,113 @@ func (wp *WorkerPool) SetJobManager(jm *JobManager) {
 
 // recoverStaleTasks checks for and resets stale tasks
 func (wp *WorkerPool) recoverStaleTasks(ctx context.Context) error {
-	return wp.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
-		staleTime := time.Now().Add(-TaskStaleTimeout)
+	const maxRetries = 3
+	var lastErr error
 
-		// Get stale tasks
-		rows, err := tx.QueryContext(ctx, `
-			SELECT t.id, t.job_id, t.page_id, p.path, t.retry_count 
-			FROM tasks t
-			JOIN pages p ON t.page_id = p.id
-			WHERE status = $1 
-			AND started_at < $2
-		`, TaskStatusRunning, staleTime)
-
-		if err != nil {
-			return err
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		if ctx.Err() != nil {
+			return ctx.Err()
 		}
-		defer rows.Close()
 
-		for rows.Next() {
-			var taskID, jobID string
-			var pageID int
-			var path string
-			var retryCount int
-			if err := rows.Scan(&taskID, &jobID, &pageID, &path, &retryCount); err != nil {
-				continue
-			}
+		err := wp.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
+			staleTime := time.Now().Add(-TaskStaleTimeout)
 
-			if retryCount >= MaxTaskRetries {
-				// Mark as failed if max retries exceeded
-				_, err = tx.ExecContext(ctx, `
-					UPDATE tasks 
-					SET status = $1,
-						error = $2,
-						completed_at = $3
-					WHERE id = $4
-				`, TaskStatusFailed, "Max retries exceeded", time.Now(), taskID)
-			} else {
-				// Reset to pending for retry
-				_, err = tx.ExecContext(ctx, `
-					UPDATE tasks 
-					SET status = $1,
-						started_at = NULL,
-						retry_count = retry_count + 1
-					WHERE id = $2
-				`, TaskStatusPending, taskID)
-			}
+			rows, err := tx.QueryContext(ctx, `
+				SELECT t.id, t.job_id, t.page_id, p.path, t.retry_count 
+				FROM tasks t
+				JOIN pages p ON t.page_id = p.id
+				WHERE status = $1 
+				AND started_at < $2
+			`, TaskStatusRunning, staleTime)
 
 			if err != nil {
-				// Critical: Database connection failure preventing task recovery
-				sentry.CaptureException(fmt.Errorf("failed to update stale task %s: %w", taskID, err))
-
-				log.Error().Err(err).
-					Str("task_id", taskID). 
-					Msg("Failed to update stale task")
+				return err
 			}
+			defer rows.Close()
+
+			for rows.Next() {
+				var taskID, jobID string
+				var pageID int
+				var path string
+				var retryCount int
+				if err := rows.Scan(&taskID, &jobID, &pageID, &path, &retryCount); err != nil {
+					continue
+				}
+
+				if retryCount >= MaxTaskRetries {
+					_, err = tx.ExecContext(ctx, `
+						UPDATE tasks 
+						SET status = $1,
+							error = $2,
+							completed_at = $3
+						WHERE id = $4
+					`, TaskStatusFailed, "Max retries exceeded", time.Now(), taskID)
+				} else {
+					_, err = tx.ExecContext(ctx, `
+						UPDATE tasks 
+						SET status = $1,
+							started_at = NULL,
+							retry_count = retry_count + 1
+						WHERE id = $2
+					`, TaskStatusPending, taskID)
+				}
+
+				if err != nil {
+					sentry.CaptureException(fmt.Errorf("failed to update stale task %s: %w", taskID, err))
+					log.Error().Err(err).
+						Str("task_id", taskID).
+						Msg("Failed to update stale task")
+				}
+			}
+
+			return rows.Err()
+		})
+
+		if err == nil {
+			return nil
 		}
 
-		return rows.Err()
-	})
+		lastErr = err
+
+		if !isTransientDBError(err) || attempt == maxRetries {
+			return lastErr
+		}
+
+		backoff := time.Duration(attempt) * time.Second
+		log.Warn().
+			Err(err).
+			Int("attempt", attempt).
+			Dur("backoff", backoff).
+			Msg("Transient DB error during recoverStaleTasks, retrying")
+
+		select {
+		case <-time.After(backoff):
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+
+	return lastErr
+}
+
+func isTransientDBError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	if errors.Is(err, sql.ErrConnDone) {
+		return true
+	}
+
+	msg := strings.ToLower(err.Error())
+	if strings.Contains(msg, "bad connection") ||
+		strings.Contains(msg, "connection reset") ||
+		strings.Contains(msg, "broken pipe") ||
+		strings.Contains(msg, "no connection to the server") {
+		return true
+	}
+
+	return false
 }
 
 // recoverRunningJobs finds jobs that were in 'running' state when the server shut down
@@ -768,12 +842,12 @@ func (wp *WorkerPool) recoverRunningJobs(ctx context.Context) error {
 			WHERE j.status = $1
 			AND t.status = $2
 		`, JobStatusRunning, TaskStatusRunning)
-		
+
 		if err != nil {
 			return err
 		}
 		defer rows.Close()
-		
+
 		for rows.Next() {
 			var jobID string
 			if err := rows.Scan(&jobID); err != nil {
@@ -781,7 +855,7 @@ func (wp *WorkerPool) recoverRunningJobs(ctx context.Context) error {
 			}
 			jobIDs = append(jobIDs, jobID)
 		}
-		
+
 		return rows.Err()
 	})
 
@@ -1031,11 +1105,11 @@ func (wp *WorkerPool) CleanupStuckJobs(ctx context.Context) error {
 			AND total_tasks > 0 
 			AND total_tasks = completed_tasks + failed_tasks
 		`, JobStatusCompleted, time.Now(), JobStatusPending, JobStatusRunning)
-		
+
 		if err != nil {
 			return err
 		}
-		
+
 		rowsAffected, err = result.RowsAffected()
 		return err
 	})
@@ -1206,7 +1280,7 @@ func (wp *WorkerPool) processDiscoveredLinks(ctx context.Context, task *Task, re
 // handleTaskError processes task failures with appropriate retry logic and status updates
 func (wp *WorkerPool) handleTaskError(ctx context.Context, task *db.Task, taskErr error) error {
 	now := time.Now()
-	
+
 	// Check if this is a blocking error (403/429)
 	if isBlockingError(taskErr) {
 		// For blocking errors, only retry twice (less aggressive)
@@ -1251,21 +1325,21 @@ func (wp *WorkerPool) handleTaskError(ctx context.Context, task *db.Task, taskEr
 			Int("retry_count", task.RetryCount).
 			Msg("Task failed permanently")
 	}
-	
+
 	// Update task status in database
 	updErr := wp.dbQueue.UpdateTaskStatus(ctx, task)
 	if updErr != nil {
 		sentry.CaptureException(updErr)
 		log.Error().Err(updErr).Str("task_id", task.ID).Msg("Failed to mark task as failed")
 	}
-	
+
 	return updErr
 }
 
 // handleTaskSuccess processes successful task completion with metrics and database updates
 func (wp *WorkerPool) handleTaskSuccess(ctx context.Context, task *db.Task, result *crawler.CrawlResult) error {
 	now := time.Now()
-	
+
 	// Mark as completed with basic metrics
 	task.Status = string(TaskStatusCompleted)
 	task.CompletedAt = now
@@ -1300,7 +1374,7 @@ func (wp *WorkerPool) handleTaskSuccess(ctx context.Context, task *db.Task, resu
 	task.Headers = []byte("{}")
 	task.SecondHeaders = []byte("{}")
 	task.CacheCheckAttempts = []byte("[]")
-	
+
 	// Only attempt marshaling if data exists and is non-empty
 	if result.Headers != nil && len(result.Headers) > 0 {
 		if headerBytes, err := json.Marshal(result.Headers); err == nil {
@@ -1314,7 +1388,7 @@ func (wp *WorkerPool) handleTaskSuccess(ctx context.Context, task *db.Task, resu
 			log.Error().Err(err).Str("task_id", task.ID).Interface("headers", result.Headers).Msg("Failed to marshal headers")
 		}
 	}
-	
+
 	if result.SecondHeaders != nil && len(result.SecondHeaders) > 0 {
 		if secondHeaderBytes, err := json.Marshal(result.SecondHeaders); err == nil {
 			// Validate that the marshaled JSON is valid
@@ -1327,7 +1401,7 @@ func (wp *WorkerPool) handleTaskSuccess(ctx context.Context, task *db.Task, resu
 			log.Error().Err(err).Str("task_id", task.ID).Interface("second_headers", result.SecondHeaders).Msg("Failed to marshal second headers")
 		}
 	}
-	
+
 	if result.CacheCheckAttempts != nil && len(result.CacheCheckAttempts) > 0 {
 		if attemptsBytes, err := json.Marshal(result.CacheCheckAttempts); err == nil {
 			// Validate that the marshaled JSON is valid
@@ -1352,7 +1426,7 @@ func (wp *WorkerPool) handleTaskSuccess(ctx context.Context, task *db.Task, resu
 	if result.ResponseTime > 0 {
 		wp.evaluateJobPerformance(task.JobID, result.ResponseTime)
 	}
-	
+
 	return updErr
 }
 
@@ -1485,11 +1559,11 @@ func (wp *WorkerPool) updateTaskPriorities(ctx context.Context, jobID string, do
 			AND p.path = ANY($4)
 			AND t.priority_score < $1
 		`, newPriority, jobID, domainID, paths)
-		
+
 		if err != nil {
 			return err
 		}
-		
+
 		rowsAffected, err = result.RowsAffected()
 		return err
 	})
