@@ -3,7 +3,8 @@ package api
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
+"encoding/json"
+"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -50,6 +51,28 @@ func (h *Handler) JobHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		case "export":
 			h.exportJobTasks(w, r, jobID)
+			return
+		case "share-links":
+			if len(parts) == 2 {
+				if r.Method == http.MethodPost {
+					h.createJobShareLink(w, r, jobID)
+					return
+				}
+				MethodNotAllowed(w, r)
+				return
+			}
+
+			if len(parts) == 3 {
+				token := parts[2]
+				if r.Method == http.MethodDelete {
+					h.revokeJobShareLink(w, r, jobID, token)
+					return
+				}
+				MethodNotAllowed(w, r)
+				return
+			}
+
+			NotFound(w, r, "Endpoint not found")
 			return
 		default:
 			NotFound(w, r, "Endpoint not found")
@@ -297,13 +320,28 @@ func (h *Handler) getJob(w http.ResponseWriter, r *http.Request, jobID string) {
 		return
 	}
 
+		response, err := h.fetchJobResponse(r.Context(), jobID, user.OrganisationID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			NotFound(w, r, "Job not found")
+		} else {
+			InternalError(w, r, err)
+		}
+		return
+	}
+
+	WriteSuccess(w, r, response, "Job retrieved successfully")
+}
+
+func (h *Handler) fetchJobResponse(ctx context.Context, jobID string, organisationID *string) (JobResponse, error) {
 	var total, completed, failed, skipped int
 	var status, domain string
 	var createdAt, startedAt, completedAt sql.NullTime
 	var durationSeconds sql.NullInt64
 	var avgTimePerTaskSeconds sql.NullFloat64
 	var statsJSON []byte
-	err = h.DB.GetDB().QueryRowContext(r.Context(), `
+
+	query := `
 		SELECT j.total_tasks, j.completed_tasks, j.failed_tasks, j.skipped_tasks, j.status,
 		       d.name as domain, j.created_at, j.started_at, j.completed_at,
 		       EXTRACT(EPOCH FROM (j.completed_at - j.started_at))::INTEGER as duration_seconds,
@@ -313,15 +351,20 @@ func (h *Handler) getJob(w http.ResponseWriter, r *http.Request, jobID string) {
 		       j.stats
 		FROM jobs j
 		JOIN domains d ON j.domain_id = d.id
-		WHERE j.id = $1 AND j.organisation_id = $2
-	`, jobID, user.OrganisationID).Scan(&total, &completed, &failed, &skipped, &status, &domain, &createdAt, &startedAt, &completedAt, &durationSeconds, &avgTimePerTaskSeconds, &statsJSON)
+		WHERE j.id = $1`
 
-	if err != nil {
-		NotFound(w, r, "Job not found")
-		return
+	args := []interface{}{jobID}
+	if organisationID != nil {
+		query += ` AND j.organisation_id = $2`
+		args = append(args, *organisationID)
 	}
 
-	// Calculate progress
+	row := h.DB.GetDB().QueryRowContext(ctx, query, args...)
+	err := row.Scan(&total, &completed, &failed, &skipped, &status, &domain, &createdAt, &startedAt, &completedAt, &durationSeconds, &avgTimePerTaskSeconds, &statsJSON)
+	if err != nil {
+		return JobResponse{}, err
+	}
+
 	progress := 0.0
 	if total > skipped {
 		progress = float64(completed+failed) / float64(total-skipped) * 100
@@ -338,7 +381,6 @@ func (h *Handler) getJob(w http.ResponseWriter, r *http.Request, jobID string) {
 		Progress:       progress,
 	}
 
-	// Add duration and average time if available
 	if durationSeconds.Valid {
 		duration := int(durationSeconds.Int64)
 		response.DurationSeconds = &duration
@@ -348,7 +390,6 @@ func (h *Handler) getJob(w http.ResponseWriter, r *http.Request, jobID string) {
 		response.AvgTimePerTaskSeconds = &avgTime
 	}
 
-	// Parse and add stats if available
 	if len(statsJSON) > 0 {
 		var stats map[string]interface{}
 		if err := json.Unmarshal(statsJSON, &stats); err == nil {
@@ -356,21 +397,23 @@ func (h *Handler) getJob(w http.ResponseWriter, r *http.Request, jobID string) {
 		}
 	}
 
-	// Add timestamps if available
 	if createdAt.Valid {
 		response.CreatedAt = createdAt.Time.Format(time.RFC3339)
+	} else {
+		response.CreatedAt = time.Now().Format(time.RFC3339)
 	}
 	if startedAt.Valid {
-		startedTime := startedAt.Time.Format(time.RFC3339)
-		response.StartedAt = &startedTime
+		started := startedAt.Time.Format(time.RFC3339)
+		response.StartedAt = &started
 	}
 	if completedAt.Valid {
-		completedTime := completedAt.Time.Format(time.RFC3339)
-		response.CompletedAt = &completedTime
+		completed := completedAt.Time.Format(time.RFC3339)
+		response.CompletedAt = &completed
 	}
 
-	WriteSuccess(w, r, response, "Job retrieved successfully")
+	return response, nil
 }
+
 
 // JobActionRequest represents actions that can be performed on jobs
 type JobActionRequest struct {
@@ -884,6 +927,15 @@ func (h *Handler) getJobTasks(w http.ResponseWriter, r *http.Request, jobID stri
 
 // exportJobTasks handles GET /v1/jobs/:id/export
 func (h *Handler) exportJobTasks(w http.ResponseWriter, r *http.Request, jobID string) {
+	user := h.validateJobAccess(w, r, jobID)
+	if user == nil {
+		return
+	}
+
+	h.serveJobExport(w, r, jobID)
+}
+
+func (h *Handler) serveJobExport(w http.ResponseWriter, r *http.Request, jobID string) {
 	// Validate user authentication and job access
 	user := h.validateJobAccess(w, r, jobID)
 	if user == nil {
