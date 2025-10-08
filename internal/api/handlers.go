@@ -104,7 +104,7 @@ func (h *Handler) SetupRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/dashboard-new", h.ServeNewDashboard)
 	mux.HandleFunc("/auth-modal.html", h.ServeAuthModal)
 	mux.HandleFunc("/debug-auth.html", h.ServeDebugAuth)
-	mux.Handle("/jobs/", auth.AuthMiddleware(http.HandlerFunc(h.ServeJobDetails)))
+	mux.HandleFunc("/jobs/", h.ServeJobDetails)
 
 	// Web Components static files
 	mux.Handle("/js/", http.StripPrefix("/js/", http.FileServer(http.Dir("./web/static/js/"))))
