@@ -712,22 +712,7 @@
           <div style="overflow-x: auto">
             <table id="tasksTable" style="display: none" role="table" aria-label="Job tasks">
               <thead></thead>
-              <tbody id="tasksTableBody">
-                <tr bbb-template="task" style="display: none">
-                  <td>
-                    <a target="_blank" rel="noopener noreferrer" bbb-href="{url}">
-                      <code bbb-text="path">/</code>
-                    </a>
-                  </td>
-                  <td>
-                    <span class="status-pill" bbb-class="status-pill {status}" bbb-text="status_label">status</span>
-                  </td>
-                  <td bbb-text="response_time">—</td>
-                  <td bbb-text="cache_status">—</td>
-                  <td bbb-text="second_response_time">—</td>
-                  <td bbb-text="status_code">—</td>
-                </tr>
-              </tbody>
+              <tbody id="tasksTableBody"></tbody>
             </table>
           </div>
           <div class="pagination" id="tasksPagination" style="display: none">
