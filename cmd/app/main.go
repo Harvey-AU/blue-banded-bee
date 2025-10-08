@@ -157,7 +157,7 @@ func main() {
 
 			// Check for stuck jobs (running >5 min with 0% progress)
 			stuckJobRows, err := pgDB.GetDB().Query(`
-				SELECT id, domain_id, created_at, started_at, progress
+				SELECT j.id, j.domain_id, j.created_at, j.started_at, j.progress
 				FROM jobs j
 				JOIN domains d ON j.domain_id = d.id
 				WHERE j.status = 'running'
