@@ -182,6 +182,79 @@
         font-size: 13px;
       }
 
+      /* Info icon + tooltip styles (shared with dashboard) */
+      .bb-info-icon {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 1em;
+        height: 1em;
+        margin-left: 0.2em;
+        margin-top: -0.7em;
+        color: #6b7280;
+        cursor: help;
+        user-select: none;
+        transition: color 0.2s;
+        vertical-align: middle;
+        line-height: 0;
+      }
+
+      .bb-info-icon svg {
+        width: 100%;
+        height: 100%;
+        display: block;
+        fill: currentColor;
+      }
+
+      .bb-info-icon:hover {
+        color: #2563eb;
+      }
+
+      .bb-tooltip-popup {
+        position: fixed;
+        background: #ffffff;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        padding: 16px;
+        max-width: 360px;
+        box-shadow:
+          0 10px 15px -3px rgba(0, 0, 0, 0.1),
+          0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        z-index: 10000;
+        font-size: 14px;
+        line-height: 1.6;
+        color: #374151;
+      }
+
+      .bb-tooltip-popup a {
+        color: #2563eb;
+        text-decoration: underline;
+      }
+
+      .bb-tooltip-popup a:hover {
+        color: #1d4ed8;
+      }
+
+      .bb-tooltip-close {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        background: transparent;
+        border: none;
+        font-size: 24px;
+        color: #9ca3af;
+        cursor: pointer;
+        padding: 0;
+        width: 24px;
+        height: 24px;
+        line-height: 24px;
+        text-align: center;
+      }
+
+      .bb-tooltip-close:hover {
+        color: #374151;
+      }
+
       .tasks-controls {
         display: flex;
         flex-wrap: wrap;
@@ -417,6 +490,9 @@
           <button class="bb-btn" id="refreshJobBtn" aria-label="Refresh job overview">↻ Refresh</button>
         </div>
         <div class="stats-container">
+          <div class="stat-row" data-metrics-empty style="grid-column: 1 / -1; display: none; text-align: center">
+            No statistics available yet.
+          </div>
           <div class="stats-group" data-metric-group="cache">
             <h3>Cache Performance</h3>
             <div class="stat-row">

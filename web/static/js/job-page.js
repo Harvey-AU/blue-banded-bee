@@ -5,6 +5,8 @@ const integerFormatter = new Intl.NumberFormat("en-AU", { maximumFractionDigits:
 const decimalFormatter = new Intl.NumberFormat("en-AU", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 const METRIC_GROUP_KEYS = ["cache", "warming", "performance", "distribution", "reliability", "discovery", "redirects"];
 
+const hasNonNullValue = (obj) => !!obj && Object.values(obj).some((value) => value != null);
+
 function formatCount(value) {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) {
@@ -102,6 +104,8 @@ function applyMetricsVisibility(metrics) {
     return;
   }
 
+  let anyVisible = false;
+
   METRIC_GROUP_KEYS.forEach((key) => {
     const groupEl = container.querySelector(`[data-metric-group="${key}"]`);
     if (!groupEl) {
@@ -116,12 +120,19 @@ function applyMetricsVisibility(metrics) {
       return;
     }
 
+    anyVisible = true;
+
     groupEl.querySelectorAll("[data-metric-field]").forEach((row) => {
       const fieldPath = row.getAttribute("data-metric-field");
       const shouldShow = resolvePath(metrics, fieldPath);
       row.style.display = shouldShow ? "" : "none";
     });
   });
+
+  const emptyState = container.querySelector("[data-metrics-empty]");
+  if (emptyState) {
+    emptyState.style.display = anyVisible ? "none" : "flex";
+  }
 }
 
 async function ensureMetadataLoaded() {
@@ -130,10 +141,12 @@ async function ensureMetadataLoaded() {
   }
 
   try {
-    if (!window.metricsMetadata.isLoaded()) {
-      await window.metricsMetadata.load();
+    await window.metricsMetadata.load();
+    if (typeof window.metricsMetadata.refresh === "function") {
+      window.metricsMetadata.refresh();
+    } else {
+      window.metricsMetadata.initializeInfoIcons();
     }
-    window.metricsMetadata.initializeInfoIcons();
   } catch (error) {
     console.warn("Failed to initialise metrics metadata tooltips:", error);
   }
@@ -197,33 +210,16 @@ function formatJobForBinding(job, jobId) {
 
 function formatMetricsForBinding(statsRaw = {}) {
   const cacheStats = statsRaw.cache_stats || {};
-  const cacheVisible =
-    cacheStats.hits != null ||
-    cacheStats.misses != null ||
-    cacheStats.hit_rate != null ||
-    cacheStats.bypass != null;
+  const cacheVisible = hasNonNullValue(cacheStats);
 
   const warmingStats = statsRaw.cache_warming_effect || {};
-  const warmingVisible =
-    warmingStats.total_time_saved_seconds != null ||
-    warmingStats.avg_time_saved_per_page_ms != null ||
-    warmingStats.avg_second_request_ms != null ||
-    warmingStats.total_validated != null ||
-    warmingStats.total_improved != null ||
-    warmingStats.improvement_rate != null;
+  const warmingVisible = hasNonNullValue(warmingStats);
 
   const responseTimes = statsRaw.response_times || {};
-  const performanceVisible =
-    responseTimes.avg_ms != null ||
-    responseTimes.median_ms != null ||
-    responseTimes.p95_ms != null ||
-    responseTimes.p90_ms != null ||
-    responseTimes.p99_ms != null ||
-    responseTimes.min_ms != null ||
-    responseTimes.max_ms != null;
+  const performanceVisible = hasNonNullValue(responseTimes);
 
   const slowBuckets = statsRaw.slow_page_buckets || {};
-  const distributionVisible = Object.keys(slowBuckets).some((key) => Number(slowBuckets[key]) > 0);
+  const distributionVisible = hasNonNullValue(slowBuckets);
 
   const taskSummary = statsRaw.task_summary || {};
   const reliabilityVisible =
@@ -233,13 +229,10 @@ function formatMetricsForBinding(statsRaw = {}) {
     taskSummary.with_errors != null;
 
   const discoverySources = statsRaw.discovery_sources || {};
-  const discoveryVisible = Object.keys(discoverySources).some((key) => Number(discoverySources[key]) > 0);
+  const discoveryVisible = hasNonNullValue(discoverySources);
 
   const redirectStats = statsRaw.redirect_stats || {};
-  const redirectVisible =
-    redirectStats.total != null ||
-    redirectStats["301_permanent"] != null ||
-    redirectStats["302_temporary"] != null;
+  const redirectVisible = hasNonNullValue(redirectStats);
 
   return {
     cache: {
@@ -247,7 +240,7 @@ function formatMetricsForBinding(statsRaw = {}) {
       hits: formatCount(cacheStats.hits ?? 0),
       misses: formatCount(cacheStats.misses ?? 0),
       bypass: formatCount(cacheStats.bypass ?? 0),
-      bypass_visible: Number(cacheStats.bypass ?? 0) > 0,
+      bypass_visible: cacheStats.bypass != null,
       hit_rate: formatPercentage(cacheStats.hit_rate, { empty: "0%" }),
     },
     warming: {
@@ -257,9 +250,9 @@ function formatMetricsForBinding(statsRaw = {}) {
       avg_second_request: formatMilliseconds(warmingStats.avg_second_request_ms, { empty: "0ms" }),
       avg_second_request_visible: warmingStats.avg_second_request_ms != null,
       validated: formatCount(warmingStats.total_validated ?? 0),
-      validated_visible: Number(warmingStats.total_validated ?? 0) > 0,
+      validated_visible: warmingStats.total_validated != null,
       improved: formatCount(warmingStats.total_improved ?? 0),
-      improved_visible: Number(warmingStats.total_improved ?? 0) > 0,
+      improved_visible: warmingStats.total_improved != null,
       improvement_rate: formatPercentage(warmingStats.improvement_rate, { empty: "0%" }),
     },
     performance: {
@@ -279,52 +272,52 @@ function formatMetricsForBinding(statsRaw = {}) {
     distribution: {
       visible: distributionVisible,
       under_500ms: formatCount(slowBuckets.under_500ms ?? 0),
-      under_500ms_visible: Number(slowBuckets.under_500ms ?? 0) > 0,
+      under_500ms_visible: slowBuckets.under_500ms != null,
       _500ms_to_1s: formatCount(slowBuckets["500ms_to_1s"] ?? 0),
-      _500ms_to_1s_visible: Number(slowBuckets["500ms_to_1s"] ?? 0) > 0,
+      _500ms_to_1s_visible: slowBuckets["500ms_to_1s"] != null,
       _1_to_1_5s: formatCount(slowBuckets["1_to_1_5s"] ?? 0),
-      _1_to_1_5s_visible: Number(slowBuckets["1_to_1_5s"] ?? 0) > 0,
+      _1_to_1_5s_visible: slowBuckets["1_to_1_5s"] != null,
       _1_5_to_2s: formatCount(slowBuckets["1_5_to_2s"] ?? 0),
-      _1_5_to_2s_visible: Number(slowBuckets["1_5_to_2s"] ?? 0) > 0,
+      _1_5_to_2s_visible: slowBuckets["1_5_to_2s"] != null,
       _2_to_3s: formatCount(slowBuckets["2_to_3s"] ?? 0),
-      _2_to_3s_visible: Number(slowBuckets["2_to_3s"] ?? 0) > 0,
+      _2_to_3s_visible: slowBuckets["2_to_3s"] != null,
       _3_to_5s: formatCount(slowBuckets["3_to_5s"] ?? 0),
-      _3_to_5s_visible: Number(slowBuckets["3_to_5s"] ?? 0) > 0,
+      _3_to_5s_visible: slowBuckets["3_to_5s"] != null,
       _5_to_10s: formatCount(slowBuckets["5_to_10s"] ?? 0),
-      _5_to_10s_visible: Number(slowBuckets["5_to_10s"] ?? 0) > 0,
+      _5_to_10s_visible: slowBuckets["5_to_10s"] != null,
       over_10s: formatCount(slowBuckets.over_10s ?? 0),
-      over_10s_visible: Number(slowBuckets.over_10s ?? 0) > 0,
+      over_10s_visible: slowBuckets.over_10s != null,
     },
     reliability: {
       visible: reliabilityVisible,
       failed_pages: formatCount(statsRaw.total_failed_pages ?? 0),
-      failed_pages_visible: Number(statsRaw.total_failed_pages ?? 0) > 0,
+      failed_pages_visible: statsRaw.total_failed_pages != null,
       server_errors: formatCount(statsRaw.total_server_errors ?? 0),
-      server_errors_visible: Number(statsRaw.total_server_errors ?? 0) > 0,
+      server_errors_visible: statsRaw.total_server_errors != null,
       slow_over_3s: formatCount(slowBuckets.total_slow_over_3s ?? 0),
-      slow_over_3s_visible: Number(slowBuckets.total_slow_over_3s ?? 0) > 0,
+      slow_over_3s_visible: slowBuckets.total_slow_over_3s != null,
       tasks_with_errors: formatCount(taskSummary.with_errors ?? 0),
-      tasks_with_errors_visible: Number(taskSummary.with_errors ?? 0) > 0,
+      tasks_with_errors_visible: taskSummary.with_errors != null,
     },
     discovery: {
       visible: discoveryVisible,
       sitemap: formatCount(discoverySources.sitemap ?? 0),
-      sitemap_visible: Number(discoverySources.sitemap ?? 0) > 0,
+      sitemap_visible: discoverySources.sitemap != null,
       discovered: formatCount(discoverySources.discovered ?? 0),
-      discovered_visible: Number(discoverySources.discovered ?? 0) > 0,
+      discovered_visible: discoverySources.discovered != null,
       manual: formatCount(discoverySources.manual ?? 0),
-      manual_visible: Number(discoverySources.manual ?? 0) > 0,
+      manual_visible: discoverySources.manual != null,
       unique_sources: formatCount(discoverySources.unique_sources ?? 0),
-      unique_sources_visible: Number(discoverySources.unique_sources ?? 0) > 0,
+      unique_sources_visible: discoverySources.unique_sources != null,
     },
     redirects: {
       visible: redirectVisible,
       total: formatCount(redirectStats.total ?? 0),
-      total_visible: Number(redirectStats.total ?? 0) > 0,
+      total_visible: redirectStats.total != null,
       permanent: formatCount(redirectStats["301_permanent"] ?? 0),
-      permanent_visible: Number(redirectStats["301_permanent"] ?? 0) > 0,
+      permanent_visible: redirectStats["301_permanent"] != null,
       temporary: formatCount(redirectStats["302_temporary"] ?? 0),
-      temporary_visible: Number(redirectStats["302_temporary"] ?? 0) > 0,
+      temporary_visible: redirectStats["302_temporary"] != null,
     },
   };
 }
@@ -440,11 +433,9 @@ function updateTasksTableVisibility(count) {
 }
 
 function updatePagination(pagination, state) {
-  const total = Number(pagination.total ?? state.totalTasks ?? 0);
-  const offset = Number(pagination.offset ?? state.page * state.limit);
-  const hasNext = Boolean(pagination.has_next ?? offset + state.limit < total);
-  const hasPrev = Boolean(pagination.has_prev ?? offset > 0);
-
+  const total = Number(pagination?.total ?? state.totalTasks ?? 0);
+  const offset = Number(pagination?.offset ?? state.page * state.limit);
+  const paginationEl = document.getElementById("tasksPagination");
   const start = total === 0 ? 0 : offset + 1;
   const end = total === 0 ? 0 : Math.min(offset + state.limit, total);
   const summary = total === 0 ? "0 tasks" : `${start}-${end} of ${formatCount(total)} tasks`;
@@ -453,6 +444,22 @@ function updatePagination(pagination, state) {
     state.binder.updateElements({ tasks: { pagination: { summary } } });
   }
 
+  if (!pagination || total <= state.limit) {
+    if (paginationEl) {
+      paginationEl.style.display = "none";
+    }
+    state.hasPrev = false;
+    state.hasNext = false;
+    state.totalTasks = total;
+    return;
+  }
+
+  if (paginationEl) {
+    paginationEl.style.display = "flex";
+  }
+
+  const hasNext = Boolean(pagination.has_next ?? offset + state.limit < total);
+  const hasPrev = Boolean(pagination.has_prev ?? offset > 0);
   const prevBtn = document.getElementById("prevTasksBtn");
   const nextBtn = document.getElementById("nextTasksBtn");
   if (prevBtn) {
