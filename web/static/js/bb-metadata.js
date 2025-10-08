@@ -50,19 +50,47 @@ class MetricsMetadata {
    */
   async _fetchMetadata() {
     try {
-      const response = await window.dataBinder.fetchData("/v1/metadata/metrics");
-
-      // fetchData already unwraps the data field
-      if (response) {
-        return response;
+      if (window.dataBinder && typeof window.dataBinder.fetchData === "function") {
+        const response = await window.dataBinder.fetchData("/v1/metadata/metrics");
+        if (response) {
+          return response;
+        }
+        console.warn("Metadata response is empty:", response);
+        return {};
       }
 
-      console.warn("Metadata response is empty:", response);
-      return {};
+      const headers = await this._buildAuthHeaders();
+      const response = await fetch("/v1/metadata/metrics", { headers });
+
+      if (!response.ok) {
+        console.warn("Metadata request failed", response.status, response.statusText);
+        return {};
+      }
+
+      const payload = await response.json();
+      if (payload?.data) {
+        return payload.data;
+      }
+      return payload || {};
     } catch (error) {
       console.error("Failed to load metrics metadata:", error);
-      return {}; // Return empty object on error
+      return {};
     }
+  }
+
+  async _buildAuthHeaders() {
+    if (window.supabase?.auth) {
+      try {
+        const { data, error } = await window.supabase.auth.getSession();
+        if (!error && data?.session?.access_token) {
+          return { Authorization: `Bearer ${data.session.access_token}` };
+        }
+      } catch (authError) {
+        console.warn("Unable to resolve Supabase session for metadata", authError);
+      }
+    }
+
+    return {};
   }
 
   /**
