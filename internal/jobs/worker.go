@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"net/url"
@@ -717,64 +718,113 @@ func (wp *WorkerPool) SetJobManager(jm *JobManager) {
 
 // recoverStaleTasks checks for and resets stale tasks
 func (wp *WorkerPool) recoverStaleTasks(ctx context.Context) error {
-	return wp.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
-		staleTime := time.Now().Add(-TaskStaleTimeout)
+	const maxRetries = 3
+	var lastErr error
 
-		// Get stale tasks
-		rows, err := tx.QueryContext(ctx, `
-			SELECT t.id, t.job_id, t.page_id, p.path, t.retry_count 
-			FROM tasks t
-			JOIN pages p ON t.page_id = p.id
-			WHERE status = $1 
-			AND started_at < $2
-		`, TaskStatusRunning, staleTime)
-
-		if err != nil {
-			return err
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		if ctx.Err() != nil {
+			return ctx.Err()
 		}
-		defer rows.Close()
 
-		for rows.Next() {
-			var taskID, jobID string
-			var pageID int
-			var path string
-			var retryCount int
-			if err := rows.Scan(&taskID, &jobID, &pageID, &path, &retryCount); err != nil {
-				continue
-			}
+		err := wp.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
+			staleTime := time.Now().Add(-TaskStaleTimeout)
 
-			if retryCount >= MaxTaskRetries {
-				// Mark as failed if max retries exceeded
-				_, err = tx.ExecContext(ctx, `
-					UPDATE tasks 
-					SET status = $1,
-						error = $2,
-						completed_at = $3
-					WHERE id = $4
-				`, TaskStatusFailed, "Max retries exceeded", time.Now(), taskID)
-			} else {
-				// Reset to pending for retry
-				_, err = tx.ExecContext(ctx, `
-					UPDATE tasks 
-					SET status = $1,
-						started_at = NULL,
-						retry_count = retry_count + 1
-					WHERE id = $2
-				`, TaskStatusPending, taskID)
-			}
+			rows, err := tx.QueryContext(ctx, `
+				SELECT t.id, t.job_id, t.page_id, p.path, t.retry_count 
+				FROM tasks t
+				JOIN pages p ON t.page_id = p.id
+				WHERE status = $1 
+				AND started_at < $2
+			`, TaskStatusRunning, staleTime)
 
 			if err != nil {
-				// Critical: Database connection failure preventing task recovery
-				sentry.CaptureException(fmt.Errorf("failed to update stale task %s: %w", taskID, err))
-
-				log.Error().Err(err).
-					Str("task_id", taskID).
-					Msg("Failed to update stale task")
+				return err
 			}
+			defer rows.Close()
+
+			for rows.Next() {
+				var taskID, jobID string
+				var pageID int
+				var path string
+				var retryCount int
+				if err := rows.Scan(&taskID, &jobID, &pageID, &path, &retryCount); err != nil {
+					continue
+				}
+
+				if retryCount >= MaxTaskRetries {
+					_, err = tx.ExecContext(ctx, `
+						UPDATE tasks 
+						SET status = $1,
+							error = $2,
+							completed_at = $3
+						WHERE id = $4
+					`, TaskStatusFailed, "Max retries exceeded", time.Now(), taskID)
+				} else {
+					_, err = tx.ExecContext(ctx, `
+						UPDATE tasks 
+						SET status = $1,
+							started_at = NULL,
+							retry_count = retry_count + 1
+						WHERE id = $2
+					`, TaskStatusPending, taskID)
+				}
+
+				if err != nil {
+					sentry.CaptureException(fmt.Errorf("failed to update stale task %s: %w", taskID, err))
+					log.Error().Err(err).
+						Str("task_id", taskID).
+						Msg("Failed to update stale task")
+				}
+			}
+
+			return rows.Err()
+		})
+
+		if err == nil {
+			return nil
 		}
 
-		return rows.Err()
-	})
+		lastErr = err
+
+		if !isTransientDBError(err) || attempt == maxRetries {
+			return lastErr
+		}
+
+		backoff := time.Duration(attempt) * time.Second
+		log.Warn().
+			Err(err).
+			Int("attempt", attempt).
+			Dur("backoff", backoff).
+			Msg("Transient DB error during recoverStaleTasks, retrying")
+
+		select {
+		case <-time.After(backoff):
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+
+	return lastErr
+}
+
+func isTransientDBError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	if errors.Is(err, sql.ErrConnDone) {
+		return true
+	}
+
+	msg := strings.ToLower(err.Error())
+	if strings.Contains(msg, "bad connection") ||
+		strings.Contains(msg, "connection reset") ||
+		strings.Contains(msg, "broken pipe") ||
+		strings.Contains(msg, "no connection to the server") {
+		return true
+	}
+
+	return false
 }
 
 // recoverRunningJobs finds jobs that were in 'running' state when the server shut down
