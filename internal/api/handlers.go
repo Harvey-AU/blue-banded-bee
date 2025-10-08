@@ -59,6 +59,8 @@ func (h *Handler) SetupRoutes(mux *http.ServeMux) {
 	// V1 API routes with authentication
 	mux.Handle("/v1/jobs", auth.AuthMiddleware(http.HandlerFunc(h.JobsHandler)))
 	mux.Handle("/v1/jobs/", auth.AuthMiddleware(http.HandlerFunc(h.JobHandler))) // For /v1/jobs/:id
+	// Shared job routes (public)
+	mux.HandleFunc("/v1/shared/jobs/", h.SharedJobHandler)
 
 	// Dashboard API routes (require auth)
 	mux.Handle("/v1/dashboard/stats", auth.AuthMiddleware(http.HandlerFunc(h.DashboardStats)))
