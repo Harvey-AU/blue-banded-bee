@@ -573,12 +573,46 @@ function setupInteractions(state) {
   const shareBtn = document.getElementById("shareJobBtn");
   if (shareBtn) {
     shareBtn.addEventListener("click", async () => {
+      if (shareBtn.disabled) {
+        return;
+      }
+
+      const originalText = shareBtn.textContent;
       try {
-        await navigator.clipboard.writeText(window.location.href);
-        showToast("Link copied to clipboard.");
+        shareBtn.disabled = true;
+        shareBtn.textContent = "Generating…";
+
+        const response = await authorisedFetch(state, `/v1/jobs/${state.jobId}/share-links`, {
+          method: "POST",
+        });
+
+        if (!response.ok) {
+          const errorBody = await response.json().catch(() => ({}));
+          const message = errorBody?.message || `Share link request failed (${response.status})`;
+          throw new Error(message);
+        }
+
+        const payload = await response.json();
+        const shareLink = payload?.data?.share_link;
+        if (!shareLink) {
+          throw new Error("Share link not returned by API.");
+        }
+
+        state.shareLink = shareLink;
+
+        try {
+          await navigator.clipboard.writeText(shareLink);
+          showToast("Share link copied to clipboard.");
+        } catch (clipboardError) {
+          console.warn("Clipboard copy failed:", clipboardError);
+          showToast("Share link ready. Copy from browser address bar.", false);
+        }
       } catch (error) {
-        console.error("Clipboard copy failed:", error);
-        showToast("Failed to copy link.", true);
+        console.error("Failed to generate share link:", error);
+        showToast(error.message || "Failed to generate share link.", true);
+      } finally {
+        shareBtn.disabled = false;
+        shareBtn.textContent = originalText;
       }
     });
   }
@@ -982,7 +1016,14 @@ function showToast(message, isError = false) {
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
-  const jobId = window.location.pathname.split("/").filter(Boolean).pop();
+  const pathSegments = window.location.pathname.split("/").filter(Boolean);
+  let jobId = pathSegments.length > 1 ? pathSegments[pathSegments.length - 1] : undefined;
+
+  if (!jobId || jobId === "jobs") {
+    const params = new URLSearchParams(window.location.search);
+    jobId = params.get("id") || "";
+  }
+
   if (!jobId) {
     showToast("No job ID provided.", true);
     return;
