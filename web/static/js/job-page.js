@@ -1,40 +1,620 @@
-/**
- * Standalone Job Details Page
- * Fetches job information directly from the API using Supabase auth tokens.
- */
-
 const DEFAULT_PAGE_SIZE = 50;
 const PAGE_SIZE_OPTIONS = [25, 50, 100, 200];
 
-document.addEventListener("DOMContentLoaded", async () => {
-  const jobId = window.location.pathname.split("/").filter(Boolean).pop();
-  if (!jobId) {
-    showToast("No job ID provided.", true);
+const integerFormatter = new Intl.NumberFormat("en-AU", { maximumFractionDigits: 0 });
+const decimalFormatter = new Intl.NumberFormat("en-AU", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+const METRIC_GROUP_KEYS = ["cache", "warming", "performance", "distribution", "reliability", "discovery", "redirects"];
+
+function formatCount(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    return "0";
+  }
+  return integerFormatter.format(numeric);
+}
+
+function formatDecimal(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    return "0";
+  }
+  return decimalFormatter.format(numeric);
+}
+
+function formatMilliseconds(value, { empty = "0ms" } = {}) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    return empty;
+  }
+  return `${decimalFormatter.format(numeric)}ms`;
+}
+
+function formatSeconds(value, { empty = "0s" } = {}) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    return empty;
+  }
+  return `${decimalFormatter.format(numeric)}s`;
+}
+
+function formatPercentage(value, { empty = "0%" } = {}) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    return empty;
+  }
+  return `${decimalFormatter.format(numeric)}%`;
+}
+
+function formatDateTime(value) {
+  if (!value) {
+    return "—";
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "—";
+  }
+  return date.toLocaleString();
+}
+
+function formatDuration(totalSeconds) {
+  if (totalSeconds == null || Number.isNaN(Number(totalSeconds))) {
+    return "—";
+  }
+  const seconds = Math.max(0, Number(totalSeconds));
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const remaining = Math.floor(seconds % 60);
+
+  if (hours > 0) {
+    return `${hours}h ${minutes}m ${remaining}s`;
+  }
+  if (minutes > 0) {
+    return `${minutes}m ${remaining}s`;
+  }
+  return `${remaining}s`;
+}
+
+function formatAverageSeconds(seconds) {
+  if (seconds == null || Number.isNaN(Number(seconds))) {
+    return "—";
+  }
+  const numeric = Number(seconds);
+  if (numeric >= 60) {
+    const mins = Math.floor(numeric / 60);
+    const secs = numeric % 60;
+    return `${mins}m ${decimalFormatter.format(secs)}s`;
+  }
+  return `${decimalFormatter.format(numeric)}s`;
+}
+
+function resolvePath(obj, path) {
+  return path.split(".").reduce((current, key) => {
+    if (!current) {
+      return undefined;
+    }
+    return current[key] !== undefined ? current[key] : undefined;
+  }, obj);
+}
+
+function applyMetricsVisibility(metrics) {
+  const container = document.querySelector(".stats-container");
+  if (!container) {
     return;
   }
 
-  const state = {
-    jobId,
-    token: null,
-    domain: null,
-    limit: DEFAULT_PAGE_SIZE,
-    page: 0,
-    sortColumn: "created_at",
-    sortDirection: "desc",
-    statusFilter: "",
-    totalTasks: 0,
-  };
+  METRIC_GROUP_KEYS.forEach((key) => {
+    const groupEl = container.querySelector(`[data-metric-group="${key}"]`);
+    if (!groupEl) {
+      return;
+    }
+
+    const groupData = metrics[key];
+    const isVisible = !!(groupData && groupData.visible);
+    groupEl.style.display = isVisible ? "" : "none";
+
+    if (!isVisible) {
+      return;
+    }
+
+    groupEl.querySelectorAll("[data-metric-field]").forEach((row) => {
+      const fieldPath = row.getAttribute("data-metric-field");
+      const shouldShow = resolvePath(metrics, fieldPath);
+      row.style.display = shouldShow ? "" : "none";
+    });
+  });
+}
+
+async function ensureMetadataLoaded() {
+  if (!window.metricsMetadata) {
+    return;
+  }
 
   try {
-    await initialiseAuth(state);
-    await loadJob(state);
-    await loadTasks(state);
-    setupInteractions(state);
+    if (!window.metricsMetadata.isLoaded()) {
+      await window.metricsMetadata.load();
+    }
+    window.metricsMetadata.initializeInfoIcons();
   } catch (error) {
-    console.error("Failed to initialise job page:", error);
-    showToast("Failed to load job details.", true);
+    console.warn("Failed to initialise metrics metadata tooltips:", error);
   }
-});
+}
+
+function updateActionButtons(jobBinding) {
+  const restartBtn = document.getElementById("restartJobBtn");
+  const cancelBtn = document.getElementById("cancelJobBtn");
+
+  if (restartBtn) {
+    restartBtn.style.display = jobBinding.can_restart ? "inline-flex" : "none";
+  }
+  if (cancelBtn) {
+    cancelBtn.style.display = jobBinding.can_cancel ? "inline-flex" : "none";
+  }
+}
+
+function updatePageTitle(title) {
+  if (!title) {
+    return;
+  }
+  document.title = `${title} · Blue Banded Bee`;
+}
+
+function formatJobForBinding(job, jobId) {
+  const statusRaw = (job.status || "unknown").toString().toLowerCase();
+  const statusLabel = statusRaw.replace(/_/g, " ").toUpperCase();
+  const totalTasks = Number(job.total_tasks ?? job.totalTasks ?? 0);
+  const completedTasks = Number(job.completed_tasks ?? job.completedTasks ?? 0);
+  const failedTasks = Number(job.failed_tasks ?? job.failedTasks ?? 0);
+  const skippedTasks = Number(job.skipped_tasks ?? job.skippedTasks ?? 0);
+
+  let progress = Number(job.progress);
+  if (!Number.isFinite(progress)) {
+    const denominator = totalTasks - skippedTasks;
+    progress = denominator > 0 ? ((completedTasks + failedTasks) / denominator) * 100 : 0;
+  }
+  const progressDisplay = `${Math.round(Math.max(0, Math.min(100, progress)))}%`;
+
+  const avgSeconds = job.avg_time_per_task_seconds ?? job.avgTimePerTaskSeconds;
+  const domain = job.domain ?? job.domains?.name ?? job.domain_name ?? "—";
+
+  return {
+    id: job.id || jobId,
+    domain,
+    page_title: domain && domain !== "—" ? `Job · ${domain}` : "Job Details",
+    status_label: statusLabel,
+    status_class: statusRaw,
+    progress_display: progressDisplay,
+    total_tasks_display: formatCount(totalTasks),
+    completed_tasks_display: formatCount(completedTasks),
+    failed_tasks_display: formatCount(failedTasks),
+    started_at_display: formatDateTime(job.started_at ?? job.startedAt),
+    completed_at_display: formatDateTime(job.completed_at ?? job.completedAt),
+    duration_display: formatDuration(job.duration_seconds ?? job.durationSeconds),
+    avg_time_display: formatAverageSeconds(avgSeconds),
+    can_restart: ["completed", "failed", "cancelled"].includes(statusRaw),
+    can_cancel: ["running", "pending"].includes(statusRaw),
+  };
+}
+
+function formatMetricsForBinding(statsRaw = {}) {
+  const cacheStats = statsRaw.cache_stats || {};
+  const cacheVisible =
+    cacheStats.hits != null ||
+    cacheStats.misses != null ||
+    cacheStats.hit_rate != null ||
+    cacheStats.bypass != null;
+
+  const warmingStats = statsRaw.cache_warming_effect || {};
+  const warmingVisible =
+    warmingStats.total_time_saved_seconds != null ||
+    warmingStats.avg_time_saved_per_page_ms != null ||
+    warmingStats.avg_second_request_ms != null ||
+    warmingStats.total_validated != null ||
+    warmingStats.total_improved != null ||
+    warmingStats.improvement_rate != null;
+
+  const responseTimes = statsRaw.response_times || {};
+  const performanceVisible =
+    responseTimes.avg_ms != null ||
+    responseTimes.median_ms != null ||
+    responseTimes.p95_ms != null ||
+    responseTimes.p90_ms != null ||
+    responseTimes.p99_ms != null ||
+    responseTimes.min_ms != null ||
+    responseTimes.max_ms != null;
+
+  const slowBuckets = statsRaw.slow_page_buckets || {};
+  const distributionVisible = Object.keys(slowBuckets).some((key) => Number(slowBuckets[key]) > 0);
+
+  const taskSummary = statsRaw.task_summary || {};
+  const reliabilityVisible =
+    statsRaw.total_failed_pages != null ||
+    statsRaw.total_server_errors != null ||
+    slowBuckets.total_slow_over_3s != null ||
+    taskSummary.with_errors != null;
+
+  const discoverySources = statsRaw.discovery_sources || {};
+  const discoveryVisible = Object.keys(discoverySources).some((key) => Number(discoverySources[key]) > 0);
+
+  const redirectStats = statsRaw.redirect_stats || {};
+  const redirectVisible =
+    redirectStats.total != null ||
+    redirectStats["301_permanent"] != null ||
+    redirectStats["302_temporary"] != null;
+
+  return {
+    cache: {
+      visible: cacheVisible,
+      hits: formatCount(cacheStats.hits ?? 0),
+      misses: formatCount(cacheStats.misses ?? 0),
+      bypass: formatCount(cacheStats.bypass ?? 0),
+      bypass_visible: Number(cacheStats.bypass ?? 0) > 0,
+      hit_rate: formatPercentage(cacheStats.hit_rate, { empty: "0%" }),
+    },
+    warming: {
+      visible: warmingVisible,
+      time_saved: formatSeconds(warmingStats.total_time_saved_seconds, { empty: "0s" }),
+      avg_saved_per_page: formatMilliseconds(warmingStats.avg_time_saved_per_page_ms, { empty: "0ms" }),
+      avg_second_request: formatMilliseconds(warmingStats.avg_second_request_ms, { empty: "0ms" }),
+      avg_second_request_visible: warmingStats.avg_second_request_ms != null,
+      validated: formatCount(warmingStats.total_validated ?? 0),
+      validated_visible: Number(warmingStats.total_validated ?? 0) > 0,
+      improved: formatCount(warmingStats.total_improved ?? 0),
+      improved_visible: Number(warmingStats.total_improved ?? 0) > 0,
+      improvement_rate: formatPercentage(warmingStats.improvement_rate, { empty: "0%" }),
+    },
+    performance: {
+      visible: performanceVisible,
+      avg: formatMilliseconds(responseTimes.avg_ms, { empty: "0ms" }),
+      median: formatMilliseconds(responseTimes.median_ms, { empty: "0ms" }),
+      p90: formatMilliseconds(responseTimes.p90_ms, { empty: "0ms" }),
+      p90_visible: responseTimes.p90_ms != null,
+      p95: formatMilliseconds(responseTimes.p95_ms, { empty: "0ms" }),
+      p99: formatMilliseconds(responseTimes.p99_ms, { empty: "0ms" }),
+      p99_visible: responseTimes.p99_ms != null,
+      min: formatMilliseconds(responseTimes.min_ms, { empty: "0ms" }),
+      min_visible: responseTimes.min_ms != null,
+      max: formatMilliseconds(responseTimes.max_ms, { empty: "0ms" }),
+      max_visible: responseTimes.max_ms != null,
+    },
+    distribution: {
+      visible: distributionVisible,
+      under_500ms: formatCount(slowBuckets.under_500ms ?? 0),
+      under_500ms_visible: Number(slowBuckets.under_500ms ?? 0) > 0,
+      _500ms_to_1s: formatCount(slowBuckets["500ms_to_1s"] ?? 0),
+      _500ms_to_1s_visible: Number(slowBuckets["500ms_to_1s"] ?? 0) > 0,
+      _1_to_1_5s: formatCount(slowBuckets["1_to_1_5s"] ?? 0),
+      _1_to_1_5s_visible: Number(slowBuckets["1_to_1_5s"] ?? 0) > 0,
+      _1_5_to_2s: formatCount(slowBuckets["1_5_to_2s"] ?? 0),
+      _1_5_to_2s_visible: Number(slowBuckets["1_5_to_2s"] ?? 0) > 0,
+      _2_to_3s: formatCount(slowBuckets["2_to_3s"] ?? 0),
+      _2_to_3s_visible: Number(slowBuckets["2_to_3s"] ?? 0) > 0,
+      _3_to_5s: formatCount(slowBuckets["3_to_5s"] ?? 0),
+      _3_to_5s_visible: Number(slowBuckets["3_to_5s"] ?? 0) > 0,
+      _5_to_10s: formatCount(slowBuckets["5_to_10s"] ?? 0),
+      _5_to_10s_visible: Number(slowBuckets["5_to_10s"] ?? 0) > 0,
+      over_10s: formatCount(slowBuckets.over_10s ?? 0),
+      over_10s_visible: Number(slowBuckets.over_10s ?? 0) > 0,
+    },
+    reliability: {
+      visible: reliabilityVisible,
+      failed_pages: formatCount(statsRaw.total_failed_pages ?? 0),
+      failed_pages_visible: Number(statsRaw.total_failed_pages ?? 0) > 0,
+      server_errors: formatCount(statsRaw.total_server_errors ?? 0),
+      server_errors_visible: Number(statsRaw.total_server_errors ?? 0) > 0,
+      slow_over_3s: formatCount(slowBuckets.total_slow_over_3s ?? 0),
+      slow_over_3s_visible: Number(slowBuckets.total_slow_over_3s ?? 0) > 0,
+      tasks_with_errors: formatCount(taskSummary.with_errors ?? 0),
+      tasks_with_errors_visible: Number(taskSummary.with_errors ?? 0) > 0,
+    },
+    discovery: {
+      visible: discoveryVisible,
+      sitemap: formatCount(discoverySources.sitemap ?? 0),
+      sitemap_visible: Number(discoverySources.sitemap ?? 0) > 0,
+      discovered: formatCount(discoverySources.discovered ?? 0),
+      discovered_visible: Number(discoverySources.discovered ?? 0) > 0,
+      manual: formatCount(discoverySources.manual ?? 0),
+      manual_visible: Number(discoverySources.manual ?? 0) > 0,
+      unique_sources: formatCount(discoverySources.unique_sources ?? 0),
+      unique_sources_visible: Number(discoverySources.unique_sources ?? 0) > 0,
+    },
+    redirects: {
+      visible: redirectVisible,
+      total: formatCount(redirectStats.total ?? 0),
+      total_visible: Number(redirectStats.total ?? 0) > 0,
+      permanent: formatCount(redirectStats["301_permanent"] ?? 0),
+      permanent_visible: Number(redirectStats["301_permanent"] ?? 0) > 0,
+      temporary: formatCount(redirectStats["302_temporary"] ?? 0),
+      temporary_visible: Number(redirectStats["302_temporary"] ?? 0) > 0,
+    },
+  };
+}
+
+function buildTaskUrl(task, defaultDomain) {
+  if (task.url) {
+    return task.url;
+  }
+
+  const host = task.domain || defaultDomain || "";
+  const path = task.path || "/";
+
+  if (!host || host === "—") {
+    return path;
+  }
+
+  const safePath = path.startsWith("/") ? path : `/${path}`;
+  if (host.startsWith("http://") || host.startsWith("https://")) {
+    return `${host}${safePath}`;
+  }
+
+  return `https://${host}${safePath}`;
+}
+
+function formatTasksForBinding(tasks, defaultDomain) {
+  return tasks.map((task) => {
+    const statusRaw = (task.status || "unknown").toString().toLowerCase();
+    return {
+      path: task.path || "/",
+      url: buildTaskUrl(task, defaultDomain),
+      status: statusRaw,
+      status_label: statusRaw.replace(/_/g, " "),
+      response_time: formatMilliseconds(task.response_time, { empty: "—" }),
+      cache_status: task.cache_status || "—",
+      second_response_time: formatMilliseconds(task.second_response_time, { empty: "—" }),
+      status_code: task.status_code != null ? String(task.status_code) : "—",
+    };
+  });
+}
+
+function renderTaskHeader(state) {
+  const table = document.getElementById("tasksTable");
+  if (!table) {
+    return;
+  }
+
+  const thead = table.querySelector("thead");
+  if (!thead) {
+    return;
+  }
+
+  const headers = [
+    { key: "path", label: "Path" },
+    { key: "status", label: "Status" },
+    { key: "response_time", label: "Response Time (ms)" },
+    { key: "cache_status", label: "Cache Status" },
+    { key: "second_response_time", label: "2nd Response (ms)" },
+    { key: "status_code", label: "Status Code" },
+  ];
+
+  const headerHtml = headers
+    .map((header) => {
+      const isActive = state.sortColumn === header.key;
+      const icon = isActive ? (state.sortDirection === "desc" ? " ↓" : " ↑") : "";
+      return `<th data-column="${header.key}">${header.label}${icon}</th>`;
+    })
+    .join("");
+
+  thead.innerHTML = `<tr>${headerHtml}</tr>`;
+
+  thead.querySelectorAll("th[data-column]").forEach((th) => {
+    th.addEventListener("click", () => {
+      const column = th.dataset.column;
+      if (state.sortColumn === column) {
+        state.sortDirection = state.sortDirection === "desc" ? "asc" : "desc";
+      } else {
+        state.sortColumn = column;
+        state.sortDirection = "desc";
+      }
+      state.page = 0;
+      loadTasks(state).catch((error) => {
+        console.error("Failed to resort tasks:", error);
+        showToast("Failed to resort tasks.", true);
+      });
+    });
+  });
+}
+
+function updateTasksTableVisibility(count) {
+  const loadingEl = document.getElementById("tasksLoading");
+  const emptyEl = document.getElementById("tasksEmpty");
+  const table = document.getElementById("tasksTable");
+
+  if (loadingEl) {
+    loadingEl.style.display = "none";
+  }
+
+  if (count === 0) {
+    if (emptyEl) {
+      emptyEl.style.display = "block";
+    }
+    if (table) {
+      table.style.display = "none";
+    }
+  } else {
+    if (emptyEl) {
+      emptyEl.style.display = "none";
+    }
+    if (table) {
+      table.style.display = "table";
+    }
+  }
+}
+
+function updatePagination(pagination, state) {
+  const total = Number(pagination.total ?? state.totalTasks ?? 0);
+  const offset = Number(pagination.offset ?? state.page * state.limit);
+  const hasNext = Boolean(pagination.has_next ?? offset + state.limit < total);
+  const hasPrev = Boolean(pagination.has_prev ?? offset > 0);
+
+  const start = total === 0 ? 0 : offset + 1;
+  const end = total === 0 ? 0 : Math.min(offset + state.limit, total);
+  const summary = total === 0 ? "0 tasks" : `${start}-${end} of ${formatCount(total)} tasks`;
+
+  if (state.binder) {
+    state.binder.updateElements({ tasks: { pagination: { summary } } });
+  }
+
+  const prevBtn = document.getElementById("prevTasksBtn");
+  const nextBtn = document.getElementById("nextTasksBtn");
+  if (prevBtn) {
+    prevBtn.disabled = !hasPrev;
+  }
+  if (nextBtn) {
+    nextBtn.disabled = !hasNext;
+  }
+
+  state.hasPrev = hasPrev;
+  state.hasNext = hasNext;
+  state.totalTasks = total;
+  state.page = total === 0 ? 0 : Math.floor(offset / state.limit);
+}
+
+function setupInteractions(state) {
+  const limitSelect = document.getElementById("tasksLimit");
+  if (limitSelect) {
+    limitSelect.innerHTML = PAGE_SIZE_OPTIONS.map((value) => `<option value="${value}">${value}</option>`).join("");
+    limitSelect.value = String(state.limit);
+    limitSelect.addEventListener("change", (event) => {
+      state.limit = Number(event.target.value) || DEFAULT_PAGE_SIZE;
+      state.page = 0;
+      loadTasks(state).catch((error) => {
+        console.error("Failed to change page size:", error);
+        showToast("Failed to update page size.", true);
+      });
+    });
+  }
+
+  const filterTabs = document.getElementById("taskFilters");
+  if (filterTabs) {
+    filterTabs.addEventListener("click", (event) => {
+      const button = event.target.closest("button[data-status]");
+      if (!button) {
+        return;
+      }
+
+      event.preventDefault();
+      filterTabs.querySelectorAll("button").forEach((btn) => btn.classList.remove("active"));
+      button.classList.add("active");
+      state.statusFilter = button.dataset.status || "";
+      state.page = 0;
+      loadTasks(state).catch((error) => {
+        console.error("Failed to apply filter:", error);
+        showToast("Failed to apply filter.", true);
+      });
+    });
+  }
+
+  const shareBtn = document.getElementById("shareJobBtn");
+  if (shareBtn) {
+    shareBtn.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(window.location.href);
+        showToast("Link copied to clipboard.");
+      } catch (error) {
+        console.error("Clipboard copy failed:", error);
+        showToast("Failed to copy link.", true);
+      }
+    });
+  }
+
+  const refreshJobBtn = document.getElementById("refreshJobBtn");
+  if (refreshJobBtn) {
+    refreshJobBtn.addEventListener("click", async () => {
+      await loadJob(state);
+      await loadTasks(state);
+      showToast("Job data refreshed.");
+    });
+  }
+
+  const refreshTasksBtn = document.getElementById("refreshTasksBtn");
+  if (refreshTasksBtn) {
+    refreshTasksBtn.addEventListener("click", async () => {
+      await loadTasks(state);
+      showToast("Task list refreshed.");
+    });
+  }
+
+  const restartBtn = document.getElementById("restartJobBtn");
+  if (restartBtn) {
+    restartBtn.addEventListener("click", async () => {
+      try {
+        await restartJobFromPage(state);
+      } catch (error) {
+        console.error("Failed to restart job:", error);
+        showToast("Failed to restart job.", true);
+      }
+    });
+  }
+
+  const cancelBtn = document.getElementById("cancelJobBtn");
+  if (cancelBtn) {
+    cancelBtn.addEventListener("click", async () => {
+      try {
+        await cancelJobFromPage(state);
+      } catch (error) {
+        console.error("Failed to cancel job:", error);
+        showToast("Failed to cancel job.", true);
+      }
+    });
+  }
+
+  const prevBtn = document.getElementById("prevTasksBtn");
+  if (prevBtn) {
+    prevBtn.addEventListener("click", () => {
+      if (!state.hasPrev) {
+        return;
+      }
+      state.page = Math.max(0, state.page - 1);
+      loadTasks(state).catch((error) => {
+        console.error("Failed to load previous page:", error);
+        showToast("Failed to load previous page.", true);
+      });
+    });
+  }
+
+  const nextBtn = document.getElementById("nextTasksBtn");
+  if (nextBtn) {
+    nextBtn.addEventListener("click", () => {
+      if (!state.hasNext) {
+        return;
+      }
+      state.page += 1;
+      loadTasks(state).catch((error) => {
+        console.error("Failed to load next page:", error);
+        showToast("Failed to load next page.", true);
+      });
+    });
+  }
+
+  const exportToggle = document.getElementById("exportMenuToggle");
+  const exportMenu = document.getElementById("exportMenu");
+  if (exportToggle && exportMenu) {
+    exportToggle.addEventListener("click", (event) => {
+      event.stopPropagation();
+      exportMenu.style.display = exportMenu.style.display === "block" ? "none" : "block";
+    });
+
+    document.querySelectorAll("#exportMenu button[data-type]").forEach((button) => {
+      button.addEventListener("click", async () => {
+        const type = button.getAttribute("data-type");
+        const format = button.getAttribute("data-format") || "csv";
+        exportMenu.style.display = "none";
+        try {
+          await exportJobData(state, { type, format });
+          showToast("Export ready.");
+        } catch (error) {
+          console.error("Failed to export job data:", error);
+          showToast("Failed to export data.", true);
+        }
+      });
+    });
+
+    document.addEventListener("click", (event) => {
+      if (!event.target.closest("#exportMenu") && !event.target.closest("#exportMenuToggle")) {
+        exportMenu.style.display = "none";
+      }
+    });
+  }
+}
 
 async function initialiseAuth(state) {
   if (typeof window.initializeSupabase === "function") {
@@ -52,8 +632,18 @@ async function initialiseAuth(state) {
   }
 
   state.token = data.session.access_token;
-  const user = data.session.user;
+  state.session = data.session;
 
+  if (state.binder) {
+    state.binder.authManager = {
+      session: data.session,
+      isAuthenticated: true,
+      user: data.session.user,
+    };
+    state.binder.updateAuthElements();
+  }
+
+  const user = data.session.user;
   const userEmailEl = document.getElementById("userEmail");
   if (userEmailEl) {
     userEmailEl.textContent = user?.email || "Signed in";
@@ -69,151 +659,23 @@ async function initialiseAuth(state) {
 }
 
 async function loadJob(state) {
-  const response = await authFetch(`/v1/jobs/${state.jobId}`, state.token);
-  if (!response.ok) {
-    if (response.status === 404) {
-      throw new Error("Job not found. It may have been deleted.");
-    }
-    if (response.status === 403) {
-      throw new Error("You do not have permission to view this job.");
-    }
-    throw new Error(`Failed to load job (${response.status})`);
+  const job = await state.binder.fetchData(`/v1/jobs/${state.jobId}`);
+  if (!job) {
+    throw new Error("Job not found.");
   }
 
-  const payload = await response.json();
-  const job = payload.data ?? payload;
+  const jobBinding = formatJobForBinding(job, state.jobId);
+  const metricsBinding = formatMetricsForBinding(job.stats || {});
+  state.domain = jobBinding.domain;
 
-  state.domain = job.domains?.name || job.domain || job.domain_name || "—";
+  state.binder.updateElements({ job: jobBinding, metrics: metricsBinding });
 
-  const formatted = formatJobData(job);
+  applyMetricsVisibility(metricsBinding);
+  updateActionButtons(jobBinding);
+  updatePageTitle(jobBinding.page_title);
+  await ensureMetadataLoaded();
 
-  document.getElementById("pageTitle").textContent = `Job · ${state.domain}`;
-  document.getElementById("jobDomain").textContent = state.domain;
-  document.getElementById("jobId").textContent = state.jobId;
-  document.getElementById("jobStatusValue").textContent = formatted.status || "—";
-  document.getElementById("jobProgress").textContent = formatted.progress_formatted;
-  document.getElementById("jobTotalTasks").textContent = Number(formatted.total_tasks ?? 0);
-  document.getElementById("jobCompletedTasks").textContent = Number(formatted.completed_tasks ?? 0);
-  document.getElementById("jobFailedTasks").textContent = Number(formatted.failed_tasks ?? 0);
-  document.getElementById("jobStartedAt").textContent = formatted.started_at_formatted;
-  document.getElementById("jobCompletedAt").textContent = formatted.completed_at_formatted;
-  document.getElementById("jobDuration").textContent = formatted.duration_formatted;
-  document.getElementById("jobAvgTime").textContent = formatted.avg_time_formatted;
-  document.getElementById("jobStatusValue").className = `status-pill ${formatted.status}`;
-
-  const restartBtn = document.getElementById("restartJobBtn");
-  const cancelBtn = document.getElementById("cancelJobBtn");
-
-  if (["completed", "failed", "cancelled"].includes(formatted.status)) {
-    restartBtn.style.display = "inline-flex";
-    restartBtn.onclick = () => restartJobFromPage(state);
-    cancelBtn.style.display = "none";
-  } else if (["running", "pending"].includes(formatted.status)) {
-    cancelBtn.style.display = "inline-flex";
-    cancelBtn.onclick = () => cancelJobFromPage(state);
-    restartBtn.style.display = "none";
-  } else {
-    restartBtn.style.display = "none";
-    cancelBtn.style.display = "none";
-  }
-
-  renderStats(job.stats || {});
-}
-
-function renderStats(stats) {
-  const container = document.getElementById("statsContainer");
-  if (!container) return;
-
-  if (!stats || Object.keys(stats).length === 0) {
-    container.innerHTML = `<div class="stat-row" style="grid-column: 1 / -1;">No statistics available yet.</div>`;
-    return;
-  }
-
-  const groups = [];
-
-  if (stats.cache_stats || stats.cache_warming_effect) {
-    const parts = [];
-    if (stats.cache_stats) {
-      parts.push(renderStatRow("Cache Hits", stats.cache_stats.hits ?? 0));
-      parts.push(renderStatRow("Cache Misses", stats.cache_stats.misses ?? 0));
-      if (stats.cache_stats.hit_rate != null) {
-        parts.push(renderStatRow("Cache Hit Rate", `${stats.cache_stats.hit_rate}%`));
-      }
-    }
-    if (stats.cache_warming_effect) {
-      parts.push(renderStatRow("Total Time Saved (s)", stats.cache_warming_effect.total_time_saved_seconds ?? 0));
-      if (stats.cache_warming_effect.avg_time_saved_per_page_ms != null) {
-        parts.push(
-          renderStatRow("Avg Time Saved / Page (ms)", stats.cache_warming_effect.avg_time_saved_per_page_ms ?? 0),
-        );
-      }
-      if (stats.cache_warming_effect.improvement_rate != null) {
-        parts.push(renderStatRow("Improvement Rate", `${stats.cache_warming_effect.improvement_rate}%`));
-      }
-    }
-    groups.push(renderStatsGroup("Cache Performance", parts));
-  }
-
-  if (stats.response_times) {
-    const rt = stats.response_times;
-    const parts = [
-      renderStatRow("Average (ms)", rt.avg_ms ?? 0),
-      renderStatRow("Median (ms)", rt.median_ms ?? 0),
-      renderStatRow("P95 (ms)", rt.p95_ms ?? 0),
-      renderStatRow("Min (ms)", rt.min_ms ?? 0),
-      renderStatRow("Max (ms)", rt.max_ms ?? 0),
-    ];
-    groups.push(renderStatsGroup("Response Times", parts));
-  }
-
-  if (stats.total_failed_pages != null || stats.total_server_errors != null) {
-    const parts = [
-      renderStatRow("Failed Pages", stats.total_failed_pages ?? 0),
-      renderStatRow("Server Errors", stats.total_server_errors ?? 0),
-    ];
-    groups.push(renderStatsGroup("Issues", parts));
-  }
-
-  if (stats.discovery_sources) {
-    const ds = stats.discovery_sources;
-    const parts = [
-      renderStatRow("From Sitemap", ds.sitemap ?? 0),
-      renderStatRow("Discovered", ds.discovered ?? 0),
-      renderStatRow("Manual", ds.manual ?? 0),
-    ];
-    groups.push(renderStatsGroup("Discovery Sources", parts));
-  }
-
-  if (groups.length === 0) {
-    container.innerHTML = `<div class="stat-row" style="grid-column: 1 / -1;">No statistics available yet.</div>`;
-  } else {
-    container.innerHTML = groups.join("");
-  }
-
-  if (window.metricsMetadata && !window.metricsMetadata.isLoaded()) {
-    window.metricsMetadata.load().catch(() => {});
-  }
-  if (window.metricsMetadata && window.metricsMetadata.isLoaded()) {
-    window.metricsMetadata.initializeInfoIcons();
-  }
-}
-
-function renderStatsGroup(title, rows) {
-  return `
-    <div class="stats-group">
-      <h3>${title}</h3>
-      ${rows.join("")}
-    </div>
-  `;
-}
-
-function renderStatRow(label, value) {
-  return `
-    <div class="stat-row">
-      <span>${label}</span>
-      <strong>${value ?? 0}</strong>
-    </div>
-  `;
+  return job;
 }
 
 async function loadTasks(state) {
@@ -225,363 +687,118 @@ async function loadTasks(state) {
     params.set("status", state.statusFilter);
   }
 
-  const url = `/v1/jobs/${state.jobId}/tasks?${params.toString()}`;
-  const response = await authFetch(url, state.token);
+  const loadingEl = document.getElementById("tasksLoading");
+  if (loadingEl && state.page === 0 && state.totalTasks === 0) {
+    loadingEl.style.display = "block";
+  }
+
+  const data = await state.binder.fetchData(`/v1/jobs/${state.jobId}/tasks?${params.toString()}`);
+  const tasks = Array.isArray(data?.tasks) ? data.tasks : [];
+  const pagination = data?.pagination || {};
+
+  renderTaskHeader(state);
+
+  const formattedTasks = formatTasksForBinding(tasks, state.domain);
+  state.binder.renderTemplate("task", formattedTasks);
+
+  updateTasksTableVisibility(formattedTasks.length);
+  updatePagination(pagination, state);
+
+  if (loadingEl) {
+    loadingEl.style.display = "none";
+  }
+}
+
+async function authorisedFetch(state, path, options = {}) {
+  const headers = new Headers(options.headers || {});
+  headers.set("Authorization", `Bearer ${state.token}`);
+  if (!headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
+
+  return fetch(path, {
+    ...options,
+    headers,
+  });
+}
+
+async function restartJobFromPage(state) {
+  const response = await authorisedFetch(state, `/v1/jobs/${state.jobId}/restart`, { method: "POST" });
   if (!response.ok) {
-    if (response.status === 404) {
-      throw new Error("No tasks found.");
-    }
-    throw new Error(`Failed to load tasks (${response.status})`);
+    throw new Error(`Failed to restart job (${response.status})`);
   }
-
-  const payload = await response.json();
-  const data = payload.data ?? payload;
-  const tasks = data.tasks ?? [];
-  state.totalTasks = data.pagination?.total ?? tasks.length;
-
-  renderTasksTable(tasks, state);
-  updatePagination(data.pagination ?? {}, state);
+  showToast("Restart requested. Refreshing…");
+  await loadJob(state);
+  await loadTasks(state);
 }
 
-function renderTasksTable(tasks, state) {
-  const table = document.getElementById("tasksTable");
-  const loading = document.getElementById("tasksLoading");
-  const tbody = table.querySelector("tbody");
-  const thead = table.querySelector("thead");
-
-  if (loading) loading.style.display = "none";
-  table.style.display = tasks.length ? "table" : "none";
-
-  if (!tasks.length) {
-    const container = document.getElementById("tasksContainer");
-    container.querySelector(
-      "#tasksPagination",
-    ).style.display = "none";
-    container.querySelector("#tasksPageInfo").textContent = "";
-    if (loading) {
-      loading.style.display = "block";
-      loading.textContent = "No tasks found for this view.";
-    }
-    return;
+async function cancelJobFromPage(state) {
+  const response = await authorisedFetch(state, `/v1/jobs/${state.jobId}/cancel`, { method: "POST" });
+  if (!response.ok) {
+    throw new Error(`Failed to cancel job (${response.status})`);
   }
-
-  const headers = [
-    { key: "path", label: "Path" },
-    { key: "status", label: "Status" },
-    { key: "response_time", label: "Response Time (ms)" },
-    { key: "cache_status", label: "Cache Status" },
-    { key: "second_response_time", label: "2nd Response (ms)" },
-    { key: "status_code", label: "Status Code" },
-  ];
-
-  thead.innerHTML = `
-    <tr>
-      ${headers
-        .map((header) => {
-          const isActive = state.sortColumn === header.key;
-          const icon = isActive ? (state.sortDirection === "desc" ? " ↓" : " ↑") : "";
-          return `<th data-column="${header.key}">${header.label}${icon}</th>`;
-        })
-        .join("")}
-    </tr>
-  `;
-
-  tbody.innerHTML = tasks
-    .map((task) => {
-      return `
-        <tr>
-          <td><a href="${task.url}" target="_blank"><code>${task.path}</code></a></td>
-          <td><span class="status-pill ${task.status}">${task.status}</span></td>
-          <td>${task.response_time ?? "—"}</td>
-          <td>${task.cache_status ?? "—"}</td>
-          <td>${task.second_response_time ?? "—"}</td>
-          <td>${task.status_code ?? "—"}</td>
-        </tr>
-      `;
-    })
-    .join("");
-
-  thead.querySelectorAll("th[data-column]").forEach((th) => {
-    th.addEventListener("click", () => {
-      const column = th.dataset.column;
-      if (state.sortColumn === column) {
-        state.sortDirection = state.sortDirection === "desc" ? "asc" : "desc";
-      } else {
-        state.sortColumn = column;
-        state.sortDirection = "desc";
-      }
-      loadTasks(state).catch((error) => {
-        console.error("Failed to resort tasks:", error);
-        showToast("Failed to resort tasks.", true);
-      });
-    });
-  });
-}
-
-function updatePagination(pagination, state) {
-  const paginationEl = document.getElementById("tasksPagination");
-  const infoEl = document.getElementById("tasksPageInfo");
-  const prevBtn = document.getElementById("prevTasksBtn");
-  const nextBtn = document.getElementById("nextTasksBtn");
-
-  if (!pagination || state.totalTasks <= state.limit) {
-    paginationEl.style.display = "none";
-    return;
-  }
-
-  paginationEl.style.display = "flex";
-
-  const { total = state.totalTasks, has_next = false, has_prev = false, offset = state.page * state.limit } = pagination;
-  const start = offset + 1;
-  const end = Math.min(offset + state.limit, total);
-
-  infoEl.textContent = `${start}-${end} of ${total} tasks`;
-  prevBtn.disabled = !has_prev && state.page === 0;
-  nextBtn.disabled = !has_next;
-}
-
-function setupInteractions(state) {
-  const limitSelect = document.getElementById("tasksLimit");
-  if (limitSelect) {
-    limitSelect.innerHTML = PAGE_SIZE_OPTIONS.map((value) => {
-      const selected = value === DEFAULT_PAGE_SIZE ? "selected" : "";
-      return `<option value="${value}" ${selected}>${value}</option>`;
-    }).join("");
-    limitSelect.value = String(state.limit);
-  }
-
-  document.getElementById("shareJobBtn")?.addEventListener("click", async () => {
-    try {
-      await navigator.clipboard.writeText(window.location.href);
-      showToast("Link copied to clipboard.");
-    } catch (error) {
-      console.error("Clipboard copy failed:", error);
-      showToast("Failed to copy link.", true);
-    }
-  });
-
-  document.getElementById("refreshJobBtn")?.addEventListener("click", async () => {
-    await loadJob(state);
-    await loadTasks(state);
-    showToast("Job data refreshed.");
-  });
-
-  document.getElementById("refreshTasksBtn")?.addEventListener("click", async () => {
-    await loadTasks(state);
-    showToast("Task list refreshed.");
-  });
-
-  limitSelect?.addEventListener("change", (event) => {
-    state.limit = Number(event.target.value);
-    state.page = 0;
-    loadTasks(state).catch((error) => {
-      console.error("Failed to change limit:", error);
-      showToast("Failed to change limit.", true);
-    });
-  });
-
-  document.getElementById("taskFilters")?.addEventListener("click", (event) => {
-    const button = event.target.closest("button[data-status]");
-    if (!button) return;
-
-    event.preventDefault();
-
-    document.querySelectorAll("#taskFilters button").forEach((btn) => btn.classList.remove("active"));
-    button.classList.add("active");
-
-    state.statusFilter = button.dataset.status;
-    state.page = 0;
-    loadTasks(state).catch((error) => {
-      console.error("Failed to filter tasks:", error);
-      showToast("Failed to apply filter.", true);
-    });
-  });
-
-  document.getElementById("prevTasksBtn")?.addEventListener("click", () => {
-    if (state.page > 0) {
-      state.page -= 1;
-      loadTasks(state).catch((error) => {
-        console.error("Failed to paginate:", error);
-        showToast("Failed to load more tasks.", true);
-      });
-    }
-  });
-
-  document.getElementById("nextTasksBtn")?.addEventListener("click", () => {
-    state.page += 1;
-    loadTasks(state).catch((error) => {
-      console.error("Failed to paginate:", error);
-      showToast("Failed to load more tasks.", true);
-    });
-  });
-
-  document.getElementById("exportMenuToggle")?.addEventListener("click", (event) => {
-    event.stopPropagation();
-    const menu = document.getElementById("exportMenu");
-    if (menu) {
-      menu.style.display = menu.style.display === "block" ? "none" : "block";
-    }
-  });
-
-  document.querySelectorAll("#exportMenu button[data-type]").forEach((button) => {
-    button.addEventListener("click", async () => {
-      const type = button.dataset.type || "job";
-      const format = button.dataset.format || "csv";
-      const menu = document.getElementById("exportMenu");
-      if (menu) menu.style.display = "none";
-
-      try {
-        await exportJobData(state, { type, format });
-        showToast(`Exported ${type} (${format.toUpperCase()}).`);
-      } catch (error) {
-        console.error("Export failed:", error);
-        showToast("Failed to export data.", true);
-      }
-    });
-  });
-
-  document.addEventListener("click", (event) => {
-    if (!event.target.closest("#exportMenu") && !event.target.closest("#exportMenuToggle")) {
-      const menu = document.getElementById("exportMenu");
-      if (menu) menu.style.display = "none";
-    }
-  });
+  showToast("Cancel requested. Refreshing…");
+  await loadJob(state);
+  await loadTasks(state);
 }
 
 async function exportJobData(state, { type, format }) {
   let url = `/v1/jobs/${state.jobId}/export`;
   if (type && type !== "job") {
-    url += `?type=${type}`;
+    url += `?type=${encodeURIComponent(type)}`;
   }
 
-  const response = await authFetch(url, state.token);
+  const response = await authorisedFetch(state, url, { headers: { Accept: "application/json" } });
   if (!response.ok) {
     throw new Error(`Export failed (${response.status})`);
   }
 
-  const payload = await response.json();
-  const data = payload.data ?? payload;
-  const { rows, columns, filenameBase } = buildExportPayload(data, state, type);
+  const exportPayload = await response.json();
+  const { payload, tasks, columns } = normaliseExportPayload(exportPayload);
 
-  if (format === "json") {
-    const jsonPayload = {
-      columns,
-      rows,
-      metadata: {
-        job_id: data.job_id || state.jobId,
-        domain: data.domain || state.domain,
-        status: data.status || null,
-        completed_at: data.completed_at || null,
-        created_at: data.created_at || null,
-        export_time: data.export_time || new Date().toISOString(),
-        export_type: data.export_type || type,
-        total_rows: rows.length,
-      },
-    };
+  const { headers, keys } = prepareExportColumns(columns, tasks);
 
-    triggerFileDownload(JSON.stringify(jsonPayload, null, 2), "application/json", `${filenameBase}.json`);
-    return;
-  }
-
-  const csv = convertRowsToCSV(rows, columns);
-  triggerFileDownload(csv, "text/csv", `${filenameBase}.csv`);
-}
-
-function buildExportPayload(data, state, type) {
-  const { payload, tasks, columns } = normaliseExportPayload(data);
-  const { keys, headers } = prepareExportColumns(columns, tasks);
-
-  const filteredRows = tasks.map((task) => {
+  const formattedRows = tasks.map((task) => {
     const row = {};
-    keys.forEach((key, index) => {
-      row[headers[index]] = task && Object.prototype.hasOwnProperty.call(task, key) ? task[key] : null;
+    keys.forEach((key) => {
+      row[key] = task[key] ?? "";
     });
     return row;
   });
 
-  const domainForFilename = sanitizeForFilename(payload?.domain || state.domain || "domain");
-  const dateStamp = formatCompletionTimestampForFilename(payload?.completed_at, payload?.export_time);
-  const typeForFilename = sanitizeForFilename(type);
-  const filenameBase = `${typeForFilename}-${domainForFilename}-${dateStamp}`;
-
-  return {
-    rows: filteredRows,
-    columns: (columns && columns.length
-      ? columns
-      : keys.map((key, idx) => ({ key, label: headers[idx] ?? key }))),
-    filenameBase,
-  };
-}
-
-function convertRowsToCSV(rows, columns) {
-  if (!rows.length) {
-    return "";
+  if (format === "json") {
+    const jsonContent = JSON.stringify(
+      {
+        meta: {
+          job_id: payload?.job_id || state.jobId,
+          export_time: payload?.export_time || new Date().toISOString(),
+          export_type: payload?.export_type || type,
+        },
+        columns: headers,
+        tasks: formattedRows,
+      },
+      null,
+      2,
+    );
+    const filename = `${sanitizeForFilename(payload?.domain || state.domain || "job")}-${formatCompletionTimestampForFilename(
+      payload?.completed_at,
+      payload?.export_time,
+    )}.json`;
+    triggerFileDownload(jsonContent, "application/json", filename);
+    return;
   }
 
-  const headers = columns.map((column) => column.label || column.key);
-  const keys = columns.map((column) => column.key);
-
-  const csvRows = [headers.map(escapeCSVValue).join(",")];
-
-  rows.forEach((row) => {
-    const line = keys.map((key, idx) => {
-      const label = columns[idx].label || key;
-      return escapeCSVValue(row[label]);
-    });
-    csvRows.push(line.join(","));
+  const csvRows = [headers.join(",")];
+  formattedRows.forEach((row) => {
+    const values = keys.map((key) => escapeCSVValue(row[key]));
+    csvRows.push(values.join(","));
   });
-
-  return csvRows.join("\n");
-}
-
-function escapeCSVValue(value) {
-  if (value === null || value === undefined) {
-    return "";
-  }
-
-  const stringValue = String(value);
-  if (stringValue.includes(",") || stringValue.includes('"') || stringValue.includes("\n")) {
-    return `"${stringValue.replace(/"/g, '""')}"`;
-  }
-
-  return stringValue;
-}
-
-function formatJobData(job) {
-  const formatted = {
-    ...job,
-    status: job.status || "unknown",
-    progress_formatted: `${Math.round(job.progress || 0)}%`,
-  };
-
-  const startedAt = job.started_at ? new Date(job.started_at) : null;
-  const completedAt = job.completed_at ? new Date(job.completed_at) : null;
-
-  formatted.started_at_formatted = startedAt ? startedAt.toLocaleString() : "—";
-  formatted.completed_at_formatted = completedAt ? completedAt.toLocaleString() : "—";
-
-  if (job.duration_seconds != null) {
-    const hours = Math.floor(job.duration_seconds / 3600);
-    const minutes = Math.floor((job.duration_seconds % 3600) / 60);
-    const seconds = job.duration_seconds % 60;
-
-    formatted.duration_formatted =
-      hours > 0 ? `${hours}h ${minutes}m ${seconds}s` : minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
-  } else {
-    formatted.duration_formatted = "—";
-  }
-
-  if (job.avg_time_per_task_seconds != null) {
-    const avgSeconds = Number(job.avg_time_per_task_seconds);
-    formatted.avg_time_formatted =
-      avgSeconds >= 60
-        ? `${Math.floor(avgSeconds / 60)}m ${(avgSeconds % 60).toFixed(2)}s`
-        : `${avgSeconds.toFixed(2)}s`;
-  } else {
-    formatted.avg_time_formatted = "—";
-  }
-
-  return formatted;
+  const csvContent = csvRows.join("\n");
+  const filename = `${sanitizeForFilename(payload?.domain || state.domain || "job")}-${formatCompletionTimestampForFilename(
+    payload?.completed_at,
+    payload?.export_time,
+  )}.csv`;
+  triggerFileDownload(csvContent, "text/csv", filename);
 }
 
 function normaliseExportPayload(data) {
@@ -621,7 +838,9 @@ function prepareExportColumns(columns, tasks) {
 }
 
 function formatColumnLabel(key) {
-  if (!key) return "";
+  if (!key) {
+    return "";
+  }
 
   const overrides = {
     id: "Task ID",
@@ -640,10 +859,23 @@ function formatColumnLabel(key) {
     .join(" ");
 }
 
+function escapeCSVValue(value) {
+  if (value === null || value === undefined) {
+    return "";
+  }
+
+  const stringValue = String(value);
+  if (stringValue.includes(",") || stringValue.includes('"') || stringValue.includes("\n")) {
+    return `"${stringValue.replace(/"/g, '""')}"`;
+  }
+
+  return stringValue;
+}
+
 function formatCompletionTimestampForFilename(completedAt, fallback) {
-  const parse = (value) => {
-    if (!value) return null;
-    const date = new Date(value);
+  const parse = (val) => {
+    if (!val) return null;
+    const date = new Date(val);
     return Number.isNaN(date.getTime()) ? null : date;
   };
 
@@ -666,42 +898,11 @@ function sanitizeForFilename(value) {
 function triggerFileDownload(content, mimeType, filename) {
   const blob = new Blob([content], { type: mimeType });
   const downloadUrl = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = downloadUrl;
-  a.download = filename;
-  a.click();
+  const anchor = document.createElement("a");
+  anchor.href = downloadUrl;
+  anchor.download = filename;
+  anchor.click();
   URL.revokeObjectURL(downloadUrl);
-}
-
-async function authFetch(path, token, options = {}) {
-  const headers = new Headers(options.headers || {});
-  headers.set("Authorization", `Bearer ${token}`);
-  headers.set("Content-Type", "application/json");
-
-  return fetch(path, {
-    ...options,
-    headers,
-  });
-}
-
-async function restartJobFromPage(state) {
-  const response = await authFetch(`/v1/jobs/${state.jobId}/restart`, state.token, { method: "POST" });
-  if (!response.ok) {
-    throw new Error(`Failed to restart job (${response.status})`);
-  }
-  showToast("Restart requested. Refreshing…");
-  await loadJob(state);
-  await loadTasks(state);
-}
-
-async function cancelJobFromPage(state) {
-  const response = await authFetch(`/v1/jobs/${state.jobId}/cancel`, state.token, { method: "POST" });
-  if (!response.ok) {
-    throw new Error(`Failed to cancel job (${response.status})`);
-  }
-  showToast("Cancel requested. Refreshing…");
-  await loadJob(state);
-  await loadTasks(state);
 }
 
 function showToast(message, isError = false) {
@@ -712,3 +913,40 @@ function showToast(message, isError = false) {
   document.body.appendChild(toast);
   setTimeout(() => toast.remove(), 4000);
 }
+
+document.addEventListener("DOMContentLoaded", async () => {
+  const jobId = window.location.pathname.split("/").filter(Boolean).pop();
+  if (!jobId) {
+    showToast("No job ID provided.", true);
+    return;
+  }
+
+  const binder = new BBDataBinder({ apiBaseUrl: "" });
+  window.dataBinder = binder;
+  binder.scanAndBind();
+
+  const state = {
+    jobId,
+    binder,
+    limit: DEFAULT_PAGE_SIZE,
+    page: 0,
+    sortColumn: "created_at",
+    sortDirection: "desc",
+    statusFilter: "",
+    totalTasks: 0,
+    hasPrev: false,
+    hasNext: false,
+    domain: null,
+    token: null,
+  };
+
+  try {
+    await initialiseAuth(state);
+    await loadJob(state);
+    await loadTasks(state);
+    setupInteractions(state);
+  } catch (error) {
+    console.error("Failed to initialise job page:", error);
+    showToast("Failed to load job details.", true);
+  }
+});
