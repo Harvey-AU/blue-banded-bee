@@ -45,10 +45,13 @@ jobs:
           # Check if app exists, create if not
           if ! flyctl apps list | grep -q "$APP_NAME"; then
             echo "Creating new review app: $APP_NAME"
-            flyctl apps create "$APP_NAME" --org personal --region syd
+            flyctl apps create "$APP_NAME" --org personal
           else
             echo "Review app already exists: $APP_NAME"
           fi
+
+          echo "Setting primary regions for review app..."
+          flyctl regions set "$APP_NAME" syd
 
           # Set secrets for Review App WITHOUT triggering deployment
           echo "Setting test database connection and auth secrets for review app..."
