@@ -50,9 +50,6 @@ jobs:
             echo "Review app already exists: $APP_NAME"
           fi
 
-          echo "Setting primary regions for review app..."
-          flyctl regions set "$APP_NAME" syd
-
           # Set secrets for Review App WITHOUT triggering deployment
           echo "Setting test database connection and auth secrets for review app..."
           flyctl secrets set DATABASE_URL="${{ secrets.TEST_DATABASE_URL }}" \
@@ -64,6 +61,7 @@ jobs:
             --app $APP_NAME \
             --config .fly/review_apps.toml \
             --local-only \
+            --region syd \
             --image blue-banded-bee:pr-${{ github.event.number }}
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
