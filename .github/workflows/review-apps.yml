@@ -26,6 +26,9 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
@@ -50,10 +53,31 @@ jobs:
             echo "Review app already exists: $APP_NAME"
           fi
 
-          # Set secrets for Review App WITHOUT triggering deployment
-          echo "Setting test database connection and auth secrets for review app..."
-          flyctl secrets set DATABASE_URL="${{ secrets.TEST_DATABASE_URL }}" \
-            SUPABASE_JWT_SECRET="${{ secrets.SUPABASE_JWT_SECRET }}" \
+          # Fetch Supabase preview branch credentials
+          echo "Fetching Supabase preview credentials..."
+          BRANCH="preview/pr-${{ github.event.number }}"
+          RESPONSE=$(curl -sS -X POST \
+            "https://api.supabase.com/v1/projects/${{ secrets.SUPABASE_PROJECT_REF }}/branches/${BRANCH}/db-credentials" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_ACCESS_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -H "Accept: application/json")
+
+          echo "Supabase response: $RESPONSE"
+
+          DB_URL=$(echo "$RESPONSE" | jq -r '.connectionString')
+          JWT_SECRET=$(echo "$RESPONSE" | jq -r '.jwtSecret // empty')
+          if [ -z "$JWT_SECRET" ] || [ "$JWT_SECRET" = "null" ]; then
+            JWT_SECRET="${{ secrets.SUPABASE_JWT_SECRET }}"
+          fi
+
+          if [ -z "$DB_URL" ] || [ "$DB_URL" = "null" ]; then
+            echo "Failed to fetch Supabase preview connection string"
+            exit 1
+          fi
+
+          echo "Setting preview secrets for review app..."
+          flyctl secrets set DATABASE_URL="$DB_URL" \
+            SUPABASE_JWT_SECRET="$JWT_SECRET" \
             --app $APP_NAME --stage
 
           # Deploy to review app with local image (this will apply staged secrets)
