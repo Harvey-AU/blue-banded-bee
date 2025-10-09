@@ -88,6 +88,51 @@
         border-color: #1d4ed8;
       }
 
+      .bb-btn-secondary {
+        background: #2563eb;
+        border-color: #1d4ed8;
+        color: #ffffff;
+      }
+
+      .bb-btn-secondary:hover {
+        background: #1d4ed8;
+        border-color: #1e3a8a;
+      }
+
+      .share-panel {
+        margin: 16px 0 0;
+        padding: 16px 18px;
+        border-radius: 10px;
+        background: #eff6ff;
+        border: 1px solid #bfdbfe;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 16px;
+        flex-wrap: wrap;
+      }
+
+      .share-panel .share-details {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        min-width: 0;
+      }
+
+      .share-panel .share-label {
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: #1d4ed8;
+        font-weight: 600;
+      }
+
+      .share-panel a {
+        color: #1d4ed8;
+        font-weight: 600;
+        word-break: break-word;
+      }
+
       main {
         max-width: 1200px;
         margin: 32px auto;
@@ -407,13 +452,21 @@
 
         <div class="user-meta" id="userMeta">
           <span id="userEmail">Loading…</span>
-          <button id="shareJobBtn" class="bb-btn" aria-label="Copy shareable link">Copy Link</button>
+          <button id="shareJobBtn" class="bb-btn" aria-label="Generate or copy shareable link">Generate Link</button>
           <button id="logoutBtn" class="bb-btn" aria-label="Sign out of Blue Banded Bee">Sign Out</button>
         </div>
       </div>
     </header>
 
     <main>
+      <div id="shareLinkPanel" class="share-panel" style="display: none">
+        <div class="share-details">
+          <span class="share-label">Public Link</span>
+          <a id="shareLinkAnchor" href="#" target="_blank" rel="noopener noreferrer">—</a>
+        </div>
+        <button id="revokeShareLinkBtn" class="bb-btn-secondary bb-btn" aria-label="Revoke share link">Revoke Link</button>
+      </div>
+
       <section>
         <div class="section-title">
           <div>

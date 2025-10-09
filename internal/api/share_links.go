@@ -101,6 +101,40 @@ func (h *Handler) createJobShareLink(w http.ResponseWriter, r *http.Request, job
 	}, "Share link created successfully")
 }
 
+func (h *Handler) getJobShareLink(w http.ResponseWriter, r *http.Request, jobID string) {
+	user := h.validateJobAccess(w, r, jobID)
+	if user == nil {
+		return
+	}
+
+	var token string
+	err := h.DB.GetDB().QueryRowContext(r.Context(), `
+        SELECT token
+        FROM job_share_links
+        WHERE job_id = $1
+          AND revoked_at IS NULL
+          AND (expires_at IS NULL OR expires_at > NOW())
+        ORDER BY created_at DESC
+        LIMIT 1
+    `, jobID).Scan(&token)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			NotFound(w, r, "Share link not found")
+			return
+		}
+
+		log.Error().Err(err).Msg("Failed to fetch share link")
+		InternalError(w, r, err)
+		return
+	}
+
+	shareURL := buildShareURL(r, token)
+	WriteSuccess(w, r, map[string]interface{}{
+		"token":      token,
+		"share_link": shareURL,
+	}, "Share link active")
+}
+
 func (h *Handler) revokeJobShareLink(w http.ResponseWriter, r *http.Request, jobID, token string) {
 	user := h.validateJobAccess(w, r, jobID)
 	if user == nil {
