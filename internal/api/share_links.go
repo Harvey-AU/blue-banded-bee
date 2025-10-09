@@ -54,10 +54,18 @@ func (h *Handler) createJobShareLink(w http.ResponseWriter, r *http.Request, job
 		return
 	}
 
-	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		log.Error().Err(err).Msg("Failed to query existing share links")
-		InternalError(w, r, err)
-		return
+	if err != nil {
+		if isUndefinedRelationError(err, "job_share_links") {
+			log.Warn().Err(err).Msg("Share link table missing, feature disabled")
+			ServiceUnavailable(w, r, "Share links are not available yet")
+			return
+		}
+
+		if !errors.Is(err, sql.ErrNoRows) {
+			log.Error().Err(err).Msg("Failed to query existing share links")
+			InternalError(w, r, err)
+			return
+		}
 	}
 
 	var token string
@@ -77,6 +85,12 @@ func (h *Handler) createJobShareLink(w http.ResponseWriter, r *http.Request, job
 		if insertErr == nil {
 			token = candidate
 			break
+		}
+
+		if isUndefinedRelationError(insertErr, "job_share_links") {
+			log.Warn().Err(insertErr).Msg("Share link table missing during insert")
+			ServiceUnavailable(w, r, "Share links are not available yet")
+			return
 		}
 
 		if isUniqueViolation(insertErr) {
@@ -118,6 +132,12 @@ func (h *Handler) getJobShareLink(w http.ResponseWriter, r *http.Request, jobID 
         LIMIT 1
     `, jobID).Scan(&token)
 	if err != nil {
+		if isUndefinedRelationError(err, "job_share_links") {
+			log.Warn().Err(err).Msg("Share link table missing during fetch")
+			ServiceUnavailable(w, r, "Share links are not available yet")
+			return
+		}
+
 		if errors.Is(err, sql.ErrNoRows) {
 			NotFound(w, r, "Share link not found")
 			return
@@ -147,6 +167,11 @@ func (h *Handler) revokeJobShareLink(w http.ResponseWriter, r *http.Request, job
         WHERE job_id = $1 AND token = $2 AND revoked_at IS NULL
     `, jobID, token)
 	if err != nil {
+		if isUndefinedRelationError(err, "job_share_links") {
+			log.Warn().Err(err).Msg("Share link table missing during revoke")
+			ServiceUnavailable(w, r, "Share links are not available yet")
+			return
+		}
 		log.Error().Err(err).Msg("Failed to revoke share link")
 		InternalError(w, r, err)
 		return
@@ -304,6 +329,9 @@ func (h *Handler) lookupShareLink(ctx context.Context, token string) (*shareLink
         WHERE token = $1
     `, token).Scan(&record.JobID, &record.ExpiresAt, &record.RevokedAt)
 	if err != nil {
+		if isUndefinedRelationError(err, "job_share_links") {
+			return nil, sql.ErrNoRows
+		}
 		return nil, err
 	}
 
@@ -342,4 +370,21 @@ func isUniqueViolation(err error) bool {
 	}
 	// We only need to detect uniqueness violations; defer to string check to avoid pulling in pq dependency here
 	return strings.Contains(err.Error(), "unique")
+}
+
+func isUndefinedRelationError(err error, relation string) bool {
+	if err == nil {
+		return false
+	}
+
+	msg := strings.ToLower(err.Error())
+	if strings.Contains(msg, "42p01") {
+		return true
+	}
+
+	if relation != "" && strings.Contains(msg, fmt.Sprintf("relation \"%s\"", strings.ToLower(relation))) {
+		return true
+	}
+
+	return false
 }
