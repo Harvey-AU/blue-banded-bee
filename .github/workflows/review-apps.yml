@@ -57,11 +57,10 @@ jobs:
             --app $APP_NAME --stage
 
           # Deploy to review app with local image (this will apply staged secrets)
-          flyctl deploy \
+          FLY_REGION=syd flyctl deploy \
             --app $APP_NAME \
             --config .fly/review_apps.toml \
             --local-only \
-            --region syd \
             --image blue-banded-bee:pr-${{ github.event.number }}
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
