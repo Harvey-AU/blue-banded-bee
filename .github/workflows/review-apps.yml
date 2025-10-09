@@ -56,23 +56,42 @@ jobs:
           # Fetch Supabase preview branch credentials
           echo "Fetching Supabase preview credentials..."
           BRANCH="preview/pr-${{ github.event.number }}"
-          RESPONSE=$(curl -sS -X POST \
-            "https://api.supabase.com/v1/projects/${{ secrets.SUPABASE_PROJECT_REF }}/branches/${BRANCH}/db-credentials" \
-            -H "Authorization: Bearer ${{ secrets.SUPABASE_ACCESS_TOKEN }}" \
-            -H "Content-Type: application/json" \
-            -H "Accept: application/json")
+          BRANCH_ENCODED=$(echo "$BRANCH" | sed 's|/|%2F|g')
+          MAX_RETRIES=5
+          RETRY_DELAY=20
+          DB_URL=""
+          JWT_SECRET=""
 
-          echo "Supabase response: $RESPONSE"
+          for attempt in $(seq 1 $MAX_RETRIES); do
+            echo "Attempt $attempt: fetching Supabase preview credentials..."
+            RESPONSE=$(curl -sS -X POST \
+              "https://api.supabase.com/v1/projects/${{ secrets.SUPABASE_PROJECT_REF }}/branch/${BRANCH_ENCODED}/db-credentials" \
+              -H "Authorization: Bearer ${{ secrets.SUPABASE_ACCESS_TOKEN }}" \
+              -H "Content-Type: application/json" \
+              -H "Accept: application/json")
 
-          DB_URL=$(echo "$RESPONSE" | jq -r '.connectionString')
-          JWT_SECRET=$(echo "$RESPONSE" | jq -r '.jwtSecret // empty')
-          if [ -z "$JWT_SECRET" ] || [ "$JWT_SECRET" = "null" ]; then
-            JWT_SECRET="${{ secrets.SUPABASE_JWT_SECRET }}"
-          fi
+            echo "Supabase response: $RESPONSE"
+
+            DB_URL=$(echo "$RESPONSE" | jq -r '.connectionString // empty')
+            JWT_SECRET=$(echo "$RESPONSE" | jq -r '.jwtSecret // empty')
+
+            if [ -n "$DB_URL" ] && [ "$DB_URL" != "null" ]; then
+              break
+            fi
+
+            if [ "$attempt" -lt "$MAX_RETRIES" ]; then
+              echo "Preview branch not ready yet, retrying in ${RETRY_DELAY}s..."
+              sleep $RETRY_DELAY
+            fi
+          done
 
           if [ -z "$DB_URL" ] || [ "$DB_URL" = "null" ]; then
-            echo "Failed to fetch Supabase preview connection string"
+            echo "Failed to fetch Supabase preview connection string after $MAX_RETRIES attempts"
             exit 1
+          fi
+
+          if [ -z "$JWT_SECRET" ] || [ "$JWT_SECRET" = "null" ]; then
+            JWT_SECRET="${{ secrets.SUPABASE_JWT_SECRET }}"
           fi
 
           echo "Setting preview secrets for review app..."
