@@ -45,7 +45,7 @@ jobs:
           # Check if app exists, create if not
           if ! flyctl apps list | grep -q "$APP_NAME"; then
             echo "Creating new review app: $APP_NAME"
-            flyctl apps create $APP_NAME --org personal
+            flyctl apps create "$APP_NAME" --org personal --region syd
           else
             echo "Review app already exists: $APP_NAME"
           fi
