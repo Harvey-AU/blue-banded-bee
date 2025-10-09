@@ -54,8 +54,12 @@ func (h *Handler) JobHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		case "share-links":
 			if len(parts) == 2 {
-				if r.Method == http.MethodPost {
+				switch r.Method {
+				case http.MethodPost:
 					h.createJobShareLink(w, r, jobID)
+					return
+				case http.MethodGet:
+					h.getJobShareLink(w, r, jobID)
 					return
 				}
 				MethodNotAllowed(w, r)

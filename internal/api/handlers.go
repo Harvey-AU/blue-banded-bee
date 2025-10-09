@@ -61,6 +61,7 @@ func (h *Handler) SetupRoutes(mux *http.ServeMux) {
 	mux.Handle("/v1/jobs/", auth.AuthMiddleware(http.HandlerFunc(h.JobHandler))) // For /v1/jobs/:id
 	// Shared job routes (public)
 	mux.HandleFunc("/v1/shared/jobs/", h.SharedJobHandler)
+	mux.HandleFunc("/shared/jobs/", h.ServeSharedJobPage)
 
 	// Dashboard API routes (require auth)
 	mux.Handle("/v1/dashboard/stats", auth.AuthMiddleware(http.HandlerFunc(h.DashboardStats)))
@@ -181,6 +182,16 @@ func (h *Handler) ServeDebugAuth(w http.ResponseWriter, r *http.Request) {
 
 // ServeJobDetails serves the standalone job details page
 func (h *Handler) ServeJobDetails(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		MethodNotAllowed(w, r)
+		return
+	}
+
+	http.ServeFile(w, r, "web/templates/job-details.html")
+}
+
+// ServeSharedJobPage serves the public shared job view
+func (h *Handler) ServeSharedJobPage(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		MethodNotAllowed(w, r)
 		return

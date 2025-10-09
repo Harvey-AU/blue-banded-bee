@@ -14,6 +14,18 @@ Each version represents a distinct set of changes, even if released on the same 
 
 - **Public Share Links**: Backend endpoints and job page hooks ready; front-end share controls still to be completed.
 
+## [0.6.3] – 2025-10-09
+
+### Added
+
+- **Dashboard Share Links**: One-click share action on job cards generates and copies public URLs with inline feedback.
+- **Share Link API Tests**: Contract coverage for create/reuse/revoke flows and shared endpoints.
+
+### Improved
+
+- **Unified Job Page**: `/shared/jobs/{token}` now reuses the job details template in read-only mode with shared API wiring.
+- **Job Page Controls**: Share panel supports generate/copy/revoke with shared-mode guards and cleaner script loading.
+
 ## [0.6.2] – 2025-10-08
 
 ### Fixed
@@ -87,14 +99,14 @@ Each version represents a distinct set of changes, even if released on the same 
 ### Enhanced
 
 - **Comprehensive API Testing Infrastructure**: Complete testing foundation for Stage 5
-  - Added comprehensive tests for all major API endpoints (createJob, getJob, updateJob, cancelJob, getJobTasks)  
+  - Added comprehensive tests for all major API endpoints (createJob, getJob, updateJob, cancelJob, getJobTasks)
   - Achieved 33.2% API package coverage (+1500% improvement from baseline)
   - Implemented interface-based testing (JobManagerInterface) and sqlmock patterns
   - Added comprehensive dashboard and webhook endpoint testing
   - Created separated test file structure for maintainability (test_mocks.go, jobs_create_test.go, etc.)
 - **Function Refactoring Excellence**: Major complexity reduction using Extract + Test + Commit
   - Completed processTask refactoring: 162 → 28 lines (83% reduction)
-  - Completed processNextTask refactoring: 136 → 31 lines (77% reduction)  
+  - Completed processNextTask refactoring: 136 → 31 lines (77% reduction)
   - Created 6 focused, single-responsibility functions with 100% coverage on testable functions
   - Achieved consistent 75-85% complexity reductions across targeted functions
 
@@ -151,7 +163,6 @@ Each version represents a distinct set of changes, even if released on the same 
   - `DbQueueInterface` - Interface for database queue operations
   - `CrawlerInterface` - Extended with GetUserAgent method
   - Mock implementations for both interfaces in tests
-  
 - **Worker Processing Tests**: Core task processing functionality
   - `worker_process_test.go` - Tests for processTask and processNextTask
   - Error classification and retry logic tests
