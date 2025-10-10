@@ -583,13 +583,14 @@ func parseTaskQueryParams(r *http.Request) TaskQueryParams {
 	orderBy := "t.created_at DESC"         // default
 	if sortParam != "" {
 		// Handle sort direction prefix
-		direction := "DESC"
-		column := sortParam
+		var direction string
+		var column string
 		if strings.HasPrefix(sortParam, "-") {
 			direction = "DESC"
 			column = strings.TrimPrefix(sortParam, "-")
 		} else {
 			direction = "ASC"
+			column = sortParam
 		}
 
 		// Map column names to actual SQL columns

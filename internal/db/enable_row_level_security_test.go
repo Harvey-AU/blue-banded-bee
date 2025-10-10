@@ -28,7 +28,7 @@ func TestEnableRowLevelSecurityTableEnabling(t *testing.T) {
 	mock.ExpectExec("DROP POLICY IF EXISTS").
 		WillReturnResult(sqlmock.NewResult(0, 0))
 
-	err = enableRowLevelSecurity(db)
+	_ = enableRowLevelSecurity(db)
 	// May have error due to incomplete mocking of setupRLSPolicies, but should not panic
 	// The key test is that the function executes and RLS enabling logic works
 }

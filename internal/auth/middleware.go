@@ -198,7 +198,9 @@ func writeAuthError(w http.ResponseWriter, r *http.Request, message string, stat
 		"request_id": requestID,
 	}
 
-	json.NewEncoder(w).Encode(response)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		log.Error().Err(err).Msg("Failed to encode unauthorised response")
+	}
 }
 
 // min returns the minimum of two integers

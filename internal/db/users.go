@@ -224,7 +224,9 @@ func (db *DB) CreateUser(userID, email string, fullName *string, orgName string)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to start transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() {
+		_ = tx.Rollback() // Rollback is safe to call even after commit
+	}()
 
 	// Create organisation first
 	org := &Organisation{

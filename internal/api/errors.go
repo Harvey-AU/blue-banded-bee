@@ -58,7 +58,9 @@ func WriteError(w http.ResponseWriter, r *http.Request, err error, status int, c
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(errResp)
+	if err := json.NewEncoder(w).Encode(errResp); err != nil {
+		log.Error().Err(err).Msg("Failed to encode error response")
+	}
 }
 
 // WriteErrorMessage writes a standardised error response with a custom message
@@ -84,7 +86,9 @@ func WriteErrorMessage(w http.ResponseWriter, r *http.Request, message string, s
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(errResp)
+	if err := json.NewEncoder(w).Encode(errResp); err != nil {
+		log.Error().Err(err).Msg("Failed to encode error response")
+	}
 }
 
 // Common error helpers for frequent use cases

@@ -27,7 +27,7 @@ func (m *MockDbQueueWithTransaction) Execute(ctx context.Context, fn func(*sql.T
 
 	err = fn(tx)
 	if err != nil {
-		tx.Rollback()
+		_ = tx.Rollback()
 		return err
 	}
 

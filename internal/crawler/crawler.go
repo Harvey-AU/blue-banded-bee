@@ -108,11 +108,13 @@ func New(config *Config, id ...string) *Crawler {
 		colly.AllowURLRevisit(),
 	)
 
-	c.Limit(&colly.LimitRule{
+	if err := c.Limit(&colly.LimitRule{
 		DomainGlob:  "*",
 		Parallelism: config.MaxConcurrency,
 		RandomDelay: time.Second / time.Duration(config.RateLimit),
-	})
+	}); err != nil {
+		return nil, fmt.Errorf("failed to set crawler limits: %w", err)
+	}
 
 	// Create metrics map for this crawler instance
 	metricsMap := &sync.Map{}
@@ -260,14 +262,15 @@ func (c *Crawler) setupResponseHandlers(collyClone *colly.Collector, result *Cra
 
 	// Handle errors
 	collyClone.OnError(func(r *colly.Response, err error) {
+		if r == nil || r.Ctx == nil {
+			return
+		}
 		result := r.Ctx.GetAny("result").(*CrawlResult)
 		result.Error = err.Error()
 
-		if r != nil {
-			startTime := r.Ctx.GetAny("start_time").(time.Time)
-			result.ResponseTime = time.Since(startTime).Milliseconds()
-			result.StatusCode = r.StatusCode
-		}
+		startTime := r.Ctx.GetAny("start_time").(time.Time)
+		result.ResponseTime = time.Since(startTime).Milliseconds()
+		result.StatusCode = r.StatusCode
 
 		log.Error().
 			Err(err).
