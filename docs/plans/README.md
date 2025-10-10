@@ -6,7 +6,6 @@ Future features, implementation strategies, and technical planning documents.
 
 ### Current Development
 - **[api-testing-post-launch.md](./api-testing-post-launch.md)** - API testing strategy after launch
-- **[code-quality-improvement.md](./code-quality-improvement.md)** - Code quality enhancement plan
 - **[content-storage-and-change-tracking.md](./content-storage-and-change-tracking.md)** - Content versioning strategy
 - **[supabase-optimise.md](./supabase-optimise.md)** - Database optimisation plans
 - **[test-strategy-overview.md](./test-strategy-overview.md)** - Comprehensive testing approach
