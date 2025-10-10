@@ -2,7 +2,6 @@ version: "2"
 
 run:
   timeout: 5m
-  modules-download-mode: mod
 
 linters:
   enable:
@@ -15,54 +14,3 @@ linters:
     - ineffassign
     - gocyclo
     - misspell
-
-  settings:
-    gocyclo:
-      min-complexity: 35
-
-    misspell:
-      locale: UK
-      ignore-rules:
-        - colour
-        - favour
-        - honour
-        - labour
-        - neighbour
-
-    govet:
-      enable:
-        - shadow
-        - unusedwrite
-
-    revive:
-      rules:
-        - name: exported
-          disabled: true
-        - name: package-comments
-          disabled: true
-
-  exclusions:
-    paths:
-      - vendor
-      - internal/mocks
-      - internal/testutil
-      - internal/benchmarks
-
-    rules:
-      - path: _test\.go
-        linters:
-          - gocyclo
-          - errcheck
-
-      - linters:
-          - govet
-        text: 'shadow: declaration of "err"'
-
-      - path: internal/
-        linters:
-          - errcheck
-        text: 'Error return value of.*Err.*is not checked'
-
-issues:
-  max-per-linter: 0
-  max-same: 0
