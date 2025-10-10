@@ -5,20 +5,14 @@ on:
     branches:
       - main
     types: [opened, synchronize, reopened, closed]
-    paths-ignore:
-      - "**.md"
-      - "docs/**"
-      - "LICENSE"
-      - ".gitignore"
-      - "CHANGELOG.md"
-      - "SECURITY.md"
-      - "Roadmap.md"
 
 jobs:
   deploy-review:
     name: Deploy Review App
     runs-on: blacksmith-4vcpu-ubuntu-2404
-    if: github.event.pull_request.draft == false
+    if: |
+      github.event.pull_request.draft == false &&
+      github.event.action != 'closed'
     permissions:
       pull-requests: write
 
