@@ -234,7 +234,7 @@ func main() {
 	apiHandler.SetupRoutes(mux)
 
 	// Create middleware stack with rate limiting
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	var handler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ip := getClientIP(r)
 		if !limiter.getLimiter(ip).Allow() {
 			api.WriteErrorMessage(w, r, "Too many requests", http.StatusTooManyRequests, api.ErrCodeRateLimit)
