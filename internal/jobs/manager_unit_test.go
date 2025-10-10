@@ -318,7 +318,7 @@ func BenchmarkJobManagerPageProcessing(b *testing.B) {
 			pageURL := fmt.Sprintf("https://example.com/page%d", i%1000)
 
 			jm.pagesMutex.RLock()
-			_, _ = jm.processedPages[pageURL]
+			_ = jm.processedPages[pageURL]
 			jm.pagesMutex.RUnlock()
 		}
 	})

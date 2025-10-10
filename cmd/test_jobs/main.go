@@ -62,7 +62,7 @@ func main() {
 	dbQueue := db.NewDbQueue(database)
 
 	// Create worker pool
-	var jobWorkers int = 3
+	var jobWorkers = 3
 	dbConfig := &db.Config{
 		DatabaseURL: dbURL,
 	}

@@ -231,13 +231,13 @@ func ValidateSession(tokenString string) *SessionInfo {
 	// Check if token expires soon (within 5 minutes)
 	refreshNeeded := false
 	if claims.ExpiresAt != nil {
-		timeUntilExpiry := claims.ExpiresAt.Time.Unix() - time.Now().Unix()
+		timeUntilExpiry := claims.ExpiresAt.Unix() - time.Now().Unix()
 		refreshNeeded = timeUntilExpiry < 300 // 5 minutes
 	}
 
 	return &SessionInfo{
 		IsValid:       true,
-		ExpiresAt:     claims.ExpiresAt.Time.Unix(),
+		ExpiresAt:     claims.ExpiresAt.Unix(),
 		RefreshNeeded: refreshNeeded,
 		UserID:        claims.UserID,
 		Email:         claims.Email,
