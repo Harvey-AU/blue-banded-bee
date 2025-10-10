@@ -223,7 +223,9 @@ jobs:
     name: Coverage Report
     runs-on: blacksmith-4vcpu-ubuntu-2404
     needs: [unit-tests, integration-tests]
-    if: always()
+    if:
+      always() && (needs.unit-tests.result == 'success' ||
+      needs.integration-tests.result == 'success')
     steps:
       - uses: actions/checkout@v4
 
