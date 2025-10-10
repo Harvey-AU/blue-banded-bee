@@ -13,10 +13,46 @@ the same day.
 
 ## [Unreleased]
 
-### In Progress
+## [0.6.4] – 2025-10-11
 
-- **Public Share Links**: Backend endpoints and job page hooks ready; front-end
-  share controls still to be completed.
+### Added
+
+- **CI Formatting Enforcement**: Automated code formatting checks in CI pipeline
+  - Added golangci-lint v2.5.0 with Australian English spell checking
+  - Prettier formatting for Markdown, YAML, JSON, HTML, CSS, and JavaScript
+  - Pre-commit hooks auto-format files before every commit
+  - Format check job blocks merges if formatting is incorrect
+- **Sentry Error Tracking on Preview Branches**: Preview apps now report to
+  Sentry
+  - Added `SENTRY_DSN` to review app secrets for staging environment visibility
+  - 5% trace sampling for preview environments (vs 10% production)
+  - Enables early issue detection before production deployment
+
+### Fixed
+
+- **Stuck Task Recovery**: Resolved recurring "task stuck in running state"
+  errors
+  - Fixed error handling in `recoverStaleTasks()` to properly rollback failed
+    transactions
+  - Recovery attempts now trigger transaction rollback when UPDATE fails
+  - Expected 99.9% reduction in stuck task alerts (from 37k to <10 per
+    occurrence)
+- **Fly.io Review App Cleanup**: Fixed preview apps not being deleted after PR
+  merge
+  - Corrected YAML syntax error preventing cleanup job from running
+  - Removed workflow-level paths-ignore that was blocking cleanup triggers
+  - Added cleanup script for manual removal of orphaned apps
+- **CI Coverage Report**: Fixed coverage job failing when tests are skipped
+  - Coverage report now only runs if at least one test job succeeds
+  - Prevents "no coverage files found" errors on documentation-only changes
+
+### Enhanced
+
+- **Code Quality Standards**: Documented linting requirements in CLAUDE.md
+  - Australian English spelling enforced via misspell linter
+  - Cyclomatic complexity limit: 35
+  - Comprehensive linter suite: govet, staticcheck, errcheck, revive, gofmt,
+    goimports
 
 ## [0.6.3] – 2025-10-09
 

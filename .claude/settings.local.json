@@ -89,7 +89,8 @@
       "WebSearch",
       "WebFetch(domain:codingforseo.com)",
       "Bash(air)",
-      "Bash(gofmt:*)"
+      "Bash(gofmt:*)",
+      "Bash(git tag:*)"
     ],
     "deny": []
   },
