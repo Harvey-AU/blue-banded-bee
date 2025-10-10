@@ -257,7 +257,17 @@ GODEBUG=gctrace=1 go run ./cmd/app/main.go
 
 ### Code Quality
 
-We use a **hybrid approach** for code quality checks due to our Go 1.25 usage:
+We enforce code quality with **golangci-lint** in CI, ensuring consistent standards across the codebase.
+
+#### CI Linting (Enforced)
+
+Our **GitHub Actions CI** runs golangci-lint v1.59.0 with Go 1.25 support:
+
+- **Runs automatically** on every push/PR
+- **Blocks merges** if linting fails
+- **Core linters enabled**: govet, staticcheck, errcheck, revive, gofmt, goimports, ineffassign, gocyclo, misspell
+- **Configured for Australian English spelling**
+- **Cyclomatic complexity threshold**: 35 (reduces over time as functions are refactored)
 
 #### Local Development (Fast Feedback)
 
@@ -277,24 +287,19 @@ go vet ./...
 go test -v -coverprofile=coverage.out ./...
 ```
 
-#### Why Local golangci-lint Doesn't Work
+#### Running golangci-lint Locally
 
-Our project uses **Go 1.25** for advanced features (container-aware GOMAXPROCS, Green Tea GC, etc.). With the official release, golangci-lint should now be compatible:
+If your local golangci-lint doesn't support Go 1.25, use Docker:
 
 ```bash
-# This will fail with version error:
-golangci-lint run --config .golangci.yml
-# Error: Go language version (go1.24) lower than targeted Go version (1.25)
+# Run linting via Docker (recommended)
+docker run --rm -v "$(pwd)":/workspace -w /workspace \
+  golangci/golangci-lint:v1.59.0 golangci-lint run
+
+# Or install Go 1.25-compatible version
+brew upgrade golangci-lint  # macOS
+# Then run: golangci-lint run
 ```
-
-#### CI-Based Comprehensive Linting ✅
-
-Our **GitHub Actions CI** uses golangci-lint v2.3.0 built with Go 1.25 support:
-
-- **Runs automatically** on every push/PR
-- **140+ linters** enabled (security, performance, style, complexity)
-- **Fast feedback** (~30 seconds)
-- **Blocks problematic code** from merging
 
 #### Recommended Workflow
 
@@ -305,12 +310,11 @@ go fmt ./... && go vet ./... && go test ./...
 # 2. 🚀 Push to GitHub
 git add . && git commit -m "feat: new feature" && git push
 
-# 3. ⚡ GitHub CI provides comprehensive feedback
-# - Formatting issues
-# - Security vulnerabilities
-# - Performance problems
-# - Code complexity issues
-# - Documentation gaps
+# 3. ⚡ GitHub CI runs comprehensive checks
+# - Linting (golangci-lint)
+# - Unit tests
+# - Integration tests
+# - Coverage reporting
 ```
 
 #### Pre-Submission Checklist
@@ -318,9 +322,8 @@ git add . && git commit -m "feat: new feature" && git push
 - [ ] Code formatted with `go fmt ./...`
 - [ ] No issues from `go vet ./...`
 - [ ] All tests pass with `./run-tests.sh`
-- [ ] Verify CI compatibility (Supabase pooler URLs work)
 - [ ] Update relevant documentation
-- [ ] Push and verify GitHub Actions pass
+- [ ] Push and verify GitHub Actions pass (including lint job)
 
 ### Git Workflow
 

@@ -27,9 +27,28 @@ on:
       - "QandA.md"
 
 jobs:
+  lint:
+    name: Lint
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache: true
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v4
+        with:
+          version: v1.59.0
+          args: --config .golangci.yml
+
   unit-tests:
     name: Unit Tests
     runs-on: blacksmith-4vcpu-ubuntu-2404
+    needs: lint
     steps:
       - uses: actions/checkout@v4
 
@@ -63,6 +82,7 @@ jobs:
   integration-tests:
     name: Integration Tests
     runs-on: blacksmith-4vcpu-ubuntu-2404
+    needs: lint
     steps:
       - uses: actions/checkout@v4
 

@@ -1,0 +1,63 @@
+run:
+  timeout: 5m
+  skip-dirs:
+    - vendor
+    - internal/mocks
+    - internal/testutil
+    - internal/benchmarks
+
+linters:
+  enable:
+    - govet         # Go static analyser
+    - staticcheck   # Advanced static analysis
+    - errcheck      # Check error returns
+    - revive        # General purpose linter
+    - gofmt         # Formatting check
+    - goimports     # Import formatting and organisation
+    - ineffassign   # Detect ineffectual assignments
+    - gocyclo       # Cyclomatic complexity
+    - misspell      # Spell checker
+
+linters-settings:
+  gocyclo:
+    # Set higher threshold to avoid blocking existing code
+    # Target: reduce over time as functions are refactored
+    min-complexity: 35
+
+  misspell:
+    locale: AU  # Australian English spelling
+
+  govet:
+    enable:
+      - shadow      # Check for shadowed variables
+      - unusedwrite # Detect unused writes
+
+  revive:
+    rules:
+      - name: exported
+        disabled: true  # Don't require comments on all exports
+      - name: package-comments
+        disabled: true
+
+issues:
+  # Show all issues
+  max-issues-per-linter: 0
+  max-same-issues: 0
+
+  exclude-rules:
+    # Exclude some linters from running on test files
+    - path: _test\.go
+      linters:
+        - gocyclo
+        - errcheck
+
+    # Ignore shadowing of 'err' - common Go idiom
+    - linters:
+        - govet
+      text: 'shadow: declaration of "err"'
+
+    # Zerolog structured logging intentionally chains Err()
+    - path: internal/
+      linters:
+        - errcheck
+      text: 'Error return value of.*Err.*is not checked'
