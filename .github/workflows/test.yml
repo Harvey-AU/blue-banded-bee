@@ -33,31 +33,30 @@ jobs:
     env:
       GOFLAGS: "-mod=mod"
       GOPROXY: "https://proxy.golang.org,direct"
-      GOMODCACHE: "${{ github.workspace }}/.gomodcache"
-      GOCACHE: "${{ github.workspace }}/.gobuildcache"
     steps:
       - uses: actions/checkout@v4
-
-      - name: Cache Go modules
-        uses: actions/cache@v4
-        with:
-          path: |
-            ${{ env.GOMODCACHE }}
-            ${{ env.GOCACHE }}
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-
-
-      - name: Ensure Go cache directories
-        run: |
-          mkdir -p "$GOMODCACHE"
-          mkdir -p "$GOCACHE"
 
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
           go-version: "1.25"
           cache: true
+
+      - name: Determine Go cache paths
+        id: go-env
+        run: |
+          echo "gomodcache=$(go env GOMODCACHE)" >> $GITHUB_OUTPUT
+          echo "gocache=$(go env GOCACHE)" >> $GITHUB_OUTPUT
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ steps.go-env.outputs.gomodcache }}
+            ${{ steps.go-env.outputs.gocache }}
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
 
       - name: Download dependencies
         run: go mod download
