@@ -1402,7 +1402,7 @@ func (wp *WorkerPool) handleTaskSuccess(ctx context.Context, task *db.Task, resu
 		}
 	}
 
-	if result.CacheCheckAttempts != nil && len(result.CacheCheckAttempts) > 0 {
+	if len(result.CacheCheckAttempts) > 0 {
 		if attemptsBytes, err := json.Marshal(result.CacheCheckAttempts); err == nil {
 			// Validate that the marshaled JSON is valid
 			if json.Valid(attemptsBytes) {
