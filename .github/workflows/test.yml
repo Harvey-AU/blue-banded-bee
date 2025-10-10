@@ -32,8 +32,21 @@ jobs:
     runs-on: blacksmith-4vcpu-ubuntu-2404
     env:
       GOFLAGS: "-mod=mod"
+      GOPROXY: "https://proxy.golang.org,direct"
+      GOMODCACHE: "${{ env.HOME }}/go/pkg/mod"
+      GOCACHE: "${{ env.HOME }}/.cache/go-build"
     steps:
       - uses: actions/checkout@v4
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ env.GOMODCACHE }}
+            ${{ env.GOCACHE }}
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -44,11 +57,14 @@ jobs:
       - name: Download dependencies
         run: go mod download
 
+      - name: Prime module graph (test + prod)
+        run: go list -deps -test ./...
+
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v4
         with:
           version: v1.59.0
-          args: --config .golangci.yml
+          args: --config .golangci.yml --modules-download-mode=mod --out-format=colored-line-number
 
   unit-tests:
     name: Unit Tests
