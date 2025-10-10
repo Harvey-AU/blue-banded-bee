@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Harvey-AU/blue-banded-bee/internal/db"
 	"github.com/DATA-DOG/go-sqlmock"
+	"github.com/Harvey-AU/blue-banded-bee/internal/db"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -23,11 +23,11 @@ func (m *mockDbQueueWrapper) Execute(ctx context.Context, fn func(*sql.Tx) error
 		return err
 	}
 	defer tx.Rollback()
-	
+
 	if err := fn(tx); err != nil {
 		return err
 	}
-	
+
 	return tx.Commit()
 }
 
@@ -240,11 +240,11 @@ func TestJobProgressCalculation(t *testing.T) {
 // TestJobLifecycleStatusTransitions tests valid job status transitions
 func TestJobLifecycleStatusTransitions(t *testing.T) {
 	tests := []struct {
-		name           string
-		fromStatus     JobStatus
-		toStatus       JobStatus
-		isValid        bool
-		expectedError  string
+		name          string
+		fromStatus    JobStatus
+		toStatus      JobStatus
+		isValid       bool
+		expectedError string
 	}{
 		{
 			name:       "pending_to_running",
@@ -308,7 +308,7 @@ func TestJobLifecycleStatusTransitions(t *testing.T) {
 			jm := &JobManager{}
 
 			err := jm.ValidateStatusTransition(job.Status, tt.toStatus)
-			
+
 			if tt.isValid {
 				assert.NoError(t, err)
 			} else {
@@ -328,23 +328,23 @@ func TestJobManagerUpdateJobStatus(t *testing.T) {
 	defer mockDB.Close()
 
 	ctx := context.Background()
-	
+
 	// Create a mock DbQueue that wraps our mock DB
 	mockDbQueue := &mockDbQueueWrapper{
 		mockDB: mockDB,
 	}
-	
+
 	jm := &JobManager{
 		db:      mockDB,
 		dbQueue: mockDbQueue,
 	}
 
 	tests := []struct {
-		name          string
-		jobID         string
-		newStatus     JobStatus
-		setupMock     func()
-		expectError   bool
+		name        string
+		jobID       string
+		newStatus   JobStatus
+		setupMock   func()
+		expectError bool
 	}{
 		{
 			name:      "update_to_completed",

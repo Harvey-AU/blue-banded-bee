@@ -95,7 +95,9 @@ func (h *Handler) SetupRoutes(mux *http.ServeMux) {
 		defer f.Close()
 		w.Header().Set("Content-Type", "application/octet-stream")
 		w.Header().Set("Content-Disposition", `attachment; filename="trace.out"`)
-		io.Copy(w, f)
+		if _, err := io.Copy(w, f); err != nil {
+			log.Error().Err(err).Msg("Failed to copy trace file")
+		}
 	}))
 
 	// Static files

@@ -152,11 +152,11 @@ func TestValidateRootURLAccessParameterHandling(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := context.Background()
 			_, err := jm.validateRootURLAccess(ctx, tt.job, tt.normalisedDomain, tt.rootPath)
-			
+
 			// Should not panic and should call crawler
 			assert.NoError(t, err)
 			assert.True(t, mockCrawler.discoverCalled)
-			
+
 			// Reset for next test
 			mockCrawler.discoverCalled = false
 		})

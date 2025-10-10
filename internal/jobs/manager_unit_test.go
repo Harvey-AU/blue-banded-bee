@@ -23,14 +23,14 @@ import (
 
 func TestJobManagerInitialisation(t *testing.T) {
 	t.Parallel()
-	
+
 	mockDB := &sql.DB{}
 	mockDbQueue := &mocks.MockDbQueue{}
 	mockCrawler := &mocks.MockCrawler{}
 	mockWorkerPool := &WorkerPool{} // Use real WorkerPool struct but don't start it
-	
+
 	jm := NewJobManager(mockDB, mockDbQueue, mockCrawler, mockWorkerPool)
-	
+
 	require.NotNil(t, jm)
 	assert.NotNil(t, jm.processedPages)
 	assert.Equal(t, 0, len(jm.processedPages))
@@ -42,7 +42,7 @@ func TestJobManagerInitialisation(t *testing.T) {
 
 func TestJobOptionsValidation(t *testing.T) {
 	t.Parallel()
-	
+
 	tests := []struct {
 		name    string
 		options *JobOptions
@@ -104,7 +104,7 @@ func TestJobOptionsValidation(t *testing.T) {
 			valid: true,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := validateJobOptions(tt.options)
@@ -180,7 +180,7 @@ func TestJobStatusTransitions(t *testing.T) {
 		{JobStatusRunning, JobStatusCancelled},
 		{JobStatusPending, JobStatusCancelled},
 	}
-	
+
 	for _, transition := range validTransitions {
 		t.Run(string(transition.from)+"_to_"+string(transition.to), func(t *testing.T) {
 			// This would test actual transition logic if we had it
@@ -198,26 +198,26 @@ func TestJobManagerConcurrentOperations(t *testing.T) {
 	mockDbQueue := &mocks.MockDbQueue{}
 	mockCrawler := &mocks.MockCrawler{}
 	mockWorkerPool := &WorkerPool{}
-	
+
 	jm := NewJobManager(mockDB, mockDbQueue, mockCrawler, mockWorkerPool)
-	
+
 	// Test concurrent access to processedPages
 	var wg sync.WaitGroup
 	numGoroutines := 100
-	
+
 	for i := 0; i < numGoroutines; i++ {
 		wg.Add(1)
 		go func(id int) {
 			defer wg.Done()
-			
+
 			// Simulate concurrent page processing
 			pageURL := fmt.Sprintf("https://example.com/page%d", id)
-			
+
 			// Check if processed
 			jm.pagesMutex.RLock()
 			_, exists := jm.processedPages[pageURL]
 			jm.pagesMutex.RUnlock()
-			
+
 			if !exists {
 				// Mark as processed
 				jm.pagesMutex.Lock()
@@ -226,9 +226,9 @@ func TestJobManagerConcurrentOperations(t *testing.T) {
 			}
 		}(i)
 	}
-	
+
 	wg.Wait()
-	
+
 	// Verify all pages were processed
 	assert.Equal(t, numGoroutines, len(jm.processedPages))
 }
@@ -239,7 +239,7 @@ func TestJobManagerConcurrentOperations(t *testing.T) {
 
 func TestJobManagerErrorHandling(t *testing.T) {
 	ctx := context.Background()
-	
+
 	tests := []struct {
 		name        string
 		setupMock   func(*mocks.MockDbQueue)
@@ -262,20 +262,20 @@ func TestJobManagerErrorHandling(t *testing.T) {
 			expectError: false, // No rows is not an error
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mockDbQueue := new(mocks.MockDbQueue)
 			tt.setupMock(mockDbQueue)
-			
+
 			_, err := mockDbQueue.GetNextTask(ctx, "job1")
-			
+
 			if tt.expectError {
 				assert.Error(t, err)
 			} else {
 				assert.Equal(t, sql.ErrNoRows, err)
 			}
-			
+
 			mockDbQueue.AssertExpectations(t)
 		})
 	}
@@ -290,35 +290,35 @@ func BenchmarkJobManagerPageProcessing(b *testing.B) {
 	mockDbQueue := &mocks.MockDbQueue{}
 	mockCrawler := &mocks.MockCrawler{}
 	mockWorkerPool := &WorkerPool{}
-	
+
 	jm := NewJobManager(mockDB, mockDbQueue, mockCrawler, mockWorkerPool)
-	
+
 	b.ResetTimer()
-	
+
 	b.Run("MarkPageProcessed", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			pageURL := fmt.Sprintf("https://example.com/page%d", i)
-			
+
 			jm.pagesMutex.Lock()
 			jm.processedPages[pageURL] = struct{}{}
 			jm.pagesMutex.Unlock()
 		}
 	})
-	
+
 	b.Run("CheckPageProcessed", func(b *testing.B) {
 		// Pre-populate some pages
 		for i := 0; i < 1000; i++ {
 			pageURL := fmt.Sprintf("https://example.com/page%d", i)
 			jm.processedPages[pageURL] = struct{}{}
 		}
-		
+
 		b.ResetTimer()
-		
+
 		for i := 0; i < b.N; i++ {
 			pageURL := fmt.Sprintf("https://example.com/page%d", i%1000)
-			
+
 			jm.pagesMutex.RLock()
-			_, _ = jm.processedPages[pageURL]
+			_ = jm.processedPages[pageURL]
 			jm.pagesMutex.RUnlock()
 		}
 	})
@@ -331,7 +331,7 @@ func BenchmarkJobManagerPageProcessing(b *testing.B) {
 func TestJobDurationCalculation(t *testing.T) {
 	// Use fixed times to avoid timing issues
 	baseTime := time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC)
-	
+
 	tests := []struct {
 		name     string
 		start    time.Time
@@ -357,7 +357,7 @@ func TestJobDurationCalculation(t *testing.T) {
 			expected: 30 * time.Minute,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			duration := tt.end.Sub(tt.start)

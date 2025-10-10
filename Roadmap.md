@@ -507,10 +507,10 @@ Organisation model implemented:
   - [x] Implement sqlmock tests for database operations
   - [x] Create comprehensive mock infrastructure (MockDB, DSN helpers)
   - [x] **Implement Comprehensive API Testing** - ✅ **COMPLETED**
-- [ ] **Code Quality Improvement** - [Implementation Plan](./docs/plans/code-quality-improvement.md)
+- [x] **Code Quality Improvement** - core quality gates now enforced in CI
   - [x] Phase 1: Automated formatting and ineffectual assignments cleanup
   - [x] Phase 2: Refactor high-complexity functions (processTask, processNextTask completed)
-  - [ ] Add golangci-lint to CI/CD pipeline - should now be compatible with 1.25
+  - [x] Add golangci-lint to CI/CD pipeline with Go 1.25 compatibility
   - [x] Improve Go Report Card score from C to A
 
 ### 🔴 Robots.txt Compliance Auditing

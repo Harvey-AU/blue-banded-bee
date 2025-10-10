@@ -21,18 +21,17 @@ func TestSitemapDiscoveryResult(t *testing.T) {
 			Sitemaps:   []string{"https://example.com/sitemap.xml"},
 		},
 	}
-	
+
 	assert.Len(t, result.Sitemaps, 2)
 	assert.NotNil(t, result.RobotsRules)
 	assert.Contains(t, result.Sitemaps, "https://example.com/sitemap.xml")
 }
 
-
 func TestFilterURLs(t *testing.T) {
 	c := &Crawler{
 		config: &Config{},
 	}
-	
+
 	tests := []struct {
 		name         string
 		urls         []string
@@ -150,13 +149,13 @@ Sitemap: https://example.com/sitemap.xml
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := context.Background()
 			result, err := c.DiscoverSitemapsAndRobots(ctx, tt.domain)
-			
+
 			require.NoError(t, err)
 			assert.NotNil(t, result)
-			
+
 			// All results should have RobotsRules (even if empty)
 			assert.NotNil(t, result.RobotsRules)
-			
+
 			// Sitemaps list might be empty but that's OK
 			// Just check it exists in result
 			_ = result.Sitemaps
@@ -246,7 +245,7 @@ func TestParseSitemap(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := context.Background()
 			urls, err := c.ParseSitemap(ctx, tt.sitemapURL)
-			
+
 			if tt.expectError {
 				assert.Error(t, err)
 			} else {
@@ -257,12 +256,11 @@ func TestParseSitemap(t *testing.T) {
 	}
 }
 
-
 func BenchmarkFilterURLs(b *testing.B) {
 	c := &Crawler{
 		config: &Config{},
 	}
-	
+
 	urls := []string{
 		"https://example.com/page1",
 		"https://example.com/page2",
@@ -270,7 +268,7 @@ func BenchmarkFilterURLs(b *testing.B) {
 		"https://example.com/page4",
 		"https://example.com/page5",
 	}
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_ = c.FilterURLs(urls, []string{}, []string{})

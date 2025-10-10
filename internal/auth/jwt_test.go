@@ -9,9 +9,14 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+// contextKey is a custom type for context keys to avoid collisions
+type contextKey string
+
+const claimsKey contextKey = "claims"
+
 func TestJWTTokenValidation(t *testing.T) {
 	secret := "test-secret-key-minimum-256-bits-long-for-hs256"
-	
+
 	tests := []struct {
 		name           string
 		token          string
@@ -71,7 +76,7 @@ func TestJWTTokenValidation(t *testing.T) {
 			// Mock validation
 			isValid := validateTestToken(tt.token, secret)
 			assert.Equal(t, tt.expectedValid, isValid, tt.description)
-			
+
 			if tt.expectedValid && tt.expectedClaims != nil {
 				claims := parseTestToken(tt.token, secret)
 				for key, expectedValue := range tt.expectedClaims {
@@ -86,7 +91,7 @@ func TestJWTTokenValidation(t *testing.T) {
 
 func TestJWTTokenExpiry(t *testing.T) {
 	secret := "test-secret-key-minimum-256-bits-long-for-hs256"
-	
+
 	tests := []struct {
 		name          string
 		expiryTime    time.Time
@@ -130,11 +135,11 @@ func TestJWTTokenExpiry(t *testing.T) {
 			claims := jwt.MapClaims{
 				"sub": "user123",
 			}
-			
+
 			if !tt.expiryTime.IsZero() {
 				claims["exp"] = tt.expiryTime.Unix()
 			}
-			
+
 			token := createTestToken(secret, claims)
 			isValid := validateTestToken(token, secret)
 			assert.Equal(t, tt.expectedValid, isValid, tt.description)
@@ -144,11 +149,11 @@ func TestJWTTokenExpiry(t *testing.T) {
 
 func TestMissingAuthHeader(t *testing.T) {
 	tests := []struct {
-		name           string
-		authHeader     string
-		expectedToken  string
-		expectedError  bool
-		description    string
+		name          string
+		authHeader    string
+		expectedToken string
+		expectedError bool
+		description   string
 	}{
 		{
 			name:          "valid_bearer_token",
@@ -197,7 +202,7 @@ func TestMissingAuthHeader(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			token, err := extractTokenFromHeader(tt.authHeader)
-			
+
 			if tt.expectedError {
 				assert.Error(t, err, tt.description)
 				assert.Empty(t, token)
@@ -211,15 +216,15 @@ func TestMissingAuthHeader(t *testing.T) {
 
 func TestUserClaimsExtraction(t *testing.T) {
 	secret := "test-secret-key-minimum-256-bits-long-for-hs256"
-	
+
 	tests := []struct {
-		name           string
-		claims         jwt.MapClaims
-		expectedUser   string
-		expectedRole   string
-		expectedEmail  string
-		expectedError  bool
-		description    string
+		name          string
+		claims        jwt.MapClaims
+		expectedUser  string
+		expectedRole  string
+		expectedEmail string
+		expectedError bool
+		description   string
 	}{
 		{
 			name: "complete_claims",
@@ -279,18 +284,18 @@ func TestUserClaimsExtraction(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			token := createTestToken(secret, tt.claims)
 			claims := parseTestToken(token, secret)
-			
+
 			if claims != nil {
 				if sub, ok := claims["sub"].(string); ok {
 					assert.Equal(t, tt.expectedUser, sub, "User ID should match")
 				} else if tt.expectedUser != "" {
 					t.Errorf("Expected user %s but not found", tt.expectedUser)
 				}
-				
+
 				if role, ok := claims["role"].(string); ok {
 					assert.Equal(t, tt.expectedRole, role, "Role should match")
 				}
-				
+
 				if email, ok := claims["email"].(string); ok {
 					assert.Equal(t, tt.expectedEmail, email, "Email should match")
 				}
@@ -422,11 +427,11 @@ func TestClaimsFromContext(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := context.Background()
 			if tt.claims != nil {
-				ctx = context.WithValue(ctx, "claims", tt.claims)
+				ctx = context.WithValue(ctx, claimsKey, tt.claims)
 			}
-			
+
 			// Mock extraction
-			if claims, ok := ctx.Value("claims").(map[string]interface{}); ok {
+			if claims, ok := ctx.Value(claimsKey).(map[string]interface{}); ok {
 				if sub, ok := claims["sub"].(string); ok {
 					assert.Equal(t, tt.expectedUser, sub, tt.description)
 				} else {
@@ -451,11 +456,11 @@ func validateTestToken(tokenString, secret string) bool {
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 		return []byte(secret), nil
 	})
-	
+
 	if err != nil {
 		return false
 	}
-	
+
 	return token.Valid
 }
 
@@ -463,15 +468,15 @@ func parseTestToken(tokenString, secret string) jwt.MapClaims {
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 		return []byte(secret), nil
 	})
-	
+
 	if err != nil || !token.Valid {
 		return nil
 	}
-	
+
 	if claims, ok := token.Claims.(jwt.MapClaims); ok {
 		return claims
 	}
-	
+
 	return nil
 }
 
@@ -479,7 +484,7 @@ func extractTokenFromHeader(authHeader string) (string, error) {
 	if authHeader == "" {
 		return "", assert.AnError
 	}
-	
+
 	const bearerPrefix = "Bearer "
 	if len(authHeader) > len(bearerPrefix) && authHeader[:len(bearerPrefix)] == bearerPrefix {
 		token := authHeader[len(bearerPrefix):]
@@ -489,7 +494,7 @@ func extractTokenFromHeader(authHeader string) (string, error) {
 		}
 		return token, nil
 	}
-	
+
 	return "", assert.AnError
 }
 
@@ -521,10 +526,10 @@ func checkPermission(role, resource, action string) bool {
 			"create": false,
 		},
 	}
-	
+
 	if rolePerms, ok := permissions[role]; ok {
 		return rolePerms[action]
 	}
-	
+
 	return false
 }

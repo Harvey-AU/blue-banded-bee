@@ -84,7 +84,7 @@ func TestCreatePerformanceIndexesOrder(t *testing.T) {
 	// Expect operations in specific order
 	mock.ExpectExec("CREATE INDEX IF NOT EXISTS idx_tasks_job_id").
 		WillReturnResult(sqlmock.NewResult(0, 0))
-	
+
 	// Cleanup old indexes first
 	mock.ExpectExec("DROP INDEX IF EXISTS idx_tasks_status").
 		WillReturnResult(sqlmock.NewResult(0, 0))
@@ -92,7 +92,7 @@ func TestCreatePerformanceIndexesOrder(t *testing.T) {
 		WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectExec("DROP INDEX IF EXISTS idx_tasks_priority").
 		WillReturnResult(sqlmock.NewResult(0, 0))
-	
+
 	// Create new optimized indexes
 	mock.ExpectExec("CREATE INDEX IF NOT EXISTS idx_tasks_pending_claim_order").
 		WillReturnResult(sqlmock.NewResult(0, 0))
@@ -115,7 +115,7 @@ func TestCreatePerformanceIndexesTypes(t *testing.T) {
 	// Regular index
 	mock.ExpectExec("CREATE INDEX IF NOT EXISTS idx_tasks_job_id").
 		WillReturnResult(sqlmock.NewResult(0, 0))
-	
+
 	// Cleanup operations (graceful failure expected)
 	mock.ExpectExec("DROP INDEX IF EXISTS idx_tasks_status").
 		WillReturnResult(sqlmock.NewResult(0, 0))
@@ -123,15 +123,15 @@ func TestCreatePerformanceIndexesTypes(t *testing.T) {
 		WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectExec("DROP INDEX IF EXISTS idx_tasks_priority").
 		WillReturnResult(sqlmock.NewResult(0, 0))
-	
+
 	// Partial index (WHERE clause)
 	mock.ExpectExec("CREATE INDEX IF NOT EXISTS idx_tasks_pending_claim_order").
 		WillReturnResult(sqlmock.NewResult(0, 0))
-	
+
 	// Composite index with ordering
 	mock.ExpectExec("CREATE INDEX IF NOT EXISTS idx_tasks_job_status_priority").
 		WillReturnResult(sqlmock.NewResult(0, 0))
-	
+
 	// Unique constraint index
 	mock.ExpectExec("CREATE UNIQUE INDEX IF NOT EXISTS idx_tasks_job_page_unique").
 		WillReturnResult(sqlmock.NewResult(0, 0))

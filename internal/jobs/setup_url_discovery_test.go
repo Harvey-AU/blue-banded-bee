@@ -12,10 +12,10 @@ import (
 
 func TestSetupJobURLDiscoveryBranching(t *testing.T) {
 	tests := []struct {
-		name           string
-		useSitemap     bool
-		expectSitemap  bool
-		expectManual   bool
+		name          string
+		useSitemap    bool
+		expectSitemap bool
+		expectManual  bool
 	}{
 		{
 			name:          "sitemap_enabled_uses_sitemap_path",
@@ -58,7 +58,7 @@ func TestSetupJobURLDiscoveryBranching(t *testing.T) {
 				// For sitemap test, we just verify the function call without triggering goroutine
 				// Test the branching logic only
 				assert.True(t, tt.useSitemap)
-				
+
 				// We can verify the function exists and handles sitemap branching
 				// without actually triggering the problematic goroutine
 				err := jm.setupJobURLDiscovery(ctx, job, options, 42, "example.com")
@@ -67,10 +67,10 @@ func TestSetupJobURLDiscoveryBranching(t *testing.T) {
 			} else if tt.expectManual {
 				// Manual path test - now async, function returns immediately
 				err := jm.setupJobURLDiscovery(ctx, job, options, 42, "example.com")
-				
+
 				// Function should return immediately without error
 				assert.NoError(t, err)
-				
+
 				// Note: Manual URL creation now happens asynchronously in background
 				// The crawler call happens in a goroutine, so we can't test it directly here
 			}
@@ -86,11 +86,11 @@ func TestSetupJobURLDiscoveryFunctionExists(t *testing.T) {
 	}
 
 	job := &Job{ID: "test", Domain: "example.com"}
-	
+
 	// Test manual URL path (no goroutine)
 	options := &JobOptions{UseSitemap: false}
 	ctx := context.Background()
-	
+
 	// Should not panic and should execute the manual path logic
 	err := jm.setupJobURLDiscovery(ctx, job, options, 1, "example.com")
 	// Manual path should succeed with our mocks now

@@ -121,11 +121,13 @@ func (m *MockDBWithRealDB) GetUserByWebhookToken(token string) (*db.User, error)
 
 // Satisfy additional DBClient methods not used in these tests
 func (m *MockDBWithRealDB) GetUser(userID string) (*db.User, error) { return nil, nil }
-func (m *MockDBWithRealDB) ResetSchema() error { return nil }
+func (m *MockDBWithRealDB) ResetSchema() error                      { return nil }
 func (m *MockDBWithRealDB) CreateUser(userID, email string, fullName *string, orgName string) (*db.User, *db.Organisation, error) {
 	return nil, nil, nil
 }
-func (m *MockDBWithRealDB) GetOrganisation(organisationID string) (*db.Organisation, error) { return nil, nil }
+func (m *MockDBWithRealDB) GetOrganisation(organisationID string) (*db.Organisation, error) {
+	return nil, nil
+}
 func (m *MockDBWithRealDB) ListJobs(organisationID string, limit, offset int, status, dateRange string) ([]db.JobWithDomain, int, error) {
 	return nil, 0, nil
 }

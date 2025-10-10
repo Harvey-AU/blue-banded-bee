@@ -20,9 +20,9 @@ func TestClaimPendingTaskWithActiveJobs(t *testing.T) {
 		expectError bool
 	}{
 		{
-			name:       "no_active_jobs_returns_no_rows",
-			activeJobs: map[string]bool{},
-			expectTask: false,
+			name:        "no_active_jobs_returns_no_rows",
+			activeJobs:  map[string]bool{},
+			expectTask:  false,
 			expectError: true, // sql.ErrNoRows
 		},
 		{
@@ -76,8 +76,8 @@ func TestClaimPendingTaskWithActiveJobs(t *testing.T) {
 			}
 
 			wp := &WorkerPool{
-				jobs:     tt.activeJobs,
-				dbQueue:  mockQueue,
+				jobs:    tt.activeJobs,
+				dbQueue: mockQueue,
 			}
 
 			ctx := context.Background()

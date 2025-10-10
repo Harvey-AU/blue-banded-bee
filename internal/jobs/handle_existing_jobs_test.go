@@ -75,11 +75,11 @@ func TestHandleExistingJobsFunctionExists(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	
+
 	// Should not panic and should return nil
 	err := jm.handleExistingJobs(ctx, "test.com", nil)
 	assert.NoError(t, err)
-	
+
 	orgID := "test-org"
 	err = jm.handleExistingJobs(ctx, "test.com", &orgID)
 	// Will fail on actual DB operation but should not panic

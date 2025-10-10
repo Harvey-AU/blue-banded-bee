@@ -74,7 +74,7 @@ func TestJobManager_updateJobWithError(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Setup
 			mockDbQueue := &MockDbQueueProvider{}
-			
+
 			if tt.dbError != nil {
 				mockDbQueue.On("Execute", mock.Anything, mock.Anything).Return(tt.dbError)
 			} else {
@@ -96,10 +96,10 @@ func TestJobManager_updateJobWithError(t *testing.T) {
 
 func TestJobManager_enqueueFallbackURL(t *testing.T) {
 	tests := []struct {
-		name          string
-		jobID         string
-		domain        string
-		expectedURL   string
+		name        string
+		jobID       string
+		domain      string
+		expectedURL string
 	}{
 		{
 			name:        "successful_fallback_enqueue",
@@ -125,7 +125,7 @@ func TestJobManager_enqueueFallbackURL(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// For these tests, we mainly verify the URL construction logic
 			// The actual enqueuing is tested separately
-			
+
 			expectedRootURL := fmt.Sprintf("https://%s/", tt.domain)
 			assert.Equal(t, tt.expectedURL, expectedRootURL, "Expected URL construction to match")
 		})
@@ -163,7 +163,7 @@ func TestJobManager_enqueueSitemapURLs(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// These tests verify the input validation and logging logic
 			// The actual enqueuing is handled by the EnqueueJobURLs wrapper method
-			
+
 			assert.NotNil(t, tt.urls, "URLs slice should not be nil")
 			assert.NotEmpty(t, tt.jobID, "Job ID should not be empty")
 			assert.NotEmpty(t, tt.domain, "Domain should not be empty")
@@ -173,17 +173,17 @@ func TestJobManager_enqueueSitemapURLs(t *testing.T) {
 
 func TestJobManager_processSitemap_Integration(t *testing.T) {
 	tests := []struct {
-		name                string
-		jobID               string
-		domain              string
-		crawlerNil          bool
-		dbQueueNil          bool
-		dbNil               bool
-		discoverError       error
-		discoveredURLs      []string
-		enqueueSitemapError error
+		name                 string
+		jobID                string
+		domain               string
+		crawlerNil           bool
+		dbQueueNil           bool
+		dbNil                bool
+		discoverError        error
+		discoveredURLs       []string
+		enqueueSitemapError  error
 		enqueueFallbackError error
-		expectEarlyReturn   bool
+		expectEarlyReturn    bool
 	}{
 		{
 			name:              "missing_dependencies_crawler",
@@ -214,34 +214,34 @@ func TestJobManager_processSitemap_Integration(t *testing.T) {
 			expectEarlyReturn: true,
 		},
 		{
-			name:               "successful_sitemap_processing",
-			jobID:              "job-789",
-			domain:             "example.com",
-			discoveredURLs:     []string{"https://example.com/", "https://example.com/about"},
-			expectEarlyReturn:  false,
+			name:              "successful_sitemap_processing",
+			jobID:             "job-789",
+			domain:            "example.com",
+			discoveredURLs:    []string{"https://example.com/", "https://example.com/about"},
+			expectEarlyReturn: false,
 		},
 		{
-			name:               "empty_sitemap_fallback_success",
-			jobID:              "job-empty",
-			domain:             "example.com",
-			discoveredURLs:     []string{},
-			expectEarlyReturn:  false,
+			name:              "empty_sitemap_fallback_success",
+			jobID:             "job-empty",
+			domain:            "example.com",
+			discoveredURLs:    []string{},
+			expectEarlyReturn: false,
 		},
 		{
-			name:                 "sitemap_enqueue_failure",
-			jobID:                "job-fail-sitemap",
+			name:                "sitemap_enqueue_failure",
+			jobID:               "job-fail-sitemap",
+			domain:              "example.com",
+			discoveredURLs:      []string{"https://example.com/page1"},
+			enqueueSitemapError: errors.New("failed to enqueue sitemap URLs"),
+			expectEarlyReturn:   true,
+		},
+		{
+			name:                 "fallback_enqueue_failure",
+			jobID:                "job-fail-fallback",
 			domain:               "example.com",
-			discoveredURLs:       []string{"https://example.com/page1"},
-			enqueueSitemapError:  errors.New("failed to enqueue sitemap URLs"),
+			discoveredURLs:       []string{},
+			enqueueFallbackError: errors.New("failed to enqueue fallback URL"),
 			expectEarlyReturn:    true,
-		},
-		{
-			name:                  "fallback_enqueue_failure",
-			jobID:                 "job-fail-fallback",
-			domain:                "example.com",
-			discoveredURLs:        []string{},
-			enqueueFallbackError:  errors.New("failed to enqueue fallback URL"),
-			expectEarlyReturn:     true,
 		},
 	}
 
@@ -250,7 +250,7 @@ func TestJobManager_processSitemap_Integration(t *testing.T) {
 			// This integration test verifies the overall flow of processSitemap
 			// without testing the actual implementation details, since that would
 			// require significant mocking of the crawler and complex setup.
-			
+
 			// For now, we verify that our extracted functions work correctly
 			// The full integration would require a more complex test setup
 			t.Skip("Integration test - would require complex crawler mocking")

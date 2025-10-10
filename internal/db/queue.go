@@ -34,14 +34,16 @@ func (q *DbQueue) Execute(ctx context.Context, fn func(*sql.Tx) error) error {
 		ctx, cancel = context.WithTimeout(ctx, 30*time.Second)
 		defer cancel()
 	}
-	
+
 	// Begin transaction
 	tx, err := q.db.client.BeginTx(ctx, nil)
 	if err != nil {
 		sentry.CaptureException(err)
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() {
+		_ = tx.Rollback() // Rollback is safe to call even after commit
+	}()
 
 	// Run the operation
 	if err := fn(tx); err != nil {
@@ -260,7 +262,7 @@ func (q *DbQueue) CleanupStuckJobs(ctx context.Context) error {
 	// Serialize cleanup operations to prevent prepared statement conflicts
 	q.cleanupMutex.Lock()
 	defer q.cleanupMutex.Unlock()
-	
+
 	span := sentry.StartSpan(ctx, "db.cleanup_stuck_jobs")
 	defer span.Finish()
 
@@ -331,15 +333,15 @@ func (q *DbQueue) UpdateTaskStatus(ctx context.Context, task *Task) error {
 		case "completed":
 			// Ensure JSONB fields are never nil and are valid JSON
 			headers := task.Headers
-			if headers == nil || len(headers) == 0 {
+			if len(headers) == 0 {
 				headers = []byte("{}")
 			}
 			secondHeaders := task.SecondHeaders
-			if secondHeaders == nil || len(secondHeaders) == 0 {
+			if len(secondHeaders) == 0 {
 				secondHeaders = []byte("{}")
 			}
 			cacheCheckAttempts := task.CacheCheckAttempts
-			if cacheCheckAttempts == nil || len(cacheCheckAttempts) == 0 {
+			if len(cacheCheckAttempts) == 0 {
 				cacheCheckAttempts = []byte("[]")
 			}
 

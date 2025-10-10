@@ -29,7 +29,7 @@ func TestCancelJob_Unit(t *testing.T) {
 			setupMock: func(mock sqlmock.Sqlmock) {
 				// GetJob transaction
 				mock.ExpectBegin()
-				
+
 				rows := sqlmock.NewRows([]string{
 					"id", "name", "status", "progress", "total_tasks", "completed_tasks",
 					"failed_tasks", "skipped_tasks", "created_at", "started_at", "completed_at",
@@ -46,7 +46,7 @@ func TestCancelJob_Unit(t *testing.T) {
 					0,
 					0,
 					time.Now().Add(-1*time.Hour),
-					sql.NullTime{Time: time.Now().Add(-30*time.Minute), Valid: true},
+					sql.NullTime{Time: time.Now().Add(-30 * time.Minute), Valid: true},
 					sql.NullTime{Valid: false},
 					10,
 					true,
@@ -100,7 +100,7 @@ func TestCancelJob_Unit(t *testing.T) {
 			setupMock: func(mock sqlmock.Sqlmock) {
 				// GetJob transaction
 				mock.ExpectBegin()
-				
+
 				rows := sqlmock.NewRows([]string{
 					"id", "name", "status", "progress", "total_tasks", "completed_tasks",
 					"failed_tasks", "skipped_tasks", "created_at", "started_at", "completed_at",
@@ -169,7 +169,7 @@ func TestCancelJob_Unit(t *testing.T) {
 			setupMock: func(mock sqlmock.Sqlmock) {
 				// GetJob transaction
 				mock.ExpectBegin()
-				
+
 				rows := sqlmock.NewRows([]string{
 					"id", "name", "status", "progress", "total_tasks", "completed_tasks",
 					"failed_tasks", "skipped_tasks", "created_at", "started_at", "completed_at",
@@ -186,7 +186,7 @@ func TestCancelJob_Unit(t *testing.T) {
 					0,
 					0,
 					time.Now().Add(-2*time.Hour),
-					sql.NullTime{Time: time.Now().Add(-90*time.Minute), Valid: true},
+					sql.NullTime{Time: time.Now().Add(-90 * time.Minute), Valid: true},
 					sql.NullTime{Valid: false},
 					10,
 					true,
@@ -238,7 +238,7 @@ func TestCancelJob_Unit(t *testing.T) {
 			setupMock: func(mock sqlmock.Sqlmock) {
 				// GetJob transaction
 				mock.ExpectBegin()
-				
+
 				rows := sqlmock.NewRows([]string{
 					"id", "name", "status", "progress", "total_tasks", "completed_tasks",
 					"failed_tasks", "skipped_tasks", "created_at", "started_at", "completed_at",
@@ -255,8 +255,8 @@ func TestCancelJob_Unit(t *testing.T) {
 					0,
 					0,
 					time.Now().Add(-2*time.Hour),
-					sql.NullTime{Time: time.Now().Add(-90*time.Minute), Valid: true},
-					sql.NullTime{Time: time.Now().Add(-30*time.Minute), Valid: true},
+					sql.NullTime{Time: time.Now().Add(-90 * time.Minute), Valid: true},
+					sql.NullTime{Time: time.Now().Add(-30 * time.Minute), Valid: true},
 					10,
 					true,
 					[]byte(`[]`),
@@ -290,7 +290,7 @@ func TestCancelJob_Unit(t *testing.T) {
 			setupMock: func(mock sqlmock.Sqlmock) {
 				// GetJob transaction
 				mock.ExpectBegin()
-				
+
 				rows := sqlmock.NewRows([]string{
 					"id", "name", "status", "progress", "total_tasks", "completed_tasks",
 					"failed_tasks", "skipped_tasks", "created_at", "started_at", "completed_at",
@@ -307,8 +307,8 @@ func TestCancelJob_Unit(t *testing.T) {
 					5,
 					0,
 					time.Now().Add(-2*time.Hour),
-					sql.NullTime{Time: time.Now().Add(-90*time.Minute), Valid: true},
-					sql.NullTime{Time: time.Now().Add(-30*time.Minute), Valid: true},
+					sql.NullTime{Time: time.Now().Add(-90 * time.Minute), Valid: true},
+					sql.NullTime{Time: time.Now().Add(-30 * time.Minute), Valid: true},
 					10,
 					true,
 					[]byte(`[]`),
@@ -342,7 +342,7 @@ func TestCancelJob_Unit(t *testing.T) {
 			setupMock: func(mock sqlmock.Sqlmock) {
 				// GetJob transaction
 				mock.ExpectBegin()
-				
+
 				rows := sqlmock.NewRows([]string{
 					"id", "name", "status", "progress", "total_tasks", "completed_tasks",
 					"failed_tasks", "skipped_tasks", "created_at", "started_at", "completed_at",
@@ -359,8 +359,8 @@ func TestCancelJob_Unit(t *testing.T) {
 					0,
 					75,
 					time.Now().Add(-2*time.Hour),
-					sql.NullTime{Time: time.Now().Add(-90*time.Minute), Valid: true},
-					sql.NullTime{Time: time.Now().Add(-60*time.Minute), Valid: true},
+					sql.NullTime{Time: time.Now().Add(-90 * time.Minute), Valid: true},
+					sql.NullTime{Time: time.Now().Add(-60 * time.Minute), Valid: true},
 					10,
 					true,
 					[]byte(`[]`),
@@ -394,7 +394,7 @@ func TestCancelJob_Unit(t *testing.T) {
 			setupMock: func(mock sqlmock.Sqlmock) {
 				// GetJob transaction
 				mock.ExpectBegin()
-				
+
 				mock.ExpectQuery(`SELECT 
 				j.id, d.name, j.status, j.progress, j.total_tasks, j.completed_tasks, j.failed_tasks, j.skipped_tasks,
 				j.created_at, j.started_at, j.completed_at, j.concurrency, j.find_links,
@@ -416,7 +416,7 @@ func TestCancelJob_Unit(t *testing.T) {
 			setupMock: func(mock sqlmock.Sqlmock) {
 				// GetJob transaction
 				mock.ExpectBegin()
-				
+
 				mock.ExpectQuery(`SELECT 
 				j.id, d.name, j.status, j.progress, j.total_tasks, j.completed_tasks, j.failed_tasks, j.skipped_tasks,
 				j.created_at, j.started_at, j.completed_at, j.concurrency, j.find_links,
@@ -438,7 +438,7 @@ func TestCancelJob_Unit(t *testing.T) {
 			setupMock: func(mock sqlmock.Sqlmock) {
 				// GetJob transaction - successful
 				mock.ExpectBegin()
-				
+
 				rows := sqlmock.NewRows([]string{
 					"id", "name", "status", "progress", "total_tasks", "completed_tasks",
 					"failed_tasks", "skipped_tasks", "created_at", "started_at", "completed_at",
@@ -455,7 +455,7 @@ func TestCancelJob_Unit(t *testing.T) {
 					0,
 					0,
 					time.Now().Add(-1*time.Hour),
-					sql.NullTime{Time: time.Now().Add(-30*time.Minute), Valid: true},
+					sql.NullTime{Time: time.Now().Add(-30 * time.Minute), Valid: true},
 					sql.NullTime{Valid: false},
 					10,
 					true,

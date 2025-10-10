@@ -20,7 +20,7 @@ func TestPerformCacheValidationDecisions(t *testing.T) {
 			expectAction: true,
 		},
 		{
-			name:         "bypass_requires_validation", 
+			name:         "bypass_requires_validation",
 			cacheStatus:  "BYPASS",
 			expectAction: true,
 		},
@@ -53,19 +53,19 @@ func TestPerformCacheValidationDecisions(t *testing.T) {
 func TestPerformCacheValidationContextCancellation(t *testing.T) {
 	// Test that context cancellation is handled gracefully
 	crawler := &Crawler{}
-	
+
 	// Create cancelled context
 	cancelledCtx, cancel := context.WithCancel(context.Background())
 	cancel()
 
 	result := &CrawlResult{
-		URL:         "https://example.com",
-		CacheStatus: "MISS", // Would trigger validation
+		URL:          "https://example.com",
+		CacheStatus:  "MISS", // Would trigger validation
 		ResponseTime: 1000,
 	}
 
 	err := crawler.performCacheValidation(cancelledCtx, "https://example.com", result)
-	
+
 	// Should handle cancellation gracefully and return nil (success)
 	assert.NoError(t, err)
 }
@@ -74,9 +74,9 @@ func TestPerformCacheValidationDelayCalculation(t *testing.T) {
 	// Test that delay calculation logic is reasonable
 	// We can't easily test the actual delay logic without complex mocking,
 	// but we can test the parameters and that the function doesn't panic
-	
+
 	crawler := &Crawler{}
-	
+
 	tests := []struct {
 		name         string
 		responseTime int64
@@ -102,8 +102,8 @@ func TestPerformCacheValidationDelayCalculation(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := &CrawlResult{
-				URL:         "https://example.com",
-				CacheStatus: tt.cacheStatus,
+				URL:          "https://example.com",
+				CacheStatus:  tt.cacheStatus,
 				ResponseTime: tt.responseTime,
 			}
 
@@ -129,7 +129,7 @@ func TestPerformCacheValidationFunctionExists(t *testing.T) {
 
 	ctx := context.Background()
 	err := crawler.performCacheValidation(ctx, "https://example.com", result)
-	
+
 	// Should complete without error for HIT status
 	assert.NoError(t, err)
 }

@@ -15,7 +15,7 @@ import (
 
 func TestWebhookSignatureValidation(t *testing.T) {
 	secret := "test-webhook-secret"
-	
+
 	tests := []struct {
 		name           string
 		payload        map[string]interface{}
@@ -26,7 +26,7 @@ func TestWebhookSignatureValidation(t *testing.T) {
 		{
 			name: "valid_signature",
 			payload: map[string]interface{}{
-				"site": "example.com",
+				"site":  "example.com",
 				"event": "site_publish",
 			},
 			signature:      "", // Will be calculated
@@ -36,7 +36,7 @@ func TestWebhookSignatureValidation(t *testing.T) {
 		{
 			name: "invalid_signature",
 			payload: map[string]interface{}{
-				"site": "example.com",
+				"site":  "example.com",
 				"event": "site_publish",
 			},
 			signature:      "invalid-signature",
@@ -46,7 +46,7 @@ func TestWebhookSignatureValidation(t *testing.T) {
 		{
 			name: "missing_signature",
 			payload: map[string]interface{}{
-				"site": "example.com",
+				"site":  "example.com",
 				"event": "site_publish",
 			},
 			signature:      "",
@@ -59,44 +59,44 @@ func TestWebhookSignatureValidation(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Prepare payload
 			body, _ := json.Marshal(tt.payload)
-			
+
 			// Calculate valid signature for first test
 			if tt.name == "valid_signature" {
 				h := hmac.New(sha256.New, []byte(secret))
 				h.Write(body)
 				tt.signature = hex.EncodeToString(h.Sum(nil))
 			}
-			
+
 			// Create request
 			req := httptest.NewRequest("POST", "/v1/webhooks/webflow", bytes.NewReader(body))
 			req.Header.Set("Content-Type", "application/json")
 			if tt.signature != "" {
 				req.Header.Set("X-Webhook-Signature", tt.signature)
 			}
-			
+
 			// Create response recorder
 			w := httptest.NewRecorder()
-			
+
 			// Simple mock handler
 			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				signature := r.Header.Get("X-Webhook-Signature")
-				
+
 				if signature == "" && tt.name != "valid_signature" {
 					w.WriteHeader(http.StatusUnauthorized)
 					return
 				}
-				
+
 				if tt.name == "invalid_signature" {
 					w.WriteHeader(http.StatusUnauthorized)
 					return
 				}
-				
+
 				w.WriteHeader(http.StatusOK)
 				json.NewEncoder(w).Encode(map[string]string{"status": "received"})
 			})
-			
+
 			handler.ServeHTTP(w, req)
-			
+
 			assert.Equal(t, tt.expectedStatus, w.Code, tt.description)
 		})
 	}
@@ -113,7 +113,7 @@ func TestWebhookPayloadParsing(t *testing.T) {
 		{
 			name: "valid_json",
 			payload: map[string]interface{}{
-				"site": "example.com",
+				"site":  "example.com",
 				"event": "site_publish",
 			},
 			contentType:    "application/json",
@@ -147,7 +147,7 @@ func TestWebhookPayloadParsing(t *testing.T) {
 			description:    "Wrong content type should error",
 		},
 		{
-			name: "empty_payload",
+			name:           "empty_payload",
 			payload:        nil,
 			contentType:    "application/json",
 			expectedStatus: http.StatusBadRequest,
@@ -158,7 +158,7 @@ func TestWebhookPayloadParsing(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var body []byte
-			
+
 			switch v := tt.payload.(type) {
 			case string:
 				body = []byte(v)
@@ -167,12 +167,12 @@ func TestWebhookPayloadParsing(t *testing.T) {
 			default:
 				body = []byte{}
 			}
-			
+
 			req := httptest.NewRequest("POST", "/v1/webhooks/webflow", bytes.NewReader(body))
 			req.Header.Set("Content-Type", tt.contentType)
-			
+
 			w := httptest.NewRecorder()
-			
+
 			// Mock handler
 			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				// Check content type
@@ -181,7 +181,7 @@ func TestWebhookPayloadParsing(t *testing.T) {
 					json.NewEncoder(w).Encode(map[string]string{"error": "Invalid content type"})
 					return
 				}
-				
+
 				// Try to parse JSON
 				var payload map[string]interface{}
 				if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
@@ -189,20 +189,20 @@ func TestWebhookPayloadParsing(t *testing.T) {
 					json.NewEncoder(w).Encode(map[string]string{"error": "Invalid JSON"})
 					return
 				}
-				
+
 				// Check required fields
 				if _, ok := payload["site"]; !ok {
 					w.WriteHeader(http.StatusBadRequest)
 					json.NewEncoder(w).Encode(map[string]string{"error": "Missing required field: site"})
 					return
 				}
-				
+
 				w.WriteHeader(http.StatusOK)
 				json.NewEncoder(w).Encode(map[string]string{"status": "processed"})
 			})
-			
+
 			handler.ServeHTTP(w, req)
-			
+
 			assert.Equal(t, tt.expectedStatus, w.Code, tt.description)
 		})
 	}
@@ -210,7 +210,7 @@ func TestWebhookPayloadParsing(t *testing.T) {
 
 func TestWebhookDuplication(t *testing.T) {
 	processedWebhooks := make(map[string]bool)
-	
+
 	tests := []struct {
 		name           string
 		webhookID      string
@@ -244,20 +244,20 @@ func TestWebhookDuplication(t *testing.T) {
 				"site":  "example.com",
 				"event": "site_publish",
 			}
-			
+
 			body, _ := json.Marshal(payload)
 			req := httptest.NewRequest("POST", "/v1/webhooks/webflow", bytes.NewReader(body))
 			req.Header.Set("Content-Type", "application/json")
-			
+
 			w := httptest.NewRecorder()
-			
+
 			// Mock handler with deduplication
 			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				var p map[string]interface{}
 				json.NewDecoder(r.Body).Decode(&p)
-				
+
 				webhookID, _ := p["id"].(string)
-				
+
 				// Check if already processed
 				if _, exists := processedWebhooks[webhookID]; exists {
 					// Return success but don't reprocess
@@ -267,24 +267,24 @@ func TestWebhookDuplication(t *testing.T) {
 					})
 					return
 				}
-				
+
 				// Mark as processed
 				processedWebhooks[webhookID] = true
-				
+
 				w.WriteHeader(http.StatusOK)
 				json.NewEncoder(w).Encode(map[string]string{
 					"status": "processed",
 				})
 			})
-			
+
 			handler.ServeHTTP(w, req)
-			
+
 			assert.Equal(t, tt.expectedStatus, w.Code, tt.description)
-			
+
 			// Verify response
 			var response map[string]string
 			json.Unmarshal(w.Body.Bytes(), &response)
-			
+
 			if tt.name == "duplicate_webhook" {
 				assert.Equal(t, "already_processed", response["status"])
 			} else {
@@ -296,7 +296,7 @@ func TestWebhookDuplication(t *testing.T) {
 
 func TestWebhookTokenAuthentication(t *testing.T) {
 	validToken := "valid-webhook-token"
-	
+
 	tests := []struct {
 		name           string
 		token          string
@@ -329,21 +329,21 @@ func TestWebhookTokenAuthentication(t *testing.T) {
 				"site":  "example.com",
 				"event": "site_publish",
 			}
-			
+
 			body, _ := json.Marshal(payload)
 			req := httptest.NewRequest("POST", "/v1/webhooks/webflow", bytes.NewReader(body))
 			req.Header.Set("Content-Type", "application/json")
-			
+
 			if tt.token != "" {
 				req.Header.Set("X-Webhook-Token", tt.token)
 			}
-			
+
 			w := httptest.NewRecorder()
-			
+
 			// Mock handler with token auth
 			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				token := r.Header.Get("X-Webhook-Token")
-				
+
 				if token != validToken {
 					w.WriteHeader(http.StatusUnauthorized)
 					json.NewEncoder(w).Encode(map[string]string{
@@ -351,15 +351,15 @@ func TestWebhookTokenAuthentication(t *testing.T) {
 					})
 					return
 				}
-				
+
 				w.WriteHeader(http.StatusOK)
 				json.NewEncoder(w).Encode(map[string]string{
 					"status": "authenticated",
 				})
 			})
-			
+
 			handler.ServeHTTP(w, req)
-			
+
 			assert.Equal(t, tt.expectedStatus, w.Code, tt.description)
 		})
 	}
@@ -368,7 +368,7 @@ func TestWebhookTokenAuthentication(t *testing.T) {
 func TestWebhookRateLimit(t *testing.T) {
 	requestCount := 0
 	maxRequests := 3
-	
+
 	tests := []struct {
 		name           string
 		requestNum     int
@@ -407,17 +407,17 @@ func TestWebhookRateLimit(t *testing.T) {
 				"site":  "example.com",
 				"event": "site_publish",
 			}
-			
+
 			body, _ := json.Marshal(payload)
 			req := httptest.NewRequest("POST", "/v1/webhooks/webflow", bytes.NewReader(body))
 			req.Header.Set("Content-Type", "application/json")
-			
+
 			w := httptest.NewRecorder()
-			
+
 			// Mock handler with rate limiting
 			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				requestCount++
-				
+
 				if requestCount > maxRequests {
 					w.Header().Set("X-RateLimit-Limit", "3")
 					w.Header().Set("X-RateLimit-Remaining", "0")
@@ -428,7 +428,7 @@ func TestWebhookRateLimit(t *testing.T) {
 					})
 					return
 				}
-				
+
 				w.Header().Set("X-RateLimit-Limit", "3")
 				w.Header().Set("X-RateLimit-Remaining", string(rune(maxRequests-requestCount+'0')))
 				w.WriteHeader(http.StatusOK)
@@ -436,11 +436,11 @@ func TestWebhookRateLimit(t *testing.T) {
 					"status": "processed",
 				})
 			})
-			
+
 			handler.ServeHTTP(w, req)
-			
+
 			assert.Equal(t, tt.expectedStatus, w.Code, tt.description)
-			
+
 			// Verify rate limit headers
 			if tt.expectedStatus == http.StatusTooManyRequests {
 				assert.Equal(t, "0", w.Header().Get("X-RateLimit-Remaining"))
