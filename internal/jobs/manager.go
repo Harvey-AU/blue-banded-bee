@@ -32,11 +32,11 @@ type JobManagerInterface interface {
 	StartJob(ctx context.Context, jobID string) error
 	CancelJob(ctx context.Context, jobID string) error
 	GetJobStatus(ctx context.Context, jobID string) (*Job, error)
-	
+
 	// Additional job operations
 	GetJob(ctx context.Context, jobID string) (*Job, error)
 	EnqueueJobURLs(ctx context.Context, jobID string, pages []db.Page, sourceType string, sourceURL string) error
-	
+
 	// Job utility methods
 	IsJobComplete(job *Job) bool
 	CalculateJobProgress(job *Job) float64
@@ -188,7 +188,7 @@ func (jm *JobManager) setupJobDatabase(ctx context.Context, job *Job, normalised
 // validateRootURLAccess checks robots.txt rules and validates root URL access
 func (jm *JobManager) validateRootURLAccess(ctx context.Context, job *Job, normalisedDomain string, rootPath string) (*crawler.RobotsRules, error) {
 	var robotsRules *crawler.RobotsRules
-	
+
 	if jm.crawler != nil {
 		// Use DiscoverSitemapsAndRobots which already includes parsing
 		discoveryResult, err := jm.crawler.DiscoverSitemapsAndRobots(ctx, normalisedDomain)
@@ -214,7 +214,7 @@ func (jm *JobManager) validateRootURLAccess(ctx context.Context, job *Job, norma
 
 		// Use the already parsed robots rules from discovery
 		robotsRules = discoveryResult.RobotsRules
-		
+
 		// Store crawl delay if specified in robots.txt
 		if robotsRules != nil && robotsRules.CrawlDelay > 0 {
 			jm.updateDomainCrawlDelay(ctx, normalisedDomain, robotsRules.CrawlDelay)
@@ -303,7 +303,7 @@ func (jm *JobManager) setupJobURLDiscovery(ctx context.Context, job *Job, option
 		return nil
 	}
 
-	// Manual root URL creation - process in background for consistency  
+	// Manual root URL creation - process in background for consistency
 	// Use detached context with timeout for background processing
 	backgroundCtx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	go func() {
@@ -883,7 +883,7 @@ func (jm *JobManager) IsJobComplete(job *Job) bool {
 	if job.Status != JobStatusRunning {
 		return false
 	}
-	
+
 	processedTasks := job.CompletedTasks + job.FailedTasks + job.SkippedTasks
 	return processedTasks >= job.TotalTasks
 }
@@ -893,7 +893,7 @@ func (jm *JobManager) CalculateJobProgress(job *Job) float64 {
 	if job.TotalTasks == 0 {
 		return 0.0
 	}
-	
+
 	processedTasks := job.CompletedTasks + job.FailedTasks + job.SkippedTasks
 	return float64(processedTasks) / float64(job.TotalTasks) * 100.0
 }
@@ -904,7 +904,7 @@ func (jm *JobManager) ValidateStatusTransition(from, to JobStatus) error {
 	if to == JobStatusRunning && (from == JobStatusCompleted || from == JobStatusCancelled || from == JobStatusFailed) {
 		return nil
 	}
-	
+
 	// Normal forward transitions
 	validTransitions := map[JobStatus][]JobStatus{
 		JobStatusPending:   {JobStatusRunning, JobStatusCancelled},
@@ -913,18 +913,18 @@ func (jm *JobManager) ValidateStatusTransition(from, to JobStatus) error {
 		JobStatusFailed:    {JobStatusRunning}, // Retry
 		JobStatusCancelled: {JobStatusRunning}, // Restart
 	}
-	
+
 	allowed, exists := validTransitions[from]
 	if !exists {
 		return fmt.Errorf("invalid status transition from %s to %s", from, to)
 	}
-	
+
 	for _, valid := range allowed {
 		if valid == to {
 			return nil
 		}
 	}
-	
+
 	return fmt.Errorf("invalid status transition from %s to %s", from, to)
 }
 
@@ -992,7 +992,7 @@ func (jm *JobManager) enqueueFallbackURL(ctx context.Context, jobID, domain stri
 		Str("job_id", jobID).
 		Str("domain", domain).
 		Msg("Created fallback root page task - job will proceed with link discovery")
-	
+
 	return nil
 }
 

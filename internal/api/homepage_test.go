@@ -38,7 +38,7 @@ func TestServeHomepage(t *testing.T) {
 	t.Run("accepts_different_methods", func(t *testing.T) {
 		// Test that the handler accepts any HTTP method for root path
 		methods := []string{"GET", "POST", "PUT", "DELETE"}
-		
+
 		for _, method := range methods {
 			req := httptest.NewRequest(method, "/", nil)
 			rec := httptest.NewRecorder()

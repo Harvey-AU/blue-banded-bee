@@ -22,9 +22,9 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/Harvey-AU/blue-banded-bee/internal/crawler"
 	"github.com/Harvey-AU/blue-banded-bee/internal/db"
-	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -281,9 +281,9 @@ func TestWorkerPoolProcessNextTask(t *testing.T) {
 			expectedError: sql.ErrNoRows,
 		},
 		{
-			name:       "database_error",
-			activeJobs: []string{"job-1"},
-			taskError:  errors.New("database connection lost"),
+			name:          "database_error",
+			activeJobs:    []string{"job-1"},
+			taskError:     errors.New("database connection lost"),
 			expectedError: errors.New("database connection lost"),
 		},
 	}
@@ -415,7 +415,7 @@ func TestRetryErrorClassification(t *testing.T) {
 			isRetryable := isRetryableError(tt.error)
 			isBlocking := isBlockingError(tt.error)
 
-			assert.Equal(t, tt.expectRetryable, isRetryable, 
+			assert.Equal(t, tt.expectRetryable, isRetryable,
 				"isRetryableError(%v) should return %v", tt.error, tt.expectRetryable)
 			assert.Equal(t, tt.expectBlocking, isBlocking,
 				"isBlockingError(%v) should return %v", tt.error, tt.expectBlocking)
@@ -427,12 +427,12 @@ func TestRetryErrorClassification(t *testing.T) {
 // This test documents the expected behavior without re-implementing the logic
 func TestRetryDecisionLogic(t *testing.T) {
 	tests := []struct {
-		name                string
-		initialRetries      int
-		errorType          error
-		shouldRetry        bool
+		name                 string
+		initialRetries       int
+		errorType            error
+		shouldRetry          bool
 		finalStatusIfNoRetry string
-		description        string
+		description          string
 	}{
 		{
 			name:           "retryable_error_under_limit",
@@ -444,10 +444,10 @@ func TestRetryDecisionLogic(t *testing.T) {
 		{
 			name:                 "retryable_error_at_limit",
 			initialRetries:       MaxTaskRetries,
-			errorType:           errors.New("connection timeout"),
-			shouldRetry:         false,
+			errorType:            errors.New("connection timeout"),
+			shouldRetry:          false,
 			finalStatusIfNoRetry: "failed",
-			description:         "Retryable errors should not retry when at MaxTaskRetries",
+			description:          "Retryable errors should not retry when at MaxTaskRetries",
 		},
 		{
 			name:           "blocking_error_first_attempt",
@@ -459,18 +459,18 @@ func TestRetryDecisionLogic(t *testing.T) {
 		{
 			name:                 "blocking_error_at_limit",
 			initialRetries:       2,
-			errorType:           errors.New("429 Too Many Requests"),
-			shouldRetry:         false,
+			errorType:            errors.New("429 Too Many Requests"),
+			shouldRetry:          false,
 			finalStatusIfNoRetry: "failed",
-			description:         "Blocking errors fail permanently after 2 retries",
+			description:          "Blocking errors fail permanently after 2 retries",
 		},
 		{
 			name:                 "non_retryable_error",
 			initialRetries:       0,
-			errorType:           errors.New("invalid URL format"),
-			shouldRetry:         false,
+			errorType:            errors.New("invalid URL format"),
+			shouldRetry:          false,
 			finalStatusIfNoRetry: "failed",
-			description:         "Non-retryable errors should fail immediately",
+			description:          "Non-retryable errors should fail immediately",
 		},
 	}
 
@@ -478,11 +478,11 @@ func TestRetryDecisionLogic(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Document the expected behavior based on error classification
 			// The actual implementation in processNextTask would handle this
-			
+
 			// Check if error is classified correctly for retry decision
 			if tt.shouldRetry {
 				if isBlockingError(tt.errorType) {
-					assert.Less(t, tt.initialRetries, 2, 
+					assert.Less(t, tt.initialRetries, 2,
 						"Blocking errors should retry only if retry count < 2")
 				} else if isRetryableError(tt.errorType) {
 					assert.Less(t, tt.initialRetries, MaxTaskRetries,
@@ -501,7 +501,7 @@ func TestRetryDecisionLogic(t *testing.T) {
 						"Non-retryable/non-blocking errors should fail immediately")
 				}
 			}
-			
+
 			// Add descriptive assertion for documentation
 			assert.NotEmpty(t, tt.description, "Test case should document expected behavior")
 		})

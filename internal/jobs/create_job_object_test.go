@@ -91,10 +91,10 @@ func TestCreateJobObject(t *testing.T) {
 				// Test that pointer fields are properly assigned
 				require.NotNil(t, job.UserID)
 				assert.Equal(t, *opts.UserID, *job.UserID)
-				
+
 				require.NotNil(t, job.OrganisationID)
 				assert.Equal(t, *opts.OrganisationID, *job.OrganisationID)
-				
+
 				require.NotNil(t, job.SourceType)
 				assert.Equal(t, *opts.SourceType, *job.SourceType)
 			},
@@ -124,9 +124,9 @@ func TestCreateJobObject(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Record time before creation to test CreatedAt
 			beforeTime := time.Now().UTC()
-			
+
 			job := createJobObject(tt.options, tt.normalisedDomain)
-			
+
 			afterTime := time.Now().UTC()
 
 			// Verify common fields
@@ -157,9 +157,9 @@ func TestCreateJobObjectDefaults(t *testing.T) {
 		Domain: "example.com",
 		// All other fields left as zero values
 	}
-	
+
 	job := createJobObject(options, "example.com")
-	
+
 	// Verify all counters start at zero
 	assert.Equal(t, 0, job.TotalTasks)
 	assert.Equal(t, 0, job.CompletedTasks)
@@ -167,10 +167,10 @@ func TestCreateJobObjectDefaults(t *testing.T) {
 	assert.Equal(t, 0, job.SitemapTasks)
 	assert.Equal(t, 0, job.FailedTasks)
 	assert.Equal(t, 0.0, job.Progress)
-	
+
 	// Verify status is pending
 	assert.Equal(t, JobStatusPending, job.Status)
-	
+
 	// Verify ID is generated (UUID format)
 	assert.Len(t, job.ID, 36) // UUID length with hyphens
 	assert.Contains(t, job.ID, "-")
@@ -179,10 +179,10 @@ func TestCreateJobObjectDefaults(t *testing.T) {
 func TestCreateJobObjectUniqueIDs(t *testing.T) {
 	// Test that each job gets a unique ID
 	options := &JobOptions{Domain: "example.com"}
-	
+
 	job1 := createJobObject(options, "example.com")
 	job2 := createJobObject(options, "example.com")
-	
+
 	assert.NotEqual(t, job1.ID, job2.ID, "Each job should get a unique ID")
 	assert.NotEmpty(t, job1.ID)
 	assert.NotEmpty(t, job2.ID)
@@ -191,13 +191,13 @@ func TestCreateJobObjectUniqueIDs(t *testing.T) {
 func TestCreateJobObjectTimeHandling(t *testing.T) {
 	// Test that CreatedAt is properly set and increases over time
 	options := &JobOptions{Domain: "example.com"}
-	
+
 	job1 := createJobObject(options, "example.com")
 	time.Sleep(1 * time.Millisecond) // Small delay
 	job2 := createJobObject(options, "example.com")
-	
+
 	assert.True(t, job2.CreatedAt.After(job1.CreatedAt) || job2.CreatedAt.Equal(job1.CreatedAt))
-	
+
 	// Verify both times are in UTC
 	assert.Equal(t, time.UTC, job1.CreatedAt.Location())
 	assert.Equal(t, time.UTC, job2.CreatedAt.Location())

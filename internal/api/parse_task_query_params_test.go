@@ -230,7 +230,7 @@ func TestParseTaskQueryParams(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodGet, tt.url, nil)
 			result := parseTaskQueryParams(req)
-			
+
 			assert.Equal(t, tt.expected.Limit, result.Limit, "Limit mismatch")
 			assert.Equal(t, tt.expected.Offset, result.Offset, "Offset mismatch")
 			assert.Equal(t, tt.expected.Status, result.Status, "Status mismatch")

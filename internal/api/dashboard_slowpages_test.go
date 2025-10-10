@@ -29,7 +29,7 @@ func TestDashboardSlowPagesIntegration(t *testing.T) {
 					Email:          "test@example.com",
 					OrganisationID: stringPtr("org-123"),
 				}, nil)
-				
+
 				slowPages := []db.SlowPage{
 					{
 						URL:                "https://example.com/slow-page",
@@ -47,13 +47,13 @@ func TestDashboardSlowPagesIntegration(t *testing.T) {
 				var response map[string]interface{}
 				err := json.Unmarshal(rec.Body.Bytes(), &response)
 				require.NoError(t, err)
-				
+
 				assert.Equal(t, "success", response["status"])
 				data := response["data"].(map[string]interface{})
 				assert.Contains(t, data, "slow_pages")
 				assert.Contains(t, data, "count")
 				assert.Equal(t, float64(1), data["count"])
-				
+
 				slowPages := data["slow_pages"].([]interface{})
 				assert.Len(t, slowPages, 1)
 				page := slowPages[0].(map[string]interface{})
@@ -70,7 +70,7 @@ func TestDashboardSlowPagesIntegration(t *testing.T) {
 					Email:          "test@example.com",
 					OrganisationID: stringPtr("org-123"),
 				}, nil)
-				
+
 				mockDB.On("GetSlowPages", "org-123", mock.AnythingOfType("*time.Time"), mock.AnythingOfType("*time.Time")).Return(nil, assert.AnError)
 			},
 			expectedStatus: http.StatusInternalServerError,
@@ -92,7 +92,7 @@ func TestDashboardSlowPagesIntegration(t *testing.T) {
 					Email:          "test@example.com",
 					OrganisationID: stringPtr("org-123"),
 				}, nil)
-				
+
 				mockDB.On("GetSlowPages", "org-123", mock.AnythingOfType("*time.Time"), mock.AnythingOfType("*time.Time")).Return([]db.SlowPage{}, nil)
 			},
 			expectedStatus: http.StatusOK,
@@ -100,7 +100,7 @@ func TestDashboardSlowPagesIntegration(t *testing.T) {
 				var response map[string]interface{}
 				err := json.Unmarshal(rec.Body.Bytes(), &response)
 				require.NoError(t, err)
-				
+
 				assert.Equal(t, "success", response["status"])
 				data := response["data"].(map[string]interface{})
 				assert.Equal(t, "last30", data["date_range"])
@@ -122,28 +122,28 @@ func TestDashboardSlowPagesIntegration(t *testing.T) {
 			// Setup
 			mockDB := &MockDBClient{}
 			mockJobsManager := &MockJobManager{}
-			
+
 			tt.setupMocks(mockDB, mockJobsManager)
-			
+
 			handler := NewHandler(mockDB, mockJobsManager)
 			rec := httptest.NewRecorder()
-			
+
 			var req *http.Request
 			if tt.name == "slow_pages_no_authentication" {
 				req = httptest.NewRequest(http.MethodGet, "/v1/dashboard/slow-pages"+tt.queryParams, nil)
 			} else {
 				req = createAuthenticatedRequest(http.MethodGet, "/v1/dashboard/slow-pages"+tt.queryParams, nil)
 			}
-			
+
 			// Execute
 			handler.DashboardSlowPages(rec, req)
-			
+
 			// Verify
 			assert.Equal(t, tt.expectedStatus, rec.Code)
 			if tt.checkResponse != nil {
 				tt.checkResponse(t, rec)
 			}
-			
+
 			// Verify mocks
 			mockDB.AssertExpectations(t)
 			mockJobsManager.AssertExpectations(t)
@@ -168,7 +168,7 @@ func TestDashboardExternalRedirectsIntegration(t *testing.T) {
 					Email:          "test@example.com",
 					OrganisationID: stringPtr("org-123"),
 				}, nil)
-				
+
 				redirects := []db.ExternalRedirect{
 					{
 						URL:         "https://example.com/redirect",
@@ -186,13 +186,13 @@ func TestDashboardExternalRedirectsIntegration(t *testing.T) {
 				var response map[string]interface{}
 				err := json.Unmarshal(rec.Body.Bytes(), &response)
 				require.NoError(t, err)
-				
+
 				assert.Equal(t, "success", response["status"])
 				data := response["data"].(map[string]interface{})
 				assert.Contains(t, data, "external_redirects")
 				assert.Contains(t, data, "count")
 				assert.Equal(t, float64(1), data["count"])
-				
+
 				redirects := data["external_redirects"].([]interface{})
 				assert.Len(t, redirects, 1)
 				redirect := redirects[0].(map[string]interface{})
@@ -209,7 +209,7 @@ func TestDashboardExternalRedirectsIntegration(t *testing.T) {
 					Email:          "test@example.com",
 					OrganisationID: stringPtr("org-123"),
 				}, nil)
-				
+
 				mockDB.On("GetExternalRedirects", "org-123", mock.AnythingOfType("*time.Time"), mock.AnythingOfType("*time.Time")).Return(nil, assert.AnError)
 			},
 			expectedStatus: http.StatusInternalServerError,
@@ -231,7 +231,7 @@ func TestDashboardExternalRedirectsIntegration(t *testing.T) {
 					Email:          "test@example.com",
 					OrganisationID: stringPtr("org-123"),
 				}, nil)
-				
+
 				mockDB.On("GetExternalRedirects", "org-123", mock.AnythingOfType("*time.Time"), mock.AnythingOfType("*time.Time")).Return([]db.ExternalRedirect{}, nil)
 			},
 			expectedStatus: http.StatusOK,
@@ -239,7 +239,7 @@ func TestDashboardExternalRedirectsIntegration(t *testing.T) {
 				var response map[string]interface{}
 				err := json.Unmarshal(rec.Body.Bytes(), &response)
 				require.NoError(t, err)
-				
+
 				assert.Equal(t, "success", response["status"])
 				data := response["data"].(map[string]interface{})
 				assert.Equal(t, "last7", data["date_range"])
@@ -263,7 +263,7 @@ func TestDashboardExternalRedirectsIntegration(t *testing.T) {
 					Email:          "test@example.com",
 					OrganisationID: nil, // No organisation
 				}, nil)
-				
+
 				mockDB.On("GetExternalRedirects", "", mock.AnythingOfType("*time.Time"), mock.AnythingOfType("*time.Time")).Return([]db.ExternalRedirect{}, nil)
 			},
 			expectedStatus: http.StatusOK,
@@ -271,7 +271,7 @@ func TestDashboardExternalRedirectsIntegration(t *testing.T) {
 				var response map[string]interface{}
 				err := json.Unmarshal(rec.Body.Bytes(), &response)
 				require.NoError(t, err)
-				
+
 				assert.Equal(t, "success", response["status"])
 				data := response["data"].(map[string]interface{})
 				assert.Equal(t, float64(0), data["count"])
@@ -284,28 +284,28 @@ func TestDashboardExternalRedirectsIntegration(t *testing.T) {
 			// Setup
 			mockDB := &MockDBClient{}
 			mockJobsManager := &MockJobManager{}
-			
+
 			tt.setupMocks(mockDB, mockJobsManager)
-			
+
 			handler := NewHandler(mockDB, mockJobsManager)
 			rec := httptest.NewRecorder()
-			
+
 			var req *http.Request
 			if tt.name == "redirects_no_authentication" {
 				req = httptest.NewRequest(http.MethodGet, "/v1/dashboard/external-redirects"+tt.queryParams, nil)
 			} else {
 				req = createAuthenticatedRequest(http.MethodGet, "/v1/dashboard/external-redirects"+tt.queryParams, nil)
 			}
-			
+
 			// Execute
 			handler.DashboardExternalRedirects(rec, req)
-			
+
 			// Verify
 			assert.Equal(t, tt.expectedStatus, rec.Code)
 			if tt.checkResponse != nil {
 				tt.checkResponse(t, rec)
 			}
-			
+
 			// Verify mocks
 			mockDB.AssertExpectations(t)
 			mockJobsManager.AssertExpectations(t)

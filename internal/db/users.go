@@ -84,25 +84,25 @@ func (db *DB) GetOrCreateUser(userID, email string, fullName *string) (*User, er
 		// User exists, return them
 		return user, nil
 	}
-	
+
 	// User doesn't exist, auto-create them with a default organisation
 	log.Info().
 		Str("user_id", userID).
 		Str("email", email).
 		Msg("Auto-creating user from JWT token")
-	
+
 	// Determine organisation name
 	orgName := "Personal Organisation"
 	if fullName != nil && *fullName != "" {
 		orgName = *fullName
 	}
-	
+
 	// Create the user
 	newUser, _, err := db.CreateUser(userID, email, fullName, orgName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to auto-create user: %w", err)
 	}
-	
+
 	return newUser, nil
 }
 

@@ -105,8 +105,8 @@ func TestValidateCrawlRequestContextCancellation(t *testing.T) {
 func TestValidateCrawlRequestErrorMessages(t *testing.T) {
 	// Test that error messages are helpful and descriptive
 	tests := []struct {
-		name        string
-		url         string
+		name          string
+		url           string
 		errorContains string
 	}{
 		{
@@ -115,7 +115,7 @@ func TestValidateCrawlRequestErrorMessages(t *testing.T) {
 			errorContains: "invalid URL format",
 		},
 		{
-			name:          "missing_scheme_error", 
+			name:          "missing_scheme_error",
 			url:           "example.com",
 			errorContains: "invalid URL format",
 		},
@@ -146,12 +146,12 @@ func TestValidateCrawlRequestURLEdgeCases(t *testing.T) {
 		{"url_with_auth", "https://user:pass@example.com", false},
 		{"url_with_fragment", "https://example.com/page#section", false},
 		{"url_with_query", "https://example.com/search?q=test&limit=10", false},
-		{"ftp_scheme", "ftp://example.com", false}, // Valid URL format, just not HTTP
-		{"javascript_url", "javascript:alert('xss')", true}, // Invalid - no host
+		{"ftp_scheme", "ftp://example.com", false},            // Valid URL format, just not HTTP
+		{"javascript_url", "javascript:alert('xss')", true},   // Invalid - no host
 		{"data_url", "data:text/plain;base64,SGVsbG8=", true}, // No host
 		{"scheme_only", "https:", true},
 		{"host_only", "//example.com", true}, // No scheme
-		{"path_only", "/page", true}, // No scheme or host
+		{"path_only", "/page", true},         // No scheme or host
 		{"query_only", "?param=value", true}, // No scheme or host
 		{"unicode_domain", "https://тест.com", false},
 		{"punycode_domain", "https://xn--e1afmkfd.xn--p1ai", false},

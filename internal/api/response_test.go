@@ -34,7 +34,7 @@ func TestWriteJSON(t *testing.T) {
 			},
 		},
 		{
-			name:           "writes_complex_nested_structure",
+			name: "writes_complex_nested_structure",
 			data: map[string]interface{}{
 				"user": map[string]interface{}{
 					"id":    123,
@@ -50,7 +50,7 @@ func TestWriteJSON(t *testing.T) {
 				var result map[string]interface{}
 				err := json.Unmarshal([]byte(body), &result)
 				require.NoError(t, err)
-				
+
 				user := result["user"].(map[string]interface{})
 				assert.Equal(t, float64(123), user["id"])
 				assert.Equal(t, "Test User", user["name"])
@@ -101,7 +101,7 @@ func TestWriteJSON(t *testing.T) {
 
 			assert.Equal(t, tt.expectedStatus, rec.Code)
 			assert.Equal(t, "application/json", rec.Header().Get("Content-Type"))
-			
+
 			if tt.validateJSON != nil {
 				tt.validateJSON(t, rec.Body.String())
 			}
@@ -163,7 +163,7 @@ func TestWriteSuccess(t *testing.T) {
 			assert.Equal(t, "success", response.Status)
 			assert.Equal(t, tt.message, response.Message)
 			assert.Equal(t, tt.requestID, response.RequestID)
-			
+
 			// Verify data matches (need to handle type conversion for comparison)
 			if tt.data != nil {
 				dataJSON, _ := json.Marshal(tt.data)
@@ -433,7 +433,7 @@ func TestWriteJSONWithInvalidData(t *testing.T) {
 				// The response should be valid JSON
 				assert.Equal(t, http.StatusOK, rec.Code)
 				assert.Equal(t, "application/json", rec.Header().Get("Content-Type"))
-				
+
 				// Verify the JSON can be decoded
 				var result interface{}
 				err := json.NewDecoder(rec.Body).Decode(&result)
@@ -503,8 +503,8 @@ func TestSuccessResponseStructure(t *testing.T) {
 
 func TestHealthResponseStructure(t *testing.T) {
 	tests := []struct {
-		name     string
-		response HealthResponse
+		name       string
+		response   HealthResponse
 		hasVersion bool
 	}{
 		{
@@ -533,15 +533,15 @@ func TestHealthResponseStructure(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			jsonBytes, err := json.Marshal(tt.response)
 			require.NoError(t, err)
-			
+
 			var result map[string]interface{}
 			err = json.Unmarshal(jsonBytes, &result)
 			require.NoError(t, err)
-			
+
 			assert.Equal(t, tt.response.Status, result["status"])
 			assert.Equal(t, tt.response.Timestamp, result["timestamp"])
 			assert.Equal(t, tt.response.Service, result["service"])
-			
+
 			if tt.hasVersion {
 				assert.Equal(t, tt.response.Version, result["version"])
 			} else {
@@ -556,14 +556,14 @@ func TestHealthResponseStructure(t *testing.T) {
 func TestConcurrentWrites(t *testing.T) {
 	// Test that response functions are safe for concurrent use
 	done := make(chan bool, 20)
-	
+
 	for i := 0; i < 20; i++ {
 		go func(index int) {
 			defer func() { done <- true }()
-			
+
 			req := httptest.NewRequest(http.MethodGet, "/test", nil)
 			rec := httptest.NewRecorder()
-			
+
 			switch index % 5 {
 			case 0:
 				WriteJSON(rec, req, map[string]int{"index": index}, http.StatusOK)
@@ -576,14 +576,14 @@ func TestConcurrentWrites(t *testing.T) {
 			case 4:
 				WriteHealthy(rec, req, "service", "1.0.0")
 			}
-			
+
 			// Verify response was written correctly
 			if index%5 != 3 { // Not NoContent
 				assert.NotEmpty(t, rec.Body.String())
 			}
 		}(i)
 	}
-	
+
 	// Wait for all goroutines
 	for i := 0; i < 20; i++ {
 		<-done
@@ -593,13 +593,13 @@ func TestConcurrentWrites(t *testing.T) {
 func TestWriteJSONPreservesHeaders(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/test", nil)
 	rec := httptest.NewRecorder()
-	
+
 	// Set custom headers before WriteJSON
 	rec.Header().Set("X-Custom-Header", "custom-value")
 	rec.Header().Set("X-Request-ID", "custom-request-id")
-	
+
 	WriteJSON(rec, req, map[string]string{"test": "data"}, http.StatusOK)
-	
+
 	// Verify custom headers are preserved
 	assert.Equal(t, "custom-value", rec.Header().Get("X-Custom-Header"))
 	assert.Equal(t, "custom-request-id", rec.Header().Get("X-Request-ID"))
@@ -615,15 +615,15 @@ func TestLargePayloadHandling(t *testing.T) {
 			"value": strings.Repeat("y", 100),
 		}
 	}
-	
+
 	req := httptest.NewRequest(http.MethodGet, "/test", nil)
 	rec := httptest.NewRecorder()
-	
+
 	WriteJSON(rec, req, largeData, http.StatusOK)
-	
+
 	assert.Equal(t, http.StatusOK, rec.Code)
 	assert.Equal(t, "application/json", rec.Header().Get("Content-Type"))
-	
+
 	// Verify the response can be decoded
 	var result []map[string]string
 	err := json.NewDecoder(rec.Body).Decode(&result)
@@ -657,19 +657,19 @@ func TestWriteWithSpecialCharacters(t *testing.T) {
 			},
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodGet, "/test", nil)
 			rec := httptest.NewRecorder()
-			
+
 			WriteJSON(rec, req, tt.data, http.StatusOK)
-			
+
 			// Verify the response can be decoded and matches original
 			var result map[string]string
 			err := json.NewDecoder(rec.Body).Decode(&result)
 			require.NoError(t, err)
-			
+
 			expected, _ := json.Marshal(tt.data)
 			actual, _ := json.Marshal(result)
 			assert.JSONEq(t, string(expected), string(actual))
@@ -685,7 +685,7 @@ func BenchmarkWriteJSON(b *testing.B) {
 		"name":   "Test",
 		"values": []int{1, 2, 3, 4, 5},
 	}
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		rec := httptest.NewRecorder()
@@ -697,9 +697,9 @@ func BenchmarkWriteSuccess(b *testing.B) {
 	req := httptest.NewRequest(http.MethodGet, "/test", nil)
 	ctx := context.WithValue(req.Context(), requestIDKey, "bench-123")
 	req = req.WithContext(ctx)
-	
+
 	data := map[string]string{"result": "success"}
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		rec := httptest.NewRecorder()
@@ -709,7 +709,7 @@ func BenchmarkWriteSuccess(b *testing.B) {
 
 func BenchmarkWriteHealthy(b *testing.B) {
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		rec := httptest.NewRecorder()
@@ -743,9 +743,9 @@ func (c *customResponseWriter) WriteHeader(status int) {
 func TestWriteJSONWithCustomResponseWriter(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/test", nil)
 	customWriter := &customResponseWriter{}
-	
+
 	WriteJSON(customWriter, req, map[string]bool{"custom": true}, http.StatusAccepted)
-	
+
 	assert.Equal(t, http.StatusAccepted, customWriter.status)
 	assert.Equal(t, "application/json", customWriter.Header().Get("Content-Type"))
 	assert.Contains(t, string(customWriter.body), `"custom":true`)
@@ -758,7 +758,7 @@ func TestResponseHelperIntegration(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/api/resource", nil)
 		ctx := context.WithValue(req.Context(), requestIDKey, "integration-test")
 		req = req.WithContext(ctx)
-		
+
 		// Simulate creating a resource
 		rec := httptest.NewRecorder()
 		resourceData := map[string]interface{}{
@@ -766,29 +766,29 @@ func TestResponseHelperIntegration(t *testing.T) {
 			"name": "New Resource",
 		}
 		WriteCreated(rec, req, resourceData, "Resource created successfully")
-		
+
 		assert.Equal(t, http.StatusCreated, rec.Code)
-		
+
 		var response SuccessResponse
 		err := json.NewDecoder(rec.Body).Decode(&response)
 		require.NoError(t, err)
 		assert.Equal(t, "success", response.Status)
 		assert.Equal(t, "integration-test", response.RequestID)
 	})
-	
+
 	t.Run("health_check_flow", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/health", nil)
 		rec := httptest.NewRecorder()
-		
+
 		// Simulate healthy service
 		WriteHealthy(rec, req, "api", "2.0.0")
 		assert.Equal(t, http.StatusOK, rec.Code)
-		
+
 		var response HealthResponse
 		err := json.NewDecoder(rec.Body).Decode(&response)
 		require.NoError(t, err)
 		assert.Equal(t, "healthy", response.Status)
-		
+
 		// Simulate unhealthy service
 		rec = httptest.NewRecorder()
 		WriteUnhealthy(rec, req, "api", errors.New("database down"))
@@ -800,16 +800,16 @@ func TestResponseHelperIntegration(t *testing.T) {
 func TestWriteJSONDoesNotLeakMemory(t *testing.T) {
 	// This test ensures we don't keep references to large objects
 	req := httptest.NewRequest(http.MethodGet, "/test", nil)
-	
+
 	// Create a large object
 	largeObject := make([]byte, 1024*1024) // 1MB
-	
+
 	rec := httptest.NewRecorder()
 	WriteJSON(rec, req, largeObject, http.StatusOK)
-	
+
 	// If this doesn't cause issues in race detector or memory profiling, we're good
 	assert.NotNil(t, rec.Body)
-	
+
 	// Clear references
 	largeObject = nil
 	rec = nil

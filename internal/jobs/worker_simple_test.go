@@ -178,7 +178,7 @@ func TestWorkerPoolConcurrentJobTracking(t *testing.T) {
 			defer wg.Done()
 			for j := 0; j < numOperations; j++ {
 				jobID := fmt.Sprintf("job-%d-%d", id, j)
-				
+
 				// Add job directly to avoid database
 				wp.jobsMutex.Lock()
 				wp.jobs[jobID] = true

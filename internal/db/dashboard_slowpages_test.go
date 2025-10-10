@@ -32,7 +32,7 @@ func TestGetSlowPages(t *testing.T) {
 				).AddRow(
 					"https://example.com/very-slow", "example.com", "/very-slow", 8000, "job-456", time.Date(2024, 1, 1, 13, 0, 0, 0, time.UTC),
 				)
-				
+
 				mock.ExpectQuery(`WITH user_tasks AS`).
 					WithArgs("org-123", nil, nil).
 					WillReturnRows(rows)
@@ -65,7 +65,7 @@ func TestGetSlowPages(t *testing.T) {
 				rows := sqlmock.NewRows([]string{
 					"url", "domain", "path", "second_response_time", "job_id", "completed_at",
 				})
-				
+
 				mock.ExpectQuery(`WITH user_tasks AS`).
 					WithArgs("org-123", sqlmock.AnyArg(), sqlmock.AnyArg()).
 					WillReturnRows(rows)
@@ -93,7 +93,7 @@ func TestGetSlowPages(t *testing.T) {
 				rows := sqlmock.NewRows([]string{
 					"url", "domain", "path", "second_response_time", "job_id", "completed_at",
 				})
-				
+
 				mock.ExpectQuery(`WITH user_tasks AS`).
 					WithArgs("", nil, nil).
 					WillReturnRows(rows)
@@ -154,7 +154,7 @@ func TestGetExternalRedirects(t *testing.T) {
 				).AddRow(
 					"https://example.com/another", "example.com", "/another", "https://different.com/page", "job-456", time.Date(2024, 1, 1, 13, 0, 0, 0, time.UTC),
 				)
-				
+
 				mock.ExpectQuery(`SELECT.*FROM tasks t.*JOIN jobs j.*WHERE j.organisation_id`).
 					WithArgs("org-123", nil, nil).
 					WillReturnRows(rows)
@@ -187,7 +187,7 @@ func TestGetExternalRedirects(t *testing.T) {
 				rows := sqlmock.NewRows([]string{
 					"url", "domain", "path", "redirect_url", "job_id", "completed_at",
 				})
-				
+
 				mock.ExpectQuery(`SELECT.*FROM tasks t.*JOIN jobs j.*WHERE j.organisation_id`).
 					WithArgs("org-123", sqlmock.AnyArg(), sqlmock.AnyArg()).
 					WillReturnRows(rows)
@@ -217,7 +217,7 @@ func TestGetExternalRedirects(t *testing.T) {
 				}).AddRow(
 					"invalid-url", "example.com", "/redirect", "https://external-site.com/target", "job-123", "invalid-date",
 				)
-				
+
 				mock.ExpectQuery(`SELECT.*FROM tasks t.*JOIN jobs j.*WHERE j.organisation_id`).
 					WithArgs("org-123", nil, nil).
 					WillReturnRows(rows)

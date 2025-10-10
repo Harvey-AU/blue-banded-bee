@@ -185,7 +185,7 @@ func (m *MockDBClient) GetOrganisation(organisationID string) (*db.Organisation,
 func createTestHandler() (*Handler, *MockDBClient, *MockJobManager) {
 	mockDB := new(MockDBClient)
 	mockJobsManager := new(MockJobManager)
-	
+
 	handler := NewHandler(mockDB, mockJobsManager)
 	return handler, mockDB, mockJobsManager
 }
@@ -198,7 +198,7 @@ func createAuthenticatedRequest(method, url string, body []byte) *http.Request {
 	} else {
 		req = httptest.NewRequest(method, url, nil)
 	}
-	
+
 	// Add user context for authentication
 	ctx := context.WithValue(req.Context(), auth.UserKey, &auth.UserClaims{
 		UserID: "test-user-123",

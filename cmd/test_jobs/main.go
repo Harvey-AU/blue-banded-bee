@@ -94,7 +94,7 @@ func main() {
 
 	// Add the job to the worker pool - it will automatically start processing pending tasks
 	workerPool.AddJob(job.ID, jobOptions)
-	
+
 	log.Info().Str("job_id", job.ID).Msg("Added job to worker pool, monitoring progress...")
 
 	// Monitor job progress

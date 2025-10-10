@@ -30,7 +30,7 @@ func TestStartJob_Unit(t *testing.T) {
 			setupMock: func(mock sqlmock.Sqlmock) {
 				// GetJob transaction
 				mock.ExpectBegin()
-				
+
 				// Query for the original job
 				rows := sqlmock.NewRows([]string{
 					"id", "name", "status", "progress", "total_tasks", "completed_tasks",
@@ -39,25 +39,25 @@ func TestStartJob_Unit(t *testing.T) {
 					"required_workers", "found_tasks", "sitemap_tasks", "duration_seconds",
 					"avg_time_per_task_seconds",
 				}).AddRow(
-					"completed-job-123",                    // id
-					"example.com",                          // domain name
-					"completed",                            // status
-					100.0,                                  // progress
-					100,                                    // total_tasks
-					100,                                    // completed_tasks
-					0,                                      // failed_tasks
-					0,                                      // skipped_tasks
-					time.Now().Add(-2*time.Hour),          // created_at
-					sql.NullTime{Time: time.Now().Add(-90*time.Minute), Valid: true}, // started_at
-					sql.NullTime{Time: time.Now().Add(-30*time.Minute), Valid: true}, // completed_at
-					10,                                     // concurrency
-					true,                                   // find_links
-					json.RawMessage(`["/*"]`),              // include_paths
-					json.RawMessage(`["/admin/*"]`),        // exclude_paths
-					sql.NullString{Valid: false},          // error_message
-					5,                                      // required_workers
-					50,                                     // found_tasks
-					50,                                     // sitemap_tasks
+					"completed-job-123",          // id
+					"example.com",                // domain name
+					"completed",                  // status
+					100.0,                        // progress
+					100,                          // total_tasks
+					100,                          // completed_tasks
+					0,                            // failed_tasks
+					0,                            // skipped_tasks
+					time.Now().Add(-2*time.Hour), // created_at
+					sql.NullTime{Time: time.Now().Add(-90 * time.Minute), Valid: true}, // started_at
+					sql.NullTime{Time: time.Now().Add(-30 * time.Minute), Valid: true}, // completed_at
+					10,                                      // concurrency
+					true,                                    // find_links
+					json.RawMessage(`["/*"]`),               // include_paths
+					json.RawMessage(`["/admin/*"]`),         // exclude_paths
+					sql.NullString{Valid: false},            // error_message
+					5,                                       // required_workers
+					50,                                      // found_tasks
+					50,                                      // sitemap_tasks
 					sql.NullInt64{Int64: 3600, Valid: true}, // duration_seconds
 					sql.NullFloat64{Float64: 36.0, Valid: true}, // avg_time_per_task_seconds
 				)
@@ -88,27 +88,27 @@ func TestStartJob_Unit(t *testing.T) {
 				mock.ExpectExec(`INSERT INTO jobs`).
 					WithArgs(
 						sqlmock.AnyArg(), // new job ID (UUID)
-						1,                 // domain_id
-						nil,               // user_id
-						nil,               // organisation_id
-						"pending",         // status
-						0.0,               // progress
-						0,                 // total_tasks
-						0,                 // completed_tasks
-						0,                 // failed_tasks
-						0,                 // skipped_tasks
+						1,                // domain_id
+						nil,              // user_id
+						nil,              // organisation_id
+						"pending",        // status
+						0.0,              // progress
+						0,                // total_tasks
+						0,                // completed_tasks
+						0,                // failed_tasks
+						0,                // skipped_tasks
 						sqlmock.AnyArg(), // created_at
-						10,                // concurrency
-						true,              // find_links
-						`["/*"]`,          // include_paths (string, not []byte)
-						`["/admin/*"]`,    // exclude_paths (string, not []byte)
-						5,                 // required_workers
-						0,                 // max_pages (from original job which had MaxPages=0)
-						0,                 // found_tasks
-						0,                 // sitemap_tasks
-						nil,               // source_type
-						nil,               // source_detail
-						nil,               // source_info
+						10,               // concurrency
+						true,             // find_links
+						`["/*"]`,         // include_paths (string, not []byte)
+						`["/admin/*"]`,   // exclude_paths (string, not []byte)
+						5,                // required_workers
+						0,                // max_pages (from original job which had MaxPages=0)
+						0,                // found_tasks
+						0,                // sitemap_tasks
+						nil,              // source_type
+						nil,              // source_detail
+						nil,              // source_info
 					).
 					WillReturnResult(sqlmock.NewResult(1, 1))
 
@@ -122,7 +122,7 @@ func TestStartJob_Unit(t *testing.T) {
 			setupMock: func(mock sqlmock.Sqlmock) {
 				// GetJob transaction
 				mock.ExpectBegin()
-				
+
 				rows := sqlmock.NewRows([]string{
 					"id", "name", "status", "progress", "total_tasks", "completed_tasks",
 					"failed_tasks", "skipped_tasks", "created_at", "started_at", "completed_at",
@@ -139,8 +139,8 @@ func TestStartJob_Unit(t *testing.T) {
 					5,
 					0,
 					time.Now().Add(-2*time.Hour),
-					sql.NullTime{Time: time.Now().Add(-90*time.Minute), Valid: true},
-					sql.NullTime{Time: time.Now().Add(-30*time.Minute), Valid: true},
+					sql.NullTime{Time: time.Now().Add(-90 * time.Minute), Valid: true},
+					sql.NullTime{Time: time.Now().Add(-30 * time.Minute), Valid: true},
 					10,
 					true,
 					json.RawMessage(`[]`),
@@ -177,9 +177,9 @@ func TestStartJob_Unit(t *testing.T) {
 				mock.ExpectExec(`INSERT INTO jobs`).
 					WithArgs(
 						sqlmock.AnyArg(), // new job ID
-						1,                 // domain_id
-						nil,               // user_id
-						nil,               // organisation_id
+						1,                // domain_id
+						nil,              // user_id
+						nil,              // organisation_id
 						"pending",
 						0.0,
 						0,
@@ -189,8 +189,8 @@ func TestStartJob_Unit(t *testing.T) {
 						sqlmock.AnyArg(),
 						10,
 						true,
-						`[]`,              // include_paths (string, not []byte)
-						`[]`,              // exclude_paths (string, not []byte)
+						`[]`, // include_paths (string, not []byte)
+						`[]`, // exclude_paths (string, not []byte)
 						5,
 						0,
 						0,
@@ -206,12 +206,12 @@ func TestStartJob_Unit(t *testing.T) {
 			expectedError: "",
 		},
 		{
-			name:  "restart cancelled job successfully", 
+			name:  "restart cancelled job successfully",
 			jobID: "cancelled-job-123",
 			setupMock: func(mock sqlmock.Sqlmock) {
 				// GetJob transaction
 				mock.ExpectBegin()
-				
+
 				rows := sqlmock.NewRows([]string{
 					"id", "name", "status", "progress", "total_tasks", "completed_tasks",
 					"failed_tasks", "skipped_tasks", "created_at", "started_at", "completed_at",
@@ -228,8 +228,8 @@ func TestStartJob_Unit(t *testing.T) {
 					0,
 					75,
 					time.Now().Add(-2*time.Hour),
-					sql.NullTime{Time: time.Now().Add(-90*time.Minute), Valid: true},
-					sql.NullTime{Time: time.Now().Add(-60*time.Minute), Valid: true},
+					sql.NullTime{Time: time.Now().Add(-90 * time.Minute), Valid: true},
+					sql.NullTime{Time: time.Now().Add(-60 * time.Minute), Valid: true},
 					10,
 					true,
 					json.RawMessage(`[]`),
@@ -278,8 +278,8 @@ func TestStartJob_Unit(t *testing.T) {
 						sqlmock.AnyArg(),
 						10,
 						true,
-						`[]`,              // include_paths (string)
-						`[]`,              // exclude_paths (string)
+						`[]`, // include_paths (string)
+						`[]`, // exclude_paths (string)
 						5,
 						0,
 						0,
@@ -300,7 +300,7 @@ func TestStartJob_Unit(t *testing.T) {
 			setupMock: func(mock sqlmock.Sqlmock) {
 				// GetJob transaction
 				mock.ExpectBegin()
-				
+
 				rows := sqlmock.NewRows([]string{
 					"id", "name", "status", "progress", "total_tasks", "completed_tasks",
 					"failed_tasks", "skipped_tasks", "created_at", "started_at", "completed_at",
@@ -317,7 +317,7 @@ func TestStartJob_Unit(t *testing.T) {
 					0,
 					0,
 					time.Now().Add(-1*time.Hour),
-					sql.NullTime{Time: time.Now().Add(-30*time.Minute), Valid: true},
+					sql.NullTime{Time: time.Now().Add(-30 * time.Minute), Valid: true},
 					sql.NullTime{Valid: false},
 					10,
 					true,
@@ -352,7 +352,7 @@ func TestStartJob_Unit(t *testing.T) {
 			setupMock: func(mock sqlmock.Sqlmock) {
 				// GetJob transaction
 				mock.ExpectBegin()
-				
+
 				rows := sqlmock.NewRows([]string{
 					"id", "name", "status", "progress", "total_tasks", "completed_tasks",
 					"failed_tasks", "skipped_tasks", "created_at", "started_at", "completed_at",
@@ -404,7 +404,7 @@ func TestStartJob_Unit(t *testing.T) {
 			setupMock: func(mock sqlmock.Sqlmock) {
 				// GetJob transaction
 				mock.ExpectBegin()
-				
+
 				mock.ExpectQuery(`SELECT 
 				j.id, d.name, j.status, j.progress, j.total_tasks, j.completed_tasks, j.failed_tasks, j.skipped_tasks,
 				j.created_at, j.started_at, j.completed_at, j.concurrency, j.find_links,
@@ -426,7 +426,7 @@ func TestStartJob_Unit(t *testing.T) {
 			setupMock: func(mock sqlmock.Sqlmock) {
 				// GetJob transaction
 				mock.ExpectBegin()
-				
+
 				mock.ExpectQuery(`SELECT 
 				j.id, d.name, j.status, j.progress, j.total_tasks, j.completed_tasks, j.failed_tasks, j.skipped_tasks,
 				j.created_at, j.started_at, j.completed_at, j.concurrency, j.find_links,

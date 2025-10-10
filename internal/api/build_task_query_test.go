@@ -122,15 +122,15 @@ func TestBuildTaskQueryParameterPlaceholders(t *testing.T) {
 			Status:  "",
 			OrderBy: "t.created_at DESC",
 		}
-		
+
 		result := buildTaskQuery("job-123", params)
-		
+
 		// Should have $1 (jobID), $2 (limit), $3 (offset)
 		assert.Contains(t, result.SelectQuery, "$1", "Should contain $1 placeholder")
 		assert.Contains(t, result.SelectQuery, "$2", "Should contain $2 placeholder")
 		assert.Contains(t, result.SelectQuery, "$3", "Should contain $3 placeholder")
 		assert.NotContains(t, result.SelectQuery, "$4", "Should not contain $4 placeholder")
-		
+
 		// Verify args match placeholders
 		require.Len(t, result.Args, 3)
 		assert.Equal(t, "job-123", result.Args[0])
@@ -145,16 +145,16 @@ func TestBuildTaskQueryParameterPlaceholders(t *testing.T) {
 			Status:  "completed",
 			OrderBy: "t.status ASC",
 		}
-		
+
 		result := buildTaskQuery("job-456", params)
-		
+
 		// Should have $1 (jobID), $2 (status), $3 (limit), $4 (offset)
 		assert.Contains(t, result.SelectQuery, "$1", "Should contain $1 placeholder")
 		assert.Contains(t, result.SelectQuery, "$2", "Should contain $2 placeholder")
 		assert.Contains(t, result.SelectQuery, "$3", "Should contain $3 placeholder")
 		assert.Contains(t, result.SelectQuery, "$4", "Should contain $4 placeholder")
 		assert.NotContains(t, result.SelectQuery, "$5", "Should not contain $5 placeholder")
-		
+
 		// Verify args match placeholders
 		require.Len(t, result.Args, 4)
 		assert.Equal(t, "job-456", result.Args[0])
@@ -167,7 +167,7 @@ func TestBuildTaskQueryParameterPlaceholders(t *testing.T) {
 func TestBuildTaskQuerySQLInjectionSafety(t *testing.T) {
 	// Test that the function properly handles potentially dangerous inputs
 	// via parameterized queries
-	
+
 	t.Run("job_id_with_sql_injection_attempt", func(t *testing.T) {
 		maliciousJobID := "'; DROP TABLE tasks; --"
 		params := TaskQueryParams{
@@ -176,18 +176,18 @@ func TestBuildTaskQuerySQLInjectionSafety(t *testing.T) {
 			Status:  "",
 			OrderBy: "t.created_at DESC",
 		}
-		
+
 		result := buildTaskQuery(maliciousJobID, params)
-		
+
 		// The jobID should be safely parameterized as $1
 		assert.Contains(t, result.SelectQuery, "WHERE t.job_id = $1")
 		assert.Equal(t, maliciousJobID, result.Args[0])
-		
+
 		// Query structure should remain intact
 		assert.Contains(t, result.SelectQuery, "SELECT t.id")
 		assert.Contains(t, result.SelectQuery, "FROM tasks t")
 	})
-	
+
 	t.Run("status_with_sql_injection_attempt", func(t *testing.T) {
 		maliciousStatus := "'; DELETE FROM tasks WHERE 1=1; --"
 		params := TaskQueryParams{
@@ -196,18 +196,18 @@ func TestBuildTaskQuerySQLInjectionSafety(t *testing.T) {
 			Status:  maliciousStatus,
 			OrderBy: "t.created_at DESC",
 		}
-		
+
 		result := buildTaskQuery("job-123", params)
-		
+
 		// The status should be safely parameterized as $2
 		assert.Contains(t, result.SelectQuery, "AND t.status = $2")
 		assert.Equal(t, maliciousStatus, result.Args[1])
-		
+
 		// Query structure should remain intact
 		assert.Contains(t, result.SelectQuery, "SELECT t.id")
 		assert.NotContains(t, result.SelectQuery, "DELETE")
 	})
-	
+
 	t.Run("orderby_is_not_parameterized_but_controlled", func(t *testing.T) {
 		// OrderBy is built from controlled input via parseTaskQueryParams
 		// so it should be safe, but let's verify the function handles it properly
@@ -217,9 +217,9 @@ func TestBuildTaskQuerySQLInjectionSafety(t *testing.T) {
 			Status:  "",
 			OrderBy: "t.created_at DESC",
 		}
-		
+
 		result := buildTaskQuery("job-123", params)
-		
+
 		// OrderBy should be directly inserted (not parameterized) because
 		// it comes from parseTaskQueryParams which validates the values
 		assert.Contains(t, result.SelectQuery, "ORDER BY t.created_at DESC")

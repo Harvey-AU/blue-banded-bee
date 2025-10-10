@@ -26,12 +26,12 @@ func setupTest(t *testing.T) *db.DB {
 
 	database, err := db.InitFromEnv()
 	require.NoError(t, err, "Failed to connect to test database")
-	
+
 	// Register cleanup to close database - this will run LAST (LIFO order)
 	t.Cleanup(func() {
 		database.Close()
 	})
-	
+
 	return database
 }
 
@@ -57,7 +57,7 @@ func TestGetJob(t *testing.T) {
 	createdJob, err := jm.CreateJob(ctx, options)
 	require.NoError(t, err, "Failed to create test job")
 	require.NotNil(t, createdJob)
-	
+
 	// Register cleanup immediately after creation - runs before database close
 	t.Cleanup(func() {
 		// Delete tasks first (if any) due to foreign key constraints
@@ -217,7 +217,7 @@ func TestProcessSitemapFallback(t *testing.T) {
 	job, err := jm.CreateJob(ctx, options)
 	require.NoError(t, err, "Failed to create job")
 	require.NotNil(t, job)
-	
+
 	// Register cleanup immediately after creation - runs before database close
 	t.Cleanup(func() {
 		// Delete tasks first due to foreign key constraints
@@ -294,7 +294,7 @@ func TestEnqueueJobURLs(t *testing.T) {
 	job, err := jm.CreateJob(ctx, options)
 	require.NoError(t, err, "Failed to create job")
 	require.NotNil(t, job)
-	
+
 	// Register cleanup immediately after creation - runs before database close
 	t.Cleanup(func() {
 		// Delete tasks first due to foreign key constraints

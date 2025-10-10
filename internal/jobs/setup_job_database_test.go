@@ -74,10 +74,10 @@ func TestSetupJobDatabaseFunctionExists(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	
+
 	// Should not panic and should return expected types
 	domainID, err := jm.setupJobDatabase(ctx, job, "example.com")
-	
+
 	assert.NoError(t, err)
 	assert.IsType(t, int(0), domainID)
 }

@@ -40,7 +40,7 @@ func TestRequestIDMiddleware(t *testing.T) {
 			// Create test handler that verifies request ID is in context
 			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				requestID := GetRequestID(r)
-				
+
 				if tt.expectGenerated {
 					assert.NotEmpty(t, requestID)
 					// Verify format of generated ID (hex-hex)
@@ -50,7 +50,7 @@ func TestRequestIDMiddleware(t *testing.T) {
 				} else {
 					assert.Equal(t, tt.existingRequestID, requestID)
 				}
-				
+
 				w.WriteHeader(http.StatusOK)
 			})
 
@@ -70,7 +70,7 @@ func TestRequestIDMiddleware(t *testing.T) {
 			// Verify response header contains request ID
 			responseRequestID := rec.Header().Get("X-Request-ID")
 			assert.NotEmpty(t, responseRequestID)
-			
+
 			if !tt.expectGenerated {
 				assert.Equal(t, tt.existingRequestID, responseRequestID)
 			}
@@ -99,12 +99,12 @@ func TestGetRequestID(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodGet, "/test", nil)
-			
+
 			if tt.requestID != "" {
 				ctx := context.WithValue(req.Context(), requestIDKey, tt.requestID)
 				req = req.WithContext(ctx)
 			}
-			
+
 			result := GetRequestID(req)
 			assert.Equal(t, tt.expected, result)
 		})
@@ -114,15 +114,15 @@ func TestGetRequestID(t *testing.T) {
 func TestGenerateRequestID(t *testing.T) {
 	// Test that generated IDs are unique
 	ids := make(map[string]bool)
-	
+
 	for i := 0; i < 100; i++ {
 		id := generateRequestID()
-		
+
 		// Check format
 		assert.Contains(t, id, "-")
 		parts := strings.Split(id, "-")
 		assert.Len(t, parts, 2)
-		
+
 		// Check uniqueness
 		assert.False(t, ids[id], "Generated ID should be unique")
 		ids[id] = true
@@ -179,7 +179,7 @@ func TestLoggingMiddleware(t *testing.T) {
 
 			// Execute request
 			rec := httptest.NewRecorder()
-			
+
 			// Record start time
 			startTime := time.Now()
 			middlewareHandler.ServeHTTP(rec, req)
@@ -187,7 +187,7 @@ func TestLoggingMiddleware(t *testing.T) {
 
 			// Verify response
 			assert.Equal(t, tt.responseCode, rec.Code)
-			
+
 			// Verify duration was recorded (should be > 0)
 			assert.Greater(t, duration.Nanoseconds(), int64(0))
 		})
@@ -244,7 +244,7 @@ func TestResponseWrapper(t *testing.T) {
 			}
 
 			assert.Equal(t, tt.expectedStatusCode, wrapper.statusCode)
-			
+
 			if tt.statusCode > 0 {
 				assert.Equal(t, tt.statusCode, rec.Code)
 			}
@@ -375,7 +375,7 @@ func TestMiddlewareChaining(t *testing.T) {
 	// Test that multiple middlewares work together correctly
 	finalHandlerCalled := false
 	capturedRequestID := ""
-	
+
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		finalHandlerCalled = true
 		capturedRequestID = GetRequestID(r)
@@ -422,12 +422,12 @@ func TestRequestIDMiddlewareConcurrency(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		go func(index int) {
 			defer func() { done <- true }()
-			
+
 			req := httptest.NewRequest(http.MethodGet, "/test", nil)
 			rec := httptest.NewRecorder()
-			
+
 			middlewareHandler.ServeHTTP(rec, req)
-			
+
 			results <- (rec.Code == http.StatusOK)
 			results <- (rec.Header().Get("X-Request-ID") != "")
 		}(i)
@@ -533,7 +533,7 @@ func TestCORSMiddlewareWithVariousHeaders(t *testing.T) {
 			if tt.expectedAllowed {
 				assert.Equal(t, http.StatusOK, rec.Code)
 			}
-			
+
 			// Verify CORS headers are always set
 			assert.NotEmpty(t, rec.Header().Get("Access-Control-Allow-Origin"))
 		})
@@ -549,7 +549,7 @@ func TestMiddlewareErrorHandling(t *testing.T) {
 
 		// Note: In production, you'd want a recovery middleware
 		// This test verifies that our middlewares don't prevent panic recovery
-		
+
 		middlewareHandler := RequestIDMiddleware(
 			LoggingMiddleware(panicHandler),
 		)
@@ -640,7 +640,7 @@ func TestEmptyRequestPath(t *testing.T) {
 	assert.NotPanics(t, func() {
 		middlewareHandler.ServeHTTP(rec, req)
 	})
-	
+
 	assert.Equal(t, http.StatusOK, rec.Code)
 	assert.NotEmpty(t, rec.Header().Get("X-Request-ID"))
 }
@@ -656,9 +656,9 @@ func TestRequestIDUniqueness(t *testing.T) {
 	// Generate many IDs concurrently to test uniqueness under load
 	const numGoroutines = 100
 	const idsPerGoroutine = 100
-	
+
 	idChan := make(chan string, numGoroutines*idsPerGoroutine)
-	
+
 	for i := 0; i < numGoroutines; i++ {
 		go func() {
 			for j := 0; j < idsPerGoroutine; j++ {
@@ -666,7 +666,7 @@ func TestRequestIDUniqueness(t *testing.T) {
 			}
 		}()
 	}
-	
+
 	// Collect all IDs
 	ids := make(map[string]bool)
 	for i := 0; i < numGoroutines*idsPerGoroutine; i++ {
@@ -674,6 +674,6 @@ func TestRequestIDUniqueness(t *testing.T) {
 		require.False(t, ids[id], "Duplicate ID generated: %s", id)
 		ids[id] = true
 	}
-	
+
 	assert.Len(t, ids, numGoroutines*idsPerGoroutine)
 }

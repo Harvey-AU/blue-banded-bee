@@ -100,18 +100,18 @@ func New(config *Config) (*DB, error) {
 		config.SSLMode = "disable"
 	}
 	if config.MaxIdleConns == 0 {
-		config.MaxIdleConns = 10  // Conservative for Supabase pool limits
+		config.MaxIdleConns = 10 // Conservative for Supabase pool limits
 	}
 	if config.MaxOpenConns == 0 {
-		config.MaxOpenConns = 25  // Stay under Supabase's 30 connection pool limit
+		config.MaxOpenConns = 25 // Stay under Supabase's 30 connection pool limit
 	}
 	if config.MaxLifetime == 0 {
-		config.MaxLifetime = 5 * time.Minute  // Shorter lifetime for pooler compatibility
+		config.MaxLifetime = 5 * time.Minute // Shorter lifetime for pooler compatibility
 	}
 
 	// Add connection configuration to prevent prepared statement conflicts
 	connStr := config.ConnectionString()
-	
+
 	// Add statement timeout if not present
 	if !strings.Contains(connStr, "statement_timeout") {
 		// Check if we're using URL format or key=value format
@@ -127,7 +127,7 @@ func New(config *Config) (*DB, error) {
 			connStr += " statement_timeout=60000" // 60 seconds
 		}
 	}
-	
+
 	// Add minimal prepared statement parameter for pooler connections
 	if strings.Contains(connStr, "pooler.supabase.com") {
 		if !strings.Contains(connStr, "default_query_exec_mode=") {
@@ -145,7 +145,7 @@ func New(config *Config) (*DB, error) {
 	}
 
 	log.Info().Msg("Opening PostgreSQL connection")
-	
+
 	client, err := sql.Open("pgx", connStr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to PostgreSQL: %w", err)
@@ -155,7 +155,7 @@ func New(config *Config) (*DB, error) {
 	client.SetMaxOpenConns(config.MaxOpenConns)
 	client.SetMaxIdleConns(config.MaxIdleConns)
 	client.SetConnMaxLifetime(config.MaxLifetime)
-	client.SetConnMaxIdleTime(2 * time.Minute)  // Close idle connections after 2 minutes
+	client.SetConnMaxIdleTime(2 * time.Minute) // Close idle connections after 2 minutes
 
 	// Test connection
 	if err := client.Ping(); err != nil {
@@ -163,7 +163,7 @@ func New(config *Config) (*DB, error) {
 	}
 
 	// Schema is managed by Supabase migrations - no setup required
-	
+
 	// Create the cache
 	dbCache := cache.NewInMemoryCache()
 
@@ -176,18 +176,18 @@ func InitFromEnv() (*DB, error) {
 	// Trim whitespace as it causes pgx to ignore the URL and fall back to Unix socket
 	if url := strings.TrimSpace(os.Getenv("DATABASE_URL")); url != "" {
 		// Optimise connection limits based on environment
-		maxOpen := 25  // Production: stay under Supabase's 30 connection pool limit
-		maxIdle := 10  // Production: conservative to prevent pool exhaustion
+		maxOpen := 25 // Production: stay under Supabase's 30 connection pool limit
+		maxIdle := 10 // Production: conservative to prevent pool exhaustion
 		if os.Getenv("APP_ENV") == "development" {
-			maxOpen = 15  // Development: modest limits for local testing
-			maxIdle = 5   // Development: fewer idle connections
+			maxOpen = 15 // Development: modest limits for local testing
+			maxIdle = 5  // Development: fewer idle connections
 		}
-		
+
 		config := &Config{
 			DatabaseURL:  url,
 			MaxIdleConns: maxIdle,
 			MaxOpenConns: maxOpen,
-			MaxLifetime:  5 * time.Minute,  // Shorter lifetime for pooler compatibility
+			MaxLifetime:  5 * time.Minute, // Shorter lifetime for pooler compatibility
 		}
 
 		// Add statement timeout and disable prepared statements to prevent cache conflicts
@@ -198,7 +198,7 @@ func InitFromEnv() (*DB, error) {
 			}
 			url += separator + "statement_timeout=60000" // 60 seconds
 		}
-		
+
 		// Add minimal prepared statement parameter for pooler connections
 		if strings.Contains(url, "pooler.supabase.com") {
 			if !strings.Contains(url, "default_query_exec_mode=") {
@@ -210,12 +210,12 @@ func InitFromEnv() (*DB, error) {
 				log.Info().Msg("Added minimal prepared statement disabling for pooler connection")
 			}
 		}
-		
+
 		// Persist the augmented URL back to config for consistency
 		config.DatabaseURL = url
-		
+
 		log.Info().Str("connection_url", url).Msg("Opening PostgreSQL connection via DATABASE_URL")
-		
+
 		client, err := sql.Open("pgx", url)
 		if err != nil {
 			return nil, fmt.Errorf("failed to connect to PostgreSQL via DATABASE_URL: %w", err)
@@ -225,7 +225,7 @@ func InitFromEnv() (*DB, error) {
 		client.SetMaxOpenConns(config.MaxOpenConns)
 		client.SetMaxIdleConns(config.MaxIdleConns)
 		client.SetConnMaxLifetime(config.MaxLifetime)
-		client.SetConnMaxIdleTime(2 * time.Minute)  // Close idle connections after 2 minutes
+		client.SetConnMaxIdleTime(2 * time.Minute) // Close idle connections after 2 minutes
 
 		// Verify connection
 		if err := client.Ping(); err != nil {
@@ -233,7 +233,7 @@ func InitFromEnv() (*DB, error) {
 		}
 
 		// Schema is managed by Supabase migrations - no setup required
-		
+
 		// Create the cache
 		dbCache := cache.NewInMemoryCache()
 
@@ -374,7 +374,7 @@ func createCoreTables(db *sql.DB) error {
 		return fmt.Errorf("failed to create jobs table: %w", err)
 	}
 
-	// Create tasks table  
+	// Create tasks table
 	_, err = db.Exec(`
 		CREATE TABLE IF NOT EXISTS tasks (
 			id TEXT PRIMARY KEY,
