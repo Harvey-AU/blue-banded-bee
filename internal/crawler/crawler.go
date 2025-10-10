@@ -113,7 +113,7 @@ func New(config *Config, id ...string) *Crawler {
 		Parallelism: config.MaxConcurrency,
 		RandomDelay: time.Second / time.Duration(config.RateLimit),
 	}); err != nil {
-		return nil, fmt.Errorf("failed to set crawler limits: %w", err)
+		log.Error().Err(err).Msg("Failed to set crawler limits")
 	}
 
 	// Create metrics map for this crawler instance
