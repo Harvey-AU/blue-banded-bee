@@ -45,7 +45,7 @@ jobs:
           # Check if app exists, create if not
           if ! flyctl apps list | grep -q "$APP_NAME"; then
             echo "Creating new review app: $APP_NAME"
-            flyctl apps create $APP_NAME --org personal
+            flyctl apps create "$APP_NAME" --org personal
           else
             echo "Review app already exists: $APP_NAME"
           fi
@@ -57,7 +57,7 @@ jobs:
             --app $APP_NAME --stage
 
           # Deploy to review app with local image (this will apply staged secrets)
-          flyctl deploy \
+          FLY_REGION=syd flyctl deploy \
             --app $APP_NAME \
             --config .fly/review_apps.toml \
             --local-only \

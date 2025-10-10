@@ -96,7 +96,7 @@ func TestGetJobIntegration(t *testing.T) {
 				var response map[string]interface{}
 				err := json.Unmarshal(rec.Body.Bytes(), &response)
 				require.NoError(t, err)
-				
+
 				assert.Equal(t, float64(404), response["status"])
 				assert.Equal(t, "NOT_FOUND", response["code"])
 				assert.Equal(t, "Job not found", response["message"])
@@ -118,7 +118,7 @@ func TestGetJobIntegration(t *testing.T) {
 				var response map[string]interface{}
 				err := json.Unmarshal(rec.Body.Bytes(), &response)
 				require.NoError(t, err)
-				
+
 				assert.Equal(t, float64(404), response["status"])
 				assert.Equal(t, "NOT_FOUND", response["code"])
 			},
@@ -126,21 +126,21 @@ func TestGetJobIntegration(t *testing.T) {
 		{
 			name:   "database_error",
 			jobID:  "job-123",
-			userID: "user-456", 
+			userID: "user-456",
 			orgID:  "org-789",
 			setupSQL: func(mock sqlmock.Sqlmock) {
 				mock.ExpectQuery(`SELECT j\.total_tasks, j\.completed_tasks`).
 					WithArgs("job-123", "org-789").
 					WillReturnError(assert.AnError)
 			},
-			expectedStatus: http.StatusNotFound, // getJob returns 404 for any DB error
+			expectedStatus: http.StatusInternalServerError,
 			checkResponse: func(t *testing.T, rec *httptest.ResponseRecorder) {
 				var response map[string]interface{}
 				err := json.Unmarshal(rec.Body.Bytes(), &response)
 				require.NoError(t, err)
-				
-				assert.Equal(t, float64(404), response["status"])
-				assert.Equal(t, "NOT_FOUND", response["code"])
+
+				assert.Equal(t, float64(http.StatusInternalServerError), response["status"])
+				assert.Equal(t, "INTERNAL_ERROR", response["code"])
 			},
 		},
 	}
@@ -151,14 +151,14 @@ func TestGetJobIntegration(t *testing.T) {
 			mockSQL, mock, err := sqlmock.New()
 			require.NoError(t, err)
 			defer mockSQL.Close()
-			
+
 			// Setup SQL expectations
 			tt.setupSQL(mock)
-			
+
 			// Create mock DBClient that returns the mock SQL DB
 			mockDB := new(MockDBClient)
 			mockJobsManager := new(MockJobManager)
-			
+
 			// Mock GetOrCreateUser for authentication
 			user := &db.User{
 				ID:             tt.userID,
@@ -166,13 +166,13 @@ func TestGetJobIntegration(t *testing.T) {
 				OrganisationID: &tt.orgID,
 			}
 			mockDB.On("GetOrCreateUser", tt.userID, "test@example.com", (*string)(nil)).Return(user, nil)
-			
+
 			// Mock GetDB to return our sqlmock instance
 			mockDB.On("GetDB").Return(mockSQL)
-			
+
 			// Create handler
 			handler := NewHandler(mockDB, mockJobsManager)
-			
+
 			// Create authenticated request
 			req := httptest.NewRequest(http.MethodGet, "/v1/jobs/"+tt.jobID, nil)
 			ctx := context.WithValue(req.Context(), auth.UserKey, &auth.UserClaims{
@@ -180,21 +180,21 @@ func TestGetJobIntegration(t *testing.T) {
 				Email:  "test@example.com",
 			})
 			req = req.WithContext(ctx)
-			
+
 			rec := httptest.NewRecorder()
-			
+
 			// Execute
 			handler.getJob(rec, req, tt.jobID)
-			
+
 			// Verify
 			assert.Equal(t, tt.expectedStatus, rec.Code)
 			if tt.checkResponse != nil {
 				tt.checkResponse(t, rec)
 			}
-			
+
 			// Verify all SQL expectations were met
 			assert.NoError(t, mock.ExpectationsWereMet())
-			
+
 			// Verify mocks
 			mockDB.AssertExpectations(t)
 			mockJobsManager.AssertExpectations(t)
@@ -231,7 +231,7 @@ func TestUpdateJobIntegration(t *testing.T) {
 			setupMocks: func(jm *MockJobManager) {
 				// Mock successful start
 				jm.On("StartJob", mock.AnythingOfType("*context.valueCtx"), "job-123").Return(nil)
-				
+
 				// Mock GetJobStatus for response
 				job := &jobs.Job{
 					ID:             "job-123",
@@ -251,10 +251,10 @@ func TestUpdateJobIntegration(t *testing.T) {
 				var response map[string]interface{}
 				err := json.Unmarshal(rec.Body.Bytes(), &response)
 				require.NoError(t, err)
-				
+
 				assert.Equal(t, "success", response["status"])
 				assert.Contains(t, response["message"].(string), "started successfully")
-				
+
 				data := response["data"].(map[string]interface{})
 				assert.Equal(t, "job-123", data["id"])
 				assert.Equal(t, "example.com", data["domain"])
@@ -277,7 +277,7 @@ func TestUpdateJobIntegration(t *testing.T) {
 			setupMocks: func(jm *MockJobManager) {
 				// Mock successful cancel
 				jm.On("CancelJob", mock.AnythingOfType("*context.valueCtx"), "job-456").Return(nil)
-				
+
 				// Mock GetJobStatus for response
 				job := &jobs.Job{
 					ID:             "job-456",
@@ -298,10 +298,10 @@ func TestUpdateJobIntegration(t *testing.T) {
 				var response map[string]interface{}
 				err := json.Unmarshal(rec.Body.Bytes(), &response)
 				require.NoError(t, err)
-				
+
 				assert.Equal(t, "success", response["status"])
 				assert.Contains(t, response["message"].(string), "canceled successfully")
-				
+
 				data := response["data"].(map[string]interface{})
 				assert.Equal(t, "job-456", data["id"])
 				assert.Equal(t, "cancelled", data["status"])
@@ -328,7 +328,7 @@ func TestUpdateJobIntegration(t *testing.T) {
 				var response map[string]interface{}
 				err := json.Unmarshal(rec.Body.Bytes(), &response)
 				require.NoError(t, err)
-				
+
 				assert.Equal(t, float64(401), response["status"])
 				assert.Equal(t, "UNAUTHORISED", response["code"])
 				assert.Equal(t, "Job access denied", response["message"])
@@ -354,7 +354,7 @@ func TestUpdateJobIntegration(t *testing.T) {
 				var response map[string]interface{}
 				err := json.Unmarshal(rec.Body.Bytes(), &response)
 				require.NoError(t, err)
-				
+
 				assert.Equal(t, float64(404), response["status"])
 				assert.Equal(t, "NOT_FOUND", response["code"])
 				assert.Equal(t, "Job not found", response["message"])
@@ -381,7 +381,7 @@ func TestUpdateJobIntegration(t *testing.T) {
 				var response map[string]interface{}
 				err := json.Unmarshal(rec.Body.Bytes(), &response)
 				require.NoError(t, err)
-				
+
 				assert.Equal(t, float64(400), response["status"])
 				assert.Equal(t, "BAD_REQUEST", response["code"])
 				assert.Contains(t, response["message"].(string), "Invalid action")
@@ -404,7 +404,7 @@ func TestUpdateJobIntegration(t *testing.T) {
 				var response map[string]interface{}
 				err := json.Unmarshal(rec.Body.Bytes(), &response)
 				require.NoError(t, err)
-				
+
 				assert.Equal(t, float64(400), response["status"])
 				assert.Equal(t, "BAD_REQUEST", response["code"])
 				assert.Equal(t, "Invalid JSON request body", response["message"])
@@ -432,7 +432,7 @@ func TestUpdateJobIntegration(t *testing.T) {
 				var response map[string]interface{}
 				err := json.Unmarshal(rec.Body.Bytes(), &response)
 				require.NoError(t, err)
-				
+
 				assert.Equal(t, float64(500), response["status"])
 				assert.Equal(t, "INTERNAL_ERROR", response["code"])
 			},
@@ -460,7 +460,7 @@ func TestUpdateJobIntegration(t *testing.T) {
 				var response map[string]interface{}
 				err := json.Unmarshal(rec.Body.Bytes(), &response)
 				require.NoError(t, err)
-				
+
 				assert.Equal(t, float64(500), response["status"])
 				assert.Equal(t, "INTERNAL_ERROR", response["code"])
 			},
@@ -473,17 +473,17 @@ func TestUpdateJobIntegration(t *testing.T) {
 			mockSQL, mock, err := sqlmock.New()
 			require.NoError(t, err)
 			defer mockSQL.Close()
-			
+
 			// Setup SQL expectations
 			tt.setupSQL(mock)
-			
+
 			// Create mocks
 			mockDB := new(MockDBClient)
 			mockJobsManager := new(MockJobManager)
-			
+
 			// Setup JobManager mocks
 			tt.setupMocks(mockJobsManager)
-			
+
 			// Mock authentication for all tests (auth happens before JSON parsing)
 			user := &db.User{
 				ID:             tt.userID,
@@ -491,15 +491,15 @@ func TestUpdateJobIntegration(t *testing.T) {
 				OrganisationID: &tt.orgID,
 			}
 			mockDB.On("GetOrCreateUser", tt.userID, "test@example.com", (*string)(nil)).Return(user, nil)
-			
+
 			// Mock GetDB only for tests that reach SQL queries
 			if tt.name != "invalid_json_payload" {
 				mockDB.On("GetDB").Return(mockSQL)
 			}
-			
+
 			// Create handler
 			handler := NewHandler(mockDB, mockJobsManager)
-			
+
 			// Create request with action
 			var bodyBytes []byte
 			if tt.name == "invalid_json_payload" {
@@ -510,7 +510,7 @@ func TestUpdateJobIntegration(t *testing.T) {
 				bodyBytes, err = json.Marshal(requestBody)
 				require.NoError(t, err)
 			}
-			
+
 			req := createAuthenticatedRequest(http.MethodPut, "/v1/jobs/"+tt.jobID, bodyBytes)
 			// Override user context for this specific test
 			ctx := context.WithValue(req.Context(), auth.UserKey, &auth.UserClaims{
@@ -518,29 +518,30 @@ func TestUpdateJobIntegration(t *testing.T) {
 				Email:  "test@example.com",
 			})
 			req = req.WithContext(ctx)
-			
+
 			rec := httptest.NewRecorder()
-			
+
 			// Execute
 			handler.updateJob(rec, req, tt.jobID)
-			
+
 			// Verify
 			assert.Equal(t, tt.expectedStatus, rec.Code)
 			if tt.checkResponse != nil {
 				tt.checkResponse(t, rec)
 			}
-			
+
 			// Verify all SQL expectations were met (if any were set)
 			if tt.name != "invalid_json_payload" {
 				assert.NoError(t, mock.ExpectationsWereMet())
 			}
-			
+
 			// Verify mocks
 			mockDB.AssertExpectations(t)
 			mockJobsManager.AssertExpectations(t)
 		})
 	}
 }
+
 // TestCancelJobIntegration tests the DELETE /v1/jobs/:id endpoint with sqlmock
 func TestCancelJobIntegration(t *testing.T) {
 	tests := []struct {
@@ -574,10 +575,10 @@ func TestCancelJobIntegration(t *testing.T) {
 				var response map[string]interface{}
 				err := json.Unmarshal(rec.Body.Bytes(), &response)
 				require.NoError(t, err)
-				
+
 				assert.Equal(t, "success", response["status"])
 				assert.Equal(t, "Job cancelled successfully", response["message"])
-				
+
 				data := response["data"].(map[string]interface{})
 				assert.Equal(t, "job-123", data["id"])
 				assert.Equal(t, "cancelled", data["status"])
@@ -599,7 +600,7 @@ func TestCancelJobIntegration(t *testing.T) {
 				var response map[string]interface{}
 				err := json.Unmarshal(rec.Body.Bytes(), &response)
 				require.NoError(t, err)
-				
+
 				assert.Equal(t, float64(500), response["status"])
 				assert.Equal(t, "INTERNAL_ERROR", response["code"])
 			},
@@ -625,7 +626,7 @@ func TestCancelJobIntegration(t *testing.T) {
 				var response map[string]interface{}
 				err := json.Unmarshal(rec.Body.Bytes(), &response)
 				require.NoError(t, err)
-				
+
 				assert.Equal(t, float64(500), response["status"])
 				assert.Equal(t, "INTERNAL_ERROR", response["code"])
 			},
@@ -638,17 +639,17 @@ func TestCancelJobIntegration(t *testing.T) {
 			mockSQL, mock, err := sqlmock.New()
 			require.NoError(t, err)
 			defer mockSQL.Close()
-			
+
 			// Setup SQL expectations
 			tt.setupSQL(mock)
-			
+
 			// Create mocks
 			mockDB := new(MockDBClient)
 			mockJobsManager := new(MockJobManager)
-			
-			// Setup JobManager mocks  
+
+			// Setup JobManager mocks
 			tt.setupMocks(mockJobsManager)
-			
+
 			// Mock GetOrCreateUser based on test case
 			if tt.name == "cancel_user_creation_error" {
 				mockDB.On("GetOrCreateUser", tt.userID, "test@example.com", (*string)(nil)).Return(nil, assert.AnError)
@@ -661,10 +662,10 @@ func TestCancelJobIntegration(t *testing.T) {
 				mockDB.On("GetOrCreateUser", tt.userID, "test@example.com", (*string)(nil)).Return(user, nil)
 				mockDB.On("GetDB").Return(mockSQL)
 			}
-			
+
 			// Create handler
 			handler := NewHandler(mockDB, mockJobsManager)
-			
+
 			// Create authenticated request
 			req := httptest.NewRequest(http.MethodDelete, "/v1/jobs/"+tt.jobID, nil)
 			ctx := context.WithValue(req.Context(), auth.UserKey, &auth.UserClaims{
@@ -672,23 +673,23 @@ func TestCancelJobIntegration(t *testing.T) {
 				Email:  "test@example.com",
 			})
 			req = req.WithContext(ctx)
-			
+
 			rec := httptest.NewRecorder()
-			
+
 			// Execute
 			handler.cancelJob(rec, req, tt.jobID)
-			
+
 			// Verify
 			assert.Equal(t, tt.expectedStatus, rec.Code)
 			if tt.checkResponse != nil {
 				tt.checkResponse(t, rec)
 			}
-			
+
 			// Verify all SQL expectations were met (only for tests that access DB)
 			if tt.name != "cancel_user_creation_error" {
 				assert.NoError(t, mock.ExpectationsWereMet())
 			}
-			
+
 			// Verify mocks
 			mockDB.AssertExpectations(t)
 			mockJobsManager.AssertExpectations(t)
@@ -720,28 +721,28 @@ func TestGetJobTasksIntegration(t *testing.T) {
 				mock.ExpectQuery(`SELECT organisation_id FROM jobs WHERE id = \$1`).
 					WithArgs("job-123").
 					WillReturnRows(orgRows)
-				
+
 				// Mock task count query
 				countRows := sqlmock.NewRows([]string{"count"}).AddRow(2)
 				mock.ExpectQuery(`SELECT COUNT\(\*\) FROM tasks t WHERE t\.job_id = \$1`).
 					WithArgs("job-123").
 					WillReturnRows(countRows)
-				
-				// Mock tasks select query  
+
+				// Mock tasks select query
 				taskRows := sqlmock.NewRows([]string{
 					"id", "job_id", "path", "domain", "status", "status_code", "response_time",
-					"cache_status", "second_response_time", "second_cache_status", "content_type", 
+					"cache_status", "second_response_time", "second_cache_status", "content_type",
 					"error", "source_type", "source_url", "created_at", "started_at", "completed_at", "retry_count",
 				}).AddRow(
 					"task-1", "job-123", "/page1", "example.com", "completed", 200, 150,
-					"HIT", 120, "HIT", "text/html", nil, "sitemap", nil, 
+					"HIT", 120, "HIT", "text/html", nil, "sitemap", nil,
 					time.Now(), time.Now(), time.Now(), 0,
 				).AddRow(
 					"task-2", "job-123", "/page2", "example.com", "failed", 404, 300,
 					"MISS", nil, nil, "text/html", "Not found", "link", "https://example.com/page1",
 					time.Now(), time.Now(), time.Now(), 2,
 				)
-				
+
 				mock.ExpectQuery(`SELECT t\.id, t\.job_id, p\.path, d\.name as domain, t\.status`).
 					WithArgs("job-123", 50, 0).
 					WillReturnRows(taskRows)
@@ -751,14 +752,14 @@ func TestGetJobTasksIntegration(t *testing.T) {
 				var response map[string]interface{}
 				err := json.Unmarshal(rec.Body.Bytes(), &response)
 				require.NoError(t, err)
-				
+
 				assert.Equal(t, "success", response["status"])
 				assert.Equal(t, "Tasks retrieved successfully", response["message"])
-				
+
 				data := response["data"].(map[string]interface{})
 				tasks := data["tasks"].([]interface{})
 				assert.Len(t, tasks, 2)
-				
+
 				// Check first task
 				task1 := tasks[0].(map[string]interface{})
 				assert.Equal(t, "task-1", task1["id"])
@@ -766,7 +767,7 @@ func TestGetJobTasksIntegration(t *testing.T) {
 				assert.Equal(t, "https://example.com/page1", task1["url"])
 				assert.Equal(t, "completed", task1["status"])
 				assert.Equal(t, float64(200), task1["status_code"])
-				
+
 				// Check pagination
 				pagination := data["pagination"].(map[string]interface{})
 				assert.Equal(t, float64(50), pagination["limit"])
@@ -787,24 +788,24 @@ func TestGetJobTasksIntegration(t *testing.T) {
 				mock.ExpectQuery(`SELECT organisation_id FROM jobs WHERE id = \$1`).
 					WithArgs("job-456").
 					WillReturnRows(orgRows)
-				
+
 				// Mock task count query
 				countRows := sqlmock.NewRows([]string{"count"}).AddRow(50)
 				mock.ExpectQuery(`SELECT COUNT\(\*\) FROM tasks t WHERE t\.job_id = \$1`).
 					WithArgs("job-456").
 					WillReturnRows(countRows)
-				
+
 				// Mock tasks select with pagination
 				taskRows := sqlmock.NewRows([]string{
 					"id", "job_id", "path", "domain", "status", "status_code", "response_time",
-					"cache_status", "second_response_time", "second_cache_status", "content_type", 
+					"cache_status", "second_response_time", "second_cache_status", "content_type",
 					"error", "source_type", "source_url", "created_at", "started_at", "completed_at", "retry_count",
 				}).AddRow(
 					"task-21", "job-456", "/page21", "test.com", "completed", 200, 180,
 					"HIT", 160, "HIT", "text/html", nil, "sitemap", nil,
 					time.Now(), time.Now(), time.Now(), 0,
 				)
-				
+
 				mock.ExpectQuery(`SELECT t\.id, t\.job_id, p\.path, d\.name as domain, t\.status`).
 					WithArgs("job-456", 10, 20).
 					WillReturnRows(taskRows)
@@ -814,10 +815,10 @@ func TestGetJobTasksIntegration(t *testing.T) {
 				var response map[string]interface{}
 				err := json.Unmarshal(rec.Body.Bytes(), &response)
 				require.NoError(t, err)
-				
+
 				data := response["data"].(map[string]interface{})
 				pagination := data["pagination"].(map[string]interface{})
-				
+
 				assert.Equal(t, float64(10), pagination["limit"])
 				assert.Equal(t, float64(20), pagination["offset"])
 				assert.Equal(t, float64(50), pagination["total"])
@@ -833,14 +834,14 @@ func TestGetJobTasksIntegration(t *testing.T) {
 			mockSQL, mock, err := sqlmock.New()
 			require.NoError(t, err)
 			defer mockSQL.Close()
-			
+
 			// Setup SQL expectations
 			tt.setupSQL(mock)
-			
+
 			// Create mocks
 			mockDB := new(MockDBClient)
 			mockJobsManager := new(MockJobManager)
-			
+
 			// Mock GetOrCreateUser for authentication
 			user := &db.User{
 				ID:             tt.userID,
@@ -848,13 +849,13 @@ func TestGetJobTasksIntegration(t *testing.T) {
 				OrganisationID: &tt.orgID,
 			}
 			mockDB.On("GetOrCreateUser", tt.userID, "test@example.com", (*string)(nil)).Return(user, nil)
-			
+
 			// Mock GetDB to return our sqlmock instance
 			mockDB.On("GetDB").Return(mockSQL)
-			
+
 			// Create handler
 			handler := NewHandler(mockDB, mockJobsManager)
-			
+
 			// Create authenticated request
 			req := httptest.NewRequest(http.MethodGet, "/v1/jobs/"+tt.jobID+"/tasks"+tt.queryParams, nil)
 			ctx := context.WithValue(req.Context(), auth.UserKey, &auth.UserClaims{
@@ -862,21 +863,21 @@ func TestGetJobTasksIntegration(t *testing.T) {
 				Email:  "test@example.com",
 			})
 			req = req.WithContext(ctx)
-			
+
 			rec := httptest.NewRecorder()
-			
+
 			// Execute
 			handler.getJobTasks(rec, req, tt.jobID)
-			
+
 			// Verify
 			assert.Equal(t, tt.expectedStatus, rec.Code)
 			if tt.checkResponse != nil {
 				tt.checkResponse(t, rec)
 			}
-			
+
 			// Verify all SQL expectations were met
 			assert.NoError(t, mock.ExpectationsWereMet())
-			
+
 			// Verify mocks
 			mockDB.AssertExpectations(t)
 			mockJobsManager.AssertExpectations(t)

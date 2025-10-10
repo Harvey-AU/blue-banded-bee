@@ -13,6 +13,7 @@ base_branch = "main"
 # Optional: Custom subdomain pattern
 # Will create URLs like: blue-banded-bee-pr-123.fly.dev
 app_name_pattern = "blue-banded-bee-pr-{pr_number}"
+primary_region = "syd"
 
 # Environment overrides for staging
 [env]
