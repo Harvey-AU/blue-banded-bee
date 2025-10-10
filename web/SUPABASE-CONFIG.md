@@ -12,8 +12,9 @@ ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6I
 ## Files That Use These Credentials
 
 ✅ **Correct (Current):**
+
 - `test-components.html`
-- `test-login.html` 
+- `test-login.html`
 - `dashboard.html`
 - `web/examples/webflow-integration.html`
 - `web/examples/complete-example.html`
@@ -23,7 +24,7 @@ ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6I
 **ALWAYS** copy from one of the correct files above, OR use the config file:
 
 ```javascript
-import { SUPABASE_CONFIG } from './src/config/supabase.js';
+import { SUPABASE_CONFIG } from "./src/config/supabase.js";
 
 window.supabase = window.supabase.createClient(
   SUPABASE_CONFIG.url,
@@ -47,7 +48,8 @@ window.supabase = window.supabase.createClient(
 ## Verification
 
 To verify config is correct, check that:
-1. `https://auth.bluebandedbee.co` resolves 
+
+1. `https://auth.bluebandedbee.co` resolves
 2. Google login works
 3. API calls succeed
 4. No CORS errors

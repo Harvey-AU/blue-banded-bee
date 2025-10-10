@@ -1,42 +1,18 @@
 #!/bin/bash
-# Install Git hooks for auto-formatting
+# Setup Git hooks for Blue Banded Bee
+# This configures Git to use hooks from the .githooks/ directory
 
 set -e
 
-HOOK_DIR=".git/hooks"
-HOOK_FILE="$HOOK_DIR/pre-commit"
+echo "🔧 Setting up Git hooks..."
 
-echo "Installing pre-commit hook..."
+# Configure Git to use .githooks directory
+git config core.hooksPath .githooks
 
-cat > "$HOOK_FILE" << 'EOF'
-#!/bin/bash
-# Auto-format Go code before committing
-
-# Only format Go files that are staged for commit
-STAGED_GO_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep '\.go$')
-
-if [ -z "$STAGED_GO_FILES" ]; then
-    exit 0  # No Go files staged, nothing to do
-fi
-
-echo "🔧 Auto-formatting Go files..."
-
-# Format each staged file
-for FILE in $STAGED_GO_FILES; do
-    # Run goimports (includes gofmt)
-    goimports -w "$FILE"
-
-    # Re-add the file to staging (picks up formatting changes)
-    git add "$FILE"
-done
-
-echo "✅ Formatting complete!"
-exit 0
-EOF
-
-chmod +x "$HOOK_FILE"
-
-echo "✅ Pre-commit hook installed successfully!"
+echo "✅ Git hooks configured successfully!"
 echo ""
-echo "Now when you commit, Go files will be auto-formatted."
-echo "To disable: rm .git/hooks/pre-commit"
+echo "Active hooks:"
+echo "  📝 pre-commit: Auto-formats Go, Markdown, YAML, and JSON files"
+echo ""
+echo "To commit without running hooks (not recommended):"
+echo "  git commit --no-verify"

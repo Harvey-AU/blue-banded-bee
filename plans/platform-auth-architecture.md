@@ -2,20 +2,23 @@
 
 ## Overview
 
-Blue Banded Bee will support multiple authentication entry points while maintaining a single unified user system. Users can access via the main dashboard, Shopify apps, or Webflow apps.
+Blue Banded Bee will support multiple authentication entry points while
+maintaining a single unified user system. Users can access via the main
+dashboard, Shopify apps, or Webflow apps.
 
 ## Core Principles
 
-1. **One User, Multiple Access Methods** - Single BB account accessible through different platforms
+1. **One User, Multiple Access Methods** - Single BB account accessible through
+   different platforms
 2. **Store-Level Isolation** - Complete data separation between unrelated stores
-3. **organisation-Based Grouping** - Related stores grouped under one organisation
+3. **organisation-Based Grouping** - Related stores grouped under one
+   organisation
 
 ## Data Structure
 
 ### Structure
 
-**Example User Access:**
-When User 1 logs in, they might see:
+**Example User Access:** When User 1 logs in, they might see:
 
 - Organisation A (ACME Corp)
 - Organisation B (Bob's Bikes)
@@ -130,7 +133,8 @@ Organisation C (Client Site)
 3. **Flexible Access Control** - Granular permissions per organisation
 4. **Clean Billing** - organisation-level billing regardless of access method
 5. **Attribution Tracking** - Know who did what, when
-6. **Scalable Architecture** - Easily add new platforms (WordPress, Squarespace, etc.)
+6. **Scalable Architecture** - Easily add new platforms (WordPress, Squarespace,
+   etc.)
 
 ## Future Considerations
 

@@ -90,13 +90,12 @@ component_management:
       name: Applications
       paths:
         - "cmd/**"
-
 # Static analysis configuration (BETA feature) - Temporarily disabled
 # static_analysis:
 #   enabled: true
 #   # Configure which issues to report
 #   rules:
-#     complexity: 
+#     complexity:
 #       enabled: true
 #       threshold: 10  # Flag functions with complexity > 10
 #     security:

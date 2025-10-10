@@ -3,6 +3,7 @@
 ## Testing Patterns
 
 ### **Interface-Based Testing**
+
 ```go
 // For API endpoints using dependency injection
 mockDB := new(MockDBClient)
@@ -14,6 +15,7 @@ mockJobsManager.On("CreateJob", ctx, opts).Return(job, nil)
 ```
 
 ### **Sqlmock Testing**
+
 ```go
 // For functions with direct SQL queries
 mockSQL, mock, err := sqlmock.New()
@@ -24,6 +26,7 @@ mock.ExpectQuery(`SELECT.*FROM jobs WHERE id = \$1`).
 ```
 
 ### **Extract + Test + Commit**
+
 ```go
 // For refactoring large functions
 func extractedFunction(params) result {

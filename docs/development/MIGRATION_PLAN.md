@@ -3,12 +3,14 @@
 ## Current State Analysis
 
 ### Files Affected
+
 - **HTML files**: 1 file with attributes (`dashboard.html` - 74 occurrences)
 - **JavaScript files**: 6 files using attribute selectors
 
 ### Attribute Usage Breakdown
 
 #### In HTML (`dashboard.html`)
+
 - `data-bb-bind`: 36 occurrences
 - `bb-action`: 21 occurrences
 - `data-bb-show-if`: 5 occurrences
@@ -20,7 +22,9 @@
 - `data-bb-tooltip`: 1 occurrence
 
 #### In JavaScript
+
 Core files using attribute selectors:
+
 - `bb-data-binder.js` - Main data binding library
 - `bb-dashboard-actions.js` - Action delegation system
 - `bb-metadata.js` - Metadata/info tooltip system
@@ -29,23 +33,29 @@ Core files using attribute selectors:
 - `bb-components.js` - Reusable components
 
 Additional attributes found in JavaScript (forms/validation):
+
 - `data-bb-form`, `data-bb-validate`, `data-bb-endpoint`, etc.
 
 ## Migration Strategy
 
 ### Phase 1: JavaScript Backwards Compatibility (Days 1-2)
 
-**Goal**: Update all JavaScript to recognize BOTH old and new attributes simultaneously.
+**Goal**: Update all JavaScript to recognize BOTH old and new attributes
+simultaneously.
 
 **Files to Update:**
 
 1. **`web/static/js/bb-data-binder.js`**
    - Update `scanAndBind()` to query both `[data-bb-bind]` and `[bbb-text]`
    - Update `registerBindElement()` to check both attribute names
-   - Update style binding to recognize both `data-bb-bind-style` and `bbb-style:`
-   - Update attr binding to recognize both `data-bb-bind-attr` and `bbb-class/bbb-href/bbb-attr:`
-   - Update template system to recognize both `data-bb-template` and `bbb-template`
-   - Update conditional rendering to recognize both `data-bb-show-if` and `bbb-show/bbb-hide/bbb-if`
+   - Update style binding to recognize both `data-bb-bind-style` and
+     `bbb-style:`
+   - Update attr binding to recognize both `data-bb-bind-attr` and
+     `bbb-class/bbb-href/bbb-attr:`
+   - Update template system to recognize both `data-bb-template` and
+     `bbb-template`
+   - Update conditional rendering to recognize both `data-bb-show-if` and
+     `bbb-show/bbb-hide/bbb-if`
    - Update auth system to recognize both `data-bb-auth` and `bbb-auth`
 
 2. **`web/static/js/bb-dashboard-actions.js`**
@@ -53,11 +63,13 @@ Additional attributes found in JavaScript (forms/validation):
    - Update attribute reading for job IDs, etc.
 
 3. **`web/static/js/bb-metadata.js`**
-   - Update `initializeInfoIcons()` to query both `[data-bb-info]` and `[bbb-help]`
+   - Update `initializeInfoIcons()` to query both `[data-bb-info]` and
+     `[bbb-help]`
    - Update tooltip attribute checks
 
 4. **`web/static/js/auth.js`**
-   - Update auth element queries to recognize both `[data-bb-auth]` and `[bbb-auth]`
+   - Update auth element queries to recognize both `[data-bb-auth]` and
+     `[bbb-auth]`
 
 5. **`web/static/js/bb-auth-extension.js`**
    - Update any auth attribute references
@@ -66,6 +78,7 @@ Additional attributes found in JavaScript (forms/validation):
    - Update component attribute selectors
 
 **Testing Phase 1:**
+
 - Run existing dashboard
 - Verify all current functionality works
 - No visual or functional changes should occur
@@ -77,11 +90,13 @@ Additional attributes found in JavaScript (forms/validation):
 **Migration Order for `dashboard.html`:**
 
 #### Section 1: Header & Stats (Lines ~1265-1420)
+
 - Auth visibility: `data-bb-auth` → `bbb-auth`
 - Stats cards: `data-bb-bind` → `bbb-text`
 - Actions: `bb-action` → `bbb-action`
 
 **Attributes to migrate:**
+
 ```
 data-bb-auth="guest" → bbb-auth="guest"
 data-bb-auth="required" → bbb-auth="required"
@@ -93,6 +108,7 @@ bb-action="create-job" → bbb-action="create-job"
 **Test**: Verify header shows/hides based on auth, stats populate correctly
 
 #### Section 2: Job Cards Template (Lines ~1436-1467)
+
 - Template definition: `data-bb-template` → `bbb-template`
 - Text binding: `data-bb-bind` → `bbb-text`
 - Attribute binding: `data-bb-bind-attr` → `bbb-class`, `bbb-attr:`
@@ -101,6 +117,7 @@ bb-action="create-job" → bbb-action="create-job"
 - Actions with IDs: `bb-action` → `bbb-action`, add `bbb-id`
 
 **Attributes to migrate:**
+
 ```
 data-bb-template="job" → bbb-template="job"
 data-bb-bind="domain" → bbb-text="domain"
@@ -114,11 +131,13 @@ bb-data-job-id="{id}" → bbb-id="{id}"
 **Test**: Verify job cards render, actions work, conditional buttons show/hide
 
 #### Section 3: Analysis Sections (Lines ~1468-1527)
+
 - Slow pages template
 - External redirects template
 - Conditional empty states
 
 **Attributes to migrate:**
+
 ```
 data-bb-template="slow_page" → bbb-template="slow_page"
 data-bb-template="external_redirect" → bbb-template="external_redirect"
@@ -129,12 +148,14 @@ data-bb-show-if="slow_pages.length=0" → bbb-show="slow_pages.length=0"
 **Test**: Verify slow pages and redirects display correctly
 
 #### Section 4: Job Modal (Lines ~1529-1669)
+
 - Modal header and stats
 - Info tooltips: `data-bb-info` → `bbb-help`
 - Task table (dynamically generated in JS - already updated)
 - Modal actions
 
 **Attributes to migrate:**
+
 ```
 data-bb-bind="id" → bbb-text="id"
 data-bb-bind="domain" → bbb-text="domain"
@@ -155,20 +176,24 @@ bb-action="tasks-prev-page" → bbb-action="tasks-prev-page"
 bb-action="tasks-next-page" → bbb-action="tasks-next-page"
 ```
 
-**Test**: Verify modal opens, info icons appear with tooltips, export works, pagination works
+**Test**: Verify modal opens, info icons appear with tooltips, export works,
+pagination works
 
 #### Section 5: Create Job Modal (Lines ~1670-1714)
+
 - Form attributes
 - Modal actions
 
 **Attributes to migrate:**
+
 ```
 bb-action="close-create-job-modal" → bbb-action="close-create-job-modal"
 ```
 
 **Test**: Verify create job modal opens, form submits
 
-**Other HTML files**: Currently no other files use the attribute system, so no migration needed.
+**Other HTML files**: Currently no other files use the attribute system, so no
+migration needed.
 
 ### Phase 3: JavaScript Cleanup (Day 6)
 
@@ -181,6 +206,7 @@ bb-action="close-create-job-modal" → bbb-action="close-create-job-modal"
 3. **Update comments/documentation** in code
 
 **Files to update:**
+
 - `bb-data-binder.js` - Remove `data-bb-bind`, `data-bb-bind-attr`, etc.
 - `bb-dashboard-actions.js` - Remove `bb-action` (old)
 - `bb-metadata.js` - Remove `data-bb-info`
@@ -225,6 +251,7 @@ sed -i 's/bb-action="/bbb-action="/g' dashboard.html
 ```
 
 **For complex replacements** (do manually):
+
 - `data-bb-bind="field"` → `bbb-text="field"` (context-dependent)
 - `data-bb-bind-attr="class:value-{field}"` → `bbb-class="value-{field}"`
 - `data-bb-bind-style="width:{progress}%"` → `bbb-style:width="{progress}%"`
@@ -242,15 +269,18 @@ If issues arise during migration:
 ## Risk Assessment
 
 **Low Risk:**
+
 - JavaScript changes maintain backwards compatibility
 - Incremental HTML migration allows testing each section
 - Old attributes continue working during transition
 
 **Medium Risk:**
+
 - Complex attribute bindings (attr, style) require manual review
 - Dynamic table generation in JavaScript needs careful testing
 
 **High Risk:**
+
 - None identified - migration is well-isolated
 
 ## Success Criteria

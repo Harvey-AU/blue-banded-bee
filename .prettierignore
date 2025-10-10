@@ -1,0 +1,51 @@
+# Dependencies
+node_modules/
+vendor/
+
+# Build outputs
+dist/
+build/
+*.out
+coverage*.out
+
+# Generated files
+*.pb.go
+*.gen.go
+
+# Binaries
+main
+*.exe
+
+# Logs
+*.log
+trace.out
+
+# IDE
+.vscode/
+.idea/
+
+# Test artifacts
+test-output.json
+junit.xml
+
+# Go coverage
+coverage.html
+
+# Large or binary files
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.svg
+*.pdf
+*.woff
+*.woff2
+*.ttf
+*.eot
+
+# Supabase
+supabase/.branches/
+supabase/.temp/
+
+# Fly.io
+fly.toml.bak

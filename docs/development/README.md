@@ -1,19 +1,26 @@
 # Development Documentation
 
-Setup guides, workflow processes, and debugging tools for Blue Banded Bee development.
+Setup guides, workflow processes, and debugging tools for Blue Banded Bee
+development.
 
 ## 📄 Documents
 
 ### Setup & Workflow
-- **[DEVELOPMENT.md](./DEVELOPMENT.md)** - Local development setup and contributing guidelines
-- **[BRANCHING.md](./BRANCHING.md)** - Git workflow, branch naming, and PR process
+
+- **[DEVELOPMENT.md](./DEVELOPMENT.md)** - Local development setup and
+  contributing guidelines
+- **[BRANCHING.md](./BRANCHING.md)** - Git workflow, branch naming, and PR
+  process
 
 ### Debugging & Performance
-- **[flight-recorder.md](./flight-recorder.md)** - Performance profiling with Go's flight recorder
+
+- **[flight-recorder.md](./flight-recorder.md)** - Performance profiling with
+  Go's flight recorder
 
 ## 🚀 Quick Start
 
-1. **Environment Setup** - Follow [DEVELOPMENT.md](./DEVELOPMENT.md) to configure your local environment
+1. **Environment Setup** - Follow [DEVELOPMENT.md](./DEVELOPMENT.md) to
+   configure your local environment
 2. **Database Setup** - Set up PostgreSQL and run migrations
 3. **Run Locally** - `go run ./cmd/app/main.go`
 4. **Run Tests** - `go test ./...`

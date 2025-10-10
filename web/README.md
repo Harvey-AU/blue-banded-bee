@@ -1,12 +1,16 @@
 # Blue Banded Bee Frontend Libraries
 
-Frontend components and data binding library for Blue Banded Bee dashboard integration with Webflow.
+Frontend components and data binding library for Blue Banded Bee dashboard
+integration with Webflow.
 
 ## Available Libraries
 
-- **Web Components** (`bb-components.js`): Custom elements for authentication and data display
-- **Data Binding Library** (`bb-data-binder.js`): Template + data binding system for flexible dashboard development
-- **Dashboard Actions** (`bb-dashboard-actions.js`): Dashboard-specific functionality and interactions
+- **Web Components** (`bb-components.js`): Custom elements for authentication
+  and data display
+- **Data Binding Library** (`bb-data-binder.js`): Template + data binding system
+  for flexible dashboard development
+- **Dashboard Actions** (`bb-dashboard-actions.js`): Dashboard-specific
+  functionality and interactions
 - **Auth Extension** (`bb-auth-extension.js`): Extended authentication features
 - **Auth** (`auth.js`): Core authentication system
 
@@ -23,8 +27,8 @@ Frontend components and data binding library for Blue Banded Bee dashboard integ
 <!-- Initialize Supabase -->
 <script>
   window.supabase = window.supabase.createClient(
-    'YOUR_SUPABASE_URL',
-    'YOUR_SUPABASE_ANON_KEY'
+    "YOUR_SUPABASE_URL",
+    "YOUR_SUPABASE_ANON_KEY"
   );
 </script>
 
@@ -53,12 +57,13 @@ Frontend components and data binding library for Blue Banded Bee dashboard integ
 3. **Add data component via HTML Embed:**
 
 ```html
-<bb-data-loader 
+<bb-data-loader
   endpoint="/v1/jobs"
   template=".job-card.template"
   target=".jobs-grid"
   auto-load="true"
-  require-auth="true">
+  require-auth="true"
+>
 </bb-data-loader>
 ```
 
@@ -103,7 +108,9 @@ web/
 
 ## Data Binding Library (v0.5.4)
 
-The `BBDataBinder` library provides a template + data binding system that allows you to create flexible HTML layouts while JavaScript automatically handles data fetching, authentication, and real-time updates.
+The `BBDataBinder` library provides a template + data binding system that allows
+you to create flexible HTML layouts while JavaScript automatically handles data
+fetching, authentication, and real-time updates.
 
 ### Quick Example
 
@@ -126,7 +133,7 @@ The `BBDataBinder` library provides a template + data binding system that allows
 
 <!-- Forms with validation -->
 <form data-bb-form="create-job" data-bb-validate="live">
-  <input name="domain" required data-bb-validate-type="url">
+  <input name="domain" required data-bb-validate-type="url" />
   <button type="submit">Create Job</button>
 </form>
 
@@ -143,8 +150,10 @@ The `BBDataBinder` library provides a template + data binding system that allows
 - **`data-bb-bind-style="property:{field}"`** - Bind CSS styles with formatting
 - **`data-bb-bind-attr="attribute:{field}"`** - Bind element attributes
 - **`data-bb-template="name"`** - Mark element as template for repeated data
-- **`data-bb-auth="required|guest"`** - Conditional rendering based on auth state
-- **`data-bb-form="action"`** - Enable form handling with validation and API submission
+- **`data-bb-auth="required|guest"`** - Conditional rendering based on auth
+  state
+- **`data-bb-form="action"`** - Enable form handling with validation and API
+  submission
 
 ### Form Validation Attributes
 
@@ -161,6 +170,7 @@ The `BBDataBinder` library provides a template + data binding system that allows
 Core component for loading data from API and populating Webflow templates.
 
 **Attributes:**
+
 - `endpoint` - API endpoint to fetch from
 - `template` - CSS selector for template element
 - `target` - CSS selector for container to populate
@@ -169,6 +179,7 @@ Core component for loading data from API and populating Webflow templates.
 - `refresh-interval` - Auto-refresh interval in seconds
 
 **Data Binding:**
+
 - `data-bind="field"` - Bind text content to data field
 - `data-style-bind="property:field"` - Bind CSS property to data field
 
@@ -177,6 +188,7 @@ Core component for loading data from API and populating Webflow templates.
 Authentication component with Supabase integration.
 
 **Attributes:**
+
 - `show-providers` - Show social login buttons
 - `redirect-url` - URL to redirect after login
 - `compact` - Use compact layout

@@ -70,10 +70,55 @@ jobs:
           version: v2.5.0
           args: --config .golangci.yml --modules-download-mode=mod
 
+  format:
+    name: Format Check
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache: true
+
+      - name: Check Go formatting
+        run: |
+          echo "=== Checking Go formatting ==="
+          UNFORMATTED=$(gofmt -l .)
+          if [ -n "$UNFORMATTED" ]; then
+            echo "❌ The following files are not formatted with gofmt:"
+            echo "$UNFORMATTED"
+            echo ""
+            echo "Run 'gofmt -w .' to fix formatting"
+            exit 1
+          fi
+          echo "✅ All Go files are properly formatted"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install Prettier
+        run: npm install --global prettier
+
+      - name: Check Prettier formatting
+        run: |
+          echo "=== Checking Prettier formatting ==="
+          prettier --check "**/*.{md,yml,yaml,json}" || {
+            echo ""
+            echo "❌ Some files are not formatted with Prettier"
+            echo "Run 'prettier --write \"**/*.{md,yml,yaml,json}\"' to fix formatting"
+            exit 1
+          }
+          echo "✅ All files are properly formatted with Prettier"
+
   unit-tests:
     name: Unit Tests
     runs-on: blacksmith-4vcpu-ubuntu-2404
-    needs: lint
+    needs: [lint, format]
     steps:
       - uses: actions/checkout@v4
 
@@ -107,7 +152,7 @@ jobs:
   integration-tests:
     name: Integration Tests
     runs-on: blacksmith-4vcpu-ubuntu-2404
-    needs: lint
+    needs: [lint, format]
     steps:
       - uses: actions/checkout@v4
 
@@ -197,7 +242,7 @@ jobs:
       - name: Merge coverage reports
         run: |
           echo "=== Merging Coverage Reports ==="
-          
+
           # Simple approach - use unit tests coverage primarily  
           if [ -f coverage-unit.out ]; then
             echo "Using unit coverage as primary"

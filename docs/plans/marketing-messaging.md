@@ -2,7 +2,10 @@
 
 ## Executive Summary
 
-Blue Banded Bee is a post-publish quality assurance tool that automatically crawls websites to detect broken links and warm caches after every update. Target market: websites with 300+ pages that publish frequently, where manual checking becomes impossible.
+Blue Banded Bee is a post-publish quality assurance tool that automatically
+crawls websites to detect broken links and warm caches after every update.
+Target market: websites with 300+ pages that publish frequently, where manual
+checking becomes impossible.
 
 ## Core Value Proposition
 
@@ -24,7 +27,8 @@ Blue Banded Bee is a post-publish quality assurance tool that automatically craw
 
 ### Direct Competitors
 
-- **Ablestar Link Manager** (Shopify): $0-9/month, 2,800+ reviews, scheduled scans only
+- **Ablestar Link Manager** (Shopify): $0-9/month, 2,800+ reviews, scheduled
+  scans only
 - **Dr. Link Check** (Shopify): $12/month, 31 reviews, basic functionality
 - **SEOAnt Suite** (Shopify): $8-30/month, bundles many features
 
@@ -34,7 +38,8 @@ Blue Banded Bee is a post-publish quality assurance tool that automatically craw
 2. **Full-site crawling** (all pages vs spot checks)
 3. **Cache warming** (unique for Webflow)
 4. **Aggressive pricing** ($5 entry point)
-5. **Ease of Use & Actionable Fixes** (brand trust and simplicity are the long-term moat)
+5. **Ease of Use & Actionable Fixes** (brand trust and simplicity are the
+   long-term moat)
 
 ## Pricing Strategy
 
@@ -73,10 +78,14 @@ Blue Banded Bee is a post-publish quality assurance tool that automatically craw
 ### Pricing Rationale
 
 - **No free tier** eliminates freeloaders and support burden.
-- **$5 entry point** is low enough to be a no-brainer, high enough to ensure commitment.
+- **$5 entry point** is low enough to be a no-brainer, high enough to ensure
+  commitment.
 - **7-day trial** proves value without enabling permanent free usage.
-- **Metered usage** (scan allowances) protects infrastructure from abuse while being generous.
-- **Value-based tiers:** Cache warming and performance metrics are kept to higher tiers, so we don't have to educate the lowest-price users on more complex features.
+- **Metered usage** (scan allowances) protects infrastructure from abuse while
+  being generous.
+- **Value-based tiers:** Cache warming and performance metrics are kept to
+  higher tiers, so we don't have to educate the lowest-price users on more
+  complex features.
 
 ## Platform-Specific Positioning
 
@@ -102,7 +111,8 @@ Blue Banded Bee is a post-publish quality assurance tool that automatically craw
 
 - **Size:** 300-400+ pages (where manual checking fails)
 - **Update Frequency:** Publishing/updating weekly or more
-- **Business Impact:** Site quality is directly tied to revenue or client satisfaction.
+- **Business Impact:** Site quality is directly tied to revenue or client
+  satisfaction.
 - **Type:**
   - Webflow agencies/freelancers
   - High-SKU Shopify stores
@@ -111,9 +121,12 @@ Blue Banded Bee is a post-publish quality assurance tool that automatically craw
 
 ### Customer Segments (Priority Order)
 
-1. **Webflow Agencies** - Understand technical value, can bundle into maintenance.
-2. **High-Update Shopify Stores** - Frequent product changes, broken links = lost sales.
-3. **Marketing Teams** - Launching campaign landing pages, need confidence in deploys.
+1. **Webflow Agencies** - Understand technical value, can bundle into
+   maintenance.
+2. **High-Update Shopify Stores** - Frequent product changes, broken links =
+   lost sales.
+3. **Marketing Teams** - Launching campaign landing pages, need confidence in
+   deploys.
 
 ## Go-to-Market Strategy
 
@@ -121,7 +134,8 @@ Blue Banded Bee is a post-publish quality assurance tool that automatically craw
 
 - Launch with Webflow integration.
 - Manual outreach to agencies.
-- **Prioritise social proof:** Get 20-30 early customers for case studies and testimonials. Incentivise reviews (e.g., one free month).
+- **Prioritise social proof:** Get 20-30 early customers for case studies and
+  testimonials. Incentivise reviews (e.g., one free month).
 - Refine based on feedback.
 
 ### Phase 2: Months 4-6 (Target: 200 customers)
@@ -149,26 +163,35 @@ Blue Banded Bee is a post-publish quality assurance tool that automatically craw
 ### Core Messages
 
 **Primary:** "The simplest way to QA your site after every publish."
+
 - Emphasises ease of use and automation.
 - Focuses on the workflow trigger ("after every publish").
 
 **For Shopify:** "Automatically find broken links before they cost you sales."
+
 - Leads with the universal, high-impact pain point.
 
 **For Webflow:** "Ship fast sites, not slow ones."
+
 - Leads with the high-value "bonus" for the more technical audience.
 
 ### Persona-Specific Lines
+
 - **For Agencies:** "Automate QA across all your client sites."
 - **For Marketers:** "Launch campaigns with confidence."
 - **For Stores:** "Protect your customer's path to purchase."
 
 ### Supporting Proof Points & Quantifiable Impact
-*This data connects our features to tangible business results and should be used in marketing materials.*
 
-- **Boost Conversions:** A 1-second page load delay can reduce conversions by 7%. A broken link is a guaranteed lost sale for that session.
-- **Improve SEO:** Eliminate 404s to maximise your crawl budget. A faster site improves Core Web Vitals, a known Google ranking factor.
-- **Increase Speed:** Slash server response time (TTFB) by up to 90% on new content by eliminating the "first load penalty."
+_This data connects our features to tangible business results and should be used
+in marketing materials._
+
+- **Boost Conversions:** A 1-second page load delay can reduce conversions by
+  7%. A broken link is a guaranteed lost sale for that session.
+- **Improve SEO:** Eliminate 404s to maximise your crawl budget. A faster site
+  improves Core Web Vitals, a known Google ranking factor.
+- **Increase Speed:** Slash server response time (TTFB) by up to 90% on new
+  content by eliminating the "first load penalty."
 
 ## Roadmap
 
@@ -196,11 +219,15 @@ Blue Banded Bee is a post-publish quality assurance tool that automatically craw
 
 ## Critical Success Factors
 
-1. **Lead with Broken Links:** This is the universal painkiller. Position as QA automation, not another monitoring tool.
-2. **Nail the Niche:** Focus relentlessly on 300+ page sites with frequent updates where manual QA fails.
-3. **Social Proof is Everything:** Get those first 20-30 customers leaving reviews to build trust.
+1. **Lead with Broken Links:** This is the universal painkiller. Position as QA
+   automation, not another monitoring tool.
+2. **Nail the Niche:** Focus relentlessly on 300+ page sites with frequent
+   updates where manual QA fails.
+3. **Social Proof is Everything:** Get those first 20-30 customers leaving
+   reviews to build trust.
 4. **Webhook Adoption:** This is the core technical moat vs. scheduled scanners.
-5. **Ease of Use:** The long-term differentiator will be brand trust and a simple, intuitive user experience.
+5. **Ease of Use:** The long-term differentiator will be brand trust and a
+   simple, intuitive user experience.
 
 ## Risks & Mitigation
 
@@ -220,9 +247,11 @@ Blue Banded Bee is a post-publish quality assurance tool that automatically craw
 
 ## Bottom Line
 
-Blue Banded Bee can realistically achieve 1,000 paying customers in 12-18 months by:
+Blue Banded Bee can realistically achieve 1,000 paying customers in 12-18 months
+by:
 
 - Starting narrow (Webflow agencies) then expanding (Shopify stores).
-- Leading with understood value (broken links) while educating on advanced features (cache warming).
+- Leading with understood value (broken links) while educating on advanced
+  features (cache warming).
 - Maintaining aggressive, but metered, pricing.
 - Focusing on sites where manual QA is a clear and present pain.

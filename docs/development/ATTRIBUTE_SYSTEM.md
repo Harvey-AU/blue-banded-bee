@@ -2,12 +2,15 @@
 
 ## Overview
 
-Blue Banded Bee uses a custom attribute system for data binding, templating, and interactions. All custom attributes use the `bbb-` namespace prefix (Blue Banded Bee).
+Blue Banded Bee uses a custom attribute system for data binding, templating, and
+interactions. All custom attributes use the `bbb-` namespace prefix (Blue Banded
+Bee).
 
 ## Design Principles
 
 1. **Consistent `bbb-` prefix** - All custom attributes use the same namespace
-2. **No category prefixes** - Follow Alpine.js/Vue.js convention: `bbb-text` not `bbb-bind-text`
+2. **No category prefixes** - Follow Alpine.js/Vue.js convention: `bbb-text` not
+   `bbb-bind-text`
 3. **Semantic naming** - Attribute names clearly indicate their purpose
 4. **Modern HTML5** - No `data-` prefix for cleaner syntax
 5. **Progressive enhancement** - Works without JavaScript (where possible)
@@ -81,7 +84,8 @@ Blue Banded Bee uses a custom attribute system for data binding, templating, and
 ### Action Names
 
 - Use kebab-case: `refresh-dashboard`, `view-job-details`, `create-job`
-- Handlers defined in JavaScript: `actions.refreshDashboard()`, `actions.viewJobDetails()`
+- Handlers defined in JavaScript: `actions.refreshDashboard()`,
+  `actions.viewJobDetails()`
 
 ## Common Patterns
 
@@ -112,7 +116,9 @@ Blue Banded Bee uses a custom attribute system for data binding, templating, and
 
 <!-- Conditional visibility -->
 <button bbb-show="status=completed,failed">Restart</button>
-<div bbb-if="stats.failed_jobs>0"><span bbb-text="stats.failed_jobs">0</span> jobs failed</div>
+<div bbb-if="stats.failed_jobs>0">
+  <span bbb-text="stats.failed_jobs">0</span> jobs failed
+</div>
 ```
 
 ### Interactions
@@ -159,7 +165,8 @@ Blue Banded Bee uses a custom attribute system for data binding, templating, and
 
 ## Complete Example
 
-See `/dashboard.html` for a full working implementation showing all patterns in context.
+See `/dashboard.html` for a full working implementation showing all patterns in
+context.
 
 Key sections to review:
 
@@ -210,8 +217,10 @@ Key sections to review:
 3. **Templates for lists** - More efficient than manual DOM manipulation
 4. **Add help tooltips** - Use `bbb-help` for all metrics and table headers
 5. **Test without JavaScript** - Ensure graceful degradation with static content
-6. **Prefer `bbb-show` for visibility** - Use `bbb-if` only when DOM removal needed
-7. **Combine attributes** - `bbb-action` + `bbb-id` + `bbb-show` work well together
+6. **Prefer `bbb-show` for visibility** - Use `bbb-if` only when DOM removal
+   needed
+7. **Combine attributes** - `bbb-action` + `bbb-id` + `bbb-show` work well
+   together
 
 ## Technical Details
 

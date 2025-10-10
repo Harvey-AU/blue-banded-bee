@@ -2,29 +2,43 @@
 
 ## System Overview
 
-Blue Banded Bee is a web cache warming service built in Go, designed for Webflow sites and other web applications. It uses a worker pool architecture for efficient URL crawling and cache warming, with a focus on reliability, performance, and observability.
+Blue Banded Bee is a web cache warming service built in Go, designed for Webflow
+sites and other web applications. It uses a worker pool architecture for
+efficient URL crawling and cache warming, with a focus on reliability,
+performance, and observability.
 
 ## Core Components
 
 ### Worker Pool System
-- **Concurrent Processing**: Multiple workers process tasks simultaneously using PostgreSQL's `FOR UPDATE SKIP LOCKED`
-- **Job Management**: Jobs are broken down into individual URL tasks and distributed across workers
-- **Recovery System**: Automatic recovery of stalled or failed tasks with exponential backoff
+
+- **Concurrent Processing**: Multiple workers process tasks simultaneously using
+  PostgreSQL's `FOR UPDATE SKIP LOCKED`
+- **Job Management**: Jobs are broken down into individual URL tasks and
+  distributed across workers
+- **Recovery System**: Automatic recovery of stalled or failed tasks with
+  exponential backoff
 - **Task Monitoring**: Real-time monitoring of task progress and status
 
 ### Database Layer (PostgreSQL)
-- **Normalised Schema**: Separate tables for domains, pages, jobs, and tasks to reduce redundancy
-- **Row-Level Locking**: Uses `FOR UPDATE SKIP LOCKED` for efficient concurrent task acquisition
-- **Connection Pooling**: Optimised pool settings (25 max open, 10 max idle connections)
+
+- **Normalised Schema**: Separate tables for domains, pages, jobs, and tasks to
+  reduce redundancy
+- **Row-Level Locking**: Uses `FOR UPDATE SKIP LOCKED` for efficient concurrent
+  task acquisition
+- **Connection Pooling**: Optimised pool settings (25 max open, 10 max idle
+  connections)
 - **Data Integrity**: Maintains job history, statistics, and task relationships
 
 ### API Layer
-- **RESTful Design**: `/v1/*` endpoints with standardised responses and error handling
+
+- **RESTful Design**: `/v1/*` endpoints with standardised responses and error
+  handling
 - **Authentication**: JWT-based auth with Supabase Auth integration
 - **Middleware Stack**: CORS, logging, rate limiting, request tracking
 - **Request IDs**: Every request tracked with unique identifier
 
 ### Crawler System
+
 - **Concurrent URL Processing**: Configurable concurrency with rate limiting
 - **Cache Validation**: Monitors cache status and performance metrics
 - **Response Tracking**: Records response times, status codes, and cache hits
@@ -35,16 +49,19 @@ Blue Banded Bee is a web cache warming service built in Go, designed for Webflow
 ### Jobs and Tasks
 
 **Job**: A collection of URLs from a single domain to be crawled
+
 - Contains metadata: domain, user/organisation, concurrency settings
 - Tracks progress: total/completed/failed task counts
 - Has lifecycle: pending → running → completed/cancelled
 
 **Task**: Individual URL processing unit within a job
+
 - References a specific page within the job's domain
 - Tracks execution: status, timing, response metrics, errors
 - Can be: pending → running → completed/failed/skipped
 
 **Worker**: Process that executes tasks concurrently
+
 - Claims tasks atomically using database locking
 - Handles retries and error reporting
 - Updates task and job progress
@@ -52,6 +69,7 @@ Blue Banded Bee is a web cache warming service built in Go, designed for Webflow
 ### Database Schema
 
 #### Normalised Structure
+
 ```sql
 -- Domains table stores unique domain names
 CREATE TABLE domains (
@@ -116,10 +134,13 @@ CREATE TABLE tasks (
 ```
 
 #### Key Design Decisions
+
 - **Domain/Page Normalisation**: Reduces storage and improves data integrity
 - **No Depth Tracking**: Removed in v0.3.8 as unnecessary complexity
-- **PostgreSQL Features**: Leverages `FOR UPDATE SKIP LOCKED` for lock-free task claiming
-- **Separate Task Counts**: Tracks `sitemap_tasks` vs `found_tasks` for analytics
+- **PostgreSQL Features**: Leverages `FOR UPDATE SKIP LOCKED` for lock-free task
+  claiming
+- **Separate Task Counts**: Tracks `sitemap_tasks` vs `found_tasks` for
+  analytics
 
 ### Job Lifecycle
 
@@ -153,7 +174,8 @@ CREATE TABLE tasks (
 
 ### Architectural Principles
 
-Blue Banded Bee follows **focused, testable function design** established through systematic refactoring:
+Blue Banded Bee follows **focused, testable function design** established
+through systematic refactoring:
 
 - **Function Size**: Functions kept under 50 lines where possible
 - **Single Responsibility**: Each function has one clear purpose
@@ -161,23 +183,26 @@ Blue Banded Bee follows **focused, testable function design** established throug
 - **Extract + Test + Commit**: Proven methodology for safe refactoring
 
 ### Application Entry Points (`cmd/`)
+
 - `cmd/app/main.go` - Main service entry point with server setup
 - `cmd/test_jobs/main.go` - Job queue testing utility
 
 ### Core Business Logic (`internal/`)
 
 #### API Layer (`internal/api/`) - 47.2% Test Coverage
+
 - `handlers.go` - HTTP route handlers and middleware
 - `auth.go` - JWT authentication and user validation
 - `jobs.go` - **Refactored**: Job management endpoints with focused functions
   - `parseTaskQueryParams()` - Query parameter validation
   - `validateJobAccess()` - Authentication and authorization
-  - `buildTaskQuery()` - SQL query construction  
+  - `buildTaskQuery()` - SQL query construction
   - `formatTasksFromRows()` - Response formatting
 - `response.go` - Standardised response formats
 - `errors.go` - Error handling and codes
 
 #### Database Layer (`internal/db/`) - 37.9% Test Coverage
+
 - `db.go` - **Refactored**: PostgreSQL connection and setup
   - `createCoreTables()` - Table creation with dependency management
   - `createPerformanceIndexes()` - Index management and optimization
@@ -188,6 +213,7 @@ Blue Banded Bee follows **focused, testable function design** established throug
 - `health.go` - Database health monitoring
 
 #### Job System (`internal/jobs/`) - 33.2% Test Coverage
+
 - `manager.go` - **Refactored**: Job lifecycle management
   - `handleExistingJobs()` - Existing job conflict resolution
   - `createJobObject()` - Job instance creation
@@ -201,6 +227,7 @@ Blue Banded Bee follows **focused, testable function design** established throug
 - `types.go` - Job and task type definitions
 
 #### Crawler (`internal/crawler/`) - 65.8% Test Coverage
+
 - `crawler.go` - **Refactored**: HTTP client and URL processing
   - `validateCrawlRequest()` - URL validation and parsing
   - `setupResponseHandlers()` - Colly response/error handling
@@ -212,15 +239,18 @@ Blue Banded Bee follows **focused, testable function design** established throug
 - `types.go` - Crawler response types
 
 #### Utilities (`internal/util/`) - 81.1% Test Coverage
+
 - `url.go` - URL normalisation and validation
 
 ## System Monitoring
 
 ### Sentry Integration Strategy
 
-Blue Banded Bee uses Sentry for both error tracking and performance monitoring with a strategic approach to avoid over-logging.
+Blue Banded Bee uses Sentry for both error tracking and performance monitoring
+with a strategic approach to avoid over-logging.
 
 #### Configuration
+
 ```go
 sentry.Init(sentry.ClientOptions{
     Dsn:              config.SentryDSN,
@@ -232,21 +262,27 @@ sentry.Init(sentry.ClientOptions{
 ```
 
 #### Error Capture Strategy
+
 **Critical Business Logic Failures:**
+
 - Job creation, start, and cancellation failures
-- Worker startup failures and task status update failures  
+- Worker startup failures and task status update failures
 - Transaction failures and stuck job cleanup failures
 - Database connection and server startup/shutdown failures
 
-**Avoided**: Individual task processing errors, expected/handled errors, normal operational events
+**Avoided**: Individual task processing errors, expected/handled errors, normal
+operational events
 
 #### Performance Monitoring Spans
-- `manager.create_job`, `manager.start_job`, `manager.cancel_job` - Job operations
+
+- `manager.create_job`, `manager.start_job`, `manager.cancel_job` - Job
+  operations
 - `manager.get_job`, `manager.get_job_status` - Job queries
 - `manager.process_sitemap` - Sitemap processing
 - `db.cleanup_stuck_jobs`, `db.create_page_records` - Database operations
 
 ### Health Monitoring
+
 - **Database Health**: Connection status and query performance
 - **Worker Status**: Active worker count and task processing rates
 - **Job Progress**: Real-time completion tracking and statistics
@@ -254,7 +290,10 @@ sentry.Init(sentry.ClientOptions{
 
 ### Performance Debugging
 
-For detailed runtime performance analysis, the application includes a [Flight Recorder](flight-recorder.md) that captures Go runtime trace data. This helps diagnose:
+For detailed runtime performance analysis, the application includes a
+[Flight Recorder](flight-recorder.md) that captures Go runtime trace data. This
+helps diagnose:
+
 - Goroutine scheduling and concurrency issues
 - Memory allocation patterns and GC pressure
 - CPU usage hotspots and bottlenecks
@@ -263,9 +302,12 @@ For detailed runtime performance analysis, the application includes a [Flight Re
 ## Frontend Integration
 
 ### Template + Data Binding System
-Blue Banded Bee uses a template-based approach that allows flexible HTML layouts whilst JavaScript provides functionality through attribute-based event handling.
+
+Blue Banded Bee uses a template-based approach that allows flexible HTML layouts
+whilst JavaScript provides functionality through attribute-based event handling.
 
 **Current Implementation (v0.5.3):**
+
 ```html
 <!-- Dashboard with attribute-based event handling -->
 <div class="dashboard">
@@ -279,6 +321,7 @@ Blue Banded Bee uses a template-based approach that allows flexible HTML layouts
 ```
 
 **Current Data Binding (v0.5.4):**
+
 ```html
 <!-- Template binding for dynamic content -->
 <div class="stats">
@@ -293,7 +336,7 @@ Blue Banded Bee uses a template-based approach that allows flexible HTML layouts
 <!-- Authentication conditional rendering -->
 <div data-bb-auth="required">
   <form data-bb-form="create-job" data-bb-validate="live">
-    <input name="domain" required data-bb-validate-type="url">
+    <input name="domain" required data-bb-validate-type="url" />
     <button type="submit">Create Job</button>
   </form>
 </div>
@@ -303,13 +346,16 @@ Blue Banded Bee uses a template-based approach that allows flexible HTML layouts
 ```
 
 **Data Flow:**
+
 - Event delegation scans DOM for `bb-action` attributes
-- Data binding scans DOM for `data-bb-bind`, `data-bb-template`, `data-bb-form` attributes
+- Data binding scans DOM for `data-bb-bind`, `data-bb-template`, `data-bb-form`
+  attributes
 - JavaScript handles clicks, form submissions, and data population automatically
 - API endpoints (`/v1/dashboard/stats`, `/v1/jobs`) provide data
 - Real-time data binding populates `data-bb-bind` elements with live API data
 
 **Integration Benefits:**
+
 - Users control all HTML structure and CSS styling
 - No CSS conflicts with existing designs
 - Works with any frontend framework (Webflow, custom sites)
@@ -321,24 +367,28 @@ Blue Banded Bee uses a template-based approach that allows flexible HTML layouts
 ## Security & Authentication
 
 ### JWT Authentication
+
 - **Supabase Auth Integration**: Validates JWT tokens from Supabase
 - **User Context**: Extracts user and organisation IDs from tokens
 - **Protected Endpoints**: Requires authentication for job operations
 - **Row Level Security**: PostgreSQL RLS policies for data isolation
 
 ### Planned: Multi-Platform Support
+
 - Extending beyond direct dashboard access
 - Shopify and Webflow apps will authenticate through their platforms
 - Organisation-based context switching
 - See `/plans/platform-auth-architecture.md` for architectural approach
 
 ### Rate Limiting
+
 - **IP-Based Limiting**: Token bucket algorithm (5 requests/second default)
 - **Client IP Detection**: Supports X-Forwarded-For headers for proxies
 - **Crawler Rate Limiting**: Configurable delays between URL requests
 - **Concurrency Controls**: Per-job worker limits
 
 ### Request Security
+
 - **Input Validation**: URL and parameter sanitisation
 - **Error Sanitisation**: Prevents information leakage
 - **CORS Configuration**: Controlled cross-origin access
@@ -347,6 +397,7 @@ Blue Banded Bee uses a template-based approach that allows flexible HTML layouts
 ## Deployment Architecture
 
 ### Infrastructure
+
 - **Hosting**: Fly.io with auto-scaling
 - **Database**: PostgreSQL with connection pooling
 - **CDN**: Cloudflare for caching and protection
@@ -357,19 +408,31 @@ Blue Banded Bee uses a template-based approach that allows flexible HTML layouts
 
 ### Data Storage & Archiving Strategy
 
-The project employs a two-tier strategy for handling file storage to balance performance, cost, and accessibility.
+The project employs a two-tier strategy for handling file storage to balance
+performance, cost, and accessibility.
 
-- **Hot Storage (Supabase Storage)**: Used for recent and frequently accessed files. This includes temporary assets, crawler logs for active jobs, and recent HTML page captures for debugging purposes. Supabase Storage provides fast, instant access suitable for day-to-day operations.
+- **Hot Storage (Supabase Storage)**: Used for recent and frequently accessed
+  files. This includes temporary assets, crawler logs for active jobs, and
+  recent HTML page captures for debugging purposes. Supabase Storage provides
+  fast, instant access suitable for day-to-day operations.
 
-- **Cold Storage (Cloudflare R2)**: Planned for the long-term archival of historical data, primarily HTML page content. As data ages (e.g., older than 30-90 days), an automated Go background job will move it from Supabase Storage to Cloudflare R2. R2 offers significantly lower storage costs with no egress fees, making it ideal for large volumes of data that are accessed infrequently. This approach ensures the main database and hot storage remain lean and performant, while historical data is preserved cost-effectively.
+- **Cold Storage (Cloudflare R2)**: Planned for the long-term archival of
+  historical data, primarily HTML page content. As data ages (e.g., older than
+  30-90 days), an automated Go background job will move it from Supabase Storage
+  to Cloudflare R2. R2 offers significantly lower storage costs with no egress
+  fees, making it ideal for large volumes of data that are accessed
+  infrequently. This approach ensures the main database and hot storage remain
+  lean and performant, while historical data is preserved cost-effectively.
 
 ### Configuration
+
 - **Environment Variables**: Centralised configuration
 - **Database Migrations**: Schema versioning and updates
 - **Health Checks**: Application and database monitoring
 - **Graceful Shutdown**: Proper cleanup on termination
 
 ### Scalability Considerations
+
 - **Worker Pool Scaling**: Configurable worker counts per job
 - **Database Connection Limits**: Optimised pooling settings
 - **Task Batching**: Efficient bulk operations
@@ -378,18 +441,21 @@ The project employs a two-tier strategy for handling file storage to balance per
 ## Performance Optimisation
 
 ### Database Optimisations
+
 - **Connection Pooling**: 25 max open, 10 max idle connections
 - **Query Optimisation**: Indexed queries and efficient joins
 - **Batch Operations**: Reduce individual database calls
 - **Lock-Free Task Claiming**: `FOR UPDATE SKIP LOCKED` prevents contention
 
 ### Crawler Optimisations
+
 - **Concurrent Processing**: Multiple workers process URLs simultaneously
 - **Connection Reuse**: HTTP client connection pooling
 - **Rate Limiting**: Prevents overwhelming target servers
 - **Response Streaming**: Efficient memory usage for large responses
 
 ### Memory Management
+
 - **Resource Cleanup**: Proper goroutine and connection cleanup
 - **Buffer Management**: Controlled memory allocation
 - **Garbage Collection**: Optimised for low-latency operations
@@ -397,26 +463,36 @@ The project employs a two-tier strategy for handling file storage to balance per
 ## Supabase Integration Strategy
 
 ### Real-time Features (Stage 4+)
-- **Live Job Progress**: Replace polling with WebSocket subscriptions for instant updates
-- **Dashboard Updates**: Real-time status changes in Web Components without refresh
+
+- **Live Job Progress**: Replace polling with WebSocket subscriptions for
+  instant updates
+- **Dashboard Updates**: Real-time status changes in Web Components without
+  refresh
 - **Team Collaboration**: Live presence indicators for multi-user organisations
 
 ### Database Functions (Stage 5)
-- **Complex Analytics**: Move CPU-intensive queries from Go to PostgreSQL functions
+
+- **Complex Analytics**: Move CPU-intensive queries from Go to PostgreSQL
+  functions
 - **Task Acquisition**: Optimise worker task claiming with database-side logic
 - **Progress Calculations**: Real-time progress updates via database triggers
 
 ### Edge Functions (Stage 6+)
-- **Webhook Processing**: Handle Webflow publish events without exposing main API
+
+- **Webhook Processing**: Handle Webflow publish events without exposing main
+  API
 - **Scheduled Jobs**: Cron-like functionality for recurring cache warming
 - **Integration Endpoints**: Lightweight processing for third-party integrations
 
 ### File Storage (Stage 5)
+
 - **Crawler Logs**: Store detailed crawling logs and error reports
 - **Sitemap Caching**: Cache parsed sitemaps for faster job processing
 - **Screenshots**: Optional page screenshots for debugging failed crawls
 
 ### Row Level Security Enhancement (Stage 6)
-- **Multi-tenant Data Isolation**: Replace Go auth middleware with database-level policies
+
+- **Multi-tenant Data Isolation**: Replace Go auth middleware with
+  database-level policies
 - **Organisation Access**: Automatic data filtering based on user's organisation
 - **Audit Trails**: Database-enforced access logging and compliance

@@ -2,17 +2,22 @@
 
 ## Overview
 
-This document defines the comprehensive API design for Blue Banded Bee's multi-interface architecture. The API follows RESTful principles with consistent response formats to support web applications, Slack integrations, Webflow extensions, and future interfaces.
+This document defines the comprehensive API design for Blue Banded Bee's
+multi-interface architecture. The API follows RESTful principles with consistent
+response formats to support web applications, Slack integrations, Webflow
+extensions, and future interfaces.
 
 ## Current Status
 
 ✅ **Core API Infrastructure Implemented:**
+
 - Standardised error handling with request IDs and proper HTTP status codes
 - RESTful API structure with consistent response formats
 - Comprehensive middleware stack (CORS, request ID, logging, rate limiting)
 - Authentication integration with Supabase JWT validation
 
 ✅ **Current Endpoints:**
+
 - `/health` - Service health check
 - `/health/db` - PostgreSQL health check
 - `/v1/jobs` - RESTful job management (GET/POST)
@@ -23,6 +28,7 @@ This document defines the comprehensive API design for Blue Banded Bee's multi-i
 - `/admin/reset-db` - Admin database reset (system administrators only)
 
 🔄 **Next Implementation Phase:**
+
 - Complete CRUD operations for jobs (cancel, retry)
 - Task management endpoints (`/v1/jobs/:id/tasks`)
 - API key management (`/v1/auth/api-keys`)
@@ -33,18 +39,21 @@ This document defines the comprehensive API design for Blue Banded Bee's multi-i
 ## API Structure
 
 ### Base URL
+
 ```
 Local Development: http://localhost:8080 (Blue Banded Bee application)
 Production Application: https://app.bluebandedbee.co (Live application, services, demo pages)
 Marketing Site: https://bluebandedbee.co (Marketing website only)
 ```
 
-**Note**: 
+**Note**:
+
 - For local development and testing, use `http://localhost:8080`
 - For production application access, use `https://app.bluebandedbee.co`
 - `https://bluebandedbee.co` is only the marketing website
 
 ### Versioning
+
 All API endpoints are versioned under `/v1/` to ensure backward compatibility.
 
 ## Authentication
@@ -52,28 +61,35 @@ All API endpoints are versioned under `/v1/` to ensure backward compatibility.
 ### Methods Supported
 
 1. **JWT Bearer Token** (Primary)
+
    ```
    Authorization: Bearer <jwt_token>
    ```
+
    - Used by web applications
    - Tokens issued by Supabase Auth
    - Short expiry with refresh capability
 
 2. **API Key** (For Integrations)
+
    ```
    Authorization: Bearer <api_key>
    X-API-Key: <api_key>
    ```
+
    - Used by Slack, CLI tools, and integrations
    - Long-lived keys with scoped permissions
    - Managed through user dashboard
 
 ### Protected Resources
+
 All endpoints under `/v1/` require authentication except:
+
 - `/health`
 - `/v1/auth/*` (registration, session validation)
 
 ### Future: Platform Authentication
+
 - Planning to support Shopify and Webflow app authentication
 - Will use organisation-based data isolation
 - Each platform store/site maps to an organisation
@@ -82,6 +98,7 @@ All endpoints under `/v1/` require authentication except:
 ## Standard Response Format
 
 ### Success Response
+
 ```json
 {
   "status": "success",
@@ -97,6 +114,7 @@ All endpoints under `/v1/` require authentication except:
 ```
 
 ### Error Response
+
 ```json
 {
   "status": "error",
@@ -117,6 +135,7 @@ All endpoints under `/v1/` require authentication except:
 ```
 
 ### HTTP Status Codes
+
 - `200` - Success
 - `201` - Created
 - `400` - Bad Request
@@ -133,6 +152,7 @@ All endpoints under `/v1/` require authentication except:
 ### Jobs
 
 #### Create Job
+
 ```http
 POST /v1/jobs
 Content-Type: application/json
@@ -150,6 +170,7 @@ Authorization: Bearer <token>
 ```
 
 **Response (201):**
+
 ```json
 {
   "status": "success",
@@ -174,12 +195,14 @@ Authorization: Bearer <token>
 ```
 
 #### List Jobs
+
 ```http
 GET /v1/jobs?page=1&limit=20&status=running
 Authorization: Bearer <token>
 ```
 
 **Response (200):**
+
 ```json
 {
   "status": "success",
@@ -215,12 +238,14 @@ Authorization: Bearer <token>
 ```
 
 #### Get Job
+
 ```http
 GET /v1/jobs/{job_id}
 Authorization: Bearer <token>
 ```
 
 **Response (200):**
+
 ```json
 {
   "status": "success",
@@ -260,12 +285,14 @@ Authorization: Bearer <token>
 ```
 
 #### Cancel Job
+
 ```http
 POST /v1/jobs/{job_id}/cancel
 Authorization: Bearer <token>
 ```
 
 **Response (200):**
+
 ```json
 {
   "status": "success",
@@ -284,12 +311,14 @@ Authorization: Bearer <token>
 ### Tasks
 
 #### List Tasks for Job
+
 ```http
 GET /v1/jobs/{job_id}/tasks?page=1&limit=50&status=failed&status_code=404&min_response_time=5000
 Authorization: Bearer <token>
 ```
 
 **Query Parameters:**
+
 - `page` - Page number (default: 1)
 - `limit` - Results per page (default: 50, max: 100)
 - `status` - Filter by task status: `pending`, `running`, `completed`, `failed`
@@ -298,15 +327,18 @@ Authorization: Bearer <token>
 - `max_response_time` - Maximum response time in milliseconds
 - `cache_status` - Filter by cache status: `hit`, `miss`, `error`
 - `has_error` - Filter tasks with/without errors: `true`, `false`
-- `sort` - Sort order: `created_at`, `response_time`, `status_code` (add `-` for desc)
+- `sort` - Sort order: `created_at`, `response_time`, `status_code` (add `-` for
+  desc)
 
 **Pagination Strategy:**
+
 - **Default**: 50 results per page (good balance of data vs performance)
 - **Maximum**: 100 results per page (prevents overwhelming responses)
 - **Large datasets**: Use filtering to reduce total results before pagination
 - **Export option**: For bulk data access, use the export endpoint instead
 
 **Response (200):**
+
 ```json
 {
   "status": "success",
@@ -370,12 +402,14 @@ Authorization: Bearer <token>
 ```
 
 #### Get Task Results Summary
+
 ```http
 GET /v1/jobs/{job_id}/results
 Authorization: Bearer <token>
 ```
 
 **Response (200):**
+
 ```json
 {
   "status": "success",
@@ -439,17 +473,20 @@ Authorization: Bearer <token>
 ```
 
 #### Export Task Results
+
 ```http
 GET /v1/jobs/{job_id}/export?format=csv&include=url,status_code,response_time,cache_status
 Authorization: Bearer <token>
 ```
 
 **Query Parameters:**
+
 - `format` - Export format: `csv`, `json`, `xlsx`
 - `include` - Fields to include (comma-separated)
 - `filter` - Same filter options as task listing
 
 **Response (200):**
+
 ```
 Content-Type: text/csv
 Content-Disposition: attachment; filename="job_123abc_results.csv"
@@ -461,6 +498,7 @@ https://example.com/page3,500,1200,error,Internal server error
 ```
 
 #### Retry Failed Tasks
+
 ```http
 POST /v1/jobs/{job_id}/tasks/retry
 Authorization: Bearer <token>
@@ -473,12 +511,14 @@ Authorization: Bearer <token>
 ### Authentication & Users
 
 #### Get Current User Profile
+
 ```http
 GET /v1/auth/profile
 Authorization: Bearer <token>
 ```
 
 **Response (200):**
+
 ```json
 {
   "status": "success",
@@ -506,12 +546,14 @@ Authorization: Bearer <token>
 ### API Keys
 
 #### List API Keys
+
 ```http
 GET /v1/auth/api-keys
 Authorization: Bearer <token>
 ```
 
 **Response (200):**
+
 ```json
 {
   "status": "success",
@@ -535,6 +577,7 @@ Authorization: Bearer <token>
 ```
 
 #### Create API Key
+
 ```http
 POST /v1/auth/api-keys
 Authorization: Bearer <token>
@@ -546,6 +589,7 @@ Authorization: Bearer <token>
 ```
 
 **Response (201):**
+
 ```json
 {
   "status": "success",
@@ -564,6 +608,7 @@ Authorization: Bearer <token>
 ```
 
 #### Revoke API Key
+
 ```http
 DELETE /v1/auth/api-keys/{key_id}
 Authorization: Bearer <token>
@@ -572,12 +617,14 @@ Authorization: Bearer <token>
 ### Organisations
 
 #### Get Organisation Details
+
 ```http
 GET /v1/organisations/current
 Authorization: Bearer <token>
 ```
 
 **Response (200):**
+
 ```json
 {
   "status": "success",
@@ -609,11 +656,13 @@ Authorization: Bearer <token>
 ### System Endpoints
 
 #### Health Check
+
 ```http
 GET /health
 ```
 
 **Response (200):**
+
 ```json
 {
   "status": "success",
@@ -632,21 +681,25 @@ GET /health
 
 ### System Administrator Endpoints
 
-These endpoints require system administrator privileges. See [SECURITY.md](../SECURITY.md#system-administrator-role) for setup instructions.
+These endpoints require system administrator privileges. See
+[SECURITY.md](../SECURITY.md#system-administrator-role) for setup instructions.
 
 #### Database Reset (Development Only)
+
 ```http
 POST /admin/reset-db
 Authorization: Bearer <jwt_token>
 ```
 
 **Requirements:**
+
 - Valid JWT authentication
 - `system_role: "system_admin"` in user's `app_metadata`
 - `APP_ENV != "production"`
 - `ALLOW_DB_RESET=true` environment variable
 
 **Response (200):**
+
 ```json
 {
   "status": "success",
@@ -660,6 +713,7 @@ Authorization: Bearer <jwt_token>
 ```
 
 **Security Notes:**
+
 - Returns 404 in production environments
 - All reset actions are logged and tracked in Sentry
 - Only Blue Banded Bee operators should have system administrator access
@@ -679,7 +733,8 @@ Authorization: Bearer <jwt_token>
 
 ### Field Validation Errors
 
-For validation errors, the `details` object contains field-specific error information:
+For validation errors, the `details` object contains field-specific error
+information:
 
 ```json
 {
@@ -702,15 +757,18 @@ For validation errors, the `details` object contains field-specific error inform
 ## Rate Limiting
 
 ### Current Implementation
+
 - **IP-based**: 5 requests per second per IP
 - **Burst capacity**: 5 requests
 
 ### Planned Enhancement
+
 - **User-based**: Different limits per authentication method
 - **Endpoint-specific**: Different limits for different operations
 - **Organisation-based**: Limits based on subscription tier
 
 ### Rate Limit Headers
+
 ```
 X-RateLimit-Limit: 1000
 X-RateLimit-Remaining: 999
@@ -721,6 +779,7 @@ X-RateLimit-Retry-After: 30
 ## Webhook System (Planned)
 
 ### Webhook Registration
+
 ```http
 POST /v1/webhooks
 Authorization: Bearer <token>
@@ -735,6 +794,7 @@ Authorization: Bearer <token>
 ### Webhook Events
 
 #### Job Completed
+
 ```json
 {
   "event": "job.completed",
@@ -757,16 +817,19 @@ Authorization: Bearer <token>
 ## Interface-Specific Considerations
 
 ### Slack Integration
+
 - **Simplified responses**: Key information only
 - **Interactive elements**: Buttons for common actions
 - **Status updates**: Regular progress notifications
 
 ### Webflow Extension
+
 - **Minimal payload**: Only essential data
 - **Real-time updates**: WebSocket connection for progress
 - **Site-specific defaults**: Remember settings per Webflow site
 
 ### CLI Tool
+
 - **Bulk operations**: Support for multiple jobs
 - **Detailed output**: Complete information for debugging
 - **Local caching**: Store frequently accessed data
@@ -774,6 +837,7 @@ Authorization: Bearer <token>
 ## Implementation Priority
 
 ### Phase 1: Standardise Existing ✅ (Completed)
+
 1. ✅ Update response format for existing endpoints
 2. ✅ Add proper error handling with consistent status codes
 3. ✅ Implement standard authentication checks
@@ -783,18 +847,21 @@ Authorization: Bearer <token>
 7. ✅ Secure debug endpoints and move to admin namespace
 
 ### Phase 2: Complete CRUD Operations
+
 1. Implement missing job management endpoints
-2. Add task management endpoints  
+2. Add task management endpoints
 3. Create API key management
 4. Add organisation endpoints
 
 ### Phase 3: Integration Features
+
 1. Webhook system implementation
 2. Advanced authentication (scoped API keys)
 3. Rate limiting enhancements
 4. Real-time updates via WebSockets
 
 ### Phase 4: Interface-Specific Optimisations
+
 1. Slack-specific endpoints
 2. Webflow extension optimisations
 3. CLI tool bulk operations
@@ -803,12 +870,14 @@ Authorization: Bearer <token>
 ## Security Considerations
 
 ### Authentication Security
+
 - JWT tokens with short expiry (15 minutes)
 - API keys with scoped permissions
 - Secure storage requirements documented
 - Regular key rotation encouraged
 
 ### Request Security
+
 - CORS properly configured
 - Content Security Policy implemented
 - Input validation on all endpoints
@@ -816,6 +885,7 @@ Authorization: Bearer <token>
 - XSS protection headers
 
 ### Data Privacy
+
 - Organisation-level data isolation
 - Row Level Security in PostgreSQL
 - Audit logging for sensitive operations
@@ -824,6 +894,7 @@ Authorization: Bearer <token>
 ## Monitoring & Observability
 
 ### Metrics to Track
+
 - Request latency by endpoint
 - Error rate by endpoint and error type
 - Authentication failure rate
@@ -831,9 +902,11 @@ Authorization: Bearer <token>
 - Job completion rate and time
 
 ### Logging
+
 - Structured JSON logs
 - Request ID correlation
 - Error context preservation
 - Performance metrics
 
-This API design provides a solid foundation for all current and future interfaces while maintaining consistency, security, and scalability.
+This API design provides a solid foundation for all current and future
+interfaces while maintaining consistency, security, and scalability.

@@ -1,22 +1,29 @@
 # yaml-language-server: $schema=https://raw.githubusercontent.com/antinomyhq/forge/refs/heads/main/forge.schema.json
 agents:
-- id: coder
-  model: ollama/qwen2.5-coder:7b
-  description: General coding tasks
-- id: reasoner
-  model: ollama/deepseek-r1:8b
-  description: Complex debugging and architecture
-- id: auditor
-  model: ollama/deepseek-r1:8b
-  description: Code review and security analysis
+  - id: coder
+    model: ollama/qwen2.5-coder:7b
+    description: General coding tasks
+  - id: reasoner
+    model: ollama/deepseek-r1:8b
+    description: Complex debugging and architecture
+  - id: auditor
+    model: ollama/deepseek-r1:8b
+    description: Code review and security analysis
 commands:
-- name: audit
-  description: Security and code quality audit
-  prompt: Analyze this code for security issues, performance problems, and maintainability concerns
-- name: refactor
-  description: Improve code structure
-  prompt: Refactor this code to improve readability, performance, and maintainability
+  - name: audit
+    description: Security and code quality audit
+    prompt:
+      Analyze this code for security issues, performance problems, and
+      maintainability concerns
+  - name: refactor
+    description: Improve code structure
+    prompt:
+      Refactor this code to improve readability, performance, and
+      maintainability
 model: ollama/qwen2.5-coder:7b
-custom_rules: "1. Always add comprehensive error handling\n2. Include unit tests for new functions  \n3. Follow team naming conventions\n4. No auto-commits without approval\n"
+custom_rules:
+  "1. Always add comprehensive error handling\n2. Include unit tests for new
+  functions  \n3. Follow team naming conventions\n4. No auto-commits without
+  approval\n"
 temperature: 0.7
 max_tokens: 2048

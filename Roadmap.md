@@ -77,7 +77,8 @@
 - [x] Implement persistent job storage in database
 - [x] Create worker pool for concurrent URL processing
 - [x] Add job management API (create, start, cancel, status)
-- [x] Implement database retry logic for job operations to handle transient errors
+- [x] Implement database retry logic for job operations to handle transient
+      errors
 - [x] Enhance error reporting and monitoring
 
 ### ✅ Sitemap Integration
@@ -189,7 +190,8 @@
   - [x] Document endpoints to consolidate or remove
   - [x] Plan endpoint implementation simplification
   - [x] Standardise error handling approach
-  - [x] Implementation plan completed in [docs/plans/api-cleanup.md](docs/plans/api-cleanup.md)
+  - [x] Implementation plan completed in
+        [docs/plans/api-cleanup.md](docs/plans/api-cleanup.md)
 - [x] Fix metrics collection (plan created)
   - [x] Document metrics to expose
   - [x] Plan for unused metrics tracking removal
@@ -215,7 +217,8 @@
 
 - [x] Configure Supabase Auth settings
 - [x] Implement JWT validation middleware in Go
-- [x] Add social login providers configuration (Google, Facebook, Slack, GitHub, Microsoft, Figma, LinkedIn + Email)
+- [x] Add social login providers configuration (Google, Facebook, Slack, GitHub,
+      Microsoft, Figma, LinkedIn + Email)
 - [x] Set up user session handling and token validation
 - [x] Implement comprehensive auth error handling
 - [x] Create user registration with auto-organisation creation
@@ -240,7 +243,8 @@ Organisation model implemented:
 ### ✅ API-First Architecture Development (Completed v0.4.2)
 
 - [x] **Comprehensive RESTful API Infrastructure**
-  - [x] Standardised response format with request IDs and consistent error handling
+  - [x] Standardised response format with request IDs and consistent error
+        handling
   - [x] Interface-agnostic RESTful endpoints (`/v1/*` structure)
   - [x] Comprehensive middleware stack (CORS, logging, rate limiting)
   - [x] Proper HTTP status codes and structured error responses
@@ -252,7 +256,8 @@ Organisation model implemented:
 
 - [x] **Dashboard Demonstration Infrastructure**
   - [x] Working vanilla JavaScript dashboard with modern UI design
-  - [x] API integration for job statistics and progress tracking (`/v1/dashboard/stats`, `/v1/jobs`)
+  - [x] API integration for job statistics and progress tracking
+        (`/v1/dashboard/stats`, `/v1/jobs`)
   - [x] Stable production deployment without Web Components dependencies
   - [x] Responsive design with professional styling and user experience
 - [x] **Template + Data Binding Foundation**
@@ -267,7 +272,8 @@ Organisation model implemented:
   - [x] Basic attribute-based event handling (`bb-action="refresh-dashboard"`)
   - [x] JavaScript library for `data-bb-bind` attribute processing
   - [x] Template engine for `data-bb-template` repeated content
-  - [x] Authentication integration with conditional element display (`data-bb-auth`)
+  - [x] Authentication integration with conditional element display
+        (`data-bb-auth`)
   - [x] Form handling with `data-bb-form` and validation (`data-bb-validate`)
   - [x] Style and attribute binding (`data-bb-bind-style`, `data-bb-bind-attr`)
 - [x] **Enhanced Job Management**
@@ -289,8 +295,11 @@ Organisation model implemented:
 
 - [x] **Task Prioritisation**
   - [x] Prioritisation by page hierarchy and importance
-  - [x] Implement link priority ordering for header links (1st: 1.000, 2nd: 0.990, etc.) ([internal/jobs/manager.go:819-820](./internal/jobs/manager.go#L819))
-  - [x] Apply priority ordering logic to all discovered page links ([internal/jobs/manager.go:816](./internal/jobs/manager.go#L816))
+  - [x] Implement link priority ordering for header links (1st: 1.000, 2nd:
+        0.990, etc.)
+        ([internal/jobs/manager.go:819-820](./internal/jobs/manager.go#L819))
+  - [x] Apply priority ordering logic to all discovered page links
+        ([internal/jobs/manager.go:816](./internal/jobs/manager.go#L816))
   - [ ] Job-level task prioritisation options
 
 - [x] **Robots.txt Compliance**
@@ -304,10 +313,13 @@ Organisation model implemented:
   - [x] Filter out links that are hidden via inline `style` attributes.
   - [x] Remove anchor links from link discovery
   - [ ] Support compressed sitemaps (.xml.gz and other formats)
-  - [x] If sitemap can't be found, setup job with / page and start as normal finding links through pages
-  - [ ] Only store source_url if page was found ON a page and redirect_url if it's a redirect AND it doesn't match the domain/path of the task
+  - [x] If sitemap can't be found, setup job with / page and start as normal
+        finding links through pages
+  - [ ] Only store source_url if page was found ON a page and redirect_url if
+        it's a redirect AND it doesn't match the domain/path of the task
 
-- [x] Considering impact of and plan updates [Go v1.25 release](/docs/plans/Go-1.25.md)
+- [x] Considering impact of and plan updates
+      [Go v1.25 release](/docs/plans/Go-1.25.md)
 
 - [x] **Blocking Avoidance**
   - [x] Series of tweaks to reduce blocking
@@ -383,7 +395,8 @@ Organisation model implemented:
   - [x] API endpoints: 33.2% coverage with all major endpoints tested
   - [x] Implement critical integration tests
   - [x] Fix critical test issues (P0/P1 from expert review)
-  - [x] Comprehensive testing infrastructure with interface-based and sqlmock patterns
+  - [x] Comprehensive testing infrastructure with interface-based and sqlmock
+        patterns
   - [ ] Add performance benchmarks
 
 ### 🔴 Payment Infrastructure
@@ -413,9 +426,12 @@ Organisation model implemented:
   - [ ] Move CPU-intensive analytics queries to PostgreSQL functions
   - [ ] Optimise task acquisition with database-side logic
   - [ ] Enhance Row Level Security policies for multi-tenant usage
-  - [ ] Consolidate database connection settings into single configuration location and make them configurable via environment variables ([internal/db/db.go:113-115](./internal/db/db.go#L113))
+  - [ ] Consolidate database connection settings into single configuration
+        location and make them configurable via environment variables
+        ([internal/db/db.go:113-115](./internal/db/db.go#L113))
 - [ ] **File Storage & Edge Functions**
-  - [ ] Store crawler logs, sitemap caches, and error reports in Supabase Storage
+  - [ ] Store crawler logs, sitemap caches, and error reports in Supabase
+        Storage
   - [ ] Create Edge Functions for webhook handling and scheduled tasks
   - [ ] Handle Webflow publish events via Edge Functions
 
@@ -444,7 +460,8 @@ Organisation model implemented:
   - [ ] Implement cron-like scheduler for recurring runs
   - [ ] Automatic cache warming based on Webflow publish events
 - [ ] **Monitoring & Reporting**
-  - [ ] Fix completion percentage to reflect actual completed vs skipped tasks (not always 100%) ([internal/db/db.go:404](./internal/db/db.go#L404))
+  - [ ] Fix completion percentage to reflect actual completed vs skipped tasks
+        (not always 100%) ([internal/db/db.go:404](./internal/db/db.go#L404))
 
 ## ⚪ Stage 7: Feature Refinement & Launch Preparation
 
@@ -456,7 +473,8 @@ Organisation model implemented:
   - [ ] Test and refine multi-provider account linking
   - [ ] Member invitation system for organisations
 - [ ] **Audit & Security Features**
-  - [x] Secure admin endpoints properly with system_role authentication ([internal/api/admin.go:11,25](./internal/api/admin.go#L11))
+  - [x] Secure admin endpoints properly with system_role authentication
+        ([internal/api/admin.go:11,25](./internal/api/admin.go#L11))
   - [ ] Login IP tracking and session limits
   - [ ] Active job limits per organisation
   - [ ] Audit logging for account changes and access history
@@ -478,13 +496,17 @@ Organisation model implemented:
 
 - [ ] **Implement two-tier data storage strategy**
   - [ ] Use Supabase Storage for "hot" data (recent logs, debug files)
-  - [ ] Implement Cloudflare R2 for "cold" storage of historical HTML page captures
-  - [ ] Create automated Go job to handle data lifecycle (e.g., move files > 30 days to R2)
-  - [ ] Update database to track storage location (hot/cold) for each archived file
+  - [ ] Implement Cloudflare R2 for "cold" storage of historical HTML page
+        captures
+  - [ ] Create automated Go job to handle data lifecycle (e.g., move files > 30
+        days to R2)
+  - [ ] Update database to track storage location (hot/cold) for each archived
+        file
 
 ### 🔴 Content Storage & Change Tracking
 
-- [ ] **Implement Semantic Hashing for change detection** - [Implementation Plan](./docs/plans/content-storage-and-change-tracking.md)
+- [ ] **Implement Semantic Hashing for change detection** -
+      [Implementation Plan](./docs/plans/content-storage-and-change-tracking.md)
   - [ ] Add `content_hash` and `html_storage_path` columns to `tasks` table
   - [ ] Add `latest_content_hash` column to `pages` table
   - [ ] Implement HTML parsing and canonical content extraction in Go worker
@@ -492,11 +514,13 @@ Organisation model implemented:
 
 ### 🔴 Code Quality & Maintenance
 
-- [x] **Increase Test Coverage** - [Implementation Plan](./docs/plans/increase-test-coverage.md)
+- [x] **Increase Test Coverage** -
+      [Implementation Plan](./docs/plans/increase-test-coverage.md)
   - [x] Set up Supabase test branch database infrastructure
   - [x] Add testify testing framework
   - [x] Create simplified test plan (Phase 1: 80-115 lines)
-  - [x] Implement Phase 1 tests (GetJob, CreateJob, CancelJob, ProcessSitemapFallback)
+  - [x] Implement Phase 1 tests (GetJob, CreateJob, CancelJob,
+        ProcessSitemapFallback)
   - [x] Implement integration tests (EnqueueJobURLs)
   - [x] Implement unit tests with mocks (CrawlerInterface refactoring)
   - [x] Enable Codecov reporting and Test Analytics
@@ -509,7 +533,8 @@ Organisation model implemented:
   - [x] **Implement Comprehensive API Testing** - ✅ **COMPLETED**
 - [x] **Code Quality Improvement** - core quality gates now enforced in CI
   - [x] Phase 1: Automated formatting and ineffectual assignments cleanup
-  - [x] Phase 2: Refactor high-complexity functions (processTask, processNextTask completed)
+  - [x] Phase 2: Refactor high-complexity functions (processTask,
+        processNextTask completed)
   - [x] Add golangci-lint to CI/CD pipeline with Go 1.25 compatibility
   - [x] Improve Go Report Card score from C to A
 

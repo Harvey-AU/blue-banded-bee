@@ -2,12 +2,17 @@
 
 ## Prerequisites
 
-- **Go 1.25** - We use Go 1.25 for advanced features (see [Go 1.25 Plan](./plans/_archive/go-1.25.md))
-- **Docker Desktop** - Required for local Supabase instance ([Download here](https://docs.docker.com/desktop/))
-- **Supabase CLI** - Database management (`npm install -g supabase` or `brew install supabase/tap/supabase`)
-- **Air** - Hot reloading for development (`go install github.com/air-verse/air@latest`)
+- **Go 1.25** - We use Go 1.25 for advanced features (see
+  [Go 1.25 Plan](./plans/_archive/go-1.25.md))
+- **Docker Desktop** - Required for local Supabase instance
+  ([Download here](https://docs.docker.com/desktop/))
+- **Supabase CLI** - Database management (`npm install -g supabase` or
+  `brew install supabase/tap/supabase`)
+- **Air** - Hot reloading for development
+  (`go install github.com/air-verse/air@latest`)
 - **Git** - Version control
-- **golangci-lint** (optional) - Code quality checks (`brew install golangci-lint`)
+- **golangci-lint** (optional) - Code quality checks
+  (`brew install golangci-lint`)
 
 ## Quick Setup
 
@@ -17,7 +22,16 @@
 # Fork and clone the repository
 git clone https://github.com/[your-username]/blue-banded-bee.git
 cd blue-banded-bee
+
+# Setup Git hooks for automatic formatting
+bash scripts/setup-hooks.sh
 ```
+
+The Git hooks will automatically format your code before each commit:
+
+- ✅ Go files formatted with `gofmt`
+- ✅ Markdown, YAML, JSON formatted with Prettier
+- ✅ No manual formatting needed!
 
 ### 2. Start Development Environment
 
@@ -91,14 +105,17 @@ supabase migration new your_migration_name
 # 🎉 Go app automatically restarts with the new schema!
 ```
 
-**No manual steps required** - the `dev` script watches for migration changes and automatically runs `supabase db reset` when you save any `.sql` file in the migrations folder.
+**No manual steps required** - the `dev` script watches for migration changes
+and automatically runs `supabase db reset` when you save any `.sql` file in the
+migrations folder.
 
 **Deployment process**:
 
 1. Push changes to feature branch
 2. After testing, merge to `main` - migrations apply automatically
 
-**Note**: Supabase GitHub integration handles all migration deployment. Never run `supabase db push` manually.
+**Note**: Supabase GitHub integration handles all migration deployment. Never
+run `supabase db push` manually.
 
 ## Development Server
 
@@ -174,24 +191,20 @@ go run ./cmd/test_jobs/main.go
 
 ### Package Structure
 
-cmd/
-├── app/ # Main application entry point
-└── test_jobs/ # Job queue testing utility
+cmd/ ├── app/ # Main application entry point └── test_jobs/ # Job queue testing
+utility
 
-internal/
-├── api/ # HTTP handlers and middleware
-├── auth/ # Authentication logic
-├── crawler/ # Web crawling functionality
-├── db/ # Database operations
-├── jobs/ # Job queue and worker management
-└── util/ # Shared utilities
+internal/ ├── api/ # HTTP handlers and middleware ├── auth/ # Authentication
+logic ├── crawler/ # Web crawling functionality ├── db/ # Database operations
+├── jobs/ # Job queue and worker management └── util/ # Shared utilities
 
 ### Development Patterns
 
 #### Error Handling
 
 - Use wrapped errors: `fmt.Errorf("context: %w", err)`
-- Log errors with context: `log.Error().Err(err).Str("job_id", id).Msg("Failed to process")`
+- Log errors with context:
+  `log.Error().Err(err).Str("job_id", id).Msg("Failed to process")`
 - Capture critical errors in Sentry: `sentry.CaptureException(err)`
 
 #### Database Operations
@@ -257,7 +270,8 @@ GODEBUG=gctrace=1 go run ./cmd/app/main.go
 
 ### Code Quality
 
-We enforce code quality with **golangci-lint** in CI, ensuring consistent standards across the codebase.
+We enforce code quality with **golangci-lint** in CI, ensuring consistent
+standards across the codebase.
 
 #### CI Linting (Enforced)
 
@@ -265,22 +279,36 @@ Our **GitHub Actions CI** runs golangci-lint v1.59.0 with Go 1.25 support:
 
 - **Runs automatically** on every push/PR
 - **Blocks merges** if linting fails
-- **Core linters enabled**: govet, staticcheck, errcheck, revive, gofmt, goimports, ineffassign, gocyclo, misspell
+- **Core linters enabled**: govet, staticcheck, errcheck, revive, gofmt,
+  goimports, ineffassign, gocyclo, misspell
 - **Configured for Australian English spelling**
-- **Cyclomatic complexity threshold**: 35 (reduces over time as functions are refactored)
+- **Cyclomatic complexity threshold**: 35 (reduces over time as functions are
+  refactored)
+
+#### Formatting (Automatic)
+
+**Pre-commit hooks automatically format files** - you don't need to do anything!
+
+To manually format all files:
+
+```bash
+# Format everything (Go + docs/config)
+bash scripts/format.sh
+
+# Or format individually:
+gofmt -w .                                    # Go files only
+prettier --write "**/*.{md,yml,yaml,json}"    # Docs/config only
+```
 
 #### Local Development (Fast Feedback)
 
-Before committing, run these **local** checks:
+Before pushing, run these **local** checks:
 
 ```bash
-# 1. Format code (instant)
-go fmt ./...
-
-# 2. Basic static analysis (5-10 seconds)
+# 1. Basic static analysis (5-10 seconds)
 go vet ./...
 
-# 3. Run tests (1-2 minutes)
+# 2. Run tests (1-2 minutes)
 ./run-tests.sh
 
 # 4. Check coverage (optional)
@@ -537,7 +565,9 @@ go install github.com/air-verse/air@latest
 
 ### Flight Recorder
 
-For detailed performance debugging, see [Flight Recorder Documentation](flight-recorder.md). The flight recorder provides runtime trace data that can help diagnose:
+For detailed performance debugging, see
+[Flight Recorder Documentation](flight-recorder.md). The flight recorder
+provides runtime trace data that can help diagnose:
 
 - Goroutine scheduling issues
 - Memory allocation patterns
@@ -546,7 +576,8 @@ For detailed performance debugging, see [Flight Recorder Documentation](flight-r
 
 ### Getting Help
 
-1. **Check existing documentation** in this guide and [ARCHITECTURE.md](ARCHITECTURE.md)
+1. **Check existing documentation** in this guide and
+   [ARCHITECTURE.md](ARCHITECTURE.md)
 2. **Search closed issues** on GitHub for similar problems
 3. **Enable debug logging** to get more context
 4. **Create minimal reproduction** case for bugs

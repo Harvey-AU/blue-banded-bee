@@ -1,7 +1,7 @@
 [![Fly Deploy](https://github.com/Harvey-AU/blue-banded-bee/actions/workflows/fly-deploy.yml/badge.svg)](https://github.com/Harvey-AU/blue-banded-bee/actions/workflows/fly-deploy.yml)
 [![Tests](https://github.com/Harvey-AU/blue-banded-bee/actions/workflows/test.yml/badge.svg)](https://github.com/Harvey-AU/blue-banded-bee/actions/workflows/test.yml)
 [![codecov](https://codecov.io/github/harvey-au/blue-banded-bee/graph/badge.svg?token=EC0JW5IU7X)](https://codecov.io/github/harvey-au/blue-banded-bee)
-[![Go Report Card](https://goreportcard.com/badge/github.com/Harvey-AU/blue-banded-bee?style=flat)](https://goreportcard.com/report/github.com/Harvey-AU/blue-banded-bee) 
+[![Go Report Card](https://goreportcard.com/badge/github.com/Harvey-AU/blue-banded-bee?style=flat)](https://goreportcard.com/report/github.com/Harvey-AU/blue-banded-bee)
 [![Go Reference](https://pkg.go.dev/badge/github.com/Harvey-AU/blue-banded-bee.svg)](https://pkg.go.dev/github.com/Harvey-AU/blue-banded-bee)
 [![Go Version](https://img.shields.io/badge/go-1.25-blue.svg)](https://golang.org/)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
@@ -9,7 +9,11 @@
 
 # Blue Banded Bee 🐝
 
-Automatically warm site caches (especially built for [Webflow](https://www.webflow.com)) after publishing to improve initial page load times. Named after [a special little bee](https://www.aussiebee.com.au/blue-banded-bee-information.html) native to where we live in Castlemaine, Victoria, Australia.
+Automatically warm site caches (especially built for
+[Webflow](https://www.webflow.com)) after publishing to improve initial page
+load times. Named after
+[a special little bee](https://www.aussiebee.com.au/blue-banded-bee-information.html)
+native to where we live in Castlemaine, Victoria, Australia.
 
 ## Key Features
 
@@ -45,6 +49,7 @@ dev debug        # Verbose output (debug level)
 ```
 
 One command starts everything:
+
 - ✅ Checks prerequisites (Docker + Supabase CLI)
 - 🐳 Starts local Supabase database
 - 🔄 Auto-applies migrations
@@ -57,7 +62,8 @@ One command starts everything:
 
 **Stage 4 of 7** - Core Authentication & MVP Interface (mostly complete)
 
-Next up: Platform integrations (Webflow/Shopify apps) and subscriptions. See [roadmap](./Roadmap.md) for details.
+Next up: Platform integrations (Webflow/Shopify apps) and subscriptions. See
+[roadmap](./Roadmap.md) for details.
 
 ## Tech Stack
 

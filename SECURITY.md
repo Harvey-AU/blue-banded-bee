@@ -2,7 +2,9 @@
 
 ## Reporting a Vulnerability
 
-If you discover a security vulnerability within Cache Warmer, please send an email to [hello@teamharvey.co](mailto:hello@teamharvey.co). All security vulnerabilities will be promptly addressed.
+If you discover a security vulnerability within Cache Warmer, please send an
+email to [hello@teamharvey.co](mailto:hello@teamharvey.co). All security
+vulnerabilities will be promptly addressed.
 
 Please do not report security vulnerabilities through public GitHub issues.
 
@@ -24,8 +26,10 @@ When deploying Cache Warmer:
 
 Blue Banded Bee distinguishes between two types of administrative access:
 
-- **System Administrator** (`system_role: "system_admin"`) - Blue Banded Bee operators with system-level access
-- **Organisation Administrator** (`role: "admin"` or `"owner"`) - Client administrators within their organisation
+- **System Administrator** (`system_role: "system_admin"`) - Blue Banded Bee
+  operators with system-level access
+- **Organisation Administrator** (`role: "admin"` or `"owner"`) - Client
+  administrators within their organisation
 
 ### Setting Up a System Administrator
 
@@ -55,12 +59,16 @@ System administrators have access to restricted endpoints such as:
 - Other system-level operations (as implemented)
 
 **Important Security Notes:**
+
 - System administrator endpoints are hidden in production environments
-- Database reset functionality requires both `system_role: "system_admin"` and explicit environment configuration:
-  - `APP_ENV != "production"` 
+- Database reset functionality requires both `system_role: "system_admin"` and
+  explicit environment configuration:
+  - `APP_ENV != "production"`
   - `ALLOW_DB_RESET=true` environment variable
-- All system administrator actions are logged and tracked in Sentry for audit purposes
+- All system administrator actions are logged and tracked in Sentry for audit
+  purposes
 
 ## Configuration
 
-Sensitive configuration should be set via environment variables, never in code or config files.
+Sensitive configuration should be set via environment variables, never in code
+or config files.

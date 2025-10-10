@@ -2,19 +2,27 @@
 
 ## Overview
 
-Blue Banded Bee uses PostgreSQL as its primary database with a normalised schema designed for efficiency and data integrity. The system leverages PostgreSQL-specific features like `FOR UPDATE SKIP LOCKED` for lock-free concurrent task processing.
+Blue Banded Bee uses PostgreSQL as its primary database with a normalised schema
+designed for efficiency and data integrity. The system leverages
+PostgreSQL-specific features like `FOR UPDATE SKIP LOCKED` for lock-free
+concurrent task processing.
 
 As of 26th July 2025 we manage database schema/setup via migrations.
 
 ### Migration Workflow
 
-Blue Banded Bee uses Supabase GitHub integration for automatic migration deployment:
+Blue Banded Bee uses Supabase GitHub integration for automatic migration
+deployment:
 
-1. **Create Migration Files**: Place new `.sql` files in `supabase/migrations/` with timestamp prefix
-2. **Push to GitHub**: Migrations apply automatically when merged to `test-branch` or `main`
-3. **No Manual Steps**: Supabase handles all migration execution via GitHub integration
+1. **Create Migration Files**: Place new `.sql` files in `supabase/migrations/`
+   with timestamp prefix
+2. **Push to GitHub**: Migrations apply automatically when merged to
+   `test-branch` or `main`
+3. **No Manual Steps**: Supabase handles all migration execution via GitHub
+   integration
 
-**Important**: Do NOT run `supabase db push` manually - let the GitHub integration handle it.
+**Important**: Do NOT run `supabase db push` manually - let the GitHub
+integration handle it.
 
 ## Connection Configuration
 
@@ -207,7 +215,8 @@ CREATE TABLE organisations (
 
 ### Lock-Free Task Processing
 
-Uses `FOR UPDATE SKIP LOCKED` to allow multiple workers to claim tasks without blocking:
+Uses `FOR UPDATE SKIP LOCKED` to allow multiple workers to claim tasks without
+blocking:
 
 ```sql
 -- Task acquisition query (internal/db/queue.go)
@@ -502,8 +511,7 @@ SELECT COUNT(*) FROM users;
 **Issue**: `CREATE TABLE IF NOT EXISTS` doesn't modify existing tables
 **Solution**: Use explicit `ALTER TABLE` commands for schema changes
 
-**Issue**: Column removal requires data migration
-**Solution**:
+**Issue**: Column removal requires data migration **Solution**:
 
 1. Add new columns first
 2. Migrate data
@@ -511,14 +519,14 @@ SELECT COUNT(*) FROM users;
 
 ### Performance Gotchas
 
-**Issue**: Sequential scans on large task tables
-**Solution**: Ensure proper indexing on status and job_id columns
+**Issue**: Sequential scans on large task tables **Solution**: Ensure proper
+indexing on status and job_id columns
 
-**Issue**: Connection pool exhaustion under high load
-**Solution**: Monitor active connections and tune pool settings
+**Issue**: Connection pool exhaustion under high load **Solution**: Monitor
+active connections and tune pool settings
 
-**Issue**: Lock contention on job progress updates
-**Solution**: Use atomic updates and avoid frequent progress writes
+**Issue**: Lock contention on job progress updates **Solution**: Use atomic
+updates and avoid frequent progress writes
 
 ## Development Workflow
 
@@ -552,4 +560,5 @@ curl -X POST localhost:8080/admin/reset-db \
   -H "Authorization: Bearer admin-token"
 ```
 
-This database design provides a solid foundation for Blue Banded Bee's cache warming operations while maintaining data integrity, performance, and security.
+This database design provides a solid foundation for Blue Banded Bee's cache
+warming operations while maintaining data integrity, performance, and security.

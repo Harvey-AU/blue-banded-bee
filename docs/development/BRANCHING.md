@@ -82,7 +82,7 @@ Keep messages concise (5-6 words max).
 ### Creating a PR
 
 1. **Title**: Clear, descriptive summary
-2. **Description**: 
+2. **Description**:
    - What changed and why
    - Related issue numbers
    - Testing performed
@@ -109,11 +109,13 @@ Keep messages concise (5-6 words max).
 When your PR includes database changes:
 
 1. **Create migration file**:
+
    ```bash
    supabase migration new your_migration_name
    ```
 
 2. **Test locally**:
+
    ```bash
    supabase db reset
    ```
@@ -142,7 +144,8 @@ git checkout -b hotfix/critical-issue
 
 ## Branch Cleanup Policy
 
-**Mandatory**: All feature branches must be deleted after merging to keep the repository clean.
+**Mandatory**: All feature branches must be deleted after merging to keep the
+repository clean.
 
 ### Automatic Cleanup
 
@@ -157,7 +160,7 @@ If not automated:
 # Delete local feature branch
 git branch -d feature/your-feature
 
-# Delete remote feature branch  
+# Delete remote feature branch
 git push origin --delete feature/your-feature
 
 # Prune stale remote references
@@ -173,7 +176,8 @@ git remote prune origin
 5. **Merge**: Squash and merge to target branch
 6. **Delete**: Immediately delete the feature branch
 
-All feature branches are deleted after merge - no persistent staging branches needed.
+All feature branches are deleted after merge - no persistent staging branches
+needed.
 
 ## Common Scenarios
 
