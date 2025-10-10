@@ -809,8 +809,4 @@ func TestWriteJSONDoesNotLeakMemory(t *testing.T) {
 
 	// If this doesn't cause issues in race detector or memory profiling, we're good
 	assert.NotNil(t, rec.Body)
-
-	// Clear references
-	largeObject = nil
-	rec = nil
 }

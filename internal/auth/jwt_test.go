@@ -9,6 +9,11 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+// contextKey is a custom type for context keys to avoid collisions
+type contextKey string
+
+const claimsKey contextKey = "claims"
+
 func TestJWTTokenValidation(t *testing.T) {
 	secret := "test-secret-key-minimum-256-bits-long-for-hs256"
 
@@ -422,11 +427,11 @@ func TestClaimsFromContext(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := context.Background()
 			if tt.claims != nil {
-				ctx = context.WithValue(ctx, "claims", tt.claims)
+				ctx = context.WithValue(ctx, claimsKey, tt.claims)
 			}
 
 			// Mock extraction
-			if claims, ok := ctx.Value("claims").(map[string]interface{}); ok {
+			if claims, ok := ctx.Value(claimsKey).(map[string]interface{}); ok {
 				if sub, ok := claims["sub"].(string); ok {
 					assert.Equal(t, tt.expectedUser, sub, tt.description)
 				} else {
