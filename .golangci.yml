@@ -3,8 +3,6 @@ version: "2"
 run:
   timeout: 5m
   modules-download-mode: mod
-  goflags:
-    - "-mod=mod"
 
 linters:
   enable:
@@ -18,51 +16,54 @@ linters:
     - gocyclo       # Cyclomatic complexity
     - misspell      # Spell checker
 
-linters-settings:
-  gocyclo:
-    # Set higher threshold to avoid blocking existing code
-    # Target: reduce over time as functions are refactored
-    min-complexity: 35
+  settings:
+    gocyclo:
+      # Set higher threshold to avoid blocking existing code
+      # Target: reduce over time as functions are refactored
+      min-complexity: 35
 
-  misspell:
-    locale: AU  # Australian English spelling
+    misspell:
+      locale: AU  # Australian English spelling
 
-  govet:
-    enable:
-      - shadow      # Check for shadowed variables
-      - unusedwrite # Detect unused writes
+    govet:
+      enable:
+        - shadow      # Check for shadowed variables
+        - unusedwrite # Detect unused writes
 
-  revive:
+    revive:
+      rules:
+        - name: exported
+          disabled: true  # Don't require comments on all exports
+        - name: package-comments
+          disabled: true
+
+  exclusions:
+    paths:
+      - vendor
+      - internal/mocks
+      - internal/testutil
+      - internal/benchmarks
+
     rules:
-      - name: exported
-        disabled: true  # Don't require comments on all exports
-      - name: package-comments
-        disabled: true
+      # Exclude some linters from running on test files
+      - path: _test\.go
+        linters:
+          - gocyclo
+          - errcheck
 
-issues:
-  # Show all issues
-  max-issues-per-linter: 0
-  max-same-issues: 0
-  exclude-dirs:
-    - vendor
-    - internal/mocks
-    - internal/testutil
-    - internal/benchmarks
+      # Ignore shadowing of 'err' - common Go idiom
+      - linters:
+          - govet
+        text: 'shadow: declaration of "err"'
 
-  exclude-rules:
-    # Exclude some linters from running on test files
-    - path: _test\.go
-      linters:
-        - gocyclo
-        - errcheck
+      # Zerolog structured logging intentionally chains Err()
+      - path: internal/
+        linters:
+          - errcheck
+        text: 'Error return value of.*Err.*is not checked'
 
-    # Ignore shadowing of 'err' - common Go idiom
-    - linters:
-        - govet
-      text: 'shadow: declaration of "err"'
-
-    # Zerolog structured logging intentionally chains Err()
-    - path: internal/
-      linters:
-        - errcheck
-      text: 'Error return value of.*Err.*is not checked'
+output:
+  issues:
+    # Show all issues
+    max-per-linter: 0
+    max-same: 0
