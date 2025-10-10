@@ -288,9 +288,10 @@ func TestProcessDiscoveredLinks(t *testing.T) {
 
 			// Verify homepage detection logic
 			isHomepage := tt.task.Path == "/"
-			if tt.name == "homepage_with_links" {
+			switch tt.name {
+			case "homepage_with_links":
 				assert.True(t, isHomepage)
-			} else if tt.name == "regular_page_with_links" {
+			case "regular_page_with_links":
 				assert.False(t, isHomepage)
 			}
 

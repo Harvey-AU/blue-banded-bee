@@ -112,7 +112,7 @@ func main() {
 	dbQueue := db.NewDbQueue(pgDB)
 
 	// Create a worker pool for task processing
-	var jobWorkers int = 5 // QUESTION: Set in env or dynamically - consider impact throughout app where worker pool sizing is set.
+	var jobWorkers = 5 // QUESTION: Set in env or dynamically - consider impact throughout app where worker pool sizing is set.
 	workerPool := jobs.NewWorkerPool(pgDB.GetDB(), dbQueue, cr, jobWorkers, pgDB.GetConfig())
 
 	// Create job manager
