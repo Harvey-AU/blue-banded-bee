@@ -98,7 +98,7 @@ func TestCreateManualRootTaskFunctionExists(t *testing.T) {
 func TestCreateManualRootTaskLogging(t *testing.T) {
 	// Test that function logs appropriately
 	mockQueue := &ManualRootTaskMock{}
-	
+
 	jm := &JobManager{
 		dbQueue: mockQueue,
 	}

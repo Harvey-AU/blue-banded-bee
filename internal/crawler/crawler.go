@@ -108,11 +108,13 @@ func New(config *Config, id ...string) *Crawler {
 		colly.AllowURLRevisit(),
 	)
 
-	c.Limit(&colly.LimitRule{
+	if err := c.Limit(&colly.LimitRule{
 		DomainGlob:  "*",
 		Parallelism: config.MaxConcurrency,
 		RandomDelay: time.Second / time.Duration(config.RateLimit),
-	})
+	}); err != nil {
+		log.Error().Err(err).Msg("Failed to set crawler limits")
+	}
 
 	// Create metrics map for this crawler instance
 	metricsMap := &sync.Map{}
@@ -260,14 +262,15 @@ func (c *Crawler) setupResponseHandlers(collyClone *colly.Collector, result *Cra
 
 	// Handle errors
 	collyClone.OnError(func(r *colly.Response, err error) {
+		if r == nil || r.Ctx == nil {
+			return
+		}
 		result := r.Ctx.GetAny("result").(*CrawlResult)
 		result.Error = err.Error()
 
-		if r != nil {
-			startTime := r.Ctx.GetAny("start_time").(time.Time)
-			result.ResponseTime = time.Since(startTime).Milliseconds()
-			result.StatusCode = r.StatusCode
-		}
+		startTime := r.Ctx.GetAny("start_time").(time.Time)
+		result.ResponseTime = time.Since(startTime).Milliseconds()
+		result.StatusCode = r.StatusCode
 
 		log.Error().
 			Err(err).
@@ -409,7 +412,7 @@ func (c *Crawler) performCacheValidation(ctx context.Context, targetURL string, 
 	return nil
 }
 
-// setupLinkExtraction configures Colly HTML handler for link extraction and categorization  
+// setupLinkExtraction configures Colly HTML handler for link extraction and categorization
 func setupLinkExtraction(collyClone *colly.Collector) {
 	collyClone.OnHTML("html", func(e *colly.HTMLElement) {
 		// Check if link extraction is enabled for this request

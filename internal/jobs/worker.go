@@ -1376,7 +1376,7 @@ func (wp *WorkerPool) handleTaskSuccess(ctx context.Context, task *db.Task, resu
 	task.CacheCheckAttempts = []byte("[]")
 
 	// Only attempt marshaling if data exists and is non-empty
-	if result.Headers != nil && len(result.Headers) > 0 {
+	if len(result.Headers) > 0 {
 		if headerBytes, err := json.Marshal(result.Headers); err == nil {
 			// Validate that the marshaled JSON is valid
 			if json.Valid(headerBytes) {
@@ -1389,7 +1389,7 @@ func (wp *WorkerPool) handleTaskSuccess(ctx context.Context, task *db.Task, resu
 		}
 	}
 
-	if result.SecondHeaders != nil && len(result.SecondHeaders) > 0 {
+	if len(result.SecondHeaders) > 0 {
 		if secondHeaderBytes, err := json.Marshal(result.SecondHeaders); err == nil {
 			// Validate that the marshaled JSON is valid
 			if json.Valid(secondHeaderBytes) {
@@ -1402,7 +1402,7 @@ func (wp *WorkerPool) handleTaskSuccess(ctx context.Context, task *db.Task, resu
 		}
 	}
 
-	if result.CacheCheckAttempts != nil && len(result.CacheCheckAttempts) > 0 {
+	if len(result.CacheCheckAttempts) > 0 {
 		if attemptsBytes, err := json.Marshal(result.CacheCheckAttempts); err == nil {
 			// Validate that the marshaled JSON is valid
 			if json.Valid(attemptsBytes) {
@@ -1665,18 +1665,6 @@ func (wp *WorkerPool) evaluateJobPerformance(jobID string, responseTime int64) {
 		// Note: For scaling down (boostDiff < 0), we let workers naturally exit
 		// when they check shouldExit in the worker loop
 	}
-}
-
-// Helper function to check if a URL points to a document
-func isDocumentLink(path string) bool {
-	lower := strings.ToLower(path)
-	return strings.HasSuffix(lower, ".pdf") ||
-		strings.HasSuffix(lower, ".doc") ||
-		strings.HasSuffix(lower, ".docx") ||
-		strings.HasSuffix(lower, ".xls") ||
-		strings.HasSuffix(lower, ".xlsx") ||
-		strings.HasSuffix(lower, ".ppt") ||
-		strings.HasSuffix(lower, ".pptx")
 }
 
 // listenForNotifications sets up PostgreSQL LISTEN/NOTIFY

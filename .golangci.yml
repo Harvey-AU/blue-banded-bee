@@ -1,0 +1,55 @@
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  enable:
+    - govet
+    - staticcheck
+    - errcheck
+    - revive
+    - ineffassign
+    - gocyclo
+    - misspell
+
+  settings:
+    gocyclo:
+      min-complexity: 35
+
+    revive:
+      rules:
+        - name: exported
+          disabled: true
+        - name: package-comments
+          disabled: true
+        - name: unused-parameter
+          disabled: true
+
+  exclusions:
+    paths:
+      - internal/mocks
+      - internal/testutil
+      - internal/benchmarks
+
+    rules:
+      # Test files: allow unchecked errors and unused code
+      - path: _test\.go
+        linters:
+          - errcheck
+          - unused
+
+      # Intentionally ignore godotenv.Load errors (optional .env files)
+      - linters:
+          - errcheck
+        text: "Error return value of `godotenv.Load` is not checked"
+
+      # Deferred Close() calls - common pattern where error isn't actionable
+      - linters:
+          - errcheck
+        text: "Error return value of.*Close.* is not checked"
+
+formatters:
+  enable:
+    - gofmt
+    - goimports

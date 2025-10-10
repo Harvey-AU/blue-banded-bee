@@ -271,10 +271,10 @@ func TestConnectionString_StatementTimeout(t *testing.T) {
 			config := &Config{
 				DatabaseURL: tt.input,
 			}
-			
+
 			// Test through the New function logic (will fail on connection)
 			_, _ = New(config)
-			
+
 			// Can't test the actual modified connection string without accessing private fields
 			// but we've tested the logic flow
 		})
@@ -326,7 +326,7 @@ func TestConfig_LargePoolSettings(t *testing.T) {
 
 	// Values should be preserved
 	_, _ = New(config)
-	
+
 	assert.Equal(t, 1000, config.MaxIdleConns)
 	assert.Equal(t, 2000, config.MaxOpenConns)
 	assert.Equal(t, 24*time.Hour, config.MaxLifetime)

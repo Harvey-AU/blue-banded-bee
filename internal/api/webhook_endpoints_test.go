@@ -44,7 +44,7 @@ func TestWebflowWebhookIntegration(t *testing.T) {
 					OrganisationID: stringPtr("webhook-org-456"),
 				}
 				mockDB.On("GetUserByWebhookToken", "test-webhook-token-123").Return(user, nil)
-				
+
 				// Mock successful job creation
 				createdJob := &jobs.Job{
 					ID:             "webhook-job-789",
@@ -61,7 +61,7 @@ func TestWebflowWebhookIntegration(t *testing.T) {
 						opts.UserID != nil && *opts.UserID == "webhook-user-123" &&
 						opts.SourceType != nil && *opts.SourceType == "webflow_webhook"
 				})).Return(createdJob, nil)
-				
+
 				// Mock StartJob call that webhook makes after creation
 				jm.On("StartJob", mock.Anything, "webhook-job-789").Return(nil)
 			},
@@ -70,11 +70,11 @@ func TestWebflowWebhookIntegration(t *testing.T) {
 				var response map[string]interface{}
 				err := json.Unmarshal(rec.Body.Bytes(), &response)
 				require.NoError(t, err)
-				
+
 				// Verify successful response structure
 				assert.Equal(t, "success", response["status"])
 				assert.Contains(t, response["message"].(string), "Job created successfully")
-				
+
 				// The main success is that the webhook processed correctly
 				// (we can see from logs: "Successfully created and started job from Webflow webhook")
 			},
@@ -96,7 +96,7 @@ func TestWebflowWebhookIntegration(t *testing.T) {
 				var response map[string]interface{}
 				err := json.Unmarshal(rec.Body.Bytes(), &response)
 				require.NoError(t, err)
-				
+
 				assert.Equal(t, float64(400), response["status"])
 				assert.Equal(t, "BAD_REQUEST", response["code"])
 				assert.Equal(t, "Webhook token required in URL path", response["message"])
@@ -119,7 +119,7 @@ func TestWebflowWebhookIntegration(t *testing.T) {
 				var response map[string]interface{}
 				err := json.Unmarshal(rec.Body.Bytes(), &response)
 				require.NoError(t, err)
-				
+
 				assert.Equal(t, float64(404), response["status"])
 				assert.Equal(t, "NOT_FOUND", response["code"])
 				assert.Equal(t, "Invalid webhook token", response["message"])
@@ -139,7 +139,7 @@ func TestWebflowWebhookIntegration(t *testing.T) {
 				var response map[string]interface{}
 				err := json.Unmarshal(rec.Body.Bytes(), &response)
 				require.NoError(t, err)
-				
+
 				assert.Equal(t, float64(405), response["status"])
 				assert.Equal(t, "METHOD_NOT_ALLOWED", response["code"])
 			},
@@ -149,38 +149,39 @@ func TestWebflowWebhookIntegration(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			handler, mockDB, mockJobsManager := createTestHandler()
-			
+
 			// Setup mocks
 			tt.setupMocks(mockDB, mockJobsManager)
-			
+
 			// Create request
 			requestBody, err := json.Marshal(tt.requestBody)
 			require.NoError(t, err)
-			
+
 			method := http.MethodPost
 			if tt.name == "webhook_wrong_method" {
 				method = http.MethodGet // Wrong method for testing
 			}
-			
+
 			req := httptest.NewRequest(method, tt.path, bytes.NewBuffer(requestBody))
 			req.Header.Set("Content-Type", "application/json")
 			rec := httptest.NewRecorder()
-			
+
 			// Execute
 			handler.WebflowWebhook(rec, req)
-			
+
 			// Verify
 			assert.Equal(t, tt.expectedStatus, rec.Code)
 			if tt.checkResponse != nil {
 				tt.checkResponse(t, rec)
 			}
-			
+
 			// Verify mocks
 			mockDB.AssertExpectations(t)
 			mockJobsManager.AssertExpectations(t)
 		})
 	}
 }
+
 // TestWebflowWebhookEdgeCases tests additional edge cases for comprehensive coverage
 func TestWebflowWebhookEdgeCases(t *testing.T) {
 	tests := []struct {
@@ -214,7 +215,7 @@ func TestWebflowWebhookEdgeCases(t *testing.T) {
 				var response map[string]interface{}
 				err := json.Unmarshal(rec.Body.Bytes(), &response)
 				require.NoError(t, err)
-				
+
 				assert.Equal(t, "success", response["status"])
 				assert.Contains(t, response["message"].(string), "ignored")
 			},
@@ -238,7 +239,7 @@ func TestWebflowWebhookEdgeCases(t *testing.T) {
 					OrganisationID: stringPtr("webhook-org-456"),
 				}
 				mockDB.On("GetUserByWebhookToken", "test-token").Return(user, nil)
-				
+
 				// Mock job creation failure
 				jm.On("CreateJob", mock.Anything, mock.AnythingOfType("*jobs.JobOptions")).Return(nil, assert.AnError)
 			},
@@ -247,7 +248,7 @@ func TestWebflowWebhookEdgeCases(t *testing.T) {
 				var response map[string]interface{}
 				err := json.Unmarshal(rec.Body.Bytes(), &response)
 				require.NoError(t, err)
-				
+
 				assert.Equal(t, float64(500), response["status"])
 				assert.Equal(t, "INTERNAL_ERROR", response["code"])
 			},
@@ -257,10 +258,10 @@ func TestWebflowWebhookEdgeCases(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			handler, mockDB, mockJobsManager := createTestHandler()
-			
+
 			// Setup mocks
 			tt.setupMocks(mockDB, mockJobsManager)
-			
+
 			// Create request
 			var req *http.Request
 			if tt.name == "webhook_invalid_json_payload" {
@@ -273,16 +274,16 @@ func TestWebflowWebhookEdgeCases(t *testing.T) {
 			}
 			req.Header.Set("Content-Type", "application/json")
 			rec := httptest.NewRecorder()
-			
+
 			// Execute
 			handler.WebflowWebhook(rec, req)
-			
+
 			// Verify
 			assert.Equal(t, tt.expectedStatus, rec.Code)
 			if tt.checkResponse != nil {
 				tt.checkResponse(t, rec)
 			}
-			
+
 			// Verify mocks
 			mockDB.AssertExpectations(t)
 			mockJobsManager.AssertExpectations(t)

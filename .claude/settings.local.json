@@ -88,7 +88,8 @@
       "Bash(fly status:*)",
       "WebSearch",
       "WebFetch(domain:codingforseo.com)",
-      "Bash(air)"
+      "Bash(air)",
+      "Bash(gofmt:*)"
     ],
     "deny": []
   },

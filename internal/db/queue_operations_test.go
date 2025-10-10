@@ -122,60 +122,60 @@ func TestGetJobByID(t *testing.T) {
 
 func TestUpdateJobStatus(t *testing.T) {
 	tests := []struct {
-		name          string
-		jobID         string
-		oldStatus     string
-		newStatus     string
+		name            string
+		jobID           string
+		oldStatus       string
+		newStatus       string
 		validTransition bool
-		description   string
+		description     string
 	}{
 		{
-			name:          "pending_to_running",
-			jobID:         uuid.New().String(),
-			oldStatus:     "Pending",
-			newStatus:     "Running",
+			name:            "pending_to_running",
+			jobID:           uuid.New().String(),
+			oldStatus:       "Pending",
+			newStatus:       "Running",
 			validTransition: true,
-			description:   "Should transition from Pending to Running",
+			description:     "Should transition from Pending to Running",
 		},
 		{
-			name:          "running_to_completed",
-			jobID:         uuid.New().String(),
-			oldStatus:     "Running",
-			newStatus:     "Completed",
+			name:            "running_to_completed",
+			jobID:           uuid.New().String(),
+			oldStatus:       "Running",
+			newStatus:       "Completed",
 			validTransition: true,
-			description:   "Should transition from Running to Completed",
+			description:     "Should transition from Running to Completed",
 		},
 		{
-			name:          "running_to_failed",
-			jobID:         uuid.New().String(),
-			oldStatus:     "Running",
-			newStatus:     "Failed",
+			name:            "running_to_failed",
+			jobID:           uuid.New().String(),
+			oldStatus:       "Running",
+			newStatus:       "Failed",
 			validTransition: true,
-			description:   "Should transition from Running to Failed",
+			description:     "Should transition from Running to Failed",
 		},
 		{
-			name:          "completed_to_pending",
-			jobID:         uuid.New().String(),
-			oldStatus:     "Completed",
-			newStatus:     "Pending",
+			name:            "completed_to_pending",
+			jobID:           uuid.New().String(),
+			oldStatus:       "Completed",
+			newStatus:       "Pending",
 			validTransition: false,
-			description:   "Should not allow Completed to Pending",
+			description:     "Should not allow Completed to Pending",
 		},
 		{
-			name:          "failed_to_retry",
-			jobID:         uuid.New().String(),
-			oldStatus:     "Failed",
-			newStatus:     "Pending",
+			name:            "failed_to_retry",
+			jobID:           uuid.New().String(),
+			oldStatus:       "Failed",
+			newStatus:       "Pending",
 			validTransition: true,
-			description:   "Should allow retry from Failed to Pending",
+			description:     "Should allow retry from Failed to Pending",
 		},
 		{
-			name:          "invalid_status",
-			jobID:         uuid.New().String(),
-			oldStatus:     "Running",
-			newStatus:     "InvalidStatus",
+			name:            "invalid_status",
+			jobID:           uuid.New().String(),
+			oldStatus:       "Running",
+			newStatus:       "InvalidStatus",
 			validTransition: false,
-			description:   "Should reject invalid status",
+			description:     "Should reject invalid status",
 		},
 	}
 
@@ -190,7 +190,7 @@ func TestUpdateJobStatus(t *testing.T) {
 					break
 				}
 			}
-			
+
 			if !isValidStatus {
 				assert.False(t, tt.validTransition, tt.description)
 			}
@@ -293,46 +293,46 @@ func TestGetNextTaskLocking(t *testing.T) {
 	}
 
 	tests := []struct {
-		name          string
+		name              string
 		concurrentWorkers int
 		availableTasks    int
 		expectedClaims    int
-		description   string
+		description       string
 	}{
 		{
-			name:          "single_task_single_worker",
+			name:              "single_task_single_worker",
 			concurrentWorkers: 1,
 			availableTasks:    1,
 			expectedClaims:    1,
-			description:   "Single worker should claim single task",
+			description:       "Single worker should claim single task",
 		},
 		{
-			name:          "single_task_multiple_workers",
+			name:              "single_task_multiple_workers",
 			concurrentWorkers: 5,
 			availableTasks:    1,
 			expectedClaims:    1,
-			description:   "Only one worker should claim single task",
+			description:       "Only one worker should claim single task",
 		},
 		{
-			name:          "multiple_tasks_multiple_workers",
+			name:              "multiple_tasks_multiple_workers",
 			concurrentWorkers: 3,
 			availableTasks:    3,
 			expectedClaims:    3,
-			description:   "Each worker should claim one task",
+			description:       "Each worker should claim one task",
 		},
 		{
-			name:          "more_workers_than_tasks",
+			name:              "more_workers_than_tasks",
 			concurrentWorkers: 10,
 			availableTasks:    5,
 			expectedClaims:    5,
-			description:   "Should claim all available tasks",
+			description:       "Should claim all available tasks",
 		},
 		{
-			name:          "no_available_tasks",
+			name:              "no_available_tasks",
 			concurrentWorkers: 5,
 			availableTasks:    0,
 			expectedClaims:    0,
-			description:   "No tasks to claim",
+			description:       "No tasks to claim",
 		},
 	}
 
@@ -347,58 +347,58 @@ func TestGetNextTaskLocking(t *testing.T) {
 
 func TestUpdateTaskStatusWithRetry(t *testing.T) {
 	tests := []struct {
-		name          string
-		taskID        string
-		currentRetries int
-		maxRetries    int
-		newStatus     string
+		name            string
+		taskID          string
+		currentRetries  int
+		maxRetries      int
+		newStatus       string
 		expectedRetries int
-		description   string
+		description     string
 	}{
 		{
-			name:          "increment_retry_on_failure",
-			taskID:        uuid.New().String(),
-			currentRetries: 0,
-			maxRetries:    3,
-			newStatus:     "Failed",
+			name:            "increment_retry_on_failure",
+			taskID:          uuid.New().String(),
+			currentRetries:  0,
+			maxRetries:      3,
+			newStatus:       "Failed",
 			expectedRetries: 1,
-			description:   "Should increment retry count on failure",
+			description:     "Should increment retry count on failure",
 		},
 		{
-			name:          "reset_retry_on_success",
-			taskID:        uuid.New().String(),
-			currentRetries: 2,
-			maxRetries:    3,
-			newStatus:     "Completed",
+			name:            "reset_retry_on_success",
+			taskID:          uuid.New().String(),
+			currentRetries:  2,
+			maxRetries:      3,
+			newStatus:       "Completed",
 			expectedRetries: 0,
-			description:   "Should reset retry count on success",
+			description:     "Should reset retry count on success",
 		},
 		{
-			name:          "max_retries_reached",
-			taskID:        uuid.New().String(),
-			currentRetries: 3,
-			maxRetries:    3,
-			newStatus:     "Failed",
+			name:            "max_retries_reached",
+			taskID:          uuid.New().String(),
+			currentRetries:  3,
+			maxRetries:      3,
+			newStatus:       "Failed",
 			expectedRetries: 3,
-			description:   "Should not exceed max retries",
+			description:     "Should not exceed max retries",
 		},
 		{
-			name:          "reset_started_at_on_pending",
-			taskID:        uuid.New().String(),
-			currentRetries: 1,
-			maxRetries:    3,
-			newStatus:     "Pending",
+			name:            "reset_started_at_on_pending",
+			taskID:          uuid.New().String(),
+			currentRetries:  1,
+			maxRetries:      3,
+			newStatus:       "Pending",
 			expectedRetries: 1,
-			description:   "Should reset started_at when back to Pending",
+			description:     "Should reset started_at when back to Pending",
 		},
 		{
-			name:          "set_completed_at",
-			taskID:        uuid.New().String(),
-			currentRetries: 0,
-			maxRetries:    3,
-			newStatus:     "Completed",
+			name:            "set_completed_at",
+			taskID:          uuid.New().String(),
+			currentRetries:  0,
+			maxRetries:      3,
+			newStatus:       "Completed",
 			expectedRetries: 0,
-			description:   "Should set completed_at when Completed",
+			description:     "Should set completed_at when Completed",
 		},
 	}
 
@@ -474,7 +474,7 @@ func TestGetTasksByJobIDPagination(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			offset := (tt.page - 1) * tt.pageSize
 			remaining := tt.totalTasks - offset
-			
+
 			if remaining < 0 {
 				assert.Equal(t, 0, tt.expectedCount, tt.description)
 			} else if remaining < tt.pageSize {
@@ -488,11 +488,11 @@ func TestGetTasksByJobIDPagination(t *testing.T) {
 
 func TestExecuteTransactionRollback(t *testing.T) {
 	tests := []struct {
-		name          string
-		operations    []string
-		failAt        int
+		name           string
+		operations     []string
+		failAt         int
 		shouldRollback bool
-		description   string
+		description    string
 	}{
 		{
 			name: "successful_transaction",
@@ -501,9 +501,9 @@ func TestExecuteTransactionRollback(t *testing.T) {
 				"UPDATE jobs",
 				"DELETE FROM temp",
 			},
-			failAt:        -1,
+			failAt:         -1,
 			shouldRollback: false,
-			description:   "Should commit successful transaction",
+			description:    "Should commit successful transaction",
 		},
 		{
 			name: "fail_at_start",
@@ -511,9 +511,9 @@ func TestExecuteTransactionRollback(t *testing.T) {
 				"INVALID SQL",
 				"UPDATE jobs",
 			},
-			failAt:        0,
+			failAt:         0,
 			shouldRollback: true,
-			description:   "Should rollback on first operation failure",
+			description:    "Should rollback on first operation failure",
 		},
 		{
 			name: "fail_mid_transaction",
@@ -522,9 +522,9 @@ func TestExecuteTransactionRollback(t *testing.T) {
 				"INVALID SQL",
 				"DELETE FROM temp",
 			},
-			failAt:        1,
+			failAt:         1,
 			shouldRollback: true,
-			description:   "Should rollback on mid-transaction error",
+			description:    "Should rollback on mid-transaction error",
 		},
 		{
 			name: "fail_at_end",
@@ -533,16 +533,16 @@ func TestExecuteTransactionRollback(t *testing.T) {
 				"UPDATE jobs",
 				"INVALID SQL",
 			},
-			failAt:        2,
+			failAt:         2,
 			shouldRollback: true,
-			description:   "Should rollback on last operation failure",
+			description:    "Should rollback on last operation failure",
 		},
 		{
-			name: "empty_transaction",
-			operations: []string{},
-			failAt:        -1,
+			name:           "empty_transaction",
+			operations:     []string{},
+			failAt:         -1,
 			shouldRollback: false,
-			description:   "Empty transaction should succeed",
+			description:    "Empty transaction should succeed",
 		},
 	}
 
@@ -559,39 +559,39 @@ func TestExecuteTransactionRollback(t *testing.T) {
 
 func TestDatabaseQueryIsolation(t *testing.T) {
 	tests := []struct {
-		name          string
-		queryType     string
-		parameters    []interface{}
-		sanitized     bool
-		description   string
+		name        string
+		queryType   string
+		parameters  []interface{}
+		sanitized   bool
+		description string
 	}{
 		{
-			name:          "parameterized_query",
-			queryType:     "SELECT",
-			parameters:    []interface{}{"user123", 25},
-			sanitized:     true,
-			description:   "Should use parameterized queries",
+			name:        "parameterized_query",
+			queryType:   "SELECT",
+			parameters:  []interface{}{"user123", 25},
+			sanitized:   true,
+			description: "Should use parameterized queries",
 		},
 		{
-			name:          "sql_injection_attempt",
-			queryType:     "SELECT",
-			parameters:    []interface{}{"'; DROP TABLE users; --"},
-			sanitized:     true,
-			description:   "Should sanitize SQL injection attempts",
+			name:        "sql_injection_attempt",
+			queryType:   "SELECT",
+			parameters:  []interface{}{"'; DROP TABLE users; --"},
+			sanitized:   true,
+			description: "Should sanitize SQL injection attempts",
 		},
 		{
-			name:          "null_parameters",
-			queryType:     "INSERT",
-			parameters:    []interface{}{nil, "value", nil},
-			sanitized:     true,
-			description:   "Should handle null parameters",
+			name:        "null_parameters",
+			queryType:   "INSERT",
+			parameters:  []interface{}{nil, "value", nil},
+			sanitized:   true,
+			description: "Should handle null parameters",
 		},
 		{
-			name:          "special_characters",
-			queryType:     "UPDATE",
-			parameters:    []interface{}{"O'Brien", "test@example.com"},
-			sanitized:     true,
-			description:   "Should handle special characters",
+			name:        "special_characters",
+			queryType:   "UPDATE",
+			parameters:  []interface{}{"O'Brien", "test@example.com"},
+			sanitized:   true,
+			description: "Should handle special characters",
 		},
 	}
 

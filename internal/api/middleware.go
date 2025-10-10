@@ -60,7 +60,10 @@ func generateRequestID() string {
 
 	// Generate 4 random bytes
 	randomBytes := make([]byte, 4)
-	rand.Read(randomBytes)
+	if _, err := rand.Read(randomBytes); err != nil {
+		// Fallback to timestamp only if random generation fails
+		return fmt.Sprintf("%x", timestamp)
+	}
 
 	return fmt.Sprintf("%x-%x", timestamp, randomBytes)
 }

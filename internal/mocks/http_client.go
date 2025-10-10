@@ -107,11 +107,11 @@ func CreateMockResponse(statusCode int, body string, headers map[string]string) 
 		StatusCode: statusCode,
 		Header:     make(http.Header),
 	}
-	
+
 	// Add headers if provided
 	for key, value := range headers {
 		resp.Header.Set(key, value)
 	}
-	
+
 	return resp
 }

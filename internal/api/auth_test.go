@@ -92,9 +92,9 @@ func TestAuthRegister(t *testing.T) {
 			if tt.skipDBCheck {
 				t.Skip("Skipping test that requires database")
 			}
-			
+
 			h := &Handler{}
-			
+
 			var body []byte
 			if tt.body != nil {
 				if str, ok := tt.body.(string); ok {
@@ -105,14 +105,14 @@ func TestAuthRegister(t *testing.T) {
 					require.NoError(t, err)
 				}
 			}
-			
+
 			req := httptest.NewRequest(tt.method, "/v1/auth/register", bytes.NewReader(body))
 			rec := httptest.NewRecorder()
-			
+
 			h.AuthRegister(rec, req)
-			
+
 			assert.Equal(t, tt.expectedStatus, rec.Code)
-			
+
 			if tt.expectedError != "" && rec.Code >= 400 {
 				var errResp map[string]interface{}
 				err := json.Unmarshal(rec.Body.Bytes(), &errResp)
@@ -174,7 +174,7 @@ func TestAuthSession(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			h := &Handler{}
-			
+
 			var body []byte
 			if tt.body != nil {
 				if str, ok := tt.body.(string); ok {
@@ -185,9 +185,9 @@ func TestAuthSession(t *testing.T) {
 					require.NoError(t, err)
 				}
 			}
-			
+
 			req := httptest.NewRequest(tt.method, "/v1/auth/session", bytes.NewReader(body))
-			
+
 			if tt.hasAuth {
 				ctx := context.WithValue(req.Context(), auth.UserKey, &auth.UserClaims{
 					UserID: "test-user",
@@ -195,12 +195,12 @@ func TestAuthSession(t *testing.T) {
 				})
 				req = req.WithContext(ctx)
 			}
-			
+
 			rec := httptest.NewRecorder()
 			h.AuthSession(rec, req)
-			
+
 			assert.Equal(t, tt.expectedStatus, rec.Code)
-			
+
 			if tt.expectedError != "" && rec.Code >= 400 {
 				var errResp map[string]interface{}
 				err := json.Unmarshal(rec.Body.Bytes(), &errResp)
@@ -248,11 +248,11 @@ func TestAuthProfile(t *testing.T) {
 			if tt.skipDBCheck {
 				t.Skip("Skipping test that requires database")
 			}
-			
+
 			h := &Handler{}
-			
+
 			req := httptest.NewRequest(tt.method, "/v1/auth/profile", nil)
-			
+
 			if tt.hasAuth {
 				ctx := context.WithValue(req.Context(), auth.UserKey, &auth.UserClaims{
 					UserID: "test-user",
@@ -260,10 +260,10 @@ func TestAuthProfile(t *testing.T) {
 				})
 				req = req.WithContext(ctx)
 			}
-			
+
 			rec := httptest.NewRecorder()
 			h.AuthProfile(rec, req)
-			
+
 			assert.Equal(t, tt.expectedStatus, rec.Code)
 		})
 	}
@@ -278,14 +278,14 @@ func TestUserResponse(t *testing.T) {
 		CreatedAt:      "2024-01-01T12:00:00Z",
 		UpdatedAt:      "2024-01-02T12:00:00Z",
 	}
-	
+
 	data, err := json.Marshal(user)
 	require.NoError(t, err)
-	
+
 	var decoded UserResponse
 	err = json.Unmarshal(data, &decoded)
 	require.NoError(t, err)
-	
+
 	assert.Equal(t, user.ID, decoded.ID)
 	assert.Equal(t, user.Email, decoded.Email)
 	assert.Equal(t, *user.FullName, *decoded.FullName)
@@ -301,14 +301,14 @@ func TestOrganisationResponse(t *testing.T) {
 		CreatedAt: "2024-01-01T12:00:00Z",
 		UpdatedAt: "2024-01-02T12:00:00Z",
 	}
-	
+
 	data, err := json.Marshal(org)
 	require.NoError(t, err)
-	
+
 	var decoded OrganisationResponse
 	err = json.Unmarshal(data, &decoded)
 	require.NoError(t, err)
-	
+
 	assert.Equal(t, org.ID, decoded.ID)
 	assert.Equal(t, org.Name, decoded.Name)
 	assert.Equal(t, org.CreatedAt, decoded.CreatedAt)

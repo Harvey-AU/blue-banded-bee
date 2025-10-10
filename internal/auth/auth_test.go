@@ -68,15 +68,15 @@ func TestNewConfigFromEnv(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Clear environment
 			os.Clearenv()
-			
+
 			// Set test environment variables
 			for key, value := range tt.envVars {
 				os.Setenv(key, value)
 			}
-			
+
 			// Test NewConfigFromEnv
 			config, err := NewConfigFromEnv()
-			
+
 			if tt.wantErr {
 				assert.Error(t, err)
 				assert.Nil(t, config)
@@ -90,7 +90,7 @@ func TestNewConfigFromEnv(t *testing.T) {
 				assert.Equal(t, tt.envVars["SUPABASE_ANON_KEY"], config.SupabaseAnonKey)
 				assert.Equal(t, tt.envVars["SUPABASE_JWT_SECRET"], config.JWTSecret)
 			}
-			
+
 			// Clean up
 			os.Clearenv()
 		})
@@ -151,7 +151,7 @@ func TestConfig_Validate(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := tt.config.Validate()
-			
+
 			if tt.wantErr {
 				assert.Error(t, err)
 				if tt.errMsg != "" {
@@ -170,12 +170,12 @@ func TestConfigFields(t *testing.T) {
 		SupabaseAnonKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test",
 		JWTSecret:       "super-secret-jwt-key-with-at-least-32-characters",
 	}
-	
+
 	// Test that fields are accessible
 	assert.Equal(t, "https://test.supabase.co", config.SupabaseURL)
 	assert.Equal(t, "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test", config.SupabaseAnonKey)
 	assert.Equal(t, "super-secret-jwt-key-with-at-least-32-characters", config.JWTSecret)
-	
+
 	// Test validation passes
 	err := config.Validate()
 	assert.NoError(t, err)
@@ -187,7 +187,7 @@ func BenchmarkNewConfigFromEnv(b *testing.B) {
 	os.Setenv("SUPABASE_ANON_KEY", "test-anon-key")
 	os.Setenv("SUPABASE_JWT_SECRET", "test-jwt-secret")
 	defer os.Clearenv()
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_, _ = NewConfigFromEnv()
@@ -200,7 +200,7 @@ func BenchmarkConfig_Validate(b *testing.B) {
 		SupabaseAnonKey: "test-anon-key",
 		JWTSecret:       "test-jwt-secret",
 	}
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_ = config.Validate()

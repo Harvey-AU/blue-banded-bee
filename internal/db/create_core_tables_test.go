@@ -80,27 +80,27 @@ func TestCreateCoreTablesTableOrder(t *testing.T) {
 	defer db.Close()
 
 	// Expect tables in dependency order
-	
+
 	// organisations first (no dependencies)
 	mock.ExpectExec("CREATE TABLE IF NOT EXISTS organisations").
 		WillReturnResult(sqlmock.NewResult(0, 0))
-	
-	// users (depends on organisations)  
+
+	// users (depends on organisations)
 	mock.ExpectExec("CREATE TABLE IF NOT EXISTS users").
 		WillReturnResult(sqlmock.NewResult(0, 0))
-		
+
 	// domains (no dependencies)
 	mock.ExpectExec("CREATE TABLE IF NOT EXISTS domains").
 		WillReturnResult(sqlmock.NewResult(0, 0))
-		
+
 	// pages (depends on domains)
 	mock.ExpectExec("CREATE TABLE IF NOT EXISTS pages").
 		WillReturnResult(sqlmock.NewResult(0, 0))
-		
+
 	// jobs (depends on domains, users, organisations)
 	mock.ExpectExec("CREATE TABLE IF NOT EXISTS jobs").
 		WillReturnResult(sqlmock.NewResult(0, 0))
-		
+
 	// tasks (depends on jobs, pages)
 	mock.ExpectExec("CREATE TABLE IF NOT EXISTS tasks").
 		WillReturnResult(sqlmock.NewResult(0, 0))
@@ -139,7 +139,7 @@ func TestCreateCoreTablesSchemaElements(t *testing.T) {
 func TestCreateCoreTablesErrorPropagation(t *testing.T) {
 	// Test that errors from different tables are properly propagated
 	tables := []struct {
-		name       string
+		name        string
 		failAtTable string
 	}{
 		{"organisations_failure", "organisations"},
@@ -157,7 +157,7 @@ func TestCreateCoreTablesErrorPropagation(t *testing.T) {
 			defer db.Close()
 
 			tableOrder := []string{"organisations", "users", "domains", "pages", "jobs", "tasks"}
-			
+
 			for _, table := range tableOrder {
 				if table == tt.failAtTable {
 					mock.ExpectExec("CREATE TABLE IF NOT EXISTS " + table).
@@ -172,7 +172,7 @@ func TestCreateCoreTablesErrorPropagation(t *testing.T) {
 			err = createCoreTables(db)
 			assert.Error(t, err)
 			assert.Contains(t, err.Error(), tt.failAtTable)
-			
+
 			// Note: expectationsWereMet may not be satisfied if we fail early,
 			// but that's expected behavior
 		})
