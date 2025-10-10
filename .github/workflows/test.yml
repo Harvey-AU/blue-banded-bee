@@ -64,11 +64,30 @@ jobs:
       - name: Prime module graph (test + prod)
         run: go list -deps -test ./...
 
+      - name: Diagnostic - Check Go environment
+        run: |
+          echo "=== Go Environment ==="
+          go env GOMODCACHE
+          go env GOCACHE
+          go env GOPATH
+          go env GOFLAGS
+          go env GOPROXY
+          echo ""
+          echo "=== Verify test dependencies on disk ==="
+          ls -la "$(go env GOMODCACHE)/github.com/getsentry" || echo "sentry-go not found"
+          ls -la "$(go env GOMODCACHE)/github.com/data-dog" || echo "go-sqlmock not found"
+          ls -la "$(go env GOMODCACHE)/github.com/stretchr" || echo "testify not found"
+          echo ""
+          echo "=== Module cache contents ==="
+          ls -la "$(go env GOMODCACHE)/github.com/" | head -20
+
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v4
         with:
           version: v1.59.0
-          args: --config .golangci.yml --modules-download-mode=mod
+          args: --config .golangci.yml --modules-download-mode=mod --verbose
+        env:
+          GOGC: "off"
 
   unit-tests:
     name: Unit Tests
