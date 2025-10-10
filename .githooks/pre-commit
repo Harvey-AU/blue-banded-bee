@@ -62,8 +62,8 @@ if ! command -v prettier &> /dev/null; then
     echo -e "${YELLOW}⚠️  Prettier not installed. Install with: npm install -g prettier${NC}"
     echo "Skipping prettier formatting..."
 else
-    # Get list of staged markdown/YAML/JSON files
-    STAGED_DOC_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(md|yml|yaml|json)$' || true)
+    # Get list of staged markdown/YAML/JSON/HTML/CSS/JS files
+    STAGED_DOC_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(md|yml|yaml|json|html|css|js)$' || true)
 
     if [ -n "$STAGED_DOC_FILES" ]; then
         echo "Found docs/config files to format:"

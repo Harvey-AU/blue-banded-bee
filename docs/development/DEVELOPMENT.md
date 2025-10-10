@@ -292,12 +292,12 @@ Our **GitHub Actions CI** runs golangci-lint v1.59.0 with Go 1.25 support:
 To manually format all files:
 
 ```bash
-# Format everything (Go + docs/config)
+# Format everything (Go + docs/config + web files)
 bash scripts/format.sh
 
 # Or format individually:
-gofmt -w .                                    # Go files only
-prettier --write "**/*.{md,yml,yaml,json}"    # Docs/config only
+gofmt -w .                                              # Go files only
+prettier --write "**/*.{md,yml,yaml,json,html,css,js}"  # Docs/config/web files
 ```
 
 #### Local Development (Fast Feedback)

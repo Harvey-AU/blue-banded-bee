@@ -16,14 +16,14 @@ else
     echo "  ✅ gofmt complete (install goimports for import formatting)"
 fi
 
-# Format docs/config files
+# Format docs/config/web files
 echo ""
-echo "📝 Formatting docs and config files..."
+echo "📝 Formatting docs, config, and web files..."
 if command -v prettier &> /dev/null; then
-    prettier --write "**/*.{md,yml,yaml,json}"
+    prettier --write "**/*.{md,yml,yaml,json,html,css,js}"
     echo "  ✅ prettier complete"
 else
-    echo "  ⚠️  prettier not installed - skipping docs/config formatting"
+    echo "  ⚠️  prettier not installed - skipping docs/config/web formatting"
     echo "     Install with: npm install -g prettier"
 fi
 

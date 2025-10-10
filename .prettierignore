@@ -46,6 +46,13 @@ coverage.html
 # Supabase
 supabase/.branches/
 supabase/.temp/
+supabase/migrations/  # Don't auto-format SQL migrations
 
 # Fly.io
 fly.toml.bak
+
+# Coverage reports (generated HTML)
+coverage.html
+
+# HTML templates (may have template syntax or be incomplete)
+web/templates/

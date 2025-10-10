@@ -107,10 +107,10 @@ jobs:
       - name: Check Prettier formatting
         run: |
           echo "=== Checking Prettier formatting ==="
-          prettier --check "**/*.{md,yml,yaml,json}" || {
+          prettier --check "**/*.{md,yml,yaml,json,html,css,js}" || {
             echo ""
             echo "❌ Some files are not formatted with Prettier"
-            echo "Run 'prettier --write \"**/*.{md,yml,yaml,json}\"' to fix formatting"
+            echo "Run 'prettier --write \"**/*.{md,yml,yaml,json,html,css,js}\"' to fix formatting"
             exit 1
           }
           echo "✅ All files are properly formatted with Prettier"
