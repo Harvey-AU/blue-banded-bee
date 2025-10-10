@@ -673,7 +673,14 @@
     handleLinkClick(linkType, data, element) {
       switch (linkType) {
         case 'job-details':
-          window.location.href = `/jobs?id=${data.id}`;
+          if (data?.id) {
+            window.location.href = `/jobs/${data.id}`;
+          }
+          break;
+        case 'share-job':
+          if (data?.id) {
+            this.generateShareLink(data.id, element);
+          }
           break;
         case 'cancel-job':
           this.cancelJob(data.id);
@@ -681,6 +688,66 @@
         default:
           this.dispatchCustomEvent('link-click', { linkType, data, element });
       }
+    }
+
+    async generateShareLink(jobId, element) {
+      if (!jobId) {
+        return;
+      }
+
+      const originalLabel = element.textContent;
+      try {
+        element.textContent = 'Generating…';
+        element.classList.add('bb-link-disabled');
+
+        const response = await api.request(`/v1/jobs/${jobId}/share-links`, {
+          method: 'POST'
+        });
+
+        const data = response?.data || response;
+        const shareLink = data?.share_link;
+        if (!shareLink) {
+          throw new Error('Share link missing in response');
+        }
+
+        try {
+          await navigator.clipboard.writeText(shareLink);
+          this.showInlineToast(element, 'Link copied');
+        } catch (copyErr) {
+          console.warn('Clipboard copy failed, showing inline toast', copyErr);
+          this.showInlineToast(element, 'Link ready', true);
+        }
+      } catch (error) {
+        console.error('Failed to generate share link:', error);
+        this.showInlineToast(element, 'Failed to share', true);
+      } finally {
+        element.textContent = originalLabel;
+        element.classList.remove('bb-link-disabled');
+      }
+    }
+
+    showInlineToast(anchorElement, message, isWarning = false) {
+      if (!anchorElement) {
+        alert(message);
+        return;
+      }
+
+      const toast = document.createElement('span');
+      toast.textContent = message;
+      toast.style.cssText = `
+        margin-left: 8px;
+        font-size: 12px;
+        color: ${isWarning ? '#b91c1c' : '#047857'};
+        font-weight: 600;
+        transition: opacity 0.2s ease;
+      `;
+
+      anchorElement.insertAdjacentElement('afterend', toast);
+
+      setTimeout(() => {
+        toast.style.opacity = '0';
+        setTimeout(() => toast.remove(), 200);
+      }, 2000);
     }
 
     handleFormSubmit(formType, data, form) {
@@ -1074,6 +1141,9 @@
             <div class="bb-job-actions">
               <button class="bb-btn-link" data-link="job-details" data-job-id="{id}">
                 View Details
+              </button>
+              <button class="bb-btn-link" data-link="share-job" data-job-id="{id}">
+                Share
               </button>
               ${this.getJobActionButtons()}
             </div>

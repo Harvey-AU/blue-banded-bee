@@ -150,8 +150,8 @@ function applyMetricsVisibility(metrics) {
   }
 }
 
-async function ensureMetadataLoaded() {
-  if (!window.metricsMetadata) {
+async function ensureMetadataLoaded(state) {
+  if (!window.metricsMetadata || state.mode === "shared") {
     return;
   }
 
@@ -167,9 +167,19 @@ async function ensureMetadataLoaded() {
   }
 }
 
-function updateActionButtons(jobBinding) {
+function updateActionButtons(state, jobBinding) {
   const restartBtn = document.getElementById("restartJobBtn");
   const cancelBtn = document.getElementById("cancelJobBtn");
+
+  if (state.mode === "shared") {
+    if (restartBtn) {
+      restartBtn.style.display = "none";
+    }
+    if (cancelBtn) {
+      cancelBtn.style.display = "none";
+    }
+    return;
+  }
 
   if (restartBtn) {
     restartBtn.style.display = jobBinding.can_restart ? "inline-flex" : "none";
@@ -535,6 +545,138 @@ function updatePagination(pagination, state) {
   state.page = total === 0 ? 0 : Math.floor(offset / state.limit);
 }
 
+function setShareLinkState(state, token, link) {
+  state.shareToken = token || null;
+  state.shareLink = link || null;
+  updateShareControls(state);
+}
+
+function updateShareControls(state) {
+  const panel = document.getElementById("shareLinkPanel");
+  const anchor = document.getElementById("shareLinkAnchor");
+  const revokeBtn = document.getElementById("revokeShareLinkBtn");
+  const shareBtn = document.getElementById("shareJobBtn");
+  const hasShareLink = Boolean(state.shareLink);
+
+  if (state.mode === "shared") {
+    if (panel) {
+      panel.style.display = "none";
+    }
+    if (shareBtn) {
+      shareBtn.style.display = "none";
+    }
+    if (revokeBtn) {
+      revokeBtn.style.display = "none";
+    }
+    return;
+  }
+
+  if (panel) {
+    panel.style.display = hasShareLink ? "flex" : "none";
+  }
+
+  if (anchor) {
+    if (hasShareLink) {
+      anchor.textContent = state.shareLink;
+      anchor.href = state.shareLink;
+    } else {
+      anchor.textContent = "—";
+      anchor.removeAttribute("href");
+    }
+  }
+
+  if (revokeBtn) {
+    revokeBtn.disabled = !hasShareLink;
+  }
+
+  if (shareBtn) {
+    shareBtn.textContent = hasShareLink ? "Copy Link" : "Generate Link";
+  }
+}
+
+async function copyShareLinkToClipboard(link) {
+  if (!link) {
+    showToast("No share link available to copy.", true);
+    return false;
+  }
+
+  try {
+    await navigator.clipboard.writeText(link);
+    showToast("Share link copied to clipboard.");
+    return true;
+  } catch (error) {
+    console.warn("Clipboard copy failed:", error);
+    showToast("Share link ready. Copy it from the share panel.", false);
+    return false;
+  }
+}
+
+async function fetchShareLink(state) {
+  try {
+    const response = await authorisedFetch(state, `/v1/jobs/${state.jobId}/share-links`, {
+      method: "GET",
+      headers: { Accept: "application/json" },
+    });
+
+    const payload = await response.json().catch(() => ({}));
+
+    if (response.status === 404) {
+      setShareLinkState(state, null, null);
+      return;
+    }
+
+    if (!response.ok) {
+      const message = payload?.message || `Failed to load share link state (${response.status})`;
+      throw new Error(message);
+    }
+
+    const data = payload?.data || payload;
+    const token = data?.token;
+    const shareLink = data?.share_link;
+
+    if (token && shareLink) {
+      setShareLinkState(state, token, shareLink);
+    } else {
+      setShareLinkState(state, null, null);
+    }
+  } catch (error) {
+    console.warn("Failed to load share link:", error);
+    setShareLinkState(state, null, null);
+  }
+}
+
+function initialiseSharedView() {
+  const backLink = document.querySelector(".back-link");
+  if (backLink) {
+    backLink.style.display = "none";
+  }
+
+  const userMeta = document.getElementById("userMeta");
+  if (userMeta) {
+    userMeta.style.display = "none";
+  }
+
+  const shareBtn = document.getElementById("shareJobBtn");
+  if (shareBtn) {
+    shareBtn.style.display = "none";
+  }
+
+  const sharePanel = document.getElementById("shareLinkPanel");
+  if (sharePanel) {
+    sharePanel.style.display = "none";
+  }
+
+  const restartBtn = document.getElementById("restartJobBtn");
+  if (restartBtn) {
+    restartBtn.style.display = "none";
+  }
+
+  const cancelBtn = document.getElementById("cancelJobBtn");
+  if (cancelBtn) {
+    cancelBtn.style.display = "none";
+  }
+}
+
 function setupInteractions(state) {
   const limitSelect = document.getElementById("tasksLimit");
   if (limitSelect) {
@@ -572,15 +714,96 @@ function setupInteractions(state) {
 
   const shareBtn = document.getElementById("shareJobBtn");
   if (shareBtn) {
+    if (state.mode === "shared") {
+      shareBtn.style.display = "none";
+    }
     shareBtn.addEventListener("click", async () => {
+      if (shareBtn.disabled) {
+        return;
+      }
+
+      if (state.shareLink) {
+        await copyShareLinkToClipboard(state.shareLink);
+        return;
+      }
+
+      if (state.mode === "shared") {
+        return;
+      }
+
       try {
-        await navigator.clipboard.writeText(window.location.href);
-        showToast("Link copied to clipboard.");
+        shareBtn.disabled = true;
+        shareBtn.textContent = "Generating…";
+
+        const response = await authorisedFetch(state, `/v1/jobs/${state.jobId}/share-links`, {
+          method: "POST",
+        });
+
+        if (!response.ok) {
+          const errorBody = await response.json().catch(() => ({}));
+          const message = errorBody?.message || `Share link request failed (${response.status})`;
+          throw new Error(message);
+        }
+
+        const payload = await response.json();
+        const shareLink = payload?.data?.share_link;
+        const token = payload?.data?.token;
+        if (!shareLink || !token) {
+          throw new Error("Share link not returned by API.");
+        }
+
+        setShareLinkState(state, token, shareLink);
+        await copyShareLinkToClipboard(shareLink);
       } catch (error) {
-        console.error("Clipboard copy failed:", error);
-        showToast("Failed to copy link.", true);
+        console.error("Failed to generate share link:", error);
+        showToast(error.message || "Failed to generate share link.", true);
+      } finally {
+        shareBtn.disabled = false;
+        updateShareControls(state);
       }
     });
+  }
+
+  const revokeBtn = document.getElementById("revokeShareLinkBtn");
+  if (revokeBtn) {
+    if (state.mode === "shared") {
+      revokeBtn.style.display = "none";
+    } else {
+      revokeBtn.addEventListener("click", async () => {
+        if (revokeBtn.disabled) {
+          return;
+        }
+        if (!state.shareToken) {
+          showToast("No active share link to revoke.", true);
+        return;
+      }
+
+      const originalText = revokeBtn.textContent;
+      try {
+        revokeBtn.disabled = true;
+        revokeBtn.textContent = "Revoking…";
+
+        const response = await authorisedFetch(state, `/v1/jobs/${state.jobId}/share-links/${state.shareToken}`, {
+          method: "DELETE",
+        });
+
+        if (!response.ok) {
+          const errorBody = await response.json().catch(() => ({}));
+          const message = errorBody?.message || `Failed to revoke share link (${response.status})`;
+          throw new Error(message);
+        }
+
+        setShareLinkState(state, null, null);
+        showToast("Share link revoked.");
+      } catch (error) {
+        console.error("Failed to revoke share link:", error);
+        showToast(error.message || "Failed to revoke share link.", true);
+      } finally {
+        revokeBtn.textContent = originalText;
+        updateShareControls(state);
+      }
+    });
+    }
   }
 
   const refreshJobBtn = document.getElementById("refreshJobBtn");
@@ -602,26 +825,34 @@ function setupInteractions(state) {
 
   const restartBtn = document.getElementById("restartJobBtn");
   if (restartBtn) {
-    restartBtn.addEventListener("click", async () => {
-      try {
-        await restartJobFromPage(state);
-      } catch (error) {
-        console.error("Failed to restart job:", error);
-        showToast("Failed to restart job.", true);
-      }
-    });
+    if (state.mode === "shared") {
+      restartBtn.style.display = "none";
+    } else {
+      restartBtn.addEventListener("click", async () => {
+        try {
+          await restartJobFromPage(state);
+        } catch (error) {
+          console.error("Failed to restart job:", error);
+          showToast("Failed to restart job.", true);
+        }
+      });
+    }
   }
 
   const cancelBtn = document.getElementById("cancelJobBtn");
   if (cancelBtn) {
-    cancelBtn.addEventListener("click", async () => {
-      try {
-        await cancelJobFromPage(state);
-      } catch (error) {
-        console.error("Failed to cancel job:", error);
-        showToast("Failed to cancel job.", true);
-      }
-    });
+    if (state.mode === "shared") {
+      cancelBtn.style.display = "none";
+    } else {
+      cancelBtn.addEventListener("click", async () => {
+        try {
+          await cancelJobFromPage(state);
+        } catch (error) {
+          console.error("Failed to cancel job:", error);
+          showToast("Failed to cancel job.", true);
+        }
+      });
+    }
   }
 
   const prevBtn = document.getElementById("prevTasksBtn");
@@ -681,6 +912,8 @@ function setupInteractions(state) {
       }
     });
   }
+
+  updateShareControls(state);
 }
 
 async function initialiseAuth(state) {
@@ -725,22 +958,50 @@ async function initialiseAuth(state) {
   }
 }
 
+async function fetchSharedJSON(path) {
+  const response = await fetch(path, { headers: { Accept: "application/json" } });
+  if (!response.ok) {
+    let message = `Request failed (${response.status})`;
+    try {
+      const payload = await response.json();
+      if (payload?.message) {
+        message = payload.message;
+      }
+    } catch {
+      // Ignore JSON parse failures
+    }
+    throw new Error(message);
+  }
+
+  const payload = await response.json().catch(() => ({}));
+  return payload?.data ?? payload;
+}
+
 async function loadJob(state) {
-  const job = await state.binder.fetchData(`/v1/jobs/${state.jobId}`);
+  let job;
+  if (state.mode === "shared") {
+    job = await fetchSharedJSON(`/v1/shared/jobs/${state.shareToken}`);
+  } else {
+    job = await state.binder.fetchData(`/v1/jobs/${state.jobId}`);
+  }
+
   if (!job) {
     throw new Error("Job not found.");
   }
 
-  const jobBinding = formatJobForBinding(job, state.jobId);
+  const jobBinding = formatJobForBinding(job, state.jobId || job.id);
   const metricsBinding = formatMetricsForBinding(job.stats || {});
   state.domain = jobBinding.domain;
+  if (!state.jobId && jobBinding.id) {
+    state.jobId = jobBinding.id;
+  }
 
   state.binder.updateElements({ job: jobBinding, metrics: metricsBinding });
 
   applyMetricsVisibility(metricsBinding);
-  updateActionButtons(jobBinding);
+  updateActionButtons(state, jobBinding);
   updatePageTitle(jobBinding.page_title);
-  await ensureMetadataLoaded();
+  await ensureMetadataLoaded(state);
 
   return job;
 }
@@ -759,7 +1020,12 @@ async function loadTasks(state) {
     loadingEl.style.display = "block";
   }
 
-  const data = await state.binder.fetchData(`/v1/jobs/${state.jobId}/tasks?${params.toString()}`);
+  let data;
+  if (state.mode === "shared") {
+    data = await fetchSharedJSON(`/v1/shared/jobs/${state.shareToken}/tasks?${params.toString()}`);
+  } else {
+    data = await state.binder.fetchData(`/v1/jobs/${state.jobId}/tasks?${params.toString()}`);
+  }
   const tasks = Array.isArray(data?.tasks) ? data.tasks : [];
   const pagination = data?.pagination || {};
 
@@ -810,6 +1076,11 @@ async function cancelJobFromPage(state) {
 }
 
 async function exportJobData(state, { type, format }) {
+  if (state.mode === "shared") {
+    await exportSharedJobData(state, { type, format });
+    return;
+  }
+
   let url = `/v1/jobs/${state.jobId}/export`;
   if (type && type !== "job") {
     url += `?type=${encodeURIComponent(type)}`;
@@ -866,6 +1137,56 @@ async function exportJobData(state, { type, format }) {
     payload?.export_time,
   )}.csv`;
   triggerFileDownload(csvContent, "text/csv", filename);
+}
+
+async function exportSharedJobData(state, { type, format }) {
+  const query = type && type !== "job" ? `?type=${encodeURIComponent(type)}` : "";
+  const exportPayload = await fetchSharedJSON(`/v1/shared/jobs/${state.shareToken}/export${query}`);
+  const { payload, tasks, columns } = normaliseExportPayload(exportPayload);
+
+  const { headers, keys } = prepareExportColumns(columns, tasks);
+
+  const formattedRows = tasks.map((task) => {
+    const row = {};
+    keys.forEach((key) => {
+      row[key] = task[key] ?? "";
+    });
+    return row;
+  });
+
+  const domain = payload?.domain || state.domain || "job";
+  const completedAt = payload?.completed_at;
+  const exportTime = payload?.export_time;
+
+  if (format === "json") {
+    const jsonContent = JSON.stringify(
+      {
+        meta: {
+          job_id: payload?.job_id || state.jobId || "",
+          export_time: exportTime || new Date().toISOString(),
+          export_type: payload?.export_type || type || "job",
+        },
+        columns: headers,
+        tasks: formattedRows,
+      },
+      null,
+      2,
+    );
+    const filename = `${sanitizeForFilename(domain)}-${formatCompletionTimestampForFilename(completedAt, exportTime)}.json`;
+    triggerFileDownload(jsonContent, "application/json", filename);
+    showToast("Export ready.");
+    return;
+  }
+
+  const csvRows = [headers.join(",")];
+  formattedRows.forEach((row) => {
+    const values = keys.map((key) => escapeCSVValue(row[key]));
+    csvRows.push(values.join(","));
+  });
+  const csvContent = csvRows.join("\n");
+  const filename = `${sanitizeForFilename(domain)}-${formatCompletionTimestampForFilename(completedAt, exportTime)}.csv`;
+  triggerFileDownload(csvContent, "text/csv", filename);
+  showToast("Export ready.");
 }
 
 function normaliseExportPayload(data) {
@@ -982,10 +1303,30 @@ function showToast(message, isError = false) {
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
-  const jobId = window.location.pathname.split("/").filter(Boolean).pop();
-  if (!jobId) {
-    showToast("No job ID provided.", true);
-    return;
+  const pathSegments = window.location.pathname.split("/").filter(Boolean);
+  const isSharedRoute = pathSegments.length >= 2 && pathSegments[0] === "shared" && pathSegments[1] === "jobs";
+
+  let jobId = null;
+  let shareToken = null;
+
+  if (isSharedRoute) {
+    shareToken = pathSegments.slice(2).join("/") || "";
+    if (!shareToken) {
+      showToast("No share token provided.", true);
+      return;
+    }
+  } else {
+    jobId = pathSegments.length > 1 ? pathSegments[pathSegments.length - 1] : undefined;
+
+    if (!jobId || jobId === "jobs") {
+      const params = new URLSearchParams(window.location.search);
+      jobId = params.get("id") || "";
+    }
+
+    if (!jobId) {
+      showToast("No job ID provided.", true);
+      return;
+    }
   }
 
   const binder = new BBDataBinder({ apiBaseUrl: "" });
@@ -993,7 +1334,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   binder.scanAndBind();
 
   const state = {
+    mode: isSharedRoute ? "shared" : "private",
     jobId,
+    shareToken,
     binder,
     limit: DEFAULT_PAGE_SIZE,
     page: 0,
@@ -1005,12 +1348,21 @@ document.addEventListener("DOMContentLoaded", async () => {
     hasNext: false,
     domain: null,
     token: null,
+    shareLink: null,
+    shareToken: shareToken,
   };
 
   try {
-    await initialiseAuth(state);
-    await loadJob(state);
-    await loadTasks(state);
+    if (state.mode === "shared") {
+      initialiseSharedView();
+      await loadJob(state);
+      await loadTasks(state);
+    } else {
+      await initialiseAuth(state);
+      await loadJob(state);
+      await fetchShareLink(state);
+      await loadTasks(state);
+    }
     setupInteractions(state);
   } catch (error) {
     console.error("Failed to initialise job page:", error);
