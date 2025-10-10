@@ -65,7 +65,7 @@ jobs:
         run: go list -deps -test ./...
 
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v4
+        uses: golangci/golangci-lint-action@v7
         with:
           version: v2.5.0
           args: --config .golangci.yml --modules-download-mode=mod
