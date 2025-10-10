@@ -190,7 +190,7 @@ func main() {
 
 			// Check for tasks stuck in running state >3 minutes
 			stuckTaskRows, err := pgDB.GetDB().Query(`
-				SELECT t.id, t.job_id, t.started_at, p.path
+				SELECT t.id, t.job_id, t.started_at, t.retry_count, p.path
 				FROM tasks t
 				JOIN pages p ON t.page_id = p.id
 				WHERE t.status = 'running'
@@ -204,15 +204,18 @@ func main() {
 				for stuckTaskRows.Next() {
 					var taskID, jobID, path string
 					var startedAt time.Time
-					if err := stuckTaskRows.Scan(&taskID, &jobID, &startedAt, &path); err == nil {
+					var retryCount int
+					if err := stuckTaskRows.Scan(&taskID, &jobID, &startedAt, &retryCount, &path); err == nil {
 						// Critical alert: Task stuck in running state
-						sentry.CaptureException(fmt.Errorf("task stuck in running state for >3min: %s (job: %s, path: %s, started: %v)",
-							taskID, jobID, path, startedAt))
+						// Include retry_count to show if recovery is actively working on it
+						sentry.CaptureException(fmt.Errorf("task stuck in running state for >3min: %s (job: %s, path: %s, started: %v, recovery_attempts: %d)",
+							taskID, jobID, path, startedAt, retryCount))
 						log.Error().
 							Str("task_id", taskID).
 							Str("job_id", jobID).
 							Str("path", path).
 							Time("started_at", startedAt).
+							Int("recovery_attempts", retryCount).
 							Msg("CRITICAL: Task stuck in running state for >3 minutes")
 					}
 				}

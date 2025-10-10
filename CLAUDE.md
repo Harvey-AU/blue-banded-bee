@@ -28,12 +28,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Code Quality Standards
 
-- **Linting is enforced in CI** - golangci-lint with 9 core linters runs on every PR and blocks merges if failing
+- **Linting is enforced in CI** - golangci-lint v2 runs on every PR and blocks merges if failing
 - **Australian English only** - All code, comments, and strings must use Australian spelling (enforced by `misspell` linter with `locale: AU`)
 - **Cyclomatic complexity limit: 35** - Functions exceeding this fail CI; refactor using Extract + Test + Commit pattern (see below)
 - **Always run `go fmt ./...`** before committing to avoid formatting failures
-- **CI runs `gofmt`, `govet`, `staticcheck`, `errcheck`, `revive`, `goimports`, `ineffassign`, `gocyclo`, `misspell`**
-- See `.golangci.yml` for full configuration; `docs/development/DEVELOPMENT.md` for local Docker-based linting
+- **Linters:** `govet`, `staticcheck`, `errcheck`, `revive`, `ineffassign`, `gocyclo`, `misspell`
+- **Formatters:** `gofmt`, `goimports`
+- See `.golangci.yml` for full configuration and exclusion rules; `docs/development/DEVELOPMENT.md` for local Docker-based linting
 
 ## Testing Approach
 

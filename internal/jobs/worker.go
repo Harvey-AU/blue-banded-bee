@@ -730,10 +730,9 @@ func (wp *WorkerPool) recoverStaleTasks(ctx context.Context) error {
 			staleTime := time.Now().Add(-TaskStaleTimeout)
 
 			rows, err := tx.QueryContext(ctx, `
-				SELECT t.id, t.job_id, t.page_id, p.path, t.retry_count 
+				SELECT t.id, t.retry_count
 				FROM tasks t
-				JOIN pages p ON t.page_id = p.id
-				WHERE status = $1 
+				WHERE status = $1
 				AND started_at < $2
 			`, TaskStatusRunning, staleTime)
 
@@ -742,18 +741,19 @@ func (wp *WorkerPool) recoverStaleTasks(ctx context.Context) error {
 			}
 			defer rows.Close()
 
+			var updateErrors []error
+			var successCount int
+
 			for rows.Next() {
-				var taskID, jobID string
-				var pageID int
-				var path string
+				var taskID string
 				var retryCount int
-				if err := rows.Scan(&taskID, &jobID, &pageID, &path, &retryCount); err != nil {
+				if err := rows.Scan(&taskID, &retryCount); err != nil {
 					continue
 				}
 
 				if retryCount >= MaxTaskRetries {
 					_, err = tx.ExecContext(ctx, `
-						UPDATE tasks 
+						UPDATE tasks
 						SET status = $1,
 							error = $2,
 							completed_at = $3
@@ -761,7 +761,7 @@ func (wp *WorkerPool) recoverStaleTasks(ctx context.Context) error {
 					`, TaskStatusFailed, "Max retries exceeded", time.Now(), taskID)
 				} else {
 					_, err = tx.ExecContext(ctx, `
-						UPDATE tasks 
+						UPDATE tasks
 						SET status = $1,
 							started_at = NULL,
 							retry_count = retry_count + 1
@@ -770,14 +770,30 @@ func (wp *WorkerPool) recoverStaleTasks(ctx context.Context) error {
 				}
 
 				if err != nil {
-					sentry.CaptureException(fmt.Errorf("failed to update stale task %s: %w", taskID, err))
-					log.Error().Err(err).
+					// Collect errors but continue processing other tasks
+					updateErrors = append(updateErrors, fmt.Errorf("task %s: %w", taskID, err))
+					log.Warn().Err(err).
 						Str("task_id", taskID).
-						Msg("Failed to update stale task")
+						Msg("Failed to update single stale task, will retry in transaction")
+				} else {
+					successCount++
+					log.Info().
+						Str("task_id", taskID).
+						Int("retry_count", retryCount).
+						Msg("Successfully recovered stale task")
 				}
 			}
 
-			return rows.Err()
+			if err := rows.Err(); err != nil {
+				return err
+			}
+
+			// If ANY updates failed, return error to rollback transaction and trigger retry
+			if len(updateErrors) > 0 {
+				return fmt.Errorf("failed to update %d stale tasks (succeeded: %d): %w", len(updateErrors), successCount, updateErrors[0])
+			}
+
+			return nil
 		})
 
 		if err == nil {
@@ -805,6 +821,66 @@ func (wp *WorkerPool) recoverStaleTasks(ctx context.Context) error {
 	}
 
 	return lastErr
+}
+
+// recoverSingleTask attempts to recover a single stale task with retries
+// This provides isolation so one failing task doesn't block others
+func (wp *WorkerPool) recoverSingleTask(ctx context.Context, taskID string, retryCount int) error {
+	const maxAttempts = 3
+
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+
+		err := wp.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
+			if retryCount >= MaxTaskRetries {
+				_, err := tx.ExecContext(ctx, `
+					UPDATE tasks
+					SET status = $1,
+						error = $2,
+						completed_at = $3
+					WHERE id = $4
+				`, TaskStatusFailed, "Max retries exceeded", time.Now(), taskID)
+				return err
+			}
+
+			_, err := tx.ExecContext(ctx, `
+				UPDATE tasks
+				SET status = $1,
+					started_at = NULL,
+					retry_count = retry_count + 1
+				WHERE id = $2
+			`, TaskStatusPending, taskID)
+			return err
+		})
+
+		if err == nil {
+			log.Info().Str("task_id", taskID).Int("retry_count", retryCount).
+				Msg("Successfully recovered single stale task")
+			return nil
+		}
+
+		if !isTransientDBError(err) || attempt == maxAttempts {
+			return fmt.Errorf("failed to recover task %s after %d attempts: %w", taskID, attempt, err)
+		}
+
+		// Retry with backoff
+		backoff := time.Duration(attempt) * time.Second
+		log.Warn().Err(err).
+			Str("task_id", taskID).
+			Int("attempt", attempt).
+			Dur("backoff", backoff).
+			Msg("Transient error recovering single task, retrying")
+
+		select {
+		case <-time.After(backoff):
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+
+	return fmt.Errorf("exhausted retries for task %s", taskID)
 }
 
 func isTransientDBError(err error) bool {
