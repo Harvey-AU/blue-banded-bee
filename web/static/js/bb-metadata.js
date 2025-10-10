@@ -50,8 +50,13 @@ class MetricsMetadata {
    */
   async _fetchMetadata() {
     try {
-      if (window.dataBinder && typeof window.dataBinder.fetchData === "function") {
-        const response = await window.dataBinder.fetchData("/v1/metadata/metrics");
+      if (
+        window.dataBinder &&
+        typeof window.dataBinder.fetchData === "function"
+      ) {
+        const response = await window.dataBinder.fetchData(
+          "/v1/metadata/metrics"
+        );
         if (response) {
           return response;
         }
@@ -63,7 +68,11 @@ class MetricsMetadata {
       const response = await fetch("/v1/metadata/metrics", { headers });
 
       if (!response.ok) {
-        console.warn("Metadata request failed", response.status, response.statusText);
+        console.warn(
+          "Metadata request failed",
+          response.status,
+          response.statusText
+        );
         return {};
       }
 
@@ -86,7 +95,10 @@ class MetricsMetadata {
           return { Authorization: `Bearer ${data.session.access_token}` };
         }
       } catch (authError) {
-        console.warn("Unable to resolve Supabase session for metadata", authError);
+        console.warn(
+          "Unable to resolve Supabase session for metadata",
+          authError
+        );
       }
     }
 
@@ -135,7 +147,9 @@ class MetricsMetadata {
 
     elements.forEach((element) => {
       // Support both old (data-bb-info) and new (bbb-help) formats
-      const metricKey = element.getAttribute("bbb-help") || element.getAttribute("data-bb-info");
+      const metricKey =
+        element.getAttribute("bbb-help") ||
+        element.getAttribute("data-bb-info");
       const info = this.getInfo(metricKey);
 
       if (!info) {
@@ -264,7 +278,10 @@ class MetricsMetadata {
     // Close on click outside
     this._outsideClickHandler = (e) => {
       if (!this.activeTooltip) return;
-      if (!this.activeTooltip.contains(e.target) && e.target !== this.activeIcon) {
+      if (
+        !this.activeTooltip.contains(e.target) &&
+        e.target !== this.activeIcon
+      ) {
         this._removeTooltip();
       }
     };

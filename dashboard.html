@@ -6,11 +6,17 @@
     <title>Blue Banded Bee - Dashboard</title>
 
     <!-- Sentry Error Monitoring & Performance -->
-    <script src="https://browser.sentry-cdn.com/8.45.0/bundle.tracing.replay.min.js" crossorigin="anonymous"></script>
+    <script
+      src="https://browser.sentry-cdn.com/8.45.0/bundle.tracing.replay.min.js"
+      crossorigin="anonymous"
+    ></script>
     <script>
       Sentry.init({
         dsn: "https://04f57d1dedc67f307cef525b1b1551a6@o4509113950928896.ingest.us.sentry.io/4509113952370688",
-        environment: window.location.hostname === "app.bluebandedbee.co" ? "production" : "development",
+        environment:
+          window.location.hostname === "app.bluebandedbee.co"
+            ? "production"
+            : "development",
 
         // Performance Monitoring
         tracesSampleRate: 0.1, // 10% of transactions
@@ -51,7 +57,8 @@
     <!-- Cloudflare Turnstile CAPTCHA (only load in production) -->
     <script>
       (function loadTurnstile() {
-        const isProduction = window.location.hostname === "app.bluebandedbee.co";
+        const isProduction =
+          window.location.hostname === "app.bluebandedbee.co";
         if (!isProduction) {
           return;
         }
@@ -65,7 +72,8 @@
 
     <style>
       body {
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
         margin: 0;
         padding: 0;
         background: #f5f7fa;
@@ -1227,7 +1235,10 @@
       }
     </style>
     <!-- Google tag (gtag.js) -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-D990P29YMF"></script>
+    <script
+      async
+      src="https://www.googletagmanager.com/gtag/js?id=G-D990P29YMF"
+    ></script>
     <script>
       window.dataLayer = window.dataLayer || [];
       function gtag() {
@@ -1256,14 +1267,18 @@
 
           <!-- Show when logged out -->
           <div bbb-auth="guest" class="auth-buttons">
-            <button id="loginBtn" class="bb-button bb-button-primary">Sign In</button>
+            <button id="loginBtn" class="bb-button bb-button-primary">
+              Sign In
+            </button>
           </div>
 
           <!-- Show when logged in -->
           <div bbb-auth="required" class="user-info">
             <span id="userEmail">Loading...</span>
             <div class="user-avatar" id="userAvatar">?</div>
-            <button id="logoutBtn" class="bb-button bb-button-outline">Sign Out</button>
+            <button id="logoutBtn" class="bb-button bb-button-outline">
+              Sign Out
+            </button>
           </div>
         </div>
       </div>
@@ -1272,12 +1287,46 @@
     <!-- Main Content -->
     <main class="main-content">
       <!-- Job Creation Form -->
-      <div style="background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1); margin-bottom: 24px; padding: 24px">
-        <h2 style="margin: 0 0 16px 0; font-size: 1.25rem; font-weight: 600; color: #374151">Start Cache Warming</h2>
+      <div
+        style="
+          background: white;
+          border-radius: 12px;
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+          margin-bottom: 24px;
+          padding: 24px;
+        "
+      >
+        <h2
+          style="
+            margin: 0 0 16px 0;
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: #374151;
+          "
+        >
+          Start Cache Warming
+        </h2>
 
-        <form id="dashboardJobForm" style="display: grid; grid-template-columns: 1fr 120px 120px auto; gap: 16px; align-items: end">
+        <form
+          id="dashboardJobForm"
+          style="
+            display: grid;
+            grid-template-columns: 1fr 120px 120px auto;
+            gap: 16px;
+            align-items: end;
+          "
+        >
           <div>
-            <label style="display: block; margin-bottom: 6px; font-weight: 500; color: #374151; font-size: 14px">Domain</label>
+            <label
+              style="
+                display: block;
+                margin-bottom: 6px;
+                font-weight: 500;
+                color: #374151;
+                font-size: 14px;
+              "
+              >Domain</label
+            >
             <input
               type="text"
               id="dashboardDomain"
@@ -1298,7 +1347,16 @@
           </div>
 
           <div>
-            <label style="display: block; margin-bottom: 6px; font-weight: 500; color: #374151; font-size: 14px">Max Pages</label>
+            <label
+              style="
+                display: block;
+                margin-bottom: 6px;
+                font-weight: 500;
+                color: #374151;
+                font-size: 14px;
+              "
+              >Max Pages</label
+            >
             <input
               type="number"
               id="dashboardMaxPages"
@@ -1320,11 +1378,27 @@
           </div>
 
           <div>
-            <label style="display: block; margin-bottom: 6px; font-weight: 500; color: #374151; font-size: 14px">Refresh</label>
+            <label
+              style="
+                display: block;
+                margin-bottom: 6px;
+                font-weight: 500;
+                color: #374151;
+                font-size: 14px;
+              "
+              >Refresh</label
+            >
             <select
               class="filter-select"
               id="refreshInterval"
-              style="width: 100%; padding: 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; background: white"
+              style="
+                width: 100%;
+                padding: 12px;
+                border: 1px solid #d1d5db;
+                border-radius: 6px;
+                font-size: 14px;
+                background: white;
+              "
             >
               <option value="0">Manual</option>
               <option value="10" selected>10 seconds</option>
@@ -1333,7 +1407,13 @@
             </select>
           </div>
 
-          <button type="submit" class="bb-button bb-button-primary" style="padding: 12px 24px; white-space: nowrap">Start Crawl</button>
+          <button
+            type="submit"
+            class="bb-button bb-button-primary"
+            style="padding: 12px 24px; white-space: nowrap"
+          >
+            Start Crawl
+          </button>
         </form>
       </div>
 
@@ -1353,7 +1433,12 @@
         </div>
 
         <div class="page-actions">
-          <button class="bb-btn bb-btn-secondary" bbb-action="refresh-dashboard"><span>↻</span> Refresh</button>
+          <button
+            class="bb-btn bb-btn-secondary"
+            bbb-action="refresh-dashboard"
+          >
+            <span>↻</span> Refresh
+          </button>
         </div>
       </div>
 
@@ -1371,16 +1456,41 @@
         >
           <div style="text-align: center; margin-bottom: 32px">
             <div style="font-size: 48px; margin-bottom: 16px">🐝</div>
-            <h1 style="font-size: 1.875rem; font-weight: 700; margin-bottom: 8px; color: #1a1a1a">Blue Banded Bee</h1>
-            <p style="color: #6b7280; font-size: 14px">Cache warming service dashboard</p>
+            <h1
+              style="
+                font-size: 1.875rem;
+                font-weight: 700;
+                margin-bottom: 8px;
+                color: #1a1a1a;
+              "
+            >
+              Blue Banded Bee
+            </h1>
+            <p style="color: #6b7280; font-size: 14px">
+              Cache warming service dashboard
+            </p>
           </div>
 
           <div style="display: flex; gap: 12px; margin-bottom: 24px">
-            <button id="showLoginBtn" class="bb-button bb-button-primary" style="flex: 1">Sign In</button>
-            <button id="showSignupBtn" class="bb-button bb-button-outline" style="flex: 1">Create Account</button>
+            <button
+              id="showLoginBtn"
+              class="bb-button bb-button-primary"
+              style="flex: 1"
+            >
+              Sign In
+            </button>
+            <button
+              id="showSignupBtn"
+              class="bb-button bb-button-outline"
+              style="flex: 1"
+            >
+              Create Account
+            </button>
           </div>
 
-          <div style="text-align: center; color: #6b7280; font-size: 14px">Sign in to access your dashboard</div>
+          <div style="text-align: center; color: #6b7280; font-size: 14px">
+            Sign in to access your dashboard
+          </div>
         </div>
       </div>
 
@@ -1411,8 +1521,15 @@
           <div class="bb-section-header">
             <h3>Recent Jobs</h3>
             <div class="bb-section-actions">
-              <button class="bb-btn bb-btn-secondary" bbb-action="refresh-dashboard"><span>↻</span> Refresh</button>
-              <button class="bb-btn bb-btn-primary" bbb-action="create-job"><span>+</span> New Job</button>
+              <button
+                class="bb-btn bb-btn-secondary"
+                bbb-action="refresh-dashboard"
+              >
+                <span>↻</span> Refresh
+              </button>
+              <button class="bb-btn bb-btn-primary" bbb-action="create-job">
+                <span>+</span> New Job
+              </button>
             </div>
           </div>
 
@@ -1421,14 +1538,26 @@
             <div class="bb-job-card" bbb-template="job">
               <div class="bb-job-header">
                 <div class="bb-job-domain" bbb-text="domain">example.com</div>
-                <div bbb-class="bb-job-status bb-status-{status}" bbb-text="status">pending</div>
+                <div
+                  bbb-class="bb-job-status bb-status-{status}"
+                  bbb-text="status"
+                >
+                  pending
+                </div>
               </div>
               <div class="bb-job-progress">
                 <div class="bb-progress-bar">
-                  <div class="bb-progress-fill" bbb-style:width="{progress}%"></div>
+                  <div
+                    class="bb-progress-fill"
+                    bbb-style:width="{progress}%"
+                  ></div>
                 </div>
                 <div class="bb-job-details">
-                  <span bbb-text="completed_tasks">0</span> / <span bbb-text="total_tasks">0</span> tasks (<span bbb-text="progress">0</span>%)
+                  <span bbb-text="completed_tasks">0</span> /
+                  <span bbb-text="total_tasks">0</span> tasks (<span
+                    bbb-text="progress"
+                    >0</span
+                  >%)
                 </div>
               </div>
               <div class="bb-job-footer">
@@ -1437,9 +1566,25 @@
                   <span bbb-text="started_at_formatted">-</span>
                 </div>
                 <div class="bb-job-actions">
-                  <a class="bb-job-link" href="/jobs/{id}" bbb-href="/jobs/{id}">Open Job</a>
-                  <button class="bb-job-link" bbb-action="restart-job" bbb-id="{id}" bbb-show="status=completed,failed,cancelled">Restart</button>
-                  <button class="bb-job-link" bbb-action="cancel-job" bbb-id="{id}" bbb-show="status=running,pending">Cancel</button>
+                  <a class="bb-job-link" href="/jobs/{id}" bbb-href="/jobs/{id}"
+                    >Open Job</a
+                  >
+                  <button
+                    class="bb-job-link"
+                    bbb-action="restart-job"
+                    bbb-id="{id}"
+                    bbb-show="status=completed,failed,cancelled"
+                  >
+                    Restart
+                  </button>
+                  <button
+                    class="bb-job-link"
+                    bbb-action="cancel-job"
+                    bbb-id="{id}"
+                    bbb-show="status=running,pending"
+                  >
+                    Cancel
+                  </button>
                 </div>
               </div>
             </div>
@@ -1451,23 +1596,36 @@
           <div class="bb-section-header">
             <h3>Slow Pages Analysis</h3>
             <div class="bb-section-actions">
-              <button class="bb-btn bb-btn-secondary" bbb-action="refresh-slow-pages"><span>↻</span> Refresh</button>
+              <button
+                class="bb-btn bb-btn-secondary"
+                bbb-action="refresh-slow-pages"
+              >
+                <span>↻</span> Refresh
+              </button>
             </div>
           </div>
           <div class="bb-analysis-list">
             <!-- Slow Page Template -->
             <div class="bb-analysis-card" bbb-template="slow_page">
               <div class="bb-analysis-header">
-                <div class="bb-analysis-url" bbb-text="url">https://example.com/slow-page</div>
-                <div class="bb-analysis-metric"><span bbb-text="second_response_time">0</span>ms</div>
+                <div class="bb-analysis-url" bbb-text="url">
+                  https://example.com/slow-page
+                </div>
+                <div class="bb-analysis-metric">
+                  <span bbb-text="second_response_time">0</span>ms
+                </div>
               </div>
               <div class="bb-analysis-details">
-                <span class="bb-analysis-domain" bbb-text="domain">example.com</span>
+                <span class="bb-analysis-domain" bbb-text="domain"
+                  >example.com</span
+                >
                 <span bbb-text="completed_at">2024-01-01T12:00:00Z</span>
               </div>
             </div>
             <!-- Empty state -->
-            <div class="bb-analysis-empty" bbb-show="slow_pages.length=0">No slow pages found in the selected time period.</div>
+            <div class="bb-analysis-empty" bbb-show="slow_pages.length=0">
+              No slow pages found in the selected time period.
+            </div>
           </div>
         </div>
 
@@ -1476,23 +1634,42 @@
           <div class="bb-section-header">
             <h3>External Redirects</h3>
             <div class="bb-section-actions">
-              <button class="bb-btn bb-btn-secondary" bbb-action="refresh-redirects"><span>↻</span> Refresh</button>
+              <button
+                class="bb-btn bb-btn-secondary"
+                bbb-action="refresh-redirects"
+              >
+                <span>↻</span> Refresh
+              </button>
             </div>
           </div>
           <div class="bb-analysis-list">
             <!-- External Redirect Template -->
             <div class="bb-analysis-card" bbb-template="external_redirect">
               <div class="bb-analysis-header">
-                <div class="bb-analysis-url" bbb-text="url">https://example.com/redirect</div>
+                <div class="bb-analysis-url" bbb-text="url">
+                  https://example.com/redirect
+                </div>
               </div>
-              <div class="bb-redirect-url">→ <span bbb-text="redirect_url">https://external-site.com/target</span></div>
+              <div class="bb-redirect-url">
+                →
+                <span bbb-text="redirect_url"
+                  >https://external-site.com/target</span
+                >
+              </div>
               <div class="bb-analysis-details">
-                <span class="bb-analysis-domain" bbb-text="domain">example.com</span>
+                <span class="bb-analysis-domain" bbb-text="domain"
+                  >example.com</span
+                >
                 <span bbb-text="completed_at">2024-01-01T12:00:00Z</span>
               </div>
             </div>
             <!-- Empty state -->
-            <div class="bb-analysis-empty" bbb-show="external_redirects.length=0">No external redirects found in the selected time period.</div>
+            <div
+              class="bb-analysis-empty"
+              bbb-show="external_redirects.length=0"
+            >
+              No external redirects found in the selected time period.
+            </div>
           </div>
         </div>
       </div>
@@ -1506,20 +1683,43 @@
       <div class="bb-modal-content" style="max-width: 600px">
         <div class="bb-modal-header">
           <h2 class="bb-modal-title">Create New Job</h2>
-          <button class="bb-modal-close" bbb-action="close-create-job-modal">&times;</button>
+          <button class="bb-modal-close" bbb-action="close-create-job-modal">
+            &times;
+          </button>
         </div>
 
         <form id="createJobForm" class="bb-auth-form">
           <div class="bb-form-group">
             <label for="jobDomain">Domain</label>
-            <input type="text" id="jobDomain" name="domain" required placeholder="example.com" class="bb-form-input" />
-            <div class="bb-field-error" id="domainError" style="display: none"></div>
+            <input
+              type="text"
+              id="jobDomain"
+              name="domain"
+              required
+              placeholder="example.com"
+              class="bb-form-input"
+            />
+            <div
+              class="bb-field-error"
+              id="domainError"
+              style="display: none"
+            ></div>
           </div>
 
           <div class="bb-form-group">
             <label for="maxPages">Maximum Pages</label>
-            <input type="number" id="maxPages" name="max_pages" min="0" max="10000" value="0" class="bb-form-input" />
-            <div style="font-size: 12px; color: #6b7280; margin-top: 4px">Maximum number of pages to crawl (set to 0 for unlimited)</div>
+            <input
+              type="number"
+              id="maxPages"
+              name="max_pages"
+              min="0"
+              max="10000"
+              value="0"
+              class="bb-form-input"
+            />
+            <div style="font-size: 12px; color: #6b7280; margin-top: 4px">
+              Maximum number of pages to crawl (set to 0 for unlimited)
+            </div>
           </div>
 
           <!-- Hidden fields with sensible defaults -->
@@ -1527,20 +1727,47 @@
           <input type="hidden" id="findLinks" name="find_links" value="on" />
           <input type="hidden" id="concurrency" name="concurrency" value="5" />
 
-          <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 32px">
-            <button type="button" class="bb-button bb-button-outline" bbb-action="close-create-job-modal">Cancel</button>
-            <button type="submit" class="bb-button bb-button-primary" id="createJobSubmitBtn">Create Job</button>
+          <div
+            style="
+              display: flex;
+              gap: 12px;
+              justify-content: flex-end;
+              margin-top: 32px;
+            "
+          >
+            <button
+              type="button"
+              class="bb-button bb-button-outline"
+              bbb-action="close-create-job-modal"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              class="bb-button bb-button-primary"
+              id="createJobSubmitBtn"
+            >
+              Create Job
+            </button>
           </div>
         </form>
 
         <!-- Loading State -->
-        <div id="createJobLoading" class="bb-auth-loading" style="display: none">
+        <div
+          id="createJobLoading"
+          class="bb-auth-loading"
+          style="display: none"
+        >
           <div class="bb-spinner"></div>
           <p>Creating job...</p>
         </div>
 
         <!-- Error Message -->
-        <div id="createJobError" class="bb-auth-error" style="display: none"></div>
+        <div
+          id="createJobError"
+          class="bb-auth-error"
+          style="display: none"
+        ></div>
       </div>
     </div>
 
@@ -1575,7 +1802,9 @@
             window.setupDashboardActions();
           }
 
-          console.log("Dashboard initialized successfully with unified auth system");
+          console.log(
+            "Dashboard initialized successfully with unified auth system"
+          );
         } catch (error) {
           console.error("Failed to initialize dashboard:", error);
 

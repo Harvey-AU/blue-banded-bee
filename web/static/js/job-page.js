@@ -1,15 +1,30 @@
 const DEFAULT_PAGE_SIZE = 50;
 const PAGE_SIZE_OPTIONS = [25, 50, 100, 200];
 
-const integerFormatter = new Intl.NumberFormat("en-AU", { maximumFractionDigits: 0 });
-const decimalFormatter = new Intl.NumberFormat("en-AU", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
-const METRIC_GROUP_KEYS = ["cache", "warming", "performance", "distribution", "reliability", "discovery", "redirects"];
+const integerFormatter = new Intl.NumberFormat("en-AU", {
+  maximumFractionDigits: 0,
+});
+const decimalFormatter = new Intl.NumberFormat("en-AU", {
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 2,
+});
+const METRIC_GROUP_KEYS = [
+  "cache",
+  "warming",
+  "performance",
+  "distribution",
+  "reliability",
+  "discovery",
+  "redirects",
+];
 
 function hasNonNullValue(obj) {
   if (!obj) {
     return false;
   }
-  return Object.values(obj).some((value) => value !== null && value !== undefined);
+  return Object.values(obj).some(
+    (value) => value !== null && value !== undefined
+  );
 }
 
 function escapeHTML(value) {
@@ -138,7 +153,9 @@ function applyMetricsVisibility(metrics) {
 
     groupEl.querySelectorAll("[data-metric-field]").forEach((row) => {
       const fieldPath = row.getAttribute("data-metric-field") || "";
-      const path = fieldPath.startsWith("metrics.") ? fieldPath.slice("metrics.".length) : fieldPath;
+      const path = fieldPath.startsWith("metrics.")
+        ? fieldPath.slice("metrics.".length)
+        : fieldPath;
       const shouldShow = resolvePath(metrics, path);
       row.style.display = shouldShow === false ? "none" : "";
     });
@@ -207,7 +224,10 @@ function formatJobForBinding(job, jobId) {
   let progress = Number(job.progress);
   if (!Number.isFinite(progress)) {
     const denominator = totalTasks - skippedTasks;
-    progress = denominator > 0 ? ((completedTasks + failedTasks) / denominator) * 100 : 0;
+    progress =
+      denominator > 0
+        ? ((completedTasks + failedTasks) / denominator) * 100
+        : 0;
   }
   const progressDisplay = `${Math.round(Math.max(0, Math.min(100, progress)))}%`;
 
@@ -226,7 +246,9 @@ function formatJobForBinding(job, jobId) {
     failed_tasks_display: formatCount(failedTasks),
     started_at_display: formatDateTime(job.started_at ?? job.startedAt),
     completed_at_display: formatDateTime(job.completed_at ?? job.completedAt),
-    duration_display: formatDuration(job.duration_seconds ?? job.durationSeconds),
+    duration_display: formatDuration(
+      job.duration_seconds ?? job.durationSeconds
+    ),
     avg_time_display: formatAverageSeconds(avgSeconds),
     can_restart: ["completed", "failed", "cancelled"].includes(statusRaw),
     can_cancel: ["running", "pending"].includes(statusRaw),
@@ -270,15 +292,25 @@ function formatMetricsForBinding(statsRaw = {}) {
     },
     warming: {
       visible: warmingVisible,
-      time_saved: formatSeconds(warmingStats.total_time_saved_seconds, { empty: "0s" }),
-      avg_saved_per_page: formatMilliseconds(warmingStats.avg_time_saved_per_page_ms, { empty: "0ms" }),
-      avg_second_request: formatMilliseconds(warmingStats.avg_second_request_ms, { empty: "0ms" }),
+      time_saved: formatSeconds(warmingStats.total_time_saved_seconds, {
+        empty: "0s",
+      }),
+      avg_saved_per_page: formatMilliseconds(
+        warmingStats.avg_time_saved_per_page_ms,
+        { empty: "0ms" }
+      ),
+      avg_second_request: formatMilliseconds(
+        warmingStats.avg_second_request_ms,
+        { empty: "0ms" }
+      ),
       avg_second_request_visible: warmingStats.avg_second_request_ms != null,
       validated: formatCount(warmingStats.total_validated ?? 0),
       validated_visible: warmingStats.total_validated != null,
       improved: formatCount(warmingStats.total_improved ?? 0),
       improved_visible: warmingStats.total_improved != null,
-      improvement_rate: formatPercentage(warmingStats.improvement_rate, { empty: "0%" }),
+      improvement_rate: formatPercentage(warmingStats.improvement_rate, {
+        empty: "0%",
+      }),
     },
     performance: {
       visible: performanceVisible,
@@ -377,7 +409,9 @@ function formatTasksForBinding(tasks, defaultDomain) {
       status_label: statusRaw.replace(/_/g, " ").toUpperCase(),
       response_time: formatMilliseconds(task.response_time, { empty: "—" }),
       cache_status: task.cache_status || "—",
-      second_response_time: formatMilliseconds(task.second_response_time, { empty: "—" }),
+      second_response_time: formatMilliseconds(task.second_response_time, {
+        empty: "—",
+      }),
       status_code: task.status_code != null ? String(task.status_code) : "—",
     };
   });
@@ -421,7 +455,7 @@ function renderTasksTable(tasks) {
           <td>${escapeHTML(task.second_response_time)}</td>
           <td>${escapeHTML(task.status_code)}</td>
         </tr>
-      `,
+      `
     )
     .join("");
 
@@ -451,7 +485,11 @@ function renderTaskHeader(state) {
   const headerHtml = headers
     .map((header) => {
       const isActive = state.sortColumn === header.key;
-      const icon = isActive ? (state.sortDirection === "desc" ? " ↓" : " ↑") : "";
+      const icon = isActive
+        ? state.sortDirection === "desc"
+          ? " ↓"
+          : " ↑"
+        : "";
       return `<th data-column="${header.key}">${header.label}${icon}</th>`;
     })
     .join("");
@@ -508,7 +546,8 @@ function updatePagination(pagination, state) {
   const paginationEl = document.getElementById("tasksPagination");
   const start = total === 0 ? 0 : offset + 1;
   const end = total === 0 ? 0 : Math.min(offset + state.limit, total);
-  const summary = total === 0 ? "0 tasks" : `${start}-${end} of ${formatCount(total)} tasks`;
+  const summary =
+    total === 0 ? "0 tasks" : `${start}-${end} of ${formatCount(total)} tasks`;
 
   if (state.binder) {
     state.binder.updateElements({ tasks: { pagination: { summary } } });
@@ -613,10 +652,14 @@ async function copyShareLinkToClipboard(link) {
 
 async function fetchShareLink(state) {
   try {
-    const response = await authorisedFetch(state, `/v1/jobs/${state.jobId}/share-links`, {
-      method: "GET",
-      headers: { Accept: "application/json" },
-    });
+    const response = await authorisedFetch(
+      state,
+      `/v1/jobs/${state.jobId}/share-links`,
+      {
+        method: "GET",
+        headers: { Accept: "application/json" },
+      }
+    );
 
     const payload = await response.json().catch(() => ({}));
 
@@ -626,7 +669,9 @@ async function fetchShareLink(state) {
     }
 
     if (!response.ok) {
-      const message = payload?.message || `Failed to load share link state (${response.status})`;
+      const message =
+        payload?.message ||
+        `Failed to load share link state (${response.status})`;
       throw new Error(message);
     }
 
@@ -680,7 +725,9 @@ function initialiseSharedView() {
 function setupInteractions(state) {
   const limitSelect = document.getElementById("tasksLimit");
   if (limitSelect) {
-    limitSelect.innerHTML = PAGE_SIZE_OPTIONS.map((value) => `<option value="${value}">${value}</option>`).join("");
+    limitSelect.innerHTML = PAGE_SIZE_OPTIONS.map(
+      (value) => `<option value="${value}">${value}</option>`
+    ).join("");
     limitSelect.value = String(state.limit);
     limitSelect.addEventListener("change", (event) => {
       state.limit = Number(event.target.value) || DEFAULT_PAGE_SIZE;
@@ -701,7 +748,9 @@ function setupInteractions(state) {
       }
 
       event.preventDefault();
-      filterTabs.querySelectorAll("button").forEach((btn) => btn.classList.remove("active"));
+      filterTabs
+        .querySelectorAll("button")
+        .forEach((btn) => btn.classList.remove("active"));
       button.classList.add("active");
       state.statusFilter = button.dataset.status || "";
       state.page = 0;
@@ -735,13 +784,19 @@ function setupInteractions(state) {
         shareBtn.disabled = true;
         shareBtn.textContent = "Generating…";
 
-        const response = await authorisedFetch(state, `/v1/jobs/${state.jobId}/share-links`, {
-          method: "POST",
-        });
+        const response = await authorisedFetch(
+          state,
+          `/v1/jobs/${state.jobId}/share-links`,
+          {
+            method: "POST",
+          }
+        );
 
         if (!response.ok) {
           const errorBody = await response.json().catch(() => ({}));
-          const message = errorBody?.message || `Share link request failed (${response.status})`;
+          const message =
+            errorBody?.message ||
+            `Share link request failed (${response.status})`;
           throw new Error(message);
         }
 
@@ -775,34 +830,40 @@ function setupInteractions(state) {
         }
         if (!state.shareToken) {
           showToast("No active share link to revoke.", true);
-        return;
-      }
-
-      const originalText = revokeBtn.textContent;
-      try {
-        revokeBtn.disabled = true;
-        revokeBtn.textContent = "Revoking…";
-
-        const response = await authorisedFetch(state, `/v1/jobs/${state.jobId}/share-links/${state.shareToken}`, {
-          method: "DELETE",
-        });
-
-        if (!response.ok) {
-          const errorBody = await response.json().catch(() => ({}));
-          const message = errorBody?.message || `Failed to revoke share link (${response.status})`;
-          throw new Error(message);
+          return;
         }
 
-        setShareLinkState(state, null, null);
-        showToast("Share link revoked.");
-      } catch (error) {
-        console.error("Failed to revoke share link:", error);
-        showToast(error.message || "Failed to revoke share link.", true);
-      } finally {
-        revokeBtn.textContent = originalText;
-        updateShareControls(state);
-      }
-    });
+        const originalText = revokeBtn.textContent;
+        try {
+          revokeBtn.disabled = true;
+          revokeBtn.textContent = "Revoking…";
+
+          const response = await authorisedFetch(
+            state,
+            `/v1/jobs/${state.jobId}/share-links/${state.shareToken}`,
+            {
+              method: "DELETE",
+            }
+          );
+
+          if (!response.ok) {
+            const errorBody = await response.json().catch(() => ({}));
+            const message =
+              errorBody?.message ||
+              `Failed to revoke share link (${response.status})`;
+            throw new Error(message);
+          }
+
+          setShareLinkState(state, null, null);
+          showToast("Share link revoked.");
+        } catch (error) {
+          console.error("Failed to revoke share link:", error);
+          showToast(error.message || "Failed to revoke share link.", true);
+        } finally {
+          revokeBtn.textContent = originalText;
+          updateShareControls(state);
+        }
+      });
     }
   }
 
@@ -888,26 +949,32 @@ function setupInteractions(state) {
   if (exportToggle && exportMenu) {
     exportToggle.addEventListener("click", (event) => {
       event.stopPropagation();
-      exportMenu.style.display = exportMenu.style.display === "block" ? "none" : "block";
+      exportMenu.style.display =
+        exportMenu.style.display === "block" ? "none" : "block";
     });
 
-    document.querySelectorAll("#exportMenu button[data-type]").forEach((button) => {
-      button.addEventListener("click", async () => {
-        const type = button.getAttribute("data-type");
-        const format = button.getAttribute("data-format") || "csv";
-        exportMenu.style.display = "none";
-        try {
-          await exportJobData(state, { type, format });
-          showToast("Export ready.");
-        } catch (error) {
-          console.error("Failed to export job data:", error);
-          showToast("Failed to export data.", true);
-        }
+    document
+      .querySelectorAll("#exportMenu button[data-type]")
+      .forEach((button) => {
+        button.addEventListener("click", async () => {
+          const type = button.getAttribute("data-type");
+          const format = button.getAttribute("data-format") || "csv";
+          exportMenu.style.display = "none";
+          try {
+            await exportJobData(state, { type, format });
+            showToast("Export ready.");
+          } catch (error) {
+            console.error("Failed to export job data:", error);
+            showToast("Failed to export data.", true);
+          }
+        });
       });
-    });
 
     document.addEventListener("click", (event) => {
-      if (!event.target.closest("#exportMenu") && !event.target.closest("#exportMenuToggle")) {
+      if (
+        !event.target.closest("#exportMenu") &&
+        !event.target.closest("#exportMenuToggle")
+      ) {
         exportMenu.style.display = "none";
       }
     });
@@ -959,7 +1026,9 @@ async function initialiseAuth(state) {
 }
 
 async function fetchSharedJSON(path) {
-  const response = await fetch(path, { headers: { Accept: "application/json" } });
+  const response = await fetch(path, {
+    headers: { Accept: "application/json" },
+  });
   if (!response.ok) {
     let message = `Request failed (${response.status})`;
     try {
@@ -1010,7 +1079,10 @@ async function loadTasks(state) {
   const params = new URLSearchParams();
   params.set("limit", state.limit);
   params.set("offset", state.page * state.limit);
-  params.set("sort", state.sortDirection === "desc" ? `-${state.sortColumn}` : state.sortColumn);
+  params.set(
+    "sort",
+    state.sortDirection === "desc" ? `-${state.sortColumn}` : state.sortColumn
+  );
   if (state.statusFilter) {
     params.set("status", state.statusFilter);
   }
@@ -1022,9 +1094,13 @@ async function loadTasks(state) {
 
   let data;
   if (state.mode === "shared") {
-    data = await fetchSharedJSON(`/v1/shared/jobs/${state.shareToken}/tasks?${params.toString()}`);
+    data = await fetchSharedJSON(
+      `/v1/shared/jobs/${state.shareToken}/tasks?${params.toString()}`
+    );
   } else {
-    data = await state.binder.fetchData(`/v1/jobs/${state.jobId}/tasks?${params.toString()}`);
+    data = await state.binder.fetchData(
+      `/v1/jobs/${state.jobId}/tasks?${params.toString()}`
+    );
   }
   const tasks = Array.isArray(data?.tasks) ? data.tasks : [];
   const pagination = data?.pagination || {};
@@ -1056,7 +1132,11 @@ async function authorisedFetch(state, path, options = {}) {
 }
 
 async function restartJobFromPage(state) {
-  const response = await authorisedFetch(state, `/v1/jobs/${state.jobId}/restart`, { method: "POST" });
+  const response = await authorisedFetch(
+    state,
+    `/v1/jobs/${state.jobId}/restart`,
+    { method: "POST" }
+  );
   if (!response.ok) {
     throw new Error(`Failed to restart job (${response.status})`);
   }
@@ -1066,7 +1146,11 @@ async function restartJobFromPage(state) {
 }
 
 async function cancelJobFromPage(state) {
-  const response = await authorisedFetch(state, `/v1/jobs/${state.jobId}/cancel`, { method: "POST" });
+  const response = await authorisedFetch(
+    state,
+    `/v1/jobs/${state.jobId}/cancel`,
+    { method: "POST" }
+  );
   if (!response.ok) {
     throw new Error(`Failed to cancel job (${response.status})`);
   }
@@ -1086,7 +1170,9 @@ async function exportJobData(state, { type, format }) {
     url += `?type=${encodeURIComponent(type)}`;
   }
 
-  const response = await authorisedFetch(state, url, { headers: { Accept: "application/json" } });
+  const response = await authorisedFetch(state, url, {
+    headers: { Accept: "application/json" },
+  });
   if (!response.ok) {
     throw new Error(`Export failed (${response.status})`);
   }
@@ -1116,11 +1202,11 @@ async function exportJobData(state, { type, format }) {
         tasks: formattedRows,
       },
       null,
-      2,
+      2
     );
     const filename = `${sanitizeForFilename(payload?.domain || state.domain || "job")}-${formatCompletionTimestampForFilename(
       payload?.completed_at,
-      payload?.export_time,
+      payload?.export_time
     )}.json`;
     triggerFileDownload(jsonContent, "application/json", filename);
     return;
@@ -1134,14 +1220,17 @@ async function exportJobData(state, { type, format }) {
   const csvContent = csvRows.join("\n");
   const filename = `${sanitizeForFilename(payload?.domain || state.domain || "job")}-${formatCompletionTimestampForFilename(
     payload?.completed_at,
-    payload?.export_time,
+    payload?.export_time
   )}.csv`;
   triggerFileDownload(csvContent, "text/csv", filename);
 }
 
 async function exportSharedJobData(state, { type, format }) {
-  const query = type && type !== "job" ? `?type=${encodeURIComponent(type)}` : "";
-  const exportPayload = await fetchSharedJSON(`/v1/shared/jobs/${state.shareToken}/export${query}`);
+  const query =
+    type && type !== "job" ? `?type=${encodeURIComponent(type)}` : "";
+  const exportPayload = await fetchSharedJSON(
+    `/v1/shared/jobs/${state.shareToken}/export${query}`
+  );
   const { payload, tasks, columns } = normaliseExportPayload(exportPayload);
 
   const { headers, keys } = prepareExportColumns(columns, tasks);
@@ -1170,7 +1259,7 @@ async function exportSharedJobData(state, { type, format }) {
         tasks: formattedRows,
       },
       null,
-      2,
+      2
     );
     const filename = `${sanitizeForFilename(domain)}-${formatCompletionTimestampForFilename(completedAt, exportTime)}.json`;
     triggerFileDownload(jsonContent, "application/json", filename);
@@ -1210,7 +1299,9 @@ function normaliseExportPayload(data) {
 function prepareExportColumns(columns, tasks) {
   if (Array.isArray(columns) && columns.length > 0) {
     const keys = columns.map((col) => col.key);
-    const headers = columns.map((col) => col.label || formatColumnLabel(col.key));
+    const headers = columns.map(
+      (col) => col.label || formatColumnLabel(col.key)
+    );
     return { keys, headers };
   }
 
@@ -1253,7 +1344,11 @@ function escapeCSVValue(value) {
   }
 
   const stringValue = String(value);
-  if (stringValue.includes(",") || stringValue.includes('"') || stringValue.includes("\n")) {
+  if (
+    stringValue.includes(",") ||
+    stringValue.includes('"') ||
+    stringValue.includes("\n")
+  ) {
     return `"${stringValue.replace(/"/g, '""')}"`;
   }
 
@@ -1270,17 +1365,19 @@ function formatCompletionTimestampForFilename(completedAt, fallback) {
   const date = parse(completedAt) || parse(fallback) || new Date();
   const pad = (num) => String(num).padStart(2, "0");
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}-${pad(date.getHours())}-${pad(
-    date.getMinutes(),
+    date.getMinutes()
   )}`;
 }
 
 function sanitizeForFilename(value) {
-  return (value || "")
-    .toString()
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "") || "data";
+  return (
+    (value || "")
+      .toString()
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "") || "data"
+  );
 }
 
 function triggerFileDownload(content, mimeType, filename) {
@@ -1304,7 +1401,10 @@ function showToast(message, isError = false) {
 
 document.addEventListener("DOMContentLoaded", async () => {
   const pathSegments = window.location.pathname.split("/").filter(Boolean);
-  const isSharedRoute = pathSegments.length >= 2 && pathSegments[0] === "shared" && pathSegments[1] === "jobs";
+  const isSharedRoute =
+    pathSegments.length >= 2 &&
+    pathSegments[0] === "shared" &&
+    pathSegments[1] === "jobs";
 
   let jobId = null;
   let shareToken = null;
@@ -1316,7 +1416,10 @@ document.addEventListener("DOMContentLoaded", async () => {
       return;
     }
   } else {
-    jobId = pathSegments.length > 1 ? pathSegments[pathSegments.length - 1] : undefined;
+    jobId =
+      pathSegments.length > 1
+        ? pathSegments[pathSegments.length - 1]
+        : undefined;
 
     if (!jobId || jobId === "jobs") {
       const params = new URLSearchParams(window.location.search);

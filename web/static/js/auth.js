@@ -17,7 +17,8 @@
 
 // Supabase configuration
 const SUPABASE_URL = "https://auth.bluebandedbee.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdwemp0Ymd0ZGp4bmFjZGZ1anZ4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDUwNjYxNjMsImV4cCI6MjA2MDY0MjE2M30.eJjM2-3X8oXsFex_lQKvFkP1-_yLMHsueIn7_hCF6YI";
+const SUPABASE_ANON_KEY =
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdwemp0Ymd0ZGp4bmFjZGZ1anZ4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDUwNjYxNjMsImV4cCI6MjA2MDY0MjE2M30.eJjM2-3X8oXsFex_lQKvFkP1-_yLMHsueIn7_hCF6YI";
 
 // Global state
 let supabase;
@@ -46,7 +47,9 @@ async function loadAuthModal() {
     const response = await fetch("/auth-modal.html");
 
     if (!response.ok) {
-      throw new Error(`Failed to fetch auth modal: ${response.status} ${response.statusText}`);
+      throw new Error(
+        `Failed to fetch auth modal: ${response.status} ${response.statusText}`
+      );
     }
 
     const modalHTML = await response.text();
@@ -68,7 +71,7 @@ async function loadAuthModal() {
     console.error("Failed to load auth modal:", error);
     if (window.Sentry) {
       window.Sentry.captureException(error, {
-        tags: { component: 'auth', action: 'load_modal' }
+        tags: { component: "auth", action: "load_modal" },
       });
     }
   }
@@ -84,7 +87,7 @@ async function handleAuthCallback() {
     const urlParams = new URLSearchParams(window.location.search);
     const error = urlParams.get("error");
     const errorDescription = urlParams.get("error_description");
-    
+
     if (error) {
       console.error("OAuth error:", error, errorDescription);
       // Clear error from URL
@@ -140,7 +143,7 @@ async function handleAuthCallback() {
     console.error("Auth callback processing error:", error);
     if (window.Sentry) {
       window.Sentry.captureException(error, {
-        tags: { component: 'auth', action: 'process_callback' }
+        tags: { component: "auth", action: "process_callback" },
       });
     }
     return false;
@@ -196,8 +199,8 @@ async function registerUserWithBackend(user) {
     console.error("Failed to register user with backend:", error);
     if (window.Sentry) {
       window.Sentry.captureException(error, {
-        tags: { component: 'auth', action: 'backend_registration' },
-        level: 'error'
+        tags: { component: "auth", action: "backend_registration" },
+        level: "error",
       });
     }
     return false;
@@ -212,41 +215,51 @@ function updateAuthState(isAuthenticated) {
   console.log("Updating auth state:", isAuthenticated);
 
   // Show/hide elements based on authentication (support both old and new attributes)
-  const allAuthElements = document.querySelectorAll('[data-bb-auth], [bbb-auth]');
+  const allAuthElements = document.querySelectorAll(
+    "[data-bb-auth], [bbb-auth]"
+  );
 
   const guestElements = [];
   const requiredElements = [];
 
-  allAuthElements.forEach(el => {
-    const authValue = el.getAttribute('bbb-auth') || el.getAttribute('data-bb-auth');
-    if (authValue === 'guest') {
+  allAuthElements.forEach((el) => {
+    const authValue =
+      el.getAttribute("bbb-auth") || el.getAttribute("data-bb-auth");
+    if (authValue === "guest") {
       guestElements.push(el);
-    } else if (authValue === 'required') {
+    } else if (authValue === "required") {
       requiredElements.push(el);
     }
   });
 
   guestElements.forEach((el) => {
-    el.style.display = isAuthenticated ? "none" : el.dataset.originalDisplay || "block";
+    el.style.display = isAuthenticated
+      ? "none"
+      : el.dataset.originalDisplay || "block";
   });
 
   requiredElements.forEach((el) => {
     if (!isAuthenticated) {
       el.dataset.originalDisplay = el.style.display || "block";
     }
-    el.style.display = isAuthenticated ? el.dataset.originalDisplay || "block" : "none";
+    el.style.display = isAuthenticated
+      ? el.dataset.originalDisplay || "block"
+      : "none";
   });
 
   // If user just authenticated and dataBinder exists, load dashboard data
   if (isAuthenticated && window.dataBinder) {
     setTimeout(() => window.dataBinder.refresh(), 100);
   }
-  
+
   // Re-setup logout handler after elements become visible
   if (isAuthenticated) {
     setTimeout(() => {
       const logoutBtn = document.getElementById("logoutBtn");
-      if (logoutBtn && !logoutBtn.hasAttribute("data-logout-handler-attached")) {
+      if (
+        logoutBtn &&
+        !logoutBtn.hasAttribute("data-logout-handler-attached")
+      ) {
         logoutBtn.addEventListener("click", async () => {
           try {
             const { error } = await supabase.auth.signOut();
@@ -369,7 +382,7 @@ function showAuthForm(formType) {
   const loginForm = document.getElementById("loginForm");
   const signupForm = document.getElementById("signupForm");
   const resetForm = document.getElementById("resetForm");
-  
+
   if (loginForm) loginForm.style.display = "none";
   if (signupForm) signupForm.style.display = "none";
   if (resetForm) resetForm.style.display = "none";
@@ -456,11 +469,13 @@ async function handleEmailLogin(event) {
     console.error("Email login error:", error);
     if (window.Sentry) {
       window.Sentry.captureException(error, {
-        tags: { component: 'auth', action: 'email_login' },
-        level: 'warning'
+        tags: { component: "auth", action: "email_login" },
+        level: "warning",
       });
     }
-    showAuthError(error.message || "Login failed. Please check your credentials.");
+    showAuthError(
+      error.message || "Login failed. Please check your credentials."
+    );
   } finally {
     hideAuthLoading();
   }
@@ -507,7 +522,9 @@ async function handleEmailSignup(event) {
     console.log("Email signup successful:", data.user?.email);
 
     if (data.user && !data.user.email_confirmed_at) {
-      showAuthError("Please check your email and click the confirmation link before signing in.");
+      showAuthError(
+        "Please check your email and click the confirmation link before signing in."
+      );
       showAuthForm("login");
     } else if (data.user) {
       // Register user with backend
@@ -526,8 +543,8 @@ async function handleEmailSignup(event) {
     console.error("Email signup error:", error);
     if (window.Sentry) {
       window.Sentry.captureException(error, {
-        tags: { component: 'auth', action: 'email_signup' },
-        level: 'warning'
+        tags: { component: "auth", action: "email_signup" },
+        level: "warning",
       });
     }
     showAuthError(error.message || "Signup failed. Please try again.");
@@ -590,8 +607,8 @@ async function handleSocialLogin(provider) {
     console.error("Social login error:", error);
     if (window.Sentry) {
       window.Sentry.captureException(error, {
-        tags: { component: 'auth', action: 'social_login', provider: provider },
-        level: 'warning'
+        tags: { component: "auth", action: "social_login", provider: provider },
+        level: "warning",
       });
     }
     showAuthError(error.message || `${provider} login failed.`);
@@ -625,7 +642,9 @@ async function handlePendingDomain() {
       });
 
       if (window.showSuccessMessage) {
-        window.showSuccessMessage(`Started crawling ${pendingDomain}! Your cache warming has begun.`);
+        window.showSuccessMessage(
+          `Started crawling ${pendingDomain}! Your cache warming has begun.`
+        );
       }
 
       // Refresh dashboard to show new job
@@ -635,7 +654,9 @@ async function handlePendingDomain() {
     } catch (error) {
       console.error("Failed to create job from pending domain:", error);
       if (window.showDashboardError) {
-        window.showDashboardError(`Failed to start crawling ${pendingDomain}. Please try creating the job manually.`);
+        window.showDashboardError(
+          `Failed to start crawling ${pendingDomain}. Please try creating the job manually.`
+        );
       }
     }
   }
@@ -646,8 +667,10 @@ async function handlePendingDomain() {
  */
 function showAuthLoading() {
   const authLoading = document.getElementById("authLoading");
-  const visibleForm = document.querySelector('.bb-auth-form:not([style*="display: none"])');
-  
+  const visibleForm = document.querySelector(
+    '.bb-auth-form:not([style*="display: none"])'
+  );
+
   if (authLoading) {
     authLoading.style.display = "block";
   }
@@ -664,7 +687,7 @@ function hideAuthLoading() {
   if (authLoading) {
     authLoading.style.display = "none";
   }
-  
+
   // Show appropriate form based on current title
   const authModalTitle = document.getElementById("authModalTitle");
   if (authModalTitle) {
@@ -828,7 +851,8 @@ function setupPasswordStrength() {
 
     // Remove existing validation styling
     confirmInput.classList.remove("bb-field-valid", "bb-field-invalid");
-    const existingError = confirmInput.parentElement.querySelector(".bb-field-error");
+    const existingError =
+      confirmInput.parentElement.querySelector(".bb-field-error");
     if (existingError) {
       existingError.remove();
     }
@@ -841,7 +865,8 @@ function setupPasswordStrength() {
         const errorDiv = document.createElement("div");
         errorDiv.className = "bb-field-error";
         errorDiv.textContent = "Passwords do not match";
-        errorDiv.style.cssText = "color: #dc2626; font-size: 12px; margin-top: 4px;";
+        errorDiv.style.cssText =
+          "color: #dc2626; font-size: 12px; margin-top: 4px;";
         confirmInput.parentElement.appendChild(errorDiv);
       }
     }
@@ -966,7 +991,7 @@ window.onTurnstileSuccess = function (token) {
 };
 
 // Export functions for use by other modules
-if (typeof module !== 'undefined' && module.exports) {
+if (typeof module !== "undefined" && module.exports) {
   // Node.js environment
   module.exports = {
     initializeSupabase,
@@ -992,7 +1017,7 @@ if (typeof module !== 'undefined' && module.exports) {
     setupAuthHandlers,
     setupAuthModalHandlers,
     setupLoginPageHandlers,
-    handleLogout
+    handleLogout,
   };
 } else {
   // Browser environment - make functions globally available
@@ -1020,7 +1045,7 @@ if (typeof module !== 'undefined' && module.exports) {
     setupAuthHandlers,
     setupAuthModalHandlers,
     setupLoginPageHandlers,
-    handleLogout
+    handleLogout,
   };
 
   // Also make individual functions available globally for backward compatibility
@@ -1048,7 +1073,7 @@ if (typeof module !== 'undefined' && module.exports) {
   window.setupAuthModalHandlers = setupAuthModalHandlers;
   window.setupLoginPageHandlers = setupLoginPageHandlers;
   window.handleLogout = handleLogout;
-  
+
   // Convenience functions for common auth form actions
   window.showLoginForm = () => showAuthForm("login");
   window.showSignupForm = () => showAuthForm("signup");

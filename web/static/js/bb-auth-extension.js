@@ -1,10 +1,10 @@
 /**
  * Blue Banded Bee Authentication Extension
  * Data binding integration for the unified authentication system
- * 
+ *
  * This module provides integration between the core auth system (auth.js)
  * and the BBDataBinder for seamless authentication in dashboard applications.
- * 
+ *
  * Features:
  * - Auth state monitoring and data binder integration
  * - Automatic dashboard refresh on auth state changes
@@ -23,7 +23,7 @@ async function initializeAuthWithDataBinder(dataBinder, options = {}) {
   const {
     debug = false,
     autoRefresh = true,
-    networkMonitoring = true
+    networkMonitoring = true,
   } = options;
 
   // Ensure Supabase is ready
@@ -39,7 +39,7 @@ async function initializeAuthWithDataBinder(dataBinder, options = {}) {
   const {
     data: { session },
   } = await supabase.auth.getSession();
-  
+
   if (session?.user) {
     await window.BBAuth.registerUserWithBackend(session.user);
   }
@@ -58,7 +58,10 @@ async function initializeAuthWithDataBinder(dataBinder, options = {}) {
       }
 
       // Register user with backend on sign in (handles OAuth returns)
-      if ((event === "SIGNED_IN" || event === "USER_UPDATED") && session?.user) {
+      if (
+        (event === "SIGNED_IN" || event === "USER_UPDATED") &&
+        session?.user
+      ) {
         await window.BBAuth.registerUserWithBackend(session.user);
       }
 
@@ -113,7 +116,8 @@ function setupDashboardRefresh(dataBinder) {
       // Show refresh indicator
       const statusIndicator = document.querySelector(".status-indicator");
       if (statusIndicator) {
-        statusIndicator.innerHTML = '<span class="status-dot"></span><span>Refreshing...</span>';
+        statusIndicator.innerHTML =
+          '<span class="status-dot"></span><span>Refreshing...</span>';
       }
 
       // Load stats and jobs data
@@ -150,13 +154,17 @@ function setupDashboardRefresh(dataBinder) {
         ...job,
         domain: job.domains?.name || "Unknown Domain",
         progress: Math.round(job.progress || 0),
-        started_at_formatted: job.started_at ? new Date(job.started_at).toLocaleString() : "-",
+        started_at_formatted: job.started_at
+          ? new Date(job.started_at).toLocaleString()
+          : "-",
       }));
 
       // Load slow pages data
       let slowPagesResponse, slowPages;
       try {
-        slowPagesResponse = await this.fetchData("/v1/dashboard/slow-pages?range=today");
+        slowPagesResponse = await this.fetchData(
+          "/v1/dashboard/slow-pages?range=today"
+        );
         slowPages = slowPagesResponse.slow_pages || [];
       } catch (error) {
         console.log("Slow pages API error (likely no data yet):", error);
@@ -166,13 +174,17 @@ function setupDashboardRefresh(dataBinder) {
       // Process slow pages data for better display
       const processedSlowPages = slowPages.map((page) => ({
         ...page,
-        completed_at: page.completed_at ? new Date(page.completed_at).toLocaleString() : "-",
+        completed_at: page.completed_at
+          ? new Date(page.completed_at).toLocaleString()
+          : "-",
       }));
 
       // Load external redirects data
       let redirectsResponse, externalRedirects;
       try {
-        redirectsResponse = await this.fetchData("/v1/dashboard/external-redirects?range=today");
+        redirectsResponse = await this.fetchData(
+          "/v1/dashboard/external-redirects?range=today"
+        );
         externalRedirects = redirectsResponse.external_redirects || [];
       } catch (error) {
         console.log("Redirects API error (likely no data yet):", error);
@@ -182,7 +194,9 @@ function setupDashboardRefresh(dataBinder) {
       // Process external redirects data for better display
       const processedRedirects = externalRedirects.map((redirect) => ({
         ...redirect,
-        completed_at: redirect.completed_at ? new Date(redirect.completed_at).toLocaleString() : "-",
+        completed_at: redirect.completed_at
+          ? new Date(redirect.completed_at).toLocaleString()
+          : "-",
       }));
 
       // Bind all templates
@@ -216,7 +230,10 @@ function setupDashboardRefresh(dataBinder) {
         }, 100); // Small delay to ensure DOM updates are complete
       }
 
-      console.log("Dashboard data refreshed", { stats: data.stats, jobs: processedJobs.length });
+      console.log("Dashboard data refreshed", {
+        stats: data.stats,
+        jobs: processedJobs.length,
+      });
 
       // Load metrics metadata after successful data load (only once)
       if (window.metricsMetadata && !window.metricsMetadata.isLoaded()) {
@@ -224,7 +241,10 @@ function setupDashboardRefresh(dataBinder) {
           await window.metricsMetadata.load();
           window.metricsMetadata.initializeInfoIcons();
         } catch (metadataError) {
-          console.warn("Failed to load metrics metadata (non-critical):", metadataError);
+          console.warn(
+            "Failed to load metrics metadata (non-critical):",
+            metadataError
+          );
         }
       }
     } catch (error) {
@@ -233,7 +253,9 @@ function setupDashboardRefresh(dataBinder) {
       // Only show error if it's not a 404 or empty data response
       if (error.status !== 404 && !error.message?.includes("No jobs found")) {
         if (window.showDashboardError) {
-          window.showDashboardError("Unable to refresh dashboard data. Please check your connection and try again.");
+          window.showDashboardError(
+            "Unable to refresh dashboard data. Please check your connection and try again."
+          );
         }
       }
 
@@ -262,7 +284,8 @@ function setupDashboardRefresh(dataBinder) {
       // Reset status indicator
       const statusIndicator = document.querySelector(".status-indicator");
       if (statusIndicator) {
-        statusIndicator.innerHTML = '<span class="status-dot"></span><span>Live</span>';
+        statusIndicator.innerHTML =
+          '<span class="status-dot"></span><span>Live</span>';
       }
     }
   };
@@ -339,7 +362,9 @@ async function handleDashboardJobCreation(event) {
   } catch (error) {
     console.error("Failed to create dashboard job:", error);
     if (window.showDashboardError) {
-      window.showDashboardError(error.message || "Failed to create job. Please try again.");
+      window.showDashboardError(
+        error.message || "Failed to create job. Please try again."
+      );
     }
   }
 }
@@ -368,7 +393,11 @@ function setupNetworkMonitoring(dataBinder) {
   window.addEventListener("offline", () => {
     updateNetworkStatus();
     if (window.showDashboardError) {
-      window.showDashboardError("Connection lost. Some features may not work.", "error", 0);
+      window.showDashboardError(
+        "Connection lost. Some features may not work.",
+        "error",
+        0
+      );
     }
   });
 }
@@ -379,9 +408,11 @@ function setupNetworkMonitoring(dataBinder) {
 function updateNetworkStatus() {
   const statusIndicator = document.querySelector(".status-indicator");
   if (statusIndicator && !navigator.onLine) {
-    statusIndicator.innerHTML = '<span style="background: #ef4444;" class="status-dot"></span><span>Offline</span>';
+    statusIndicator.innerHTML =
+      '<span style="background: #ef4444;" class="status-dot"></span><span>Offline</span>';
   } else if (statusIndicator && navigator.onLine) {
-    statusIndicator.innerHTML = '<span class="status-dot"></span><span>Live</span>';
+    statusIndicator.innerHTML =
+      '<span class="status-dot"></span><span>Live</span>';
   }
 }
 
@@ -396,7 +427,7 @@ async function initializeDashboard(config = {}) {
     refreshInterval = 10,
     apiBaseUrl = "",
     autoRefresh = true,
-    networkMonitoring = true
+    networkMonitoring = true,
   } = config;
 
   console.log("Enhanced dashboard initialising...");
@@ -420,7 +451,11 @@ async function initializeDashboard(config = {}) {
   }
 
   // Initialise auth with data binder integration
-  await initializeAuthWithDataBinder(dataBinder, { debug, autoRefresh, networkMonitoring });
+  await initializeAuthWithDataBinder(dataBinder, {
+    debug,
+    autoRefresh,
+    networkMonitoring,
+  });
 
   // Initialise data binder
   await dataBinder.init();
@@ -443,7 +478,7 @@ async function initializeDashboard(config = {}) {
   }
 
   console.log("Enhanced dashboard initialised");
-  
+
   return dataBinder;
 }
 
@@ -454,22 +489,22 @@ async function initializeDashboard(config = {}) {
 async function setupQuickAuth(dataBinder) {
   // Load auth modal
   await window.BBAuth.loadAuthModal();
-  
+
   // Wait for DOM to be ready
   await new Promise((resolve) => setTimeout(resolve, 50));
-  
+
   // Initialise auth
   await initializeAuthWithDataBinder(dataBinder, { debug: false });
-  
+
   // Setup handlers
   window.BBAuth.setupAuthHandlers();
   window.BBAuth.setupLoginPageHandlers();
-  
+
   console.log("Quick auth setup complete");
 }
 
 // Export functions for use by other modules
-if (typeof module !== 'undefined' && module.exports) {
+if (typeof module !== "undefined" && module.exports) {
   // Node.js environment
   module.exports = {
     initializeAuthWithDataBinder,
@@ -479,7 +514,7 @@ if (typeof module !== 'undefined' && module.exports) {
     setupNetworkMonitoring,
     updateNetworkStatus,
     initializeDashboard,
-    setupQuickAuth
+    setupQuickAuth,
   };
 } else {
   // Browser environment - make functions globally available
@@ -491,7 +526,7 @@ if (typeof module !== 'undefined' && module.exports) {
     setupNetworkMonitoring,
     updateNetworkStatus,
     initializeDashboard,
-    setupQuickAuth
+    setupQuickAuth,
   };
 
   // Also make individual functions available globally for convenience

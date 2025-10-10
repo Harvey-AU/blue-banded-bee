@@ -1,13 +1,14 @@
 (function () {
-  'use strict';
+  "use strict";
 
   /**
    * API utility for Blue Banded Bee components
    */
 
-  const API_BASE = window.location.hostname === 'localhost'
-    ? 'http://localhost:8080'
-    : window.location.origin;
+  const API_BASE =
+    window.location.hostname === "localhost"
+      ? "http://localhost:8080"
+      : window.location.origin;
 
   class BBApi {
     constructor() {
@@ -22,8 +23,8 @@
     async request(endpoint, options = {}) {
       const url = `${this.baseUrl}${endpoint}`;
       const headers = {
-        'Content-Type': 'application/json',
-        ...options.headers
+        "Content-Type": "application/json",
+        ...options.headers,
       };
 
       // Get current token from auth manager if available
@@ -38,7 +39,7 @@
 
       const config = {
         ...options,
-        headers
+        headers,
       };
 
       try {
@@ -51,37 +52,37 @@
 
         return data;
       } catch (error) {
-        console.error('API request failed:', error);
+        console.error("API request failed:", error);
         throw error;
       }
     }
 
     async get(endpoint) {
-      return this.request(endpoint, { method: 'GET' });
+      return this.request(endpoint, { method: "GET" });
     }
 
     async post(endpoint, body) {
       return this.request(endpoint, {
-        method: 'POST',
-        body: JSON.stringify(body)
+        method: "POST",
+        body: JSON.stringify(body),
       });
     }
 
     async put(endpoint, body) {
       return this.request(endpoint, {
-        method: 'PUT',
-        body: JSON.stringify(body)
+        method: "PUT",
+        body: JSON.stringify(body),
       });
     }
 
     async delete(endpoint) {
-      return this.request(endpoint, { method: 'DELETE' });
+      return this.request(endpoint, { method: "DELETE" });
     }
 
     // Specific API methods
     async getJobs(params = {}) {
       const query = new URLSearchParams(params).toString();
-      const endpoint = query ? `/v1/jobs?${query}` : '/v1/jobs';
+      const endpoint = query ? `/v1/jobs?${query}` : "/v1/jobs";
       return this.get(endpoint);
     }
 
@@ -90,25 +91,27 @@
     }
 
     async createJob(jobData) {
-      return this.post('/v1/jobs', jobData);
+      return this.post("/v1/jobs", jobData);
     }
 
     async getJobTasks(jobId, params = {}) {
       const query = new URLSearchParams(params).toString();
-      const endpoint = query ? `/v1/jobs/${jobId}/tasks?${query}` : `/v1/jobs/${jobId}/tasks`;
+      const endpoint = query
+        ? `/v1/jobs/${jobId}/tasks?${query}`
+        : `/v1/jobs/${jobId}/tasks`;
       return this.get(endpoint);
     }
 
     async getUserProfile() {
-      return this.get('/v1/auth/profile');
+      return this.get("/v1/auth/profile");
     }
   }
 
   const api = new BBApi();
 
-  var api$1 = /*#__PURE__*/Object.freeze({
+  var api$1 = /*#__PURE__*/ Object.freeze({
     __proto__: null,
-    api: api
+    api: api,
   });
 
   /**
@@ -163,7 +166,7 @@
     }
 
     getBooleanAttribute(name) {
-      return this.hasAttribute(name) && this.getAttribute(name) !== 'false';
+      return this.hasAttribute(name) && this.getAttribute(name) !== "false";
     }
 
     getNumberAttribute(name, defaultValue = 0) {
@@ -181,17 +184,17 @@
       if (key) {
         return this.loadingStates.get(key) || false;
       }
-      return Array.from(this.loadingStates.values()).some(state => state);
+      return Array.from(this.loadingStates.values()).some((state) => state);
     }
 
     updateLoadingState() {
       const isLoading = this.isLoading();
-      this.classList.toggle('bb-loading', isLoading);
-      
+      this.classList.toggle("bb-loading", isLoading);
+
       // Update loading indicators
-      const loadingElements = this.querySelectorAll('.bb-loading-indicator');
-      loadingElements.forEach(el => {
-        el.style.display = isLoading ? 'block' : 'none';
+      const loadingElements = this.querySelectorAll(".bb-loading-indicator");
+      loadingElements.forEach((el) => {
+        el.style.display = isLoading ? "block" : "none";
       });
     }
 
@@ -214,19 +217,19 @@
 
     updateErrorState() {
       const hasError = this.hasError();
-      this.classList.toggle('bb-error', hasError);
-      
+      this.classList.toggle("bb-error", hasError);
+
       // Update error displays
-      const errorElements = this.querySelectorAll('.bb-error-message');
+      const errorElements = this.querySelectorAll(".bb-error-message");
       if (hasError) {
         const firstError = Array.from(this.errorStates.values())[0];
-        errorElements.forEach(el => {
+        errorElements.forEach((el) => {
           el.textContent = firstError.message || firstError.toString();
-          el.style.display = 'block';
+          el.style.display = "block";
         });
       } else {
-        errorElements.forEach(el => {
-          el.style.display = 'none';
+        errorElements.forEach((el) => {
+          el.style.display = "none";
         });
       }
     }
@@ -235,15 +238,15 @@
     populateTemplate(templateSelector, data, targetSelector = null) {
       const template = this.querySelector(templateSelector);
       const target = targetSelector ? this.querySelector(targetSelector) : this;
-      
+
       if (!template) {
         console.warn(`Template not found: ${templateSelector}`);
         return null;
       }
 
       const clone = template.cloneNode(true);
-      clone.classList.remove('template');
-      clone.style.display = '';
+      clone.classList.remove("template");
+      clone.style.display = "";
 
       // Replace data placeholders
       this.bindDataToElement(clone, data);
@@ -257,14 +260,14 @@
 
     bindDataToElement(element, data) {
       // Find elements with data attributes and populate them
-      const bindableElements = element.querySelectorAll('[data-bind]');
-      
-      bindableElements.forEach(el => {
+      const bindableElements = element.querySelectorAll("[data-bind]");
+
+      bindableElements.forEach((el) => {
         const bindPath = el.dataset.bind;
         const value = this.getNestedValue(data, bindPath);
-        
+
         if (value !== undefined) {
-          if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
+          if (el.tagName === "INPUT" || el.tagName === "TEXTAREA") {
             el.value = value;
           } else {
             el.textContent = value;
@@ -273,11 +276,11 @@
       });
 
       // Handle style bindings (e.g., width for progress bars)
-      const styleBindings = element.querySelectorAll('[data-style-bind]');
-      styleBindings.forEach(el => {
-        const bindings = el.dataset.styleBind.split(',');
-        bindings.forEach(binding => {
-          const [property, path] = binding.split(':');
+      const styleBindings = element.querySelectorAll("[data-style-bind]");
+      styleBindings.forEach((el) => {
+        const bindings = el.dataset.styleBind.split(",");
+        bindings.forEach((binding) => {
+          const [property, path] = binding.split(":");
           const value = this.getNestedValue(data, path.trim());
           if (value !== undefined) {
             el.style[property.trim()] = value;
@@ -287,7 +290,7 @@
     }
 
     getNestedValue(obj, path) {
-      return path.split('.').reduce((current, key) => current?.[key], obj);
+      return path.split(".").reduce((current, key) => current?.[key], obj);
     }
 
     // Event handling utilities
@@ -295,7 +298,7 @@
       const event = new CustomEvent(`bb:${eventName}`, {
         detail,
         bubbles: true,
-        cancelable: true
+        cancelable: true,
       });
       this.dispatchEvent(event);
     }
@@ -315,7 +318,6 @@
    * Expects Supabase to be loaded via CDN
    */
 
-
   class SimpleAuthManager {
     constructor() {
       this.user = null;
@@ -328,9 +330,11 @@
     async init() {
       // Wait for Supabase to be available on window
       await this.waitForSupabase();
-      
+
       // Get initial session
-      const { data: { session } } = await this.supabase.auth.getSession();
+      const {
+        data: { session },
+      } = await this.supabase.auth.getSession();
       this.setSession(session);
 
       // Listen for auth changes
@@ -342,7 +346,10 @@
 
     async waitForSupabase() {
       // Check if Supabase is already loaded and client is created
-      if (window.supabase && typeof window.supabase.createClient === 'function') {
+      if (
+        window.supabase &&
+        typeof window.supabase.createClient === "function"
+      ) {
         // Create the client with the correct credentials
         this.supabase = window.supabase.createClient(
           "https://auth.bluebandedbee.co",
@@ -354,7 +361,10 @@
       // Wait for it to load
       return new Promise((resolve) => {
         const checkSupabase = () => {
-          if (window.supabase && typeof window.supabase.createClient === 'function') {
+          if (
+            window.supabase &&
+            typeof window.supabase.createClient === "function"
+          ) {
             this.supabase = window.supabase.createClient(
               "https://auth.bluebandedbee.co",
               "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdwemp0Ymd0ZGp4bmFjZGZ1anZ4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDUwNjYxNjMsImV4cCI6MjA2MDY0MjE2M30.eJjM2-3X8oXsFex_lQKvFkP1-_yLMHsueIn7_hCF6YI"
@@ -371,7 +381,7 @@
     setSession(session) {
       this.session = session;
       this.user = session?.user || null;
-      
+
       // Update API token
       if (session?.access_token) {
         api.setToken(session.access_token);
@@ -383,65 +393,68 @@
     // Authentication methods
     async signIn(email, password) {
       if (!this.supabase) await this.waitForSupabase();
-      
+
       const { data, error } = await this.supabase.auth.signInWithPassword({
         email,
-        password
+        password,
       });
-      
+
       if (error) throw error;
       return data;
     }
 
     async signUp(email, password, metadata = {}, captchaToken = null) {
       if (!this.supabase) await this.waitForSupabase();
-      
+
       const options = {
-        data: metadata
+        data: metadata,
       };
-      
+
       if (captchaToken) {
         options.captchaToken = captchaToken;
       }
-      
+
       const { data, error } = await this.supabase.auth.signUp({
         email,
         password,
-        options
+        options,
       });
-      
+
       if (error) throw error;
       return data;
     }
 
     async signInWithProvider(provider) {
       if (!this.supabase) await this.waitForSupabase();
-      
+
       const { data, error } = await this.supabase.auth.signInWithOAuth({
         provider,
         options: {
-          redirectTo: window.location.origin + '/dashboard'
-        }
+          redirectTo: window.location.origin + "/dashboard",
+        },
       });
-      
+
       if (error) throw error;
       return data;
     }
 
     async signOut() {
       if (!this.supabase) await this.waitForSupabase();
-      
+
       const { error } = await this.supabase.auth.signOut();
       if (error) throw error;
     }
 
     async resetPassword(email) {
       if (!this.supabase) await this.waitForSupabase();
-      
-      const { data, error } = await this.supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: window.location.origin + '/reset-password'
-      });
-      
+
+      const { data, error } = await this.supabase.auth.resetPasswordForEmail(
+        email,
+        {
+          redirectTo: window.location.origin + "/reset-password",
+        }
+      );
+
       if (error) throw error;
       return data;
     }
@@ -466,7 +479,7 @@
     // Event handling
     onAuthStateChange(callback) {
       this.listeners.add(callback);
-      
+
       // Return unsubscribe function
       return () => {
         this.listeners.delete(callback);
@@ -474,11 +487,11 @@
     }
 
     notifyListeners(event, session) {
-      this.listeners.forEach(callback => {
+      this.listeners.forEach((callback) => {
         try {
           callback(event, session);
         } catch (error) {
-          console.error('Auth listener error:', error);
+          console.error("Auth listener error:", error);
         }
       });
     }
@@ -486,20 +499,20 @@
     // User profile management
     async getUserProfile() {
       if (!this.isAuthenticated()) {
-        throw new Error('User not authenticated');
+        throw new Error("User not authenticated");
       }
-      
+
       try {
         return await api.getUserProfile();
       } catch (error) {
-        console.error('Failed to get user profile:', error);
+        console.error("Failed to get user profile:", error);
         throw error;
       }
     }
 
     async updateProfile(updates) {
       if (!this.supabase) await this.waitForSupabase();
-      
+
       const { data, error } = await this.supabase.auth.updateUser(updates);
       if (error) throw error;
       return data;
@@ -523,10 +536,10 @@
     return true;
   }
 
-  var simpleAuth = /*#__PURE__*/Object.freeze({
+  var simpleAuth = /*#__PURE__*/ Object.freeze({
     __proto__: null,
     authManager: authManager,
-    requireAuth: requireAuth
+    requireAuth: requireAuth,
   });
 
   /**
@@ -534,10 +547,16 @@
    * Fetches data from API and populates Webflow templates
    */
 
-
   class BBDataLoader extends BBBaseComponent {
     static get observedAttributes() {
-      return ['endpoint', 'template', 'target', 'auto-load', 'require-auth', 'refresh-interval'];
+      return [
+        "endpoint",
+        "template",
+        "target",
+        "auto-load",
+        "require-auth",
+        "refresh-interval",
+      ];
     }
 
     constructor() {
@@ -548,12 +567,12 @@
 
     connectedCallback() {
       super.connectedCallback();
-      
-      if (this.getBooleanAttribute('require-auth') && !requireAuth(this)) {
+
+      if (this.getBooleanAttribute("require-auth") && !requireAuth(this)) {
         return;
       }
 
-      if (this.getBooleanAttribute('auto-load')) {
+      if (this.getBooleanAttribute("auto-load")) {
         this.loadData();
       }
 
@@ -567,12 +586,12 @@
 
     handleAttributeChange(name, oldValue, newValue) {
       switch (name) {
-        case 'endpoint':
-          if (this.getBooleanAttribute('auto-load')) {
+        case "endpoint":
+          if (this.getBooleanAttribute("auto-load")) {
             this.loadData();
           }
           break;
-        case 'refresh-interval':
+        case "refresh-interval":
           this.setupRefreshTimer();
           break;
       }
@@ -588,34 +607,33 @@
     }
 
     async loadData() {
-      const endpoint = this.getAttribute('endpoint');
+      const endpoint = this.getAttribute("endpoint");
       if (!endpoint) {
-        this.setError('endpoint', new Error('No endpoint specified'));
+        this.setError("endpoint", new Error("No endpoint specified"));
         return;
       }
 
-      this.setLoading('data', true);
-      this.setError('endpoint', null);
+      this.setLoading("data", true);
+      this.setError("endpoint", null);
 
       try {
         const response = await api.get(endpoint);
         this.data = response.data;
-        
+
         this.populateTemplates();
-        this.dispatchCustomEvent('data-loaded', { data: this.data, endpoint });
-        
+        this.dispatchCustomEvent("data-loaded", { data: this.data, endpoint });
       } catch (error) {
-        this.setError('endpoint', error);
-        this.dispatchCustomEvent('data-error', { error, endpoint });
+        this.setError("endpoint", error);
+        this.dispatchCustomEvent("data-error", { error, endpoint });
       } finally {
-        this.setLoading('data', false);
+        this.setLoading("data", false);
       }
     }
 
     populateTemplates() {
-      const templateSelector = this.getAttribute('template');
-      const targetSelector = this.getAttribute('target');
-      
+      const templateSelector = this.getAttribute("template");
+      const targetSelector = this.getAttribute("target");
+
       if (!templateSelector || !this.data) {
         return;
       }
@@ -624,32 +642,36 @@
       if (targetSelector) {
         const target = document.querySelector(targetSelector);
         if (target) {
-          const existingItems = target.querySelectorAll(':not(.template)');
-          existingItems.forEach(item => item.remove());
+          const existingItems = target.querySelectorAll(":not(.template)");
+          existingItems.forEach((item) => item.remove());
         }
       }
 
       // Handle array data (common case)
       if (Array.isArray(this.data)) {
-        this.data.forEach(item => {
+        this.data.forEach((item) => {
           this.populateTemplate(templateSelector, item, targetSelector);
         });
-      } 
+      }
       // Handle object data
-      else if (typeof this.data === 'object') {
+      else if (typeof this.data === "object") {
         this.populateTemplate(templateSelector, this.data, targetSelector);
       }
     }
 
     // Enhanced template population with event handling
     populateTemplate(templateSelector, data, targetSelector = null) {
-      const element = super.populateTemplate(templateSelector, data, targetSelector);
-      
+      const element = super.populateTemplate(
+        templateSelector,
+        data,
+        targetSelector
+      );
+
       if (element) {
         // Add click handlers for links
-        const links = element.querySelectorAll('[data-link]');
-        links.forEach(link => {
-          link.addEventListener('click', (e) => {
+        const links = element.querySelectorAll("[data-link]");
+        links.forEach((link) => {
+          link.addEventListener("click", (e) => {
             e.preventDefault();
             const linkType = link.dataset.link;
             this.handleLinkClick(linkType, data, link);
@@ -657,9 +679,9 @@
         });
 
         // Add form handlers
-        const forms = element.querySelectorAll('[data-form]');
-        forms.forEach(form => {
-          form.addEventListener('submit', (e) => {
+        const forms = element.querySelectorAll("[data-form]");
+        forms.forEach((form) => {
+          form.addEventListener("submit", (e) => {
             e.preventDefault();
             const formType = form.dataset.form;
             this.handleFormSubmit(formType, data, form);
@@ -672,21 +694,21 @@
 
     handleLinkClick(linkType, data, element) {
       switch (linkType) {
-        case 'job-details':
+        case "job-details":
           if (data?.id) {
             window.location.href = `/jobs/${data.id}`;
           }
           break;
-        case 'share-job':
+        case "share-job":
           if (data?.id) {
             this.generateShareLink(data.id, element);
           }
           break;
-        case 'cancel-job':
+        case "cancel-job":
           this.cancelJob(data.id);
           break;
         default:
-          this.dispatchCustomEvent('link-click', { linkType, data, element });
+          this.dispatchCustomEvent("link-click", { linkType, data, element });
       }
     }
 
@@ -697,32 +719,32 @@
 
       const originalLabel = element.textContent;
       try {
-        element.textContent = 'Generating…';
-        element.classList.add('bb-link-disabled');
+        element.textContent = "Generating…";
+        element.classList.add("bb-link-disabled");
 
         const response = await api.request(`/v1/jobs/${jobId}/share-links`, {
-          method: 'POST'
+          method: "POST",
         });
 
         const data = response?.data || response;
         const shareLink = data?.share_link;
         if (!shareLink) {
-          throw new Error('Share link missing in response');
+          throw new Error("Share link missing in response");
         }
 
         try {
           await navigator.clipboard.writeText(shareLink);
-          this.showInlineToast(element, 'Link copied');
+          this.showInlineToast(element, "Link copied");
         } catch (copyErr) {
-          console.warn('Clipboard copy failed, showing inline toast', copyErr);
-          this.showInlineToast(element, 'Link ready', true);
+          console.warn("Clipboard copy failed, showing inline toast", copyErr);
+          this.showInlineToast(element, "Link ready", true);
         }
       } catch (error) {
-        console.error('Failed to generate share link:', error);
-        this.showInlineToast(element, 'Failed to share', true);
+        console.error("Failed to generate share link:", error);
+        this.showInlineToast(element, "Failed to share", true);
       } finally {
         element.textContent = originalLabel;
-        element.classList.remove('bb-link-disabled');
+        element.classList.remove("bb-link-disabled");
       }
     }
 
@@ -732,47 +754,47 @@
         return;
       }
 
-      const toast = document.createElement('span');
+      const toast = document.createElement("span");
       toast.textContent = message;
       toast.style.cssText = `
         margin-left: 8px;
         font-size: 12px;
-        color: ${isWarning ? '#b91c1c' : '#047857'};
+        color: ${isWarning ? "#b91c1c" : "#047857"};
         font-weight: 600;
         transition: opacity 0.2s ease;
       `;
 
-      anchorElement.insertAdjacentElement('afterend', toast);
+      anchorElement.insertAdjacentElement("afterend", toast);
 
       setTimeout(() => {
-        toast.style.opacity = '0';
+        toast.style.opacity = "0";
         setTimeout(() => toast.remove(), 200);
       }, 2000);
     }
 
     handleFormSubmit(formType, data, form) {
-      this.dispatchCustomEvent('form-submit', { formType, data, form });
+      this.dispatchCustomEvent("form-submit", { formType, data, form });
     }
 
     // Job-specific actions
     async cancelJob(jobId) {
       try {
-        this.setLoading('cancel', true);
+        this.setLoading("cancel", true);
         await api.post(`/v1/jobs/${jobId}/cancel`);
         this.loadData(); // Refresh data
-        this.dispatchCustomEvent('job-cancelled', { jobId });
+        this.dispatchCustomEvent("job-cancelled", { jobId });
       } catch (error) {
-        this.setError('cancel', error);
+        this.setError("cancel", error);
       } finally {
-        this.setLoading('cancel', false);
+        this.setLoading("cancel", false);
       }
     }
 
     // Refresh timer management
     setupRefreshTimer() {
       this.clearRefreshTimer();
-      
-      const interval = this.getNumberAttribute('refresh-interval');
+
+      const interval = this.getNumberAttribute("refresh-interval");
       if (interval > 0) {
         this.refreshTimer = setInterval(() => {
           if (this._isComponentConnected && !this.isLoading()) {
@@ -799,16 +821,15 @@
     }
   }
 
-  customElements.define('bb-data-loader', BBDataLoader);
+  customElements.define("bb-data-loader", BBDataLoader);
 
   /**
    * Login component for Blue Banded Bee
    */
 
-
   class BBAuthLogin extends BBBaseComponent {
     static get observedAttributes() {
-      return ['redirect-url', 'show-providers', 'compact'];
+      return ["redirect-url", "show-providers", "compact"];
     }
 
     constructor() {
@@ -818,16 +839,16 @@
 
     connectedCallback() {
       super.connectedCallback();
-      
+
       // Listen for auth state changes
       this.unsubscribeAuth = authManager.onAuthStateChange((event, session) => {
-        if (session && this.hasAttribute('redirect-url')) {
+        if (session && this.hasAttribute("redirect-url")) {
           this.handleSuccessfulLogin();
         }
       });
 
       // Check if already logged in - only redirect if redirect-url is explicitly set
-      if (authManager.isAuthenticated() && this.hasAttribute('redirect-url')) {
+      if (authManager.isAuthenticated() && this.hasAttribute("redirect-url")) {
         this.handleSuccessfulLogin();
       }
     }
@@ -840,11 +861,11 @@
     }
 
     render() {
-      const compact = this.getBooleanAttribute('compact');
-      const showProviders = this.getBooleanAttribute('show-providers');
-      
+      const compact = this.getBooleanAttribute("compact");
+      const showProviders = this.getBooleanAttribute("show-providers");
+
       this.innerHTML = `
-      <div class="bb-auth-login ${compact ? 'compact' : ''}">
+      <div class="bb-auth-login ${compact ? "compact" : ""}">
         ${this.getErrorHTML()}
         ${this.getLoadingHTML()}
         
@@ -881,7 +902,7 @@
           </div>
         </form>
         
-        ${showProviders ? this.renderSocialProviders() : ''}
+        ${showProviders ? this.renderSocialProviders() : ""}
       </div>
     `;
     }
@@ -915,24 +936,24 @@
 
     setupEventListeners() {
       // Form submission
-      const form = this.querySelector('.bb-login-form');
+      const form = this.querySelector(".bb-login-form");
       if (form) {
-        form.addEventListener('submit', (e) => this.handleLogin(e));
+        form.addEventListener("submit", (e) => this.handleLogin(e));
       }
 
       // Social login buttons
-      const socialButtons = this.querySelectorAll('[data-provider]');
-      socialButtons.forEach(button => {
-        button.addEventListener('click', (e) => {
+      const socialButtons = this.querySelectorAll("[data-provider]");
+      socialButtons.forEach((button) => {
+        button.addEventListener("click", (e) => {
           const provider = e.currentTarget.dataset.provider;
           this.handleSocialLogin(provider);
         });
       });
 
       // Action links
-      const actionLinks = this.querySelectorAll('[data-action]');
-      actionLinks.forEach(link => {
-        link.addEventListener('click', (e) => {
+      const actionLinks = this.querySelectorAll("[data-action]");
+      actionLinks.forEach((link) => {
+        link.addEventListener("click", (e) => {
           e.preventDefault();
           const action = e.currentTarget.dataset.action;
           this.handleAction(action);
@@ -942,81 +963,85 @@
 
     async handleLogin(event) {
       event.preventDefault();
-      
-      const formData = new FormData(event.target);
-      const email = formData.get('email');
-      const password = formData.get('password');
 
-      this.setLoading('login', true);
-      this.setError('login', null);
+      const formData = new FormData(event.target);
+      const email = formData.get("email");
+      const password = formData.get("password");
+
+      this.setLoading("login", true);
+      this.setError("login", null);
 
       try {
         await authManager.signIn(email, password);
         // Success is handled by auth state change listener
       } catch (error) {
-        this.setError('login', error);
+        this.setError("login", error);
       } finally {
-        this.setLoading('login', false);
+        this.setLoading("login", false);
       }
     }
 
     async handleSocialLogin(provider) {
-      this.setLoading('social', true);
-      this.setError('social', null);
+      this.setLoading("social", true);
+      this.setError("social", null);
 
       try {
         await authManager.signInWithProvider(provider);
         // Success is handled by auth state change listener
       } catch (error) {
-        this.setError('social', error);
-        this.setLoading('social', false);
+        this.setError("social", error);
+        this.setLoading("social", false);
       }
     }
 
     handleAction(action) {
       switch (action) {
-        case 'forgot-password':
+        case "forgot-password":
           this.showForgotPassword();
           break;
-        case 'show-signup':
-          this.dispatchCustomEvent('show-signup');
+        case "show-signup":
+          this.dispatchCustomEvent("show-signup");
           break;
       }
     }
 
     showForgotPassword() {
-      const email = this.querySelector('#bb-email').value;
-      
+      const email = this.querySelector("#bb-email").value;
+
       if (email) {
         this.sendPasswordReset(email);
       } else {
-        alert('Please enter your email address first.');
+        alert("Please enter your email address first.");
       }
     }
 
     async sendPasswordReset(email) {
-      this.setLoading('reset', true);
+      this.setLoading("reset", true);
 
       try {
         await authManager.resetPassword(email);
-        alert('Password reset email sent! Check your inbox.');
+        alert("Password reset email sent! Check your inbox.");
       } catch (error) {
-        this.setError('reset', error);
+        this.setError("reset", error);
       } finally {
-        this.setLoading('reset', false);
+        this.setLoading("reset", false);
       }
     }
 
     handleSuccessfulLogin() {
-      const redirectUrl = this.getAttribute('redirect-url');
-      
-      this.dispatchCustomEvent('login-success', { 
+      const redirectUrl = this.getAttribute("redirect-url");
+
+      this.dispatchCustomEvent("login-success", {
         user: authManager.getUser(),
-        redirectUrl 
+        redirectUrl,
       });
 
       // Only redirect if redirect-url attribute is explicitly set
-      if (redirectUrl && redirectUrl !== '' && redirectUrl !== window.location.pathname) {
+      if (
+        redirectUrl &&
+        redirectUrl !== "" &&
+        redirectUrl !== window.location.pathname
+      ) {
         setTimeout(() => {
           window.location.href = redirectUrl;
         }, 100);
@@ -1024,17 +1049,22 @@
     }
   }
 
-  customElements.define('bb-auth-login', BBAuthLogin);
+  customElements.define("bb-auth-login", BBAuthLogin);
 
   /**
    * Job Dashboard Component for Blue Banded Bee
    * Provides comprehensive job summary with status overview cards and performance metrics
    */
 
-
   class BBJobDashboard extends BBBaseComponent {
     static get observedAttributes() {
-      return ['auto-load', 'refresh-interval', 'show-charts', 'date-range', 'limit'];
+      return [
+        "auto-load",
+        "refresh-interval",
+        "show-charts",
+        "date-range",
+        "limit",
+      ];
     }
 
     constructor() {
@@ -1046,14 +1076,14 @@
 
     connectedCallback() {
       super.connectedCallback();
-      
+
       if (!requireAuth(this)) {
         return;
       }
 
       this.render();
 
-      if (this.getBooleanAttribute('auto-load')) {
+      if (this.getBooleanAttribute("auto-load")) {
         this.loadDashboard();
       }
 
@@ -1068,13 +1098,13 @@
 
     handleAttributeChange(name, oldValue, newValue) {
       switch (name) {
-        case 'date-range':
-        case 'limit':
-          if (this.getBooleanAttribute('auto-load')) {
+        case "date-range":
+        case "limit":
+          if (this.getBooleanAttribute("auto-load")) {
             this.loadDashboard();
           }
           break;
-        case 'refresh-interval':
+        case "refresh-interval":
           this.setupRefreshTimer();
           break;
       }
@@ -1111,7 +1141,7 @@
         </div>
 
         <!-- Performance Chart (if enabled) -->
-        ${this.getBooleanAttribute('show-charts') ? this.getChartsHTML() : ''}
+        ${this.getBooleanAttribute("show-charts") ? this.getChartsHTML() : ""}
       </div>
 
       <!-- Job Card Template -->
@@ -1213,7 +1243,7 @@
 
     setupEventHandlers() {
       // Action button handlers
-      this.addEventListener('click', (e) => {
+      this.addEventListener("click", (e) => {
         const action = e.target.dataset.action;
         if (action) {
           this.handleAction(action, e.target);
@@ -1229,74 +1259,77 @@
 
     handleAction(action, element) {
       switch (action) {
-        case 'refresh':
+        case "refresh":
           this.loadDashboard();
           break;
-        case 'create-job':
-          this.dispatchCustomEvent('create-job-requested');
+        case "create-job":
+          this.dispatchCustomEvent("create-job-requested");
           break;
       }
     }
 
     handleLinkClick(linkType, element) {
       const jobId = element.dataset.jobId;
-      
+
       switch (linkType) {
-        case 'job-details':
-          this.dispatchCustomEvent('job-details-requested', { jobId });
+        case "job-details":
+          this.dispatchCustomEvent("job-details-requested", { jobId });
           break;
-        case 'cancel-job':
+        case "cancel-job":
           this.cancelJob(jobId);
           break;
-        case 'retry-job':
+        case "retry-job":
           this.retryJob(jobId);
           break;
       }
     }
 
     async loadDashboard() {
-      this.setLoading('dashboard', true);
-      this.setError('dashboard', null);
+      this.setLoading("dashboard", true);
+      this.setError("dashboard", null);
 
       try {
         // Load dashboard data in parallel
         const [statsData, jobsData] = await Promise.all([
           this.loadStats(),
-          this.loadJobs()
+          this.loadJobs(),
         ]);
 
         this.dashboardData = {
           stats: statsData,
-          jobs: jobsData
+          jobs: jobsData,
         };
 
         this.updateStats(statsData);
         this.updateJobs(jobsData);
 
-        if (this.getBooleanAttribute('show-charts')) {
+        if (this.getBooleanAttribute("show-charts")) {
           await this.updateCharts();
         }
 
-        this.dispatchCustomEvent('dashboard-loaded', { data: this.dashboardData });
-
+        this.dispatchCustomEvent("dashboard-loaded", {
+          data: this.dashboardData,
+        });
       } catch (error) {
-        this.setError('dashboard', error);
-        this.dispatchCustomEvent('dashboard-error', { error });
+        this.setError("dashboard", error);
+        this.dispatchCustomEvent("dashboard-error", { error });
       } finally {
-        this.setLoading('dashboard', false);
+        this.setLoading("dashboard", false);
       }
     }
 
     async loadStats() {
-      const dateRange = this.getAttribute('date-range') || 'last7';
+      const dateRange = this.getAttribute("date-range") || "last7";
       const response = await api.get(`/v1/dashboard/stats?range=${dateRange}`);
       return response.data;
     }
 
     async loadJobs() {
-      const limit = this.getNumberAttribute('limit') || 10;
-      const dateRange = this.getAttribute('date-range') || 'last7';
-      const response = await api.get(`/v1/jobs?limit=${limit}&range=${dateRange}&include=domain,progress`);
+      const limit = this.getNumberAttribute("limit") || 10;
+      const dateRange = this.getAttribute("date-range") || "last7";
+      const response = await api.get(
+        `/v1/jobs?limit=${limit}&range=${dateRange}&include=domain,progress`
+      );
       return response.data;
     }
 
@@ -1305,24 +1338,48 @@
       if (!container) return;
 
       // Clear loading state
-      const loading = container.querySelector('.bb-loading-stats');
-      if (loading) loading.style.display = 'none';
+      const loading = container.querySelector(".bb-loading-stats");
+      if (loading) loading.style.display = "none";
 
       // Prepare stats for template population
       const stats = [
-        { type: 'total', value: statsData.total_jobs || 0, label: 'Total Jobs', trend: statsData.total_trend },
-        { type: 'running', value: statsData.running_jobs || 0, label: 'Running', trend: statsData.running_trend },
-        { type: 'completed', value: statsData.completed_jobs || 0, label: 'Completed', trend: statsData.completed_trend },
-        { type: 'failed', value: statsData.failed_jobs || 0, label: 'Failed', trend: statsData.failed_trend }
+        {
+          type: "total",
+          value: statsData.total_jobs || 0,
+          label: "Total Jobs",
+          trend: statsData.total_trend,
+        },
+        {
+          type: "running",
+          value: statsData.running_jobs || 0,
+          label: "Running",
+          trend: statsData.running_trend,
+        },
+        {
+          type: "completed",
+          value: statsData.completed_jobs || 0,
+          label: "Completed",
+          trend: statsData.completed_trend,
+        },
+        {
+          type: "failed",
+          value: statsData.failed_jobs || 0,
+          label: "Failed",
+          trend: statsData.failed_trend,
+        },
       ];
 
       // Clear existing cards
-      const existingCards = container.querySelectorAll('.bb-stat-card');
-      existingCards.forEach(card => card.remove());
+      const existingCards = container.querySelectorAll(".bb-stat-card");
+      existingCards.forEach((card) => card.remove());
 
       // Populate stats cards
-      stats.forEach(stat => {
-        this.populateTemplate('.bb-stats-card-template', stat, '[data-bind-container="stats"]');
+      stats.forEach((stat) => {
+        this.populateTemplate(
+          ".bb-stats-card-template",
+          stat,
+          '[data-bind-container="stats"]'
+        );
       });
     }
 
@@ -1331,12 +1388,12 @@
       if (!container) return;
 
       // Clear loading state
-      const loading = container.querySelector('.bb-loading-jobs');
-      if (loading) loading.style.display = 'none';
+      const loading = container.querySelector(".bb-loading-jobs");
+      if (loading) loading.style.display = "none";
 
       // Clear existing jobs
-      const existingJobs = container.querySelectorAll('.bb-job-card');
-      existingJobs.forEach(job => job.remove());
+      const existingJobs = container.querySelectorAll(".bb-job-card");
+      existingJobs.forEach((job) => job.remove());
 
       // Handle empty state
       if (!jobsData.jobs || jobsData.jobs.length === 0) {
@@ -1354,83 +1411,87 @@
       }
 
       // Populate job cards
-      jobsData.jobs.forEach(job => {
+      jobsData.jobs.forEach((job) => {
         // Format job data for template
         const formattedJob = {
           ...job,
           progress: Math.round(job.progress || 0),
           started_at: this.formatDate(job.started_at),
-          completed_at: this.formatDate(job.completed_at)
+          completed_at: this.formatDate(job.completed_at),
         };
 
-        this.populateTemplate('.bb-job-card-template', formattedJob, '[data-bind-container="jobs"]');
+        this.populateTemplate(
+          ".bb-job-card-template",
+          formattedJob,
+          '[data-bind-container="jobs"]'
+        );
       });
     }
 
     async updateCharts() {
-      if (!this.getBooleanAttribute('show-charts')) return;
+      if (!this.getBooleanAttribute("show-charts")) return;
 
       try {
-        const chartData = await api.get('/v1/dashboard/activity');
+        const chartData = await api.get("/v1/dashboard/activity");
         this.renderActivityChart(chartData.data);
       } catch (error) {
-        console.warn('Failed to load chart data:', error);
+        console.warn("Failed to load chart data:", error);
       }
     }
 
     renderActivityChart(data) {
-      const canvas = this.querySelector('.bb-activity-chart');
+      const canvas = this.querySelector(".bb-activity-chart");
       if (!canvas) return;
 
       // Basic chart implementation (could be enhanced with Chart.js)
-      canvas.getContext('2d');
+      canvas.getContext("2d");
       // Simple bar chart implementation here...
     }
 
     async cancelJob(jobId) {
-      if (!confirm('Are you sure you want to cancel this job?')) return;
+      if (!confirm("Are you sure you want to cancel this job?")) return;
 
       try {
-        this.setLoading('cancel', true);
+        this.setLoading("cancel", true);
         await api.post(`/v1/jobs/${jobId}/cancel`);
         this.loadDashboard(); // Refresh data
-        this.dispatchCustomEvent('job-cancelled', { jobId });
+        this.dispatchCustomEvent("job-cancelled", { jobId });
       } catch (error) {
-        this.setError('cancel', error);
+        this.setError("cancel", error);
       } finally {
-        this.setLoading('cancel', false);
+        this.setLoading("cancel", false);
       }
     }
 
     async retryJob(jobId) {
       try {
-        this.setLoading('retry', true);
+        this.setLoading("retry", true);
         await api.post(`/v1/jobs/${jobId}/retry`);
         this.loadDashboard(); // Refresh data
-        this.dispatchCustomEvent('job-retried', { jobId });
+        this.dispatchCustomEvent("job-retried", { jobId });
       } catch (error) {
-        this.setError('retry', error);
+        this.setError("retry", error);
       } finally {
-        this.setLoading('retry', false);
+        this.setLoading("retry", false);
       }
     }
 
     formatDate(dateStr) {
-      if (!dateStr) return '-';
-      const date = new Date(dateStr + (dateStr.includes('Z') ? '' : 'Z'));
-      return date.toLocaleString('en-AU', {
-        day: '2-digit',
-        month: '2-digit', 
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
+      if (!dateStr) return "-";
+      const date = new Date(dateStr + (dateStr.includes("Z") ? "" : "Z"));
+      return date.toLocaleString("en-AU", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
       });
     }
 
     setupRefreshTimer() {
       this.clearRefreshTimer();
-      
-      const interval = this.getNumberAttribute('refresh-interval');
+
+      const interval = this.getNumberAttribute("refresh-interval");
       if (interval > 0) {
         this.refreshTimer = setInterval(() => {
           if (this._isComponentConnected && !this.isLoading()) {
@@ -1448,7 +1509,7 @@
     }
 
     destroyCharts() {
-      this.charts.forEach(chart => {
+      this.charts.forEach((chart) => {
         if (chart && chart.destroy) {
           chart.destroy();
         }
@@ -1765,50 +1826,55 @@
     }
   }
 
-  customElements.define('bb-job-dashboard', BBJobDashboard);
+  customElements.define("bb-job-dashboard", BBJobDashboard);
 
   /**
    * Blue Banded Bee Web Components
    * Main entry point for all components
    */
 
-
   // Initialize global BBComponents namespace
   window.BBComponents = {
-    version: '1.0.0',
-    
+    version: "1.0.0",
+
     // Component registry
     components: {
-      'bb-data-loader': 'BBDataLoader',
-      'bb-auth-login': 'BBAuthLogin',
-      'bb-job-dashboard': 'BBJobDashboard'
+      "bb-data-loader": "BBDataLoader",
+      "bb-auth-login": "BBAuthLogin",
+      "bb-job-dashboard": "BBJobDashboard",
     },
-    
+
     // Utility functions
     async loadData(endpoint) {
-      const { api } = await Promise.resolve().then(function () { return api$1; });
+      const { api } = await Promise.resolve().then(function () {
+        return api$1;
+      });
       return api.get(endpoint);
     },
-    
+
     getAuthManager() {
-      return Promise.resolve().then(function () { return simpleAuth; }).then(m => m.authManager);
-    }
+      return Promise.resolve()
+        .then(function () {
+          return simpleAuth;
+        })
+        .then((m) => m.authManager);
+    },
   };
 
   // Auto-initialize components when DOM is ready
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initializeComponents);
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", initializeComponents);
   } else {
     initializeComponents();
   }
 
   function initializeComponents() {
-    console.log('Blue Banded Bee Web Components loaded successfully');
-    
+    console.log("Blue Banded Bee Web Components loaded successfully");
+
     // Add global styles
-    if (!document.querySelector('#bb-components-styles')) {
-      const styles = document.createElement('style');
-      styles.id = 'bb-components-styles';
+    if (!document.querySelector("#bb-components-styles")) {
+      const styles = document.createElement("style");
+      styles.id = "bb-components-styles";
       styles.textContent = getGlobalStyles();
       document.head.appendChild(styles);
     }
@@ -1951,5 +2017,4 @@
     }
   `;
   }
-
 })();

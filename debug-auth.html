@@ -1,6 +1,6 @@
-<!DOCTYPE html>
+<!doctype html>
 <html>
-<head>
+  <head>
     <title>Debug Auth Loading</title>
     <!-- Load dependencies in exact same order as dashboard -->
     <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
@@ -8,42 +8,45 @@
     <script src="/js/bb-data-binder.js"></script>
     <script src="/js/auth.js"></script>
     <script src="/js/bb-auth-extension.js"></script>
-</head>
-<body>
+  </head>
+  <body>
     <h1>Auth Debug Test</h1>
     <div id="authModalContainer"></div>
     <button id="testBtn">Test Auth</button>
-    
+
     <script>
-        console.log("=== Auth Debug Test ===");
-        
-        // Check if all dependencies loaded
-        console.log("Supabase available:", typeof window.supabase);
-        console.log("zxcvbn available:", typeof zxcvbn);
-        console.log("BBDataBinder available:", typeof BBDataBinder);
-        console.log("BBAuth available:", typeof window.BBAuth);
-        console.log("initializeDashboard available:", typeof window.initializeDashboard);
-        
-        // Test basic auth initialization
-        document.getElementById("testBtn").addEventListener("click", async () => {
-            try {
-                console.log("Testing basic auth init...");
-                
-                if (window.BBAuth && window.BBAuth.initializeSupabase) {
-                    const result = window.BBAuth.initializeSupabase();
-                    console.log("Supabase init result:", result);
-                }
-                
-                if (window.BBAuth && window.BBAuth.loadAuthModal) {
-                    await window.BBAuth.loadAuthModal();
-                    console.log("Auth modal loaded");
-                }
-                
-                console.log("Basic auth test completed successfully");
-            } catch (error) {
-                console.error("Auth test failed:", error);
-            }
-        });
+      console.log("=== Auth Debug Test ===");
+
+      // Check if all dependencies loaded
+      console.log("Supabase available:", typeof window.supabase);
+      console.log("zxcvbn available:", typeof zxcvbn);
+      console.log("BBDataBinder available:", typeof BBDataBinder);
+      console.log("BBAuth available:", typeof window.BBAuth);
+      console.log(
+        "initializeDashboard available:",
+        typeof window.initializeDashboard
+      );
+
+      // Test basic auth initialization
+      document.getElementById("testBtn").addEventListener("click", async () => {
+        try {
+          console.log("Testing basic auth init...");
+
+          if (window.BBAuth && window.BBAuth.initializeSupabase) {
+            const result = window.BBAuth.initializeSupabase();
+            console.log("Supabase init result:", result);
+          }
+
+          if (window.BBAuth && window.BBAuth.loadAuthModal) {
+            await window.BBAuth.loadAuthModal();
+            console.log("Auth modal loaded");
+          }
+
+          console.log("Basic auth test completed successfully");
+        } catch (error) {
+          console.error("Auth test failed:", error);
+        }
+      });
     </script>
-</body>
+  </body>
 </html>

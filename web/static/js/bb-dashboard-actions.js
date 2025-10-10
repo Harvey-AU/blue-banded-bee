@@ -10,7 +10,8 @@ function setupDashboardActions() {
       return;
     }
 
-    const action = element.getAttribute("bbb-action") || element.getAttribute("bb-action");
+    const action =
+      element.getAttribute("bbb-action") || element.getAttribute("bb-action");
     if (!action) {
       return;
     }
@@ -31,7 +32,9 @@ function handleDashboardAction(action, element) {
       break;
 
     case "restart-job": {
-      const jobId = element.getAttribute("bbb-id") || element.getAttribute("bb-data-job-id");
+      const jobId =
+        element.getAttribute("bbb-id") ||
+        element.getAttribute("bb-data-job-id");
       if (jobId) {
         restartJob(jobId);
       }
@@ -39,7 +42,9 @@ function handleDashboardAction(action, element) {
     }
 
     case "cancel-job": {
-      const jobId = element.getAttribute("bbb-id") || element.getAttribute("bb-data-job-id");
+      const jobId =
+        element.getAttribute("bbb-id") ||
+        element.getAttribute("bb-data-job-id");
       if (jobId) {
         cancelJob(jobId);
       }
@@ -69,7 +74,9 @@ function handleDashboardAction(action, element) {
 
 async function restartJob(jobId) {
   try {
-    await window.dataBinder.fetchData(`/v1/jobs/${jobId}/restart`, { method: "POST" });
+    await window.dataBinder.fetchData(`/v1/jobs/${jobId}/restart`, {
+      method: "POST",
+    });
     showDashboardError("Job restart requested.");
     if (window.dataBinder) {
       window.dataBinder.refresh();
@@ -82,7 +89,9 @@ async function restartJob(jobId) {
 
 async function cancelJob(jobId) {
   try {
-    await window.dataBinder.fetchData(`/v1/jobs/${jobId}/cancel`, { method: "POST" });
+    await window.dataBinder.fetchData(`/v1/jobs/${jobId}/cancel`, {
+      method: "POST",
+    });
     showDashboardError("Job cancel requested.");
     if (window.dataBinder) {
       window.dataBinder.refresh();
