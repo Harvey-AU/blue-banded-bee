@@ -15,6 +15,8 @@ linters:
     - ineffassign   # Detect ineffectual assignments
     - gocyclo       # Cyclomatic complexity
     - misspell      # Spell checker
+  disable:
+    - typecheck     # Disabled: conflicts with test dependencies, use go test instead
 
 linters-settings:
   gocyclo:
