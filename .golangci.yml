@@ -9,8 +9,11 @@ linters:
     - staticcheck
     - errcheck
     - revive
-    - gofmt
-    - goimports
     - ineffassign
     - gocyclo
     - misspell
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
