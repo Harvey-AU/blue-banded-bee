@@ -823,66 +823,6 @@ func (wp *WorkerPool) recoverStaleTasks(ctx context.Context) error {
 	return lastErr
 }
 
-// recoverSingleTask attempts to recover a single stale task with retries
-// This provides isolation so one failing task doesn't block others
-func (wp *WorkerPool) recoverSingleTask(ctx context.Context, taskID string, retryCount int) error {
-	const maxAttempts = 3
-
-	for attempt := 1; attempt <= maxAttempts; attempt++ {
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-
-		err := wp.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
-			if retryCount >= MaxTaskRetries {
-				_, err := tx.ExecContext(ctx, `
-					UPDATE tasks
-					SET status = $1,
-						error = $2,
-						completed_at = $3
-					WHERE id = $4
-				`, TaskStatusFailed, "Max retries exceeded", time.Now(), taskID)
-				return err
-			}
-
-			_, err := tx.ExecContext(ctx, `
-				UPDATE tasks
-				SET status = $1,
-					started_at = NULL,
-					retry_count = retry_count + 1
-				WHERE id = $2
-			`, TaskStatusPending, taskID)
-			return err
-		})
-
-		if err == nil {
-			log.Info().Str("task_id", taskID).Int("retry_count", retryCount).
-				Msg("Successfully recovered single stale task")
-			return nil
-		}
-
-		if !isTransientDBError(err) || attempt == maxAttempts {
-			return fmt.Errorf("failed to recover task %s after %d attempts: %w", taskID, attempt, err)
-		}
-
-		// Retry with backoff
-		backoff := time.Duration(attempt) * time.Second
-		log.Warn().Err(err).
-			Str("task_id", taskID).
-			Int("attempt", attempt).
-			Dur("backoff", backoff).
-			Msg("Transient error recovering single task, retrying")
-
-		select {
-		case <-time.After(backoff):
-		case <-ctx.Done():
-			return ctx.Err()
-		}
-	}
-
-	return fmt.Errorf("exhausted retries for task %s", taskID)
-}
-
 func isTransientDBError(err error) bool {
 	if err == nil {
 		return false
