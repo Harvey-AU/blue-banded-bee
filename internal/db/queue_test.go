@@ -39,7 +39,7 @@ func TestDbQueue_UpdateTaskStatus_NilTaskValidation(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	
+
 	// Test nil task validation
 	err := dbQueue.UpdateTaskStatus(ctx, nil)
 	require.Error(t, err)
@@ -288,32 +288,32 @@ func TestDbQueue_Execute_ContextTimeout(t *testing.T) {
 	t.Helper()
 
 	tests := []struct {
-		name            string
-		contextTimeout  time.Duration
-		operationDelay  time.Duration
-		expectTimeout   bool
-		description     string
+		name           string
+		contextTimeout time.Duration
+		operationDelay time.Duration
+		expectTimeout  bool
+		description    string
 	}{
 		{
-			name:            "context_without_deadline",
-			contextTimeout:  0, // No explicit timeout
-			operationDelay:  10 * time.Millisecond,
-			expectTimeout:   false, // Execute adds 30s timeout
-			description:     "Should add default timeout when context has no deadline",
+			name:           "context_without_deadline",
+			contextTimeout: 0, // No explicit timeout
+			operationDelay: 10 * time.Millisecond,
+			expectTimeout:  false, // Execute adds 30s timeout
+			description:    "Should add default timeout when context has no deadline",
 		},
 		{
-			name:            "context_with_short_timeout",
-			contextTimeout:  5 * time.Millisecond,
-			operationDelay:  50 * time.Millisecond,
-			expectTimeout:   true,
-			description:     "Should respect existing context timeout",
+			name:           "context_with_short_timeout",
+			contextTimeout: 5 * time.Millisecond,
+			operationDelay: 50 * time.Millisecond,
+			expectTimeout:  true,
+			description:    "Should respect existing context timeout",
 		},
 		{
-			name:            "context_with_long_timeout",
-			contextTimeout:  100 * time.Millisecond,
-			operationDelay:  10 * time.Millisecond,
-			expectTimeout:   false,
-			description:     "Should complete within timeout",
+			name:           "context_with_long_timeout",
+			contextTimeout: 100 * time.Millisecond,
+			operationDelay: 10 * time.Millisecond,
+			expectTimeout:  false,
+			description:    "Should complete within timeout",
 		},
 	}
 
@@ -332,7 +332,7 @@ func TestDbQueue_Execute_ContextTimeout(t *testing.T) {
 
 			// Test the context timeout logic
 			_, hasDeadline := ctx.Deadline()
-			
+
 			if tt.contextTimeout == 0 {
 				assert.False(t, hasDeadline, "Context should not have deadline initially")
 				// Execute would add a 30-second timeout
@@ -468,7 +468,7 @@ func TestDbQueue_UpdateTaskStatus_StatusSpecificLogic(t *testing.T) {
 
 			// Test the SQL update logic selection based on status
 			// This validates which fields should be updated for each status
-			
+
 			task := &Task{
 				ID:     uuid.New().String(),
 				Status: tt.status,

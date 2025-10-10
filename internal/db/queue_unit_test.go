@@ -125,16 +125,16 @@ func TestDbQueueGetNextTask(t *testing.T) {
 			jobID: "test-job",
 			setupMock: func(mock sqlmock.Sqlmock) {
 				mock.ExpectBegin()
-				
+
 				// Expect SELECT query
 				rows := sqlmock.NewRows([]string{
-					"id", "job_id", "page_id", "path", "created_at", 
+					"id", "job_id", "page_id", "path", "created_at",
 					"retry_count", "source_type", "source_url", "priority_score",
 				}).AddRow(
 					"task-1", "test-job", 1, "/page", fixedTime,
 					0, "sitemap", "https://example.com/sitemap.xml", 1.0,
 				)
-				
+
 				mock.ExpectQuery("SELECT id, job_id, page_id, path, created_at, retry_count, source_type, source_url, priority_score FROM tasks WHERE status = 'pending' AND job_id = \\$1").
 					WithArgs("test-job").
 					WillReturnRows(rows)
@@ -154,7 +154,7 @@ func TestDbQueueGetNextTask(t *testing.T) {
 			jobID: "test-job",
 			setupMock: func(mock sqlmock.Sqlmock) {
 				mock.ExpectBegin()
-				
+
 				mock.ExpectQuery("SELECT id, job_id, page_id, path, created_at, retry_count, source_type, source_url, priority_score FROM tasks WHERE status = 'pending' AND job_id = \\$1").
 					WithArgs("test-job").
 					WillReturnError(sql.ErrNoRows)
@@ -169,7 +169,7 @@ func TestDbQueueGetNextTask(t *testing.T) {
 			jobID: "",
 			setupMock: func(mock sqlmock.Sqlmock) {
 				mock.ExpectBegin()
-				
+
 				rows := sqlmock.NewRows([]string{
 					"id", "job_id", "page_id", "path", "created_at",
 					"retry_count", "source_type", "source_url", "priority_score",
@@ -365,15 +365,15 @@ func TestDbQueueEnqueueURLs(t *testing.T) {
 				mock.ExpectExec("INSERT INTO tasks ").
 					WithArgs(
 						sqlmock.AnyArg(), // id
-						"job-1",        // job_id
-						1,              // page_id
-						"/page1",      // path
-						"pending",     // status
+						"job-1",          // job_id
+						1,                // page_id
+						"/page1",         // path
+						"pending",        // status
 						sqlmock.AnyArg(), // created_at
-						0,              // retry_count
-						"manual",      // source_type
-						"",            // source_url
-						1.0,           // priority_score
+						0,                // retry_count
+						"manual",         // source_type
+						"",               // source_url
+						1.0,              // priority_score
 					).
 					WillReturnResult(sqlmock.NewResult(1, 1))
 

@@ -26,7 +26,7 @@ func TestConstructTaskURL(t *testing.T) {
 		{
 			name:       "full_http_url",
 			path:       "http://example.com/page",
-			domainName: "example.com", 
+			domainName: "example.com",
 			expected:   "https://example.com/page", // Normalised to HTTPS
 		},
 		{
@@ -97,9 +97,9 @@ func TestApplyCrawlDelay(t *testing.T) {
 		{
 			name: "no_crawl_delay",
 			task: &Task{
-				ID:           "task-1",
-				DomainName:   "example.com",
-				CrawlDelay:   0,
+				ID:         "task-1",
+				DomainName: "example.com",
+				CrawlDelay: 0,
 			},
 			expectedSleepTime: 0,
 			expectLog:         false,
@@ -107,9 +107,9 @@ func TestApplyCrawlDelay(t *testing.T) {
 		{
 			name: "one_second_delay",
 			task: &Task{
-				ID:           "task-2",
-				DomainName:   "example.com",
-				CrawlDelay:   1,
+				ID:         "task-2",
+				DomainName: "example.com",
+				CrawlDelay: 1,
 			},
 			expectedSleepTime: 1 * time.Second,
 			expectLog:         true,
@@ -117,9 +117,9 @@ func TestApplyCrawlDelay(t *testing.T) {
 		{
 			name: "five_second_delay",
 			task: &Task{
-				ID:           "task-3",
-				DomainName:   "slow.com",
-				CrawlDelay:   5,
+				ID:         "task-3",
+				DomainName: "slow.com",
+				CrawlDelay: 5,
 			},
 			expectedSleepTime: 5 * time.Second,
 			expectLog:         true,
@@ -127,9 +127,9 @@ func TestApplyCrawlDelay(t *testing.T) {
 		{
 			name: "large_delay",
 			task: &Task{
-				ID:           "task-4",
-				DomainName:   "very-slow.com",
-				CrawlDelay:   30,
+				ID:         "task-4",
+				DomainName: "very-slow.com",
+				CrawlDelay: 30,
 			},
 			expectedSleepTime: 30 * time.Second,
 			expectLog:         true,
@@ -141,9 +141,9 @@ func TestApplyCrawlDelay(t *testing.T) {
 			// For tests with delays, we don't want to actually sleep
 			// Instead, we'll verify the function would sleep correctly
 			// This is a limitation of testing time.Sleep directly
-			
+
 			start := time.Now()
-			
+
 			// For tests with no delay, we can verify directly
 			if tt.expectedSleepTime == 0 {
 				applyCrawlDelay(tt.task)
@@ -154,7 +154,7 @@ func TestApplyCrawlDelay(t *testing.T) {
 				// This tests the conditional logic correctly
 				assert.Greater(t, tt.task.CrawlDelay, 0, "Task should have crawl delay set")
 				assert.Equal(t, tt.expectedSleepTime, time.Duration(tt.task.CrawlDelay)*time.Second)
-				
+
 				// We can test the actual sleep for very short delays in unit tests
 				if tt.expectedSleepTime <= 100*time.Millisecond {
 					applyCrawlDelay(tt.task)
@@ -169,15 +169,15 @@ func TestApplyCrawlDelay(t *testing.T) {
 // TestApplyCrawlDelayActualSleep tests that sleep actually occurs for small delays
 func TestApplyCrawlDelayActualSleep(t *testing.T) {
 	task := &Task{
-		ID:           "sleep-test",
-		DomainName:   "example.com",
-		CrawlDelay:   1, // 1 second
+		ID:         "sleep-test",
+		DomainName: "example.com",
+		CrawlDelay: 1, // 1 second
 	}
-	
+
 	start := time.Now()
 	applyCrawlDelay(task)
 	elapsed := time.Since(start)
-	
+
 	// Verify sleep actually occurred (with some tolerance for timing)
 	assert.GreaterOrEqual(t, elapsed, 900*time.Millisecond, "Should sleep for approximately 1 second")
 	assert.Less(t, elapsed, 1100*time.Millisecond, "Should not sleep significantly longer than 1 second")
@@ -186,7 +186,7 @@ func TestApplyCrawlDelayActualSleep(t *testing.T) {
 func TestProcessDiscoveredLinks(t *testing.T) {
 	// Note: This function requires more complex mocking for database operations
 	// For now, we'll test the core logic patterns and add TODO for full implementation
-	
+
 	tests := []struct {
 		name         string
 		task         *Task
@@ -217,7 +217,7 @@ func TestProcessDiscoveredLinks(t *testing.T) {
 			name: "links_found_but_find_links_disabled",
 			task: &Task{
 				ID:         "task-2",
-				JobID:      "job-123", 
+				JobID:      "job-123",
 				Path:       "/page",
 				DomainName: "example.com",
 				FindLinks:  false, // Disabled
@@ -256,7 +256,7 @@ func TestProcessDiscoveredLinks(t *testing.T) {
 				ID:            "task-4",
 				JobID:         "job-123",
 				Path:          "/about",
-				DomainName:    "example.com", 
+				DomainName:    "example.com",
 				FindLinks:     true,
 				PriorityScore: 0.8,
 			},
@@ -277,15 +277,15 @@ func TestProcessDiscoveredLinks(t *testing.T) {
 			// TODO: Implement with proper mocks for WorkerPool
 			// This requires mocking:
 			// - wp.dbQueue (DbQueueProvider interface)
-			// - wp.jobInfoCache (map with RLock/RUnlock) 
+			// - wp.jobInfoCache (map with RLock/RUnlock)
 			// - wp.EnqueueURLs method
 			// - wp.updateTaskPriorities method
-			
+
 			// For now, verify the test structure is sound
 			assert.NotNil(t, tt.task)
 			assert.NotNil(t, tt.result)
 			assert.NotEmpty(t, tt.sourceURL)
-			
+
 			// Verify homepage detection logic
 			isHomepage := tt.task.Path == "/"
 			if tt.name == "homepage_with_links" {
@@ -293,7 +293,7 @@ func TestProcessDiscoveredLinks(t *testing.T) {
 			} else if tt.name == "regular_page_with_links" {
 				assert.False(t, isHomepage)
 			}
-			
+
 			// TODO: Once WorkerPool mocking is implemented, test:
 			// - Domain ID retrieval
 			// - Robots rules cache lookup
@@ -326,11 +326,11 @@ func BenchmarkConstructTaskURLWithFullURL(b *testing.B) {
 
 func BenchmarkApplyCrawlDelayZero(b *testing.B) {
 	task := &Task{
-		ID:           "bench-task",
-		DomainName:   "example.com",
-		CrawlDelay:   0,
+		ID:         "bench-task",
+		DomainName: "example.com",
+		CrawlDelay: 0,
 	}
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		applyCrawlDelay(task)
@@ -338,12 +338,12 @@ func BenchmarkApplyCrawlDelayZero(b *testing.B) {
 }
 func TestHandleTaskSuccess(t *testing.T) {
 	tests := []struct {
-		name                string
-		task                *db.Task
-		result              *crawler.CrawlResult
-		expectDBUpdate      bool
-		expectPerfEval      bool
-		expectJSONMarshall  bool
+		name               string
+		task               *db.Task
+		result             *crawler.CrawlResult
+		expectDBUpdate     bool
+		expectPerfEval     bool
+		expectJSONMarshall bool
 	}{
 		{
 			name: "successful_basic_task_completion",
@@ -358,11 +358,11 @@ func TestHandleTaskSuccess(t *testing.T) {
 				CacheStatus:  "HIT",
 				ContentType:  "text/html",
 				Performance: crawler.PerformanceMetrics{
-					DNSLookupTime:        10,
-					TCPConnectionTime:    20,
-					TLSHandshakeTime:     30,
-					TTFB:                 100,
-					ContentTransferTime:  50,
+					DNSLookupTime:       10,
+					TCPConnectionTime:   20,
+					TLSHandshakeTime:    30,
+					TTFB:                100,
+					ContentTransferTime: 50,
 				},
 				Headers: map[string][]string{
 					"Content-Type": {"text/html"},
@@ -397,14 +397,14 @@ func TestHandleTaskSuccess(t *testing.T) {
 			// This requires mocking:
 			// - wp.dbQueue.UpdateTaskStatus (DbQueueProvider interface)
 			// - wp.evaluateJobPerformance method
-			
+
 			// For now, verify the test structure and data mapping logic
 			assert.NotNil(t, tt.task)
 			assert.NotNil(t, tt.result)
-			
+
 			// Verify performance metrics structure
 			assert.GreaterOrEqual(t, tt.result.Performance.TTFB, int64(0))
-			
+
 			// Verify JSON marshalling requirements
 			if tt.expectJSONMarshall {
 				if tt.result.Headers != nil {
@@ -412,13 +412,13 @@ func TestHandleTaskSuccess(t *testing.T) {
 					assert.NoError(t, err, "Headers should be marshallable")
 				}
 			}
-			
+
 			// TODO: Once WorkerPool mocking is implemented, test:
 			// - Task status set to TaskStatusCompleted
 			// - All metrics fields populated correctly
 			// - Performance metrics mapped properly
 			// - Second request metrics handled conditionally
-			// - JSON marshalling errors handled gracefully  
+			// - JSON marshalling errors handled gracefully
 			// - Database update called with correct task
 			// - Performance evaluation called when ResponseTime > 0
 			t.Skip("TODO: Implement with WorkerPool mocks")

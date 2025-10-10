@@ -37,29 +37,29 @@ func TestGetJob_Unit(t *testing.T) {
 					"id", "name", "status", "progress", "total_tasks", "completed_tasks",
 					"failed_tasks", "skipped_tasks", "created_at", "started_at", "completed_at",
 					"concurrency", "find_links", "include_paths", "exclude_paths", "error_message",
-					"required_workers", "found_tasks", "sitemap_tasks", "duration_seconds", 
+					"required_workers", "found_tasks", "sitemap_tasks", "duration_seconds",
 					"avg_time_per_task_seconds",
 				}).AddRow(
-					"test-job-123",                      // id
-					"example.com",                       // domain name
-					"running",                           // status
-					50.0,                               // progress
-					100,                                // total_tasks
-					50,                                 // completed_tasks
-					5,                                  // failed_tasks
-					0,                                  // skipped_tasks
-					time.Now().Add(-1*time.Hour),       // created_at
-					sql.NullTime{Time: time.Now().Add(-30*time.Minute), Valid: true}, // started_at
-					sql.NullTime{Valid: false},         // completed_at (null)
-					10,                                 // concurrency
-					true,                               // find_links
-					json.RawMessage(`["/*"]`),          // include_paths
-					json.RawMessage(`["/admin/*"]`),    // exclude_paths
-					sql.NullString{Valid: false},       // error_message (null)
-					5,                                  // required_workers
-					20,                                 // found_tasks
-					80,                                 // sitemap_tasks
-					sql.NullInt64{Int64: 1800, Valid: true},     // duration_seconds (INTEGER)
+					"test-job-123",               // id
+					"example.com",                // domain name
+					"running",                    // status
+					50.0,                         // progress
+					100,                          // total_tasks
+					50,                           // completed_tasks
+					5,                            // failed_tasks
+					0,                            // skipped_tasks
+					time.Now().Add(-1*time.Hour), // created_at
+					sql.NullTime{Time: time.Now().Add(-30 * time.Minute), Valid: true}, // started_at
+					sql.NullTime{Valid: false},              // completed_at (null)
+					10,                                      // concurrency
+					true,                                    // find_links
+					json.RawMessage(`["/*"]`),               // include_paths
+					json.RawMessage(`["/admin/*"]`),         // exclude_paths
+					sql.NullString{Valid: false},            // error_message (null)
+					5,                                       // required_workers
+					20,                                      // found_tasks
+					80,                                      // sitemap_tasks
+					sql.NullInt64{Int64: 1800, Valid: true}, // duration_seconds (INTEGER)
 					sql.NullFloat64{Float64: 18.0, Valid: true}, // avg_time_per_task_seconds (NUMERIC)
 				)
 
@@ -77,22 +77,22 @@ func TestGetJob_Unit(t *testing.T) {
 				mock.ExpectCommit()
 			},
 			expectedJob: &Job{
-				ID:             "test-job-123",
-				Domain:         "example.com",
-				Status:         JobStatusRunning,
-				Progress:       50.0,
-				TotalTasks:     100,
-				CompletedTasks: 50,
-				FailedTasks:    5,
-				SkippedTasks:   0,
-				Concurrency:    10,
-				FindLinks:      true,
-				IncludePaths:   []string{"/*"},
-				ExcludePaths:   []string{"/admin/*"},
-				RequiredWorkers: 5,
-				FoundTasks:     20,
-				SitemapTasks:   80,
-				DurationSeconds: intPtr(1800),
+				ID:                    "test-job-123",
+				Domain:                "example.com",
+				Status:                JobStatusRunning,
+				Progress:              50.0,
+				TotalTasks:            100,
+				CompletedTasks:        50,
+				FailedTasks:           5,
+				SkippedTasks:          0,
+				Concurrency:           10,
+				FindLinks:             true,
+				IncludePaths:          []string{"/*"},
+				ExcludePaths:          []string{"/admin/*"},
+				RequiredWorkers:       5,
+				FoundTasks:            20,
+				SitemapTasks:          80,
+				DurationSeconds:       intPtr(1800),
 				AvgTimePerTaskSeconds: float64Ptr(18.0),
 			},
 		},
@@ -144,7 +144,7 @@ func TestGetJob_Unit(t *testing.T) {
 					"id", "name", "status", "progress", "total_tasks", "completed_tasks",
 					"failed_tasks", "skipped_tasks", "created_at", "started_at", "completed_at",
 					"concurrency", "find_links", "include_paths", "exclude_paths", "error_message",
-					"required_workers", "found_tasks", "sitemap_tasks", "duration_seconds", 
+					"required_workers", "found_tasks", "sitemap_tasks", "duration_seconds",
 					"avg_time_per_task_seconds",
 				}).AddRow(
 					"failed-job-123",
@@ -156,8 +156,8 @@ func TestGetJob_Unit(t *testing.T) {
 					0,
 					0,
 					time.Now().Add(-1*time.Hour),
-					sql.NullTime{Time: time.Now().Add(-30*time.Minute), Valid: true},
-					sql.NullTime{Time: time.Now().Add(-15*time.Minute), Valid: true},
+					sql.NullTime{Time: time.Now().Add(-30 * time.Minute), Valid: true},
+					sql.NullTime{Time: time.Now().Add(-15 * time.Minute), Valid: true},
 					5,
 					false,
 					json.RawMessage(`[]`),
@@ -184,22 +184,22 @@ func TestGetJob_Unit(t *testing.T) {
 				mock.ExpectCommit()
 			},
 			expectedJob: &Job{
-				ID:             "failed-job-123",
-				Domain:         "example.com",
-				Status:         JobStatusFailed,
-				Progress:       0.0,
-				TotalTasks:     0,
-				CompletedTasks: 0,
-				FailedTasks:    0,
-				SkippedTasks:   0,
-				Concurrency:    5,
-				FindLinks:      false,
-				IncludePaths:   []string{},
-				ExcludePaths:   []string{},
-				ErrorMessage:   "Failed to connect to domain",
+				ID:              "failed-job-123",
+				Domain:          "example.com",
+				Status:          JobStatusFailed,
+				Progress:        0.0,
+				TotalTasks:      0,
+				CompletedTasks:  0,
+				FailedTasks:     0,
+				SkippedTasks:    0,
+				Concurrency:     5,
+				FindLinks:       false,
+				IncludePaths:    []string{},
+				ExcludePaths:    []string{},
+				ErrorMessage:    "Failed to connect to domain",
 				RequiredWorkers: 1,
-				FoundTasks:     0,
-				SitemapTasks:   0,
+				FoundTasks:      0,
+				SitemapTasks:    0,
 				DurationSeconds: intPtr(900),
 			},
 		},
@@ -249,7 +249,7 @@ func TestGetJob_Unit(t *testing.T) {
 					assert.Equal(t, tt.expectedJob.TotalTasks, job.TotalTasks)
 					assert.Equal(t, tt.expectedJob.CompletedTasks, job.CompletedTasks)
 					assert.Equal(t, tt.expectedJob.ErrorMessage, job.ErrorMessage)
-					
+
 					// Check arrays
 					assert.Equal(t, tt.expectedJob.IncludePaths, job.IncludePaths)
 					assert.Equal(t, tt.expectedJob.ExcludePaths, job.ExcludePaths)
@@ -261,4 +261,3 @@ func TestGetJob_Unit(t *testing.T) {
 		})
 	}
 }
-

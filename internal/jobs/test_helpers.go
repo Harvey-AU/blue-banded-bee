@@ -24,13 +24,13 @@ func (m *MockDbQueueWithTransaction) Execute(ctx context.Context, fn func(*sql.T
 	if err != nil {
 		return err
 	}
-	
+
 	err = fn(tx)
 	if err != nil {
 		tx.Rollback()
 		return err
 	}
-	
+
 	return tx.Commit()
 }
 
@@ -106,11 +106,11 @@ func (m *simpleCrawlerMock) GetUserAgent() string {
 
 // MockWorkerPool is a minimal mock implementation of WorkerPool for testing
 type MockWorkerPool struct {
-	jobs           map[string]bool
-	jobPerformance map[string]*JobPerformance
-	stopCh         chan struct{}
-	notifyCh       chan struct{}
-	AddJobCalled   bool
+	jobs            map[string]bool
+	jobPerformance  map[string]*JobPerformance
+	stopCh          chan struct{}
+	notifyCh        chan struct{}
+	AddJobCalled    bool
 	RemoveJobCalled bool
 }
 

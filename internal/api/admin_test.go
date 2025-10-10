@@ -326,16 +326,16 @@ func TestHasSystemAdminRoleEdgeCases(t *testing.T) {
 			role     interface{}
 			expected bool
 		}{
-			{"system_admin", true},              // correct value
-			{"system_admin🔑", false},           // with emoji
-			{"system_admin\n", false},           // with newline
-			{"system_admin\t", false},           // with tab
-			{"system_admin\x00", false},         // with null character
-			{"系统管理员", false},                    // chinese characters
-			{"système_admin", false},            // french characters
-			{"system‑admin", false},             // en dash instead of underscore
-			{"system—admin", false},             // em dash instead of underscore
-			{"system_admin­", false},            // soft hyphen at end
+			{"system_admin", true},      // correct value
+			{"system_admin🔑", false},    // with emoji
+			{"system_admin\n", false},   // with newline
+			{"system_admin\t", false},   // with tab
+			{"system_admin\x00", false}, // with null character
+			{"系统管理员", false},            // chinese characters
+			{"système_admin", false},    // french characters
+			{"system‑admin", false},     // en dash instead of underscore
+			{"system—admin", false},     // em dash instead of underscore
+			{"system_admin­", false},    // soft hyphen at end
 		}
 
 		for _, tc := range testCases {

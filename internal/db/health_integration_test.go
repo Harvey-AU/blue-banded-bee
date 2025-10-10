@@ -20,7 +20,7 @@ func TestCheckHealth_Integration(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	
+
 	// Connect to database using DATABASE_URL
 	config := &Config{
 		DatabaseURL:  databaseURL,
@@ -35,16 +35,16 @@ func TestCheckHealth_Integration(t *testing.T) {
 
 	// Run health check
 	health := db.CheckHealth(ctx)
-	
+
 	// Verify results
 	assert.True(t, health.Connected, "Database should be connected")
 	assert.Greater(t, health.Latency, time.Duration(0), "Latency should be positive")
 	assert.Empty(t, health.Error, "Should have no error")
-	
+
 	// Should have some tables
 	assert.NotEmpty(t, health.Tables, "Should have tables")
 	assert.Greater(t, health.TablesCount, 0, "Should have table count")
-	
+
 	// Check for expected tables
 	expectedTables := []string{"users", "jobs", "tasks", "pages"}
 	for _, expected := range expectedTables {
@@ -68,7 +68,7 @@ func TestCheckHealth_WithTimeout(t *testing.T) {
 	// Create a very short timeout context
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Nanosecond)
 	defer cancel()
-	
+
 	config := &Config{
 		DatabaseURL: databaseURL,
 	}
@@ -79,7 +79,7 @@ func TestCheckHealth_WithTimeout(t *testing.T) {
 
 	// Run health check with timeout
 	health := db.CheckHealth(ctx)
-	
+
 	// Should fail due to timeout
 	assert.False(t, health.Connected, "Should not be connected with timeout")
 	assert.NotEmpty(t, health.Error, "Should have timeout error")
@@ -100,7 +100,7 @@ func TestCheckHealth_BadConnection(t *testing.T) {
 
 	ctx := context.Background()
 	health := db.CheckHealth(ctx)
-	
+
 	// Should not be connected
 	assert.False(t, health.Connected, "Should not be connected with invalid URL")
 	assert.NotEmpty(t, health.Error, "Should have connection error")

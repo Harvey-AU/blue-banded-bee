@@ -31,7 +31,7 @@ func TestDashboardStatsIntegration(t *testing.T) {
 					OrganisationID: &orgID,
 				}
 				mockDB.On("GetOrCreateUser", "test-user-123", "test@example.com", (*string)(nil)).Return(user, nil)
-				
+
 				// Mock successful job stats
 				stats := &db.JobStats{
 					TotalJobs:         10,
@@ -48,10 +48,10 @@ func TestDashboardStatsIntegration(t *testing.T) {
 				var response map[string]interface{}
 				err := json.Unmarshal(rec.Body.Bytes(), &response)
 				require.NoError(t, err)
-				
+
 				assert.Equal(t, "success", response["status"])
 				assert.Equal(t, "Dashboard statistics retrieved successfully", response["message"])
-				
+
 				data := response["data"].(map[string]interface{})
 				assert.Equal(t, float64(10), data["total_jobs"])
 				assert.Equal(t, float64(8), data["completed_jobs"])
@@ -72,7 +72,7 @@ func TestDashboardStatsIntegration(t *testing.T) {
 					OrganisationID: &orgID,
 				}
 				mockDB.On("GetOrCreateUser", "test-user-123", "test@example.com", (*string)(nil)).Return(user, nil)
-				
+
 				stats := &db.JobStats{
 					TotalJobs:         25,
 					CompletedJobs:     20,
@@ -88,7 +88,7 @@ func TestDashboardStatsIntegration(t *testing.T) {
 				var response map[string]interface{}
 				err := json.Unmarshal(rec.Body.Bytes(), &response)
 				require.NoError(t, err)
-				
+
 				data := response["data"].(map[string]interface{})
 				assert.Equal(t, float64(25), data["total_jobs"])
 				assert.Equal(t, float64(1200), data["total_tasks"])
@@ -113,7 +113,7 @@ func TestDashboardStatsIntegration(t *testing.T) {
 				var response map[string]interface{}
 				err := json.Unmarshal(rec.Body.Bytes(), &response)
 				require.NoError(t, err)
-				
+
 				assert.Equal(t, float64(500), response["status"])
 				assert.Equal(t, "DATABASE_ERROR", response["code"])
 			},
@@ -129,7 +129,7 @@ func TestDashboardStatsIntegration(t *testing.T) {
 				var response map[string]interface{}
 				err := json.Unmarshal(rec.Body.Bytes(), &response)
 				require.NoError(t, err)
-				
+
 				assert.Equal(t, float64(500), response["status"])
 				assert.Equal(t, "INTERNAL_ERROR", response["code"])
 			},
@@ -139,23 +139,23 @@ func TestDashboardStatsIntegration(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			handler, mockDB, mockJobsManager := createTestHandler()
-			
+
 			// Setup mocks
 			tt.setupMocks(mockDB, mockJobsManager)
-			
+
 			// Create request
 			req := createAuthenticatedRequest(http.MethodGet, "/v1/dashboard/stats"+tt.queryParams, nil)
 			rec := httptest.NewRecorder()
-			
+
 			// Execute
 			handler.DashboardStats(rec, req)
-			
+
 			// Verify
 			assert.Equal(t, tt.expectedStatus, rec.Code)
 			if tt.checkResponse != nil {
 				tt.checkResponse(t, rec)
 			}
-			
+
 			// Verify mocks
 			mockDB.AssertExpectations(t)
 			mockJobsManager.AssertExpectations(t)
@@ -182,7 +182,7 @@ func TestDashboardActivityIntegration(t *testing.T) {
 					OrganisationID: &orgID,
 				}
 				mockDB.On("GetOrCreateUser", "test-user-123", "test@example.com", (*string)(nil)).Return(user, nil)
-				
+
 				// Mock successful activity data
 				activity := []db.ActivityPoint{
 					{
@@ -203,14 +203,14 @@ func TestDashboardActivityIntegration(t *testing.T) {
 				var response map[string]interface{}
 				err := json.Unmarshal(rec.Body.Bytes(), &response)
 				require.NoError(t, err)
-				
+
 				assert.Equal(t, "success", response["status"])
 				assert.Equal(t, "Dashboard activity retrieved successfully", response["message"])
-				
+
 				data := response["data"].(map[string]interface{})
 				activity := data["activity"].([]interface{})
 				assert.Len(t, activity, 2)
-				
+
 				// Check first activity point
 				firstPoint := activity[0].(map[string]interface{})
 				assert.Equal(t, "2025-08-17T10:00:00Z", firstPoint["timestamp"])
@@ -236,7 +236,7 @@ func TestDashboardActivityIntegration(t *testing.T) {
 				var response map[string]interface{}
 				err := json.Unmarshal(rec.Body.Bytes(), &response)
 				require.NoError(t, err)
-				
+
 				assert.Equal(t, float64(500), response["status"])
 				assert.Equal(t, "DATABASE_ERROR", response["code"])
 			},
@@ -252,7 +252,7 @@ func TestDashboardActivityIntegration(t *testing.T) {
 				var response map[string]interface{}
 				err := json.Unmarshal(rec.Body.Bytes(), &response)
 				require.NoError(t, err)
-				
+
 				assert.Equal(t, float64(401), response["status"])
 				assert.Equal(t, "UNAUTHORISED", response["code"])
 				assert.Equal(t, "Authentication required", response["message"])
@@ -263,10 +263,10 @@ func TestDashboardActivityIntegration(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			handler, mockDB, mockJobsManager := createTestHandler()
-			
+
 			// Setup mocks
 			tt.setupMocks(mockDB, mockJobsManager)
-			
+
 			// Create request (authenticated or not based on test)
 			var req *http.Request
 			if tt.name == "activity_no_authentication" {
@@ -275,16 +275,16 @@ func TestDashboardActivityIntegration(t *testing.T) {
 				req = createAuthenticatedRequest(http.MethodGet, "/v1/dashboard/activity"+tt.queryParams, nil)
 			}
 			rec := httptest.NewRecorder()
-			
+
 			// Execute
 			handler.DashboardActivity(rec, req)
-			
+
 			// Verify
 			assert.Equal(t, tt.expectedStatus, rec.Code)
 			if tt.checkResponse != nil {
 				tt.checkResponse(t, rec)
 			}
-			
+
 			// Verify mocks
 			mockDB.AssertExpectations(t)
 			mockJobsManager.AssertExpectations(t)

@@ -83,7 +83,7 @@ func TestSetupResponseHandlersParameterHandling(t *testing.T) {
 func TestSetupResponseHandlersCDNDetection(t *testing.T) {
 	// Test that the function sets up handlers that can detect different CDN cache headers
 	// This is a structural test - we verify the handlers are registered, not their execution
-	
+
 	crawler := &Crawler{
 		metricsMap: &sync.Map{},
 	}
@@ -114,7 +114,7 @@ func TestSetupResponseHandlersMetricsMapIntegration(t *testing.T) {
 		DNSLookupTime:       10,
 		TCPConnectionTime:   20,
 		TLSHandshakeTime:    30,
-		TTFB:               100,
+		TTFB:                100,
 		ContentTransferTime: 0, // Will be calculated
 	}
 	crawler.metricsMap.Store(testURL, testMetrics)

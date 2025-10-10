@@ -60,9 +60,9 @@ func TestGetUserFromContext(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := tt.setupContext()
-			
+
 			user, exists := GetUserFromContext(ctx)
-			
+
 			assert.Equal(t, tt.expectedExists, exists)
 			if tt.expectedExists && tt.expectedUser != nil {
 				require.NotNil(t, user)
@@ -91,7 +91,7 @@ func BenchmarkGetUserFromContext(b *testing.B) {
 		Email:  "bench@example.com",
 	}
 	ctx := context.WithValue(context.Background(), UserKey, user)
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_, _ = GetUserFromContext(ctx)

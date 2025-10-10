@@ -15,7 +15,7 @@ func BenchmarkCacheSet(b *testing.B) {
 	c := cache.NewInMemoryCache()
 	key := "test-key"
 	value := "test-value"
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		c.Set(key, value)
@@ -26,7 +26,7 @@ func BenchmarkCacheGet(b *testing.B) {
 	c := cache.NewInMemoryCache()
 	key := "test-key"
 	c.Set(key, "test-value")
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		c.Get(key)
@@ -35,12 +35,12 @@ func BenchmarkCacheGet(b *testing.B) {
 
 func BenchmarkCacheConcurrentAccess(b *testing.B) {
 	c := cache.NewInMemoryCache()
-	
+
 	// Pre-populate cache
 	for i := 0; i < 100; i++ {
 		c.Set(string(rune(i)), i)
 	}
-	
+
 	b.RunParallel(func(pb *testing.PB) {
 		i := 0
 		for pb.Next() {
@@ -58,7 +58,7 @@ func BenchmarkCacheConcurrentAccess(b *testing.B) {
 // Benchmark URL utilities - hot path for URL normalization
 func BenchmarkNormalizeURL(b *testing.B) {
 	url := "https://www.example.com/path/to/page?query=value#fragment"
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		util.NormaliseURL(url)
@@ -67,7 +67,7 @@ func BenchmarkNormalizeURL(b *testing.B) {
 
 func BenchmarkNormaliseDomain(b *testing.B) {
 	domain := "www.example.com"
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		util.NormaliseDomain(domain)
@@ -76,7 +76,7 @@ func BenchmarkNormaliseDomain(b *testing.B) {
 
 func BenchmarkExtractPathFromURL(b *testing.B) {
 	url := "https://www.example.com/path/to/page?query=value"
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		util.ExtractPathFromURL(url)
@@ -86,7 +86,7 @@ func BenchmarkExtractPathFromURL(b *testing.B) {
 func BenchmarkConstructURL(b *testing.B) {
 	domain := "example.com"
 	path := "/path/to/page"
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		util.ConstructURL(domain, path)
@@ -104,7 +104,7 @@ func BenchmarkJSONResponse(b *testing.B) {
 			"enabled": true,
 		},
 	}
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		w := httptest.NewRecorder()
@@ -123,7 +123,7 @@ func BenchmarkSuccessResponse(b *testing.B) {
 		Name:   "Test",
 		Active: true,
 	}
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		w := httptest.NewRecorder()
@@ -144,12 +144,12 @@ func BenchmarkRequestIDMiddleware(b *testing.B) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		req := httptest.NewRequest("GET", "/test", nil)
 		w := httptest.NewRecorder()
-		
+
 		// Simulate request ID middleware
 		requestID := generateRequestID()
 		req.Header.Set("X-Request-ID", requestID)
@@ -162,15 +162,15 @@ func BenchmarkLoggingMiddleware(b *testing.B) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("OK"))
 	})
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		req := httptest.NewRequest("GET", "/test", nil)
 		w := httptest.NewRecorder()
-		
+
 		// Simulate logging middleware (without actual logging)
 		handler.ServeHTTP(w, req)
-		_ = w.Code // Access status code
+		_ = w.Code       // Access status code
 		_ = w.Body.Len() // Access response size
 	}
 }
@@ -179,7 +179,7 @@ func BenchmarkLoggingMiddleware(b *testing.B) {
 func BenchmarkStringContains(b *testing.B) {
 	haystack := "https://www.example.com/path/to/page?query=value#fragment"
 	needle := "example.com"
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_ = contains(haystack, needle)
@@ -189,7 +189,7 @@ func BenchmarkStringContains(b *testing.B) {
 func BenchmarkStringConcatenation(b *testing.B) {
 	base := "https://example.com"
 	path := "/api/v1/jobs"
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_ = base + path
@@ -198,7 +198,7 @@ func BenchmarkStringConcatenation(b *testing.B) {
 
 func BenchmarkStringBuilder(b *testing.B) {
 	parts := []string{"https://", "example.com", "/api/v1/", "jobs"}
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		result := ""
@@ -220,7 +220,7 @@ func BenchmarkUUIDGeneration(b *testing.B) {
 // Benchmark map operations - used in various places
 func BenchmarkMapSet(b *testing.B) {
 	m := make(map[string]interface{})
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		m[string(rune(i%1000))] = i
@@ -232,7 +232,7 @@ func BenchmarkMapGet(b *testing.B) {
 	for i := 0; i < 1000; i++ {
 		m[string(rune(i))] = i
 	}
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_ = m[string(rune(i%1000))]
@@ -244,7 +244,7 @@ func BenchmarkMapConcurrent(b *testing.B) {
 	for i := 0; i < 100; i++ {
 		m[string(rune(i))] = i
 	}
-	
+
 	b.RunParallel(func(pb *testing.PB) {
 		i := 0
 		for pb.Next() {

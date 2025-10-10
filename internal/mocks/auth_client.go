@@ -84,25 +84,25 @@ type AuthUser struct {
 
 // TokenResponse represents authentication tokens for testing
 type TokenResponse struct {
-	AccessToken      string   `json:"access_token"`
-	TokenType        string   `json:"token_type"`
-	ExpiresIn        int      `json:"expires_in"`
-	RefreshToken     string   `json:"refresh_token,omitempty"`
-	User             *AuthUser `json:"user,omitempty"`
+	AccessToken  string    `json:"access_token"`
+	TokenType    string    `json:"token_type"`
+	ExpiresIn    int       `json:"expires_in"`
+	RefreshToken string    `json:"refresh_token,omitempty"`
+	User         *AuthUser `json:"user,omitempty"`
 }
 
 // UserClaims represents JWT token claims for testing
 type UserClaims struct {
-	Sub           string                 `json:"sub"`           // User ID
-	Email         string                 `json:"email"`         // User email
+	Sub           string                 `json:"sub"`   // User ID
+	Email         string                 `json:"email"` // User email
 	EmailVerified bool                   `json:"email_verified"`
 	Role          string                 `json:"role,omitempty"`
 	UserMetadata  map[string]interface{} `json:"user_metadata,omitempty"`
 	AppMetadata   map[string]interface{} `json:"app_metadata,omitempty"`
-	Aud           string                 `json:"aud"`           // Audience
-	Iss           string                 `json:"iss"`           // Issuer
-	Iat           int64                  `json:"iat"`           // Issued at
-	Exp           int64                  `json:"exp"`           // Expires at
+	Aud           string                 `json:"aud"` // Audience
+	Iss           string                 `json:"iss"` // Issuer
+	Iat           int64                  `json:"iat"` // Issued at
+	Exp           int64                  `json:"exp"` // Expires at
 }
 
 // MockSupabaseClient is a mock for Supabase authentication client

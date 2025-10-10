@@ -34,7 +34,7 @@ func (q *DbQueue) Execute(ctx context.Context, fn func(*sql.Tx) error) error {
 		ctx, cancel = context.WithTimeout(ctx, 30*time.Second)
 		defer cancel()
 	}
-	
+
 	// Begin transaction
 	tx, err := q.db.client.BeginTx(ctx, nil)
 	if err != nil {
@@ -260,7 +260,7 @@ func (q *DbQueue) CleanupStuckJobs(ctx context.Context) error {
 	// Serialize cleanup operations to prevent prepared statement conflicts
 	q.cleanupMutex.Lock()
 	defer q.cleanupMutex.Unlock()
-	
+
 	span := sentry.StartSpan(ctx, "db.cleanup_stuck_jobs")
 	defer span.Finish()
 

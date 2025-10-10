@@ -409,7 +409,7 @@ func (c *Crawler) performCacheValidation(ctx context.Context, targetURL string, 
 	return nil
 }
 
-// setupLinkExtraction configures Colly HTML handler for link extraction and categorization  
+// setupLinkExtraction configures Colly HTML handler for link extraction and categorization
 func setupLinkExtraction(collyClone *colly.Collector) {
 	collyClone.OnHTML("html", func(e *colly.HTMLElement) {
 		// Check if link extraction is enabled for this request

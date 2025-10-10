@@ -19,14 +19,14 @@ func TestHealthResponse(t *testing.T) {
 		Version:   "1.0.0",
 		Timestamp: time.Now().UTC().Format(time.RFC3339),
 	}
-	
+
 	data, err := json.Marshal(response)
 	require.NoError(t, err)
-	
+
 	var decoded HealthResponse
 	err = json.Unmarshal(data, &decoded)
 	require.NoError(t, err)
-	
+
 	assert.Equal(t, response.Status, decoded.Status)
 	assert.Equal(t, response.Service, decoded.Service)
 	assert.Equal(t, response.Version, decoded.Version)
@@ -34,7 +34,7 @@ func TestHealthResponse(t *testing.T) {
 
 func TestCalculateDateRange(t *testing.T) {
 	now := time.Now().UTC()
-	
+
 	tests := []struct {
 		name      string
 		dateRange string
@@ -81,18 +81,18 @@ func TestCalculateDateRange(t *testing.T) {
 			expectNil: false,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			startDate, endDate := calculateDateRange(tt.dateRange)
-			
+
 			if tt.expectNil {
 				assert.Nil(t, startDate)
 				assert.Nil(t, endDate)
 			} else {
 				assert.NotNil(t, startDate)
 				assert.NotNil(t, endDate)
-				
+
 				if startDate != nil && endDate != nil {
 					// For "today", start should be before or equal to end
 					assert.True(t, !startDate.After(*endDate), "Start date should not be after end date")
@@ -114,11 +114,11 @@ func TestWebflowPayload(t *testing.T) {
 			}
 		}
 	}`
-	
+
 	var payload WebflowWebhookPayload
 	err := json.Unmarshal([]byte(jsonData), &payload)
 	require.NoError(t, err)
-	
+
 	assert.Equal(t, "site_publish", payload.TriggerType)
 	assert.Len(t, payload.Payload.Domains, 2)
 	assert.Equal(t, "example.com", payload.Payload.Domains[0])
@@ -127,7 +127,7 @@ func TestWebflowPayload(t *testing.T) {
 
 func TestStaticFileHandlers(t *testing.T) {
 	h := &Handler{}
-	
+
 	tests := []struct {
 		name         string
 		handlerFunc  http.HandlerFunc
@@ -165,15 +165,15 @@ func TestStaticFileHandlers(t *testing.T) {
 			expectedFile: "dashboard.html",
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodGet, tt.url, nil)
 			rec := httptest.NewRecorder()
-			
+
 			// Call the handler
 			tt.handlerFunc(rec, req)
-			
+
 			// When file doesn't exist, http.ServeFile returns 404
 			// We can at least verify the response code
 			if rec.Code != http.StatusOK {
@@ -190,7 +190,7 @@ func TestStaticFileHandlers(t *testing.T) {
 
 func TestHealthCheck(t *testing.T) {
 	h := &Handler{}
-	
+
 	tests := []struct {
 		name           string
 		method         string
@@ -217,21 +217,21 @@ func TestHealthCheck(t *testing.T) {
 			expectedStatus: http.StatusMethodNotAllowed,
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest(tt.method, "/health", nil)
 			rec := httptest.NewRecorder()
-			
+
 			h.HealthCheck(rec, req)
-			
+
 			assert.Equal(t, tt.expectedStatus, rec.Code)
-			
+
 			if tt.expectedStatus == http.StatusOK {
 				var response HealthResponse
 				err := json.NewDecoder(rec.Body).Decode(&response)
 				require.NoError(t, err)
-				
+
 				assert.Equal(t, "healthy", response.Status)
 				assert.Equal(t, "blue-banded-bee", response.Service)
 				assert.Equal(t, Version, response.Version)
@@ -241,11 +241,10 @@ func TestHealthCheck(t *testing.T) {
 	}
 }
 
-
 // Benchmark tests
 func BenchmarkCalculateDateRange(b *testing.B) {
 	ranges := []string{"today", "last24", "yesterday", "last7", "last30", "last90", "all", "invalid"}
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		rangeType := ranges[i%len(ranges)]
@@ -260,7 +259,7 @@ func BenchmarkHealthResponseMarshalling(b *testing.B) {
 		Version:   "1.0.0",
 		Timestamp: time.Now().UTC().Format(time.RFC3339),
 	}
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		data, _ := json.Marshal(response)
@@ -278,7 +277,7 @@ func BenchmarkWebflowPayloadParsing(b *testing.B) {
 			}
 		}
 	}`)
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		var payload WebflowWebhookPayload

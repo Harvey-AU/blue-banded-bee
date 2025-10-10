@@ -73,7 +73,7 @@ func TestDashboardStatsEndpoint(t *testing.T) {
 						return
 					}
 				}
-				
+
 				if endDate != "" {
 					if _, err := time.Parse("2006-01-02", endDate); err != nil {
 						w.WriteHeader(http.StatusBadRequest)
@@ -122,7 +122,7 @@ func TestDashboardStatsEndpoint(t *testing.T) {
 			if tt.expectedStatus == http.StatusOK && tt.expectedFields != nil {
 				var response map[string]interface{}
 				json.Unmarshal(w.Body.Bytes(), &response)
-				
+
 				for _, field := range tt.expectedFields {
 					assert.Contains(t, response, field, "Response should contain field: %s", field)
 				}
@@ -236,7 +236,7 @@ func TestDashboardActivityTimeline(t *testing.T) {
 						"timestamp": time.Now().Add(-time.Hour * time.Duration(i)).Format(time.RFC3339),
 						"details":   "Job created for example.com",
 					}
-					
+
 					if activityType == "" || activityType == "job_created" {
 						activities = append(activities, activity)
 					}
@@ -258,7 +258,7 @@ func TestDashboardActivityTimeline(t *testing.T) {
 			if tt.expectedStatus == http.StatusOK {
 				var response map[string]interface{}
 				json.Unmarshal(w.Body.Bytes(), &response)
-				
+
 				if activities, ok := response["activities"].([]interface{}); ok {
 					if tt.expectedCount > 0 {
 						assert.Equal(t, tt.expectedCount, len(activities), "Activity count should match")
@@ -271,13 +271,13 @@ func TestDashboardActivityTimeline(t *testing.T) {
 
 func TestDashboardDateRangeFiltering(t *testing.T) {
 	tests := []struct {
-		name           string
-		period         string
-		customStart    string
-		customEnd      string
-		expectedDays   int
-		expectedError  bool
-		description    string
+		name          string
+		period        string
+		customStart   string
+		customEnd     string
+		expectedDays  int
+		expectedError bool
+		description   string
 	}{
 		{
 			name:         "today",
@@ -335,14 +335,14 @@ func TestDashboardDateRangeFiltering(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Test calculateDateRange equivalent
 			start, end, err := calculateTestDateRange(tt.period, tt.customStart, tt.customEnd)
-			
+
 			if tt.expectedError {
 				assert.Error(t, err, tt.description)
 			} else {
 				assert.NoError(t, err, tt.description)
-				
+
 				if tt.expectedDays > 0 {
-					days := int(end.Sub(start).Hours() / 24) + 1
+					days := int(end.Sub(start).Hours()/24) + 1
 					assert.Equal(t, tt.expectedDays, days, "Date range should match expected days")
 				}
 			}
@@ -422,10 +422,10 @@ func TestDashboardPagination(t *testing.T) {
 			if page < 1 {
 				page = 1
 			}
-			
+
 			offset := (page - 1) * tt.perPage
 			limit := tt.perPage
-			
+
 			// Adjust limit for last page
 			remaining := tt.total - offset
 			if remaining < limit {
@@ -434,7 +434,7 @@ func TestDashboardPagination(t *testing.T) {
 			if limit < 0 {
 				limit = 0
 			}
-			
+
 			assert.Equal(t, tt.expectedOffset, offset, "Offset should match")
 			assert.Equal(t, tt.expectedLimit, limit, "Limit should match")
 		})
