@@ -1,0 +1,61 @@
+name: Changelog Check
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - "LICENSE"
+      - ".gitignore"
+      - "SECURITY.md"
+      - "Roadmap.md"
+      - "QandA.md"
+      - ".prettierrc"
+      - ".prettierignore"
+      - ".golangci.yml"
+      - ".github/**"
+
+jobs:
+  check-changelog:
+    name: Validate Changelog Updated
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check for changelog updates
+        run: |
+          # Check if CHANGELOG.md has content under [Unreleased]
+          if ! grep -q "^## \[Unreleased" CHANGELOG.md; then
+            echo "❌ ERROR: No [Unreleased] section found in CHANGELOG.md"
+            echo ""
+            echo "Please add a changelog entry for your changes:"
+            echo "  ## [Unreleased]          → for patch releases"
+            echo "  ## [Unreleased:minor]    → for minor releases"
+            echo "  ## [Unreleased:major]    → for major releases"
+            exit 1
+          fi
+
+          # Extract content between [Unreleased] and next version header
+          UNRELEASED_CONTENT=$(sed -n '/^## \[Unreleased/,/^## \[0-9/p' CHANGELOG.md | sed '$d' | tail -n +2)
+
+          # Check if there's actual content (not just whitespace)
+          if [ -z "$(echo "$UNRELEASED_CONTENT" | grep -v '^[[:space:]]*$')" ]; then
+            echo "❌ ERROR: [Unreleased] section in CHANGELOG.md is empty"
+            echo ""
+            echo "Please document your changes under the [Unreleased] section."
+            echo ""
+            echo "Example:"
+            echo "  ## [Unreleased:minor]"
+            echo "  "
+            echo "  ### Added"
+            echo "  - New feature description"
+            echo "  "
+            echo "  ### Fixed"
+            echo "  - Bug fix description"
+            exit 1
+          fi
+
+          echo "✅ Changelog has been updated with changes"

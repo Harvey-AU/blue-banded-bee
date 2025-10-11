@@ -11,7 +11,33 @@ Multiple version updates may occur on the same date, each with its own version
 number. Each version represents a distinct set of changes, even if released on
 the same day.
 
+## Release Automation
+
+When merging to main, CI automatically creates releases based on the changelog:
+
+- `## [Unreleased]` or `## [Unreleased:patch]` → Patch release (0.6.4 → 0.6.5)
+- `## [Unreleased:minor]` → Minor release (0.6.4 → 0.7.0)
+- `## [Unreleased:major]` → Major release (0.6.4 → 1.0.0)
+
+On merge, CI will:
+1. Calculate the new version number
+2. Replace the heading with `## [X.Y.Z] - YYYY-MM-DD`
+3. Add a new `## [Unreleased]` section above
+4. Create a git tag and GitHub release
+5. Commit the updated changelog
+
 ## [Unreleased]
+
+### Added
+
+- **Automated Release System**: CI now automatically creates releases when merging to main
+  - Changelog-driven versioning using `[Unreleased]`, `[Unreleased:minor]`, or `[Unreleased:major]` markers
+  - Auto-updates CHANGELOG.md with version number and date on merge
+  - Creates git tags and GitHub releases with changelog content
+  - All releases marked as pre-release until stable
+- **Changelog Validation**: PR checks enforce changelog updates for all code changes
+  - Blocks merges if `[Unreleased]` section is empty
+  - Skips validation for docs/config-only changes
 
 ## [0.6.4] – 2025-10-11
 
