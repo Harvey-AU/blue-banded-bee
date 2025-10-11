@@ -20,6 +20,7 @@ type shareLinkSuccessResponse struct {
 	Status  string `json:"status"`
 	Message string `json:"message"`
 	Data    struct {
+		Exists    bool   `json:"exists"`
 		Token     string `json:"token"`
 		ShareLink string `json:"share_link"`
 	} `json:"data"`
@@ -186,6 +187,7 @@ func TestGetJobShareLinkSuccess(t *testing.T) {
 
 	resp := decodeShareLinkSuccess(t, rec)
 	assert.Equal(t, "success", resp.Status)
+	assert.True(t, resp.Data.Exists)
 	assert.Equal(t, "active-token", resp.Data.Token)
 	assert.Contains(t, resp.Data.ShareLink, "active-token")
 	assert.Contains(t, resp.Data.ShareLink, "app.example")
@@ -229,8 +231,9 @@ func TestGetJobShareLinkNotFound(t *testing.T) {
 
 	handler.getJobShareLink(rec, req, "job-333")
 
-	assert.Equal(t, http.StatusNotFound, rec.Code)
-	assert.Contains(t, rec.Body.String(), "Share link not found")
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Body.String(), `"exists":false`)
+	assert.Contains(t, rec.Body.String(), "No active share link")
 
 	assert.NoError(t, mock.ExpectationsWereMet())
 	mockDB.AssertExpectations(t)
