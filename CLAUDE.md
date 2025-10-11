@@ -132,6 +132,15 @@ Only after completing ALL steps above, ask: "What would you like me to work on?"
 
 ## Project Initialisation
 
+**MANDATORY: Set up pre-commit hooks on first clone:**
+
+```bash
+git config core.hooksPath .githooks
+```
+
+This enables automatic code formatting on every commit (gofmt for Go, prettier
+for docs/config).
+
 **MANDATORY: Read these documents before proceeding with any work:**
 
 1. **CLAUDE.md** (this file) - Complete project guidance and workflow
