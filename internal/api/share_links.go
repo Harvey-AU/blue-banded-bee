@@ -139,7 +139,10 @@ func (h *Handler) getJobShareLink(w http.ResponseWriter, r *http.Request, jobID 
 		}
 
 		if errors.Is(err, sql.ErrNoRows) {
-			NotFound(w, r, "Share link not found")
+			// No share link exists - return 200 with exists:false instead of 404
+			WriteSuccess(w, r, map[string]interface{}{
+				"exists": false,
+			}, "No active share link")
 			return
 		}
 
@@ -150,6 +153,7 @@ func (h *Handler) getJobShareLink(w http.ResponseWriter, r *http.Request, jobID 
 
 	shareURL := buildShareURL(r, token)
 	WriteSuccess(w, r, map[string]interface{}{
+		"exists":     true,
 		"token":      token,
 		"share_link": shareURL,
 	}, "Share link active")

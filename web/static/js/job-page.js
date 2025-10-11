@@ -663,11 +663,6 @@ async function fetchShareLink(state) {
 
     const payload = await response.json().catch(() => ({}));
 
-    if (response.status === 404) {
-      setShareLinkState(state, null, null);
-      return;
-    }
-
     if (!response.ok) {
       const message =
         payload?.message ||
@@ -676,6 +671,13 @@ async function fetchShareLink(state) {
     }
 
     const data = payload?.data || payload;
+
+    // Check if share link exists
+    if (data?.exists === false) {
+      setShareLinkState(state, null, null);
+      return;
+    }
+
     const token = data?.token;
     const shareLink = data?.share_link;
 

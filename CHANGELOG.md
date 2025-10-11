@@ -29,6 +29,19 @@ On merge, CI will:
 
 ## [Unreleased]
 
+### Fixed
+
+- **Share Link API**: Return 200 with exists flag instead of 404 when no link
+  exists
+  - Changed GET /v1/jobs/:id/share-links to return 200 with `{"exists": false}`
+    when no share link exists
+  - Returns 200 with `{"exists": true, "token": "...", "share_link": "..."}`
+    when link exists
+  - Updated frontend to check exists field instead of 404 status
+  - Eliminates console errors and provides cleaner API semantics
+
+## [0.6.4] – 2025-10-11
+
 ### Added
 
 - **Automated Release System**: CI now automatically creates releases when
@@ -42,10 +55,6 @@ On merge, CI will:
   changes
   - Blocks merges if `[Unreleased]` section is empty
   - Skips validation for docs/config-only changes
-
-## [0.6.4] – 2025-10-11
-
-### Added
 
 - **CI Formatting Enforcement**: Automated code formatting checks in CI pipeline
   - Added golangci-lint v2.5.0 with Australian English spell checking
