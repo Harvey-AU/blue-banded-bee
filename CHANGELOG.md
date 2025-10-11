@@ -20,6 +20,7 @@ When merging to main, CI automatically creates releases based on the changelog:
 - `## [Unreleased:major]` → Major release (0.6.4 → 1.0.0)
 
 On merge, CI will:
+
 1. Calculate the new version number
 2. Replace the heading with `## [X.Y.Z] - YYYY-MM-DD`
 3. Add a new `## [Unreleased]` section above
@@ -30,12 +31,15 @@ On merge, CI will:
 
 ### Added
 
-- **Automated Release System**: CI now automatically creates releases when merging to main
-  - Changelog-driven versioning using `[Unreleased]`, `[Unreleased:minor]`, or `[Unreleased:major]` markers
+- **Automated Release System**: CI now automatically creates releases when
+  merging to main
+  - Changelog-driven versioning using `[Unreleased]`, `[Unreleased:minor]`, or
+    `[Unreleased:major]` markers
   - Auto-updates CHANGELOG.md with version number and date on merge
   - Creates git tags and GitHub releases with changelog content
   - All releases marked as pre-release until stable
-- **Changelog Validation**: PR checks enforce changelog updates for all code changes
+- **Changelog Validation**: PR checks enforce changelog updates for all code
+  changes
   - Blocks merges if `[Unreleased]` section is empty
   - Skips validation for docs/config-only changes
 
