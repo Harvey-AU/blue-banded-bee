@@ -29,6 +29,17 @@ On merge, CI will:
 
 ## [Unreleased]
 
+### Fixed
+
+- **Cache Warming Improvement Calculation**: Fixed "Improved Pages" incorrectly
+  showing 100% when cache was already warm
+  - Changed logic from `second_response_time < response_time` to
+    `second_response_time > 0 AND second_response_time < response_time`
+  - Pages with `second_response_time = 0` (already cached) are no longer counted
+    as "improved"
+  - Improvement rate now accurately reflects pages actually warmed by this job
+  - Stats calculation version bumped to v4.0
+
 ## [0.6.6] – 2025-10-11
 
 ### Fixed
