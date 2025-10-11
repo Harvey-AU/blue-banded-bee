@@ -1,0 +1,32 @@
+#!/bin/bash
+# Commit-msg hook to block AI attribution in commit messages
+# This enforces the CLAUDE.md rule: no AI mentions in commits
+
+# Colours
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+NC='\033[0m'
+
+# Get commit message from file passed as argument
+COMMIT_MSG_FILE=$1
+COMMIT_MSG=$(cat "$COMMIT_MSG_FILE")
+
+# Check for AI attribution patterns (case-insensitive)
+if echo "$COMMIT_MSG" | grep -iqE '(claude|gemini|chatgpt|gpt-|copilot|generated with|co-authored-by: claude|co-authored-by: gemini|co-authored-by: chatgpt)'; then
+    echo -e "${RED}❌ COMMIT BLOCKED: AI attribution detected${NC}"
+    echo ""
+    echo "Your commit message contains banned AI attribution:"
+    echo "---"
+    echo "$COMMIT_MSG"
+    echo "---"
+    echo ""
+    echo "Banned patterns found:"
+    echo "$COMMIT_MSG" | grep -iE '(claude|gemini|chatgpt|gpt-|copilot|generated with|co-authored-by: claude|co-authored-by: gemini|co-authored-by: chatgpt)' || true
+    echo ""
+    echo "Please remove all AI attribution from your commit message."
+    echo "See CLAUDE.md for guidelines."
+    exit 1
+fi
+
+echo -e "${GREEN}✅ Commit message approved (no AI attribution)${NC}"
+exit 0
