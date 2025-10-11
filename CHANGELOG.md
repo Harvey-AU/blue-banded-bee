@@ -29,6 +29,18 @@ On merge, CI will:
 
 ## [Unreleased]
 
+### Fixed
+
+- **Job Metrics Calculation**: Fixed response time metrics displaying 0ms when
+  cache warming is perfectly effective
+  - Resolved bug where `COALESCE(second_response_time, response_time)` treated
+    `0` as valid value instead of falling back to first request times
+  - Now uses `NULLIF(second_response_time, 0)` to convert instant cache hits
+    (0ms) to NULL, enabling fallback to meaningful first-request metrics
+  - Recalculates existing jobs with buggy v1.0 or v2.0 stats automatically on
+    migration
+  - Stats calculation version bumped to v3.0
+
 ## [0.6.5] – 2025-10-11
 
 ### Fixed
