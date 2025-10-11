@@ -29,6 +29,8 @@ On merge, CI will:
 
 ## [Unreleased]
 
+## [0.6.5] – 2025-10-11
+
 ### Fixed
 
 - **Share Link API**: Return 200 with exists flag instead of 404 when no link
@@ -183,7 +185,9 @@ On merge, CI will:
 - **External Links**: Dashboard preview links in PR comments open in new tabs
   - Added `target="_blank"` for better user experience
 
-## [Unreleased] – 2025-08-18
+## [Unreleased]
+
+## [0.6.5] – 2025-10-11 – 2025-08-18
 
 ### Enhanced
 
