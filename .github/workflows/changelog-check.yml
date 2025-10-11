@@ -1,0 +1,143 @@
+name: Changelog Check
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - "LICENSE"
+      - ".gitignore"
+      - "SECURITY.md"
+      - "Roadmap.md"
+      - "QandA.md"
+      - ".prettierrc"
+      - ".prettierignore"
+      - ".golangci.yml"
+      - ".github/**"
+
+jobs:
+  check-changelog:
+    name: Validate Changelog Updated
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for changelog updates
+        id: check
+        run: |
+          # Check if CHANGELOG.md has content under [Unreleased]
+          if ! grep -q "^## \[Unreleased" CHANGELOG.md; then
+            echo "❌ ERROR: No [Unreleased] section found in CHANGELOG.md"
+            echo ""
+            echo "Please add a changelog entry for your changes:"
+            echo "  ## [Unreleased]          → for patch releases"
+            echo "  ## [Unreleased:minor]    → for minor releases"
+            echo "  ## [Unreleased:major]    → for major releases"
+            exit 1
+          fi
+
+          # Extract content between [Unreleased] and next version header
+          UNRELEASED_CONTENT=$(sed -n '/^## \[Unreleased/,/^## \[0-9/p' CHANGELOG.md | sed '$d' | tail -n +2)
+
+          # Check if there's actual content (not just whitespace)
+          if [ -z "$(echo "$UNRELEASED_CONTENT" | grep -v '^[[:space:]]*$')" ]; then
+            echo "⚠️  [Unreleased] section is empty - release will have blank changelog"
+          else
+            echo "✅ Changelog has been updated with changes"
+          fi
+
+          # Determine release type from changelog header
+          CHANGELOG_HEADER=$(grep "^## \[Unreleased" CHANGELOG.md | head -1)
+
+          if echo "$CHANGELOG_HEADER" | grep -qi "\[Unreleased:major\]"; then
+            RELEASE_TYPE="major"
+          elif echo "$CHANGELOG_HEADER" | grep -qi "\[Unreleased:minor\]"; then
+            RELEASE_TYPE="minor"
+          else
+            RELEASE_TYPE="patch"
+          fi
+
+          echo "release_type=$RELEASE_TYPE" >> $GITHUB_OUTPUT
+
+          # Calculate next version
+          CURRENT_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.6.4")
+          CURRENT_VERSION=${CURRENT_TAG#v}
+          CURRENT_VERSION=${CURRENT_VERSION%%-*}
+
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT_VERSION"
+
+          if [ "$RELEASE_TYPE" = "major" ]; then
+            MAJOR=$((MAJOR + 1))
+            MINOR=0
+            PATCH=0
+          elif [ "$RELEASE_TYPE" = "minor" ]; then
+            MINOR=$((MINOR + 1))
+            PATCH=0
+          else
+            PATCH=$((PATCH + 1))
+          fi
+
+          NEW_VERSION="v${MAJOR}.${MINOR}.${PATCH}"
+          echo "next_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "Next version will be: $NEW_VERSION"
+
+      - name: Comment on PR with version info
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const releaseType = '${{ steps.check.outputs.release_type }}';
+            const nextVersion = '${{ steps.check.outputs.next_version }}';
+
+            const body = `## 🏷️ Release Preview
+
+            When this PR is merged, it will automatically create:
+
+            - **Version:** \`${nextVersion}\` (${releaseType} release)
+            - **Tag:** \`${nextVersion}\`
+            - **GitHub Release:** Pre-release with changelog content
+
+            The changelog will be updated and committed automatically.
+
+            ---
+
+            💡 **Tip:** Update the changelog heading to control release type:
+            - \`## [Unreleased]\` or \`## [Unreleased:patch]\` → patch release (default)
+            - \`## [Unreleased:minor]\` → minor release
+            - \`## [Unreleased:major]\` → major release`;
+
+            // Find existing comment
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number
+            });
+
+            const botComment = comments.find(comment =>
+              comment.user.type === 'Bot' &&
+              comment.body.includes('🏷️ Release Preview')
+            );
+
+            if (botComment) {
+              // Update existing comment
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: body
+              });
+            } else {
+              // Create new comment
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: body
+              });
+            }

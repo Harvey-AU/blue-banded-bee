@@ -38,6 +38,9 @@ native to where we live in Castlemaine, Victoria, Australia.
 git clone https://github.com/Harvey-AU/blue-banded-bee.git
 cd blue-banded-bee
 
+# Enable pre-commit hooks for automatic formatting
+git config core.hooksPath .githooks
+
 # Start development environment
 # Windows:
 dev              # Clean output (info level)

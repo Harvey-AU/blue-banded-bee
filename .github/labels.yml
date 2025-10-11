@@ -1,0 +1,18 @@
+# Release versioning labels
+# Add one of these to a PR to auto-tag when merged
+
+- name: release:patch
+  description: "Patch release (0.x.Y) - bug fixes, small improvements"
+  color: "0e8a16"
+
+- name: release:minor
+  description: "Minor release (0.X.0) - new features, enhancements"
+  color: "fbca04"
+
+- name: release:major
+  description: "Major release (X.0.0) - breaking changes"
+  color: "d93f0b"
+
+- name: no-release
+  description: "Skip auto-release (docs, chores, etc.)"
+  color: "cccccc"
