@@ -39,18 +39,10 @@ jobs:
               RELEASE_TYPE="patch"
             fi
 
-            # Check if there's actual content under Unreleased section
-            # Extract content between [Unreleased] and next version header
-            UNRELEASED_CONTENT=$(sed -n '/^## \[Unreleased/,/^## \[0-9/p' CHANGELOG.md | sed '$d' | tail -n +2)
-
-            if [ -z "$(echo "$UNRELEASED_CONTENT" | grep -v '^[[:space:]]*$')" ]; then
-              echo "should_release=false" >> $GITHUB_OUTPUT
-              echo "No content under [Unreleased] - skipping release"
-            else
-              echo "should_release=true" >> $GITHUB_OUTPUT
-              echo "release_type=$RELEASE_TYPE" >> $GITHUB_OUTPUT
-              echo "Detected release type: $RELEASE_TYPE"
-            fi
+            # Always create release if [Unreleased] section exists, even if empty
+            echo "should_release=true" >> $GITHUB_OUTPUT
+            echo "release_type=$RELEASE_TYPE" >> $GITHUB_OUTPUT
+            echo "Detected release type: $RELEASE_TYPE"
           else
             echo "should_release=false" >> $GITHUB_OUTPUT
             echo "No [Unreleased] section found - skipping release"

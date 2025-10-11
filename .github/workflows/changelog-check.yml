@@ -48,22 +48,10 @@ jobs:
 
           # Check if there's actual content (not just whitespace)
           if [ -z "$(echo "$UNRELEASED_CONTENT" | grep -v '^[[:space:]]*$')" ]; then
-            echo "❌ ERROR: [Unreleased] section in CHANGELOG.md is empty"
-            echo ""
-            echo "Please document your changes under the [Unreleased] section."
-            echo ""
-            echo "Example:"
-            echo "  ## [Unreleased:minor]"
-            echo "  "
-            echo "  ### Added"
-            echo "  - New feature description"
-            echo "  "
-            echo "  ### Fixed"
-            echo "  - Bug fix description"
-            exit 1
+            echo "⚠️  [Unreleased] section is empty - release will have blank changelog"
+          else
+            echo "✅ Changelog has been updated with changes"
           fi
-
-          echo "✅ Changelog has been updated with changes"
 
           # Determine release type from changelog header
           CHANGELOG_HEADER=$(grep "^## \[Unreleased" CHANGELOG.md | head -1)
@@ -115,7 +103,14 @@ jobs:
             - **Tag:** \`${nextVersion}\`
             - **GitHub Release:** Pre-release with changelog content
 
-            The changelog will be updated and committed automatically.`;
+            The changelog will be updated and committed automatically.
+
+            ---
+
+            💡 **Tip:** Update the changelog heading to control release type:
+            - \`## [Unreleased]\` or \`## [Unreleased:patch]\` → patch release (default)
+            - \`## [Unreleased:minor]\` → minor release
+            - \`## [Unreleased:major]\` → major release`;
 
             // Find existing comment
             const { data: comments } = await github.rest.issues.listComments({
