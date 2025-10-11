@@ -1,5 +1,22 @@
 name: Auto Release
 
+# This workflow automatically creates releases when PRs are merged to main.
+# It uses a fine-grained Personal Access Token (PAT_TOKEN) to bypass branch protection.
+#
+# PAT Configuration:
+# - Name: "Blue Banded Bee Release Automation"
+# - Type: Fine-grained token
+# - Expiration: 365 days (expires ~1 year from creation)
+# - Repository: Harvey-AU/blue-banded-bee
+# - Permissions: Contents (read/write), Pull requests (read/write)
+# - Location: https://github.com/settings/tokens?type=beta
+# - Secret: https://github.com/Harvey-AU/blue-banded-bee/settings/secrets/actions
+#
+# When to renew:
+# - GitHub will email you before expiration
+# - Create new token with same permissions
+# - Update PAT_TOKEN secret with new value
+
 on:
   pull_request:
     types: [closed]
@@ -21,6 +38,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          token: ${{ secrets.PAT_TOKEN }}
 
       - name: Check changelog for release marker
         id: check
