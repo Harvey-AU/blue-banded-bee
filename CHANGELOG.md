@@ -29,6 +29,8 @@ On merge, CI will:
 
 ## [Unreleased]
 
+## [0.6.6] – 2025-10-11
+
 ### Fixed
 
 - **Job Metrics Calculation**: Fixed response time metrics displaying 0ms when
@@ -198,6 +200,8 @@ On merge, CI will:
   - Added `target="_blank"` for better user experience
 
 ## [Unreleased]
+
+## [0.6.6] – 2025-10-11
 
 ## [0.6.5] – 2025-10-11 – 2025-08-18
 
