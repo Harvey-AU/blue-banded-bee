@@ -27,7 +27,7 @@ Sorted by Impact/Effort ratio (descending - highest value first).
 | 6       | ✅     | pprof profiling           | 5   | 0   | 4   | 1   | 5   | Built-in CPU/memory profiling - needs full HTTP exposure                 | • `/debug/pprof/*` endpoints available behind system-admin auth                                                            |
 | 9       | ✅     | pg_stat_statements        | 5   | 5   | 5   | 1   | 5   | Enable PostgreSQL extension - identify slow queries with production data | • Extension enabled via migration<br>• View available at `observability.pg_stat_statements_top_total_time`; review monthly |
 | 8       | defer  | index_advisor extension   | 5   | 0   | 5   | 1   | 5   | Deprioritised—Supabase dashboard already surfaces index guidance         | • Use Query Performance Advisor exports in place of enabling the extension                                                 |
-| 8       | ⚪     | Query Performance Advisor | 5   | 1   | 4   | 1   | 5   | Built-in Supabase dashboard tool - automated index suggestions           | • Check Supabase dashboard weekly<br>• Track action items in docs                                                          |
+| 8       | defer  | Query Performance Advisor | 5   | 1   | 4   | 1   | 5   | Deprioritised—dashboard review sufficient, no immediate code work        | • Rely on Supabase reports; capture follow-ups during scheduled ops reviews                                                |
 | 7       | ✅     | Timeout strategy          | 5   | 3   | 4   | 2   | 5   | Add `idle_in_transaction_session_timeout` - prevent zombie transactions  | • Added 30s timeout via DSN parameters<br>• Documented in `docs/architecture/DATABASE.md`                                  |
 | 7       | ✅     | Queue limits              | 5   | 5   | 4   | 3   | 5   | Return 429 with Retry-After when pool exhausted - graceful degradation   | • `internal/db/queue.go` rejects when pool usage ≥ threshold (ErrPoolSaturated)<br>• `internal/api/errors.go` maps to 429  |
 | 6       | ⚪     | Observability first       | 5   | 1   | 5   | 3   | 5   | Add OpenTelemetry traces + Prometheus metrics - comprehensive visibility | • Add OpenTelemetry traces<br>• Publish Prometheus metrics                                                                 |
@@ -295,21 +295,21 @@ https://supabase.com/docs/guides/troubleshooting/steps-to-improve-query-performa
 
 - **index_advisor extension**: Deferred—Supabase dashboard coverage considered
   sufficient for now [5 impact, 1 effort]
-- **Query Performance Advisor**: Built-in Supabase dashboard tool - check weekly
-  for suggestions [4 impact, 1 effort]
+- **Query Performance Advisor**: Deferred—covered by manual Supabase dashboard
+  reviews [4 impact, 1 effort]
 
 ### Recommendations
 
-| Status | Concept                   | Rel | Cur | Imp | Eff | Pri | Summary                                                        | Application Examples                                                                              |
-| ------ | ------------------------- | --- | --- | --- | --- | --- | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| defer  | index_advisor extension   | 5   | 0   | 5   | 1   | 5   | Deferred—lean on dashboard recommendations for now             | • Use Query Performance Advisor exports to track suggested indexes                                |
-| ⚪     | Query Performance Advisor | 5   | 1   | 4   | 1   | 5   | Built-in Supabase dashboard tool - automated index suggestions | • Check Supabase dashboard weekly<br>• Review suggestions<br>• Apply high-impact indexes          |
-| ⚪     | Cache hit rate            | 5   | 0   | 4   | 2   | 4   | Target 99% PostgreSQL cache hits - fundamental health metric   | • Run diagnostic query monthly<br>• Monitor in Supabase Reports<br>• Adjust work_mem              |
-| ⚪     | Index usage analysis      | 5   | 1   | 4   | 2   | 4   | Find and drop unused indexes - reduce write overhead           | • `supabase inspect db unused-indexes`<br>• Drop unused indexes<br>• Profile with EXPLAIN         |
-| ⚪     | CONCURRENTLY modifier     | 5   | 0   | 3   | 1   | 3   | Create indexes without blocking writes - production safety     | • Use for all production indexes<br>• Add to migration template<br>• Document in DATABASE.md      |
-| ⚪     | Grafana metrics           | 4   | 0   | 4   | 3   | 3   | Real-time database monitoring dashboard - visibility           | • Deploy Supabase Grafana (Fly.io)<br>• Track connections, queries, cache<br>• Alert on anomalies |
-| ⚪     | GIN/GIST indexes          | 2   | 0   | 2   | 2   | 1   | Specialised indexes for JSON/ARRAY columns - not needed yet    | Not currently needed (no complex JSON queries)                                                    |
-| ⚪     | HNSW indexes              | 0   | 0   | 0   | 2   | 0   | Vector similarity search indexes - not applicable              | Not applicable (no vector/AI features)                                                            |
+| Status | Concept                   | Rel | Cur | Imp | Eff | Pri | Summary                                                      | Application Examples                                                                              |
+| ------ | ------------------------- | --- | --- | --- | --- | --- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------- |
+| defer  | index_advisor extension   | 5   | 0   | 5   | 1   | 5   | Deferred—lean on dashboard recommendations for now           | • Use Query Performance Advisor exports to track suggested indexes                                |
+| defer  | Query Performance Advisor | 5   | 1   | 4   | 1   | 5   | Deferred—Supabase dashboard review covers this for now       | • Capture action items during scheduled Supabase performance reviews                              |
+| ⚪     | Cache hit rate            | 5   | 0   | 4   | 2   | 4   | Target 99% PostgreSQL cache hits - fundamental health metric | • Run diagnostic query monthly<br>• Monitor in Supabase Reports<br>• Adjust work_mem              |
+| ⚪     | Index usage analysis      | 5   | 1   | 4   | 2   | 4   | Find and drop unused indexes - reduce write overhead         | • `supabase inspect db unused-indexes`<br>• Drop unused indexes<br>• Profile with EXPLAIN         |
+| ⚪     | CONCURRENTLY modifier     | 5   | 0   | 3   | 1   | 3   | Create indexes without blocking writes - production safety   | • Use for all production indexes<br>• Add to migration template<br>• Document in DATABASE.md      |
+| ⚪     | Grafana metrics           | 4   | 0   | 4   | 3   | 3   | Real-time database monitoring dashboard - visibility         | • Deploy Supabase Grafana (Fly.io)<br>• Track connections, queries, cache<br>• Alert on anomalies |
+| ⚪     | GIN/GIST indexes          | 2   | 0   | 2   | 2   | 1   | Specialised indexes for JSON/ARRAY columns - not needed yet  | Not currently needed (no complex JSON queries)                                                    |
+| ⚪     | HNSW indexes              | 0   | 0   | 0   | 2   | 0   | Vector similarity search indexes - not applicable            | Not applicable (no vector/AI features)                                                            |
 
 ---
 
@@ -417,17 +417,17 @@ zombie transactions | • `internal/db/db.go` appends
 extension | 5 | ⚪ | Test virtual indexes before creating | • Enable in Supabase
 dashboard • Test slow queries • Create indexes with proof | | 8 | Query
 Performance Advisor | 5 | ⚪ | Built-in Supabase dashboard tool - automated
-index suggestions | • Check Supabase dashboard weekly • Review suggestions •
-Apply high-impact indexes | | 8 | Cache hit rate | 4 | ⚪ | Target 99%
-PostgreSQL cache hits - fundamental health metric | • Run diagnostic query
-monthly • Monitor in Supabase Reports • Adjust work_mem | | 8 | Index usage
-analysis | 4 | ⚪ | Find and drop unused indexes - reduce write overhead | •
-`supabase inspect db unused-indexes` • Drop unused indexes • Profile with
-EXPLAIN | | 9 | pg_stat_statements | 5 | ✅ | Enable PostgreSQL extension -
-identify slow queries with production data | • Extension enabled via migration •
-Query view: observability.pg_stat_statements_top_total_time • Review monthly | |
-9 | Composite indexes | 4 | 🟠 | Index query patterns not columns - some exist,
-more needed | • `tasks(job_id, status, claimed_at)` •
+index suggestions | • Check Supabase dashboard weekly • Review suggestions • •
+Capture action items during scheduled Supabase performance reviews | | 8 | Cache
+hit rate | 4 | ⚪ | Target 99% PostgreSQL cache hits - fundamental health metric
+| • Run diagnostic query monthly • Monitor in Supabase Reports • Adjust work_mem
+| | 8 | Index usage analysis | 4 | ⚪ | Find and drop unused indexes - reduce
+write overhead | • `supabase inspect db unused-indexes` • Drop unused indexes •
+Profile with EXPLAIN | | 9 | pg_stat_statements | 5 | ✅ | Enable PostgreSQL
+extension - identify slow queries with production data | • Extension enabled via
+migration • Query view: observability.pg_stat_statements_top_total_time • Review
+monthly | | 9 | Composite indexes | 4 | 🟠 | Index query patterns not columns -
+some exist, more needed | • `tasks(job_id, status, claimed_at)` •
 `jobs(user_id, status, created_at)` • Test with index_advisor | | 9 | Timeout
 discipline | 4 | 🟠 | Add statement_timeout and idle-in-transaction timeouts -
 prevent runaway queries | • Add idle_in_transaction_session_timeout • Document
