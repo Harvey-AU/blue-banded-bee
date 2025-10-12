@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/pprof"
 	"os"
 	"strings"
 	"time"
@@ -85,6 +86,21 @@ func (h *Handler) SetupRoutes(mux *http.ServeMux) {
 	// Admin endpoints (require authentication and admin role)
 	mux.Handle("/admin/reset-db", auth.AuthMiddleware(http.HandlerFunc(h.AdminResetDatabase)))
 
+	// Protected pprof endpoints (system admin + auth required)
+	pprofProtected := func(handler http.Handler) http.Handler {
+		return auth.AuthMiddleware(requireSystemAdmin(handler))
+	}
+	mux.Handle("/debug/pprof/", pprofProtected(http.HandlerFunc(pprof.Index)))
+	mux.Handle("/debug/pprof/cmdline", pprofProtected(http.HandlerFunc(pprof.Cmdline)))
+	mux.Handle("/debug/pprof/profile", pprofProtected(http.HandlerFunc(pprof.Profile)))
+	mux.Handle("/debug/pprof/symbol", pprofProtected(http.HandlerFunc(pprof.Symbol)))
+	mux.Handle("/debug/pprof/trace", pprofProtected(http.HandlerFunc(pprof.Trace)))
+	mux.Handle("/debug/pprof/heap", pprofProtected(pprof.Handler("heap")))
+	mux.Handle("/debug/pprof/goroutine", pprofProtected(pprof.Handler("goroutine")))
+	mux.Handle("/debug/pprof/threadcreate", pprofProtected(pprof.Handler("threadcreate")))
+	mux.Handle("/debug/pprof/block", pprofProtected(pprof.Handler("block")))
+	mux.Handle("/debug/pprof/mutex", pprofProtected(pprof.Handler("mutex")))
+
 	// Debug endpoints (no auth required)
 	mux.HandleFunc("/debug/fgtrace", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		f, err := os.Open("trace.out")
@@ -114,6 +130,24 @@ func (h *Handler) SetupRoutes(mux *http.ServeMux) {
 	// Web Components static files
 	mux.Handle("/js/", http.StripPrefix("/js/", http.FileServer(http.Dir("./web/static/js/"))))
 	mux.Handle("/web/", http.StripPrefix("/web/", h.jsFileServer(http.Dir("./web/"))))
+}
+
+// requireSystemAdmin ensures the current request is authenticated and performed by a system administrator.
+func requireSystemAdmin(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		claims, ok := auth.GetUserFromContext(r.Context())
+		if !ok {
+			Unauthorised(w, r, "Authentication required")
+			return
+		}
+
+		if !hasSystemAdminRole(claims) {
+			Forbidden(w, r, "System administrator privileges required")
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
 }
 
 // HealthCheck handles basic health check requests
