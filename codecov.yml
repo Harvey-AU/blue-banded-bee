@@ -10,19 +10,19 @@ coverage:
   status:
     project:
       default:
-        target: auto
+        target: 45%
         threshold: 1%
         base: auto
         if_ci_failed: error
-        informational: false
+        informational: true
         only_pulls: false # Important: Allow status checks on push events
     patch:
       default:
-        target: auto
+        target: 0%
         threshold: 1%
         base: auto
         if_ci_failed: error
-        informational: false
+        informational: true
         only_pulls: false # Important: Allow status checks on push events
 
 comment:

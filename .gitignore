@@ -10,9 +10,9 @@
 /build/
 /dist/
 *.exe
-app
-main
-test_jobs
+/app
+/main
+/test_jobs
 
 # IDE
 .idea/
@@ -58,3 +58,5 @@ node_modules/
 supabase/.temp/
 supabase/.branches/
 
+# Grafana/observability config with secrets
+alloy.river

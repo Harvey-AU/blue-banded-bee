@@ -138,6 +138,9 @@ func (h *Handler) listJobs(w http.ResponseWriter, r *http.Request) {
 	// Auto-create user if they don't exist (handles new signups)
 	user, err := h.DB.GetOrCreateUser(userClaims.UserID, userClaims.Email, nil)
 	if err != nil {
+		if HandlePoolSaturation(w, r, err) {
+			return
+		}
 		log.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get or create user")
 		InternalError(w, r, err)
 		return
@@ -169,6 +172,9 @@ func (h *Handler) listJobs(w http.ResponseWriter, r *http.Request) {
 	}
 	jobs, total, err := h.DB.ListJobs(orgID, limit, offset, status, dateRange)
 	if err != nil {
+		if HandlePoolSaturation(w, r, err) {
+			return
+		}
 		log.Error().Err(err).Str("organisation_id", orgID).Msg("Failed to list jobs")
 		DatabaseError(w, r, err)
 		return
@@ -248,6 +254,9 @@ func (h *Handler) createJob(w http.ResponseWriter, r *http.Request) {
 	// Auto-create user if they don't exist (handles new signups)
 	user, err := h.DB.GetOrCreateUser(userClaims.UserID, userClaims.Email, nil)
 	if err != nil {
+		if HandlePoolSaturation(w, r, err) {
+			return
+		}
 		log.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get or create user")
 		InternalError(w, r, err)
 		return
@@ -288,6 +297,9 @@ func (h *Handler) createJob(w http.ResponseWriter, r *http.Request) {
 
 	job, err := h.createJobFromRequest(r.Context(), user, req)
 	if err != nil {
+		if HandlePoolSaturation(w, r, err) {
+			return
+		}
 		log.Error().Err(err).Str("domain", req.Domain).Msg("Failed to create job")
 		InternalError(w, r, err)
 		return
@@ -319,6 +331,9 @@ func (h *Handler) getJob(w http.ResponseWriter, r *http.Request, jobID string) {
 	// Auto-create user if they don't exist (handles new signups)
 	user, err := h.DB.GetOrCreateUser(userClaims.UserID, userClaims.Email, nil)
 	if err != nil {
+		if HandlePoolSaturation(w, r, err) {
+			return
+		}
 		log.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get or create user")
 		InternalError(w, r, err)
 		return
@@ -328,6 +343,9 @@ func (h *Handler) getJob(w http.ResponseWriter, r *http.Request, jobID string) {
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			NotFound(w, r, "Job not found")
+			return
+		}
+		if HandlePoolSaturation(w, r, err) {
 			return
 		}
 
@@ -890,6 +908,9 @@ func (h *Handler) getJobTasks(w http.ResponseWriter, r *http.Request, jobID stri
 	countArgs := queries.Args[:len(queries.Args)-2] // Remove limit and offset for count query
 	err := h.DB.GetDB().QueryRowContext(r.Context(), queries.CountQuery, countArgs...).Scan(&total)
 	if err != nil {
+		if HandlePoolSaturation(w, r, err) {
+			return
+		}
 		log.Error().Err(err).Str("job_id", jobID).Msg("Failed to count tasks")
 		DatabaseError(w, r, err)
 		return
@@ -898,6 +919,9 @@ func (h *Handler) getJobTasks(w http.ResponseWriter, r *http.Request, jobID stri
 	// Get tasks
 	rows, err := h.DB.GetDB().QueryContext(r.Context(), queries.SelectQuery, queries.Args...)
 	if err != nil {
+		if HandlePoolSaturation(w, r, err) {
+			return
+		}
 		log.Error().Err(err).Str("job_id", jobID).Msg("Failed to get tasks")
 		DatabaseError(w, r, err)
 		return

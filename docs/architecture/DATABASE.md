@@ -528,6 +528,29 @@ active connections and tune pool settings
 **Issue**: Lock contention on job progress updates **Solution**: Use atomic
 updates and avoid frequent progress writes
 
+## Performance Observability
+
+Blue Banded Bee ships with the `pg_stat_statements` extension enabled so we can
+measure the queries causing the highest load:
+
+- The migration `20251012070000_enable_pg_stat_statements.sql` enables the
+  extension and exposes a view at
+  `observability.pg_stat_statements_top_total_time`.
+- The view lists the top 50 statements by total execution time and is limited to
+  the `service_role` and `postgres` roles; query it via the Supabase SQL Editor
+  or psql using a service key.
+- Recommended review cadence: run
+  `select * from observability.pg_stat_statements_top_total_time limit 20;` at
+  least monthly and before significant releases to confirm query plans match
+  expectations.
+- Reset statement statistics only after exporting results for analysis:
+
+  ```sql
+  select * from observability.pg_stat_statements_top_total_time limit 20;
+  -- optional, requires postgres superuser privileges
+  select pg_stat_statements_reset();
+  ```
+
 ## Development Workflow
 
 ### Local Setup

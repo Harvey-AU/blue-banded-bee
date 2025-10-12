@@ -908,5 +908,35 @@ Authorization: Bearer <token>
 - Error context preservation
 - Performance metrics
 
+### Telemetry Pipeline
+
+- **Tracing**: OpenTelemetry spans are emitted for every HTTP request and worker
+  task. Configure the OTLP HTTP exporter via:
+  - `OBSERVABILITY_ENABLED=true` (default) to enable instrumentation
+  - `OTEL_EXPORTER_OTLP_ENDPOINT=https://your-collector.example.com`
+  - Optional headers with
+    `OTEL_EXPORTER_OTLP_HEADERS=x-api-key=secret,tenant=bee`
+  - `OTEL_EXPORTER_OTLP_INSECURE=true` when targeting a non-TLS endpoint
+    (development only)
+- **Metrics**: Prometheus-compatible metrics are exposed on `METRICS_ADDR`
+  (default `:9464`) under `/metrics`. Example scrape configuration:
+
+```yaml
+- job_name: blue-banded-bee
+  static_configs:
+    - targets: ["blue-banded-bee-prod.internal:9464"]
+```
+
+Worker task counters (`bee_worker_task_total`) and histograms
+(`bee_worker_task_duration_ms`) augment the standard `otelhttp` request metrics.
+
+- **Infrastructure note**: Production metrics are scraped by the Fly Alloy agent
+  `bee-observability` (config in `~/fly-configs/bee-observability/config.alloy`)
+  and remote-written to Grafana Cloud
+  (`https://prometheus-prod-41-prod-au-southeast-1.grafana.net/api/prom/push`)
+  with the stack-specific username + Primary API Token. The agent’s dedicated
+  IPv4 must remain in the stack’s allow list. OTLP traces continue to flow
+  directly to `https://otlp-gateway-prod-au-southeast-1.grafana.net`.
+
 This API design provides a solid foundation for all current and future
 interfaces while maintaining consistency, security, and scalability.

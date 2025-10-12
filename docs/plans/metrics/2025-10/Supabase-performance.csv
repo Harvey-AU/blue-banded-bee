@@ -1,0 +1,122 @@
+rolname,query,calls,total_time,min_time,max_time,mean_time,avg_rows,rows_read,debug_hit,debug_read,cache_hit_rate,prop_total_time,index_advisor_result
+postgres,"INSERT INTO pages (domain_id, path)
+			VALUES ($1, $2)
+			ON CONFLICT (domain_id, path) DO UPDATE SET path = EXCLUDED.path
+			RETURNING id",2792867,305693134.46491,0.019315,119995.972598,109.454955952037,1,2792867,196404789,29347,99.9850601323183461,82.7089198957074,null
+postgres,"UPDATE tasks
+			SET status = $3, started_at = $1
+			WHERE id = $2",3114,12030132.6127,51.082074,47728.331277,3863.24104454077,1,3114,78053772,1861,99.9976158030772744,3.25489571867619,null
+postgres,"UPDATE tasks 
+				SET status = $1, completed_at = $2, status_code = $3, 
+					response_time = $4, cache_status = $5, content_type = $6,
+					content_length = $7, headers = $8, redirect_url = $9,
+					dns_lookup_time = $10, tcp_connection_time = $11, tls_handshake_time = $12,
+					ttfb = $13, content_transfer_time = $14,
+					second_response_time = $15, second_cache_status = $16,
+					second_content_length = $17, second_headers = $18,
+					second_dns_lookup_time = $19, second_tcp_connection_time = $20,
+					second_tls_handshake_time = $21, second_ttfb = $22,
+					second_content_transfer_time = $23,
+					retry_count = $24, cache_check_attempts = $25
+				WHERE id = $26",2445,9859192.066074,50.509146,52326.601874,4032.3893930773,1,2445,60329891,237,99.9996071614500801,2.66752188679891,null
+postgres,"UPDATE tasks
+			SET status = $1, started_at =  $2 
+			WHERE id =  $3",217892,8964064.60069112,0.595154,100809.291712,41.1399436449749,1,217892,457162160,77160,99.9831248108758451,2.42533448550057,null
+postgres,"UPDATE tasks t
+		SET priority_score = $1
+		FROM pages p
+		WHERE t.page_id = p.id
+		AND t.job_id = $2
+		AND p.domain_id = $3
+		AND p.path = ANY($4)
+		AND t.priority_score < $1",2286,6227918.405456,0.130976,59118.939258,2724.37375566754,2,4674,113939290,1089,99.9990442369864331,1.68503753090664,null
+postgres,"INSERT INTO tasks (
+				id, job_id, page_id, path, status, created_at, retry_count,
+				source_type, source_url, priority_score
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+			ON CONFLICT (job_id, page_id) DO NOTHING",23780,5800837.09888798,0.018256,43200.315631,243.937640827922,0,4647,112559737,5434,99.9951725742947612,1.56948559469544,null
+postgres,"UPDATE jobs 
+				SET status = $1, completed_at = NOW()
+				WHERE (completed_tasks + failed_tasks) >= (total_tasks - COALESCE(skipped_tasks, $2))
+				  AND status = $3
+				RETURNING id",1182409,5543696.03263084,0.004513,869.536551,4.68847584264912,0,0,6124987991,10433101,99.8299529756221010,1.49991301535641,null
+postgres,"SELECT t.id, t.job_id, t.page_id, p.path, t.retry_count 
+			FROM tasks t
+			JOIN pages p ON t.page_id = p.id
+			WHERE status =  $1  
+			AND started_at <  $2",49942,3985278.44899995,0.008706,31632.213928,79.7981348163868,10380,518423995,1357554471,6697007,99.5091075869811152,1.07826456939373,"{""has_suggestion"":true,""startup_cost_before"":2239.67,""startup_cost_after"":792.87,""total_cost_before"":11146.34,""total_cost_after"":4845.53,""index_statements"":[""CREATE INDEX ON public.tasks USING btree (status)"",""CREATE INDEX ON public.tasks USING btree (started_at)""]}"
+postgres,"INSERT INTO tasks (
+				id, job_id, page_id, path, status, created_at, retry_count,
+				source_type, source_url, priority_score
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+			ON CONFLICT (job_id, page_id) DO NOTHING",359039,2189510.243368,0.015007,102261.190858,6.09825184274689,0,252864,652435235,20017,99.9969320501385128,0.592398084590748,null
+postgres,"UPDATE tasks 
+				SET status =  $1 ,
+					started_at = $2,
+					retry_count = retry_count + $3
+				WHERE job_id =  $4  
+				AND status =  $5",830,1275633.635711,0.035683,57747.334164,1536.90799483253,152,126867,655074327,70268,99.9892744287999506,0.345137879452121,null
+postgres,"UPDATE tasks
+			SET status = $3, started_at = $1
+			WHERE id = $2",163490,1085676.78000101,0.505046,14127.524018,6.64063110894245,1,163490,90606584,94,99.9998962548875261,0.293742788783635,null
+postgres,"UPDATE tasks
+				SET status =  $1 , completed_at =  $2 , status_code =  $3 ,
+					response_time =  $4 , cache_status =  $5 , content_type =  $6 ,
+					content_length =  $7 , headers =  $8 ::jsonb, redirect_url =  $9 ,
+					dns_lookup_time =  $10 , tcp_connection_time =  $11 , tls_handshake_time =  $12 ,
+					ttfb =  $13 , content_transfer_time =  $14 ,
+					second_response_time =  $15 , second_cache_status =  $16 ,
+					second_content_length =  $17 , second_headers =  $18 ::jsonb,
+					second_dns_lookup_time =  $19 , second_tcp_connection_time =  $20 ,
+					second_tls_handshake_time =  $21 , second_ttfb =  $22 ,
+					second_content_transfer_time =  $23 ,
+					retry_count =  $24 , cache_check_attempts =  $25 ::jsonb
+				WHERE id =  $26",58140,1068412.966348,0.620878,7112.523465,18.3765560087373,1,58140,48084586,0,100.0000000000000000,0.289071858299636,null
+postgres,"UPDATE tasks t
+			SET priority_score =  $1 
+			FROM pages p
+			WHERE t.page_id = p.id
+			AND t.job_id =  $2 
+			AND p.domain_id =  $3 
+			AND p.path = ANY( $4 )
+			AND t.priority_score <  $5",133022,510786.482972998,0.024837,14206.238064,3.8398647063869,0,64844,109500379,7819,99.9928598952929533,0.138199369043642,null
+postgres,"SELECT t.id, t.job_id, t.started_at, p.path
+				FROM tasks t
+				JOIN pages p ON t.page_id = p.id
+				WHERE t.status = $1
+				  AND t.started_at < NOW() - INTERVAL $2
+				LIMIT $3",232370,501466.926752004,0.008985,65.63232,2.15805365043682,0,106239,109824243,0,100.0000000000000000,0.135677852064548,"{""has_suggestion"":null,""startup_cost_before"":null,""startup_cost_after"":null,""total_cost_before"":null,""total_cost_after"":null,""index_statements"":[]}"
+postgres,"UPDATE jobs 
+			SET status =  $1 , 
+				completed_at = COALESCE(completed_at,  $2 ),
+				progress = $3
+			WHERE (status =  $4  OR status =  $5 )
+			AND total_tasks > $6 
+			AND total_tasks = completed_tasks + failed_tasks",52756,442747.351828996,0.004571,600.43847,8.39236014536735,0,0,318346930,822288,99.7423661325635732,0.119790571419145,null
+postgres,"UPDATE tasks 
+				SET status = $1, completed_at = $2, status_code = $3, 
+					response_time = $4, cache_status = $5, content_type = $6,
+					content_length = $7, headers = $8, redirect_url = $9,
+					dns_lookup_time = $10, tcp_connection_time = $11, tls_handshake_time = $12,
+					ttfb = $13, content_transfer_time = $14,
+					second_response_time = $15, second_cache_status = $16,
+					second_content_length = $17, second_headers = $18,
+					second_dns_lookup_time = $19, second_tcp_connection_time = $20,
+					second_tls_handshake_time = $21, second_ttfb = $22,
+					second_content_transfer_time = $23,
+					retry_count = $24, cache_check_attempts = $25
+				WHERE id = $26",66740,441266.880947002,0.489285,8676.654672,6.61173031086306,1,66740,66654149,340,99.9994899068238300,0.119390012382053,null
+postgres,"SELECT max_pages, 
+				   COALESCE((SELECT COUNT(*) FROM tasks WHERE job_id = $1 AND status != $2), $3)
+			FROM jobs WHERE id = $1",2186,370592.936640999,41.626962,770.362468,169.530163147758,1,2186,52325033,0,100.0000000000000000,0.100268334662497,"{""has_suggestion"":null,""startup_cost_before"":153.01,""startup_cost_after"":153.01,""total_cost_before"":155.23,""total_cost_after"":155.23,""index_statements"":[]}"
+postgres,"SELECT DISTINCT job_id FROM tasks 
+			WHERE status =  $1  
+			LIMIT $2",104914,352663.926107007,0.006646,635.180549,3.36145725172044,0,15373,149379464,179653,99.8798782691395537,0.0954174272364574,"{""has_suggestion"":null,""startup_cost_before"":0.42,""startup_cost_after"":0.42,""total_cost_before"":421.99,""total_cost_after"":421.99,""index_statements"":[]}"
+postgres,"UPDATE tasks 
+				SET status = $1
+				WHERE id = $2",107,233287.263625,59.27346,18085.285232,2180.25480023365,1,107,2819612,3,99.9998936024953761,0.063118648816314,null
+postgres,"SELECT t.id, t.job_id, t.page_id, p.path, t.retry_count 
+			FROM tasks t
+			JOIN pages p ON t.page_id = p.id
+			WHERE status = $1 
+			AND started_at < $2",45968,188554.102244,0.00361,795.050768,4.10185568752175,2,93048,34765641,0,100.0000000000000000,0.0510155590043064,"{""has_suggestion"":true,""startup_cost_before"":2239.67,""startup_cost_after"":792.87,""total_cost_before"":11146.34,""total_cost_after"":4845.53,""index_statements"":[""CREATE INDEX ON public.tasks USING btree (status)"",""CREATE INDEX ON public.tasks USING btree (started_at)""]}"

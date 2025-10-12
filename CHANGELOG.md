@@ -29,6 +29,119 @@ On merge, CI will:
 
 ## [Unreleased]
 
+## [0.7.0] – 2025-10-12
+
+### Added
+
+- **OpenTelemetry Tracing and Prometheus Metrics**: Comprehensive observability
+  infrastructure for performance monitoring
+  - Created dedicated `internal/observability` package with OpenTelemetry (OTLP)
+    and Prometheus integration
+  - Worker task tracing with span instrumentation for individual cache warming
+    operations
+  - Prometheus metrics endpoint (`/metrics`) exposing task duration histograms
+    and counters
+  - Configurable OTLP exporter for sending traces to Grafana Cloud or other
+    OpenTelemetry backends
+  - Environment-aware configuration with sampling controls (10% production, 100%
+    development)
+  - Process and Go runtime metrics automatically collected
+  - HTTP request instrumentation via `otelhttp` middleware
+
+- **Grafana Cloud Integration**: Production monitoring with Grafana Alloy for
+  metrics collection
+  - Deployed Grafana Alloy sidecar on Fly.io to scrape Prometheus metrics from
+    application
+  - Successfully configured metrics pipeline: App → Alloy → Grafana Cloud
+    Prometheus
+  - Resolved authentication and endpoint configuration for Cloud Access Policy
+    tokens
+  - 310+ metrics flowing into Grafana Cloud including database connections,
+    worker performance, and HTTP traffic
+
+- **Database Performance Optimisation**: Strategic indexing and query
+  improvements
+  - Added composite index `idx_tasks_running_started_at` on
+    `(status, started_at)` for efficient stale task recovery
+  - Enabled `pg_stat_statements` extension for PostgreSQL query performance
+    analysis
+  - Added `idle_in_transaction_session_timeout` (5 seconds) to prevent
+    connection pool exhaustion
+  - Cached normalised page paths on insert to reduce duplicate URL processing
+  - Implemented duplicate page key check during URL enqueuing to prevent
+    redundant tasks
+
+- **Performance Testing Infrastructure**: Load testing tools for benchmarking
+  and optimisation
+  - Created `scripts/load-test-simple.sh` for automated performance testing
+  - Batch job loading capability for testing with realistic workloads
+  - Comprehensive documentation in `scripts/README-load-test.md`
+
+- **Performance Research Documentation**: In-depth research on Go and PostgreSQL
+  optimisation
+  - Comprehensive analysis in `docs/research/2025-10/EVALUATION.md` covering
+    profiling, database tuning, and architectural patterns
+  - Documented 9 performance optimisation articles covering Go patterns,
+    PostgreSQL pooling, and Supabase performance
+  - Captured baseline performance metrics from Supabase dashboard for
+    optimisation tracking
+
+### Enhanced
+
+- **Worker Pool Instrumentation**: Detailed telemetry for cache warming
+  operations
+  - Worker tasks emit OpenTelemetry spans with job ID, task ID, domain, path,
+    and find_links attributes
+  - Task duration and outcome metrics (completed/failed) recorded to Prometheus
+  - Graceful shutdown with proper telemetry provider cleanup
+
+- **Database Insert Efficiency**: Reduced redundant processing and improved
+  throughput
+  - Optimised insert operations to check for existing pages before database
+    calls
+  - Improved DB throttling to reduce duplicate queue insertions
+  - Better handling of high-throughput scenarios with concurrent workers
+
+- **HTTP Handler Instrumentation**: Automatic request tracing for API endpoints
+  - `WrapHandler` function applies OpenTelemetry instrumentation when providers
+    are active
+  - Span names formatted as `METHOD /path` for clear trace visualisation
+  - Trace and baggage context propagated across service boundaries
+
+- **Link Extraction Performance**: Optimised visible link checker with reduced
+  regex usage
+  - Improved link visibility detection performance
+  - Reduced CPU overhead from regex operations in crawler
+
+### Fixed
+
+- **Code Quality**: Addressed linting and formatting issues
+  - Changed Codecov thresholds to informational mode (project-level only, not
+    patch-level)
+  - Fixed formatting across all modified files
+  - Removed completed tasks from evaluation documentation
+
+### Changed
+
+- **Review App Workflow**: Skip documentation-only changes to reduce CI overhead
+  - Review apps no longer deploy for `.md` file changes
+  - Faster PR feedback cycle for documentation updates
+
+- **Database Migrations**: New migrations for performance improvements
+  - `20251012060206_idx_tasks_running_started_at.sql` - Adds composite index for
+    worker recovery queries
+  - `20251012070000_enable_pg_stat_statements.sql` - Enables query performance
+    monitoring extension
+
+### Documentation
+
+- **Performance Analysis**: Extensive research documentation for future
+  optimisation work
+  - Supabase performance metrics baseline captured with 122 data points
+  - Articles on Go performance patterns, database pooling, and microservices
+    architecture
+  - Evaluation plan documenting profiling methodology and optimisation targets
+
 ## [0.6.9] – 2025-10-12
 
 ## [0.6.8] – 2025-10-11
@@ -217,6 +330,8 @@ On merge, CI will:
   - Added `target="_blank"` for better user experience
 
 ## [Unreleased]
+
+## [0.7.0] – 2025-10-12
 
 ## [0.6.9] – 2025-10-12
 

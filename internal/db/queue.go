@@ -3,7 +3,11 @@ package db
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
+	"os"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -16,14 +20,52 @@ import (
 type DbQueue struct {
 	db *DB
 	// Mutex to prevent concurrent cleanup operations that cause prepared statement conflicts
-	cleanupMutex sync.Mutex
+	cleanupMutex        sync.Mutex
+	poolWarnThreshold   float64
+	poolRejectThreshold float64
+	lastWarnLog         time.Time
+	lastRejectLog       time.Time
 }
+
+// ErrPoolSaturated is returned when the database connection pool is saturated
+var ErrPoolSaturated = errors.New("database connection pool saturated")
+
+const (
+	defaultPoolWarnThreshold   = 0.80
+	defaultPoolRejectThreshold = 0.90
+	poolLogCooldown            = 5 * time.Second
+)
 
 // NewDbQueue creates a PostgreSQL job queue
 func NewDbQueue(db *DB) *DbQueue {
-	return &DbQueue{
-		db: db,
+	warn := parseThresholdEnv("DB_POOL_WARN_THRESHOLD", defaultPoolWarnThreshold)
+	reject := parseThresholdEnv("DB_POOL_REJECT_THRESHOLD", defaultPoolRejectThreshold)
+
+	// Ensure thresholds are sane and warn <= reject
+	if reject <= 0 || reject > 1 {
+		reject = defaultPoolRejectThreshold
 	}
+	if warn <= 0 || warn >= reject {
+		warn = reject - 0.05
+		if warn <= 0 {
+			warn = defaultPoolWarnThreshold
+		}
+	}
+
+	return &DbQueue{
+		db:                  db,
+		poolWarnThreshold:   warn,
+		poolRejectThreshold: reject,
+	}
+}
+
+func parseThresholdEnv(key string, fallback float64) float64 {
+	if val := strings.TrimSpace(os.Getenv(key)); val != "" {
+		if parsed, err := strconv.ParseFloat(val, 64); err == nil {
+			return parsed
+		}
+	}
+	return fallback
 }
 
 // Execute runs a database operation in a transaction
@@ -33,6 +75,10 @@ func (q *DbQueue) Execute(ctx context.Context, fn func(*sql.Tx) error) error {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, 30*time.Second)
 		defer cancel()
+	}
+
+	if err := q.ensurePoolCapacity(); err != nil {
+		return err
 	}
 
 	// Begin transaction
@@ -54,6 +100,72 @@ func (q *DbQueue) Execute(ctx context.Context, fn func(*sql.Tx) error) error {
 	if err := tx.Commit(); err != nil {
 		sentry.CaptureException(err)
 		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	return nil
+}
+
+func (q *DbQueue) ensurePoolCapacity() error {
+	if q == nil || q.db == nil || q.db.client == nil {
+		return nil
+	}
+
+	stats := q.db.client.Stats()
+	maxOpen := stats.MaxOpenConnections
+	if maxOpen == 0 && q.db.config != nil {
+		maxOpen = q.db.config.MaxOpenConns
+	}
+	if maxOpen <= 0 {
+		return nil
+	}
+
+	usage := float64(stats.InUse) / float64(maxOpen)
+
+	if usage >= q.poolRejectThreshold {
+		if time.Since(q.lastRejectLog) > poolLogCooldown {
+			log.Warn().
+				Int("in_use", stats.InUse).
+				Int("max_open", maxOpen).
+				Float64("usage", usage).
+				Msg("DB pool saturated: rejecting request")
+			sentry.WithScope(func(scope *sentry.Scope) {
+				scope.SetLevel(sentry.LevelWarning)
+				scope.SetTag("event_type", "db_pool")
+				scope.SetTag("state", "reject")
+				scope.SetContext("db_pool", map[string]interface{}{
+					"in_use":     stats.InUse,
+					"max_open":   maxOpen,
+					"idle":       stats.Idle,
+					"wait_count": stats.WaitCount,
+					"usage":      usage,
+				})
+				sentry.CaptureMessage("DB pool saturated")
+			})
+			q.lastRejectLog = time.Now()
+		}
+		return ErrPoolSaturated
+	}
+
+	if usage >= q.poolWarnThreshold && time.Since(q.lastWarnLog) > poolLogCooldown {
+		log.Warn().
+			Int("in_use", stats.InUse).
+			Int("max_open", maxOpen).
+			Float64("usage", usage).
+			Msg("DB pool nearing capacity")
+		sentry.WithScope(func(scope *sentry.Scope) {
+			scope.SetLevel(sentry.LevelInfo)
+			scope.SetTag("event_type", "db_pool")
+			scope.SetTag("state", "warn")
+			scope.SetContext("db_pool", map[string]interface{}{
+				"in_use":     stats.InUse,
+				"max_open":   maxOpen,
+				"idle":       stats.Idle,
+				"wait_count": stats.WaitCount,
+				"usage":      usage,
+			})
+			sentry.CaptureMessage("DB pool nearing capacity")
+		})
+		q.lastWarnLog = time.Now()
 	}
 
 	return nil
@@ -187,6 +299,28 @@ func (q *DbQueue) EnqueueURLs(ctx context.Context, jobID string, pages []Page, s
 	}
 
 	return q.Execute(ctx, func(tx *sql.Tx) error {
+		uniquePages := make([]Page, 0, len(pages))
+		seen := make(map[int]int, len(pages))
+		for _, page := range pages {
+			if page.ID == 0 {
+				continue
+			}
+
+			if idx, ok := seen[page.ID]; ok {
+				if page.Priority > uniquePages[idx].Priority {
+					uniquePages[idx].Priority = page.Priority
+				}
+				continue
+			}
+
+			seen[page.ID] = len(uniquePages)
+			uniquePages = append(uniquePages, page)
+		}
+
+		if len(uniquePages) == 0 {
+			return nil
+		}
+
 		// Get job's max_pages setting and current task counts
 		var maxPages int
 		var currentTaskCount int
@@ -202,10 +336,7 @@ func (q *DbQueue) EnqueueURLs(ctx context.Context, jobID string, pages []Page, s
 		// Count how many tasks will be pending vs skipped
 		pendingCount := 0
 		skippedCount := 0
-		for _, page := range pages {
-			if page.ID == 0 {
-				continue
-			}
+		for range uniquePages {
 			if maxPages == 0 || currentTaskCount+pendingCount < maxPages {
 				pendingCount++
 			} else {
@@ -229,7 +360,7 @@ func (q *DbQueue) EnqueueURLs(ctx context.Context, jobID string, pages []Page, s
 		// Insert each task with appropriate status
 		now := time.Now()
 		processedCount := 0
-		for _, page := range pages {
+		for _, page := range uniquePages {
 			if page.ID == 0 {
 				continue
 			}

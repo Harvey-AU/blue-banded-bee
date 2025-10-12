@@ -260,6 +260,9 @@ func (h *Handler) getSharedJobTasks(w http.ResponseWriter, r *http.Request, toke
 	countArgs := queries.Args[:len(queries.Args)-2]
 	err = dbConn.QueryRowContext(r.Context(), queries.CountQuery, countArgs...).Scan(&total)
 	if err != nil {
+		if HandlePoolSaturation(w, r, err) {
+			return
+		}
 		log.Error().Err(err).Msg("Failed to count shared tasks")
 		DatabaseError(w, r, err)
 		return
@@ -267,6 +270,9 @@ func (h *Handler) getSharedJobTasks(w http.ResponseWriter, r *http.Request, toke
 
 	rows, err := dbConn.QueryContext(r.Context(), queries.SelectQuery, queries.Args...)
 	if err != nil {
+		if HandlePoolSaturation(w, r, err) {
+			return
+		}
 		log.Error().Err(err).Msg("Failed to get shared tasks")
 		DatabaseError(w, r, err)
 		return
@@ -316,6 +322,9 @@ func (h *Handler) handleShareLinkError(w http.ResponseWriter, r *http.Request, e
 	case errors.Is(err, errShareLinkExpired):
 		NotFound(w, r, "Share link has expired")
 	default:
+		if HandlePoolSaturation(w, r, err) {
+			return
+		}
 		log.Error().Err(err).Msg("Share link error")
 		InternalError(w, r, err)
 	}
