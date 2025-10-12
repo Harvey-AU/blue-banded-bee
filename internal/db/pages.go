@@ -30,15 +30,17 @@ func CreatePageRecords(ctx context.Context, q TransactionExecutor, domainID int,
 
 	err := q.Execute(ctx, func(tx *sql.Tx) error {
 		stmt, err := tx.PrepareContext(ctx, `
-			INSERT INTO pages (domain_id, path)
-			VALUES ($1, $2)
-			ON CONFLICT (domain_id, path) DO UPDATE SET path = EXCLUDED.path
-			RETURNING id
-		`)
+		INSERT INTO pages (domain_id, path)
+		VALUES ($1, $2)
+		ON CONFLICT (domain_id, path) DO UPDATE SET path = EXCLUDED.path
+		RETURNING id
+	`)
 		if err != nil {
 			return fmt.Errorf("failed to prepare page insert statement: %w", err)
 		}
 		defer stmt.Close()
+
+		seen := make(map[string]int, len(urls))
 
 		for _, u := range urls {
 			// Normalise URL to get just the path
@@ -48,12 +50,20 @@ func CreatePageRecords(ctx context.Context, q TransactionExecutor, domainID int,
 				continue
 			}
 
+			// Skip duplicates within this batch and reuse cached IDs
+			if id, ok := seen[path]; ok {
+				pageIDs = append(pageIDs, id)
+				paths = append(paths, path)
+				continue
+			}
+
 			// Get or create the page record
 			var pageID int
 			if err := stmt.QueryRowContext(ctx, domainID, path).Scan(&pageID); err != nil {
 				return fmt.Errorf("failed to insert/get page record: %w", err)
 			}
 
+			seen[path] = pageID
 			pageIDs = append(pageIDs, pageID)
 			paths = append(paths, path)
 		}
