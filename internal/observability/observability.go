@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel"
@@ -114,8 +115,8 @@ func Init(ctx context.Context, cfg Config) (*Providers, error) {
 
 	registry := prometheus.NewRegistry()
 	registry.MustRegister(
-		prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}),
-		prometheus.NewGoCollector(),
+		collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}),
+		collectors.NewGoCollector(),
 	)
 	promExporter, err := otelprom.New(
 		otelprom.WithRegisterer(registry),
