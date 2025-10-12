@@ -438,9 +438,13 @@ func setupLinkExtraction(collyClone *colly.Collector) {
 		}
 
 		extractLinks := func(selection *goquery.Selection, category string) {
-			selection.Find("a[href]").Each(func(i int, s *goquery.Selection) {
+			selection.Find("a").Each(func(i int, s *goquery.Selection) {
 				href := strings.TrimSpace(s.AttrOr("href", ""))
-				if isElementHidden(s) || href == "" || href == "#" || strings.HasPrefix(href, "javascript:") || strings.HasPrefix(href, "mailto:") {
+				if href == "" || href == "#" || strings.HasPrefix(href, "javascript:") || strings.HasPrefix(href, "mailto:") {
+					return
+				}
+
+				if isElementHidden(s) {
 					return
 				}
 
@@ -694,9 +698,12 @@ func isElementHidden(s *goquery.Selection) bool {
 		}
 
 		// 4. Check for common hiding classes
-		for _, class := range hidingClasses {
-			if n.HasClass(class) {
-				return true
+		if classAttr, exists := n.Attr("class"); exists {
+			padded := " " + classAttr + " "
+			for _, class := range hidingClasses {
+				if strings.Contains(padded, " "+class+" ") {
+					return true
+				}
 			}
 		}
 	}
