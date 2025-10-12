@@ -187,6 +187,28 @@ func (q *DbQueue) EnqueueURLs(ctx context.Context, jobID string, pages []Page, s
 	}
 
 	return q.Execute(ctx, func(tx *sql.Tx) error {
+		uniquePages := make([]Page, 0, len(pages))
+		seen := make(map[int]int, len(pages))
+		for _, page := range pages {
+			if page.ID == 0 {
+				continue
+			}
+
+			if idx, ok := seen[page.ID]; ok {
+				if page.Priority > uniquePages[idx].Priority {
+					uniquePages[idx].Priority = page.Priority
+				}
+				continue
+			}
+
+			seen[page.ID] = len(uniquePages)
+			uniquePages = append(uniquePages, page)
+		}
+
+		if len(uniquePages) == 0 {
+			return nil
+		}
+
 		// Get job's max_pages setting and current task counts
 		var maxPages int
 		var currentTaskCount int
@@ -202,10 +224,7 @@ func (q *DbQueue) EnqueueURLs(ctx context.Context, jobID string, pages []Page, s
 		// Count how many tasks will be pending vs skipped
 		pendingCount := 0
 		skippedCount := 0
-		for _, page := range pages {
-			if page.ID == 0 {
-				continue
-			}
+		for range uniquePages {
 			if maxPages == 0 || currentTaskCount+pendingCount < maxPages {
 				pendingCount++
 			} else {
@@ -229,7 +248,7 @@ func (q *DbQueue) EnqueueURLs(ctx context.Context, jobID string, pages []Page, s
 		// Insert each task with appropriate status
 		now := time.Now()
 		processedCount := 0
-		for _, page := range pages {
+		for _, page := range uniquePages {
 			if page.ID == 0 {
 				continue
 			}
