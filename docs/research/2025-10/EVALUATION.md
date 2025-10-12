@@ -30,7 +30,7 @@ Sorted by Impact/Effort ratio (descending - highest value first).
 | 8       | defer  | Query Performance Advisor | 5   | 1   | 4   | 1   | 5   | Deprioritised—dashboard review sufficient, no immediate code work        | • Rely on Supabase reports; capture follow-ups during scheduled ops reviews                                                |
 | 7       | ✅     | Timeout strategy          | 5   | 3   | 4   | 2   | 5   | Add `idle_in_transaction_session_timeout` - prevent zombie transactions  | • Added 30s timeout via DSN parameters<br>• Documented in `docs/architecture/DATABASE.md`                                  |
 | 7       | ✅     | Queue limits              | 5   | 5   | 4   | 3   | 5   | Return 429 with Retry-After when pool exhausted - graceful degradation   | • `internal/db/queue.go` rejects when pool usage ≥ threshold (ErrPoolSaturated)<br>• `internal/api/errors.go` maps to 429  |
-| 6       | ⚪     | Observability first       | 5   | 1   | 5   | 3   | 5   | Add OpenTelemetry traces + Prometheus metrics - comprehensive visibility | • Add OpenTelemetry traces<br>• Publish Prometheus metrics                                                                 |
+| 6       | ✅     | Observability first       | 5   | 4   | 5   | 3   | 5   | OpenTelemetry traces + Prometheus metrics wired into app + worker pool   | • `/metrics` served via OTEL Prom exporter<br>• HTTP + worker spans exported via OTLP                                      |
 
 **Total Priority 5 Items**: 7 active (index_advisor deferred)
 
@@ -229,33 +229,21 @@ https://medium.com/@puneetpm/after-5-years-building-go-microservices-the-5-game-
 
 ### Priority Items
 
-- **Expand observability**: Add OpenTelemetry traces + Prometheus metrics - only
-  have Sentry errors now [5 impact, 3 effort]
+- **Expand observability**: ✅ OpenTelemetry traces + Prometheus metrics
+  shipped; keep refining dashboards [5 impact, 3 effort]
 
 ### Recommendations
 
-| Status | Concept             | Rel | Cur | Imp | Eff | Pri | Summary                                                                  | Application Examples       |
-| ------ | ------------------- | --- | --- | --- | --- | --- | ------------------------------------------------------------------------ | -------------------------- |
-| ⚪     | Observability first | 5   | 1   | 5   | 3   | 5   | Add OpenTelemetry traces + Prometheus metrics - comprehensive visibility | • Add OpenTelemetry traces |
-
-• Prometheus metrics • Only logging + Sentry currently | | 🟠 | Error wrapping
-(%w) | 5 | 4 | 3 | 1 | 4 | Wrap errors with fmt.Errorf(%w) - preserve error
-chain for debugging | • Audit all error returns • `db.go` wrap SQL errors • ~90
-instances found via grep | | ⚪ | Custom error types | 4 | 1 | 3 | 3 | 2 |
-Domain-specific errors with errors.Is/As - type-safe error handling | • Define
-domain errors (ErrJobNotFound, ErrTaskLocked) • Currently rely on sql.ErrNoRows
-| | ✅ | Structured concurrency | 5 | 5 | 5 | 3 | 0 | Context + WaitGroup +
-channels for goroutine management - already done | Already implemented (very
-high impact, moderate effort) | | ✅ | Simplicity over complexity | 5 | 5 | 4 |
-2 | 0 | Prefer stdlib over dependencies - keep codebase maintainable | Already
-practised (high impact, low effort) | | 🟠 | Static binaries | 5 | 4 | 4 | 2 | 1
-| FROM scratch Docker images - minimal attack surface and size | •
-`Dockerfile:16` CGO=0 but uses alpine:3.19 base • Not truly static (needs
-ca-certs) | | ✅ | pprof profiling | 5 | 0 | 4 | 1 | 5 | Built-in CPU/memory
-profiling - needs full HTTP exposure | • `/debug/pprof/*` endpoints available
-behind system-admin auth | | ✅ | Race detection | 5 | 5 | 5 | 1 | 0 | go test
--race in CI - catch concurrency bugs early | Already run in CI (very high
-impact, trivial effort) |
+| Status | Concept                    | Rel | Cur | Imp | Eff | Pri | Summary                                                                | Application Examples                                                                     |
+| ------ | -------------------------- | --- | --- | --- | --- | --- | ---------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| ✅     | Observability first        | 5   | 4   | 5   | 3   | 5   | OTLP traces (HTTP + worker) and Prometheus metrics now exported        | • OTLP endpoint configurable via env<br>• `/metrics` served for Prometheus scrapes       |
+| 🟠     | Error wrapping (%w)        | 5   | 4   | 3   | 1   | 4   | Wrap errors with fmt.Errorf(%w) - preserve error chain for debugging   | • Audit all error returns • `db.go` wrap SQL errors • ~90 instances found via grep       |
+| ⚪     | Custom error types         | 4   | 1   | 3   | 3   | 2   | Domain-specific errors with errors.Is/As - type-safe error handling    | • Define domain errors (ErrJobNotFound, ErrTaskLocked) • Currently rely on sql.ErrNoRows |
+| ✅     | Structured concurrency     | 5   | 5   | 5   | 3   | 0   | Context + WaitGroup + channels for goroutine management - already done | Already implemented (very high impact, moderate effort)                                  |
+| ✅     | Simplicity over complexity | 5   | 5   | 4   | 2   | 0   | Prefer stdlib over dependencies - keep codebase maintainable           | Already practised (high impact, low effort)                                              |
+| 🟠     | Static binaries            | 5   | 4   | 4   | 2   | 1   | FROM scratch Docker images - minimal attack surface and size           | • `Dockerfile:16` CGO=0 but uses alpine:3.19 base • Not truly static (needs ca-certs)    |
+| ✅     | pprof profiling            | 5   | 0   | 4   | 1   | 5   | Built-in CPU/memory profiling - needs full HTTP exposure               | • `/debug/pprof/*` endpoints available behind system-admin auth                          |
+| ✅     | Race detection             | 5   | 5   | 5   | 1   | 0   | go test -race in CI - catch concurrency bugs early                     | Already run in CI (very high impact, trivial effort)                                     |
 
 ---
 
@@ -393,19 +381,18 @@ https://blog.stackademic.com/top-10-go-libraries-every-developer-should-know-in-
 This table consolidates all recommendations with Priority 4 or 5 from the 10
 articles above.
 
-| Article                                    | Concept                   | Pri | Status | Summary                                                                  | Application Examples                                   |
-| ------------------------------------------ | ------------------------- | --- | ------ | ------------------------------------------------------------------------ | ------------------------------------------------------ |
-| 3                                          | Intelligent logging       | 4   | ⚪     | Define when to log at each level - currently ad-hoc and inconsistent     | • Document standards in CLAUDE.md                      |
+| Article                                    | Concept                   | Pri | Status | Summary                                                              | Application Examples                                   |
+| ------------------------------------------ | ------------------------- | --- | ------ | -------------------------------------------------------------------- | ------------------------------------------------------ |
+| 3                                          | Intelligent logging       | 4   | ⚪     | Define when to log at each level - currently ad-hoc and inconsistent | • Document standards in CLAUDE.md                      |
 | • 339 statements but inconsistent severity |
-| 4                                          | Go runtime profiling      | 4   | ⚪     | Profile GC pauses and scheduler latency before optimising                | • Add GODEBUG=gctrace=1 to staging                     |
+| 4                                          | Go runtime profiling      | 4   | ⚪     | Profile GC pauses and scheduler latency before optimising            | • Add GODEBUG=gctrace=1 to staging                     |
 | • Monitor GC pause patterns                |
-| 5                                          | Profile before optimising | 5   | ✅     | Enable pprof HTTP endpoints - optimise based on data not assumptions     | • `/debug/pprof/*` exposed via auth-protected handlers |
+| 5                                          | Profile before optimising | 5   | ✅     | Enable pprof HTTP endpoints - optimise based on data not assumptions | • `/debug/pprof/*` exposed via auth-protected handlers |
 | • Requires system admin credentials        |
-| 6                                          | Observability first       | 5   | ⚪     | Add OpenTelemetry traces + Prometheus metrics - comprehensive visibility | • Add OpenTelemetry traces                             |
+| 6                                          | Observability first       | 5   | ✅     | OTLP traces and Prometheus metrics live; refine dashboards over time | • `/metrics` endpoint exposed via Prom exporter        |
 
-• Prometheus metrics • Only logging + Sentry currently | | 6 | pprof profiling |
-5 | ✅ | Built-in CPU/memory profiling - needs full HTTP exposure | •
-`/debug/pprof/*` endpoints available behind system-admin auth | | 6 | Error
+| 6 | pprof profiling | 5 | ✅ | Built-in CPU/memory profiling - needs full HTTP
+exposure | • `/debug/pprof/*` endpoints available behind system-admin auth |
 wrapping (%w) | 4 | 🟠 | Wrap errors with fmt.Errorf(%w) - preserve error chain
 for debugging | • Audit all error returns • ~90 instances found via grep | | 7 |
 Timeout strategy | 5 | ✅ | Add idle_in_transaction_session_timeout - prevent

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -18,6 +19,7 @@ import (
 	"github.com/Harvey-AU/blue-banded-bee/internal/crawler"
 	"github.com/Harvey-AU/blue-banded-bee/internal/db"
 	"github.com/Harvey-AU/blue-banded-bee/internal/jobs"
+	"github.com/Harvey-AU/blue-banded-bee/internal/observability"
 	"github.com/getsentry/sentry-go"
 	"github.com/joho/godotenv"
 	"github.com/rs/zerolog"
@@ -32,6 +34,11 @@ type Config struct {
 	SentryDSN             string // Sentry DSN for error tracking
 	LogLevel              string // Log level (debug, info, warn, error)
 	FlightRecorderEnabled bool   // Flight recorder for performance debugging
+	ObservabilityEnabled  bool   // Toggle OpenTelemetry + Prometheus exporters
+	MetricsAddr           string // Address for Prometheus metrics endpoint (":9464" style)
+	OTLPEndpoint          string // OTLP HTTP endpoint for trace export
+	OTLPHeaders           string // Comma separated headers for OTLP exporter
+	OTLPInsecure          bool   // Disable TLS verification for OTLP exporter
 }
 
 func main() {
@@ -45,6 +52,11 @@ func main() {
 		SentryDSN:             os.Getenv("SENTRY_DSN"),
 		LogLevel:              getEnvWithDefault("LOG_LEVEL", "info"),
 		FlightRecorderEnabled: getEnvWithDefault("FLIGHT_RECORDER_ENABLED", "false") == "true",
+		ObservabilityEnabled:  getEnvWithDefault("OBSERVABILITY_ENABLED", "true") == "true",
+		MetricsAddr:           getEnvWithDefault("METRICS_ADDR", ":9464"),
+		OTLPEndpoint:          os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT"),
+		OTLPHeaders:           os.Getenv("OTEL_EXPORTER_OTLP_HEADERS"),
+		OTLPInsecure:          getEnvWithDefault("OTEL_EXPORTER_OTLP_INSECURE", "false") == "true",
 	}
 
 	// Start flight recorder if enabled
@@ -69,6 +81,8 @@ func main() {
 
 	setupLogging(config)
 
+	var err error
+
 	// Initialise Sentry for error tracking and performance monitoring
 	if config.SentryDSN != "" {
 		err := sentry.Init(sentry.ClientOptions{
@@ -92,6 +106,58 @@ func main() {
 		}
 	} else {
 		log.Warn().Msg("Sentry DSN not configured, error tracking disabled")
+	}
+
+	var (
+		obsProviders *observability.Providers
+		metricsSrv   *http.Server
+	)
+
+	if config.ObservabilityEnabled {
+		obsProviders, err = observability.Init(context.Background(), observability.Config{
+			Enabled:        true,
+			ServiceName:    "blue-banded-bee",
+			Environment:    config.Env,
+			OTLPEndpoint:   strings.TrimSpace(config.OTLPEndpoint),
+			OTLPHeaders:    parseOTLPHeaders(config.OTLPHeaders),
+			OTLPInsecure:   config.OTLPInsecure,
+			MetricsAddress: config.MetricsAddr,
+		})
+		if err != nil {
+			log.Warn().Err(err).Msg("Failed to initialise observability providers")
+		} else {
+			defer func() {
+				shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+				defer cancel()
+				if err := obsProviders.Shutdown(shutdownCtx); err != nil {
+					log.Warn().Err(err).Msg("Failed to flush telemetry providers cleanly")
+				}
+			}()
+
+			if obsProviders.MetricsHandler != nil && config.MetricsAddr != "" {
+				metricsSrv = &http.Server{
+					Addr:              config.MetricsAddr,
+					Handler:           obsProviders.MetricsHandler,
+					ReadHeaderTimeout: 5 * time.Second,
+				}
+
+				go func() {
+					log.Info().Str("addr", config.MetricsAddr).Msg("Metrics server listening")
+					if err := metricsSrv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+						sentry.CaptureException(err)
+						log.Error().Err(err).Msg("Metrics server failed")
+					}
+				}()
+
+				defer func() {
+					ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+					defer cancel()
+					if err := metricsSrv.Shutdown(ctx); err != nil && !errors.Is(err, http.ErrServerClosed) {
+						log.Warn().Err(err).Msg("Graceful shutdown of metrics server failed")
+					}
+				}()
+			}
+		}
 	}
 
 	// Connect to PostgreSQL
@@ -252,6 +318,7 @@ func main() {
 	handler = api.SecurityHeadersMiddleware(handler)
 	handler = api.CrossOriginProtectionMiddleware(handler)
 	handler = api.CORSMiddleware(handler)
+	handler = observability.WrapHandler(handler, obsProviders)
 
 	// Create a new HTTP server
 	server := &http.Server{
@@ -313,6 +380,36 @@ func getEnvWithDefault(key, defaultValue string) string {
 		return defaultValue
 	}
 	return value
+}
+
+func parseOTLPHeaders(raw string) map[string]string {
+	headers := make(map[string]string)
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return headers
+	}
+
+	for _, pair := range strings.Split(raw, ",") {
+		pair = strings.TrimSpace(pair)
+		if pair == "" {
+			continue
+		}
+
+		parts := strings.SplitN(pair, "=", 2)
+		if len(parts) != 2 {
+			continue
+		}
+
+		key := strings.TrimSpace(parts[0])
+		value := strings.TrimSpace(parts[1])
+		if key == "" {
+			continue
+		}
+
+		headers[key] = value
+	}
+
+	return headers
 }
 
 // setupLogging configures the logging system

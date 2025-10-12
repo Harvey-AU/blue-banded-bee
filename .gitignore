@@ -10,9 +10,9 @@
 /build/
 /dist/
 *.exe
-app
-main
-test_jobs
+/app
+/main
+/test_jobs
 
 # IDE
 .idea/
@@ -57,4 +57,3 @@ node_modules/
 # Supabase
 supabase/.temp/
 supabase/.branches/
-

@@ -908,5 +908,27 @@ Authorization: Bearer <token>
 - Error context preservation
 - Performance metrics
 
+### Telemetry Pipeline
+
+- **Tracing**: OpenTelemetry spans are emitted for every HTTP request and worker
+  task. Configure the OTLP HTTP exporter via:
+  - `OBSERVABILITY_ENABLED=true` (default) to enable instrumentation
+  - `OTEL_EXPORTER_OTLP_ENDPOINT=https://your-collector.example.com`
+  - Optional headers with
+    `OTEL_EXPORTER_OTLP_HEADERS=x-api-key=secret,tenant=bee`
+  - `OTEL_EXPORTER_OTLP_INSECURE=true` when targeting a non-TLS endpoint
+    (development only)
+- **Metrics**: Prometheus-compatible metrics are exposed on `METRICS_ADDR`
+  (default `:9464`) under `/metrics`. Example scrape configuration:
+
+```yaml
+- job_name: blue-banded-bee
+  static_configs:
+    - targets: ["blue-banded-bee-prod.internal:9464"]
+```
+
+Worker task counters (`bee_worker_task_total`) and histograms
+(`bee_worker_task_duration_ms`) augment the standard `otelhttp` request metrics.
+
 This API design provides a solid foundation for all current and future
 interfaces while maintaining consistency, security, and scalability.

@@ -16,10 +16,13 @@ import (
 
 	"github.com/Harvey-AU/blue-banded-bee/internal/crawler"
 	"github.com/Harvey-AU/blue-banded-bee/internal/db"
+	"github.com/Harvey-AU/blue-banded-bee/internal/observability"
 	"github.com/Harvey-AU/blue-banded-bee/internal/util"
 	"github.com/getsentry/sentry-go"
 	"github.com/jackc/pgx/v5"
 	"github.com/rs/zerolog/log"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 )
 
 const taskProcessingTimeout = 2 * time.Minute
@@ -1459,6 +1462,26 @@ func (wp *WorkerPool) handleTaskSuccess(ctx context.Context, task *db.Task, resu
 }
 
 func (wp *WorkerPool) processTask(ctx context.Context, task *Task) (*crawler.CrawlResult, error) {
+	start := time.Now()
+	status := "success"
+
+	ctx, span := observability.StartWorkerTaskSpan(ctx, observability.WorkerTaskSpanInfo{
+		JobID:     task.JobID,
+		TaskID:    task.ID,
+		Domain:    task.DomainName,
+		Path:      task.Path,
+		FindLinks: task.FindLinks,
+	})
+	defer span.End()
+
+	defer func() {
+		observability.RecordWorkerTask(ctx, observability.WorkerTaskMetrics{
+			JobID:    task.JobID,
+			Status:   status,
+			Duration: time.Since(start),
+		})
+	}()
+
 	// Construct a proper URL for processing
 	urlStr := constructTaskURL(task.Path, task.DomainName)
 
@@ -1469,9 +1492,22 @@ func (wp *WorkerPool) processTask(ctx context.Context, task *Task) (*crawler.Cra
 
 	result, err := wp.crawler.WarmURL(ctx, urlStr, task.FindLinks)
 	if err != nil {
+		status = "error"
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		log.Error().Err(err).Str("task_id", task.ID).Msg("Crawler failed")
 		return result, fmt.Errorf("crawler error: %w", err)
 	}
+
+	if result != nil {
+		span.SetAttributes(
+			attribute.Int("http.status_code", result.StatusCode),
+			attribute.Int("task.links_found", len(result.Links)),
+			attribute.String("task.content_type", result.ContentType),
+		)
+	}
+	span.SetStatus(codes.Ok, "completed")
+
 	log.Info().
 		Int("status_code", result.StatusCode).
 		Str("task_id", task.ID).
