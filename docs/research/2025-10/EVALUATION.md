@@ -21,16 +21,16 @@ Banded Bee's architecture, current implementation, and roadmap.
 
 Sorted by Impact/Effort ratio (descending - highest value first).
 
-| Article | Status | Concept                   | Rel | Cur | Imp | Eff | Pri | Summary                                                                  | Application Examples                                                                                |
-| ------- | ------ | ------------------------- | --- | --- | --- | --- | --- | ------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------- |
-| 5       | ✅     | Profile before optimising | 5   | 1   | 5   | 1   | 5   | Enable pprof HTTP endpoints - optimise based on data not assumptions     | • `/debug/pprof/*` exported via auth-protected handlers<br>• Requires system admin credentials      |
-| 6       | ✅     | pprof profiling           | 5   | 0   | 4   | 1   | 5   | Built-in CPU/memory profiling - needs full HTTP exposure                 | • `/debug/pprof/*` endpoints available behind system-admin auth                                     |
-| 9       | ⚪     | pg_stat_statements        | 5   | 0   | 5   | 1   | 5   | Enable PostgreSQL extension - identify slow queries with production data | • Enable extension in Supabase<br>• Query top 20 by total_exec_time<br>• Review monthly             |
-| 8       | ⚪     | index_advisor extension   | 5   | 0   | 5   | 1   | 5   | Test virtual indexes before creating                                     | • Enable in Supabase dashboard<br>• Test slow queries<br>• Create indexes with proof                |
-| 8       | ⚪     | Query Performance Advisor | 5   | 1   | 4   | 1   | 5   | Built-in Supabase dashboard tool - automated index suggestions           | • Check Supabase dashboard weekly<br>• Review suggestions<br>• Apply high-impact indexes            |
-| 7       | 🟠     | Timeout strategy          | 5   | 2   | 4   | 2   | 5   | Add idle_in_transaction_session_timeout - prevent zombie transactions    | • `db.go:115` has statement_timeout<br>• Missing idle_in_transaction_session_timeout (critical gap) |
-| 7       | ⚪     | Queue limits              | 5   | 1   | 4   | 3   | 5   | Return 429 with Retry-After when pool exhausted - graceful degradation   | • `main.go:227` HTTP limiter exists<br>• Not DB pool-aware<br>• Need pool exhaustion detection      |
-| 6       | ⚪     | Observability first       | 5   | 1   | 5   | 3   | 5   | Add OpenTelemetry traces + Prometheus metrics - comprehensive visibility | • Add OpenTelemetry traces<br>• Prometheus metrics<br>• Only logging + Sentry currently             |
+| Article | Status | Concept                   | Rel | Cur | Imp | Eff | Pri | Summary                                                                  | Application Examples                                                                           |
+| ------- | ------ | ------------------------- | --- | --- | --- | --- | --- | ------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------- |
+| 5       | ✅     | Profile before optimising | 5   | 1   | 5   | 1   | 5   | Enable pprof HTTP endpoints - optimise based on data not assumptions     | • `/debug/pprof/*` exported via auth-protected handlers<br>• Requires system admin credentials |
+| 6       | ✅     | pprof profiling           | 5   | 0   | 4   | 1   | 5   | Built-in CPU/memory profiling - needs full HTTP exposure                 | • `/debug/pprof/*` endpoints available behind system-admin auth                                |
+| 9       | ⚪     | pg_stat_statements        | 5   | 0   | 5   | 1   | 5   | Enable PostgreSQL extension - identify slow queries with production data | • Enable extension in Supabase<br>• Query top 20 by total_exec_time<br>• Review monthly        |
+| 8       | ⚪     | index_advisor extension   | 5   | 0   | 5   | 1   | 5   | Test virtual indexes before creating                                     | • Enable in Supabase dashboard<br>• Test slow queries<br>• Create indexes with proof           |
+| 8       | ⚪     | Query Performance Advisor | 5   | 1   | 4   | 1   | 5   | Built-in Supabase dashboard tool - automated index suggestions           | • Check Supabase dashboard weekly<br>• Review suggestions<br>• Apply high-impact indexes       |
+| 7       | ✅     | Timeout strategy          | 5   | 3   | 4   | 2   | 5   | Add idle_in_transaction_session_timeout - prevent zombie transactions    | • Added 30s idle timeout in DSN alongside statement_timeout<br>• Document value in DATABASE.md |
+| 7       | ⚪     | Queue limits              | 5   | 1   | 4   | 3   | 5   | Return 429 with Retry-After when pool exhausted - graceful degradation   | • `main.go:227` HTTP limiter exists<br>• Not DB pool-aware<br>• Need pool exhaustion detection |
+| 6       | ⚪     | Observability first       | 5   | 1   | 5   | 3   | 5   | Add OpenTelemetry traces + Prometheus metrics - comprehensive visibility | • Add OpenTelemetry traces<br>• Prometheus metrics<br>• Only logging + Sentry currently        |
 
 **Total Priority 5 Items**: 8
 

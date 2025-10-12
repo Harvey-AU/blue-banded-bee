@@ -114,6 +114,19 @@ func New(config *Config) (*DB, error) {
 
 	// Add statement timeout if not present
 	if !strings.Contains(connStr, "statement_timeout") {
+
+		// Add idle-in-transaction timeout if not present
+		if !strings.Contains(connStr, "idle_in_transaction_session_timeout") {
+			if strings.HasPrefix(connStr, "postgres://") || strings.HasPrefix(connStr, "postgresql://") {
+				separator := "?"
+				if strings.Contains(connStr, "?") {
+					separator = "&"
+				}
+				connStr += separator + "idle_in_transaction_session_timeout=30000" // 30 seconds
+			} else {
+				connStr += " idle_in_transaction_session_timeout=30000" // 30 seconds
+			}
+		}
 		// Check if we're using URL format or key=value format
 		if strings.HasPrefix(connStr, "postgres://") || strings.HasPrefix(connStr, "postgresql://") {
 			// URL format - use query parameters
@@ -197,6 +210,14 @@ func InitFromEnv() (*DB, error) {
 				separator = "&"
 			}
 			url += separator + "statement_timeout=60000" // 60 seconds
+		}
+
+		if !strings.Contains(url, "idle_in_transaction_session_timeout") {
+			separator := "?"
+			if strings.Contains(url, "?") {
+				separator = "&"
+			}
+			url += separator + "idle_in_transaction_session_timeout=30000" // 30 seconds
 		}
 
 		// Add minimal prepared statement parameter for pooler connections
