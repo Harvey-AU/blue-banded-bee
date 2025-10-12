@@ -21,28 +21,16 @@ Banded Bee's architecture, current implementation, and roadmap.
 
 Sorted by Impact/Effort ratio (descending - highest value first).
 
-| Article                             | Status | Concept                   | Rel | Cur | Imp | Eff | Pri | Summary                                                                  | Application Examples                                            |
-| ----------------------------------- | ------ | ------------------------- | --- | --- | --- | --- | --- | ------------------------------------------------------------------------ | --------------------------------------------------------------- |
-| 5                                   | ✅     | Profile before optimising | 5   | 1   | 5   | 1   | 5   | Enable pprof HTTP endpoints - optimise based on data not assumptions     | • `/debug/pprof/*` exported via auth-protected handlers         |
-| • Requires system admin credentials |
-| 6                                   | ✅     | pprof profiling           | 5   | 0   | 4   | 1   | 5   | Built-in CPU/memory profiling - needs full HTTP exposure                 | • `/debug/pprof/*` endpoints available behind system-admin auth |
-| 9                                   | ✅     | pg_stat_statements        | 5   | 5   | 5   | 1   | 5   | Enable PostgreSQL extension - identify slow queries with production data | • Extension enabled via migration                               |
-
-• Query view: observability.pg_stat_statements_top_total_time • Review monthly |
-| 8 | ⚪ | index_advisor extension | 5 | 0 | 5 | 1 | 5 | Test virtual indexes
-before creating | • Enable in Supabase dashboard • Test slow queries • Create
-indexes with proof | | 8 | ⚪ | Query Performance Advisor | 5 | 1 | 4 | 1 | 5 |
-Built-in Supabase dashboard tool - automated index suggestions | • Check
-Supabase dashboard weekly • Review suggestions • Apply high-impact indexes | | 7
-| ✅ | Timeout strategy | 5 | 3 | 4 | 2 | 5 | Add
-idle_in_transaction_session_timeout - prevent zombie transactions | • Added 30s
-idle timeout in DSN alongside statement_timeout • Document value in DATABASE.md
-| | 7 | ⚪ | Queue limits | 5 | 1 | 4 | 3 | 5 | Return 429 with Retry-After when
-pool exhausted - graceful degradation | • `main.go:227` HTTP limiter exists •
-Not DB pool-aware • Need pool exhaustion detection | | 6 | ⚪ | Observability
-first | 5 | 1 | 5 | 3 | 5 | Add OpenTelemetry traces + Prometheus metrics -
-comprehensive visibility | • Add OpenTelemetry traces • Prometheus metrics •
-Only logging + Sentry currently |
+| Article | Status | Concept                   | Rel | Cur | Imp | Eff | Pri | Summary                                                                  | Application Examples                                                                                                       |
+| ------- | ------ | ------------------------- | --- | --- | --- | --- | --- | ------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------- |
+| 5       | ✅     | Profile before optimising | 5   | 1   | 5   | 1   | 5   | Enable pprof HTTP endpoints - optimise based on data not assumptions     | • `/debug/pprof/*` exported via auth-protected handlers<br>• Requires system admin credentials                             |
+| 6       | ✅     | pprof profiling           | 5   | 0   | 4   | 1   | 5   | Built-in CPU/memory profiling - needs full HTTP exposure                 | • `/debug/pprof/*` endpoints available behind system-admin auth                                                            |
+| 9       | ✅     | pg_stat_statements        | 5   | 5   | 5   | 1   | 5   | Enable PostgreSQL extension - identify slow queries with production data | • Extension enabled via migration<br>• View available at `observability.pg_stat_statements_top_total_time`; review monthly |
+| 8       | ⚪     | index_advisor extension   | 5   | 0   | 5   | 1   | 5   | Test virtual indexes before creating                                     | • Enable extension via Supabase migration<br>• Validate slow queries before adding real indexes                            |
+| 8       | ⚪     | Query Performance Advisor | 5   | 1   | 4   | 1   | 5   | Built-in Supabase dashboard tool - automated index suggestions           | • Check Supabase dashboard weekly<br>• Track action items in docs                                                          |
+| 7       | ✅     | Timeout strategy          | 5   | 3   | 4   | 2   | 5   | Add `idle_in_transaction_session_timeout` - prevent zombie transactions  | • Added 30s timeout via DSN parameters<br>• Documented in `docs/architecture/DATABASE.md`                                  |
+| 7       | ✅     | Queue limits              | 5   | 5   | 4   | 3   | 5   | Return 429 with Retry-After when pool exhausted - graceful degradation   | • `internal/db/queue.go` rejects when pool usage ≥ threshold (ErrPoolSaturated)<br>• `internal/api/errors.go` maps to 429  |
+| 6       | ⚪     | Observability first       | 5   | 1   | 5   | 3   | 5   | Add OpenTelemetry traces + Prometheus metrics - comprehensive visibility | • Add OpenTelemetry traces<br>• Publish Prometheus metrics                                                                 |
 
 **Total Priority 5 Items**: 8
 
@@ -280,31 +268,21 @@ https://medium.com/@Nexumo_/7-postgres-pool-fixes-for-sudden-traffic-spikes-f54d
 
 - **Timeout strategy**: Add idle_in_transaction_session_timeout - prevent zombie
   transactions [4 impact, 2 effort]
-- **Queue limits & backpressure**: Return 429 with Retry-After when pool full -
-  graceful degradation [4 impact, 2 effort]
+- **Queue limits & backpressure**: Completed - DB pool guard now returns 429
+  with Retry-After when saturated [4 impact, 2 effort]
 
 ### Recommendations
 
-| Status                                                       | Concept          | Rel | Cur | Imp | Eff | Pri | Summary                                                                | Application Examples                |
-| ------------------------------------------------------------ | ---------------- | --- | --- | --- | --- | --- | ---------------------------------------------------------------------- | ----------------------------------- |
-| 🟠                                                           | Timeout strategy | 5   | 2   | 4   | 2   | 5   | Add idle_in_transaction_session_timeout - prevent zombie transactions  | • `db.go:115` has statement_timeout |
-| • Missing idle_in_transaction_session_timeout (critical gap) |
-| ⚪                                                           | Queue limits     | 5   | 1   | 4   | 3   | 5   | Return 429 with Retry-After when pool exhausted - graceful degradation | • `main.go:227` HTTP limiter exists |
-
-• Not DB pool-aware • Need pool exhaustion detection | | 🟠 | Pool sizing
-formula | 5 | 3 | 3 | 1 | 3 | Document 2×vCPU or ¼ max_connections formula -
-tribal knowledge now | • `db.go:103,155-156` in code comments only • Not in
-docs/ folder | | 🟠 | Small transactions | 5 | 3 | 3 | 2 | 3 | Minimise
-transaction scope - release locks faster | • Batch flushing at `worker.go:1008`
-• Some long txns remain • Needs profiling | | | Transaction pooling | 4 | 0 | 4
-| 4 | 2 | PgBouncer transaction mode - connection multiplexing | Fly.io infra
-change + Supabase config (Stage 5+) | | 🟠 | Prepared statements | 3 | 3 | 2 | 3
-| 1 | Balance caching vs statement churn - profile first | Monitor with pprof
-(no action needed now) | | ✅ | App-side concurrency cap | 5 | 5 | 4 | 2 | 0 |
-Hard limit on concurrent workers - 25 max connections | Already implemented
-(high impact, low effort) | | | Read/write pool split | 2 | 0 | 3 | 4 | 0 |
-Separate read/write connection pools - future scaling | Stage 6 consideration
-(needs Supabase Pro) |
+| Status | Concept               | Rel | Cur | Imp | Eff | Pri | Summary                                                                   | Application Examples                                                                                                                              |
+| ------ | --------------------- | --- | --- | --- | --- | --- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ✅     | Timeout strategy      | 5   | 3   | 4   | 2   | 5   | Add `idle_in_transaction_session_timeout` - prevent zombie transactions   | • `internal/db/db.go` appends `idle_in_transaction_session_timeout=30000` when absent<br>• Documented in `docs/architecture/DATABASE.md`          |
+| ✅     | Queue limits          | 5   | 5   | 4   | 3   | 5   | Return 429 with Retry-After when pool exhausted - graceful degradation    | • `internal/db/queue.go` rejects once pool usage crosses threshold (ErrPoolSaturated)<br>• `internal/api/errors.go` translates to 429 Retry-After |
+| 🟠     | Pool sizing formula   | 5   | 3   | 3   | 1   | 3   | Document 2×vCPU or ¼ max_connections formula - currently tribal knowledge | • Connection limits noted in `internal/db/db.go` comments<br>• Needs formal docs entry                                                            |
+| 🟠     | Small transactions    | 5   | 3   | 3   | 2   | 3   | Minimise transaction scope - release locks faster                         | • Batch flush at `internal/jobs/worker.go:1008`<br>• Further profiling required                                                                   |
+| ⚪     | Transaction pooling   | 4   | 0   | 4   | 4   | 2   | PgBouncer transaction mode - connection multiplexing (future)             | • Requires Fly.io + Supabase configuration (Stage 5+)                                                                                             |
+| 🟠     | Prepared statements   | 3   | 3   | 2   | 3   | 1   | Balance caching vs statement churn - profile first                        | • Monitor with pprof; no immediate action                                                                                                         |
+| ✅     | App-side concurrency  | 5   | 5   | 4   | 2   | 0   | Hard limit on concurrent workers - cap aligns with 25 max connections     | • Worker pool concurrency capped to pool size                                                                                                     |
+| ⚪     | Read/write pool split | 2   | 0   | 3   | 4   | 0   | Separate read/write connection pools - future scaling                     | • Requires Supabase Pro; defer to later stage                                                                                                     |
 
 ---
 
@@ -442,25 +420,26 @@ articles above.
 `/debug/pprof/*` endpoints available behind system-admin auth | | 6 | Error
 wrapping (%w) | 4 | 🟠 | Wrap errors with fmt.Errorf(%w) - preserve error chain
 for debugging | • Audit all error returns • ~90 instances found via grep | | 7 |
-Timeout strategy | 5 | 🟠 | Add idle_in_transaction_session_timeout - prevent
-zombie transactions | • `db.go:115` has statement_timeout • Missing
-idle_in_transaction_session_timeout (critical gap) | | 7 | Queue limits | 5 | ⚪
-| Return 429 with Retry-After when pool exhausted - graceful degradation | •
-`main.go:227` HTTP limiter exists • Not DB pool-aware • Need pool exhaustion
-detection | | 8 | index_advisor extension | 5 | ⚪ | Test virtual indexes before
-creating | • Enable in Supabase dashboard • Test slow queries • Create indexes
-with proof | | 8 | Query Performance Advisor | 5 | ⚪ | Built-in Supabase
-dashboard tool - automated index suggestions | • Check Supabase dashboard weekly
-• Review suggestions • Apply high-impact indexes | | 8 | Cache hit rate | 4 | ⚪
-| Target 99% PostgreSQL cache hits - fundamental health metric | • Run
-diagnostic query monthly • Monitor in Supabase Reports • Adjust work_mem | | 8 |
-Index usage analysis | 4 | ⚪ | Find and drop unused indexes - reduce write
-overhead | • `supabase inspect db unused-indexes` • Drop unused indexes •
-Profile with EXPLAIN | | 9 | pg_stat_statements | 5 | ✅ | Enable PostgreSQL
-extension - identify slow queries with production data | • Extension enabled via
-migration • Query view: observability.pg_stat_statements_top_total_time • Review
-monthly | | 9 | Composite indexes | 4 | 🟠 | Index query patterns not columns -
-some exist, more needed | • `tasks(job_id, status, claimed_at)` •
+Timeout strategy | 5 | ✅ | Add idle_in_transaction_session_timeout - prevent
+zombie transactions | • `internal/db/db.go` appends
+`idle_in_transaction_session_timeout=30000` when absent | | 7 | Queue limits | 5
+| ✅ | Return 429 with Retry-After when pool exhausted - graceful degradation |
+• `internal/db/queue.go` triggers `ErrPoolSaturated` and
+`internal/api/errors.go` issues 429 Retry-After responses | | 8 | index_advisor
+extension | 5 | ⚪ | Test virtual indexes before creating | • Enable in Supabase
+dashboard • Test slow queries • Create indexes with proof | | 8 | Query
+Performance Advisor | 5 | ⚪ | Built-in Supabase dashboard tool - automated
+index suggestions | • Check Supabase dashboard weekly • Review suggestions •
+Apply high-impact indexes | | 8 | Cache hit rate | 4 | ⚪ | Target 99%
+PostgreSQL cache hits - fundamental health metric | • Run diagnostic query
+monthly • Monitor in Supabase Reports • Adjust work_mem | | 8 | Index usage
+analysis | 4 | ⚪ | Find and drop unused indexes - reduce write overhead | •
+`supabase inspect db unused-indexes` • Drop unused indexes • Profile with
+EXPLAIN | | 9 | pg_stat_statements | 5 | ✅ | Enable PostgreSQL extension -
+identify slow queries with production data | • Extension enabled via migration •
+Query view: observability.pg_stat_statements_top_total_time • Review monthly | |
+9 | Composite indexes | 4 | 🟠 | Index query patterns not columns - some exist,
+more needed | • `tasks(job_id, status, claimed_at)` •
 `jobs(user_id, status, created_at)` • Test with index_advisor | | 9 | Timeout
 discipline | 4 | 🟠 | Add statement_timeout and idle-in-transaction timeouts -
 prevent runaway queries | • Add idle_in_transaction_session_timeout • Document
