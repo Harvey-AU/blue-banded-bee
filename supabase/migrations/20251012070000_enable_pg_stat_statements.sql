@@ -17,9 +17,7 @@ select
     shared_blks_read,
     local_blks_hit,
     local_blks_read,
-    temp_blks_written,
-    blk_read_time,
-    blk_write_time
+    temp_blks_written
 from pg_stat_statements
 where query is not null
 order by total_exec_time desc
