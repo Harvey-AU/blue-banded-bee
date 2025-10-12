@@ -263,18 +263,19 @@ https://medium.com/@kaushalsinh73/8-supabase-postgres-habits-for-startup-speed-b
 
 ### Recommendations
 
-| Status | Concept                | Rel | Cur | Imp | Eff | Pri | Summary                        | Application Examples                                                                                        |
-| ------ | ---------------------- | --- | --- | --- | --- | --- | ------------------------------ | ----------------------------------------------------------------------------------------------------------- |
-|        | pg_stat_statements     | 5   | 0   | 5   | 1   | 5   | Identify slow queries          | • Enable extension in Supabase<br>• Query top 20 by total_exec_time<br>• Review monthly                     |
-| 🟠     | Composite indexes      | 5   | 2   | 5   | 2   | 4   | Match query patterns           | • `tasks(job_id, status, claimed_at)`<br>• `jobs(user_id, status, created_at)`<br>• Test with index_advisor |
-| 🟠     | Timeout discipline     | 5   | 2   | 4   | 2   | 4   | statement_timeout, idle-in-tx  | • Add idle_in_transaction_session_timeout<br>• Document in DATABASE.md<br>• Already have statement_timeout  |
-| ✅     | Partial indexes        | 4   | 4   | 4   | 2   | 3   | WHERE clauses for sparse data  | • `initial_schema.sql:140` idx_tasks_pending_claim_order EXISTS<br>• `WHERE status = 'pending'` implemented |
-|        | Covering indexes       | 4   | 0   | 3   | 2   | 3   | INCLUDE to avoid heap lookups  | • Add INCLUDE (url) to task indexes<br>• Avoid second lookup for hot queries<br>• Profile before adding     |
-|        | Views for joined APIs  | 3   | 0   | 3   | 3   | 2   | Pre-aggregate for UI           | • v_job_summary (tasks count, progress %)<br>• Dashboard endpoints<br>• Stage 3+ feature                    |
-|        | RPC functions          | 3   | 0   | 2   | 3   | 1   | One round trip for complex ops | • Consider for job creation + URL discovery<br>• Reduce round trips<br>• Test vs current approach           |
-| ✅     | RLS as product feature | 5   | 5   | 5   | 3   | 0   | Design policies from day 1     | Already implemented (very high impact, moderate effort)                                                     |
-|        | JSONB with discipline  | 2   | 1   | 2   | 3   | 0   | Generated columns + GIN        | Minimal JSONB usage - not needed yet                                                                        |
-|        | pg_cron + outbox       | 3   | 0   | 3   | 4   | 0   | Reliable background jobs       | Stage 4+ - current worker pool handles async work                                                           |
+| Status                                                                  | Concept                | Rel | Cur | Imp | Eff | Pri | Summary                        | Application Examples                                                                                        |
+| ----------------------------------------------------------------------- | ---------------------- | --- | --- | --- | --- | --- | ------------------------------ | ----------------------------------------------------------------------------------------------------------- |
+|                                                                         | pg_stat_statements     | 5   | 0   | 5   | 1   | 5   | Identify slow queries          | • Enable extension in Supabase<br>• Query top 20 by total_exec_time<br>• Review monthly                     |
+| 🟠                                                                      | Composite indexes      | 5   | 2   | 5   | 2   | 4   | Match query patterns           | • `tasks(job_id, status, claimed_at)`<br>• `jobs(user_id, status, created_at)`<br>• Test with index_advisor |
+| 🟠                                                                      | Timeout discipline     | 5   | 2   | 4   | 2   | 4   | statement_timeout, idle-in-tx  | • Add idle_in_transaction_session_timeout<br>• Document in DATABASE.md<br>• Already have statement_timeout  |
+| ✅                                                                      | Partial indexes        | 4   | 4   | 4   | 2   | 3   | WHERE clauses for sparse data  | • `initial_schema.sql:140` idx_tasks_pending_claim_order EXISTS<br>• `WHERE status = 'pending'` implemented |
+| • Page creation now uses DO NOTHING + SELECT to avoid redundant updates |
+|                                                                         | Covering indexes       | 4   | 0   | 3   | 2   | 3   | INCLUDE to avoid heap lookups  | • Add INCLUDE (url) to task indexes<br>• Avoid second lookup for hot queries<br>• Profile before adding     |
+|                                                                         | Views for joined APIs  | 3   | 0   | 3   | 3   | 2   | Pre-aggregate for UI           | • v_job_summary (tasks count, progress %)<br>• Dashboard endpoints<br>• Stage 3+ feature                    |
+|                                                                         | RPC functions          | 3   | 0   | 2   | 3   | 1   | One round trip for complex ops | • Consider for job creation + URL discovery<br>• Reduce round trips<br>• Test vs current approach           |
+| ✅                                                                      | RLS as product feature | 5   | 5   | 5   | 3   | 0   | Design policies from day 1     | Already implemented (very high impact, moderate effort)                                                     |
+|                                                                         | JSONB with discipline  | 2   | 1   | 2   | 3   | 0   | Generated columns + GIN        | Minimal JSONB usage - not needed yet                                                                        |
+|                                                                         | pg_cron + outbox       | 3   | 0   | 3   | 4   | 0   | Reliable background jobs       | Stage 4+ - current worker pool handles async work                                                           |
 
 ---
 
