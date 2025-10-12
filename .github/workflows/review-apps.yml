@@ -5,6 +5,15 @@ on:
     branches:
       - main
     types: [opened, synchronize, reopened, closed]
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - "LICENSE"
+      - ".gitignore"
+      - "CHANGELOG.md"
+      - "SECURITY.md"
+      - "Roadmap.md"
+      - "QandA.md"
 
 jobs:
   deploy-review:
