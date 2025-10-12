@@ -23,6 +23,7 @@ import (
 )
 
 const taskProcessingTimeout = 2 * time.Minute
+const poolSaturationBackoff = 2 * time.Second
 
 // JobPerformance tracks performance metrics for a specific job
 type JobPerformance struct {
@@ -556,7 +557,18 @@ func (wp *WorkerPool) EnqueueURLs(ctx context.Context, jobID string, pages []db.
 		return err
 	}
 
-	return wp.jobManager.EnqueueJobURLs(ctx, jobID, pages, sourceType, sourceURL)
+	if err := wp.jobManager.EnqueueJobURLs(ctx, jobID, pages, sourceType, sourceURL); err != nil {
+		if errors.Is(err, db.ErrPoolSaturated) {
+			log.Warn().
+				Str("job_id", jobID).
+				Str("source_type", sourceType).
+				Msg("Database pool saturated while enqueueing URLs; backing off")
+			time.Sleep(poolSaturationBackoff)
+		}
+		return err
+	}
+
+	return nil
 }
 
 // StartTaskMonitor starts a background process that monitors for pending tasks

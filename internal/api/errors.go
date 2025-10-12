@@ -2,8 +2,13 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
+	"math"
 	"net/http"
+	"strconv"
+	"time"
 
+	"github.com/Harvey-AU/blue-banded-bee/internal/db"
 	"github.com/rs/zerolog/log"
 )
 
@@ -131,4 +136,26 @@ func DatabaseError(w http.ResponseWriter, r *http.Request, err error) {
 // ServiceUnavailable responds with a 503 Service Unavailable error
 func ServiceUnavailable(w http.ResponseWriter, r *http.Request, message string) {
 	WriteErrorMessage(w, r, message, http.StatusServiceUnavailable, ErrCodeServiceUnavailable)
+}
+
+// TooManyRequests responds with 429 and Retry-After header
+func TooManyRequests(w http.ResponseWriter, r *http.Request, message string, retryAfter time.Duration) {
+	seconds := int(math.Ceil(retryAfter.Seconds()))
+	if seconds <= 0 {
+		seconds = 3
+	}
+	w.Header().Set("Retry-After", strconv.Itoa(seconds))
+	WriteErrorMessage(w, r, message, http.StatusTooManyRequests, ErrCodeRateLimit)
+}
+
+// HandlePoolSaturation writes a 429 when the error indicates pool exhaustion.
+func HandlePoolSaturation(w http.ResponseWriter, r *http.Request, err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, db.ErrPoolSaturated) {
+		TooManyRequests(w, r, "Database is busy, please retry shortly", 3*time.Second)
+		return true
+	}
+	return false
 }

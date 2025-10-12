@@ -263,6 +263,9 @@ func (h *Handler) DashboardStats(w http.ResponseWriter, r *http.Request) {
 	// Get full user object from database (auto-create if needed)
 	user, err := h.DB.GetOrCreateUser(userClaims.UserID, userClaims.Email, nil)
 	if err != nil {
+		if HandlePoolSaturation(w, r, err) {
+			return
+		}
 		log.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get or create user")
 		InternalError(w, r, err)
 		return
@@ -284,6 +287,9 @@ func (h *Handler) DashboardStats(w http.ResponseWriter, r *http.Request) {
 	}
 	stats, err := h.DB.GetJobStats(orgID, startDate, endDate)
 	if err != nil {
+		if HandlePoolSaturation(w, r, err) {
+			return
+		}
 		DatabaseError(w, r, err)
 		return
 	}
