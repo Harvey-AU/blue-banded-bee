@@ -53,6 +53,53 @@ client.SetConnMaxLifetime(5 * time.Minute)  // Connection lifetime
 client.SetConnMaxIdleTime(2 * time.Minute)  // Idle connection timeout
 ```
 
+### Connection Pool Sizing Strategy
+
+Blue Banded Bee uses conservative connection pool limits tuned for Supabase's
+shared infrastructure:
+
+**Current Configuration:**
+
+- **MaxOpenConns: 25** - Stay safely under Supabase's default 30-connection pool
+  limit
+- **MaxIdleConns: 10** - Conservative to prevent pool exhaustion whilst
+  maintaining ready connections
+
+**Sizing Rationale:**
+
+1. **Supabase Constraints**: Free tier provides ~30 max connections; we target
+   80-85% utilisation to leave headroom for monitoring tools, migrations, and
+   background processes.
+
+2. **Worker Pool Alignment**: The worker pool's concurrency is capped to match
+   available connections, ensuring database access never becomes a bottleneck.
+
+3. **Environment-Based Tuning** (see `internal/db/db.go:192-197`):
+   - **Production**: 25 max open, 10 idle
+   - **Development**: 15 max open, 5 idle (reduced for local testing)
+
+**General Formula** (for future scaling):
+
+- Target `MaxOpenConns ≤ 80% × database_max_connections`
+- For shared hosting: consult provider limits (Supabase Free = 30, Pro = 200+)
+- For dedicated instances: common heuristic is `2× vCPU` or `¼ max_connections`,
+  whichever is lower
+- Set `MaxIdleConns` to 30-40% of `MaxOpenConns` to balance readiness vs
+  resource usage
+
+**Monitoring Connection Pool Health:**
+
+```sql
+-- View active connections
+SELECT count(*) FROM pg_stat_activity WHERE datname = current_database();
+
+-- View connection distribution by state
+SELECT state, count(*)
+FROM pg_stat_activity
+WHERE datname = current_database()
+GROUP BY state;
+```
+
 ### Connection Timeout Configuration
 
 Blue Banded Bee configures PostgreSQL session timeouts to prevent resource leaks

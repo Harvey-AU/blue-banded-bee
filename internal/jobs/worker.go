@@ -136,12 +136,16 @@ func NewWorkerPool(db *sql.DB, dbQueue DbQueueInterface, crawler CrawlerInterfac
 		wp.processBatches(context.Background())
 	}()
 
-	// Start the notification listener
-	wp.wg.Add(1)
-	go func() {
-		defer wp.wg.Done()
-		wp.listenForNotifications(context.Background())
-	}()
+	// Start the notification listener when we have connection details available.
+	if hasNotificationConfig(dbConfig) {
+		wp.wg.Add(1)
+		go func() {
+			defer wp.wg.Done()
+			wp.listenForNotifications(context.Background())
+		}()
+	} else {
+		log.Debug().Msg("Skipping LISTEN/NOTIFY setup: database config lacks connection details")
+	}
 
 	return wp
 }
@@ -1729,6 +1733,16 @@ func (wp *WorkerPool) evaluateJobPerformance(jobID string, responseTime int64) {
 		// Note: For scaling down (boostDiff < 0), we let workers naturally exit
 		// when they check shouldExit in the worker loop
 	}
+}
+
+func hasNotificationConfig(cfg *db.Config) bool {
+	if cfg == nil {
+		return false
+	}
+	if cfg.DatabaseURL != "" {
+		return true
+	}
+	return cfg.Host != "" && cfg.Port != "" && cfg.Database != "" && cfg.User != ""
 }
 
 // listenForNotifications sets up PostgreSQL LISTEN/NOTIFY

@@ -624,7 +624,7 @@ func (jm *JobManager) GetJob(ctx context.Context, jobID string) (*Job, error) {
 	})
 
 	if err == sql.ErrNoRows {
-		return nil, fmt.Errorf("job not found: %s", jobID)
+		return nil, fmt.Errorf("job %s not found: %w", jobID, err)
 	} else if err != nil {
 		span.SetTag("error", "true")
 		span.SetData("error.message", err.Error())
