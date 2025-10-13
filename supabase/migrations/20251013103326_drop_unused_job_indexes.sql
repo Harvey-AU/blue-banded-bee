@@ -6,13 +6,13 @@
 -- Saves ~1.3 MB of index storage overhead
 
 -- Drop GIN index on JSONB stats column (496 kB, 0 scans)
-DROP INDEX CONCURRENTLY IF EXISTS idx_jobs_stats;
+DROP INDEX IF EXISTS idx_jobs_stats;
 
 -- Drop B-tree index on avg_time_per_task_seconds (496 kB, 0 scans)
-DROP INDEX CONCURRENTLY IF EXISTS idx_jobs_avg_time;
+DROP INDEX IF EXISTS idx_jobs_avg_time;
 
 -- Drop B-tree index on duration_seconds (280 kB, 0 scans)
-DROP INDEX CONCURRENTLY IF EXISTS idx_jobs_duration;
+DROP INDEX IF EXISTS idx_jobs_duration;
 
 -- Note: Columns remain intact - only indexes are removed
 -- Indexes can be recreated instantly when/if future features need to query these columns

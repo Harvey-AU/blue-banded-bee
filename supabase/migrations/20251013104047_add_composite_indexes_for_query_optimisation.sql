@@ -22,7 +22,7 @@ DROP INDEX IF EXISTS idx_tasks_job_status_priority;
 -- - Eliminates "Incremental Sort" step (was sorting ~777 rows)
 -- - Index-only scan possible for task claiming
 -- - Supports both WITH and WITHOUT job_id filter
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_tasks_claim_optimised
+CREATE INDEX IF NOT EXISTS idx_tasks_claim_optimised
 ON tasks(status, job_id, priority_score DESC, created_at ASC)
 WHERE status = 'pending';
 
@@ -37,12 +37,12 @@ WHERE status = 'pending';
 -- - Eliminates sequential scan (was scanning 5899 buffers!)
 -- - Reduces 11ms query to <1ms
 -- - Index-only scan possible for common dashboard queries
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_jobs_org_status_created
+CREATE INDEX IF NOT EXISTS idx_jobs_org_status_created
 ON jobs(organisation_id, status, created_at DESC);
 
 -- Also create a simpler index for queries that don't filter by status
 -- Covers: WHERE organisation_id = $1 ORDER BY created_at DESC
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_jobs_org_created
+CREATE INDEX IF NOT EXISTS idx_jobs_org_created
 ON jobs(organisation_id, created_at DESC);
 
 -- ============================================================================
