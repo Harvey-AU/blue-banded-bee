@@ -29,6 +29,40 @@ On merge, CI will:
 
 ## [Unreleased]
 
+### Enhanced
+
+- **Database Performance Optimisation**: Composite index strategy based on
+  EXPLAIN ANALYZE profiling
+  - Created `idx_tasks_claim_optimised` composite index for worker pool task
+    claiming (50-70% latency reduction)
+  - Added `idx_jobs_org_status_created` and `idx_jobs_org_created` composite
+    indexes for dashboard queries (90%+ improvement, 11ms → <1ms)
+  - Dropped unused indexes (`idx_jobs_stats`, `idx_jobs_avg_time`,
+    `idx_jobs_duration`) saving ~1.3 MB and improving write performance
+  - Eliminated sequential scans on jobs table (was scanning 5899 buffers for 164
+    rows)
+  - Migration: `20251013104047_add_composite_indexes_for_query_optimisation.sql`
+  - Migration: `20251013103326_drop_unused_job_indexes.sql`
+
+### Fixed
+
+- **Database Connection Timeout Configuration**: Fixed nested timeout check bug
+  - `idle_in_transaction_session_timeout` now correctly applied independently of
+    `statement_timeout`
+  - Previously, idle timeout was only added if statement_timeout was missing
+  - Ensures zombie transaction cleanup works in all configurations
+
+### Documentation
+
+- **Database Performance**: Comprehensive documentation of optimisation strategy
+  - Added "Connection Pool Sizing Strategy" section to DATABASE.md with sizing
+    formulas and rationale
+  - Documented composite index design and query patterns in DATABASE.md
+  - Established PostgreSQL cache hit rate baseline (99.94% index, 99.76% table)
+    via production query analysis
+  - Both metrics exceed 99% target indicating optimal shared buffer
+    configuration
+
 ## [0.7.0] – 2025-10-12
 
 ### Added
