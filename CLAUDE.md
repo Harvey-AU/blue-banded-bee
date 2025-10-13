@@ -76,6 +76,10 @@ after several rounds of iterating on a task, and before deploying.
   - Capture only high-severity or security relevant issues
     (`sentry.CaptureException(err)` or `CaptureMessage` for suspicious events).
     Do not spam Sentry with transient warnings already handled by retries.
+  - High-severity covers infrastructure faults or events that prevent users
+    accessing the product (e.g. signup/auth creation failing, database
+    unavailable). Skip Sentry for routine validation errors or recoverable
+    retries.
 - **Request tracing**
   - Ensure API handlers log the `request_id` (already injected by middleware) so
     support can correlate client reports to backend events.
