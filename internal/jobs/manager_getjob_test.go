@@ -101,7 +101,7 @@ func TestGetJob_Unit(t *testing.T) {
 			jobID: "non-existent-job",
 			setupMock: func(mock sqlmock.Sqlmock) {
 				mock.ExpectBegin()
-				mock.ExpectQuery(`SELECT 
+				mock.ExpectQuery(`SELECT
 				j.id, d.name, j.status, j.progress, j.total_tasks, j.completed_tasks, j.failed_tasks, j.skipped_tasks,
 				j.created_at, j.started_at, j.completed_at, j.concurrency, j.find_links,
 				j.include_paths, j.exclude_paths, j.error_message, j.required_workers,
@@ -113,7 +113,7 @@ func TestGetJob_Unit(t *testing.T) {
 					WillReturnError(sql.ErrNoRows)
 				mock.ExpectRollback()
 			},
-			expectedError: "job not found: non-existent-job",
+			expectedError: "job non-existent-job not found",
 		},
 		{
 			name:  "database error",

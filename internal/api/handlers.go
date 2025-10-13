@@ -14,7 +14,6 @@ import (
 	"github.com/Harvey-AU/blue-banded-bee/internal/auth"
 	"github.com/Harvey-AU/blue-banded-bee/internal/db"
 	"github.com/Harvey-AU/blue-banded-bee/internal/jobs"
-	"github.com/rs/zerolog/log"
 )
 
 // Version is the current API version (can be set via ldflags at build time)
@@ -109,10 +108,13 @@ func (h *Handler) SetupRoutes(mux *http.ServeMux) {
 			return
 		}
 		defer f.Close()
+
+		logger := loggerWithRequest(r)
+
 		w.Header().Set("Content-Type", "application/octet-stream")
 		w.Header().Set("Content-Disposition", `attachment; filename="trace.out"`)
 		if _, err := io.Copy(w, f); err != nil {
-			log.Error().Err(err).Msg("Failed to copy trace file")
+			logger.Error().Err(err).Msg("Failed to copy trace file")
 		}
 	}))
 
@@ -248,6 +250,8 @@ func (h *Handler) ServeHomepage(w http.ResponseWriter, r *http.Request) {
 
 // DashboardStats handles dashboard statistics requests
 func (h *Handler) DashboardStats(w http.ResponseWriter, r *http.Request) {
+	logger := loggerWithRequest(r)
+
 	if r.Method != http.MethodGet {
 		MethodNotAllowed(w, r)
 		return
@@ -266,7 +270,7 @@ func (h *Handler) DashboardStats(w http.ResponseWriter, r *http.Request) {
 		if HandlePoolSaturation(w, r, err) {
 			return
 		}
-		log.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get or create user")
+		logger.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get or create user")
 		InternalError(w, r, err)
 		return
 	}
@@ -309,6 +313,8 @@ func (h *Handler) DashboardStats(w http.ResponseWriter, r *http.Request) {
 
 // DashboardActivity handles dashboard activity chart requests
 func (h *Handler) DashboardActivity(w http.ResponseWriter, r *http.Request) {
+	logger := loggerWithRequest(r)
+
 	if r.Method != http.MethodGet {
 		MethodNotAllowed(w, r)
 		return
@@ -324,7 +330,7 @@ func (h *Handler) DashboardActivity(w http.ResponseWriter, r *http.Request) {
 	// Get full user object from database (auto-create if needed)
 	user, err := h.DB.GetOrCreateUser(userClaims.UserID, userClaims.Email, nil)
 	if err != nil {
-		log.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get or create user")
+		logger.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get or create user")
 		InternalError(w, r, err)
 		return
 	}
@@ -419,6 +425,8 @@ func (h *Handler) jsFileServer(root http.FileSystem) http.Handler {
 
 // DashboardSlowPages handles requests for slow-loading pages analysis
 func (h *Handler) DashboardSlowPages(w http.ResponseWriter, r *http.Request) {
+	logger := loggerWithRequest(r)
+
 	if r.Method != http.MethodGet {
 		MethodNotAllowed(w, r)
 		return
@@ -434,7 +442,7 @@ func (h *Handler) DashboardSlowPages(w http.ResponseWriter, r *http.Request) {
 	// Get full user object from database (auto-create if needed)
 	user, err := h.DB.GetOrCreateUser(userClaims.UserID, userClaims.Email, nil)
 	if err != nil {
-		log.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get or create user")
+		logger.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get or create user")
 		InternalError(w, r, err)
 		return
 	}
@@ -470,6 +478,8 @@ func (h *Handler) DashboardSlowPages(w http.ResponseWriter, r *http.Request) {
 
 // DashboardExternalRedirects handles requests for external redirect analysis
 func (h *Handler) DashboardExternalRedirects(w http.ResponseWriter, r *http.Request) {
+	logger := loggerWithRequest(r)
+
 	if r.Method != http.MethodGet {
 		MethodNotAllowed(w, r)
 		return
@@ -485,7 +495,7 @@ func (h *Handler) DashboardExternalRedirects(w http.ResponseWriter, r *http.Requ
 	// Get full user object from database (auto-create if needed)
 	user, err := h.DB.GetOrCreateUser(userClaims.UserID, userClaims.Email, nil)
 	if err != nil {
-		log.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get or create user")
+		logger.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get or create user")
 		InternalError(w, r, err)
 		return
 	}
@@ -532,6 +542,8 @@ type WebflowWebhookPayload struct {
 
 // WebflowWebhook handles Webflow site publish webhooks
 func (h *Handler) WebflowWebhook(w http.ResponseWriter, r *http.Request) {
+	logger := loggerWithRequest(r)
+
 	if r.Method != http.MethodPost {
 		MethodNotAllowed(w, r)
 		return
@@ -540,7 +552,7 @@ func (h *Handler) WebflowWebhook(w http.ResponseWriter, r *http.Request) {
 	// Extract webhook token from URL path: /v1/webhooks/webflow/WEBHOOK_TOKEN
 	pathParts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
 	if len(pathParts) < 4 || pathParts[3] == "" {
-		log.Error().Str("path", r.URL.Path).Msg("Webflow webhook missing token in URL")
+		logger.Warn().Str("path", r.URL.Path).Msg("Webflow webhook missing token in URL")
 		BadRequest(w, r, "Webhook token required in URL path")
 		return
 	}
@@ -549,7 +561,7 @@ func (h *Handler) WebflowWebhook(w http.ResponseWriter, r *http.Request) {
 	// Parse webhook payload
 	var payload WebflowWebhookPayload
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-		log.Error().Err(err).Msg("Failed to parse Webflow webhook payload")
+		logger.Warn().Err(err).Msg("Failed to parse Webflow webhook payload")
 		BadRequest(w, r, "Invalid webhook payload")
 		return
 	}
@@ -557,14 +569,14 @@ func (h *Handler) WebflowWebhook(w http.ResponseWriter, r *http.Request) {
 	// Get user from database using webhook token
 	user, err := h.DB.GetUserByWebhookToken(webhookToken)
 	if err != nil {
-		log.Error().Err(err).Str("webhook_token", webhookToken).Msg("Failed to get user by webhook token")
+		logger.Warn().Err(err).Msg("Failed to get user by webhook token")
 		// Return 404 to avoid leaking information about valid tokens
 		NotFound(w, r, "Invalid webhook token")
 		return
 	}
 
 	// Log webhook received
-	log.Info().
+	logger.Info().
 		Str("user_id", user.ID).
 		Str("trigger_type", payload.TriggerType).
 		Str("published_by", payload.Payload.PublishedBy.DisplayName).
@@ -573,14 +585,14 @@ func (h *Handler) WebflowWebhook(w http.ResponseWriter, r *http.Request) {
 
 	// Validate it's a site publish event
 	if payload.TriggerType != "site_publish" {
-		log.Warn().Str("trigger_type", payload.TriggerType).Msg("Ignoring non-site-publish webhook")
+		logger.Warn().Str("trigger_type", payload.TriggerType).Msg("Ignoring non-site-publish webhook")
 		WriteSuccess(w, r, nil, "Webhook received but ignored (not site_publish)")
 		return
 	}
 
 	// Validate domains are provided
 	if len(payload.Payload.Domains) == 0 {
-		log.Error().Msg("Webflow webhook missing domains")
+		logger.Warn().Msg("Webflow webhook missing domains")
 		BadRequest(w, r, "Domains are required")
 		return
 	}
@@ -613,7 +625,7 @@ func (h *Handler) WebflowWebhook(w http.ResponseWriter, r *http.Request) {
 
 	job, err := h.createJobFromRequest(r.Context(), user, req)
 	if err != nil {
-		log.Error().Err(err).
+		logger.Error().Err(err).
 			Str("user_id", user.ID).
 			Str("domain", selectedDomain).
 			Msg("Failed to create job from webhook")
@@ -623,7 +635,7 @@ func (h *Handler) WebflowWebhook(w http.ResponseWriter, r *http.Request) {
 
 	// Start the job immediately
 	if err := h.JobsManager.StartJob(r.Context(), job.ID); err != nil {
-		log.Error().Err(err).Str("job_id", job.ID).Msg("Failed to start job from webhook")
+		logger.Error().Err(err).Str("job_id", job.ID).Msg("Failed to start job from webhook")
 		// Don't return error - job was created successfully, just failed to start
 	}
 
@@ -632,7 +644,7 @@ func (h *Handler) WebflowWebhook(w http.ResponseWriter, r *http.Request) {
 		orgIDStr = *user.OrganisationID
 	}
 
-	log.Info().
+	logger.Info().
 		Str("job_id", job.ID).
 		Str("user_id", user.ID).
 		Str("org_id", orgIDStr).

@@ -112,21 +112,21 @@ func New(config *Config) (*DB, error) {
 	// Add connection configuration to prevent prepared statement conflicts
 	connStr := config.ConnectionString()
 
+	// Add idle-in-transaction timeout if not present
+	if !strings.Contains(connStr, "idle_in_transaction_session_timeout") {
+		if strings.HasPrefix(connStr, "postgres://") || strings.HasPrefix(connStr, "postgresql://") {
+			separator := "?"
+			if strings.Contains(connStr, "?") {
+				separator = "&"
+			}
+			connStr += separator + "idle_in_transaction_session_timeout=30000" // 30 seconds
+		} else {
+			connStr += " idle_in_transaction_session_timeout=30000" // 30 seconds
+		}
+	}
+
 	// Add statement timeout if not present
 	if !strings.Contains(connStr, "statement_timeout") {
-
-		// Add idle-in-transaction timeout if not present
-		if !strings.Contains(connStr, "idle_in_transaction_session_timeout") {
-			if strings.HasPrefix(connStr, "postgres://") || strings.HasPrefix(connStr, "postgresql://") {
-				separator := "?"
-				if strings.Contains(connStr, "?") {
-					separator = "&"
-				}
-				connStr += separator + "idle_in_transaction_session_timeout=30000" // 30 seconds
-			} else {
-				connStr += " idle_in_transaction_session_timeout=30000" // 30 seconds
-			}
-		}
 		// Check if we're using URL format or key=value format
 		if strings.HasPrefix(connStr, "postgres://") || strings.HasPrefix(connStr, "postgresql://") {
 			// URL format - use query parameters

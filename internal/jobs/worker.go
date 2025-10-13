@@ -136,12 +136,16 @@ func NewWorkerPool(db *sql.DB, dbQueue DbQueueInterface, crawler CrawlerInterfac
 		wp.processBatches(context.Background())
 	}()
 
-	// Start the notification listener
-	wp.wg.Add(1)
-	go func() {
-		defer wp.wg.Done()
-		wp.listenForNotifications(context.Background())
-	}()
+	// Start the notification listener when we have connection details available.
+	if hasNotificationConfig(dbConfig) {
+		wp.wg.Add(1)
+		go func() {
+			defer wp.wg.Done()
+			wp.listenForNotifications(context.Background())
+		}()
+	} else {
+		log.Debug().Msg("Skipping LISTEN/NOTIFY setup: database config lacks connection details")
+	}
 
 	return wp
 }
@@ -1731,6 +1735,16 @@ func (wp *WorkerPool) evaluateJobPerformance(jobID string, responseTime int64) {
 	}
 }
 
+func hasNotificationConfig(cfg *db.Config) bool {
+	if cfg == nil {
+		return false
+	}
+	if cfg.DatabaseURL != "" {
+		return true
+	}
+	return cfg.Host != "" && cfg.Port != "" && cfg.Database != "" && cfg.User != ""
+}
+
 // listenForNotifications sets up PostgreSQL LISTEN/NOTIFY
 func (wp *WorkerPool) listenForNotifications(ctx context.Context) {
 	var conn *pgx.Conn
@@ -1773,13 +1787,13 @@ func (wp *WorkerPool) listenForNotifications(ctx context.Context) {
 			if ctx.Err() != nil || wp.stopping.Load() {
 				return // Context cancelled or pool is stopping
 			}
-			log.Error().Err(err).Msg("Error waiting for notification, reconnecting...")
+			log.Warn().Err(err).Msg("Error waiting for notification, reconnecting...")
 			conn.Close(ctx)
 			time.Sleep(5 * time.Second) // Wait before reconnecting
 
 			conn, err = connect()
 			if err != nil {
-				log.Error().Err(err).Msg("Failed to reconnect for notifications")
+				log.Warn().Err(err).Msg("Failed to reconnect for notifications")
 				continue
 			}
 			continue

@@ -49,6 +49,41 @@ after several rounds of iterating on a task, and before deploying.
 - See `.golangci.yml` for full configuration and exclusion rules;
   `docs/development/DEVELOPMENT.md` for local Docker-based linting
 
+## Logging Standards
+
+- **General guidance**
+  - Use structured logging (`zerolog`) with contextual fields (job ID, domain,
+    request ID) rather than string concatenation.
+  - Prefer one high-quality log per meaningful event over streaming repetitive
+    messages; avoid logging inside tight loops.
+  - Never log secrets, Supabase credentials, JWTs, or end-user content.
+  - When returning an error to callers, log once at the boundary that handles
+    it—downstream callers should rely on `fmt.Errorf("context: %w", err)` rather
+    than double logging.
+- **Level selection**
+  - `Debug` (only in development): noisy instrumentation or temporary
+    diagnostics; keep behind `LOG_LEVEL=debug` so production stays quiet.
+  - `Info`: expected state changes that help operators follow the happy path
+    (job created, worker pool started, external webhook received). Include
+    enough fields for correlation and avoid chatting every iteration.
+  - `Warn`: unexpected or degraded behaviour that we recovered from (retry
+    scheduled, third-party rate limiting, fallback sitemap path). Use it
+    sparingly and add next action or retry detail so it is actionable.
+  - `Error`: failures we cannot automatically correct (request returning 500,
+    database write rejected, worker panic). Always attach the error via
+    `.Err(err)` and capture via Sentry if escalation is required.
+- **Sentry**
+  - Capture only high-severity or security relevant issues
+    (`sentry.CaptureException(err)` or `CaptureMessage` for suspicious events).
+    Do not spam Sentry with transient warnings already handled by retries.
+  - High-severity covers infrastructure faults or events that prevent users
+    accessing the product (e.g. signup/auth creation failing, database
+    unavailable). Skip Sentry for routine validation errors or recoverable
+    retries.
+- **Request tracing**
+  - Ensure API handlers log the `request_id` (already injected by middleware) so
+    support can correlate client reports to backend events.
+
 ## Testing Approach
 
 - Test locally first (`go test ./...`, targeted unit or integration suites,

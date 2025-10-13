@@ -14,6 +14,10 @@
 /main
 /test_jobs
 
+# Go build cache (local)
+.gocache/
+.gomodcache/
+
 # IDE
 .idea/
 .vscode/

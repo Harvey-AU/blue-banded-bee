@@ -8,7 +8,6 @@ import (
 	emailverifier "github.com/AfterShip/email-verifier"
 	"github.com/Harvey-AU/blue-banded-bee/internal/auth"
 	"github.com/getsentry/sentry-go"
-	"github.com/rs/zerolog/log"
 )
 
 var (
@@ -48,6 +47,8 @@ type OrganisationResponse struct {
 
 // AuthRegister handles POST /v1/auth/register
 func (h *Handler) AuthRegister(w http.ResponseWriter, r *http.Request) {
+	logger := loggerWithRequest(r)
+
 	if r.Method != http.MethodPost {
 		MethodNotAllowed(w, r)
 		return
@@ -75,7 +76,7 @@ func (h *Handler) AuthRegister(w http.ResponseWriter, r *http.Request) {
 	if orgName == "" {
 		result, err := verifier.Verify(req.Email)
 		if err != nil {
-			log.Warn().Err(err).Msg("Email verifier failed")
+			logger.Warn().Err(err).Msg("Email verifier failed")
 		} else if !result.Free {
 			// Not a free provider, so use the domain name
 			if emailParts := strings.Split(req.Email, "@"); len(emailParts) == 2 {
@@ -103,7 +104,7 @@ func (h *Handler) AuthRegister(w http.ResponseWriter, r *http.Request) {
 	user, org, err := h.DB.CreateUser(req.UserID, req.Email, req.FullName, orgName)
 	if err != nil {
 		sentry.CaptureException(err)
-		log.Error().Err(err).Str("user_id", req.UserID).Msg("Failed to create user with organisation")
+		logger.Error().Err(err).Str("user_id", req.UserID).Msg("Failed to create user with organisation")
 		InternalError(w, r, err)
 		return
 	}
@@ -154,6 +155,8 @@ func (h *Handler) AuthSession(w http.ResponseWriter, r *http.Request) {
 
 // AuthProfile handles GET /v1/auth/profile
 func (h *Handler) AuthProfile(w http.ResponseWriter, r *http.Request) {
+	logger := loggerWithRequest(r)
+
 	if r.Method != http.MethodGet {
 		MethodNotAllowed(w, r)
 		return
@@ -169,7 +172,7 @@ func (h *Handler) AuthProfile(w http.ResponseWriter, r *http.Request) {
 	user, err := h.DB.GetOrCreateUser(userClaims.UserID, userClaims.Email, nil)
 	if err != nil {
 		sentry.CaptureException(err)
-		log.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get or create user")
+		logger.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get or create user")
 		InternalError(w, r, err)
 		return
 	}
@@ -191,7 +194,7 @@ func (h *Handler) AuthProfile(w http.ResponseWriter, r *http.Request) {
 	if user.OrganisationID != nil {
 		org, err := h.DB.GetOrganisation(*user.OrganisationID)
 		if err != nil {
-			log.Warn().Err(err).Str("organisation_id", *user.OrganisationID).Msg("Failed to get organisation")
+			logger.Warn().Err(err).Str("organisation_id", *user.OrganisationID).Msg("Failed to get organisation")
 		} else {
 			orgResp := OrganisationResponse{
 				ID:        org.ID,

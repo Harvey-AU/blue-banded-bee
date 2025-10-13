@@ -53,6 +53,81 @@ client.SetConnMaxLifetime(5 * time.Minute)  // Connection lifetime
 client.SetConnMaxIdleTime(2 * time.Minute)  // Idle connection timeout
 ```
 
+### Connection Pool Sizing Strategy
+
+Blue Banded Bee uses conservative connection pool limits tuned for Supabase's
+shared infrastructure:
+
+**Current Configuration:**
+
+- **MaxOpenConns: 25** - Stay safely under Supabase's default 30-connection pool
+  limit
+- **MaxIdleConns: 10** - Conservative to prevent pool exhaustion whilst
+  maintaining ready connections
+
+**Sizing Rationale:**
+
+1. **Supabase Constraints**: Free tier provides ~30 max connections; we target
+   80-85% utilisation to leave headroom for monitoring tools, migrations, and
+   background processes.
+
+2. **Worker Pool Alignment**: The worker pool's concurrency is capped to match
+   available connections, ensuring database access never becomes a bottleneck.
+
+3. **Environment-Based Tuning** (see `internal/db/db.go:192-197`):
+   - **Production**: 25 max open, 10 idle
+   - **Development**: 15 max open, 5 idle (reduced for local testing)
+
+**General Formula** (for future scaling):
+
+- Target `MaxOpenConns ≤ 80% × database_max_connections`
+- For shared hosting: consult provider limits (Supabase Free = 30, Pro = 200+)
+- For dedicated instances: common heuristic is `2× vCPU` or `¼ max_connections`,
+  whichever is lower
+- Set `MaxIdleConns` to 30-40% of `MaxOpenConns` to balance readiness vs
+  resource usage
+
+**Monitoring Connection Pool Health:**
+
+```sql
+-- View active connections
+SELECT count(*) FROM pg_stat_activity WHERE datname = current_database();
+
+-- View connection distribution by state
+SELECT state, count(*)
+FROM pg_stat_activity
+WHERE datname = current_database()
+GROUP BY state;
+```
+
+### Connection Timeout Configuration
+
+Blue Banded Bee configures PostgreSQL session timeouts to prevent resource leaks
+and runaway queries:
+
+```go
+// Located in internal/db/db.go - automatically appended to connection strings
+statement_timeout=60000                      // 60 seconds - abort queries exceeding this duration
+idle_in_transaction_session_timeout=30000    // 30 seconds - terminate idle transactions
+```
+
+**Rationale:**
+
+- **`statement_timeout` (60s)**: Prevents long-running queries from consuming
+  resources indefinitely. Queries should complete well within this window; if
+  they don't, they likely indicate a performance issue requiring optimisation.
+
+- **`idle_in_transaction_session_timeout` (30s)**: Prevents "zombie"
+  transactions that hold locks without actively executing queries. This is
+  critical for:
+  - Avoiding connection pool exhaustion
+  - Preventing lock contention on high-traffic tables
+  - Ensuring failed/abandoned transactions release resources quickly
+
+These timeouts are automatically added to connection strings if not already
+present (see `internal/db/db.go:115-141`). They apply to all database
+connections including those from the connection pool.
+
 ## Database Schema
 
 ### Core Tables
@@ -375,13 +450,89 @@ FOR ALL USING (
 
 ## Performance Optimisation
 
+### Composite Indexes for Hot Paths
+
+Blue Banded Bee uses composite indexes optimised for actual query patterns
+identified through EXPLAIN ANALYZE profiling:
+
+#### Task Claiming (Worker Pool)
+
+**Index:** `idx_tasks_claim_optimised`
+
+```sql
+CREATE INDEX CONCURRENTLY idx_tasks_claim_optimised
+ON tasks(status, job_id, priority_score DESC, created_at ASC)
+WHERE status = 'pending';
+```
+
+**Query Pattern:**
+
+```sql
+SELECT ... FROM tasks
+WHERE status = 'pending' AND job_id = $1
+ORDER BY priority_score DESC, created_at ASC
+LIMIT 1 FOR UPDATE SKIP LOCKED;
+```
+
+**Why Composite:**
+
+- Eliminates "Incremental Sort" step (was sorting ~777 rows per claim)
+- Index already sorted by priority_score DESC, created_at ASC
+- 50-70% latency reduction on task claiming
+- Partial index (WHERE status = 'pending') keeps index size small
+
+**Migration:** `20251013104047_add_composite_indexes_for_query_optimisation.sql`
+
+#### Dashboard Job Listing
+
+**Indexes:** `idx_jobs_org_status_created` and `idx_jobs_org_created`
+
+```sql
+-- For queries WITH status filter
+CREATE INDEX CONCURRENTLY idx_jobs_org_status_created
+ON jobs(organisation_id, status, created_at DESC);
+
+-- For queries WITHOUT status filter
+CREATE INDEX CONCURRENTLY idx_jobs_org_created
+ON jobs(organisation_id, created_at DESC);
+```
+
+**Query Pattern:**
+
+```sql
+SELECT ... FROM jobs
+WHERE organisation_id = $1
+  AND status = $2  -- optional
+  AND created_at >= $3  -- optional
+ORDER BY created_at DESC;
+```
+
+**Why Two Indexes:**
+
+- PostgreSQL can't always use multi-column indexes when middle columns are
+  omitted
+- `idx_jobs_org_status_created`: For filtered views (e.g., "show only completed
+  jobs")
+- `idx_jobs_org_created`: For unfiltered views (e.g., "show all jobs")
+- Each index is only ~100KB but provides 90%+ improvement (11ms → <1ms)
+- Eliminated sequential scans that were reading 5899 buffers for 164 rows
+
+**Migration:** `20251013104047_add_composite_indexes_for_query_optimisation.sql`
+
+#### Dropped Indexes
+
+The following indexes were identified as unused via `pg_stat_user_indexes`
+analysis and removed to reduce write overhead:
+
+- `idx_jobs_stats` (496 kB) - GIN index on unused JSONB column
+- `idx_jobs_avg_time` (496 kB) - Never used in WHERE/ORDER BY
+- `idx_jobs_duration` (280 kB) - Never used in WHERE/ORDER BY
+
+**Savings:** ~1.3 MB index storage, improved job update performance
+
+**Migration:** `20251013103326_drop_unused_job_indexes.sql`
+
 ### Query Optimisation
-
-**Indexed Queries:**
-
-- Task status lookups use `idx_tasks_status`
-- Job lookups by user/org use `idx_jobs_user_org`
-- Pending task queries use partial index `idx_tasks_pending`
 
 **Connection Management:**
 
