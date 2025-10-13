@@ -10,8 +10,6 @@ import (
 	"net/http"
 	"strings"
 	"time"
-
-	"github.com/rs/zerolog/log"
 )
 
 type shareLinkRecord struct {
@@ -26,6 +24,8 @@ var (
 )
 
 func (h *Handler) createJobShareLink(w http.ResponseWriter, r *http.Request, jobID string) {
+	logger := loggerWithRequest(r)
+
 	user := h.validateJobAccess(w, r, jobID)
 	if user == nil {
 		return
@@ -56,13 +56,13 @@ func (h *Handler) createJobShareLink(w http.ResponseWriter, r *http.Request, job
 
 	if err != nil {
 		if isUndefinedRelationError(err, "job_share_links") {
-			log.Warn().Err(err).Msg("Share link table missing, feature disabled")
+			logger.Warn().Err(err).Msg("Share link table missing, feature disabled")
 			ServiceUnavailable(w, r, "Share links are not available yet")
 			return
 		}
 
 		if !errors.Is(err, sql.ErrNoRows) {
-			log.Error().Err(err).Msg("Failed to query existing share links")
+			logger.Error().Err(err).Msg("Failed to query existing share links")
 			InternalError(w, r, err)
 			return
 		}
@@ -73,7 +73,7 @@ func (h *Handler) createJobShareLink(w http.ResponseWriter, r *http.Request, job
 	for i := 0; i < maxAttempts; i++ {
 		candidate, genErr := generateShareToken()
 		if genErr != nil {
-			log.Error().Err(genErr).Msg("Failed to generate share token")
+			logger.Error().Err(genErr).Msg("Failed to generate share token")
 			InternalError(w, r, genErr)
 			return
 		}
@@ -88,7 +88,7 @@ func (h *Handler) createJobShareLink(w http.ResponseWriter, r *http.Request, job
 		}
 
 		if isUndefinedRelationError(insertErr, "job_share_links") {
-			log.Warn().Err(insertErr).Msg("Share link table missing during insert")
+			logger.Warn().Err(insertErr).Msg("Share link table missing during insert")
 			ServiceUnavailable(w, r, "Share links are not available yet")
 			return
 		}
@@ -97,13 +97,13 @@ func (h *Handler) createJobShareLink(w http.ResponseWriter, r *http.Request, job
 			continue
 		}
 
-		log.Error().Err(insertErr).Msg("Failed to insert share link")
+		logger.Error().Err(insertErr).Msg("Failed to insert share link")
 		InternalError(w, r, insertErr)
 		return
 	}
 
 	if token == "" {
-		log.Error().Msg("exhausted attempts to generate unique share token")
+		logger.Error().Msg("exhausted attempts to generate unique share token")
 		InternalError(w, r, errors.New("failed to generate share token"))
 		return
 	}
@@ -116,6 +116,8 @@ func (h *Handler) createJobShareLink(w http.ResponseWriter, r *http.Request, job
 }
 
 func (h *Handler) getJobShareLink(w http.ResponseWriter, r *http.Request, jobID string) {
+	logger := loggerWithRequest(r)
+
 	user := h.validateJobAccess(w, r, jobID)
 	if user == nil {
 		return
@@ -133,7 +135,7 @@ func (h *Handler) getJobShareLink(w http.ResponseWriter, r *http.Request, jobID 
     `, jobID).Scan(&token)
 	if err != nil {
 		if isUndefinedRelationError(err, "job_share_links") {
-			log.Warn().Err(err).Msg("Share link table missing during fetch")
+			logger.Warn().Err(err).Msg("Share link table missing during fetch")
 			ServiceUnavailable(w, r, "Share links are not available yet")
 			return
 		}
@@ -146,7 +148,7 @@ func (h *Handler) getJobShareLink(w http.ResponseWriter, r *http.Request, jobID 
 			return
 		}
 
-		log.Error().Err(err).Msg("Failed to fetch share link")
+		logger.Error().Err(err).Msg("Failed to fetch share link")
 		InternalError(w, r, err)
 		return
 	}
@@ -160,6 +162,8 @@ func (h *Handler) getJobShareLink(w http.ResponseWriter, r *http.Request, jobID 
 }
 
 func (h *Handler) revokeJobShareLink(w http.ResponseWriter, r *http.Request, jobID, token string) {
+	logger := loggerWithRequest(r)
+
 	user := h.validateJobAccess(w, r, jobID)
 	if user == nil {
 		return
@@ -172,11 +176,11 @@ func (h *Handler) revokeJobShareLink(w http.ResponseWriter, r *http.Request, job
     `, jobID, token)
 	if err != nil {
 		if isUndefinedRelationError(err, "job_share_links") {
-			log.Warn().Err(err).Msg("Share link table missing during revoke")
+			logger.Warn().Err(err).Msg("Share link table missing during revoke")
 			ServiceUnavailable(w, r, "Share links are not available yet")
 			return
 		}
-		log.Error().Err(err).Msg("Failed to revoke share link")
+		logger.Error().Err(err).Msg("Failed to revoke share link")
 		InternalError(w, r, err)
 		return
 	}
@@ -245,6 +249,8 @@ func (h *Handler) getSharedJob(w http.ResponseWriter, r *http.Request, token str
 }
 
 func (h *Handler) getSharedJobTasks(w http.ResponseWriter, r *http.Request, token string) {
+	logger := loggerWithRequest(r)
+
 	record, err := h.lookupShareLink(r.Context(), token)
 	if err != nil {
 		h.handleShareLinkError(w, r, err)
@@ -263,7 +269,7 @@ func (h *Handler) getSharedJobTasks(w http.ResponseWriter, r *http.Request, toke
 		if HandlePoolSaturation(w, r, err) {
 			return
 		}
-		log.Error().Err(err).Msg("Failed to count shared tasks")
+		logger.Error().Err(err).Msg("Failed to count shared tasks")
 		DatabaseError(w, r, err)
 		return
 	}
@@ -273,7 +279,7 @@ func (h *Handler) getSharedJobTasks(w http.ResponseWriter, r *http.Request, toke
 		if HandlePoolSaturation(w, r, err) {
 			return
 		}
-		log.Error().Err(err).Msg("Failed to get shared tasks")
+		logger.Error().Err(err).Msg("Failed to get shared tasks")
 		DatabaseError(w, r, err)
 		return
 	}
@@ -281,7 +287,7 @@ func (h *Handler) getSharedJobTasks(w http.ResponseWriter, r *http.Request, toke
 
 	tasks, err := formatTasksFromRows(rows)
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to format shared tasks")
+		logger.Error().Err(err).Msg("Failed to format shared tasks")
 		DatabaseError(w, r, err)
 		return
 	}
@@ -314,6 +320,8 @@ func (h *Handler) exportSharedJobTasks(w http.ResponseWriter, r *http.Request, t
 }
 
 func (h *Handler) handleShareLinkError(w http.ResponseWriter, r *http.Request, err error) {
+	logger := loggerWithRequest(r)
+
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
 		NotFound(w, r, "Share link not found")
@@ -325,7 +333,7 @@ func (h *Handler) handleShareLinkError(w http.ResponseWriter, r *http.Request, e
 		if HandlePoolSaturation(w, r, err) {
 			return
 		}
-		log.Error().Err(err).Msg("Share link error")
+		logger.Error().Err(err).Msg("Share link error")
 		InternalError(w, r, err)
 	}
 }

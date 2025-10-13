@@ -15,7 +15,6 @@ import (
 	"github.com/Harvey-AU/blue-banded-bee/internal/auth"
 	"github.com/Harvey-AU/blue-banded-bee/internal/db"
 	"github.com/Harvey-AU/blue-banded-bee/internal/jobs"
-	"github.com/rs/zerolog/log"
 )
 
 // JobsHandler handles requests to /v1/jobs
@@ -129,6 +128,8 @@ type JobResponse struct {
 
 // listJobs handles GET /v1/jobs
 func (h *Handler) listJobs(w http.ResponseWriter, r *http.Request) {
+	logger := loggerWithRequest(r)
+
 	userClaims, ok := auth.GetUserFromContext(r.Context())
 	if !ok {
 		Unauthorised(w, r, "User information not found")
@@ -141,7 +142,7 @@ func (h *Handler) listJobs(w http.ResponseWriter, r *http.Request) {
 		if HandlePoolSaturation(w, r, err) {
 			return
 		}
-		log.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get or create user")
+		logger.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get or create user")
 		InternalError(w, r, err)
 		return
 	}
@@ -175,7 +176,7 @@ func (h *Handler) listJobs(w http.ResponseWriter, r *http.Request) {
 		if HandlePoolSaturation(w, r, err) {
 			return
 		}
-		log.Error().Err(err).Str("organisation_id", orgID).Msg("Failed to list jobs")
+		logger.Error().Err(err).Str("organisation_id", orgID).Msg("Failed to list jobs")
 		DatabaseError(w, r, err)
 		return
 	}
@@ -245,6 +246,8 @@ func (h *Handler) createJobFromRequest(ctx context.Context, user *db.User, req C
 
 // createJob handles POST /v1/jobs
 func (h *Handler) createJob(w http.ResponseWriter, r *http.Request) {
+	logger := loggerWithRequest(r)
+
 	userClaims, ok := auth.GetUserFromContext(r.Context())
 	if !ok {
 		Unauthorised(w, r, "User information not found")
@@ -257,7 +260,7 @@ func (h *Handler) createJob(w http.ResponseWriter, r *http.Request) {
 		if HandlePoolSaturation(w, r, err) {
 			return
 		}
-		log.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get or create user")
+		logger.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get or create user")
 		InternalError(w, r, err)
 		return
 	}
@@ -300,7 +303,7 @@ func (h *Handler) createJob(w http.ResponseWriter, r *http.Request) {
 		if HandlePoolSaturation(w, r, err) {
 			return
 		}
-		log.Error().Err(err).Str("domain", req.Domain).Msg("Failed to create job")
+		logger.Error().Err(err).Str("domain", req.Domain).Msg("Failed to create job")
 		InternalError(w, r, err)
 		return
 	}
@@ -322,6 +325,8 @@ func (h *Handler) createJob(w http.ResponseWriter, r *http.Request) {
 
 // getJob handles GET /v1/jobs/:id
 func (h *Handler) getJob(w http.ResponseWriter, r *http.Request, jobID string) {
+	logger := loggerWithRequest(r)
+
 	userClaims, ok := auth.GetUserFromContext(r.Context())
 	if !ok {
 		Unauthorised(w, r, "User information not found")
@@ -334,7 +339,7 @@ func (h *Handler) getJob(w http.ResponseWriter, r *http.Request, jobID string) {
 		if HandlePoolSaturation(w, r, err) {
 			return
 		}
-		log.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get or create user")
+		logger.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get or create user")
 		InternalError(w, r, err)
 		return
 	}
@@ -349,7 +354,7 @@ func (h *Handler) getJob(w http.ResponseWriter, r *http.Request, jobID string) {
 			return
 		}
 
-		log.Error().Err(err).Str("job_id", jobID).Msg("Failed to fetch job details")
+		logger.Error().Err(err).Str("job_id", jobID).Msg("Failed to fetch job details")
 		InternalError(w, r, err)
 		return
 	}
@@ -445,6 +450,8 @@ type JobActionRequest struct {
 
 // updateJob handles PUT /v1/jobs/:id for job actions
 func (h *Handler) updateJob(w http.ResponseWriter, r *http.Request, jobID string) {
+	logger := loggerWithRequest(r)
+
 	userClaims, ok := auth.GetUserFromContext(r.Context())
 	if !ok {
 		Unauthorised(w, r, "User information not found")
@@ -454,7 +461,7 @@ func (h *Handler) updateJob(w http.ResponseWriter, r *http.Request, jobID string
 	// Auto-create user if they don't exist (handles new signups)
 	user, err := h.DB.GetOrCreateUser(userClaims.UserID, userClaims.Email, nil)
 	if err != nil {
-		log.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get or create user")
+		logger.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get or create user")
 		InternalError(w, r, err)
 		return
 	}
@@ -492,7 +499,7 @@ func (h *Handler) updateJob(w http.ResponseWriter, r *http.Request, jobID string
 	}
 
 	if err != nil {
-		log.Error().Err(err).Str("job_id", jobID).Str("action", req.Action).Msg("Failed to perform job action")
+		logger.Error().Err(err).Str("job_id", jobID).Str("action", req.Action).Msg("Failed to perform job action")
 		InternalError(w, r, err)
 		return
 	}
@@ -500,7 +507,7 @@ func (h *Handler) updateJob(w http.ResponseWriter, r *http.Request, jobID string
 	// Get updated job status
 	job, err := h.JobsManager.GetJobStatus(r.Context(), jobID)
 	if err != nil {
-		log.Error().Err(err).Str("job_id", jobID).Msg("Failed to get job status after action")
+		logger.Error().Err(err).Str("job_id", jobID).Msg("Failed to get job status after action")
 		InternalError(w, r, err)
 		return
 	}
@@ -527,6 +534,8 @@ func (h *Handler) updateJob(w http.ResponseWriter, r *http.Request, jobID string
 
 // cancelJob handles DELETE /v1/jobs/:id
 func (h *Handler) cancelJob(w http.ResponseWriter, r *http.Request, jobID string) {
+	logger := loggerWithRequest(r)
+
 	userClaims, ok := auth.GetUserFromContext(r.Context())
 	if !ok {
 		Unauthorised(w, r, "User information not found")
@@ -536,7 +545,7 @@ func (h *Handler) cancelJob(w http.ResponseWriter, r *http.Request, jobID string
 	// Auto-create user if they don't exist (handles new signups)
 	user, err := h.DB.GetOrCreateUser(userClaims.UserID, userClaims.Email, nil)
 	if err != nil {
-		log.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get or create user")
+		logger.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get or create user")
 		InternalError(w, r, err)
 		return
 	}
@@ -559,7 +568,7 @@ func (h *Handler) cancelJob(w http.ResponseWriter, r *http.Request, jobID string
 
 	err = h.JobsManager.CancelJob(r.Context(), jobID)
 	if err != nil {
-		log.Error().Err(err).Str("job_id", jobID).Msg("Failed to cancel job")
+		logger.Error().Err(err).Str("job_id", jobID).Msg("Failed to cancel job")
 		InternalError(w, r, err)
 		return
 	}
@@ -643,6 +652,8 @@ func parseTaskQueryParams(r *http.Request) TaskQueryParams {
 // validateJobAccess validates user authentication and job access permissions
 // Returns the user if validation succeeds, or writes HTTP error and returns nil
 func (h *Handler) validateJobAccess(w http.ResponseWriter, r *http.Request, jobID string) *db.User {
+	logger := loggerWithRequest(r)
+
 	// Extract user claims from context
 	userClaims, ok := auth.GetUserFromContext(r.Context())
 	if !ok {
@@ -653,7 +664,7 @@ func (h *Handler) validateJobAccess(w http.ResponseWriter, r *http.Request, jobI
 	// Auto-create user if they don't exist (handles new signups)
 	user, err := h.DB.GetOrCreateUser(userClaims.UserID, userClaims.Email, nil)
 	if err != nil {
-		log.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get or create user")
+		logger.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get or create user")
 		InternalError(w, r, err)
 		return nil
 	}
@@ -893,6 +904,8 @@ func taskExportColumns(exportType string) []ExportColumn {
 
 // getJobTasks handles GET /v1/jobs/:id/tasks
 func (h *Handler) getJobTasks(w http.ResponseWriter, r *http.Request, jobID string) {
+	logger := loggerWithRequest(r)
+
 	// Validate user authentication and job access
 	user := h.validateJobAccess(w, r, jobID)
 	if user == nil {
@@ -911,7 +924,7 @@ func (h *Handler) getJobTasks(w http.ResponseWriter, r *http.Request, jobID stri
 		if HandlePoolSaturation(w, r, err) {
 			return
 		}
-		log.Error().Err(err).Str("job_id", jobID).Msg("Failed to count tasks")
+		logger.Error().Err(err).Str("job_id", jobID).Msg("Failed to count tasks")
 		DatabaseError(w, r, err)
 		return
 	}
@@ -922,7 +935,7 @@ func (h *Handler) getJobTasks(w http.ResponseWriter, r *http.Request, jobID stri
 		if HandlePoolSaturation(w, r, err) {
 			return
 		}
-		log.Error().Err(err).Str("job_id", jobID).Msg("Failed to get tasks")
+		logger.Error().Err(err).Str("job_id", jobID).Msg("Failed to get tasks")
 		DatabaseError(w, r, err)
 		return
 	}
@@ -931,7 +944,7 @@ func (h *Handler) getJobTasks(w http.ResponseWriter, r *http.Request, jobID stri
 	// Format tasks from database rows
 	tasks, err := formatTasksFromRows(rows)
 	if err != nil {
-		log.Error().Err(err).Str("job_id", jobID).Msg("Failed to format tasks")
+		logger.Error().Err(err).Str("job_id", jobID).Msg("Failed to format tasks")
 		DatabaseError(w, r, err)
 		return
 	}
@@ -961,6 +974,8 @@ func (h *Handler) exportJobTasks(w http.ResponseWriter, r *http.Request, jobID s
 }
 
 func (h *Handler) serveJobExport(w http.ResponseWriter, r *http.Request, jobID string, requireAuth bool) {
+	logger := loggerWithRequest(r)
+
 	if requireAuth {
 		if h.validateJobAccess(w, r, jobID) == nil {
 			return
@@ -1008,7 +1023,7 @@ func (h *Handler) serveJobExport(w http.ResponseWriter, r *http.Request, jobID s
 
 	rows, err := h.DB.GetDB().QueryContext(r.Context(), query, jobID)
 	if err != nil {
-		log.Error().Err(err).Str("job_id", jobID).Msg("Failed to export tasks")
+		logger.Error().Err(err).Str("job_id", jobID).Msg("Failed to export tasks")
 		DatabaseError(w, r, err)
 		return
 	}
@@ -1017,7 +1032,7 @@ func (h *Handler) serveJobExport(w http.ResponseWriter, r *http.Request, jobID s
 	// Format tasks from database rows
 	tasks, err := formatTasksFromRows(rows)
 	if err != nil {
-		log.Error().Err(err).Str("job_id", jobID).Msg("Failed to format export tasks")
+		logger.Error().Err(err).Str("job_id", jobID).Msg("Failed to format export tasks")
 		DatabaseError(w, r, err)
 		return
 	}
@@ -1034,7 +1049,7 @@ func (h *Handler) serveJobExport(w http.ResponseWriter, r *http.Request, jobID s
 	`, jobID).Scan(&domain, &status, &createdAt, &completedAt)
 
 	if err != nil {
-		log.Error().Err(err).Str("job_id", jobID).Msg("Failed to get job details for export")
+		logger.Error().Err(err).Str("job_id", jobID).Msg("Failed to get job details for export")
 		DatabaseError(w, r, err)
 		return
 	}

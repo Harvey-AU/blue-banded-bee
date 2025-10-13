@@ -1787,13 +1787,13 @@ func (wp *WorkerPool) listenForNotifications(ctx context.Context) {
 			if ctx.Err() != nil || wp.stopping.Load() {
 				return // Context cancelled or pool is stopping
 			}
-			log.Error().Err(err).Msg("Error waiting for notification, reconnecting...")
+			log.Warn().Err(err).Msg("Error waiting for notification, reconnecting...")
 			conn.Close(ctx)
 			time.Sleep(5 * time.Second) // Wait before reconnecting
 
 			conn, err = connect()
 			if err != nil {
-				log.Error().Err(err).Msg("Failed to reconnect for notifications")
+				log.Warn().Err(err).Msg("Failed to reconnect for notifications")
 				continue
 			}
 			continue

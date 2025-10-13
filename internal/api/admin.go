@@ -6,12 +6,13 @@ import (
 
 	"github.com/Harvey-AU/blue-banded-bee/internal/auth"
 	"github.com/getsentry/sentry-go"
-	"github.com/rs/zerolog/log"
 )
 
 // AdminResetDatabase handles the admin database reset endpoint
 // Requires valid JWT with admin role and explicit environment enablement
 func (h *Handler) AdminResetDatabase(w http.ResponseWriter, r *http.Request) {
+	logger := loggerWithRequest(r)
+
 	if r.Method != http.MethodPost {
 		MethodNotAllowed(w, r)
 		return
@@ -39,9 +40,8 @@ func (h *Handler) AdminResetDatabase(w http.ResponseWriter, r *http.Request) {
 
 	// Verify system admin role
 	if !hasSystemAdminRole(claims) {
-		log.Warn().
+		logger.Warn().
 			Str("user_id", claims.UserID).
-			Str("email", claims.Email).
 			Msg("Non-system-admin user attempted to access database reset endpoint")
 		Forbidden(w, r, "System administrator privileges required")
 		return
@@ -50,15 +50,14 @@ func (h *Handler) AdminResetDatabase(w http.ResponseWriter, r *http.Request) {
 	// Verify user exists in database
 	user, err := h.DB.GetUser(claims.UserID)
 	if err != nil {
-		log.Error().Err(err).Str("user_id", claims.UserID).Msg("Failed to verify admin user")
+		logger.Error().Err(err).Str("user_id", claims.UserID).Msg("Failed to verify admin user")
 		Unauthorised(w, r, "User verification failed")
 		return
 	}
 
 	// Log the admin action with full context
-	log.Warn().
+	logger.Warn().
 		Str("user_id", user.ID).
-		Str("email", user.Email).
 		Str("org_id", func() string {
 			if user.OrganisationID != nil {
 				return *user.OrganisationID
@@ -87,16 +86,15 @@ func (h *Handler) AdminResetDatabase(w http.ResponseWriter, r *http.Request) {
 
 	// Perform the database reset
 	if err := h.DB.ResetSchema(); err != nil {
-		log.Error().Err(err).
+		logger.Error().Err(err).
 			Str("user_id", user.ID).
 			Msg("Failed to reset database schema")
 		InternalError(w, r, err)
 		return
 	}
 
-	log.Info().
+	logger.Info().
 		Str("user_id", user.ID).
-		Str("email", user.Email).
 		Msg("Database schema reset completed by admin")
 
 	WriteSuccess(w, r, nil, "Database schema reset successfully")
