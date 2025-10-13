@@ -53,6 +53,34 @@ client.SetConnMaxLifetime(5 * time.Minute)  // Connection lifetime
 client.SetConnMaxIdleTime(2 * time.Minute)  // Idle connection timeout
 ```
 
+### Connection Timeout Configuration
+
+Blue Banded Bee configures PostgreSQL session timeouts to prevent resource leaks
+and runaway queries:
+
+```go
+// Located in internal/db/db.go - automatically appended to connection strings
+statement_timeout=60000                      // 60 seconds - abort queries exceeding this duration
+idle_in_transaction_session_timeout=30000    // 30 seconds - terminate idle transactions
+```
+
+**Rationale:**
+
+- **`statement_timeout` (60s)**: Prevents long-running queries from consuming
+  resources indefinitely. Queries should complete well within this window; if
+  they don't, they likely indicate a performance issue requiring optimisation.
+
+- **`idle_in_transaction_session_timeout` (30s)**: Prevents "zombie"
+  transactions that hold locks without actively executing queries. This is
+  critical for:
+  - Avoiding connection pool exhaustion
+  - Preventing lock contention on high-traffic tables
+  - Ensuring failed/abandoned transactions release resources quickly
+
+These timeouts are automatically added to connection strings if not already
+present (see `internal/db/db.go:115-141`). They apply to all database
+connections including those from the connection pool.
+
 ## Database Schema
 
 ### Core Tables
