@@ -47,11 +47,10 @@ Sorted by Impact/Effort ratio (descending - highest value first).
 | 8       | ✅     | Index usage analysis | 5   | 5   | 4   | 2   | 4   | Find and drop unused indexes - reduce write overhead                             | • Unused indexes dropped 13 Oct (125642a)<br>• Migration: `drop_unused_job_indexes.sql`                                    |
 | 3       | ✅     | Intelligent logging  | 5   | 5   | 4   | 3   | 4   | Define when to log at each level - standards documented and enforced             | • Standards documented in CLAUDE.md:52-85<br>• Enforced across API 13 Oct (69540ef)<br>• Helper: `internal/api/logging.go` |
 | 8       | ✅     | Cache hit rate       | 5   | 5   | 4   | 2   | 4   | Target 99% PostgreSQL cache hits - verified at 99.98-100% via pg_stat_statements | • CSV analysis Oct 2025: all queries 99.98-100%<br>• Monitored via `docs/plans/metrics/2025-10/Supabase-performance.csv`   |
-| 4       | ⚪     | Go runtime profiling | 4   | 1   | 4   | 2   | 4   | Profile GC pauses and scheduler latency before optimising                        | • Add GODEBUG=gctrace=1 to Fly.io config<br>• Zero code changes, observability only<br>• 10-minute, zero-risk task         |
-| 7       | 🟠     | Pool sizing formula  | 5   | 3   | 3   | 1   | 3   | Document 2×vCPU or ¼ max_connections formula - tribal knowledge now              | • `db.go:103,155-156` in code comments only<br>• Move to docs/architecture/DATABASE.md<br>• Trivial doc-only change        |
+| 7       | ✅     | Pool sizing formula  | 5   | 5   | 3   | 1   | 3   | Document 2×vCPU or ¼ max_connections formula - already documented                | • Documented in DATABASE.md:56-100<br>• Includes Supabase-specific guidance<br>• Environment-based tuning explained        |
+| 4       | defer  | Go runtime profiling | 4   | 1   | 4   | 2   | 4   | Profile GC pauses and scheduler latency - low priority, can be added anytime     | • Add GODEBUG=gctrace=1 to Fly.io config when needed<br>• Zero code changes, observability only<br>• 10-minute task        |
 
-**Total Priority 4 Items**: 7 (5 completed ✅, 1 not started ⚪, 1 in progress
-🟠)
+**Total Priority 4 Items**: 7 (6 completed ✅, 1 deferred)
 
 ---
 
@@ -366,13 +365,14 @@ articles above.
 | Article | Concept                   | Pri | Status | Summary                                                                          | Application Examples                                                                                              |
 | ------- | ------------------------- | --- | ------ | -------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
 | 3       | Intelligent logging       | 4   | ✅     | Define when to log at each level - standards documented and enforced             | • CLAUDE.md:52-85 defines Debug/Info/Warn/Error<br>• Enforced across API 13 Oct (69540ef)                         |
-| 4       | Go runtime profiling      | 4   | ⚪     | Profile GC pauses and scheduler latency before optimising                        | • Add GODEBUG=gctrace=1 to Fly.io config<br>• 10-minute, zero-risk task                                           |
+| 4       | Go runtime profiling      | 4   | defer  | Profile GC pauses and scheduler latency - low priority, can be added anytime     | • Add GODEBUG=gctrace=1 to Fly.io config when needed<br>• 10-minute, zero-risk task                               |
 | 5       | Profile before optimising | 5   | ✅     | Enable pprof HTTP endpoints - optimise based on data not assumptions             | • `/debug/pprof/*` exposed via auth-protected handlers<br>• Requires system admin credentials                     |
 | 6       | Observability first       | 5   | ✅     | OTLP traces and Prometheus metrics live; refine dashboards over time             | • `/metrics` endpoint exposed via Prom exporter<br>• OpenTelemetry traces + Prometheus metrics wired              |
 | 6       | pprof profiling           | 5   | ✅     | Built-in CPU/memory profiling - needs full HTTP exposure                         | • `/debug/pprof/*` endpoints available behind system-admin auth                                                   |
 | 6       | Error wrapping (%w)       | 4   | ✅     | Wrap errors with fmt.Errorf(%w) - preserve error chain for debugging             | • 106+ instances across codebase<br>• Pattern documented in CLAUDE.md:62<br>• Completed 10 Oct (2e02751)          |
 | 7       | Timeout strategy          | 5   | ✅     | Add idle_in_transaction_session_timeout - prevent zombie transactions            | • `internal/db/db.go` appends `idle_in_transaction_session_timeout=30000`<br>• Documented in DATABASE.md          |
 | 7       | Queue limits              | 5   | ✅     | Return 429 with Retry-After when pool exhausted - graceful degradation           | • `internal/db/queue.go` triggers `ErrPoolSaturated`<br>• `internal/api/errors.go` issues 429 responses           |
+| 7       | Pool sizing formula       | 3   | ✅     | Document 2×vCPU or ¼ max_connections formula - already documented                | • Documented in DATABASE.md:56-100<br>• Includes Supabase-specific guidance                                       |
 | 8       | index_advisor extension   | 5   | defer  | Test virtual indexes before creating - Supabase dashboard sufficient             | • Use Query Performance Advisor exports<br>• Deferred per EVALUATION.md                                           |
 | 8       | Query Performance Advisor | 5   | defer  | Built-in Supabase dashboard tool - automated index suggestions                   | • Check Supabase dashboard during scheduled reviews<br>• Deferred per EVALUATION.md                               |
 | 8       | Cache hit rate            | 4   | ✅     | Target 99% PostgreSQL cache hits - verified at 99.98-100%                        | • CSV analysis Oct 2025: all queries 99.98-100%<br>• docs/plans/metrics/2025-10/Supabase-performance.csv          |
@@ -381,8 +381,7 @@ articles above.
 | 9       | Composite indexes         | 4   | ✅     | Index query patterns not columns - 3 high-impact indexes added                   | • 3 composite indexes created 13 Oct (74a8bfd)<br>• Migration: `add_composite_indexes_for_query_optimisation.sql` |
 | 9       | Timeout discipline        | 4   | ✅     | Add statement_timeout and idle-in-transaction timeouts - prevent runaway queries | • idle_in_transaction_session_timeout added<br>• Documented in DATABASE.md<br>• statement_timeout present         |
 
-**Total High-Priority Items**: 15 (13 completed ✅, 1 not started ⚪, 2
-deferred)
+**Total High-Priority Items**: 16 (13 completed ✅, 3 deferred)
 
 ---
 
