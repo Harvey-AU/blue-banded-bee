@@ -29,6 +29,8 @@ On merge, CI will:
 
 ## [Unreleased]
 
+## [0.7.2] – 2025-10-14
+
 ## [0.7.1] – 2025-10-13
 
 ### Enhanced
@@ -366,6 +368,8 @@ On merge, CI will:
   - Added `target="_blank"` for better user experience
 
 ## [Unreleased]
+
+## [0.7.2] – 2025-10-14
 
 ## [0.7.1] – 2025-10-13
 
