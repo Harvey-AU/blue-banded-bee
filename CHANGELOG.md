@@ -29,6 +29,19 @@ On merge, CI will:
 
 ## [Unreleased]
 
+## [0.7.3] – 2025-10-14
+
+### Security
+
+- **gRPC Dependency Update**: Updated `google.golang.org/grpc` from v1.64.0 to
+  v1.64.1
+  - Fixes potential PII leak where private tokens in gRPC metadata could appear
+    in logs if context is logged
+  - Addresses Dependabot security alert CVE (indirect dependency via
+    OpenTelemetry)
+  - No impact on Blue Banded Bee as we don't log contexts containing gRPC
+    metadata
+
 ## [0.7.2] – 2025-10-14
 
 ## [0.7.1] – 2025-10-13
@@ -368,6 +381,8 @@ On merge, CI will:
   - Added `target="_blank"` for better user experience
 
 ## [Unreleased]
+
+## [0.7.3] – 2025-10-14
 
 ## [0.7.2] – 2025-10-14
 
