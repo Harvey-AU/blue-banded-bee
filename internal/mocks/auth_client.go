@@ -164,6 +164,5 @@ func NewMockAuthConfig() *auth.Config {
 	return &auth.Config{
 		SupabaseURL:     "https://test.supabase.co",
 		SupabaseAnonKey: "test_anon_key",
-		JWTSecret:       "test_jwt_secret",
 	}
 }

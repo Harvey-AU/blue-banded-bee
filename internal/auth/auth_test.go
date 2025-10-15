@@ -1,17 +1,26 @@
 package auth
 
 import (
+	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/rsa"
+	"encoding/base64"
+	"encoding/json"
+	"fmt"
+	"math/big"
+	"net/http"
+	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
+	"time"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-func TestPackage(t *testing.T) {
-	// Placeholder test for auth package
-	t.Log("Auth package loaded")
-}
 
 func TestNewConfigFromEnv(t *testing.T) {
 	tests := []struct {
@@ -23,17 +32,15 @@ func TestNewConfigFromEnv(t *testing.T) {
 		{
 			name: "all_env_vars_set",
 			envVars: map[string]string{
-				"SUPABASE_URL":        "https://test.supabase.co",
-				"SUPABASE_ANON_KEY":   "test-anon-key",
-				"SUPABASE_JWT_SECRET": "test-jwt-secret",
+				"SUPABASE_URL":      "https://test.supabase.co",
+				"SUPABASE_ANON_KEY": "test-anon-key",
 			},
 			wantErr: false,
 		},
 		{
 			name: "missing_url",
 			envVars: map[string]string{
-				"SUPABASE_ANON_KEY":   "test-anon-key",
-				"SUPABASE_JWT_SECRET": "test-jwt-secret",
+				"SUPABASE_ANON_KEY": "test-anon-key",
 			},
 			wantErr: true,
 			errMsg:  "SUPABASE_URL environment variable is required",
@@ -41,20 +48,10 @@ func TestNewConfigFromEnv(t *testing.T) {
 		{
 			name: "missing_anon_key",
 			envVars: map[string]string{
-				"SUPABASE_URL":        "https://test.supabase.co",
-				"SUPABASE_JWT_SECRET": "test-jwt-secret",
+				"SUPABASE_URL": "https://test.supabase.co",
 			},
 			wantErr: true,
 			errMsg:  "SUPABASE_ANON_KEY environment variable is required",
-		},
-		{
-			name: "missing_jwt_secret",
-			envVars: map[string]string{
-				"SUPABASE_URL":      "https://test.supabase.co",
-				"SUPABASE_ANON_KEY": "test-anon-key",
-			},
-			wantErr: true,
-			errMsg:  "SUPABASE_JWT_SECRET environment variable is required",
 		},
 		{
 			name:    "all_missing",
@@ -66,15 +63,12 @@ func TestNewConfigFromEnv(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Clear environment
-			os.Clearenv()
+			t.Cleanup(os.Clearenv)
 
-			// Set test environment variables
 			for key, value := range tt.envVars {
-				os.Setenv(key, value)
+				require.NoError(t, os.Setenv(key, value))
 			}
 
-			// Test NewConfigFromEnv
 			config, err := NewConfigFromEnv()
 
 			if tt.wantErr {
@@ -88,16 +82,12 @@ func TestNewConfigFromEnv(t *testing.T) {
 				require.NotNil(t, config)
 				assert.Equal(t, tt.envVars["SUPABASE_URL"], config.SupabaseURL)
 				assert.Equal(t, tt.envVars["SUPABASE_ANON_KEY"], config.SupabaseAnonKey)
-				assert.Equal(t, tt.envVars["SUPABASE_JWT_SECRET"], config.JWTSecret)
 			}
-
-			// Clean up
-			os.Clearenv()
 		})
 	}
 }
 
-func TestConfig_Validate(t *testing.T) {
+func TestConfigValidate(t *testing.T) {
 	tests := []struct {
 		name    string
 		config  *Config
@@ -109,7 +99,6 @@ func TestConfig_Validate(t *testing.T) {
 			config: &Config{
 				SupabaseURL:     "https://test.supabase.co",
 				SupabaseAnonKey: "test-anon-key",
-				JWTSecret:       "test-jwt-secret",
 			},
 			wantErr: false,
 		},
@@ -117,7 +106,6 @@ func TestConfig_Validate(t *testing.T) {
 			name: "missing_url",
 			config: &Config{
 				SupabaseAnonKey: "test-anon-key",
-				JWTSecret:       "test-jwt-secret",
 			},
 			wantErr: true,
 			errMsg:  "SupabaseURL is required",
@@ -126,19 +114,9 @@ func TestConfig_Validate(t *testing.T) {
 			name: "missing_anon_key",
 			config: &Config{
 				SupabaseURL: "https://test.supabase.co",
-				JWTSecret:   "test-jwt-secret",
 			},
 			wantErr: true,
 			errMsg:  "SupabaseAnonKey is required",
-		},
-		{
-			name: "missing_jwt_secret",
-			config: &Config{
-				SupabaseURL:     "https://test.supabase.co",
-				SupabaseAnonKey: "test-anon-key",
-			},
-			wantErr: true,
-			errMsg:  "JWTSecret is required",
 		},
 		{
 			name:    "empty_config",
@@ -164,29 +142,75 @@ func TestConfig_Validate(t *testing.T) {
 	}
 }
 
-func TestConfigFields(t *testing.T) {
-	config := &Config{
-		SupabaseURL:     "https://test.supabase.co",
-		SupabaseAnonKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test",
-		JWTSecret:       "super-secret-jwt-key-with-at-least-32-characters",
-	}
+func TestValidateSupabaseTokenRS256(t *testing.T) {
+	privKey, kid, supabaseURL, cleanup := startTestJWKS(t)
+	defer cleanup()
 
-	// Test that fields are accessible
-	assert.Equal(t, "https://test.supabase.co", config.SupabaseURL)
-	assert.Equal(t, "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test", config.SupabaseAnonKey)
-	assert.Equal(t, "super-secret-jwt-key-with-at-least-32-characters", config.JWTSecret)
+	tokenString := signTestToken(t, privKey, kid, supabaseURL, []string{"authenticated"}, time.Now().Add(time.Hour))
 
-	// Test validation passes
-	err := config.Validate()
-	assert.NoError(t, err)
+	claims, err := validateSupabaseToken(context.Background(), tokenString)
+	require.NoError(t, err)
+
+	assert.Equal(t, "user-123", claims.UserID)
+	assert.Equal(t, "user@example.com", claims.Email)
+}
+
+func TestValidateSupabaseTokenES256(t *testing.T) {
+	ecPrivKey, kid, supabaseURL, cleanup := startTestJWKSWithES256(t)
+	defer cleanup()
+
+	tokenString := signTestTokenES256(t, ecPrivKey, kid, supabaseURL, []string{"authenticated"}, time.Now().Add(time.Hour))
+
+	claims, err := validateSupabaseToken(context.Background(), tokenString)
+	require.NoError(t, err)
+
+	assert.Equal(t, "user-123", claims.UserID)
+	assert.Equal(t, "user@example.com", claims.Email)
+}
+
+func TestValidateSupabaseTokenInvalidAudience(t *testing.T) {
+	privKey, kid, supabaseURL, cleanup := startTestJWKS(t)
+	defer cleanup()
+
+	tokenString := signTestToken(t, privKey, kid, supabaseURL, []string{"other-service"}, time.Now().Add(time.Hour))
+
+	_, err := validateSupabaseToken(context.Background(), tokenString)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unexpected audience")
+}
+
+func TestValidateSupabaseTokenInvalidSignature(t *testing.T) {
+	_, kid, supabaseURL, cleanup := startTestJWKS(t)
+	defer cleanup()
+
+	otherKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+
+	tokenString := signTestToken(t, otherKey, kid, supabaseURL, []string{"authenticated"}, time.Now().Add(time.Hour))
+
+	_, err = validateSupabaseToken(context.Background(), tokenString)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "signature")
+}
+
+func TestValidateSupabaseTokenContextCancelled(t *testing.T) {
+	privKey, kid, supabaseURL, cleanup := startTestJWKS(t)
+	defer cleanup()
+
+	tokenString := signTestToken(t, privKey, kid, supabaseURL, []string{"authenticated"}, time.Now().Add(time.Hour))
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, err := validateSupabaseToken(ctx, tokenString)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "request context cancelled")
 }
 
 func BenchmarkNewConfigFromEnv(b *testing.B) {
-	// Set up environment
-	os.Setenv("SUPABASE_URL", "https://test.supabase.co")
-	os.Setenv("SUPABASE_ANON_KEY", "test-anon-key")
-	os.Setenv("SUPABASE_JWT_SECRET", "test-jwt-secret")
-	defer os.Clearenv()
+	b.Cleanup(os.Clearenv)
+	require.NoError(b, os.Setenv("SUPABASE_URL", "https://test.supabase.co"))
+	require.NoError(b, os.Setenv("SUPABASE_ANON_KEY", "test-anon-key"))
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -194,15 +218,208 @@ func BenchmarkNewConfigFromEnv(b *testing.B) {
 	}
 }
 
-func BenchmarkConfig_Validate(b *testing.B) {
+func BenchmarkConfigValidate(b *testing.B) {
 	config := &Config{
 		SupabaseURL:     "https://test.supabase.co",
 		SupabaseAnonKey: "test-anon-key",
-		JWTSecret:       "test-jwt-secret",
 	}
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_ = config.Validate()
 	}
+}
+
+func startTestJWKS(tb testing.TB) (*rsa.PrivateKey, string, string, func()) {
+	tb.Helper()
+
+	resetJWKSForTest()
+
+	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(tb, err)
+
+	kid := "test-key"
+	publicKey := &privateKey.PublicKey
+
+	n := base64.RawURLEncoding.EncodeToString(publicKey.N.Bytes())
+	e := base64.RawURLEncoding.EncodeToString(big.NewInt(int64(publicKey.E)).Bytes())
+
+	jwksPayload := struct {
+		Keys []map[string]string `json:"keys"`
+	}{
+		Keys: []map[string]string{
+			{
+				"kty": "RSA",
+				"alg": "RS256",
+				"use": "sig",
+				"kid": kid,
+				"n":   n,
+				"e":   e,
+			},
+		},
+	}
+
+	payload, err := json.Marshal(jwksPayload)
+	require.NoError(tb, err)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/auth/v1/certs" {
+			http.NotFound(w, r)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		if _, writeErr := w.Write(payload); writeErr != nil {
+			tb.Logf("failed to write JWKS payload: %v", writeErr)
+		}
+	}))
+
+	supabaseURL := strings.TrimSuffix(server.URL, "/")
+
+	prevURL := os.Getenv("SUPABASE_URL")
+	prevAnon := os.Getenv("SUPABASE_ANON_KEY")
+
+	require.NoError(tb, os.Setenv("SUPABASE_URL", supabaseURL))
+	require.NoError(tb, os.Setenv("SUPABASE_ANON_KEY", "test-anon-key"))
+
+	cleanup := func() {
+		server.Close()
+
+		if prevURL == "" {
+			os.Unsetenv("SUPABASE_URL")
+		} else {
+			os.Setenv("SUPABASE_URL", prevURL)
+		}
+
+		if prevAnon == "" {
+			os.Unsetenv("SUPABASE_ANON_KEY")
+		} else {
+			os.Setenv("SUPABASE_ANON_KEY", prevAnon)
+		}
+
+		resetJWKSForTest()
+	}
+
+	return privateKey, kid, supabaseURL, cleanup
+}
+
+func signTestToken(tb testing.TB, privateKey *rsa.PrivateKey, kid, supabaseURL string, audience []string, expiry time.Time) string {
+	tb.Helper()
+
+	claims := &UserClaims{
+		RegisteredClaims: jwt.RegisteredClaims{
+			Issuer:    fmt.Sprintf("%s/auth/v1", strings.TrimSuffix(supabaseURL, "/")),
+			Audience:  jwt.ClaimStrings(audience),
+			IssuedAt:  jwt.NewNumericDate(time.Now().Add(-time.Minute)),
+			ExpiresAt: jwt.NewNumericDate(expiry),
+		},
+		UserID: "user-123",
+		Email:  "user@example.com",
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
+	token.Header["kid"] = kid
+
+	signed, err := token.SignedString(privateKey)
+	require.NoError(tb, err)
+
+	return signed
+}
+
+func startTestJWKSWithES256(tb testing.TB) (*ecdsa.PrivateKey, string, string, func()) {
+	tb.Helper()
+
+	resetJWKSForTest()
+
+	privateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(tb, err)
+
+	kid := "test-key-es256"
+	publicKey := &privateKey.PublicKey
+
+	// Encode EC public key coordinates
+	x := base64.RawURLEncoding.EncodeToString(publicKey.X.Bytes())
+	y := base64.RawURLEncoding.EncodeToString(publicKey.Y.Bytes())
+
+	jwksPayload := struct {
+		Keys []map[string]string `json:"keys"`
+	}{
+		Keys: []map[string]string{
+			{
+				"kty": "EC",
+				"crv": "P-256",
+				"alg": "ES256",
+				"use": "sig",
+				"kid": kid,
+				"x":   x,
+				"y":   y,
+			},
+		},
+	}
+
+	payload, err := json.Marshal(jwksPayload)
+	require.NoError(tb, err)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/auth/v1/certs" {
+			http.NotFound(w, r)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		if _, writeErr := w.Write(payload); writeErr != nil {
+			tb.Logf("failed to write JWKS payload: %v", writeErr)
+		}
+	}))
+
+	supabaseURL := strings.TrimSuffix(server.URL, "/")
+
+	prevURL := os.Getenv("SUPABASE_URL")
+	prevAnon := os.Getenv("SUPABASE_ANON_KEY")
+
+	require.NoError(tb, os.Setenv("SUPABASE_URL", supabaseURL))
+	require.NoError(tb, os.Setenv("SUPABASE_ANON_KEY", "test-anon-key"))
+
+	cleanup := func() {
+		server.Close()
+
+		if prevURL == "" {
+			os.Unsetenv("SUPABASE_URL")
+		} else {
+			os.Setenv("SUPABASE_URL", prevURL)
+		}
+
+		if prevAnon == "" {
+			os.Unsetenv("SUPABASE_ANON_KEY")
+		} else {
+			os.Setenv("SUPABASE_ANON_KEY", prevAnon)
+		}
+
+		resetJWKSForTest()
+	}
+
+	return privateKey, kid, supabaseURL, cleanup
+}
+
+func signTestTokenES256(tb testing.TB, privateKey *ecdsa.PrivateKey, kid, supabaseURL string, audience []string, expiry time.Time) string {
+	tb.Helper()
+
+	claims := &UserClaims{
+		RegisteredClaims: jwt.RegisteredClaims{
+			Issuer:    fmt.Sprintf("%s/auth/v1", strings.TrimSuffix(supabaseURL, "/")),
+			Audience:  jwt.ClaimStrings(audience),
+			IssuedAt:  jwt.NewNumericDate(time.Now().Add(-time.Minute)),
+			ExpiresAt: jwt.NewNumericDate(expiry),
+		},
+		UserID: "user-123",
+		Email:  "user@example.com",
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodES256, claims)
+	token.Header["kid"] = kid
+
+	signed, err := token.SignedString(privateKey)
+	require.NoError(tb, err)
+
+	return signed
 }
