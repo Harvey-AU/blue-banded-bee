@@ -322,7 +322,7 @@ func main() {
 
 	// Create a new HTTP server
 	server := &http.Server{
-		Addr:    ":" + config.Port,
+		Addr:    "0.0.0.0:" + config.Port,
 		Handler: handler,
 	}
 
