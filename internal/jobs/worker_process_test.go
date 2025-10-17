@@ -83,9 +83,10 @@ func (m *MockCrawler) GetUserAgent() string {
 
 // MockDbQueue implements a minimal DbQueue interface for testing
 type MockDbQueue struct {
-	GetNextTaskFunc      func(ctx context.Context, jobID string) (*db.Task, error)
-	UpdateTaskStatusFunc func(ctx context.Context, task *db.Task) error
-	ExecuteFunc          func(ctx context.Context, fn func(*sql.Tx) error) error
+	GetNextTaskFunc        func(ctx context.Context, jobID string) (*db.Task, error)
+	UpdateTaskStatusFunc   func(ctx context.Context, task *db.Task) error
+	ExecuteFunc            func(ctx context.Context, fn func(*sql.Tx) error) error
+	ExecuteMaintenanceFunc func(ctx context.Context, fn func(*sql.Tx) error) error
 }
 
 func (m *MockDbQueue) GetNextTask(ctx context.Context, jobID string) (*db.Task, error) {
@@ -107,6 +108,13 @@ func (m *MockDbQueue) Execute(ctx context.Context, fn func(*sql.Tx) error) error
 		return m.ExecuteFunc(ctx, fn)
 	}
 	return nil
+}
+
+func (m *MockDbQueue) ExecuteMaintenance(ctx context.Context, fn func(*sql.Tx) error) error {
+	if m.ExecuteMaintenanceFunc != nil {
+		return m.ExecuteMaintenanceFunc(ctx, fn)
+	}
+	return m.Execute(ctx, fn)
 }
 
 // TestWorkerPoolProcessTask demonstrates the test structure for processTask

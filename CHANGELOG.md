@@ -29,6 +29,14 @@ On merge, CI will:
 
 ## [Unreleased]
 
+## [0.8.2] – 2025-10-17
+
+### Fixed
+
+- **Job Recovery**: ensured stale task and job cleanup runs even when the DB
+  pool is saturated by routing maintenance updates through a dedicated low-cost
+  transaction helper
+
 ## [0.8.1] – 2025-10-17
 
 ## [0.8.0] – 2025-10-17
@@ -428,6 +436,8 @@ On merge, CI will:
   - Added `target="_blank"` for better user experience
 
 ## [Unreleased]
+
+## [0.8.2] – 2025-10-17
 
 ## [0.8.1] – 2025-10-17
 

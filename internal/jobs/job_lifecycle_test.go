@@ -36,6 +36,10 @@ func (m *mockDbQueueWrapper) EnqueueURLs(ctx context.Context, jobID string, page
 	return nil
 }
 
+func (m *mockDbQueueWrapper) ExecuteMaintenance(ctx context.Context, fn func(*sql.Tx) error) error {
+	return m.Execute(ctx, fn)
+}
+
 func (m *mockDbQueueWrapper) CleanupStuckJobs(ctx context.Context) error {
 	// Not needed for this test
 	return nil

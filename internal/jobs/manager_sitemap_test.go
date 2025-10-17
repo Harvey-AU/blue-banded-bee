@@ -22,6 +22,11 @@ func (m *MockDbQueueProvider) Execute(ctx context.Context, fn func(*sql.Tx) erro
 	return args.Error(0)
 }
 
+func (m *MockDbQueueProvider) ExecuteMaintenance(ctx context.Context, fn func(*sql.Tx) error) error {
+	args := m.Called(ctx, fn)
+	return args.Error(0)
+}
+
 func (m *MockDbQueueProvider) EnqueueURLs(ctx context.Context, jobID string, pages []db.Page, sourceType string, sourceURL string) error {
 	args := m.Called(ctx, jobID, pages, sourceType, sourceURL)
 	return args.Error(0)

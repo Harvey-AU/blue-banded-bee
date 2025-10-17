@@ -745,12 +745,12 @@ func (wp *WorkerPool) recoverStaleTasks(ctx context.Context) error {
 			return ctx.Err()
 		}
 
-		err := wp.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
+		err := wp.dbQueue.ExecuteMaintenance(ctx, func(tx *sql.Tx) error {
 			staleTime := time.Now().Add(-TaskStaleTimeout)
 
 			rows, err := tx.QueryContext(ctx, `
-				SELECT t.id, t.retry_count
-				FROM tasks t
+					SELECT t.id, t.retry_count
+					FROM tasks t
 				WHERE status = $1
 				AND started_at < $2
 			`, TaskStatusRunning, staleTime)
@@ -1130,11 +1130,11 @@ func (wp *WorkerPool) CleanupStuckJobs(ctx context.Context) error {
 	defer span.Finish()
 
 	var rowsAffected int64
-	err := wp.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
+	err := wp.dbQueue.ExecuteMaintenance(ctx, func(tx *sql.Tx) error {
 		result, err := tx.ExecContext(ctx, `
-			UPDATE jobs 
-			SET status = $1, 
-				completed_at = COALESCE(completed_at, $2),
+				UPDATE jobs 
+				SET status = $1, 
+					completed_at = COALESCE(completed_at, $2),
 				progress = 100.0
 			WHERE (status = $3 OR status = $4)
 			AND total_tasks > 0 
