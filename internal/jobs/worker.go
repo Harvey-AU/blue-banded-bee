@@ -749,16 +749,22 @@ func (wp *WorkerPool) recoverStaleTasks(ctx context.Context) error {
 			staleTime := time.Now().Add(-TaskStaleTimeout)
 
 			rows, err := tx.QueryContext(ctx, `
-					SELECT t.id, t.retry_count
-					FROM tasks t
-				WHERE status = $1
-				AND started_at < $2
-			`, TaskStatusRunning, staleTime)
+						SELECT t.id, t.retry_count
+						FROM tasks t
+						WHERE status = $1
+							AND started_at < $2
+					`, TaskStatusRunning, staleTime)
 
 			if err != nil {
 				return err
 			}
-			defer rows.Close()
+
+			type staleTask struct {
+				id         string
+				retryCount int
+			}
+
+			var tasks []staleTask
 
 			var updateErrors []error
 			var successCount int
@@ -770,41 +776,55 @@ func (wp *WorkerPool) recoverStaleTasks(ctx context.Context) error {
 					continue
 				}
 
-				if retryCount >= MaxTaskRetries {
+				tasks = append(tasks, staleTask{
+					id:         taskID,
+					retryCount: retryCount,
+				})
+			}
+
+			if err := rows.Err(); err != nil {
+				rows.Close()
+				return err
+			}
+
+			if err := rows.Close(); err != nil {
+				return err
+			}
+
+			now := time.Now()
+
+			for _, task := range tasks {
+				if task.retryCount >= MaxTaskRetries {
 					_, err = tx.ExecContext(ctx, `
-						UPDATE tasks
-						SET status = $1,
-							error = $2,
-							completed_at = $3
-						WHERE id = $4
-					`, TaskStatusFailed, "Max retries exceeded", time.Now(), taskID)
+								UPDATE tasks
+								SET status = $1,
+									error = $2,
+									completed_at = $3
+								WHERE id = $4
+							`, TaskStatusFailed, "Max retries exceeded", now, task.id)
 				} else {
 					_, err = tx.ExecContext(ctx, `
-						UPDATE tasks
-						SET status = $1,
-							started_at = NULL,
-							retry_count = retry_count + 1
-						WHERE id = $2
-					`, TaskStatusPending, taskID)
+								UPDATE tasks
+								SET status = $1,
+									started_at = NULL,
+									retry_count = retry_count + 1
+								WHERE id = $2
+							`, TaskStatusPending, task.id)
 				}
 
 				if err != nil {
-					// Collect errors but continue processing other tasks
-					updateErrors = append(updateErrors, fmt.Errorf("task %s: %w", taskID, err))
-					log.Warn().Err(err).
-						Str("task_id", taskID).
+					updateErrors = append(updateErrors, fmt.Errorf("task %s: %w", task.id, err))
+					log.Warn().
+						Err(err).
+						Str("task_id", task.id).
 						Msg("Failed to update single stale task, will retry in transaction")
 				} else {
 					successCount++
 					log.Info().
-						Str("task_id", taskID).
-						Int("retry_count", retryCount).
+						Str("task_id", task.id).
+						Int("retry_count", task.retryCount).
 						Msg("Successfully recovered stale task")
 				}
-			}
-
-			if err := rows.Err(); err != nil {
-				return err
 			}
 
 			// If ANY updates failed, return error to rollback transaction and trigger retry
