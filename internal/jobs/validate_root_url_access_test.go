@@ -173,6 +173,10 @@ func (m *RobotsValidationMock) Execute(ctx context.Context, fn func(*sql.Tx) err
 	return nil // Simulate successful execution
 }
 
+func (m *RobotsValidationMock) ExecuteMaintenance(ctx context.Context, fn func(*sql.Tx) error) error {
+	return m.Execute(ctx, fn)
+}
+
 func (m *RobotsValidationMock) EnqueueURLs(ctx context.Context, jobID string, pages []db.Page, sourceType string, sourceURL string) error {
 	return nil
 }

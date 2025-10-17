@@ -28,6 +28,17 @@ func (m *MockDbQueue) Execute(ctx context.Context, fn func(*sql.Tx) error) error
 	return args.Error(0)
 }
 
+// ExecuteMaintenance mocks the ExecuteMaintenance method
+func (m *MockDbQueue) ExecuteMaintenance(ctx context.Context, fn func(*sql.Tx) error) error {
+	args := m.Called(ctx, fn)
+
+	if args.Error(0) == nil && fn != nil {
+		return fn(nil)
+	}
+
+	return args.Error(0)
+}
+
 // EnqueueURLs mocks the EnqueueURLs method
 func (m *MockDbQueue) EnqueueURLs(ctx context.Context, jobID string, pages []db.Page, sourceType string, sourceURL string) error {
 	args := m.Called(ctx, jobID, pages, sourceType, sourceURL)

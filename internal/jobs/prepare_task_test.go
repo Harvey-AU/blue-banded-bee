@@ -199,6 +199,10 @@ func (m *TaskPrepMock) Execute(ctx context.Context, fn func(*sql.Tx) error) erro
 	return nil
 }
 
+func (m *TaskPrepMock) ExecuteMaintenance(ctx context.Context, fn func(*sql.Tx) error) error {
+	return m.Execute(ctx, fn)
+}
+
 func (m *TaskPrepMock) GetNextTask(ctx context.Context, jobID string) (*db.Task, error) {
 	return nil, nil
 }

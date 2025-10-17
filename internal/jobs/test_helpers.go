@@ -34,6 +34,10 @@ func (m *MockDbQueueWithTransaction) Execute(ctx context.Context, fn func(*sql.T
 	return tx.Commit()
 }
 
+func (m *MockDbQueueWithTransaction) ExecuteMaintenance(ctx context.Context, fn func(*sql.Tx) error) error {
+	return m.Execute(ctx, fn)
+}
+
 func (m *MockDbQueueWithTransaction) EnqueueURLs(ctx context.Context, jobID string, pages []db.Page, sourceType string, sourceURL string) error {
 	// Not needed for most tests - override in specific tests if needed
 	return nil
@@ -75,6 +79,10 @@ func (m *simpleDbQueueMock) UpdateTaskStatus(ctx context.Context, task *db.Task)
 }
 
 func (m *simpleDbQueueMock) Execute(ctx context.Context, fn func(*sql.Tx) error) error {
+	return nil
+}
+
+func (m *simpleDbQueueMock) ExecuteMaintenance(ctx context.Context, fn func(*sql.Tx) error) error {
 	return nil
 }
 

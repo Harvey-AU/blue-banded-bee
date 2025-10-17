@@ -105,6 +105,46 @@ func (q *DbQueue) Execute(ctx context.Context, fn func(*sql.Tx) error) error {
 	return nil
 }
 
+// ExecuteMaintenance runs a low-impact transaction that bypasses pool saturation guards.
+// This is intended for housekeeping tasks that must always run, even when the pool is busy.
+func (q *DbQueue) ExecuteMaintenance(ctx context.Context, fn func(*sql.Tx) error) error {
+	if q == nil || q.db == nil || q.db.client == nil {
+		return fmt.Errorf("maintenance transaction requires an initialised database connection")
+	}
+
+	// Keep maintenance units short-lived to minimise pool impact.
+	if _, ok := ctx.Deadline(); !ok {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, 10*time.Second)
+		defer cancel()
+	}
+
+	tx, err := q.db.client.BeginTx(ctx, &sql.TxOptions{})
+	if err != nil {
+		sentry.CaptureException(err)
+		return fmt.Errorf("failed to begin maintenance transaction: %w", err)
+	}
+	defer func() {
+		_ = tx.Rollback()
+	}()
+
+	// Apply a tight statement timeout so maintenance never blocks the pool.
+	if _, err := tx.ExecContext(ctx, `SET LOCAL statement_timeout = '5s'`); err != nil {
+		log.Warn().Err(err).Msg("Failed to set maintenance statement timeout")
+	}
+
+	if err := fn(tx); err != nil {
+		return err
+	}
+
+	if err := tx.Commit(); err != nil {
+		sentry.CaptureException(err)
+		return fmt.Errorf("failed to commit maintenance transaction: %w", err)
+	}
+
+	return nil
+}
+
 func (q *DbQueue) ensurePoolCapacity() error {
 	if q == nil || q.db == nil || q.db.client == nil {
 		return nil

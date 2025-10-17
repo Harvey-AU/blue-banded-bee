@@ -127,6 +127,10 @@ func (m *ManualRootTaskMock) Execute(ctx context.Context, fn func(*sql.Tx) error
 	return m.executeError
 }
 
+func (m *ManualRootTaskMock) ExecuteMaintenance(ctx context.Context, fn func(*sql.Tx) error) error {
+	return m.Execute(ctx, fn)
+}
+
 func (m *ManualRootTaskMock) EnqueueURLs(ctx context.Context, jobID string, pages []db.Page, sourceType string, sourceURL string) error {
 	return nil
 }

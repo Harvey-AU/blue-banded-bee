@@ -108,6 +108,10 @@ func (m *URLDiscoveryMock) Execute(ctx context.Context, fn func(*sql.Tx) error) 
 	return nil
 }
 
+func (m *URLDiscoveryMock) ExecuteMaintenance(ctx context.Context, fn func(*sql.Tx) error) error {
+	return m.Execute(ctx, fn)
+}
+
 func (m *URLDiscoveryMock) EnqueueURLs(ctx context.Context, jobID string, pages []db.Page, sourceType string, sourceURL string) error {
 	return nil
 }
