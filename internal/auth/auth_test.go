@@ -32,32 +32,32 @@ func TestNewConfigFromEnv(t *testing.T) {
 		{
 			name: "all_env_vars_set",
 			envVars: map[string]string{
-				"SUPABASE_URL":      "https://test.supabase.co",
-				"SUPABASE_ANON_KEY": "test-anon-key",
+				"SUPABASE_AUTH_URL":        "https://test.supabase.co",
+				"SUPABASE_PUBLISHABLE_KEY": "sb_publishable_test_key",
 			},
 			wantErr: false,
 		},
 		{
 			name: "missing_url",
 			envVars: map[string]string{
-				"SUPABASE_ANON_KEY": "test-anon-key",
+				"SUPABASE_PUBLISHABLE_KEY": "sb_publishable_test_key",
 			},
 			wantErr: true,
-			errMsg:  "SUPABASE_URL environment variable is required",
+			errMsg:  "SUPABASE_AUTH_URL environment variable is required",
 		},
 		{
-			name: "missing_anon_key",
+			name: "missing_publishable_key",
 			envVars: map[string]string{
-				"SUPABASE_URL": "https://test.supabase.co",
+				"SUPABASE_AUTH_URL": "https://test.supabase.co",
 			},
 			wantErr: true,
-			errMsg:  "SUPABASE_ANON_KEY environment variable is required",
+			errMsg:  "SUPABASE_PUBLISHABLE_KEY environment variable is required",
 		},
 		{
 			name:    "all_missing",
 			envVars: map[string]string{},
 			wantErr: true,
-			errMsg:  "SUPABASE_URL environment variable is required",
+			errMsg:  "SUPABASE_AUTH_URL environment variable is required",
 		},
 	}
 
@@ -80,8 +80,8 @@ func TestNewConfigFromEnv(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 				require.NotNil(t, config)
-				assert.Equal(t, tt.envVars["SUPABASE_URL"], config.SupabaseURL)
-				assert.Equal(t, tt.envVars["SUPABASE_ANON_KEY"], config.SupabaseAnonKey)
+				assert.Equal(t, tt.envVars["SUPABASE_AUTH_URL"], config.AuthURL)
+				assert.Equal(t, tt.envVars["SUPABASE_PUBLISHABLE_KEY"], config.PublishableKey)
 			}
 		})
 	}
@@ -97,32 +97,32 @@ func TestConfigValidate(t *testing.T) {
 		{
 			name: "valid_config",
 			config: &Config{
-				SupabaseURL:     "https://test.supabase.co",
-				SupabaseAnonKey: "test-anon-key",
+				AuthURL:        "https://test.supabase.co",
+				PublishableKey: "sb_publishable_test_key",
 			},
 			wantErr: false,
 		},
 		{
 			name: "missing_url",
 			config: &Config{
-				SupabaseAnonKey: "test-anon-key",
+				PublishableKey: "sb_publishable_test_key",
 			},
 			wantErr: true,
-			errMsg:  "SupabaseURL is required",
+			errMsg:  "AuthURL is required",
 		},
 		{
-			name: "missing_anon_key",
+			name: "missing_publishable_key",
 			config: &Config{
-				SupabaseURL: "https://test.supabase.co",
+				AuthURL: "https://test.supabase.co",
 			},
 			wantErr: true,
-			errMsg:  "SupabaseAnonKey is required",
+			errMsg:  "PublishableKey is required",
 		},
 		{
 			name:    "empty_config",
 			config:  &Config{},
 			wantErr: true,
-			errMsg:  "SupabaseURL is required",
+			errMsg:  "AuthURL is required",
 		},
 	}
 
@@ -209,8 +209,8 @@ func TestValidateSupabaseTokenContextCancelled(t *testing.T) {
 
 func BenchmarkNewConfigFromEnv(b *testing.B) {
 	b.Cleanup(os.Clearenv)
-	require.NoError(b, os.Setenv("SUPABASE_URL", "https://test.supabase.co"))
-	require.NoError(b, os.Setenv("SUPABASE_ANON_KEY", "test-anon-key"))
+	require.NoError(b, os.Setenv("SUPABASE_AUTH_URL", "https://test.supabase.co"))
+	require.NoError(b, os.Setenv("SUPABASE_PUBLISHABLE_KEY", "sb_publishable_test_key"))
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -220,8 +220,8 @@ func BenchmarkNewConfigFromEnv(b *testing.B) {
 
 func BenchmarkConfigValidate(b *testing.B) {
 	config := &Config{
-		SupabaseURL:     "https://test.supabase.co",
-		SupabaseAnonKey: "test-anon-key",
+		AuthURL:        "https://test.supabase.co",
+		PublishableKey: "sb_publishable_test_key",
 	}
 
 	b.ResetTimer()
@@ -276,25 +276,25 @@ func startTestJWKS(tb testing.TB) (*rsa.PrivateKey, string, string, func()) {
 
 	supabaseURL := strings.TrimSuffix(server.URL, "/")
 
-	prevURL := os.Getenv("SUPABASE_URL")
-	prevAnon := os.Getenv("SUPABASE_ANON_KEY")
+	prevURL := os.Getenv("SUPABASE_AUTH_URL")
+	prevKey := os.Getenv("SUPABASE_PUBLISHABLE_KEY")
 
-	require.NoError(tb, os.Setenv("SUPABASE_URL", supabaseURL))
-	require.NoError(tb, os.Setenv("SUPABASE_ANON_KEY", "test-anon-key"))
+	require.NoError(tb, os.Setenv("SUPABASE_AUTH_URL", supabaseURL))
+	require.NoError(tb, os.Setenv("SUPABASE_PUBLISHABLE_KEY", "sb_publishable_test_key"))
 
 	cleanup := func() {
 		server.Close()
 
 		if prevURL == "" {
-			os.Unsetenv("SUPABASE_URL")
+			os.Unsetenv("SUPABASE_AUTH_URL")
 		} else {
-			os.Setenv("SUPABASE_URL", prevURL)
+			os.Setenv("SUPABASE_AUTH_URL", prevURL)
 		}
 
-		if prevAnon == "" {
-			os.Unsetenv("SUPABASE_ANON_KEY")
+		if prevKey == "" {
+			os.Unsetenv("SUPABASE_PUBLISHABLE_KEY")
 		} else {
-			os.Setenv("SUPABASE_ANON_KEY", prevAnon)
+			os.Setenv("SUPABASE_PUBLISHABLE_KEY", prevKey)
 		}
 
 		resetJWKSForTest()
@@ -374,25 +374,25 @@ func startTestJWKSWithES256(tb testing.TB) (*ecdsa.PrivateKey, string, string, f
 
 	supabaseURL := strings.TrimSuffix(server.URL, "/")
 
-	prevURL := os.Getenv("SUPABASE_URL")
-	prevAnon := os.Getenv("SUPABASE_ANON_KEY")
+	prevURL := os.Getenv("SUPABASE_AUTH_URL")
+	prevKey := os.Getenv("SUPABASE_PUBLISHABLE_KEY")
 
-	require.NoError(tb, os.Setenv("SUPABASE_URL", supabaseURL))
-	require.NoError(tb, os.Setenv("SUPABASE_ANON_KEY", "test-anon-key"))
+	require.NoError(tb, os.Setenv("SUPABASE_AUTH_URL", supabaseURL))
+	require.NoError(tb, os.Setenv("SUPABASE_PUBLISHABLE_KEY", "sb_publishable_test_key"))
 
 	cleanup := func() {
 		server.Close()
 
 		if prevURL == "" {
-			os.Unsetenv("SUPABASE_URL")
+			os.Unsetenv("SUPABASE_AUTH_URL")
 		} else {
-			os.Setenv("SUPABASE_URL", prevURL)
+			os.Setenv("SUPABASE_AUTH_URL", prevURL)
 		}
 
-		if prevAnon == "" {
-			os.Unsetenv("SUPABASE_ANON_KEY")
+		if prevKey == "" {
+			os.Unsetenv("SUPABASE_PUBLISHABLE_KEY")
 		} else {
-			os.Setenv("SUPABASE_ANON_KEY", prevAnon)
+			os.Setenv("SUPABASE_PUBLISHABLE_KEY", prevKey)
 		}
 
 		resetJWKSForTest()

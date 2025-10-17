@@ -56,8 +56,11 @@ On merge, CI will:
 
 - **Authentication Configuration**: Simplified auth config structure
   - Removed `JWTSecret` field from `auth.Config` struct
-  - Updated `NewConfigFromEnv()` to only require `SUPABASE_URL` and
-    `SUPABASE_ANON_KEY`
+  - Renamed environment variables for clarity:
+    - `SUPABASE_URL` → `SUPABASE_AUTH_URL`
+    - `SUPABASE_ANON_KEY` → `SUPABASE_PUBLISHABLE_KEY`
+  - Updated `NewConfigFromEnv()` to only require `SUPABASE_AUTH_URL` and
+    `SUPABASE_PUBLISHABLE_KEY`
   - Updated all authentication tests to use RS256 tokens with proper JWKS
     mocking
 

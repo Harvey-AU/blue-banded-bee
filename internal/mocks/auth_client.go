@@ -162,7 +162,7 @@ type AuthClientInterface interface {
 // NewMockAuthConfig creates a mock auth configuration for testing
 func NewMockAuthConfig() *auth.Config {
 	return &auth.Config{
-		SupabaseURL:     "https://test.supabase.co",
-		SupabaseAnonKey: "test_anon_key",
+		AuthURL:        "https://test.supabase.co",
+		PublishableKey: "sb_publishable_test_key",
 	}
 }

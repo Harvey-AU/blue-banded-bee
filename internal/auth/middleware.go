@@ -127,13 +127,13 @@ var (
 // getJWKS returns a cached JWKS client bound to Supabase's signing certs.
 func getJWKS() (keyfunc.Keyfunc, error) {
 	jwksOnce.Do(func() {
-		supabaseURL := strings.TrimSuffix(os.Getenv("SUPABASE_URL"), "/")
-		if supabaseURL == "" {
-			jwksInitErr = fmt.Errorf("SUPABASE_URL environment variable not set")
+		authURL := strings.TrimSuffix(os.Getenv("SUPABASE_AUTH_URL"), "/")
+		if authURL == "" {
+			jwksInitErr = fmt.Errorf("SUPABASE_AUTH_URL environment variable not set")
 			return
 		}
 
-		jwksURL := fmt.Sprintf("%s/auth/v1/certs", supabaseURL)
+		jwksURL := fmt.Sprintf("%s/auth/v1/certs", authURL)
 
 		override := keyfunc.Override{
 			Client:          &http.Client{Timeout: 5 * time.Second},
@@ -174,12 +174,12 @@ func validateSupabaseToken(ctx context.Context, tokenString string) (*UserClaims
 		return nil, fmt.Errorf("failed to initialise JWKS: %w", err)
 	}
 
-	supabaseURL := strings.TrimSuffix(os.Getenv("SUPABASE_URL"), "/")
-	if supabaseURL == "" {
-		return nil, fmt.Errorf("SUPABASE_URL environment variable not set")
+	authURL := strings.TrimSuffix(os.Getenv("SUPABASE_AUTH_URL"), "/")
+	if authURL == "" {
+		return nil, fmt.Errorf("SUPABASE_AUTH_URL environment variable not set")
 	}
 
-	issuer := fmt.Sprintf("%s/auth/v1", supabaseURL)
+	issuer := fmt.Sprintf("%s/auth/v1", authURL)
 
 	token, err := jwt.ParseWithClaims(
 		tokenString,
