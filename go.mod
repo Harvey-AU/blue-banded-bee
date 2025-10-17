@@ -5,6 +5,7 @@ go 1.25
 require (
 	github.com/AfterShip/email-verifier v1.4.1
 	github.com/DATA-DOG/go-sqlmock v1.5.2
+	github.com/MicahParks/keyfunc/v3 v3.7.0
 	github.com/PuerkitoBio/goquery v1.10.3
 	github.com/getsentry/sentry-go v0.32.0
 	github.com/gocolly/colly/v2 v2.2.0
@@ -27,6 +28,7 @@ require (
 )
 
 require (
+	github.com/MicahParks/jwkset v0.11.0 // indirect
 	github.com/andybalholm/cascadia v1.3.3 // indirect
 	github.com/antchfx/htmlquery v1.3.4 // indirect
 	github.com/antchfx/xmlquery v1.4.4 // indirect

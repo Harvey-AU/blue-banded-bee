@@ -29,6 +29,48 @@ On merge, CI will:
 
 ## [Unreleased]
 
+## [0.8.0] – 2025-10-17
+
+### Security
+
+- **JWT Signing Keys Migration**: Migrated from legacy JWT secrets to asymmetric
+  JWT signing keys
+  - Replaced HMAC (HS256) shared secret validation with JWKS-based public key
+    validation
+  - **Supports both RS256 (RSA) and ES256 (Elliptic Curve P-256) signing
+    algorithms**
+  - Added `github.com/MicahParks/keyfunc/v3` for production-ready JWKS handling
+    with automatic caching and key rotation
+  - Removed `SUPABASE_JWT_SECRET` environment variable - no longer needed with
+    public key cryptography
+  - Implemented audience validation supporting both `authenticated` and
+    `service_role` tokens
+  - Enhanced error handling with JWKS-specific error detection and Sentry
+    integration
+  - Added context cancellation handling for graceful request timeouts
+  - Updated authentication to use Supabase's `/auth/v1/certs` JWKS endpoint
+  - 10-minute JWKS cache refresh aligns with Supabase Edge cache duration
+  - Improved security posture by eliminating shared secret vulnerabilities
+
+### Changed
+
+- **Authentication Configuration**: Simplified auth config structure
+  - Removed `JWTSecret` field from `auth.Config` struct
+  - Updated `NewConfigFromEnv()` to only require `SUPABASE_URL` and
+    `SUPABASE_ANON_KEY`
+  - Updated all authentication tests to use RS256 tokens with proper JWKS
+    mocking
+
+### Enhanced
+
+- **Test Coverage**: Comprehensive JWT validation tests for both RS256 and ES256
+  - Added test JWKS servers with RSA and Elliptic Curve key generation
+  - Tests for valid tokens (both RS256 and ES256), invalid signatures, invalid
+    audiences, and context cancellation
+  - Helper functions `startTestJWKS()`, `signTestToken()`,
+    `startTestJWKSWithES256()`, and `signTestTokenES256()`
+  - All tests passing with 100% coverage on new JWKS functionality
+
 ## [0.7.3] – 2025-10-14
 
 ### Security
@@ -381,6 +423,8 @@ On merge, CI will:
   - Added `target="_blank"` for better user experience
 
 ## [Unreleased]
+
+## [0.8.0] – 2025-10-17
 
 ## [0.7.3] – 2025-10-14
 
