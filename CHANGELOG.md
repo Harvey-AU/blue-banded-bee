@@ -29,6 +29,8 @@ On merge, CI will:
 
 ## [Unreleased]
 
+## [0.8.1] – 2025-10-17
+
 ## [0.8.0] – 2025-10-17
 
 ### Security
@@ -426,6 +428,8 @@ On merge, CI will:
   - Added `target="_blank"` for better user experience
 
 ## [Unreleased]
+
+## [0.8.1] – 2025-10-17
 
 ## [0.8.0] – 2025-10-17
 

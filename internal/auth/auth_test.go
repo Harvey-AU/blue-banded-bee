@@ -263,7 +263,7 @@ func startTestJWKS(tb testing.TB) (*rsa.PrivateKey, string, string, func()) {
 	require.NoError(tb, err)
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/auth/v1/certs" {
+		if r.URL.Path != "/auth/v1/.well-known/jwks.json" {
 			http.NotFound(w, r)
 			return
 		}
@@ -361,7 +361,7 @@ func startTestJWKSWithES256(tb testing.TB) (*ecdsa.PrivateKey, string, string, f
 	require.NoError(tb, err)
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/auth/v1/certs" {
+		if r.URL.Path != "/auth/v1/.well-known/jwks.json" {
 			http.NotFound(w, r)
 			return
 		}
