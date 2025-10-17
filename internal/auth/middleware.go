@@ -133,7 +133,7 @@ func getJWKS() (keyfunc.Keyfunc, error) {
 			return
 		}
 
-		jwksURL := fmt.Sprintf("%s/auth/v1/certs", authURL)
+		jwksURL := fmt.Sprintf("%s/auth/v1/.well-known/jwks.json", authURL)
 
 		override := keyfunc.Override{
 			Client:          &http.Client{Timeout: 5 * time.Second},
@@ -146,7 +146,7 @@ func getJWKS() (keyfunc.Keyfunc, error) {
 			},
 		}
 
-		childCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		childCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
 		jwksCache, jwksInitErr = keyfunc.NewDefaultOverrideCtx(childCtx, []string{jwksURL}, override)
