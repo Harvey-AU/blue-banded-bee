@@ -47,6 +47,8 @@ On merge, CI will:
   INFO-level logs
   - Health checks still function normally but don't clutter production logs
   - Real API requests continue to be logged for observability
+- **Cloudflare Analytics Support**: Updated Content Security Policy to allow
+  Cloudflare Web Analytics beacon resources when the zone is proxied
 
 ### Fixed
 
