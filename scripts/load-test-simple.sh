@@ -3,13 +3,33 @@ set -e
 
 # Simple Load Test Script
 # Calls the /v1/jobs API endpoint to create real jobs at intervals
+# Creates one job per unique domain in the DOMAINS array
+# Usage: ./load-test-simple.sh [batch:N] [jobs:N]
+# Example: ./load-test-simple.sh batch:5 jobs:10
 
-# Configuration
-API_URL="${API_URL:-http://localhost:8080}"
+# Parse command line arguments
+BATCH_INTERVAL_MINUTES=3
+JOBS_PER_BATCH=3
+
+for arg in "$@"; do
+  case $arg in
+    batch:*)
+      BATCH_INTERVAL_MINUTES="${arg#*:}"
+      ;;
+    jobs:*)
+      JOBS_PER_BATCH="${arg#*:}"
+      ;;
+    *)
+      echo "Unknown argument: $arg"
+      echo "Usage: $0 [batch:N] [jobs:N]"
+      exit 1
+      ;;
+  esac
+done
+
+# Configuration (can still be overridden by environment variables)
+API_URL="${API_URL:-https://blue-banded-bee.fly.dev}"
 AUTH_TOKEN="${AUTH_TOKEN:-}"
-BATCH_INTERVAL_MINUTES="${BATCH_INTERVAL_MINUTES:-30}"
-TEST_DURATION_HOURS="${TEST_DURATION_HOURS:-5}"
-JOBS_PER_BATCH="${JOBS_PER_BATCH:-7}"
 
 # Colours
 GREEN='\033[0;32m'
@@ -62,18 +82,18 @@ fi
 echo -e "${GREEN}=== Simple Load Test ===${NC}"
 echo "API URL:           $API_URL"
 echo "Batch interval:    $BATCH_INTERVAL_MINUTES minutes"
-echo "Test duration:     $TEST_DURATION_HOURS hours"
 echo "Jobs per batch:    $JOBS_PER_BATCH"
 echo "Available domains: ${#DOMAINS[@]}"
 echo ""
 
-# Calculate batches
+# Calculate batches based on domain count, not time
 BATCH_INTERVAL_SECONDS=$((BATCH_INTERVAL_MINUTES * 60))
-TEST_DURATION_SECONDS=$((TEST_DURATION_HOURS * 3600))
-TOTAL_BATCHES=$((TEST_DURATION_SECONDS / BATCH_INTERVAL_SECONDS))
-TOTAL_JOBS=$((TOTAL_BATCHES * JOBS_PER_BATCH))
+TOTAL_DOMAINS=${#DOMAINS[@]}
+TOTAL_BATCHES=$(( (TOTAL_DOMAINS + JOBS_PER_BATCH - 1) / JOBS_PER_BATCH ))  # Round up
+ESTIMATED_DURATION_MINUTES=$(( (TOTAL_BATCHES - 1) * BATCH_INTERVAL_MINUTES ))
 
-echo "Will create $TOTAL_JOBS jobs across $TOTAL_BATCHES batches"
+echo "Will create $TOTAL_DOMAINS jobs (one per unique domain) across $TOTAL_BATCHES batches"
+echo "Estimated duration: $ESTIMATED_DURATION_MINUTES minutes"
 echo ""
 read -p "Continue? [y/N] " -n 1 -r
 echo
@@ -110,6 +130,12 @@ create_job() {
   else
     echo -e "${RED}✗ Failed to create job for $domain (HTTP $http_code)${NC}"
     echo "$body" | jq '.' 2>/dev/null || echo "$body"
+
+    # Exit immediately on auth errors
+    if [ "$http_code" -eq 401 ]; then
+      echo -e "${RED}Authentication failed. Please check your AUTH_TOKEN.${NC}"
+      exit 1
+    fi
   fi
 }
 
@@ -134,11 +160,11 @@ for ((batch=1; batch<=TOTAL_BATCHES; batch++)); do
   echo -e "${GREEN}=== Batch $batch/$TOTAL_BATCHES ===${NC}"
   echo "$(date)"
 
-  # Select next N domains from shuffled list (wrap around if needed)
+  # Select next N domains from shuffled list (stop when we run out)
   selected_domains=()
-  for ((i=0; i<JOBS_PER_BATCH; i++)); do
+  for ((i=0; i<JOBS_PER_BATCH && domain_index<${#all_shuffled[@]}; i++)); do
     selected_domains+=("${all_shuffled[$domain_index]}")
-    domain_index=$(( (domain_index + 1) % ${#all_shuffled[@]} ))
+    ((domain_index++))
   done
 
   # Create jobs
