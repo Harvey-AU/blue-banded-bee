@@ -93,9 +93,14 @@ func Init(ctx context.Context, cfg Config) (*Providers, error) {
 
 		exp, err := otlptracehttp.New(ctx, clientOpts...)
 		if err != nil {
-			return nil, fmt.Errorf("create OTLP trace exporter: %w", err)
+			// Log error but don't fail app startup - observability is optional
+			fmt.Printf("WARN: Failed to create OTLP trace exporter (traces disabled): %v\n", err)
+			fmt.Printf("WARN: Endpoint: %s\n", cfg.OTLPEndpoint)
+			// Continue without tracing - app should still function
+		} else {
+			spanExporter = exp
+			fmt.Printf("INFO: OTLP trace exporter initialised successfully for endpoint: %s\n", cfg.OTLPEndpoint)
 		}
-		spanExporter = exp
 	}
 
 	traceOpts := []sdktrace.TracerProviderOption{

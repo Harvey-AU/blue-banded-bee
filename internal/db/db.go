@@ -230,6 +230,16 @@ func InitFromEnv() (*DB, error) {
 				url += separator + "default_query_exec_mode=simple_protocol"
 				log.Info().Msg("Added minimal prepared statement disabling for pooler connection")
 			}
+
+			// Enable transaction pooling mode to prevent pool exhaustion
+			if !strings.Contains(url, "pgbouncer=") {
+				separator := "?"
+				if strings.Contains(url, "?") {
+					separator = "&"
+				}
+				url += separator + "pgbouncer=true"
+				log.Info().Msg("Enabled transaction pooling mode (pgbouncer=true)")
+			}
 		}
 
 		// Persist the augmented URL back to config for consistency
