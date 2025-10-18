@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -81,7 +82,7 @@ func Init(ctx context.Context, cfg Config) (*Providers, error) {
 	var spanExporter sdktrace.SpanExporter
 	if cfg.OTLPEndpoint != "" {
 		clientOpts := []otlptracehttp.Option{
-			otlptracehttp.WithEndpoint(cfg.OTLPEndpoint),
+			getOTLPEndpointOption(cfg.OTLPEndpoint),
 		}
 		if cfg.OTLPInsecure {
 			clientOpts = append(clientOpts, otlptracehttp.WithInsecure())
@@ -159,6 +160,13 @@ func Init(ctx context.Context, cfg Config) (*Providers, error) {
 		Shutdown:       shutdown,
 		Config:         cfg,
 	}, nil
+}
+
+func getOTLPEndpointOption(endpoint string) otlptracehttp.Option {
+	if strings.HasPrefix(endpoint, "http://") || strings.HasPrefix(endpoint, "https://") {
+		return otlptracehttp.WithEndpointURL(endpoint)
+	}
+	return otlptracehttp.WithEndpoint(endpoint)
 }
 
 // WrapHandler applies OpenTelemetry instrumentation to an http.Handler when the providers are active.
