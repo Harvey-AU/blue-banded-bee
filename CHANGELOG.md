@@ -29,6 +29,33 @@ On merge, CI will:
 
 ## [Unreleased]
 
+### Added
+
+- **Grafana Cloud OTLP Integration**: Configured OpenTelemetry trace export to
+  Grafana Cloud Tempo
+  - Traces show complete request journeys with timing breakdowns for debugging
+    slow jobs
+  - Automatically captures job processing, URL warming, database queries, and
+    HTTP requests
+  - Configured with `OTEL_EXPORTER_OTLP_ENDPOINT` and
+    `OTEL_EXPORTER_OTLP_HEADERS` environment variables
+  - Health check endpoints (`/health`) excluded from tracing to reduce noise
+
+### Changed
+
+- **Reduced Log Noise**: Health check requests from Fly.io no longer generate
+  INFO-level logs
+  - Health checks still function normally but don't clutter production logs
+  - Real API requests continue to be logged for observability
+
+### Fixed
+
+- **OTLP Endpoint Configuration**: Fixed trace export to use full URL path for
+  Grafana Cloud compatibility
+  - Endpoint now correctly includes `/otlp/v1/traces` path
+  - Authentication uses HTTP Basic Auth with Base64-encoded Instance ID and
+    Access Policy Token
+
 ## [0.8.2] – 2025-10-17
 
 ### Fixed

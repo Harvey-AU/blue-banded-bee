@@ -187,6 +187,10 @@ func WrapHandler(handler http.Handler, prov *Providers) http.Handler {
 		otelhttp.WithSpanNameFormatter(func(operation string, r *http.Request) string {
 			return fmt.Sprintf("%s %s", r.Method, r.URL.Path)
 		}),
+		// Skip tracing for health checks to reduce noise
+		otelhttp.WithFilter(func(r *http.Request) bool {
+			return r.URL.Path != "/health"
+		}),
 	}
 
 	return otelhttp.NewHandler(handler, "http.server", options...)

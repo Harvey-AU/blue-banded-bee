@@ -32,14 +32,16 @@ func RequestIDMiddleware(next http.Handler) http.Handler {
 		ctx := context.WithValue(r.Context(), requestIDKey, requestID)
 		r = r.WithContext(ctx)
 
-		// Log the incoming request
-		log.Info().
-			Str("request_id", requestID).
-			Str("method", r.Method).
-			Str("path", r.URL.Path).
-			Str("remote_addr", r.RemoteAddr).
-			Str("user_agent", r.UserAgent()).
-			Msg("Incoming request")
+		// Log the incoming request (skip health checks to reduce noise)
+		if r.URL.Path != "/health" {
+			log.Info().
+				Str("request_id", requestID).
+				Str("method", r.Method).
+				Str("path", r.URL.Path).
+				Str("remote_addr", r.RemoteAddr).
+				Str("user_agent", r.UserAgent()).
+				Msg("Incoming request")
+		}
 
 		next.ServeHTTP(w, r)
 	})
@@ -84,14 +86,16 @@ func LoggingMiddleware(next http.Handler) http.Handler {
 
 		duration := time.Since(start)
 
-		// Log the completed request
-		log.Info().
-			Str("request_id", requestID).
-			Str("method", r.Method).
-			Str("path", r.URL.Path).
-			Int("status", wrapper.statusCode).
-			Dur("duration", duration).
-			Msg("Request completed")
+		// Log the completed request (skip health checks to reduce noise)
+		if r.URL.Path != "/health" {
+			log.Info().
+				Str("request_id", requestID).
+				Str("method", r.Method).
+				Str("path", r.URL.Path).
+				Int("status", wrapper.statusCode).
+				Dur("duration", duration).
+				Msg("Request completed")
+		}
 	})
 }
 

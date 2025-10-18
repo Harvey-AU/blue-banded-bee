@@ -72,13 +72,14 @@ Next up: Platform integrations (Webflow/Shopify apps) and subscriptions. See
 
 - **Backend**: Go with PostgreSQL
 - **Infrastructure**: Fly.io, Cloudflare CDN, Supabase Auth
-- **Monitoring**: Sentry, Codecov
+- **Monitoring**: Sentry, Grafana Cloud (traces), Codecov
 
 ## Documentation
 
 - [Getting Started](docs/development/DEVELOPMENT.md)
 - [API Reference](docs/architecture/API.md)
 - [Architecture Overview](docs/architecture/ARCHITECTURE.md)
+- [Observability & Tracing](docs/operations/OBSERVABILITY.md)
 - [All Documentation →](docs/)
 
 ## Support
