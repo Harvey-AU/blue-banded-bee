@@ -29,6 +29,11 @@ On merge, CI will:
 
 ## [Unreleased]
 
+### Fixed
+
+- **Large Sitemap Processing**: Batch sitemap URL enqueueing (1000 URLs per
+  batch) to prevent database timeouts on sites with 10,000+ URLs
+
 ## [0.8.4] – 2025-10-19
 
 ### Fixed
