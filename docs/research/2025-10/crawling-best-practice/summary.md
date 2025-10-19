@@ -139,10 +139,9 @@ Based on these documents, here are the **very precise issues**:
 
 ### Must Fix (P0-P1)
 
-- ⚠️ Issue #1 & #1a: Cache warming timeout fixes (NOT DONE - needs
-  implementation)
-- ✅ Issue #3: Domain rate limiter
-- ⚠️ Issue #2: Exponential backoff
+- ✅ Issue #1 & #1a: Cache warming timeout fixes (DONE - implemented today)
+- ✅ Issue #3: Domain rate limiter (already done)
+- ✅ Issue #2: Exponential backoff (DONE - implemented today)
 
 ### Should Monitor
 

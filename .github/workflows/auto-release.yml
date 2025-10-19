@@ -137,7 +137,8 @@ jobs:
 
           # Extract content for this version from updated CHANGELOG.md
           # Get content between this version header and the next version header
-          CHANGELOG_CONTENT=$(sed -n "/^## \[$VERSION_NO_V\]/,/^## \[/p" CHANGELOG.md | sed '$d' | tail -n +2)
+          # Use awk to stop before the next version header (more reliable than sed)
+          CHANGELOG_CONTENT=$(awk "/^## \[$VERSION_NO_V\]/ {flag=1; next} /^## \[/ {flag=0} flag" CHANGELOG.md)
 
           # Save to file to preserve newlines
           echo "$CHANGELOG_CONTENT" > /tmp/changelog_extract.md

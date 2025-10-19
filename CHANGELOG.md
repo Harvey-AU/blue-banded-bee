@@ -31,6 +31,14 @@ On merge, CI will:
 
 ## [0.8.4] – 2025-10-19
 
+### Fixed
+
+- **Cache Warming Optimisation**: Skip second request for BYPASS/DYNAMIC
+  (uncacheable) content
+- **Timeout Enforcement**: Clarified HTTP client and context timeout protection
+- **Exponential Backoff**: Added backoff for 503/rate-limiting errors (1s, 2s,
+  4s, 8s, 16s, 32s, 60s max)
+
 ## [0.8.3] – 2025-10-19
 
 ### Added
