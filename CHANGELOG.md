@@ -29,8 +29,13 @@ On merge, CI will:
 
 ## [Unreleased]
 
+## [0.8.3] – 2025-10-19
+
 ### Added
 
+- **Crawling Analysis and Planning**: Research to improve crawling success rates
+  and fix timeout issues
+- **Referer Header**: Added Referer header to crawler requests
 - **Grafana Cloud OTLP Integration**: Configured OpenTelemetry trace export to
   Grafana Cloud Tempo
   - Traces show complete request journeys with timing breakdowns for debugging
@@ -43,10 +48,13 @@ On merge, CI will:
 
 ### Changed
 
+- **Crawler Random Delay**: Adjusted from 0-333ms to 200ms-1s range
 - **Reduced Log Noise**: Health check requests from Fly.io no longer generate
   INFO-level logs
   - Health checks still function normally but don't clutter production logs
   - Real API requests continue to be logged for observability
+- **Cloudflare Analytics Support**: Updated Content Security Policy to allow
+  Cloudflare Web Analytics beacon resources when the zone is proxied
 
 ### Fixed
 
@@ -463,6 +471,8 @@ On merge, CI will:
   - Added `target="_blank"` for better user experience
 
 ## [Unreleased]
+
+## [0.8.3] – 2025-10-19
 
 ## [0.8.2] – 2025-10-17
 
