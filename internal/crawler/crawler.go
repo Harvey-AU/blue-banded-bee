@@ -109,13 +109,15 @@ func New(config *Config, id ...string) *Crawler {
 	)
 
 	// Set rate limiting with randomised delays between requests
-	// RandomDelay = 1s / RateLimit provides jitter to avoid monotonic timing patterns
-	// Default: RateLimit=3 → RandomDelay=333ms (random 0-333ms delay per request)
-	// This is adequate for cache warming and respectful crawling
+	// RateLimit determines base delay: Delay = 1s / RateLimit
+	// RandomDelay = 1s - Delay to create jitter range from base to 1s
+	// Example: RateLimit=5 → Delay=200ms, RandomDelay=800ms → Total: 200ms-1s per request
+	baseDelay := time.Second / time.Duration(config.RateLimit)
 	if err := c.Limit(&colly.LimitRule{
 		DomainGlob:  "*",
 		Parallelism: config.MaxConcurrency,
-		RandomDelay: time.Second / time.Duration(config.RateLimit),
+		Delay:       baseDelay,
+		RandomDelay: time.Second - baseDelay,
 	}); err != nil {
 		log.Error().Err(err).Msg("Failed to set crawler limits")
 	}
