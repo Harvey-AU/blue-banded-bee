@@ -108,6 +108,10 @@ func New(config *Config, id ...string) *Crawler {
 		colly.AllowURLRevisit(),
 	)
 
+	// Set rate limiting with randomised delays between requests
+	// RandomDelay = 1s / RateLimit provides jitter to avoid monotonic timing patterns
+	// Default: RateLimit=3 → RandomDelay=333ms (random 0-333ms delay per request)
+	// This is adequate for cache warming and respectful crawling
 	if err := c.Limit(&colly.LimitRule{
 		DomainGlob:  "*",
 		Parallelism: config.MaxConcurrency,
@@ -148,6 +152,11 @@ func New(config *Config, id ...string) *Crawler {
 		r.Headers.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8")
 		r.Headers.Set("Accept-Language", "en-US,en;q=0.9")
 		r.Headers.Set("Accept-Encoding", "gzip, deflate, br")
+
+		// Set Referer to site homepage for more browser-like behaviour
+		if r.URL.Host != "" {
+			r.Headers.Set("Referer", fmt.Sprintf("https://%s/", r.URL.Host))
+		}
 
 		log.Debug().
 			Str("url", r.URL.String()).

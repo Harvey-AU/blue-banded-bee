@@ -8,7 +8,7 @@ import (
 type Config struct {
 	DefaultTimeout time.Duration // Default timeout for requests
 	MaxConcurrency int           // Maximum number of concurrent requests
-	RateLimit      int           // Maximum requests per second
+	RateLimit      int           // Maximum requests per second (also determines RandomDelay: 1s/RateLimit)
 	UserAgent      string        // User agent string for requests
 	RetryAttempts  int           // Number of retry attempts for failed requests
 	RetryDelay     time.Duration // Delay between retry attempts
