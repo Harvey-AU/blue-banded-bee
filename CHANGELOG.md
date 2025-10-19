@@ -31,6 +31,9 @@ On merge, CI will:
 
 ### Added
 
+- **Crawling Analysis and Planning**: Research to improve crawling success rates
+  and fix timeout issues
+- **Referer Header**: Added Referer header to crawler requests
 - **Grafana Cloud OTLP Integration**: Configured OpenTelemetry trace export to
   Grafana Cloud Tempo
   - Traces show complete request journeys with timing breakdowns for debugging
@@ -43,6 +46,7 @@ On merge, CI will:
 
 ### Changed
 
+- **Crawler Random Delay**: Adjusted from 0-333ms to 200ms-1s range
 - **Reduced Log Noise**: Health check requests from Fly.io no longer generate
   INFO-level logs
   - Health checks still function normally but don't clutter production logs
