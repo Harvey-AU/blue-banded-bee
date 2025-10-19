@@ -1149,15 +1149,17 @@ func (wp *WorkerPool) CleanupStuckJobs(ctx context.Context) error {
 	span := sentry.StartSpan(ctx, "jobs.cleanup_stuck_jobs")
 	defer span.Finish()
 
-	var rowsAffected int64
+	var completedJobs, timedOutJobs int64
+
 	err := wp.dbQueue.ExecuteMaintenance(ctx, func(tx *sql.Tx) error {
+		// 1. Mark jobs as completed when all tasks are done
 		result, err := tx.ExecContext(ctx, `
-				UPDATE jobs 
-				SET status = $1, 
+				UPDATE jobs
+				SET status = $1,
 					completed_at = COALESCE(completed_at, $2),
 				progress = 100.0
 			WHERE (status = $3 OR status = $4)
-			AND total_tasks > 0 
+			AND total_tasks > 0
 			AND total_tasks = completed_tasks + failed_tasks
 		`, JobStatusCompleted, time.Now(), JobStatusPending, JobStatusRunning)
 
@@ -1165,7 +1167,45 @@ func (wp *WorkerPool) CleanupStuckJobs(ctx context.Context) error {
 			return err
 		}
 
-		rowsAffected, err = result.RowsAffected()
+		completedJobs, err = result.RowsAffected()
+		if err != nil {
+			return err
+		}
+
+		// 2. Mark jobs as failed when stuck for too long
+		// - Pending jobs with 0 tasks for 5 minutes (sitemap processing likely failed)
+		// - Running jobs with no task progress for 30 minutes
+		// - Jobs running for all tasks failed
+		result, err = tx.ExecContext(ctx, `
+			UPDATE jobs
+			SET status = $1,
+				completed_at = $2,
+				error_message = CASE
+					WHEN status = $3 AND total_tasks = 0 THEN 'Job timed out: no tasks created after 5 minutes (sitemap processing may have failed)'
+					WHEN total_tasks > 0 AND total_tasks = failed_tasks THEN 'Job failed: all tasks failed'
+					ELSE 'Job timed out: no task progress for 30 minutes'
+				END
+			WHERE (
+				-- Pending jobs with no tasks for 5+ minutes
+				(status = $3 AND total_tasks = 0 AND created_at < $4)
+				OR
+				-- Running jobs where all tasks failed
+				(status = $5 AND total_tasks > 0 AND total_tasks = failed_tasks)
+				OR
+				-- Running jobs with no task updates for 30+ minutes
+				(status = $5 AND total_tasks > 0 AND COALESCE((
+					SELECT MAX(GREATEST(started_at, completed_at))
+					FROM tasks
+					WHERE job_id = jobs.id
+				), created_at) < $6)
+			)
+		`, JobStatusFailed, time.Now(), JobStatusPending, time.Now().Add(-5*time.Minute), JobStatusRunning, time.Now().Add(-30*time.Minute))
+
+		if err != nil {
+			return err
+		}
+
+		timedOutJobs, err = result.RowsAffected()
 		return err
 	})
 
@@ -1175,10 +1215,16 @@ func (wp *WorkerPool) CleanupStuckJobs(ctx context.Context) error {
 		return fmt.Errorf("failed to cleanup stuck jobs: %w", err)
 	}
 
-	if rowsAffected > 0 {
+	if completedJobs > 0 {
 		log.Info().
-			Int64("jobs_fixed", rowsAffected).
-			Msg("Fixed stuck jobs")
+			Int64("jobs_completed", completedJobs).
+			Msg("Marked stuck jobs as completed")
+	}
+
+	if timedOutJobs > 0 {
+		log.Warn().
+			Int64("jobs_failed", timedOutJobs).
+			Msg("Marked timed-out jobs as failed")
 	}
 
 	return nil

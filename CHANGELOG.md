@@ -29,6 +29,13 @@ On merge, CI will:
 
 ## [Unreleased]
 
+## [0.8.6] – 2025-10-19
+
+### Fixed
+
+- **Job Timeout Cleanup**: Automatically mark jobs as failed if pending for 5+
+  minutes with no tasks, or running for 30+ minutes with no progress
+
 ## [0.8.5] – 2025-10-19
 
 ### Fixed
@@ -488,6 +495,8 @@ On merge, CI will:
   - Added `target="_blank"` for better user experience
 
 ## [Unreleased]
+
+## [0.8.6] – 2025-10-19
 
 ## [0.8.5] – 2025-10-19
 
