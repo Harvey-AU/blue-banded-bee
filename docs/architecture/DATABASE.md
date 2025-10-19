@@ -47,8 +47,8 @@ Optimised for high-concurrency workloads:
 
 ```go
 // Located in internal/db/db.go
-client.SetMaxOpenConns(25)      // Maximum open connections
-client.SetMaxIdleConns(10)      // Maximum idle connections
+client.SetMaxOpenConns(45)      // Maximum open connections
+client.SetMaxIdleConns(18)      // Maximum idle connections
 client.SetConnMaxLifetime(5 * time.Minute)  // Connection lifetime
 client.SetConnMaxIdleTime(2 * time.Minute)  // Idle connection timeout
 ```
@@ -60,27 +60,26 @@ shared infrastructure:
 
 **Current Configuration:**
 
-- **MaxOpenConns: 25** - Stay safely under Supabase's default 30-connection pool
-  limit
-- **MaxIdleConns: 10** - Conservative to prevent pool exhaustion whilst
-  maintaining ready connections
+- **MaxOpenConns: 45** - Stays just below the Supabase pool limit of 48
+- **MaxIdleConns: 18** - 40% idle buffer to keep ready connections without
+  exhausting the pool
 
 **Sizing Rationale:**
 
-1. **Supabase Constraints**: Free tier provides ~30 max connections; we target
-   80-85% utilisation to leave headroom for monitoring tools, migrations, and
-   background processes.
+1. **Supabase Constraints**: Current pool size is 48 connections; capping the
+   app at 45 open sessions leaves a few slots for migrations, monitoring, and
+   manual queries.
 
 2. **Worker Pool Alignment**: The worker pool's concurrency is capped to match
    available connections, ensuring database access never becomes a bottleneck.
 
 3. **Environment-Based Tuning** (see `internal/db/db.go:192-197`):
-   - **Production**: 25 max open, 10 idle
+   - **Production**: 45 max open, 18 idle
    - **Development**: 15 max open, 5 idle (reduced for local testing)
 
 **General Formula** (for future scaling):
 
-- Target `MaxOpenConns ≤ 80% × database_max_connections`
+- Target `MaxOpenConns ≤ ~90% × database_max_connections`
 - For shared hosting: consult provider limits (Supabase Free = 30, Pro = 200+)
 - For dedicated instances: common heuristic is `2× vCPU` or `¼ max_connections`,
   whichever is lower
