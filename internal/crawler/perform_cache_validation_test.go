@@ -20,9 +20,19 @@ func TestPerformCacheValidationDecisions(t *testing.T) {
 			expectAction: true,
 		},
 		{
-			name:         "bypass_requires_validation",
-			cacheStatus:  "BYPASS",
+			name:         "expired_requires_validation",
+			cacheStatus:  "EXPIRED",
 			expectAction: true,
+		},
+		{
+			name:         "bypass_skips_validation_uncacheable",
+			cacheStatus:  "BYPASS",
+			expectAction: false,
+		},
+		{
+			name:         "dynamic_skips_validation_uncacheable",
+			cacheStatus:  "DYNAMIC",
+			expectAction: false,
 		},
 		{
 			name:         "hit_skips_validation",

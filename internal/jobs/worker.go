@@ -1336,10 +1336,15 @@ func (wp *WorkerPool) processDiscoveredLinks(ctx context.Context, task *Task, re
 func (wp *WorkerPool) handleTaskError(ctx context.Context, task *db.Task, taskErr error) error {
 	now := time.Now()
 
-	// Check if this is a blocking error (403/429)
+	// Check if this is a blocking error (403/429/503)
 	if isBlockingError(taskErr) {
 		// For blocking errors, only retry twice (less aggressive)
 		if task.RetryCount < 2 {
+			// Apply exponential backoff before retry
+			backoffDuration := calculateBackoffDuration(task.RetryCount)
+
+			time.Sleep(backoffDuration)
+
 			task.RetryCount++
 			task.Status = string(TaskStatusPending)
 			task.StartedAt = time.Time{} // Reset started time
@@ -1347,7 +1352,8 @@ func (wp *WorkerPool) handleTaskError(ctx context.Context, task *db.Task, taskEr
 				Err(taskErr).
 				Str("task_id", task.ID).
 				Int("retry_count", task.RetryCount).
-				Msg("Task blocked (403/429), limited retry scheduled")
+				Dur("backoff_duration", backoffDuration).
+				Msg("Blocking error (403/429/503), retry scheduled after exponential backoff")
 		} else {
 			// Mark as permanently failed after 2 retries
 			task.Status = string(TaskStatusFailed)
@@ -1566,12 +1572,11 @@ func isRetryableError(err error) bool {
 		strings.Contains(errorStr, "unexpected eof")
 
 	// Server errors that should be retried (likely due to load/temporary issues)
+	// Note: 503 Service Unavailable is treated as a blocking error (see isBlockingError)
 	serverErrors := strings.Contains(errorStr, "internal server error") ||
 		strings.Contains(errorStr, "bad gateway") ||
-		strings.Contains(errorStr, "service unavailable") ||
 		strings.Contains(errorStr, "gateway timeout") ||
 		strings.Contains(errorStr, "502") ||
-		strings.Contains(errorStr, "503") ||
 		strings.Contains(errorStr, "504") ||
 		strings.Contains(errorStr, "500")
 
@@ -1586,12 +1591,30 @@ func isBlockingError(err error) bool {
 
 	errorStr := strings.ToLower(err.Error())
 
-	// Blocking/rate limit errors that need special handling
+	// Blocking/rate limit errors that need special handling with exponential backoff
 	return strings.Contains(errorStr, "403") ||
 		strings.Contains(errorStr, "forbidden") ||
 		strings.Contains(errorStr, "429") ||
 		strings.Contains(errorStr, "too many requests") ||
-		strings.Contains(errorStr, "rate limit")
+		strings.Contains(errorStr, "rate limit") ||
+		strings.Contains(errorStr, "503") ||
+		strings.Contains(errorStr, "service unavailable")
+}
+
+// calculateBackoffDuration computes exponential backoff duration for retry attempts
+// Uses 2^retryCount formula with a maximum cap of 60 seconds
+func calculateBackoffDuration(retryCount int) time.Duration {
+	// 2^0 = 1s, 2^1 = 2s, 2^2 = 4s, 2^3 = 8s, etc.
+	backoffSeconds := 1 << uint(retryCount) // Bit shift for 2^retryCount
+	backoffDuration := time.Duration(backoffSeconds) * time.Second
+
+	// Cap at 60 seconds maximum
+	maxBackoff := 60 * time.Second
+	if backoffDuration > maxBackoff {
+		backoffDuration = maxBackoff
+	}
+
+	return backoffDuration
 }
 
 // Helper function to check if a hostname is the same domain or a subdomain of the target domain

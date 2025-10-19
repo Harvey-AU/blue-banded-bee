@@ -122,23 +122,25 @@ Based on these documents, here are the **very precise issues**:
    - **Current**: `BlueBandedBee/1.0 (+https://bluebandedbee.co)`
    - **Verdict**: Keep current implementation (transparent, respectful)
 
-7. **Referer Header** → [Technical Brief](issue-7-referer-header.md) - ⚠️
-   **Optional**
+7. **Referer Header** → [Technical Brief](done/issue-7-referer-header.md) - ✅
+   **DONE - Not implementing**
    - **Priority**: Low - Minor benefit
    - **Cost**: 1 hour (~15 lines)
-   - **Verdict**: Implement only if time permits
+   - **Decision**: Not implementing - minimal benefit for cache warming
 
-8. **Randomised Delays** → [Technical Brief](issue-8-randomised-delays.md) - ✅
-   **Already implemented**
+8. **Randomised Delays** →
+   [Technical Brief](done/issue-8-randomised-delays.md) - ✅ **DONE - Already
+   implemented**
    - **Priority**: None - Already have 0-333ms RandomDelay in Colly
    - **Status**: Current implementation adequate
-   - **Verdict**: No changes needed
+   - **Decision**: No changes needed - adequate randomness exists
 
 ## Priority Summary
 
 ### Must Fix (P0-P1)
 
-- ✅ Issue #1 & #1a: Cache warming timeout fixes
+- ⚠️ Issue #1 & #1a: Cache warming timeout fixes (NOT DONE - needs
+  implementation)
 - ✅ Issue #3: Domain rate limiter
 - ⚠️ Issue #2: Exponential backoff
 
@@ -153,8 +155,5 @@ Based on these documents, here are the **very precise issues**:
 
 ### Already Done
 
-- ✅ Issue #8: Random delays (already in Colly)
-
-### Optional/Low Value
-
-- ⚠️ Issue #7: Referer header (minor benefit, ~1 hour)
+- ✅ Issue #7: Referer header (reviewed, not implementing - minimal benefit)
+- ✅ Issue #8: Random delays (reviewed, already in Colly)
