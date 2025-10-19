@@ -56,7 +56,8 @@ hammered.
 
 ## Technical Solution
 
-**IMPORTANT:** The proper solution is implemented in **Issue #3 (Domain Rate Limiter)**. This issue documents the problem analysis only.
+**IMPORTANT:** The proper solution is implemented in **Issue #3 (Domain Rate
+Limiter)**. This issue documents the problem analysis only.
 
 ### ~~Option A: Per-Domain LimitRules in Colly~~ (SUPERSEDED BY ISSUE #3)
 
@@ -167,9 +168,12 @@ result, err := wp.crawler.WarmURL(ctx, urlStr, task.FindLinks)
 
 ### Recommended Solution
 
-**Use Issue #3 (Domain Rate Limiter)** - This is the proper solution that enforces minimum time intervals between requests to the same domain, preventing concurrent hammering.
+**Use Issue #3 (Domain Rate Limiter)** - This is the proper solution that
+enforces minimum time intervals between requests to the same domain, preventing
+concurrent hammering.
 
 The options above are documented for reference but are **not recommended**:
+
 - Option A (LimitRules) requires hardcoding domain lists and doesn't scale
 - Option B (semaphores) duplicates Colly functionality and is complex
 

@@ -1,8 +1,7 @@
 # Issue #8: Randomised Delays
 
-**Priority:** ✅ **ALREADY IMPLEMENTED** - No action needed
-**Cost:** None (already exists)
-**Status:** Current implementation is adequate
+**Priority:** ✅ **ALREADY IMPLEMENTED** - No action needed **Cost:** None
+(already exists) **Status:** Current implementation is adequate
 
 ## Current Behaviour
 
@@ -22,6 +21,7 @@ RateLimit: 3  // 3 requests per second
 ```
 
 **What this means:**
+
 - Colly adds a random delay up to 333ms between requests
 - Delays range from 0ms to 333ms (uniform distribution)
 - **Already "human-like" - not perfectly consistent timing**
@@ -29,6 +29,7 @@ RateLimit: 3  // 3 requests per second
 ## Problem Statement
 
 Some best practices suggest:
+
 - Random delays prevent bot detection via timing analysis
 - Vary delays to mimic human reading/clicking patterns
 - Add depth-based pauses (longer on deeper pages)
@@ -38,6 +39,7 @@ Some best practices suggest:
 ### 1. We Already Have RandomDelay
 
 **Current behaviour:**
+
 ```
 Request 1: delay 127ms
 Request 2: delay 284ms
@@ -50,11 +52,13 @@ Request 4: delay 312ms
 ### 2. Cache Warming Doesn't Need Human Simulation
 
 **We're not scraping:**
+
 - Don't need to "read" pages
 - Don't need to "click" links
 - Don't need to mimic human behaviour
 
 **We're warming caches:**
+
 - CDNs don't care about timing patterns
 - They care about cache hit rates
 - Our timing is already respectful (333ms max + domain rate limiter)
@@ -62,6 +66,7 @@ Request 4: delay 312ms
 ### 3. Larger Random Delays Hurt Performance
 
 **Proposed change (from other agent):**
+
 ```go
 Delay = 200ms        // Minimum delay
 RandomDelay = 400ms  // Random 0-400ms on top
@@ -69,6 +74,7 @@ RandomDelay = 400ms  // Random 0-400ms on top
 ```
 
 **Impact:**
+
 - Current: 0-333ms (avg ~167ms)
 - Proposed: 200-600ms (avg ~400ms)
 - **Performance drop: 2.4x slower** (167ms → 400ms avg)
@@ -78,11 +84,13 @@ RandomDelay = 400ms  // Random 0-400ms on top
 ## What We Actually Need
 
 **Issue #3 (Domain Rate Limiter) provides:**
+
 - Minimum time between requests to same domain
 - Based on robots.txt Crawl-delay
 - Already includes randomness from workers claiming tasks at different times
 
 **Together:**
+
 - Colly's RandomDelay: 0-333ms jitter per request
 - Domain Rate Limiter: 1+ second minimum between same-domain requests
 - Worker scheduling: Natural randomness from async task claiming
@@ -92,6 +100,7 @@ RandomDelay = 400ms  // Random 0-400ms on top
 ## When Increased Delays WOULD Matter
 
 **Scenarios that justify longer/random delays:**
+
 1. **Scraping sites with bot detection** (not our use case)
 2. **Simulating user behaviour for testing** (not cache warming)
 3. **Avoiding pattern-based blocking** (we identify ourselves as BlueBandedBee)
@@ -128,6 +137,7 @@ c.Limit(&colly.LimitRule{
 ### ✅ **KEEP CURRENT IMPLEMENTATION**
 
 **Reasons:**
+
 1. **Already have RandomDelay** - 0-333ms jitter exists
 2. **Already respectful** - Combined with domain rate limiter (Issue #3)
 3. **Good performance** - Avg 167ms delay vs proposed 400ms
@@ -137,6 +147,7 @@ c.Limit(&colly.LimitRule{
 ### ⚠️ **Optional: Make Configurable**
 
 **Only if you want operators to tune delays:**
+
 - Add `MIN_DELAY` and `RANDOM_DELAY` env vars
 - Default to current behaviour (0ms min, 333ms random)
 - Allows experimentation without code changes
@@ -145,33 +156,38 @@ c.Limit(&colly.LimitRule{
 
 ## Cost-Benefit Analysis
 
-| Aspect | Cost | Benefit |
-|--------|------|---------|
-| Current state | Already implemented | Adequate randomness |
+| Aspect                    | Cost                    | Benefit                |
+| ------------------------- | ----------------------- | ---------------------- |
+| Current state             | Already implemented     | Adequate randomness    |
 | Larger delays (200-600ms) | 2.4x slower performance | None for cache warming |
-| Configurable delays | 1 hour dev time | Flexibility (unneeded) |
-| Depth-based delays | High complexity | None for cache warming |
+| Configurable delays       | 1 hour dev time         | Flexibility (unneeded) |
+| Depth-based delays        | High complexity         | None for cache warming |
 
 **Verdict:** ✅ Keep current implementation (no changes needed)
 
 ## Performance Impact Analysis
 
 ### Current (0-333ms RandomDelay)
+
 - Avg delay: ~167ms
 - Throughput: ~6 req/sec (1000ms / 167ms)
 - With Parallelism: 10 → ~60 req/sec
 
 ### Proposed (200-600ms Delay + RandomDelay)
+
 - Avg delay: ~400ms
 - Throughput: ~2.5 req/sec (1000ms / 400ms)
 - With Parallelism: 10 → ~25 req/sec
 
 **Performance loss: 58% slower** (60 req/sec → 25 req/sec)
 
-**For what benefit?** Making timing patterns "more human"... for a crawler that identifies itself as a crawler.
+**For what benefit?** Making timing patterns "more human"... for a crawler that
+identifies itself as a crawler.
 
 ## Related Issues
 
-- **Issue #3 (Domain Rate Limiter)** - Provides per-domain timing control (more important)
-- **Issue #6 (User-Agent)** - Similar "pretend to be human" idea (also unnecessary)
+- **Issue #3 (Domain Rate Limiter)** - Provides per-domain timing control (more
+  important)
+- **Issue #6 (User-Agent)** - Similar "pretend to be human" idea (also
+  unnecessary)
 - **Issue #7 (Referer)** - Similar "look more browser-like" idea (low priority)

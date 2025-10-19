@@ -83,8 +83,8 @@ func shouldMakeSecondRequest(cacheStatus string) bool {
 
 ### Fix #1: Add Colly Request Timeout (SIMPLE - 3-4 lines)
 
-**File:** `internal/crawler/config.go` - Add new field
-**File:** `internal/crawler/crawler.go` - Thread config through to collector
+**File:** `internal/crawler/config.go` - Add new field **File:**
+`internal/crawler/crawler.go` - Thread config through to collector
 
 **Step 1 - Add config field:**
 

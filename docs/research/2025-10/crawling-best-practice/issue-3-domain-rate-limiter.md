@@ -320,7 +320,8 @@ Result: Strict 1 req/second to everlane.com, zero 429 errors
 
 **With multiple different domains:**
 
-Workers processing different domains proceed in parallel with no contention. The domain rate limiter only serializes requests to the **same** domain.
+Workers processing different domains proceed in parallel with no contention. The
+domain rate limiter only serializes requests to the **same** domain.
 
 **If multiple workers hit same domain:**
 

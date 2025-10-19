@@ -1,16 +1,18 @@
 # Issue #4: Cookie Jar Support
 
-**Priority:** ⚠️ **LOW** - Not recommended for cache warming
-**Cost:** Medium complexity, security risks
-**Status:** Not needed for current use case
+**Priority:** ⚠️ **LOW** - Not recommended for cache warming **Cost:** Medium
+complexity, security risks **Status:** Not needed for current use case
 
 ## Problem Statement
 
-HTTP cookie jars maintain session state across requests by storing cookies sent by servers and automatically including them in subsequent requests to the same domain.
+HTTP cookie jars maintain session state across requests by storing cookies sent
+by servers and automatically including them in subsequent requests to the same
+domain.
 
 ## Current Architecture Reality
 
-**Critical fact:** All workers share a **single Crawler instance** with **one HTTP client**.
+**Critical fact:** All workers share a **single Crawler instance** with **one
+HTTP client**.
 
 ```go
 // cmd/app/main.go
@@ -26,6 +28,7 @@ type WorkerPool struct {
 ```
 
 **Architecture:**
+
 - 1 Crawler → 1 HTTP client → 1 cookie jar (if enabled)
 - 50 workers → all share the same cookie jar
 - Workers switch jobs constantly (any worker can process any job's tasks)
@@ -35,6 +38,7 @@ type WorkerPool struct {
 ### 1. Cross-Job Cookie Leakage (Security Risk)
 
 **Scenario:**
+
 ```
 Worker 1 processes job-A (customer-1.webflow.io) → receives session cookie
 Worker 2 processes job-B (customer-2.webflow.io) → REUSES Worker 1's cookie
@@ -46,6 +50,7 @@ Result: Worker 2 sees customer-1's session data
 ### 2. No Benefit for Cache Warming
 
 Cache warming doesn't require session state:
+
 - We're hitting public URLs
 - CDN caching is independent of cookies
 - Session cookies are for logged-in content (not our use case)
@@ -53,6 +58,7 @@ Cache warming doesn't require session state:
 ### 3. Memory Overhead (Minimal but Unnecessary)
 
 **Realistic estimate:**
+
 - Cookie jar stores cookies **per domain** (not per page)
 - example.com sets 1 session cookie → stored once
 - 10,000 pages on example.com → still 1 session cookie
@@ -63,6 +69,7 @@ Cache warming doesn't require session state:
 ### 4. Cleanup Complexity
 
 Would require:
+
 - Per-job cookie jar isolation
 - Clear cookies when switching jobs
 - Detect job transitions in worker loop
@@ -82,10 +89,12 @@ type WorkerPool struct {
 ```
 
 **Pros:**
+
 - True job isolation
 - Cookies scoped to job
 
 **Cons:**
+
 - Need to create/destroy crawlers dynamically
 - Higher memory (1 HTTP client per active job)
 - More complex lifecycle management
@@ -104,9 +113,11 @@ type JobCookies struct {
 ```
 
 **Pros:**
+
 - Full control over cookie lifecycle
 
 **Cons:**
+
 - Reimplementing cookiejar.Jar logic
 - Easy to get wrong (cookie expiry, domain matching, etc.)
 - Doesn't leverage Colly's built-in mechanisms
@@ -116,10 +127,12 @@ type JobCookies struct {
 ### ❌ **DO NOT IMPLEMENT**
 
 **Reasons:**
+
 1. **No benefit** - Cache warming doesn't need session state
 2. **Security risk** - Cross-job cookie leakage with shared crawler
 3. **Complexity** - Would require per-job crawler isolation
-4. **Alternative exists** - If you need authenticated crawling, create separate jobs with auth headers
+4. **Alternative exists** - If you need authenticated crawling, create separate
+   jobs with auth headers
 
 ### ✅ **Alternative: Use Request Headers Instead**
 
@@ -135,6 +148,7 @@ c.OnRequest(func(r *colly.Request) {
 ```
 
 **Benefits:**
+
 - Explicit auth control
 - No session leakage
 - Simpler architecture
@@ -143,6 +157,7 @@ c.OnRequest(func(r *colly.Request) {
 ## Implementation Complexity
 
 **If forced to implement:**
+
 - Per-job crawler instances: ~200 lines (lifecycle management)
 - Cookie cleanup logic: ~50 lines
 - Tests: ~100 lines
@@ -152,17 +167,18 @@ c.OnRequest(func(r *colly.Request) {
 
 ## Cost-Benefit Analysis
 
-| Aspect | Cost | Benefit |
-|--------|------|---------|
-| Development time | 2-3 days | None for cache warming |
-| Code complexity | High (per-job crawler lifecycle) | None |
-| Memory overhead | 20 MB (20 jobs) | None |
-| Security risk | High (cookie leakage) | None |
-| Maintenance burden | Medium (cleanup, testing) | None |
+| Aspect             | Cost                             | Benefit                |
+| ------------------ | -------------------------------- | ---------------------- |
+| Development time   | 2-3 days                         | None for cache warming |
+| Code complexity    | High (per-job crawler lifecycle) | None                   |
+| Memory overhead    | 20 MB (20 jobs)                  | None                   |
+| Security risk      | High (cookie leakage)            | None                   |
+| Maintenance burden | Medium (cleanup, testing)        | None                   |
 
 **Verdict:** ❌ Not worth implementing
 
 ## Related Issues
 
 - **Issue #3 (Domain Rate Limiter)** - Solves rate limiting without cookies
-- **Issue #1 (Cache Warming Timeout)** - Primary performance issue (cookies irrelevant)
+- **Issue #1 (Cache Warming Timeout)** - Primary performance issue (cookies
+  irrelevant)
