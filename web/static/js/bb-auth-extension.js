@@ -159,51 +159,9 @@ function setupDashboardRefresh(dataBinder) {
           : "-",
       }));
 
-      // Load slow pages data
-      let slowPagesResponse, slowPages;
-      try {
-        slowPagesResponse = await this.fetchData(
-          "/v1/dashboard/slow-pages?range=today"
-        );
-        slowPages = slowPagesResponse.slow_pages || [];
-      } catch (error) {
-        console.log("Slow pages API error (likely no data yet):", error);
-        slowPages = [];
-      }
-
-      // Process slow pages data for better display
-      const processedSlowPages = slowPages.map((page) => ({
-        ...page,
-        completed_at: page.completed_at
-          ? new Date(page.completed_at).toLocaleString()
-          : "-",
-      }));
-
-      // Load external redirects data
-      let redirectsResponse, externalRedirects;
-      try {
-        redirectsResponse = await this.fetchData(
-          "/v1/dashboard/external-redirects?range=today"
-        );
-        externalRedirects = redirectsResponse.external_redirects || [];
-      } catch (error) {
-        console.log("Redirects API error (likely no data yet):", error);
-        externalRedirects = [];
-      }
-
-      // Process external redirects data for better display
-      const processedRedirects = externalRedirects.map((redirect) => ({
-        ...redirect,
-        completed_at: redirect.completed_at
-          ? new Date(redirect.completed_at).toLocaleString()
-          : "-",
-      }));
-
       // Bind all templates
       this.bindTemplates({
         job: processedJobs,
-        slow_page: processedSlowPages,
-        external_redirect: processedRedirects,
       });
 
       // Show simple empty state if no jobs

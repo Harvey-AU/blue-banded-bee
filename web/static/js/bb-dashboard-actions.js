@@ -59,14 +59,6 @@ function handleDashboardAction(action, element) {
       closeCreateJobModal();
       break;
 
-    case "refresh-slow-pages":
-      refreshSlowPages();
-      break;
-
-    case "refresh-redirects":
-      refreshExternalRedirects();
-      break;
-
     default:
       console.log("Unhandled dashboard action:", action);
   }
@@ -113,18 +105,6 @@ function closeCreateJobModal() {
   const modal = document.getElementById("createJobModal");
   if (modal) {
     modal.style.display = "none";
-  }
-}
-
-async function refreshSlowPages() {
-  if (window.dataBinder) {
-    await window.dataBinder.refresh();
-  }
-}
-
-async function refreshExternalRedirects() {
-  if (window.dataBinder) {
-    await window.dataBinder.refresh();
   }
 }
 
