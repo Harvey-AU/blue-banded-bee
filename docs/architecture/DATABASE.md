@@ -66,9 +66,9 @@ shared infrastructure:
 
 **Sizing Rationale:**
 
-1. **Supabase Constraints**: Current pool size is 48 connections; we target ~94%
-   utilisation to leave headroom for monitoring tools, migrations, and
-   background processes.
+1. **Supabase Constraints**: Current pool size is 48 connections; capping the
+   app at 45 open sessions leaves a few slots for migrations, monitoring, and
+   manual queries.
 
 2. **Worker Pool Alignment**: The worker pool's concurrency is capped to match
    available connections, ensuring database access never becomes a bottleneck.
@@ -79,7 +79,7 @@ shared infrastructure:
 
 **General Formula** (for future scaling):
 
-- Target `MaxOpenConns ≤ 80% × database_max_connections`
+- Target `MaxOpenConns ≤ ~90% × database_max_connections`
 - For shared hosting: consult provider limits (Supabase Free = 30, Pro = 200+)
 - For dedicated instances: common heuristic is `2× vCPU` or `¼ max_connections`,
   whichever is lower
