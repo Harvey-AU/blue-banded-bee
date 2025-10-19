@@ -510,6 +510,8 @@ func executeCollyRequest(ctx context.Context, collyClone *colly.Collector, targe
 	}()
 
 	// Wait for either completion or context cancellation
+	// Note: HTTP client timeout (DefaultTimeout) enforces request-level timeout
+	// Context timeout enforces overall task timeout
 	select {
 	case err := <-done:
 		if err != nil {
@@ -526,7 +528,7 @@ func executeCollyRequest(ctx context.Context, collyClone *colly.Collector, targe
 		log.Error().
 			Err(ctx.Err()).
 			Str("url", targetURL).
-			Msg("URL warming cancelled due to context")
+			Msg("URL warming cancelled due to context timeout")
 		return ctx.Err()
 	}
 }
@@ -604,10 +606,10 @@ func (c *Crawler) WarmURL(ctx context.Context, targetURL string, findLinks bool)
 
 // shouldMakeSecondRequest determines if we should make a second request for cache warming
 func shouldMakeSecondRequest(cacheStatus string) bool {
-	// Make second request for cache misses and bypasses
-	// Don't make second request for hits, expired, stale, etc.
+	// Make second request only for cache misses and expired content
+	// Don't make second request for BYPASS/DYNAMIC (uncacheable), hits, stale, etc.
 	switch strings.ToUpper(cacheStatus) {
-	case "MISS", "BYPASS", "EXPIRED":
+	case "MISS", "EXPIRED":
 		return true
 	default:
 		return false
