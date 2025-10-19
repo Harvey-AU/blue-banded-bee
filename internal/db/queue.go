@@ -559,15 +559,23 @@ func (q *DbQueue) UpdateTaskStatus(ctx context.Context, task *Task) error {
 
 		case "skipped":
 			_, err = tx.ExecContext(ctx, `
-				UPDATE tasks 
+				UPDATE tasks
 				SET status = $1
 				WHERE id = $2
 			`, task.Status, task.ID)
 
+		case "pending":
+			// Update retry count and reset started_at for pending (retry) status
+			_, err = tx.ExecContext(ctx, `
+				UPDATE tasks
+				SET status = $1, retry_count = $2, started_at = $3
+				WHERE id = $4
+			`, task.Status, task.RetryCount, task.StartedAt, task.ID)
+
 		default:
 			// Generic status update
 			_, err = tx.ExecContext(ctx, `
-				UPDATE tasks 
+				UPDATE tasks
 				SET status = $1
 				WHERE id = $2
 			`, task.Status, task.ID)

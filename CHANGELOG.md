@@ -29,6 +29,13 @@ On merge, CI will:
 
 ## [Unreleased]
 
+## [0.8.5] – 2025-10-19
+
+### Fixed
+
+- **Large Sitemap Processing**: Batch sitemap URL enqueueing (1000 URLs per
+  batch) to prevent database timeouts on sites with 10,000+ URLs
+
 ## [0.8.4] – 2025-10-19
 
 ### Fixed
@@ -481,6 +488,8 @@ On merge, CI will:
   - Added `target="_blank"` for better user experience
 
 ## [Unreleased]
+
+## [0.8.5] – 2025-10-19
 
 ## [0.8.4] – 2025-10-19
 

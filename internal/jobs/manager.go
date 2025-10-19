@@ -1063,12 +1063,46 @@ func (jm *JobManager) processSitemap(ctx context.Context, jobID, domain string, 
 	// Step 3: Filter URLs against robots.txt and path patterns
 	urls = jm.filterURLsAgainstRobots(urls, robotsRules, includePaths, excludePaths)
 
-	// Step 4: Enqueue URLs or create fallback
+	// Step 4: Enqueue URLs in batches or create fallback
 	if len(urls) > 0 {
-		if err := jm.enqueueSitemapURLs(ctx, jobID, domain, urls); err != nil {
-			span.SetTag("error", "true")
-			span.SetData("error.message", err.Error())
-			return
+		// Process URLs in batches to avoid database timeouts on large sitemaps
+		const batchSize = 1000
+		totalBatches := (len(urls) + batchSize - 1) / batchSize
+
+		log.Info().
+			Str("job_id", jobID).
+			Int("total_urls", len(urls)).
+			Int("batch_size", batchSize).
+			Int("total_batches", totalBatches).
+			Msg("Enqueueing sitemap URLs in batches")
+
+		for i := 0; i < len(urls); i += batchSize {
+			end := i + batchSize
+			if end > len(urls) {
+				end = len(urls)
+			}
+			batch := urls[i:end]
+			batchNum := (i / batchSize) + 1
+
+			if err := jm.enqueueSitemapURLs(ctx, jobID, domain, batch); err != nil {
+				log.Warn().
+					Err(err).
+					Str("job_id", jobID).
+					Int("batch_number", batchNum).
+					Int("batch_start", i).
+					Int("batch_size", len(batch)).
+					Msg("Failed to enqueue URL batch, continuing with next batch")
+				// Continue to next batch even if one fails
+				continue
+			}
+
+			log.Info().
+				Str("job_id", jobID).
+				Int("batch_number", batchNum).
+				Int("total_batches", totalBatches).
+				Int("urls_enqueued", end).
+				Int("total_urls", len(urls)).
+				Msg("Enqueued URL batch")
 		}
 	} else {
 		if err := jm.enqueueFallbackURL(ctx, jobID, domain); err != nil {
