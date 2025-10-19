@@ -21,6 +21,7 @@ import (
 	"database/sql"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/Harvey-AU/blue-banded-bee/internal/crawler"
@@ -415,6 +416,18 @@ func TestRetryErrorClassification(t *testing.T) {
 			expectRetryable: false,
 			expectBlocking:  false,
 		},
+		{
+			name:            "503_service_unavailable_is_blocking",
+			error:           errors.New("503 Service Unavailable"),
+			expectRetryable: false,
+			expectBlocking:  true,
+		},
+		{
+			name:            "service_unavailable_text_is_blocking",
+			error:           errors.New("service unavailable"),
+			expectRetryable: false,
+			expectBlocking:  true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -512,6 +525,69 @@ func TestRetryDecisionLogic(t *testing.T) {
 
 			// Add descriptive assertion for documentation
 			assert.NotEmpty(t, tt.description, "Test case should document expected behavior")
+		})
+	}
+}
+
+// TestExponentialBackoffCalculation tests the backoff duration calculation logic
+func TestExponentialBackoffCalculation(t *testing.T) {
+	tests := []struct {
+		name            string
+		retryCount      int
+		expectedBackoff time.Duration
+	}{
+		{
+			name:            "first_retry_1_second",
+			retryCount:      0,
+			expectedBackoff: 1 * time.Second,
+		},
+		{
+			name:            "second_retry_2_seconds",
+			retryCount:      1,
+			expectedBackoff: 2 * time.Second,
+		},
+		{
+			name:            "third_retry_4_seconds",
+			retryCount:      2,
+			expectedBackoff: 4 * time.Second,
+		},
+		{
+			name:            "fourth_retry_8_seconds",
+			retryCount:      3,
+			expectedBackoff: 8 * time.Second,
+		},
+		{
+			name:            "fifth_retry_16_seconds",
+			retryCount:      4,
+			expectedBackoff: 16 * time.Second,
+		},
+		{
+			name:            "sixth_retry_32_seconds",
+			retryCount:      5,
+			expectedBackoff: 32 * time.Second,
+		},
+		{
+			name:            "seventh_retry_capped_at_60_seconds",
+			retryCount:      6,
+			expectedBackoff: 60 * time.Second, // Would be 64s, but capped at 60s
+		},
+		{
+			name:            "eighth_retry_capped_at_60_seconds",
+			retryCount:      7,
+			expectedBackoff: 60 * time.Second, // Would be 128s, but capped at 60s
+		},
+		{
+			name:            "very_high_retry_count_still_capped",
+			retryCount:      10,
+			expectedBackoff: 60 * time.Second, // Would be 1024s, but capped at 60s
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			actual := calculateBackoffDuration(tt.retryCount)
+			assert.Equal(t, tt.expectedBackoff, actual,
+				"calculateBackoffDuration(%d) should return %v", tt.retryCount, tt.expectedBackoff)
 		})
 	}
 }
