@@ -113,9 +113,10 @@ func (q *DbQueue) ExecuteMaintenance(ctx context.Context, fn func(*sql.Tx) error
 	}
 
 	// Keep maintenance units short-lived to minimise pool impact.
+	// Allow 35s to accommodate recovery batches processing large backlogs.
 	if _, ok := ctx.Deadline(); !ok {
 		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, 10*time.Second)
+		ctx, cancel = context.WithTimeout(ctx, 35*time.Second)
 		defer cancel()
 	}
 
@@ -128,8 +129,9 @@ func (q *DbQueue) ExecuteMaintenance(ctx context.Context, fn func(*sql.Tx) error
 		_ = tx.Rollback()
 	}()
 
-	// Apply a tight statement timeout so maintenance never blocks the pool.
-	if _, err := tx.ExecContext(ctx, `SET LOCAL statement_timeout = '5s'`); err != nil {
+	// Apply a statement timeout so maintenance never blocks the pool indefinitely.
+	// Set to 30s to allow recovery batches time to process large backlogs.
+	if _, err := tx.ExecContext(ctx, `SET LOCAL statement_timeout = '30s'`); err != nil {
 		log.Warn().Err(err).Msg("Failed to set maintenance statement timeout")
 	}
 

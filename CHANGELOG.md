@@ -29,6 +29,8 @@ On merge, CI will:
 
 ## [Unreleased]
 
+## [0.9.1] – 2025-10-20
+
 ## [0.9.0] – 2025-10-20
 
 ### Fixed
@@ -40,6 +42,8 @@ On merge, CI will:
     failures to prevent database hammering
   - Tasks from cancelled/failed jobs are marked as failed immediately instead of
     retrying
+  - Increased maintenance statement timeout from 5s to 30s to allow recovery
+    batches to complete when processing large backlogs
   - Fixes issue where thousands of tasks could remain stuck indefinitely due to
     all-or-nothing transaction rollbacks
 - **Monitoring and Alerting**: Reduced Sentry event spam whilst improving alert
@@ -51,6 +55,8 @@ On merge, CI will:
   - Expected reduction: from 3,600+ events/hour to ~12 events/hour
 
 ## [Unreleased]
+
+## [0.9.1] – 2025-10-20
 
 ## [0.9.0] – 2025-10-20
 
@@ -524,6 +530,8 @@ On merge, CI will:
   - Added `target="_blank"` for better user experience
 
 ## [Unreleased]
+
+## [0.9.1] – 2025-10-20
 
 ## [0.9.0] – 2025-10-20
 
