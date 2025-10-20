@@ -38,6 +38,8 @@ On merge, CI will:
     failures to prevent database hammering
   - Tasks from cancelled/failed jobs are marked as failed immediately instead of
     retrying
+  - Increased maintenance statement timeout from 5s to 30s to allow recovery
+    batches to complete when processing large backlogs
   - Fixes issue where thousands of tasks could remain stuck indefinitely due to
     all-or-nothing transaction rollbacks
 - **Monitoring and Alerting**: Reduced Sentry event spam whilst improving alert
