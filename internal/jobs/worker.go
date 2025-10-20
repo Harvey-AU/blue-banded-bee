@@ -973,26 +973,6 @@ func (wp *WorkerPool) recoverStaleBatch(ctx context.Context, staleTime time.Time
 	return recovered, failed, err
 }
 
-func isTransientDBError(err error) bool {
-	if err == nil {
-		return false
-	}
-
-	if errors.Is(err, sql.ErrConnDone) {
-		return true
-	}
-
-	msg := strings.ToLower(err.Error())
-	if strings.Contains(msg, "bad connection") ||
-		strings.Contains(msg, "connection reset") ||
-		strings.Contains(msg, "broken pipe") ||
-		strings.Contains(msg, "no connection to the server") {
-		return true
-	}
-
-	return false
-}
-
 // recoverRunningJobs finds jobs that were in 'running' state when the server shut down
 // and resets their 'running' tasks to 'pending', then adds them to the worker pool
 func (wp *WorkerPool) recoverRunningJobs(ctx context.Context) error {
