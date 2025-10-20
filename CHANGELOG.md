@@ -27,6 +27,27 @@ On merge, CI will:
 4. Create a git tag and GitHub release
 5. Commit the updated changelog
 
+## [Unreleased:minor]
+
+### Fixed
+
+- **Task Recovery System**: Rewrote stuck task recovery to use batch processing
+  - Processes stuck tasks in batches of 100 (oldest first) preventing
+    transaction timeouts
+  - Failed batches use exponential backoff and bail out after 5 consecutive
+    failures to prevent database hammering
+  - Tasks from cancelled/failed jobs are marked as failed immediately instead of
+    retrying
+  - Fixes issue where thousands of tasks could remain stuck indefinitely due to
+    all-or-nothing transaction rollbacks
+- **Monitoring and Alerting**: Reduced Sentry event spam whilst improving alert
+  quality
+  - Reduced stuck task monitoring from every 5 seconds to every 5 minutes
+  - Replaced per-task Sentry events with single aggregated alert reporting
+    actual totals (not sample size)
+  - Separated job completion checks (30s) from health monitoring (5min)
+  - Expected reduction: from 3,600+ events/hour to ~12 events/hour
+
 ## [Unreleased]
 
 ## [0.8.8] – 2025-10-19

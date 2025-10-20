@@ -27,6 +27,14 @@ import (
 	"golang.org/x/time/rate"
 )
 
+// minInt returns the smaller of two integers
+func minInt(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
 // Config holds the application configuration loaded from environment variables
 type Config struct {
 	Port                  string // HTTP port to listen on
@@ -191,16 +199,18 @@ func main() {
 	workerPool.Start(context.Background())
 	defer workerPool.Stop()
 
-	// Start a goroutine to monitor job completion
+	// Start a goroutine to monitor job completion and health
 	go func() {
-		ticker := time.NewTicker(5 * time.Second)
-		defer ticker.Stop()
+		completionTicker := time.NewTicker(30 * time.Second)
+		defer completionTicker.Stop()
 
-		// Use for-range instead of for-select for better readability
-		for range ticker.C {
-			// Check for jobs that should be marked complete
+		healthTicker := time.NewTicker(5 * time.Minute)
+		defer healthTicker.Stop()
+
+		// Helper to check job completion
+		checkJobCompletion := func() {
 			rows, err := pgDB.GetDB().Query(`
-				UPDATE jobs 
+				UPDATE jobs
 				SET status = 'completed', completed_at = NOW()
 				WHERE (completed_tasks + failed_tasks) >= (total_tasks - COALESCE(skipped_tasks, 0))
 				  AND status = 'running'
@@ -209,83 +219,188 @@ func main() {
 			if err != nil {
 				sentry.CaptureException(err)
 				log.Error().Err(err).Msg("Failed to update completed jobs")
-				continue
+				return
 			}
+			defer rows.Close()
 
-			// Log completed jobs
 			for rows.Next() {
 				var jobID string
 				if err := rows.Scan(&jobID); err == nil {
 					log.Info().Str("job_id", jobID).Msg("Job marked as completed")
 				}
 			}
-			rows.Close()
+		}
 
-			// Check for stuck jobs (running >5 min with 0% progress)
-			stuckJobRows, err := pgDB.GetDB().Query(`
-				SELECT j.id, j.domain_id, j.created_at, j.started_at, j.progress
+		// Helper to check system health (stuck jobs/tasks)
+		checkSystemHealth := func() {
+			// Check for stuck jobs - get total count first
+			var totalStuckJobs int
+			err := pgDB.GetDB().QueryRow(`
+				SELECT COUNT(*)
 				FROM jobs j
-				JOIN domains d ON j.domain_id = d.id
 				WHERE j.status = 'running'
 				  AND j.progress = 0
 				  AND j.started_at < NOW() - INTERVAL '5 minutes'
-			`)
+			`).Scan(&totalStuckJobs)
+
 			if err != nil {
-				sentry.CaptureException(err)
-				log.Error().Err(err).Msg("Failed to check for stuck jobs")
-			} else {
-				for stuckJobRows.Next() {
-					var jobID string
-					var domainID int
-					var createdAt, startedAt time.Time
-					var progress float64
-					if err := stuckJobRows.Scan(&jobID, &domainID, &createdAt, &startedAt, &progress); err == nil {
-						// Critical alert: Job stuck without progress
-						sentry.CaptureException(fmt.Errorf("job stuck without progress for >5min: %s (domain_id: %d, started: %v)",
-							jobID, domainID, startedAt))
-						log.Error().
-							Str("job_id", jobID).
-							Int("domain_id", domainID).
-							Time("started_at", startedAt).
-							Float64("progress", progress).
-							Msg("CRITICAL: Job stuck without progress for >5 minutes")
-					}
-				}
-				stuckJobRows.Close()
+				log.Error().Err(err).Msg("Failed to count stuck jobs")
 			}
 
-			// Check for tasks stuck in running state >3 minutes
-			stuckTaskRows, err := pgDB.GetDB().Query(`
-				SELECT t.id, t.job_id, t.started_at, t.retry_count, p.path
-				FROM tasks t
-				JOIN pages p ON t.page_id = p.id
-				WHERE t.status = 'running'
-				  AND t.started_at < NOW() - INTERVAL '3 minutes'
-				LIMIT 5
-			`)
-			if err != nil {
-				sentry.CaptureException(err)
-				log.Error().Err(err).Msg("Failed to check for stuck tasks")
-			} else {
-				for stuckTaskRows.Next() {
-					var taskID, jobID, path string
-					var startedAt time.Time
-					var retryCount int
-					if err := stuckTaskRows.Scan(&taskID, &jobID, &startedAt, &retryCount, &path); err == nil {
-						// Critical alert: Task stuck in running state
-						// Include retry_count to show if recovery is actively working on it
-						sentry.CaptureException(fmt.Errorf("task stuck in running state for >3min: %s (job: %s, path: %s, started: %v, recovery_attempts: %d)",
-							taskID, jobID, path, startedAt, retryCount))
-						log.Error().
-							Str("task_id", taskID).
-							Str("job_id", jobID).
-							Str("path", path).
-							Time("started_at", startedAt).
-							Int("recovery_attempts", retryCount).
-							Msg("CRITICAL: Task stuck in running state for >3 minutes")
+			// Get sample of stuck jobs for details
+			type stuckJobInfo struct {
+				ID        string
+				DomainID  int
+				StartedAt time.Time
+				Progress  float64
+			}
+			var stuckJobs []stuckJobInfo
+
+			if totalStuckJobs > 0 {
+				stuckJobRows, err := pgDB.GetDB().Query(`
+					SELECT j.id, j.domain_id, j.started_at, j.progress
+					FROM jobs j
+					WHERE j.status = 'running'
+					  AND j.progress = 0
+					  AND j.started_at < NOW() - INTERVAL '5 minutes'
+					ORDER BY j.started_at ASC
+					LIMIT 10
+				`)
+				if err != nil {
+					log.Error().Err(err).Msg("Failed to query stuck jobs sample")
+				} else {
+					defer stuckJobRows.Close()
+					for stuckJobRows.Next() {
+						var job stuckJobInfo
+						if err := stuckJobRows.Scan(&job.ID, &job.DomainID, &job.StartedAt, &job.Progress); err == nil {
+							stuckJobs = append(stuckJobs, job)
+						}
 					}
 				}
-				stuckTaskRows.Close()
+			}
+
+			if totalStuckJobs > 0 && len(stuckJobs) > 0 {
+				jobIDs := make([]string, len(stuckJobs))
+				for i, job := range stuckJobs {
+					jobIDs[i] = job.ID
+				}
+
+				sentry.WithScope(func(scope *sentry.Scope) {
+					scope.SetLevel(sentry.LevelWarning)
+					scope.SetTag("event_type", "stuck_jobs")
+					scope.SetContext("stuck_jobs", map[string]any{
+						"total_count":  totalStuckJobs,
+						"sample_count": len(stuckJobs),
+						"job_ids":      jobIDs,
+						"oldest_job":   stuckJobs[0].ID,
+						"started_at":   stuckJobs[0].StartedAt,
+						"sample_jobs":  stuckJobs,
+					})
+					sentry.CaptureMessage(fmt.Sprintf("Found %d stuck jobs with 0%% progress (showing %d samples)", totalStuckJobs, len(stuckJobs)))
+				})
+
+				log.Warn().
+					Int("total_stuck_jobs", totalStuckJobs).
+					Int("sample_count", len(stuckJobs)).
+					Strs("sample_job_ids", jobIDs).
+					Msg("CRITICAL: Jobs stuck without progress for >5 minutes")
+			}
+
+			// Check for stuck tasks - get total counts first
+			var totalStuckTasks int
+			var totalAffectedJobs int
+
+			err = pgDB.GetDB().QueryRow(`
+				SELECT COUNT(*), COUNT(DISTINCT job_id)
+				FROM tasks
+				WHERE status = 'running'
+				  AND started_at < NOW() - INTERVAL '3 minutes'
+			`).Scan(&totalStuckTasks, &totalAffectedJobs)
+
+			if err != nil {
+				log.Error().Err(err).Msg("Failed to count stuck tasks")
+			}
+
+			// Get sample of stuck tasks for details
+			type stuckTaskInfo struct {
+				ID         string
+				JobID      string
+				Path       string
+				StartedAt  time.Time
+				RetryCount int
+			}
+			var stuckTasks []stuckTaskInfo
+
+			if totalStuckTasks > 0 {
+				stuckTaskRows, err := pgDB.GetDB().Query(`
+					SELECT t.id, t.job_id, p.path, t.started_at, t.retry_count
+					FROM tasks t
+					JOIN pages p ON t.page_id = p.id
+					WHERE t.status = 'running'
+					  AND t.started_at < NOW() - INTERVAL '3 minutes'
+					ORDER BY t.started_at ASC
+					LIMIT 20
+				`)
+				if err != nil {
+					log.Error().Err(err).Msg("Failed to query stuck tasks sample")
+				} else {
+					defer stuckTaskRows.Close()
+					for stuckTaskRows.Next() {
+						var task stuckTaskInfo
+						if err := stuckTaskRows.Scan(&task.ID, &task.JobID, &task.Path, &task.StartedAt, &task.RetryCount); err == nil {
+							stuckTasks = append(stuckTasks, task)
+						}
+					}
+				}
+			}
+
+			if totalStuckTasks > 0 && len(stuckTasks) > 0 {
+				// Get unique job IDs from sample for context
+				jobIDMap := make(map[string]struct{})
+				for _, task := range stuckTasks {
+					jobIDMap[task.JobID] = struct{}{}
+				}
+				sampleJobIDs := make([]string, 0, len(jobIDMap))
+				for jobID := range jobIDMap {
+					sampleJobIDs = append(sampleJobIDs, jobID)
+				}
+
+				sentry.WithScope(func(scope *sentry.Scope) {
+					scope.SetLevel(sentry.LevelWarning)
+					scope.SetTag("event_type", "stuck_tasks")
+					scope.SetContext("stuck_tasks", map[string]any{
+						"total_tasks":       totalStuckTasks,
+						"total_jobs":        totalAffectedJobs,
+						"sample_task_count": len(stuckTasks),
+						"sample_job_count":  len(sampleJobIDs),
+						"sample_job_ids":    sampleJobIDs,
+						"oldest_task":       stuckTasks[0].ID,
+						"oldest_at":         stuckTasks[0].StartedAt,
+						"sample_tasks":      stuckTasks[:minInt(5, len(stuckTasks))],
+					})
+					sentry.CaptureMessage(fmt.Sprintf("Found %d stuck tasks across %d jobs (showing %d task samples)", totalStuckTasks, totalAffectedJobs, len(stuckTasks)))
+				})
+
+				log.Warn().
+					Int("total_stuck_tasks", totalStuckTasks).
+					Int("total_affected_jobs", totalAffectedJobs).
+					Int("sample_task_count", len(stuckTasks)).
+					Int("sample_job_count", len(sampleJobIDs)).
+					Strs("sample_job_ids", sampleJobIDs).
+					Time("oldest_stuck_at", stuckTasks[0].StartedAt).
+					Msg("CRITICAL: Tasks stuck in running state for >3 minutes")
+			}
+		}
+
+		// Run initial checks
+		checkJobCompletion()
+
+		for {
+			select {
+			case <-completionTicker.C:
+				checkJobCompletion()
+			case <-healthTicker.C:
+				checkSystemHealth()
 			}
 		}
 	}()
