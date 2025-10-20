@@ -735,151 +735,242 @@ func (wp *WorkerPool) SetJobManager(jm *JobManager) {
 	wp.jobManager = jm
 }
 
-// recoverStaleTasks checks for and resets stale tasks
+// recoverStaleTasks checks for and resets stale tasks in batches
+// Processes oldest tasks first, handles cancelled/failed jobs separately
 func (wp *WorkerPool) recoverStaleTasks(ctx context.Context) error {
-	const maxRetries = 3
-	var lastErr error
+	const batchSize = 100
+	staleTime := time.Now().Add(-TaskStaleTimeout)
 
-	for attempt := 1; attempt <= maxRetries; attempt++ {
+	// STEP 1: Handle tasks from cancelled/failed jobs separately
+	// These should be marked as failed immediately, not retried
+	cancelledCount, err := wp.recoverTasksFromDeadJobs(ctx, staleTime)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to recover tasks from cancelled/failed jobs")
+		// Don't fail the whole recovery, continue to running jobs
+	} else if cancelledCount > 0 {
+		log.Info().
+			Int64("tasks_marked_failed", cancelledCount).
+			Msg("Marked stuck tasks from cancelled/failed jobs as failed")
+	}
+
+	// STEP 2: Process tasks from running jobs in batches
+	totalRecovered := 0
+	totalFailed := 0
+	batchNum := 0
+	consecutiveFailures := 0
+	const maxConsecutiveFailures = 5
+
+	for {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
 
-		err := wp.dbQueue.ExecuteMaintenance(ctx, func(tx *sql.Tx) error {
-			staleTime := time.Now().Add(-TaskStaleTimeout)
+		batchNum++
+		recovered, failed, err := wp.recoverStaleBatch(ctx, staleTime, batchSize, batchNum)
 
-			rows, err := tx.QueryContext(ctx, `
-						SELECT t.id, t.retry_count
+		if err != nil {
+			consecutiveFailures++
+			log.Warn().
+				Err(err).
+				Int("batch_num", batchNum).
+				Int("consecutive_failures", consecutiveFailures).
+				Msg("Batch recovery failed")
+
+			// If we've failed too many times in a row, bail out
+			if consecutiveFailures >= maxConsecutiveFailures {
+				log.Error().
+					Int("max_failures", maxConsecutiveFailures).
+					Msg("Recovery failed after max consecutive failures, will retry next cycle")
+				return fmt.Errorf("recovery failed after %d consecutive batch failures: %w", maxConsecutiveFailures, err)
+			}
+
+			// Exponential backoff between failed batches
+			backoff := time.Duration(consecutiveFailures) * time.Second
+			log.Debug().
+				Dur("backoff", backoff).
+				Msg("Sleeping before retrying next batch")
+			time.Sleep(backoff)
+			continue
+		}
+
+		// Success - reset failure counter
+		consecutiveFailures = 0
+		totalRecovered += recovered
+		totalFailed += failed
+
+		// If we processed fewer than batchSize, we're done
+		if recovered+failed < batchSize {
+			break
+		}
+
+		// Small delay between batches to avoid overwhelming the database
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	if totalRecovered > 0 || totalFailed > 0 {
+		log.Info().
+			Int("tasks_recovered", totalRecovered).
+			Int("tasks_failed", totalFailed).
+			Int("batches_processed", batchNum).
+			Msg("Completed stale task recovery")
+	}
+
+	return nil
+}
+
+// recoverTasksFromDeadJobs marks tasks from cancelled/failed jobs as failed
+func (wp *WorkerPool) recoverTasksFromDeadJobs(ctx context.Context, staleTime time.Time) (int64, error) {
+	var totalAffected int64
+
+	// Process in batches to avoid transaction timeout
+	for {
+		var affected int64
+		err := wp.dbQueue.ExecuteMaintenance(ctx, func(tx *sql.Tx) error {
+			result, err := tx.ExecContext(ctx, `
+				UPDATE tasks
+				SET status = $1,
+					error = $2,
+					completed_at = $3
+				FROM jobs j
+				WHERE tasks.job_id = j.id
+					AND tasks.status = $4
+					AND tasks.started_at < $5
+					AND j.status IN ($6, $7)
+					AND tasks.id IN (
+						SELECT t.id
 						FROM tasks t
-						WHERE status = $1
-							AND started_at < $2
-					`, TaskStatusRunning, staleTime)
+						JOIN jobs j2 ON t.job_id = j2.id
+						WHERE t.status = $4
+							AND t.started_at < $5
+							AND j2.status IN ($6, $7)
+						ORDER BY t.started_at ASC
+						LIMIT 100
+					)
+			`, TaskStatusFailed, "Job was cancelled or failed", time.Now(),
+				TaskStatusRunning, staleTime, JobStatusCancelled, JobStatusFailed)
 
 			if err != nil {
 				return err
 			}
 
-			type staleTask struct {
-				id         string
-				retryCount int
+			affected, err = result.RowsAffected()
+			return err
+		})
+
+		if err != nil {
+			return totalAffected, err
+		}
+
+		totalAffected += affected
+
+		// If we updated fewer than 100, we're done
+		if affected < 100 {
+			break
+		}
+	}
+
+	return totalAffected, nil
+}
+
+// recoverStaleBatch processes one batch of stale tasks
+func (wp *WorkerPool) recoverStaleBatch(ctx context.Context, staleTime time.Time, batchSize int, batchNum int) (recovered int, failed int, err error) {
+	err = wp.dbQueue.ExecuteMaintenance(ctx, func(tx *sql.Tx) error {
+		// Query for one batch of stale tasks, oldest first
+		rows, err := tx.QueryContext(ctx, `
+			SELECT t.id, t.retry_count, t.job_id
+			FROM tasks t
+			JOIN jobs j ON t.job_id = j.id
+			WHERE t.status = $1
+				AND t.started_at < $2
+				AND j.status = $3
+			ORDER BY t.started_at ASC
+			LIMIT $4
+		`, TaskStatusRunning, staleTime, JobStatusRunning, batchSize)
+
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+
+		type staleTask struct {
+			id         string
+			retryCount int
+			jobID      string
+		}
+
+		var tasks []staleTask
+		for rows.Next() {
+			var task staleTask
+			if err := rows.Scan(&task.id, &task.retryCount, &task.jobID); err != nil {
+				log.Warn().Err(err).Msg("Failed to scan stale task row")
+				continue
 			}
+			tasks = append(tasks, task)
+		}
 
-			var tasks []staleTask
+		if err := rows.Err(); err != nil {
+			return err
+		}
 
-			var updateErrors []error
-			var successCount int
+		if len(tasks) == 0 {
+			return nil // No tasks to process
+		}
 
-			for rows.Next() {
-				var taskID string
-				var retryCount int
-				if err := rows.Scan(&taskID, &retryCount); err != nil {
-					continue
-				}
+		log.Debug().
+			Int("batch_num", batchNum).
+			Int("batch_size", len(tasks)).
+			Msg("Processing stale task batch")
 
-				tasks = append(tasks, staleTask{
-					id:         taskID,
-					retryCount: retryCount,
-				})
-			}
-
-			if err := rows.Err(); err != nil {
-				rows.Close()
-				return err
-			}
-
-			if err := rows.Close(); err != nil {
-				return err
-			}
-
-			now := time.Now()
-
-			for _, task := range tasks {
-				if task.retryCount >= MaxTaskRetries {
-					_, err = tx.ExecContext(ctx, `
-								UPDATE tasks
-								SET status = $1,
-									error = $2,
-									completed_at = $3
-								WHERE id = $4
-							`, TaskStatusFailed, "Max retries exceeded", now, task.id)
-				} else {
-					_, err = tx.ExecContext(ctx, `
-								UPDATE tasks
-								SET status = $1,
-									started_at = NULL,
-									retry_count = retry_count + 1
-								WHERE id = $2
-							`, TaskStatusPending, task.id)
-				}
+		// Update tasks in this batch
+		now := time.Now()
+		for _, task := range tasks {
+			if task.retryCount >= MaxTaskRetries {
+				_, err = tx.ExecContext(ctx, `
+					UPDATE tasks
+					SET status = $1,
+						error = $2,
+						completed_at = $3
+					WHERE id = $4
+				`, TaskStatusFailed, "Max retries exceeded", now, task.id)
 
 				if err != nil {
-					updateErrors = append(updateErrors, fmt.Errorf("task %s: %w", task.id, err))
 					log.Warn().
 						Err(err).
 						Str("task_id", task.id).
-						Msg("Failed to update single stale task, will retry in transaction")
-				} else {
-					successCount++
-					log.Info().
-						Str("task_id", task.id).
-						Int("retry_count", task.retryCount).
-						Msg("Successfully recovered stale task")
+						Msg("Failed to mark task as failed")
+					return err
 				}
+				failed++
+			} else {
+				_, err = tx.ExecContext(ctx, `
+					UPDATE tasks
+					SET status = $1,
+						started_at = NULL,
+						retry_count = retry_count + 1
+					WHERE id = $2
+				`, TaskStatusPending, task.id)
+
+				if err != nil {
+					log.Warn().
+						Err(err).
+						Str("task_id", task.id).
+						Msg("Failed to reset task to pending")
+					return err
+				}
+				recovered++
 			}
-
-			// If ANY updates failed, return error to rollback transaction and trigger retry
-			if len(updateErrors) > 0 {
-				return fmt.Errorf("failed to update %d stale tasks (succeeded: %d): %w", len(updateErrors), successCount, updateErrors[0])
-			}
-
-			return nil
-		})
-
-		if err == nil {
-			return nil
 		}
 
-		lastErr = err
+		log.Debug().
+			Int("batch_num", batchNum).
+			Int("recovered", recovered).
+			Int("failed", failed).
+			Msg("Completed batch recovery")
 
-		if !isTransientDBError(err) || attempt == maxRetries {
-			return lastErr
-		}
+		return nil
+	})
 
-		backoff := time.Duration(attempt) * time.Second
-		log.Warn().
-			Err(err).
-			Int("attempt", attempt).
-			Dur("backoff", backoff).
-			Msg("Transient DB error during recoverStaleTasks, retrying")
-
-		select {
-		case <-time.After(backoff):
-		case <-ctx.Done():
-			return ctx.Err()
-		}
-	}
-
-	return lastErr
-}
-
-func isTransientDBError(err error) bool {
-	if err == nil {
-		return false
-	}
-
-	if errors.Is(err, sql.ErrConnDone) {
-		return true
-	}
-
-	msg := strings.ToLower(err.Error())
-	if strings.Contains(msg, "bad connection") ||
-		strings.Contains(msg, "connection reset") ||
-		strings.Contains(msg, "broken pipe") ||
-		strings.Contains(msg, "no connection to the server") {
-		return true
-	}
-
-	return false
+	return recovered, failed, err
 }
 
 // recoverRunningJobs finds jobs that were in 'running' state when the server shut down
