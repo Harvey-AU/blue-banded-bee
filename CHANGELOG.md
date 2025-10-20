@@ -29,6 +29,17 @@ On merge, CI will:
 
 ## [Unreleased]
 
+## [0.9.2] – 2025-10-20
+
+### Fixed
+
+- **Deployment Connection Pool**: Use immediate deployment strategy to prevent
+  database connection exhaustion
+  - Stops old machine before starting new one during deployments
+  - Prevents attempting to open 90 connections (2×45) when Supabase limit is ~60
+  - Eliminates deployment crashes caused by exceeding connection pool limits
+  - Brief downtime (~30-60s) during deploys is acceptable trade-off
+
 ## [0.9.1] – 2025-10-20
 
 ## [0.9.0] – 2025-10-20
@@ -55,6 +66,8 @@ On merge, CI will:
   - Expected reduction: from 3,600+ events/hour to ~12 events/hour
 
 ## [Unreleased]
+
+## [0.9.2] – 2025-10-20
 
 ## [0.9.1] – 2025-10-20
 
@@ -530,6 +543,8 @@ On merge, CI will:
   - Added `target="_blank"` for better user experience
 
 ## [Unreleased]
+
+## [0.9.2] – 2025-10-20
 
 ## [0.9.1] – 2025-10-20
 
