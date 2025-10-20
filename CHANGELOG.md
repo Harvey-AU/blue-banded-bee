@@ -27,7 +27,16 @@ On merge, CI will:
 4. Create a git tag and GitHub release
 5. Commit the updated changelog
 
-## [Unreleased]
+## [Unreleased:patch]
+
+### Fixed
+
+- **Deployment Connection Pool**: Use immediate deployment strategy to prevent
+  database connection exhaustion
+  - Stops old machine before starting new one during deployments
+  - Prevents attempting to open 90 connections (2×45) when Supabase limit is ~60
+  - Eliminates deployment crashes caused by exceeding connection pool limits
+  - Brief downtime (~30-60s) during deploys is acceptable trade-off
 
 ## [0.9.1] – 2025-10-20
 
