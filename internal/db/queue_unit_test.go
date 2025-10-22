@@ -360,8 +360,7 @@ func TestDbQueueEnqueueURLs(t *testing.T) {
 					WithArgs("job-1").
 					WillReturnRows(sqlmock.NewRows([]string{"max_pages", "count"}).AddRow(0, 0))
 
-				// Expect prepared statement and Exec for single task insert
-				mock.ExpectPrepare("INSERT INTO tasks ")
+				// Expect direct Exec (no prepared statement for Supabase pooler compatibility)
 				mock.ExpectExec("INSERT INTO tasks ").
 					WithArgs(
 						sqlmock.AnyArg(), // id
@@ -396,8 +395,7 @@ func TestDbQueueEnqueueURLs(t *testing.T) {
 					WithArgs("job-2").
 					WillReturnRows(sqlmock.NewRows([]string{"max_pages", "count"}).AddRow(0, 0))
 
-				mock.ExpectPrepare("INSERT INTO tasks ")
-				// Expect three execs (could be one prepared statement executed thrice)
+				// Expect three direct execs (no prepared statement for Supabase pooler compatibility)
 				mock.ExpectExec("INSERT INTO tasks ").
 					WillReturnResult(sqlmock.NewResult(1, 1))
 				mock.ExpectExec("INSERT INTO tasks ").
@@ -431,7 +429,7 @@ func TestDbQueueEnqueueURLs(t *testing.T) {
 					WithArgs("job-4").
 					WillReturnRows(sqlmock.NewRows([]string{"max_pages", "count"}).AddRow(0, 0))
 
-				mock.ExpectPrepare("INSERT INTO tasks ")
+				// Expect direct Exec (no prepared statement)
 				mock.ExpectExec("INSERT INTO tasks ").
 					WillReturnError(errors.New("constraint violation"))
 

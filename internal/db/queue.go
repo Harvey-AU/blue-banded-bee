@@ -386,18 +386,14 @@ func (q *DbQueue) EnqueueURLs(ctx context.Context, jobID string, pages []Page, s
 			}
 		}
 
-		// Prepare statement for batch insert with duplicate handling
-		stmt, err := tx.PrepareContext(ctx, `
+		// Use direct query instead of prepared statement for Supabase pooler compatibility
+		insertQuery := `
 			INSERT INTO tasks (
 				id, job_id, page_id, path, status, created_at, retry_count,
 				source_type, source_url, priority_score
 			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 			ON CONFLICT (job_id, page_id) DO NOTHING
-		`)
-		if err != nil {
-			return fmt.Errorf("failed to prepare statement: %w", err)
-		}
-		defer stmt.Close()
+		`
 
 		// Insert each task with appropriate status
 		now := time.Now()
@@ -417,7 +413,7 @@ func (q *DbQueue) EnqueueURLs(ctx context.Context, jobID string, pages []Page, s
 			}
 
 			taskID := uuid.New().String()
-			_, err = stmt.ExecContext(ctx,
+			_, err = tx.ExecContext(ctx, insertQuery,
 				taskID, jobID, page.ID, page.Path, status, now, 0, sourceType, sourceURL, page.Priority)
 
 			if err != nil {
