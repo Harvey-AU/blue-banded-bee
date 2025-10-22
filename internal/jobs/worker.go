@@ -1168,27 +1168,23 @@ func (wp *WorkerPool) flushBatches(ctx context.Context) {
 
 	// Execute everything in ONE queue operation instead of separate ones
 	err := wp.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
-		// 1. Update all tasks in a single statement with CASE
+		// 1. Update all tasks - use direct query instead of prepared statement for Supabase pooler compatibility
 		if len(tasks) > 0 {
 			taskUpdateStart := time.Now()
-			stmt, err := tx.PrepareContext(ctx, `
+			updateQuery := `
 				UPDATE tasks
-				SET status = $1, 
+				SET status = $1,
 					completed_at = $2,
-					error = $3 -- Only include error (for failure reason)
+					error = $3
 				WHERE id = $4
-			`)
-			if err != nil {
-				return err
-			}
-			defer stmt.Close()
+			`
 
 			for _, task := range tasks {
 				if task.Status == TaskStatusCompleted || task.Status == TaskStatusFailed {
 					if task.CompletedAt.IsZero() {
 						task.CompletedAt = time.Now().UTC()
 					}
-					_, err := stmt.ExecContext(ctx,
+					_, err := tx.ExecContext(ctx, updateQuery,
 						task.Status, task.CompletedAt,
 						task.Error, task.ID)
 					if err != nil {

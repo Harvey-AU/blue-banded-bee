@@ -29,6 +29,8 @@ On merge, CI will:
 
 ## [Unreleased]
 
+## [0.10.1] – 2025-10-22
+
 ## [0.10.0] – 2025-10-22
 
 ### Fixed
@@ -87,6 +89,8 @@ On merge, CI will:
   - Expected reduction: from 3,600+ events/hour to ~12 events/hour
 
 ## [Unreleased]
+
+## [0.10.1] – 2025-10-22
 
 ## [0.10.0] – 2025-10-22
 
@@ -566,6 +570,8 @@ On merge, CI will:
   - Added `target="_blank"` for better user experience
 
 ## [Unreleased]
+
+## [0.10.1] – 2025-10-22
 
 ## [0.10.0] – 2025-10-22
 
