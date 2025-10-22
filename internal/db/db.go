@@ -103,22 +103,22 @@ func New(config *Config) (*DB, error) {
 		// Environment-based idle connection limits (40% of max open)
 		appEnv := os.Getenv("APP_ENV")
 		if appEnv == "production" {
-			config.MaxIdleConns = 14 // Production: 40% of 35
+			config.MaxIdleConns = 13
 		} else if appEnv == "staging" {
-			config.MaxIdleConns = 4 // Preview/staging: 40% of 10
+			config.MaxIdleConns = 4
 		} else {
-			config.MaxIdleConns = 6 // Development: 40% of 15
+			config.MaxIdleConns = 1
 		}
 	}
 	if config.MaxOpenConns == 0 {
 		// Environment-based connection limits to prevent pool exhaustion
 		appEnv := os.Getenv("APP_ENV")
 		if appEnv == "production" {
-			config.MaxOpenConns = 35 // Production: high capacity
+			config.MaxOpenConns = 32
 		} else if appEnv == "staging" {
-			config.MaxOpenConns = 10 // Preview/staging: conservative for PR testing
+			config.MaxOpenConns = 10
 		} else {
-			config.MaxOpenConns = 15 // Development: modest for local testing
+			config.MaxOpenConns = 3
 		}
 	}
 	if config.MaxLifetime == 0 {
@@ -208,14 +208,14 @@ func InitFromEnv() (*DB, error) {
 		var maxOpen, maxIdle int
 		appEnv := os.Getenv("APP_ENV")
 		if appEnv == "production" {
-			maxOpen = 35 // Production: high capacity
-			maxIdle = 14 // Production: 40% idle buffer
+			maxOpen = 32 // Production: high capacity
+			maxIdle = 13 // Production: 40% idle buffer
 		} else if appEnv == "staging" {
 			maxOpen = 10 // Preview/staging: conservative for PR testing
 			maxIdle = 4  // Preview/staging: 40% idle buffer
 		} else {
-			maxOpen = 15 // Development: modest for local testing
-			maxIdle = 6  // Development: 40% idle buffer
+			maxOpen = 3 // Development: minimal for local testing
+			maxIdle = 1 // Development: minimal idle buffer
 		}
 
 		config := &Config{
@@ -297,14 +297,14 @@ func InitFromEnv() (*DB, error) {
 	var maxOpen, maxIdle int
 	appEnv := os.Getenv("APP_ENV")
 	if appEnv == "production" {
-		maxOpen = 35 // Production: high capacity
-		maxIdle = 14 // Production: 40% idle buffer
+		maxOpen = 32 // Production: high capacity
+		maxIdle = 13 // Production: 40% idle buffer
 	} else if appEnv == "staging" {
 		maxOpen = 10 // Preview/staging: conservative for PR testing
 		maxIdle = 4  // Preview/staging: 40% idle buffer
 	} else {
-		maxOpen = 15 // Development: modest for local testing
-		maxIdle = 6  // Development: 40% idle buffer
+		maxOpen = 3 // Development: minimal for local testing
+		maxIdle = 1 // Development: minimal idle buffer
 	}
 
 	config := &Config{

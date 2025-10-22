@@ -33,8 +33,8 @@ On merge, CI will:
 
 - **Database Connection Pool Exhaustion**: Comprehensive fix for Supabase
   connection limit issues
-  - Environment-based connection limits: Production (35), Preview/Staging (10),
-    Development (15)
+  - Environment-based connection limits: Production (32), Preview/Staging (10),
+    Development (3)
   - Prevents pool exhaustion by scaling connections to environment needs
   - Use immediate deployment strategy to prevent double connection usage during
     deploys
@@ -52,15 +52,17 @@ On merge, CI will:
 
 - **Environment-Based Resource Scaling**: Worker pool and database connections
   now scale based on APP_ENV
-  - Production: 50 workers (max 50), 35 max connections, 14 idle connections
+  - Production: 50 workers (max 50), 32 max connections, 13 idle connections
   - Preview/Staging: 10 workers (max 10), 10 max connections, 4 idle connections
-  - Development: 5 workers (max 50), 15 max connections, 6 idle connections
+  - Development: 5 workers (max 50), 3 max connections, 1 idle connection
   - **Dynamic worker scaling** respects environment limits: AddJob scaling and
     performance-based scaling enforce environment-specific max workers
   - Prevents preview apps from scaling beyond their connection pool capacity (10
     workers for 10 connections)
   - Prevents resource exhaustion in preview environments during PR testing
-  - Optimises production capacity for high throughput
+  - Optimises production capacity for high throughput whilst staying well under
+    Supabase's ~60 connection limit
+  - Development uses minimal connections to allow multiple local instances
   - APP_ENV values: "production", "staging" (for PR previews), or
     "development"/"" (local dev)
   - **CI Configuration**: Already set correctly in fly.toml (production) and
