@@ -144,8 +144,8 @@ func TestNew_DefaultValues(t *testing.T) {
 	_, _ = New(config)
 
 	assert.Equal(t, "disable", config.SSLMode)
-	assert.Equal(t, 18, config.MaxIdleConns)
-	assert.Equal(t, 45, config.MaxOpenConns)
+	assert.Equal(t, 1, config.MaxIdleConns) // Development default (APP_ENV not set)
+	assert.Equal(t, 3, config.MaxOpenConns) // Development default (APP_ENV not set)
 	assert.Equal(t, 5*time.Minute, config.MaxLifetime)
 }
 
