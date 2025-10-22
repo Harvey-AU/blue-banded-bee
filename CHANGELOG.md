@@ -86,6 +86,8 @@ On merge, CI will:
 
 ## [Unreleased]
 
+## [0.9.2] – 2025-10-20
+
 ## [0.9.1] – 2025-10-20
 
 ## [0.9.0] – 2025-10-20
@@ -560,6 +562,8 @@ On merge, CI will:
   - Added `target="_blank"` for better user experience
 
 ## [Unreleased]
+
+## [0.9.2] – 2025-10-20
 
 ## [0.9.1] – 2025-10-20
 
