@@ -27,46 +27,37 @@ On merge, CI will:
 4. Create a git tag and GitHub release
 5. Commit the updated changelog
 
-## [Unreleased:patch]
+## [Unreleased:minor]
 
 ### Fixed
 
-- **Database Connection Pool Exhaustion**: Comprehensive fix for Supabase
-  connection limit issues
-  - Environment-based connection limits: Production (32), Preview/Staging (10),
-    Development (3)
-  - Prevents pool exhaustion by scaling connections to environment needs
-  - Use immediate deployment strategy to prevent double connection usage during
-    deploys
-  - Stops old machine before starting new one, eliminating deployment crashes
+- **Connection Pool Exhaustion and Deployment Crashes**: Fixed database
+  connection exhaustion causing application crashes
+  - Changed deployment strategy from rolling to immediate (stops old machine
+    before starting new)
+  - Prevents attempting 90 connections during deploys (old + new machine)
+  - Eliminates "remaining connection slots reserved for SUPERUSER" errors
   - Brief downtime (~30-60s) during deploys is acceptable trade-off
 - **Recovery Batch Timeouts**: Increased statement timeout for maintenance
   operations
   - Increased statement timeout from 30s to 60s for recovery batches
   - Increased context timeout from 35s to 65s to accommodate longer queries
-  - Allows recovery system to complete processing of large task backlogs without
-    timing out
   - Fixes persistent timeout errors when recovering 1,000+ stuck tasks
 
 ### Changed
 
-- **Environment-Based Resource Scaling**: Worker pool and database connections
-  now scale based on APP_ENV
-  - Production: 50 workers (max 50), 32 max connections, 13 idle connections
-  - Preview/Staging: 10 workers (max 10), 10 max connections, 4 idle connections
-  - Development: 5 workers (max 50), 3 max connections, 1 idle connection
-  - **Dynamic worker scaling** respects environment limits: AddJob scaling and
-    performance-based scaling enforce environment-specific max workers
-  - Prevents preview apps from scaling beyond their connection pool capacity (10
-    workers for 10 connections)
-  - Prevents resource exhaustion in preview environments during PR testing
-  - Optimises production capacity for high throughput whilst staying well under
-    Supabase's ~60 connection limit
+- **Environment-Based Resource Scaling**: Worker pools and database connections
+  now scale based on APP_ENV environment variable
+  - **Production**: 50 workers (max 50), 32 max connections, 13 idle connections
+  - **Preview/Staging**: 10 workers (max 10), 10 max connections, 4 idle
+    connections
+  - **Development**: 5 workers (max 50), 3 max connections, 1 idle connection
+  - Dynamic worker scaling enforces environment-specific limits in AddJob and
+    performance-based scaling
+  - Prevents preview apps from scaling beyond their connection pool capacity
+  - Prevents resource exhaustion during PR testing
+  - Stays well under Supabase's 48-connection pool limit
   - Development uses minimal connections to allow multiple local instances
-  - APP_ENV values: "production", "staging" (for PR previews), or
-    "development"/"" (local dev)
-  - **CI Configuration**: Already set correctly in fly.toml (production) and
-    .fly/review_apps.toml (staging)
 
 ## [0.9.1] – 2025-10-20
 

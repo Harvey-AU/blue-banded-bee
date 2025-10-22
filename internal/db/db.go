@@ -101,23 +101,23 @@ func New(config *Config) (*DB, error) {
 	}
 	if config.MaxIdleConns == 0 {
 		// Environment-based idle connection limits (40% of max open)
-		appEnv := os.Getenv("APP_ENV")
-		if appEnv == "production" {
+		switch os.Getenv("APP_ENV") {
+		case "production":
 			config.MaxIdleConns = 13
-		} else if appEnv == "staging" {
+		case "staging":
 			config.MaxIdleConns = 4
-		} else {
+		default:
 			config.MaxIdleConns = 1
 		}
 	}
 	if config.MaxOpenConns == 0 {
 		// Environment-based connection limits to prevent pool exhaustion
-		appEnv := os.Getenv("APP_ENV")
-		if appEnv == "production" {
+		switch os.Getenv("APP_ENV") {
+		case "production":
 			config.MaxOpenConns = 32
-		} else if appEnv == "staging" {
+		case "staging":
 			config.MaxOpenConns = 10
-		} else {
+		default:
 			config.MaxOpenConns = 3
 		}
 	}
@@ -206,14 +206,14 @@ func InitFromEnv() (*DB, error) {
 	if url := strings.TrimSpace(os.Getenv("DATABASE_URL")); url != "" {
 		// Optimise connection limits based on environment
 		var maxOpen, maxIdle int
-		appEnv := os.Getenv("APP_ENV")
-		if appEnv == "production" {
+		switch os.Getenv("APP_ENV") {
+		case "production":
 			maxOpen = 32 // Production: high capacity
 			maxIdle = 13 // Production: 40% idle buffer
-		} else if appEnv == "staging" {
+		case "staging":
 			maxOpen = 10 // Preview/staging: conservative for PR testing
 			maxIdle = 4  // Preview/staging: 40% idle buffer
-		} else {
+		default:
 			maxOpen = 3 // Development: minimal for local testing
 			maxIdle = 1 // Development: minimal idle buffer
 		}
@@ -295,14 +295,14 @@ func InitFromEnv() (*DB, error) {
 
 	// Fallback to individual environment variables
 	var maxOpen, maxIdle int
-	appEnv := os.Getenv("APP_ENV")
-	if appEnv == "production" {
+	switch os.Getenv("APP_ENV") {
+	case "production":
 		maxOpen = 32 // Production: high capacity
 		maxIdle = 13 // Production: 40% idle buffer
-	} else if appEnv == "staging" {
+	case "staging":
 		maxOpen = 10 // Preview/staging: conservative for PR testing
 		maxIdle = 4  // Preview/staging: 40% idle buffer
-	} else {
+	default:
 		maxOpen = 3 // Development: minimal for local testing
 		maxIdle = 1 // Development: minimal idle buffer
 	}
