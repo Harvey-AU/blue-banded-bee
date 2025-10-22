@@ -29,24 +29,16 @@ func CreatePageRecords(ctx context.Context, q TransactionExecutor, domainID int,
 	var paths []string
 
 	err := q.Execute(ctx, func(tx *sql.Tx) error {
-		insertStmt, err := tx.PrepareContext(ctx, `
-		INSERT INTO pages (domain_id, path)
-		VALUES ($1, $2)
-		ON CONFLICT (domain_id, path) DO NOTHING
-		RETURNING id
-	`)
-		if err != nil {
-			return fmt.Errorf("failed to prepare page insert statement: %w", err)
-		}
-		defer insertStmt.Close()
-
-		selectStmt, err := tx.PrepareContext(ctx, `
-		SELECT id FROM pages WHERE domain_id = $1 AND path = $2
-	`)
-		if err != nil {
-			return fmt.Errorf("failed to prepare page select statement: %w", err)
-		}
-		defer selectStmt.Close()
+		// Use direct queries instead of prepared statements for Supabase pooler compatibility
+		insertQuery := `
+			INSERT INTO pages (domain_id, path)
+			VALUES ($1, $2)
+			ON CONFLICT (domain_id, path) DO NOTHING
+			RETURNING id
+		`
+		selectQuery := `
+			SELECT id FROM pages WHERE domain_id = $1 AND path = $2
+		`
 
 		seen := make(map[string]int, len(urls))
 
@@ -67,9 +59,9 @@ func CreatePageRecords(ctx context.Context, q TransactionExecutor, domainID int,
 
 			// Get or create the page record without touching existing rows unnecessarily
 			var pageID int
-			err = insertStmt.QueryRowContext(ctx, domainID, path).Scan(&pageID)
+			err = tx.QueryRowContext(ctx, insertQuery, domainID, path).Scan(&pageID)
 			if err == sql.ErrNoRows {
-				if err := selectStmt.QueryRowContext(ctx, domainID, path).Scan(&pageID); err != nil {
+				if err := tx.QueryRowContext(ctx, selectQuery, domainID, path).Scan(&pageID); err != nil {
 					return fmt.Errorf("failed to lookup existing page record: %w", err)
 				}
 			} else if err != nil {
