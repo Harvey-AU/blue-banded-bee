@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math"
 	"net/url"
+	"os"
 	"runtime/debug"
 	"strings"
 	"sync"
@@ -50,6 +51,7 @@ type WorkerPool struct {
 	activeJobs       sync.WaitGroup
 	baseWorkerCount  int
 	currentWorkers   int
+	maxWorkers       int // Maximum workers allowed (environment-specific)
 	workersMutex     sync.RWMutex
 	taskBatch        *TaskBatch
 	batchTimer       *time.Ticker
@@ -102,6 +104,12 @@ func NewWorkerPool(db *sql.DB, dbQueue DbQueueInterface, crawler CrawlerInterfac
 		panic("database configuration is required")
 	}
 
+	// Determine max workers based on environment to prevent resource exhaustion
+	maxWorkers := 50 // Production: high throughput
+	if env := os.Getenv("APP_ENV"); env == "staging" {
+		maxWorkers = 10 // Preview/staging: match conservative limits
+	}
+
 	wp := &WorkerPool{
 		db:              db,
 		dbQueue:         dbQueue,
@@ -110,6 +118,7 @@ func NewWorkerPool(db *sql.DB, dbQueue DbQueueInterface, crawler CrawlerInterfac
 		numWorkers:      numWorkers,
 		baseWorkerCount: numWorkers,
 		currentWorkers:  numWorkers,
+		maxWorkers:      maxWorkers,
 		jobs:            make(map[string]bool),
 
 		stopCh:           make(chan struct{}),
@@ -283,9 +292,9 @@ func (wp *WorkerPool) AddJob(jobID string, options *JobOptions) {
 		sentry.CaptureException(fmt.Errorf("failed to cache job info for job %s: %w", jobID, err))
 	}
 
-	// Simple scaling: add 5 workers per job, maximum of 50 total
+	// Simple scaling: add 5 workers per job, respect environment-specific max
 	wp.workersMutex.Lock()
-	targetWorkers := min(wp.currentWorkers+5, 50)
+	targetWorkers := min(wp.currentWorkers+5, wp.maxWorkers)
 
 	if targetWorkers > wp.currentWorkers {
 		wp.workersMutex.Unlock()
@@ -1895,9 +1904,9 @@ func (wp *WorkerPool) evaluateJobPerformance(jobID string, responseTime int64) {
 			// Need more workers
 			wp.workersMutex.Lock()
 			targetWorkers := wp.currentWorkers + boostDiff
-			if targetWorkers > 50 { // Respect global max
-				targetWorkers = 50
-				perf.CurrentBoost = perf.CurrentBoost - (wp.currentWorkers + boostDiff - 50) // Adjust boost to actual
+			if targetWorkers > wp.maxWorkers { // Respect environment-specific max
+				targetWorkers = wp.maxWorkers
+				perf.CurrentBoost = perf.CurrentBoost - (wp.currentWorkers + boostDiff - wp.maxWorkers) // Adjust boost to actual
 			}
 			wp.workersMutex.Unlock()
 
