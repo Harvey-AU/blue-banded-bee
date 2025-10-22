@@ -27,7 +27,9 @@ On merge, CI will:
 4. Create a git tag and GitHub release
 5. Commit the updated changelog
 
-## [Unreleased:minor]
+## [Unreleased]
+
+## [0.10.0] – 2025-10-22
 
 ### Fixed
 
@@ -85,6 +87,8 @@ On merge, CI will:
   - Expected reduction: from 3,600+ events/hour to ~12 events/hour
 
 ## [Unreleased]
+
+## [0.10.0] – 2025-10-22
 
 ## [0.9.2] – 2025-10-20
 
@@ -562,6 +566,8 @@ On merge, CI will:
   - Added `target="_blank"` for better user experience
 
 ## [Unreleased]
+
+## [0.10.0] – 2025-10-22
 
 ## [0.9.2] – 2025-10-20
 
