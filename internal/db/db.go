@@ -100,10 +100,26 @@ func New(config *Config) (*DB, error) {
 		config.SSLMode = "disable"
 	}
 	if config.MaxIdleConns == 0 {
-		config.MaxIdleConns = 18 // Keep 40% idle buffer for Supabase pool limits
+		// Environment-based idle connection limits (40% of max open)
+		switch os.Getenv("APP_ENV") {
+		case "production":
+			config.MaxIdleConns = 13
+		case "staging":
+			config.MaxIdleConns = 4
+		default:
+			config.MaxIdleConns = 1
+		}
 	}
 	if config.MaxOpenConns == 0 {
-		config.MaxOpenConns = 45 // Stay just under Supabase's 48-connection pool limit
+		// Environment-based connection limits to prevent pool exhaustion
+		switch os.Getenv("APP_ENV") {
+		case "production":
+			config.MaxOpenConns = 32
+		case "staging":
+			config.MaxOpenConns = 10
+		default:
+			config.MaxOpenConns = 3
+		}
 	}
 	if config.MaxLifetime == 0 {
 		config.MaxLifetime = 5 * time.Minute // Shorter lifetime for pooler compatibility
@@ -189,11 +205,17 @@ func InitFromEnv() (*DB, error) {
 	// Trim whitespace as it causes pgx to ignore the URL and fall back to Unix socket
 	if url := strings.TrimSpace(os.Getenv("DATABASE_URL")); url != "" {
 		// Optimise connection limits based on environment
-		maxOpen := 45 // Production: stay under Supabase's 48 connection pool limit
-		maxIdle := 18 // Production: 40% idle buffer for rapid reuse
-		if os.Getenv("APP_ENV") == "development" {
-			maxOpen = 15 // Development: modest limits for local testing
-			maxIdle = 5  // Development: fewer idle connections
+		var maxOpen, maxIdle int
+		switch os.Getenv("APP_ENV") {
+		case "production":
+			maxOpen = 32 // Production: high capacity
+			maxIdle = 13 // Production: 40% idle buffer
+		case "staging":
+			maxOpen = 10 // Preview/staging: conservative for PR testing
+			maxIdle = 4  // Preview/staging: 40% idle buffer
+		default:
+			maxOpen = 3 // Development: minimal for local testing
+			maxIdle = 1 // Development: minimal idle buffer
 		}
 
 		config := &Config{
@@ -271,6 +293,20 @@ func InitFromEnv() (*DB, error) {
 		return &DB{client: client, config: config, Cache: dbCache}, nil
 	}
 
+	// Fallback to individual environment variables
+	var maxOpen, maxIdle int
+	switch os.Getenv("APP_ENV") {
+	case "production":
+		maxOpen = 32 // Production: high capacity
+		maxIdle = 13 // Production: 40% idle buffer
+	case "staging":
+		maxOpen = 10 // Preview/staging: conservative for PR testing
+		maxIdle = 4  // Preview/staging: 40% idle buffer
+	default:
+		maxOpen = 3 // Development: minimal for local testing
+		maxIdle = 1 // Development: minimal idle buffer
+	}
+
 	config := &Config{
 		Host:         os.Getenv("POSTGRES_HOST"),
 		Port:         os.Getenv("POSTGRES_PORT"),
@@ -278,8 +314,8 @@ func InitFromEnv() (*DB, error) {
 		Password:     os.Getenv("POSTGRES_PASSWORD"),
 		Database:     os.Getenv("POSTGRES_DB"),
 		SSLMode:      os.Getenv("POSTGRES_SSL_MODE"),
-		MaxIdleConns: 18,
-		MaxOpenConns: 45,
+		MaxIdleConns: maxIdle,
+		MaxOpenConns: maxOpen,
 		MaxLifetime:  5 * time.Minute,
 	}
 

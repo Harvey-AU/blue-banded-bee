@@ -392,7 +392,18 @@ func main() {
 	dbQueue := db.NewDbQueue(pgDB)
 
 	// Create a worker pool for task processing
-	var jobWorkers = 5 // QUESTION: Set in env or dynamically - consider impact throughout app where worker pool sizing is set.
+	// Configure worker count based on environment to prevent resource exhaustion
+	var jobWorkers int
+	appEnv := os.Getenv("APP_ENV")
+	switch appEnv {
+	case "production":
+		jobWorkers = 50 // Production: high throughput
+	case "staging":
+		jobWorkers = 10 // Preview/staging: moderate throughput for PR testing
+	default:
+		jobWorkers = 5 // Development: minimal for local testing
+	}
+	log.Info().Int("workers", jobWorkers).Str("environment", appEnv).Msg("Configuring worker pool")
 	workerPool := jobs.NewWorkerPool(pgDB.GetDB(), dbQueue, cr, jobWorkers, pgDB.GetConfig())
 
 	// Create job manager

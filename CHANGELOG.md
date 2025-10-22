@@ -29,16 +29,37 @@ On merge, CI will:
 
 ## [Unreleased]
 
-## [0.9.2] – 2025-10-20
+## [0.10.0] – 2025-10-22
 
 ### Fixed
 
-- **Deployment Connection Pool**: Use immediate deployment strategy to prevent
-  database connection exhaustion
-  - Stops old machine before starting new one during deployments
-  - Prevents attempting to open 90 connections (2×45) when Supabase limit is ~60
-  - Eliminates deployment crashes caused by exceeding connection pool limits
+- **Connection Pool Exhaustion and Deployment Crashes**: Fixed database
+  connection exhaustion causing application crashes
+  - Changed deployment strategy from rolling to immediate (stops old machine
+    before starting new)
+  - Prevents attempting 90 connections during deploys (old + new machine)
+  - Eliminates "remaining connection slots reserved for SUPERUSER" errors
   - Brief downtime (~30-60s) during deploys is acceptable trade-off
+- **Recovery Batch Timeouts**: Increased statement timeout for maintenance
+  operations
+  - Increased statement timeout from 30s to 60s for recovery batches
+  - Increased context timeout from 35s to 65s to accommodate longer queries
+  - Fixes persistent timeout errors when recovering 1,000+ stuck tasks
+
+### Changed
+
+- **Environment-Based Resource Scaling**: Worker pools and database connections
+  now scale based on APP_ENV environment variable
+  - **Production**: 50 workers (max 50), 32 max connections, 13 idle connections
+  - **Preview/Staging**: 10 workers (max 10), 10 max connections, 4 idle
+    connections
+  - **Development**: 5 workers (max 50), 3 max connections, 1 idle connection
+  - Dynamic worker scaling enforces environment-specific limits in AddJob and
+    performance-based scaling
+  - Prevents preview apps from scaling beyond their connection pool capacity
+  - Prevents resource exhaustion during PR testing
+  - Stays well under Supabase's 48-connection pool limit
+  - Development uses minimal connections to allow multiple local instances
 
 ## [0.9.1] – 2025-10-20
 
@@ -66,6 +87,8 @@ On merge, CI will:
   - Expected reduction: from 3,600+ events/hour to ~12 events/hour
 
 ## [Unreleased]
+
+## [0.10.0] – 2025-10-22
 
 ## [0.9.2] – 2025-10-20
 
@@ -543,6 +566,8 @@ On merge, CI will:
   - Added `target="_blank"` for better user experience
 
 ## [Unreleased]
+
+## [0.10.0] – 2025-10-22
 
 ## [0.9.2] – 2025-10-20
 
