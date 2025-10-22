@@ -31,12 +31,22 @@ On merge, CI will:
 
 ### Fixed
 
-- **Deployment Connection Pool**: Use immediate deployment strategy to prevent
-  database connection exhaustion
-  - Stops old machine before starting new one during deployments
-  - Prevents attempting to open 90 connections (2×45) when Supabase limit is ~60
-  - Eliminates deployment crashes caused by exceeding connection pool limits
+- **Database Connection Pool Exhaustion**: Comprehensive fix for Supabase
+  connection limit issues
+  - Reduced MaxOpenConns from 45 to 25 to stay well under Supabase's ~60
+    connection limit
+  - Reduced MaxIdleConns from 18 to 10 to maintain 40% idle buffer
+  - Use immediate deployment strategy to prevent double connection usage during
+    deploys
+  - Stops old machine before starting new one, eliminating deployment crashes
   - Brief downtime (~30-60s) during deploys is acceptable trade-off
+- **Recovery Batch Timeouts**: Increased statement timeout for maintenance
+  operations
+  - Increased statement timeout from 30s to 60s for recovery batches
+  - Increased context timeout from 35s to 65s to accommodate longer queries
+  - Allows recovery system to complete processing of large task backlogs without
+    timing out
+  - Fixes persistent timeout errors when recovering 1,000+ stuck tasks
 
 ## [0.9.1] – 2025-10-20
 

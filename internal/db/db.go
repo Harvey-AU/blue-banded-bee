@@ -103,7 +103,7 @@ func New(config *Config) (*DB, error) {
 		config.MaxIdleConns = 18 // Keep 40% idle buffer for Supabase pool limits
 	}
 	if config.MaxOpenConns == 0 {
-		config.MaxOpenConns = 45 // Stay just under Supabase's 48-connection pool limit
+		config.MaxOpenConns = 25 // Conservative limit to prevent pool exhaustion
 	}
 	if config.MaxLifetime == 0 {
 		config.MaxLifetime = 5 * time.Minute // Shorter lifetime for pooler compatibility
@@ -189,8 +189,8 @@ func InitFromEnv() (*DB, error) {
 	// Trim whitespace as it causes pgx to ignore the URL and fall back to Unix socket
 	if url := strings.TrimSpace(os.Getenv("DATABASE_URL")); url != "" {
 		// Optimise connection limits based on environment
-		maxOpen := 45 // Production: stay under Supabase's 48 connection pool limit
-		maxIdle := 18 // Production: 40% idle buffer for rapid reuse
+		maxOpen := 25 // Production: conservative limit to prevent pool exhaustion
+		maxIdle := 10 // Production: 40% idle buffer for rapid reuse
 		if os.Getenv("APP_ENV") == "development" {
 			maxOpen = 15 // Development: modest limits for local testing
 			maxIdle = 5  // Development: fewer idle connections
@@ -278,8 +278,8 @@ func InitFromEnv() (*DB, error) {
 		Password:     os.Getenv("POSTGRES_PASSWORD"),
 		Database:     os.Getenv("POSTGRES_DB"),
 		SSLMode:      os.Getenv("POSTGRES_SSL_MODE"),
-		MaxIdleConns: 18,
-		MaxOpenConns: 45,
+		MaxIdleConns: 10,
+		MaxOpenConns: 25,
 		MaxLifetime:  5 * time.Minute,
 	}
 
