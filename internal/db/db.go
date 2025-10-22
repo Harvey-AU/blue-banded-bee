@@ -100,10 +100,26 @@ func New(config *Config) (*DB, error) {
 		config.SSLMode = "disable"
 	}
 	if config.MaxIdleConns == 0 {
-		config.MaxIdleConns = 18 // Keep 40% idle buffer for Supabase pool limits
+		// Environment-based idle connection limits (40% of max open)
+		appEnv := os.Getenv("APP_ENV")
+		if appEnv == "production" {
+			config.MaxIdleConns = 14 // Production: 40% of 35
+		} else if appEnv == "staging" {
+			config.MaxIdleConns = 4 // Preview/staging: 40% of 10
+		} else {
+			config.MaxIdleConns = 6 // Development: 40% of 15
+		}
 	}
 	if config.MaxOpenConns == 0 {
-		config.MaxOpenConns = 25 // Conservative limit to prevent pool exhaustion
+		// Environment-based connection limits to prevent pool exhaustion
+		appEnv := os.Getenv("APP_ENV")
+		if appEnv == "production" {
+			config.MaxOpenConns = 35 // Production: high capacity
+		} else if appEnv == "staging" {
+			config.MaxOpenConns = 10 // Preview/staging: conservative for PR testing
+		} else {
+			config.MaxOpenConns = 15 // Development: modest for local testing
+		}
 	}
 	if config.MaxLifetime == 0 {
 		config.MaxLifetime = 5 * time.Minute // Shorter lifetime for pooler compatibility
@@ -189,11 +205,17 @@ func InitFromEnv() (*DB, error) {
 	// Trim whitespace as it causes pgx to ignore the URL and fall back to Unix socket
 	if url := strings.TrimSpace(os.Getenv("DATABASE_URL")); url != "" {
 		// Optimise connection limits based on environment
-		maxOpen := 25 // Production: conservative limit to prevent pool exhaustion
-		maxIdle := 10 // Production: 40% idle buffer for rapid reuse
-		if os.Getenv("APP_ENV") == "development" {
-			maxOpen = 15 // Development: modest limits for local testing
-			maxIdle = 5  // Development: fewer idle connections
+		var maxOpen, maxIdle int
+		appEnv := os.Getenv("APP_ENV")
+		if appEnv == "production" {
+			maxOpen = 35 // Production: high capacity
+			maxIdle = 14 // Production: 40% idle buffer
+		} else if appEnv == "staging" {
+			maxOpen = 10 // Preview/staging: conservative for PR testing
+			maxIdle = 4  // Preview/staging: 40% idle buffer
+		} else {
+			maxOpen = 15 // Development: modest for local testing
+			maxIdle = 6  // Development: 40% idle buffer
 		}
 
 		config := &Config{
@@ -271,6 +293,20 @@ func InitFromEnv() (*DB, error) {
 		return &DB{client: client, config: config, Cache: dbCache}, nil
 	}
 
+	// Fallback to individual environment variables
+	var maxOpen, maxIdle int
+	appEnv := os.Getenv("APP_ENV")
+	if appEnv == "production" {
+		maxOpen = 35 // Production: high capacity
+		maxIdle = 14 // Production: 40% idle buffer
+	} else if appEnv == "staging" {
+		maxOpen = 10 // Preview/staging: conservative for PR testing
+		maxIdle = 4  // Preview/staging: 40% idle buffer
+	} else {
+		maxOpen = 15 // Development: modest for local testing
+		maxIdle = 6  // Development: 40% idle buffer
+	}
+
 	config := &Config{
 		Host:         os.Getenv("POSTGRES_HOST"),
 		Port:         os.Getenv("POSTGRES_PORT"),
@@ -278,8 +314,8 @@ func InitFromEnv() (*DB, error) {
 		Password:     os.Getenv("POSTGRES_PASSWORD"),
 		Database:     os.Getenv("POSTGRES_DB"),
 		SSLMode:      os.Getenv("POSTGRES_SSL_MODE"),
-		MaxIdleConns: 10,
-		MaxOpenConns: 25,
+		MaxIdleConns: maxIdle,
+		MaxOpenConns: maxOpen,
 		MaxLifetime:  5 * time.Minute,
 	}
 

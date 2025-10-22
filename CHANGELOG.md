@@ -33,9 +33,9 @@ On merge, CI will:
 
 - **Database Connection Pool Exhaustion**: Comprehensive fix for Supabase
   connection limit issues
-  - Reduced MaxOpenConns from 45 to 25 to stay well under Supabase's ~60
-    connection limit
-  - Reduced MaxIdleConns from 18 to 10 to maintain 40% idle buffer
+  - Environment-based connection limits: Production (35), Preview/Staging (10),
+    Development (15)
+  - Prevents pool exhaustion by scaling connections to environment needs
   - Use immediate deployment strategy to prevent double connection usage during
     deploys
   - Stops old machine before starting new one, eliminating deployment crashes
@@ -47,6 +47,18 @@ On merge, CI will:
   - Allows recovery system to complete processing of large task backlogs without
     timing out
   - Fixes persistent timeout errors when recovering 1,000+ stuck tasks
+
+### Changed
+
+- **Environment-Based Resource Scaling**: Worker pool and database connections
+  now scale based on APP_ENV
+  - Production: 50 workers, 35 max connections, 14 idle connections
+  - Preview/Staging: 10 workers, 10 max connections, 4 idle connections
+  - Development: 5 workers, 15 max connections, 6 idle connections
+  - Prevents resource exhaustion in preview environments during PR testing
+  - Optimises production capacity for high throughput
+  - APP_ENV values: "production", "staging" (for PR previews), or
+    "development"/"" (local dev)
 
 ## [0.9.1] – 2025-10-20
 
