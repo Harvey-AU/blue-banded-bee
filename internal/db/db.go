@@ -208,11 +208,11 @@ func InitFromEnv() (*DB, error) {
 		var maxOpen, maxIdle int
 		switch os.Getenv("APP_ENV") {
 		case "production":
-			maxOpen = 32 // Production: high capacity
-			maxIdle = 13 // Production: 40% idle buffer
+			maxOpen = 27 // Production: reduced to leave headroom for Supabase services
+			maxIdle = 11 // Production: 40% idle buffer
 		case "staging":
-			maxOpen = 10 // Preview/staging: conservative for PR testing
-			maxIdle = 4  // Preview/staging: 40% idle buffer
+			maxOpen = 5 // Preview/staging: conservative to share connection pool
+			maxIdle = 2 // Preview/staging: 40% idle buffer
 		default:
 			maxOpen = 3 // Development: minimal for local testing
 			maxIdle = 1 // Development: minimal idle buffer
@@ -297,11 +297,11 @@ func InitFromEnv() (*DB, error) {
 	var maxOpen, maxIdle int
 	switch os.Getenv("APP_ENV") {
 	case "production":
-		maxOpen = 32 // Production: high capacity
-		maxIdle = 13 // Production: 40% idle buffer
+		maxOpen = 27 // Production: reduced to leave headroom for Supabase services
+		maxIdle = 11 // Production: 40% idle buffer
 	case "staging":
-		maxOpen = 10 // Preview/staging: conservative for PR testing
-		maxIdle = 4  // Preview/staging: 40% idle buffer
+		maxOpen = 5 // Preview/staging: conservative to share connection pool
+		maxIdle = 2 // Preview/staging: 40% idle buffer
 	default:
 		maxOpen = 3 // Development: minimal for local testing
 		maxIdle = 1 // Development: minimal idle buffer

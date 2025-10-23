@@ -885,16 +885,16 @@ func (wp *WorkerPool) recoverTasksFromDeadJobs(ctx context.Context, staleTime ti
 func (wp *WorkerPool) recoverStaleBatch(ctx context.Context, staleTime time.Time, batchSize int, batchNum int) (recovered int, failed int, err error) {
 	err = wp.dbQueue.ExecuteMaintenance(ctx, func(tx *sql.Tx) error {
 		// Query for one batch of stale tasks, oldest first
+		// Note: We recover stuck tasks regardless of job status to prevent tasks
+		// from being orphaned when jobs are marked completed/cancelled/failed
 		rows, err := tx.QueryContext(ctx, `
 			SELECT t.id, t.retry_count, t.job_id
 			FROM tasks t
-			JOIN jobs j ON t.job_id = j.id
 			WHERE t.status = $1
 				AND t.started_at < $2
-				AND j.status = $3
 			ORDER BY t.started_at ASC
-			LIMIT $4
-		`, TaskStatusRunning, staleTime, JobStatusRunning, batchSize)
+			LIMIT $3
+		`, TaskStatusRunning, staleTime, batchSize)
 
 		if err != nil {
 			return err
