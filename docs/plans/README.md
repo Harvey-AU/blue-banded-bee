@@ -6,33 +6,30 @@ Future features, implementation strategies, and technical planning documents.
 
 ### Current Development
 
-- **[api-testing-post-launch.md](./api-testing-post-launch.md)** - API testing
-  strategy after launch
 - **[content-storage-and-change-tracking.md](./content-storage-and-change-tracking.md)** -
   Content versioning strategy
-- **[supabase-optimise.md](./supabase-optimise.md)** - Database optimisation
-  plans
-- **[test-strategy-overview.md](./test-strategy-overview.md)** - Comprehensive
-  testing approach
+- **[dashboard-timezone-fix.md](./dashboard-timezone-fix.md)** - Dashboard
+  timezone handling
+- **[marketing-messaging.md](./marketing-messaging.md)** - Marketing and
+  messaging strategy
+- **[platform-auth-architecture.md](./platform-auth-architecture.md)** -
+  Platform authentication design
 - **[ui-implementation.md](./ui-implementation.md)** - Frontend development
   strategy
 - **[webflow-integration.md](./webflow-integration.md)** - Webflow marketplace
   integration
 
-## 📁 Archived Plans
+## 📋 Completed Optimisations
 
-The `_archive/` folder contains completed or superseded plans:
-
-- Historical planning documents
-- Completed feature implementations
-- Deprecated strategies
+- **[performance-optimisations-completed.md](./performance-optimisations-completed.md)** -
+  Completed performance improvements tracker
 
 ## 🎯 Planning Process
 
 1. **Proposal** - Create new plan document
 2. **Review** - Discuss in team/PR
 3. **Implementation** - Execute the plan
-4. **Archive** - Move completed plans to `_archive/`
+4. **Document** - Move to completed tracker or archive
 
 ## 🔗 Related Documentation
 
