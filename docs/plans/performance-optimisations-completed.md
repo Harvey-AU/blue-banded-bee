@@ -63,21 +63,46 @@ tracked in planning documents.
 - Deadlock errors: 270/day → ~0 (100% reduction)
 - Transaction rollback rate: 9.4% → <2% (78% reduction)
 
+## Stuck Task Recovery ✅ (2025-10-24)
+
+**Status:** FIXED in PR #139 (commit 7fd7716)
+
+**Original Issue:**
+
+- 77 tasks stuck per day
+- Recovery detected issues but couldn't fix them
+- Required investigation of PostgreSQL logs
+
+**Implementation:**
+
+- Fixed recovery logic to properly reset stuck tasks
+- Improved maintenance transaction path
+- Added connection handling for stuck task cleanup
+
+**Results:**
+
+- Stuck tasks dramatically reduced
+- Recovery now effective
+
 ## Outstanding Items
 
-### Phase 3: Maintenance & Investigation (Future)
+### Database Maintenance (Optional - Low Priority)
 
-From `connection-pool-and-scaling-fixes.md`:
+**Note:** With the 95% reduction in UPDATE transactions from batch processing,
+dead tuple accumulation should be minimal. Supabase's auto-vacuum handles
+routine cleanup.
 
-1. **Database maintenance** - Operational task, not code
-   - VACUUM FULL during low-traffic window
-   - REINDEX tables
-   - Update query planner statistics
+**VACUUM FULL** is a PostgreSQL maintenance operation (run via SQL console
+during low-traffic periods), not a code change. It locks tables and rewrites
+them to reclaim space from dead tuples.
 
-2. **Stuck task recovery investigation** - Monitoring ongoing
-   - Current: 77 tasks stuck (recovery detected but ineffective)
-   - Requires PostgreSQL log analysis
-   - May need SKIP LOCKED approach
+If monitoring shows dead tuple buildup:
+
+- Run `VACUUM ANALYZE` during low-traffic periods (Supabase SQL Editor)
+- `VACUUM FULL` only if table bloat becomes severe (requires maintenance window)
+- `REINDEX` if query performance degrades
+
+**This is an operational DBA task, not a code change.**
 
 ## Removed Planning Documents
 
