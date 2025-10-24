@@ -84,7 +84,7 @@ func TestCalculateDateRange(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			startDate, endDate := calculateDateRange(tt.dateRange)
+			startDate, endDate := calculateDateRange(tt.dateRange, "UTC")
 
 			if tt.expectNil {
 				assert.Nil(t, startDate)
@@ -248,7 +248,7 @@ func BenchmarkCalculateDateRange(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		rangeType := ranges[i%len(ranges)]
-		calculateDateRange(rangeType)
+		calculateDateRange(rangeType, "UTC")
 	}
 }
 

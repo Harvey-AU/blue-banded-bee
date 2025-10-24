@@ -128,7 +128,7 @@ func (m *MockDBWithRealDB) CreateUser(userID, email string, fullName *string, or
 func (m *MockDBWithRealDB) GetOrganisation(organisationID string) (*db.Organisation, error) {
 	return nil, nil
 }
-func (m *MockDBWithRealDB) ListJobs(organisationID string, limit, offset int, status, dateRange string) ([]db.JobWithDomain, int, error) {
+func (m *MockDBWithRealDB) ListJobs(organisationID string, limit, offset int, status, dateRange, timezone string) ([]db.JobWithDomain, int, error) {
 	return nil, 0, nil
 }
 func (m *MockDBWithRealDB) GetSlowPages(organisationID string, startDate, endDate *time.Time) ([]db.SlowPage, error) {

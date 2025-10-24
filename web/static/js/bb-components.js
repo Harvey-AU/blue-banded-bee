@@ -1320,17 +1320,32 @@
 
     async loadStats() {
       const dateRange = this.getAttribute("date-range") || "last7";
-      const response = await api.get(`/v1/dashboard/stats?range=${dateRange}`);
+      const timezone = this.getTimezone();
+      const response = await api.get(
+        `/v1/dashboard/stats?range=${dateRange}&tz=${timezone}`
+      );
       return response.data;
     }
 
     async loadJobs() {
       const limit = this.getNumberAttribute("limit") || 10;
       const dateRange = this.getAttribute("date-range") || "last7";
+      const timezone = this.getTimezone();
       const response = await api.get(
-        `/v1/jobs?limit=${limit}&range=${dateRange}&include=domain,progress`
+        `/v1/jobs?limit=${limit}&range=${dateRange}&tz=${timezone}&include=domain,progress`
       );
       return response.data;
+    }
+
+    getTimezone() {
+      try {
+        const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        // URL-encode to handle special characters like + in Etc/GMT+10
+        return encodeURIComponent(tz);
+      } catch (error) {
+        console.warn("Failed to detect timezone, falling back to UTC:", error);
+        return "UTC";
+      }
     }
 
     updateStats(statsData) {
@@ -1432,7 +1447,11 @@
       if (!this.getBooleanAttribute("show-charts")) return;
 
       try {
-        const chartData = await api.get("/v1/dashboard/activity");
+        const dateRange = this.getAttribute("date-range") || "last7";
+        const timezone = this.getTimezone();
+        const chartData = await api.get(
+          `/v1/dashboard/activity?range=${dateRange}&tz=${timezone}`
+        );
         this.renderActivityChart(chartData.data);
       } catch (error) {
         console.warn("Failed to load chart data:", error);
