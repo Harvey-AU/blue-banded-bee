@@ -41,6 +41,7 @@ type WorkerPool struct {
 	dbQueue          DbQueueInterface
 	dbConfig         *db.Config
 	crawler          CrawlerInterface
+	batchManager     *db.BatchManager // Batch manager for task updates
 	numWorkers       int
 	jobs             map[string]bool
 	jobsMutex        sync.RWMutex
@@ -86,9 +87,9 @@ type TaskBatch struct {
 	mu sync.Mutex
 }
 
-func NewWorkerPool(db *sql.DB, dbQueue DbQueueInterface, crawler CrawlerInterface, numWorkers int, dbConfig *db.Config) *WorkerPool {
+func NewWorkerPool(sqlDB *sql.DB, dbQueue DbQueueInterface, crawler CrawlerInterface, numWorkers int, dbConfig *db.Config) *WorkerPool {
 	// Validate inputs
-	if db == nil {
+	if sqlDB == nil {
 		panic("database connection is required")
 	}
 	if dbQueue == nil {
@@ -110,11 +111,15 @@ func NewWorkerPool(db *sql.DB, dbQueue DbQueueInterface, crawler CrawlerInterfac
 		maxWorkers = 10 // Preview/staging: match conservative limits
 	}
 
+	// Create batch manager before WorkerPool construction (db package reference must happen here)
+	batchMgr := db.NewBatchManager(dbQueue)
+
 	wp := &WorkerPool{
-		db:              db,
+		db:              sqlDB,
 		dbQueue:         dbQueue,
 		dbConfig:        dbConfig,
 		crawler:         crawler,
+		batchManager:    batchMgr,
 		numWorkers:      numWorkers,
 		baseWorkerCount: numWorkers,
 		currentWorkers:  numWorkers,
@@ -204,6 +209,10 @@ func (wp *WorkerPool) Stop() {
 			wp.batchTimer.Stop()
 		}
 		wp.wg.Wait()
+		// Stop batch manager to flush remaining updates
+		if wp.batchManager != nil {
+			wp.batchManager.Stop()
+		}
 		log.Debug().Msg("Worker pool stopped")
 	}
 }
@@ -1529,14 +1538,10 @@ func (wp *WorkerPool) handleTaskError(ctx context.Context, task *db.Task, taskEr
 			Msg("Task failed permanently")
 	}
 
-	// Update task status in database
-	updErr := wp.dbQueue.UpdateTaskStatus(ctx, task)
-	if updErr != nil {
-		sentry.CaptureException(updErr)
-		log.Error().Err(updErr).Str("task_id", task.ID).Msg("Failed to mark task as failed")
-	}
+	// Queue task update for batch processing
+	wp.batchManager.QueueTaskUpdate(task)
 
-	return updErr
+	return nil
 }
 
 // handleTaskSuccess processes successful task completion with metrics and database updates
@@ -1618,19 +1623,15 @@ func (wp *WorkerPool) handleTaskSuccess(ctx context.Context, task *db.Task, resu
 		}
 	}
 
-	// Update task status in database
-	updErr := wp.dbQueue.UpdateTaskStatus(ctx, task)
-	if updErr != nil {
-		sentry.CaptureException(updErr)
-		log.Error().Err(updErr).Str("task_id", task.ID).Msg("Failed to mark task as completed")
-	}
+	// Queue task update for batch processing
+	wp.batchManager.QueueTaskUpdate(task)
 
 	// Evaluate job performance for scaling
 	if result.ResponseTime > 0 {
 		wp.evaluateJobPerformance(task.JobID, result.ResponseTime)
 	}
 
-	return updErr
+	return nil
 }
 
 func (wp *WorkerPool) processTask(ctx context.Context, task *Task) (*crawler.CrawlResult, error) {

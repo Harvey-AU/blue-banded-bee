@@ -329,10 +329,15 @@ func TestWorkerPoolProcessNextTask(t *testing.T) {
 			// Create mock crawler
 			mockCrawler := &MockCrawler{}
 
+			// Create batch manager with mock queue
+			batchMgr := db.NewBatchManager(mockQueue)
+			defer batchMgr.Stop()
+
 			// Create worker pool with mocked dependencies
 			wp := &WorkerPool{
 				db:           mockDB,
 				dbQueue:      mockQueue,
+				batchManager: batchMgr,
 				crawler:      mockCrawler,
 				jobs:         make(map[string]bool),
 				jobInfoCache: make(map[string]*JobInfo),
