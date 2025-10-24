@@ -126,7 +126,7 @@ func TestDbQueueGetNextTask(t *testing.T) {
 			setupMock: func(mock sqlmock.Sqlmock) {
 				mock.ExpectBegin()
 
-				// Expect SELECT query
+				// Expect combined CTE query with SELECT and UPDATE
 				rows := sqlmock.NewRows([]string{
 					"id", "job_id", "page_id", "path", "created_at",
 					"retry_count", "source_type", "source_url", "priority_score",
@@ -135,14 +135,9 @@ func TestDbQueueGetNextTask(t *testing.T) {
 					0, "sitemap", "https://example.com/sitemap.xml", 1.0,
 				)
 
-				mock.ExpectQuery("SELECT id, job_id, page_id, path, created_at, retry_count, source_type, source_url, priority_score FROM tasks WHERE status = 'pending' AND job_id = \\$1").
-					WithArgs("test-job").
+				mock.ExpectQuery(`WITH next_task AS \( SELECT .* FROM tasks WHERE status = 'pending' AND job_id = .* ORDER BY .* LIMIT 1 FOR UPDATE SKIP LOCKED \) UPDATE tasks SET status = 'running', started_at = .* FROM next_task WHERE tasks\.id = next_task\.id RETURNING .*`).
+					WithArgs(sqlmock.AnyArg(), "test-job").
 					WillReturnRows(rows)
-
-				// Expect UPDATE query
-				mock.ExpectExec(`UPDATE tasks\s+SET status = 'running', started_at = \$1\s+WHERE id = \$2`).
-					WithArgs(sqlmock.AnyArg(), "task-1").
-					WillReturnResult(sqlmock.NewResult(0, 1))
 
 				mock.ExpectCommit()
 			},
@@ -155,8 +150,8 @@ func TestDbQueueGetNextTask(t *testing.T) {
 			setupMock: func(mock sqlmock.Sqlmock) {
 				mock.ExpectBegin()
 
-				mock.ExpectQuery("SELECT id, job_id, page_id, path, created_at, retry_count, source_type, source_url, priority_score FROM tasks WHERE status = 'pending' AND job_id = \\$1").
-					WithArgs("test-job").
+				mock.ExpectQuery(`WITH next_task AS \( SELECT .* FROM tasks WHERE status = 'pending' AND job_id = .* ORDER BY .* LIMIT 1 FOR UPDATE SKIP LOCKED \) UPDATE tasks SET status = 'running', started_at = .* FROM next_task WHERE tasks\.id = next_task\.id RETURNING .*`).
+					WithArgs(sqlmock.AnyArg(), "test-job").
 					WillReturnError(sql.ErrNoRows)
 
 				mock.ExpectRollback()
@@ -179,12 +174,9 @@ func TestDbQueueGetNextTask(t *testing.T) {
 				)
 
 				// Query without job_id filter
-				mock.ExpectQuery("SELECT id, job_id, page_id, path, created_at, retry_count, source_type, source_url, priority_score FROM tasks WHERE status = 'pending'").
+				mock.ExpectQuery(`WITH next_task AS \( SELECT .* FROM tasks WHERE status = 'pending' ORDER BY .* LIMIT 1 FOR UPDATE SKIP LOCKED \) UPDATE tasks SET status = 'running', started_at = .* FROM next_task WHERE tasks\.id = next_task\.id RETURNING .*`).
+					WithArgs(sqlmock.AnyArg()).
 					WillReturnRows(rows)
-
-				mock.ExpectExec(`UPDATE tasks\s+SET status = 'running', started_at = \$1\s+WHERE id = \$2`).
-					WithArgs(sqlmock.AnyArg(), "task-2").
-					WillReturnResult(sqlmock.NewResult(0, 1))
 
 				mock.ExpectCommit()
 			},
