@@ -29,6 +29,13 @@ On merge, CI will:
 
 ## [Unreleased]
 
+### Fixed
+
+- **Trigger Storm Causing Deadlocks**: Optimised job progress trigger to fire
+  only on task status changes, reducing executions by 80%
+- **Dashboard Timezone Issue**: Jobs created in local timezone not showing when
+  UTC rolls over (fix deferred, documented in plans/)
+
 ## [0.10.2] – 2025-10-23
 
 ## [0.10.1] – 2025-10-22
