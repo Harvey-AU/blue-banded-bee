@@ -299,8 +299,7 @@ func (q *DbQueue) GetNextTask(ctx context.Context, jobID string) (*Task, error) 
 		`
 
 		// Execute the combined query
-		var row *sql.Row
-		row = tx.QueryRowContext(ctx, query, args...)
+		row := tx.QueryRowContext(ctx, query, args...)
 
 		err := row.Scan(
 			&task.ID, &task.JobID, &task.PageID, &task.Path,
