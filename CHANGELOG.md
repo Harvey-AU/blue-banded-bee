@@ -33,8 +33,8 @@ On merge, CI will:
 
 - **Database Performance Optimisation**: Critical scaling improvements for
   concurrent job processing
-  - Added 9 foreign key indexes (CONCURRENTLY) reducing lock wait times from
-    2-6s to <100ms (20x improvement)
+  - Added 9 foreign key indexes reducing lock wait times from 2-6s to <100ms
+    (20x improvement)
   - Optimised RLS policies wrapping auth.uid() in SELECT for 10,000x reduction
     in per-row evaluation overhead
   - Refactored task claiming to use single CTE query combining SELECT + UPDATE
