@@ -168,7 +168,7 @@ func TestWorkerPoolStopLifecycle(t *testing.T) {
 		// Verify initial state
 		assert.False(t, wp.stopping.Load(), "should not be stopping initially")
 		assert.NotNil(t, wp.stopCh, "stopCh should be initialized")
-		assert.NotNil(t, wp.batchTimer, "batchTimer should be initialized")
+		assert.NotNil(t, wp.batchManager, "batchManager should be initialized")
 
 		// Stop should succeed
 		wp.Stop()
@@ -229,9 +229,8 @@ func TestWorkerPoolStopLifecycle(t *testing.T) {
 		// Create worker pool
 		wp := NewWorkerPool(&sql.DB{}, &simpleDbQueueMock{}, &simpleCrawlerMock{}, 2, &db.Config{})
 
-		// Capture initial ticker state
-		initialTimer := wp.batchTimer
-		assert.NotNil(t, initialTimer, "batchTimer should be initialized")
+		// Verify batch manager is initialized
+		assert.NotNil(t, wp.batchManager, "batchManager should be initialized")
 
 		// Stop the worker pool
 		wp.Stop()
@@ -239,8 +238,7 @@ func TestWorkerPoolStopLifecycle(t *testing.T) {
 		// Verify resources are cleaned up
 		assert.True(t, wp.stopping.Load(), "should be stopping")
 
-		// The ticker should be stopped (though we can't easily test this without
+		// The batch manager should be stopped (though we can't easily test this without
 		// implementation details, we verify the Stop() call doesn't panic)
-		// This indirectly tests that batchTimer.Stop() was called successfully
 	})
 }

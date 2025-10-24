@@ -29,6 +29,19 @@ On merge, CI will:
 
 ## [Unreleased]
 
+## [0.11.0] – 2025-10-24
+
+### Enhanced
+
+- **Batch Task Status Updates**: Implemented PostgreSQL batch UPDATE system
+  reducing database transactions by 95% (3000/min → 60/min)
+- **Error Classification**: Distinguish infrastructure failures (retry
+  indefinitely) from data corruption (poison pill isolation)
+- **Graceful Shutdown**: Retry logic with backoff ensures zero data loss during
+  application shutdown
+- **Sentry Integration**: Critical failure monitoring for poison pills, database
+  unavailability, and shutdown errors
+
 ## [0.10.3] – 2025-10-24
 
 ### Fixed

@@ -41,6 +41,7 @@ type WorkerPool struct {
 	dbQueue          DbQueueInterface
 	dbConfig         *db.Config
 	crawler          CrawlerInterface
+	batchManager     *db.BatchManager // Batch manager for task updates
 	numWorkers       int
 	jobs             map[string]bool
 	jobsMutex        sync.RWMutex
@@ -53,8 +54,6 @@ type WorkerPool struct {
 	currentWorkers   int
 	maxWorkers       int // Maximum workers allowed (environment-specific)
 	workersMutex     sync.RWMutex
-	taskBatch        *TaskBatch
-	batchTimer       *time.Ticker
 	cleanupInterval  time.Duration
 	notifyCh         chan struct{}
 	jobManager       *JobManager // Reference to JobManager for duplicate checking
@@ -76,19 +75,9 @@ type JobInfo struct {
 	RobotsRules *crawler.RobotsRules // Cached robots.txt rules for URL filtering
 }
 
-// TaskBatch holds groups of tasks for batch processing
-type TaskBatch struct {
-	tasks     []*Task
-	jobCounts map[string]struct {
-		completed int
-		failed    int
-	}
-	mu sync.Mutex
-}
-
-func NewWorkerPool(db *sql.DB, dbQueue DbQueueInterface, crawler CrawlerInterface, numWorkers int, dbConfig *db.Config) *WorkerPool {
+func NewWorkerPool(sqlDB *sql.DB, dbQueue DbQueueInterface, crawler CrawlerInterface, numWorkers int, dbConfig *db.Config) *WorkerPool {
 	// Validate inputs
-	if db == nil {
+	if sqlDB == nil {
 		panic("database connection is required")
 	}
 	if dbQueue == nil {
@@ -110,11 +99,15 @@ func NewWorkerPool(db *sql.DB, dbQueue DbQueueInterface, crawler CrawlerInterfac
 		maxWorkers = 10 // Preview/staging: match conservative limits
 	}
 
+	// Create batch manager before WorkerPool construction (db package reference must happen here)
+	batchMgr := db.NewBatchManager(dbQueue)
+
 	wp := &WorkerPool{
-		db:              db,
+		db:              sqlDB,
 		dbQueue:         dbQueue,
 		dbConfig:        dbConfig,
 		crawler:         crawler,
+		batchManager:    batchMgr,
 		numWorkers:      numWorkers,
 		baseWorkerCount: numWorkers,
 		currentWorkers:  numWorkers,
@@ -124,12 +117,7 @@ func NewWorkerPool(db *sql.DB, dbQueue DbQueueInterface, crawler CrawlerInterfac
 		stopCh:           make(chan struct{}),
 		notifyCh:         make(chan struct{}, 1), // Buffer of 1 to prevent blocking
 		recoveryInterval: 1 * time.Minute,
-		taskBatch: &TaskBatch{
-			tasks:     make([]*Task, 0, 50),
-			jobCounts: make(map[string]struct{ completed, failed int }),
-		},
-		batchTimer:      time.NewTicker(10 * time.Second),
-		cleanupInterval: time.Minute,
+		cleanupInterval:  time.Minute,
 
 		// Performance scaling
 		jobPerformance: make(map[string]*JobPerformance),
@@ -137,13 +125,6 @@ func NewWorkerPool(db *sql.DB, dbQueue DbQueueInterface, crawler CrawlerInterfac
 		// Job info cache
 		jobInfoCache: make(map[string]*JobInfo),
 	}
-
-	// Start the batch processor
-	wp.wg.Add(1)
-	go func() {
-		defer wp.wg.Done()
-		wp.processBatches(context.Background())
-	}()
 
 	// Start the notification listener when we have connection details available.
 	if hasNotificationConfig(dbConfig) {
@@ -199,11 +180,11 @@ func (wp *WorkerPool) Stop() {
 	if wp.stopping.CompareAndSwap(false, true) {
 		log.Debug().Msg("Stopping worker pool")
 		close(wp.stopCh)
-		// Stop the batch timer to prevent leaks
-		if wp.batchTimer != nil {
-			wp.batchTimer.Stop()
-		}
 		wp.wg.Wait()
+		// Stop batch manager to flush remaining updates
+		if wp.batchManager != nil {
+			wp.batchManager.Stop()
+		}
 		log.Debug().Msg("Worker pool stopped")
 	}
 }
@@ -1128,94 +1109,7 @@ func (wp *WorkerPool) scaleWorkers(ctx context.Context, targetWorkers int) {
 	wp.currentWorkers = targetWorkers
 }
 
-// Batch processor goroutine
-func (wp *WorkerPool) processBatches(ctx context.Context) {
-	for {
-		select {
-		case <-wp.batchTimer.C:
-			wp.flushBatches(ctx)
-		case <-wp.stopCh:
-			wp.flushBatches(ctx) // Final flush before shutdown
-			return
-		case <-ctx.Done():
-			return
-		}
-	}
-}
-
-// Flush collected tasks in a batch
-func (wp *WorkerPool) flushBatches(ctx context.Context) {
-	wp.taskBatch.mu.Lock()
-	tasks := wp.taskBatch.tasks
-	jobCounts := wp.taskBatch.jobCounts
-
-	// Reset batches
-	wp.taskBatch.tasks = make([]*Task, 0, 50)
-	wp.taskBatch.jobCounts = make(map[string]struct{ completed, failed int })
-	wp.taskBatch.mu.Unlock()
-
-	if len(tasks) == 0 {
-		return // Nothing to flush
-	}
-
-	// Process the batch in a single transaction
-	batchStart := time.Now()
-	log.Debug().
-		Int("batch_size", len(tasks)).
-		Int("job_count", len(jobCounts)).
-		Time("batch_update_start", batchStart).
-		Msg("⏱️ TIMING: Starting batch DB update")
-
-	// Execute everything in ONE queue operation instead of separate ones
-	err := wp.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
-		// 1. Update all tasks - use direct query instead of prepared statement for Supabase pooler compatibility
-		if len(tasks) > 0 {
-			taskUpdateStart := time.Now()
-			updateQuery := `
-				UPDATE tasks
-				SET status = $1,
-					completed_at = $2,
-					error = $3
-				WHERE id = $4
-			`
-
-			for _, task := range tasks {
-				if task.Status == TaskStatusCompleted || task.Status == TaskStatusFailed {
-					if task.CompletedAt.IsZero() {
-						task.CompletedAt = time.Now().UTC()
-					}
-					_, err := tx.ExecContext(ctx, updateQuery,
-						task.Status, task.CompletedAt,
-						task.Error, task.ID)
-					if err != nil {
-						return err
-					}
-				}
-			}
-			log.Debug().
-				Dur("task_update_duration_ms", time.Since(taskUpdateStart)).
-				Int("task_count", len(tasks)).
-				Msg("⏱️ TIMING: Completed batch task updates")
-		}
-
-		return nil
-	})
-
-	batchDuration := time.Since(batchStart)
-	log.Debug().
-		Int("task_count", len(tasks)).
-		Int("job_count", len(jobCounts)).
-		Dur("batch_duration_ms", batchDuration).
-		Time("batch_completed", time.Now()).
-		Bool("success", err == nil).
-		Msg("⏱️ TIMING: Batch DB update completed")
-
-	if err != nil {
-		log.Error().Err(err).Int("task_count", len(tasks)).Msg("Failed to process task batch")
-	}
-}
-
-// Add new method to start the cleanup monitor
+// StartCleanupMonitor starts the cleanup monitor goroutine
 func (wp *WorkerPool) StartCleanupMonitor(ctx context.Context) {
 	wp.wg.Add(1)
 	go func() {
@@ -1529,14 +1423,10 @@ func (wp *WorkerPool) handleTaskError(ctx context.Context, task *db.Task, taskEr
 			Msg("Task failed permanently")
 	}
 
-	// Update task status in database
-	updErr := wp.dbQueue.UpdateTaskStatus(ctx, task)
-	if updErr != nil {
-		sentry.CaptureException(updErr)
-		log.Error().Err(updErr).Str("task_id", task.ID).Msg("Failed to mark task as failed")
-	}
+	// Queue task update for batch processing
+	wp.batchManager.QueueTaskUpdate(task)
 
-	return updErr
+	return nil
 }
 
 // handleTaskSuccess processes successful task completion with metrics and database updates
@@ -1618,19 +1508,15 @@ func (wp *WorkerPool) handleTaskSuccess(ctx context.Context, task *db.Task, resu
 		}
 	}
 
-	// Update task status in database
-	updErr := wp.dbQueue.UpdateTaskStatus(ctx, task)
-	if updErr != nil {
-		sentry.CaptureException(updErr)
-		log.Error().Err(updErr).Str("task_id", task.ID).Msg("Failed to mark task as completed")
-	}
+	// Queue task update for batch processing
+	wp.batchManager.QueueTaskUpdate(task)
 
 	// Evaluate job performance for scaling
 	if result.ResponseTime > 0 {
 		wp.evaluateJobPerformance(task.JobID, result.ResponseTime)
 	}
 
-	return updErr
+	return nil
 }
 
 func (wp *WorkerPool) processTask(ctx context.Context, task *Task) (*crawler.CrawlResult, error) {

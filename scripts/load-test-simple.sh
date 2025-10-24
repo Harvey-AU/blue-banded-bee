@@ -37,19 +37,18 @@ YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m'
 
-# Test domains - 70 diverse real-world sites (mostly small-medium, a few larger)
+# Test domains - 50 diverse real-world sites (all under 5000 pages)
 DOMAINS=(
-  # Australian businesses (10) - mostly small-medium corporate sites
-  "bankaust.com.au" "australiansuper.com" "qantas.com" "woolworths.com.au" "bunnings.com.au"
-  "jbhifi.com.au" "realestate.com.au" "seek.com.au" "kmart.com.au" "bigw.com.au"
+  # Australian businesses (7) - small-medium corporate sites
+  "bankaust.com.au" "australiansuper.com" "bunnings.com.au"
+  "jbhifi.com.au" "kmart.com.au" "bigw.com.au" "officeworks.com.au"
 
   # E-commerce & retail (10) - DTC brands, smaller catalogs
   "merrypeople.com" "aesop.com" "allbirds.com" "everlane.com" "warbyparker.com"
   "casper.com" "glossier.com" "away.com" "brooklinen.com" "kotn.com"
 
-  # Media & blogs (10) - smaller publications, not massive news sites
-  "techcrunch.com" "theverge.com" "axios.com" "mashable.com" "lifehacker.com"
-  "gizmodo.com" "engadget.com" "polygon.com" "kotaku.com" "theonion.com"
+  # Media & blogs (5) - smaller publications
+  "lifehacker.com" "polygon.com" "kotaku.com" "theonion.com" "boingboing.net"
 
   # WordPress blogs & design sites (10) - typical WP installs
   "smashingmagazine.com" "css-tricks.com" "webdesignerdepot.com" "sitepoint.com" "alistapart.com"
@@ -59,16 +58,9 @@ DOMAINS=(
   "studiothink.com.au" "zeroseven.com.au" "humaan.com.au" "noice.com.au" "willandco.com.au"
   "thecontentlab.com.au" "makebold.com.au" "thisisgold.com.au" "wethecollective.com.au" "tworedshoes.com.au"
 
-  # Developer docs (8) - docs sites, not entire platforms
-  "docs.github.com" "docs.gitlab.com" "fly.io" "railway.app" "render.com"
-  "tailwindcss.com" "nextjs.org" "react.dev"
-
-  # Medium-sized SaaS marketing sites (8) - just marketing sites, not full apps
-  "linear.app" "cal.com" "resend.com" "upstash.com" "neon.tech"
-  "turso.tech" "convex.dev" "clerk.com"
-
-  # Larger sites for stress testing (4) - these are 5k-15k pages
-  "docs.stripe.com" "supabase.com" "vercel.com" "netlify.com"
+  # Developer docs & tools (8) - compact doc sites
+  "fly.io" "railway.app" "render.com" "tailwindcss.com"
+  "nextjs.org" "react.dev" "astro.build" "svelte.dev"
 )
 
 # Check prerequisites

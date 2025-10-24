@@ -97,7 +97,7 @@ func TestWorkerPoolConstructor(t *testing.T) {
 					assert.NotNil(t, wp.jobs)
 					assert.NotNil(t, wp.stopCh)
 					assert.NotNil(t, wp.notifyCh)
-					assert.NotNil(t, wp.taskBatch)
+					assert.NotNil(t, wp.batchManager)
 					assert.NotNil(t, wp.jobPerformance)
 					assert.NotNil(t, wp.jobInfoCache)
 				})
@@ -120,8 +120,7 @@ func TestWorkerPoolInitialState(t *testing.T) {
 	assert.Empty(t, wp.jobs)
 	assert.Empty(t, wp.jobPerformance)
 	assert.Empty(t, wp.jobInfoCache)
-	assert.NotNil(t, wp.taskBatch)
-	assert.Empty(t, wp.taskBatch.tasks)
+	assert.NotNil(t, wp.batchManager)
 }
 
 // TestWorkerPoolSimpleJobTracking tests basic job tracking without database
@@ -266,10 +265,8 @@ func TestWorkerPoolBatchInit(t *testing.T) {
 
 	wp := NewWorkerPool(&sql.DB{}, &simpleDbQueueMock{}, &simpleCrawlerMock{}, 2, &db.Config{})
 
-	// Verify batch is initialized
-	assert.NotNil(t, wp.taskBatch)
-	assert.Empty(t, wp.taskBatch.tasks)
-	assert.NotNil(t, wp.taskBatch.jobCounts)
+	// Verify batch manager is initialized
+	assert.NotNil(t, wp.batchManager)
 }
 
 // TestWorkerPoolJobInfoCaching tests the job info cache
