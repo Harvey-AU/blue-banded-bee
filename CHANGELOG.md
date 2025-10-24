@@ -29,6 +29,15 @@ On merge, CI will:
 
 ## [Unreleased]
 
+## [0.10.3] – 2025-10-24
+
+### Fixed
+
+- **Trigger Storm Causing Deadlocks**: Optimised job progress trigger to fire
+  only on task status changes, reducing executions by 80%
+- **Dashboard Timezone Issue**: Jobs created in local timezone not showing when
+  UTC rolls over (fix deferred, documented in plans/)
+
 ## [0.10.2] – 2025-10-23
 
 ## [0.10.1] – 2025-10-22
@@ -89,8 +98,6 @@ On merge, CI will:
     actual totals (not sample size)
   - Separated job completion checks (30s) from health monitoring (5min)
   - Expected reduction: from 3,600+ events/hour to ~12 events/hour
-
-## [Unreleased]
 
 ## [0.10.2] – 2025-10-23
 
@@ -572,8 +579,6 @@ On merge, CI will:
   - Improved separation of concerns in frontend code
 - **External Links**: Dashboard preview links in PR comments open in new tabs
   - Added `target="_blank"` for better user experience
-
-## [Unreleased]
 
 ## [0.10.2] – 2025-10-23
 
