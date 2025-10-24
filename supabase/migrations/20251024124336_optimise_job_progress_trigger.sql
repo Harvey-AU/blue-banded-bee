@@ -22,17 +22,13 @@ DROP TRIGGER IF EXISTS trigger_update_job_progress ON tasks;
 
 -- Recreate trigger with optimized conditions
 -- Key changes:
--- 1. UPDATE OF status - Only watch status column changes, not all columns
--- 2. WHEN clause - Additional guard to verify status actually changed
+-- 1. UPDATE OF status - Only fires on status column changes, not all columns
+-- 2. WHEN clause - Guards against no-op updates where status value didn't actually change
 -- 3. Still fires on INSERT/DELETE as before
 CREATE TRIGGER trigger_update_job_progress
   AFTER INSERT OR UPDATE OF status OR DELETE ON tasks
   FOR EACH ROW
-  WHEN (
-    TG_OP = 'INSERT' OR
-    TG_OP = 'DELETE' OR
-    (TG_OP = 'UPDATE' AND OLD.status IS DISTINCT FROM NEW.status)
-  )
+  WHEN (OLD.status IS DISTINCT FROM NEW.status OR OLD IS NULL OR NEW IS NULL)
   EXECUTE FUNCTION update_job_progress();
 
 -- Add comment explaining the optimization
