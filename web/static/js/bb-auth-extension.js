@@ -120,11 +120,17 @@ function setupDashboardRefresh(dataBinder) {
           '<span class="status-dot"></span><span>Refreshing...</span>';
       }
 
+      // Get user's timezone (URL-encode to handle special characters like + in Etc/GMT+10)
+      const timezone = encodeURIComponent(getTimezone());
+
+      // Get current filter range (defaults to 'today')
+      const currentRange = this.currentRange || "today";
+
       // Load stats and jobs data
       let data;
       try {
         data = await this.loadAndBind({
-          stats: "/v1/dashboard/stats?range=today",
+          stats: `/v1/dashboard/stats?range=${currentRange}&tz=${timezone}`,
         });
       } catch (error) {
         // Handle stats API errors gracefully
@@ -142,7 +148,9 @@ function setupDashboardRefresh(dataBinder) {
       // Load jobs separately for template binding
       let jobsResponse, jobs;
       try {
-        jobsResponse = await this.fetchData("/v1/jobs?limit=10&range=today");
+        jobsResponse = await this.fetchData(
+          `/v1/jobs?limit=10&range=${currentRange}&tz=${timezone}`
+        );
         jobs = jobsResponse.jobs || [];
       } catch (error) {
         console.log("Jobs API error (likely no jobs yet):", error);
@@ -375,6 +383,30 @@ function updateNetworkStatus() {
 }
 
 /**
+ * Get user's timezone using browser API
+ * @returns {string} IANA timezone string (e.g., "Australia/Sydney")
+ */
+function getTimezone() {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone;
+  } catch (error) {
+    console.warn("Failed to detect timezone, falling back to UTC:", error);
+    return "UTC";
+  }
+}
+
+/**
+ * Change the dashboard filter range and refresh data
+ * @param {string} range - Range filter: 'last_hour', 'today', 'last_24_hours', 'yesterday', '7days', '30days', 'all'
+ */
+function changeTimeRange(range) {
+  if (window.dataBinder) {
+    window.dataBinder.currentRange = range;
+    window.dataBinder.refresh();
+  }
+}
+
+/**
  * Enhanced dashboard initialisation with full auth integration
  * @param {Object} config - Configuration options
  * @returns {Promise<Object>} Initialised data binder
@@ -483,6 +515,8 @@ if (typeof module !== "undefined" && module.exports) {
     handleDashboardJobCreation,
     setupNetworkMonitoring,
     updateNetworkStatus,
+    getTimezone,
+    changeTimeRange,
     initializeDashboard,
     setupQuickAuth,
   };
@@ -494,6 +528,8 @@ if (typeof module !== "undefined" && module.exports) {
   window.handleDashboardJobCreation = handleDashboardJobCreation;
   window.setupNetworkMonitoring = setupNetworkMonitoring;
   window.updateNetworkStatus = updateNetworkStatus;
+  window.getTimezone = getTimezone;
+  window.changeTimeRange = changeTimeRange;
   window.initializeDashboard = initializeDashboard;
   window.setupQuickAuth = setupQuickAuth;
 }

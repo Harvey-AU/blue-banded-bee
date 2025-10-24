@@ -107,8 +107,8 @@ func (m *MockDBClient) GetUserByWebhookToken(token string) (*db.User, error) {
 	return args.Get(0).(*db.User), args.Error(1)
 }
 
-func (m *MockDBClient) ListJobs(organisationID string, limit, offset int, status, dateRange string) ([]db.JobWithDomain, int, error) {
-	args := m.Called(organisationID, limit, offset, status, dateRange)
+func (m *MockDBClient) ListJobs(organisationID string, limit, offset int, status, dateRange, timezone string) ([]db.JobWithDomain, int, error) {
+	args := m.Called(organisationID, limit, offset, status, dateRange, timezone)
 	if args.Get(0) == nil {
 		return nil, args.Int(1), args.Error(2)
 	}

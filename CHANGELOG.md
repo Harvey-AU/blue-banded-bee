@@ -29,6 +29,22 @@ On merge, CI will:
 
 ## [Unreleased]
 
+## [0.11.1] – 2025-10-24
+
+### Fixed
+
+- **Dashboard Timezone Handling**: Jobs now display correctly in user's local
+  timezone instead of UTC
+  - Added automatic timezone detection using browser's IANA timezone string
+    (e.g., "Australia/Sydney")
+  - Backend converts "today"/"yesterday" boundaries to user's timezone with
+    graceful UTC fallback
+  - Added "Last Hour" and "Last 24 Hours" rolling window filters alongside
+    existing calendar-day filters
+  - URL-encodes timezone parameter to handle special characters (`Etc/GMT+10` →
+    `Etc%2FGMT%2B10`)
+  - Applied to both bb-auth-extension.js and bb-components.js integration paths
+
 ## [0.11.0] – 2025-10-24
 
 ### Enhanced

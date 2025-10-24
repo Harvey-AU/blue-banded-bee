@@ -14,6 +14,7 @@ import (
 	"github.com/Harvey-AU/blue-banded-bee/internal/auth"
 	"github.com/Harvey-AU/blue-banded-bee/internal/db"
 	"github.com/Harvey-AU/blue-banded-bee/internal/jobs"
+	"github.com/rs/zerolog/log"
 )
 
 // Version is the current API version (can be set via ldflags at build time)
@@ -33,7 +34,7 @@ type DBClient interface {
 	ResetSchema() error
 	CreateUser(userID, email string, fullName *string, orgName string) (*db.User, *db.Organisation, error)
 	GetOrganisation(organisationID string) (*db.Organisation, error)
-	ListJobs(organisationID string, limit, offset int, status, dateRange string) ([]db.JobWithDomain, int, error)
+	ListJobs(organisationID string, limit, offset int, status, dateRange, timezone string) ([]db.JobWithDomain, int, error)
 }
 
 // Handler holds dependencies for API handlers
@@ -280,9 +281,13 @@ func (h *Handler) DashboardStats(w http.ResponseWriter, r *http.Request) {
 	if dateRange == "" {
 		dateRange = "last7"
 	}
+	timezone := r.URL.Query().Get("tz")
+	if timezone == "" {
+		timezone = "UTC"
+	}
 
 	// Calculate date range for query
-	startDate, endDate := calculateDateRange(dateRange)
+	startDate, endDate := calculateDateRange(dateRange, timezone)
 
 	// Get job statistics
 	orgID := ""
@@ -340,9 +345,13 @@ func (h *Handler) DashboardActivity(w http.ResponseWriter, r *http.Request) {
 	if dateRange == "" {
 		dateRange = "last7"
 	}
+	timezone := r.URL.Query().Get("tz")
+	if timezone == "" {
+		timezone = "UTC"
+	}
 
 	// Calculate date range for query
-	startDate, endDate := calculateDateRange(dateRange)
+	startDate, endDate := calculateDateRange(dateRange, timezone)
 
 	// Get activity data
 	orgID := ""
@@ -364,35 +373,54 @@ func (h *Handler) DashboardActivity(w http.ResponseWriter, r *http.Request) {
 }
 
 // calculateDateRange converts date range string to start and end times
-func calculateDateRange(dateRange string) (*time.Time, *time.Time) {
-	now := time.Now().UTC()
+func calculateDateRange(dateRange, timezone string) (*time.Time, *time.Time) {
+	// Load timezone location, fall back to UTC if invalid
+	loc, err := time.LoadLocation(timezone)
+	if err != nil {
+		log.Warn().Err(err).Str("timezone", timezone).Msg("Invalid timezone in calculateDateRange, falling back to UTC")
+		loc = time.UTC
+	}
+
+	// Get current time in user's timezone
+	now := time.Now().In(loc)
 	var startDate, endDate *time.Time
 
 	switch dateRange {
+	case "last_hour":
+		// Rolling 1 hour window from now
+		start := now.Add(-1 * time.Hour)
+		startDate = &start
+		endDate = &now
 	case "today":
-		start := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
-		end := time.Date(now.Year(), now.Month(), now.Day(), 23, 59, 59, 999999999, time.UTC)
+		// Calendar day boundaries in user's timezone
+		start := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc)
+		end := time.Date(now.Year(), now.Month(), now.Day(), 23, 59, 59, 999999999, loc)
 		startDate = &start
 		endDate = &end
-	case "last24":
+	case "last_24_hours", "last24":
+		// Rolling 24 hour window from now
 		start := now.Add(-24 * time.Hour)
 		startDate = &start
 		endDate = &now
 	case "yesterday":
+		// Previous calendar day in user's timezone
 		yesterday := now.AddDate(0, 0, -1)
-		start := time.Date(yesterday.Year(), yesterday.Month(), yesterday.Day(), 0, 0, 0, 0, time.UTC)
-		end := time.Date(yesterday.Year(), yesterday.Month(), yesterday.Day(), 23, 59, 59, 999999999, time.UTC)
+		start := time.Date(yesterday.Year(), yesterday.Month(), yesterday.Day(), 0, 0, 0, 0, loc)
+		end := time.Date(yesterday.Year(), yesterday.Month(), yesterday.Day(), 23, 59, 59, 999999999, loc)
 		startDate = &start
 		endDate = &end
-	case "last7":
+	case "7days", "last7":
+		// Last 7 days from now
 		start := now.AddDate(0, 0, -7)
 		startDate = &start
 		endDate = &now
-	case "last30":
+	case "30days", "last30":
+		// Last 30 days from now
 		start := now.AddDate(0, 0, -30)
 		startDate = &start
 		endDate = &now
 	case "last90":
+		// Last 90 days from now
 		start := now.AddDate(0, 0, -90)
 		startDate = &start
 		endDate = &now
@@ -452,9 +480,13 @@ func (h *Handler) DashboardSlowPages(w http.ResponseWriter, r *http.Request) {
 	if dateRange == "" {
 		dateRange = "last7"
 	}
+	timezone := r.URL.Query().Get("tz")
+	if timezone == "" {
+		timezone = "UTC"
+	}
 
 	// Calculate date range for query
-	startDate, endDate := calculateDateRange(dateRange)
+	startDate, endDate := calculateDateRange(dateRange, timezone)
 
 	// Get slow pages data
 	orgID := ""
@@ -505,9 +537,13 @@ func (h *Handler) DashboardExternalRedirects(w http.ResponseWriter, r *http.Requ
 	if dateRange == "" {
 		dateRange = "last7"
 	}
+	timezone := r.URL.Query().Get("tz")
+	if timezone == "" {
+		timezone = "UTC"
+	}
 
 	// Calculate date range for query
-	startDate, endDate := calculateDateRange(dateRange)
+	startDate, endDate := calculateDateRange(dateRange, timezone)
 
 	// Get external redirects data
 	orgID := ""

@@ -216,7 +216,7 @@ type JobWithDomain struct {
 }
 
 // ListJobs retrieves a paginated list of jobs for an organisation
-func (db *DB) ListJobs(organisationID string, limit, offset int, status, dateRange string) ([]JobWithDomain, int, error) {
+func (db *DB) ListJobs(organisationID string, limit, offset int, status, dateRange, timezone string) ([]JobWithDomain, int, error) {
 	// Build the base query
 	baseQuery := `
 		FROM jobs j
@@ -235,7 +235,7 @@ func (db *DB) ListJobs(organisationID string, limit, offset int, status, dateRan
 
 	// Add date range filter if provided
 	if dateRange != "" {
-		startDate, endDate := calculateDateRangeForList(dateRange)
+		startDate, endDate := calculateDateRangeForList(dateRange, timezone)
 		if startDate != nil {
 			argCount++
 			baseQuery += fmt.Sprintf(" AND j.created_at >= $%d", argCount)
@@ -314,25 +314,54 @@ func (db *DB) ListJobs(organisationID string, limit, offset int, status, dateRan
 }
 
 // calculateDateRangeForList is a helper function for list queries
-func calculateDateRangeForList(dateRange string) (*time.Time, *time.Time) {
-	now := time.Now().UTC()
+func calculateDateRangeForList(dateRange, timezone string) (*time.Time, *time.Time) {
+	// Load timezone location, fall back to UTC if invalid
+	loc, err := time.LoadLocation(timezone)
+	if err != nil {
+		log.Warn().Err(err).Str("timezone", timezone).Msg("Invalid timezone, falling back to UTC")
+		loc = time.UTC
+	}
+
+	// Get current time in user's timezone
+	now := time.Now().In(loc)
 	var startDate, endDate *time.Time
 
 	switch dateRange {
+	case "last_hour":
+		// Rolling 1 hour window from now
+		start := now.Add(-1 * time.Hour)
+		startDate = &start
+		endDate = &now
 	case "today":
-		start := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
-		end := time.Date(now.Year(), now.Month(), now.Day(), 23, 59, 59, 999999999, time.UTC)
+		// Calendar day boundaries in user's timezone
+		start := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc)
+		end := time.Date(now.Year(), now.Month(), now.Day(), 23, 59, 59, 999999999, loc)
 		startDate = &start
 		endDate = &end
-	case "last7":
+	case "last_24_hours":
+		// Rolling 24 hour window from now
+		start := now.Add(-24 * time.Hour)
+		startDate = &start
+		endDate = &now
+	case "yesterday":
+		// Previous calendar day in user's timezone
+		yesterday := now.AddDate(0, 0, -1)
+		start := time.Date(yesterday.Year(), yesterday.Month(), yesterday.Day(), 0, 0, 0, 0, loc)
+		end := time.Date(yesterday.Year(), yesterday.Month(), yesterday.Day(), 23, 59, 59, 999999999, loc)
+		startDate = &start
+		endDate = &end
+	case "7days", "last7":
+		// Last 7 days from now
 		start := now.AddDate(0, 0, -7)
 		startDate = &start
 		endDate = &now
-	case "last30":
+	case "30days", "last30":
+		// Last 30 days from now
 		start := now.AddDate(0, 0, -30)
 		startDate = &start
 		endDate = &now
 	case "last90":
+		// Last 90 days from now
 		start := now.AddDate(0, 0, -90)
 		startDate = &start
 		endDate = &now
@@ -340,10 +369,11 @@ func calculateDateRangeForList(dateRange string) (*time.Time, *time.Time) {
 		// Return nil for both to indicate no date filtering
 		return nil, nil
 	default:
-		// Default to last 7 days
-		start := now.AddDate(0, 0, -7)
+		// Default to today in user's timezone
+		start := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc)
+		end := time.Date(now.Year(), now.Month(), now.Day(), 23, 59, 59, 999999999, loc)
 		startDate = &start
-		endDate = &now
+		endDate = &end
 	}
 
 	return startDate, endDate

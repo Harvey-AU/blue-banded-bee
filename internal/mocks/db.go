@@ -92,8 +92,8 @@ func (m *MockDB) GetOrganisation(organisationID string) (*db.Organisation, error
 }
 
 // ListJobs mocks listing jobs with pagination and filters
-func (m *MockDB) ListJobs(organisationID string, limit, offset int, status, dateRange string) ([]db.JobWithDomain, int, error) {
-	args := m.Called(organisationID, limit, offset, status, dateRange)
+func (m *MockDB) ListJobs(organisationID string, limit, offset int, status, dateRange, timezone string) ([]db.JobWithDomain, int, error) {
+	args := m.Called(organisationID, limit, offset, status, dateRange, timezone)
 	var jobs []db.JobWithDomain
 	if v := args.Get(0); v != nil {
 		jobs = v.([]db.JobWithDomain)

@@ -164,14 +164,20 @@ func (h *Handler) listJobs(w http.ResponseWriter, r *http.Request) {
 
 	status := r.URL.Query().Get("status")   // Optional status filter
 	dateRange := r.URL.Query().Get("range") // Optional date range filter
+	timezone := r.URL.Query().Get("tz")     // Optional timezone (e.g., "Australia/Sydney")
 	include := r.URL.Query().Get("include") // Optional includes (domain, progress, etc.)
+
+	// Default timezone to UTC if not provided
+	if timezone == "" {
+		timezone = "UTC"
+	}
 
 	// Get jobs from database
 	orgID := ""
 	if user.OrganisationID != nil {
 		orgID = *user.OrganisationID
 	}
-	jobs, total, err := h.DB.ListJobs(orgID, limit, offset, status, dateRange)
+	jobs, total, err := h.DB.ListJobs(orgID, limit, offset, status, dateRange, timezone)
 	if err != nil {
 		if HandlePoolSaturation(w, r, err) {
 			return

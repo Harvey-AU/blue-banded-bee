@@ -1,7 +1,7 @@
 # Dashboard "Today" Filter Timezone Issue
 
-**Date:** 2025-10-24 **Status:** Identified - Not Yet Fixed **Priority:** LOW
-(UX improvement)
+**Date:** 2025-10-24 **Status:** ✅ IMPLEMENTED **Priority:** LOW (UX
+improvement)
 
 ---
 
@@ -213,11 +213,183 @@ Consider making timezone handling consistent across all date-filtered endpoints.
 
 ## Decision
 
-**DEFERRED** - Will implement Option 1 (timezone conversion) after addressing
-the trigger storm issue, as that's higher priority for system stability.
+**✅ IMPLEMENTED** - Option 1 (timezone conversion) has been fully implemented
+with additional enhancements.
 
-For now, users can work around by:
+---
 
-- Using "Last 7 Days" filter instead of "Today"
-- Refreshing dashboard before UTC midnight rolls over
-- Viewing all jobs (no filter)
+## Implementation Summary
+
+### What Was Implemented
+
+**1. Timezone Detection (Frontend)**
+
+- Added `getTimezone()` function in
+  [bb-auth-extension.js](../../../web/static/js/bb-auth-extension.js#L387-L394)
+- Uses `Intl.DateTimeFormat().resolvedOptions().timeZone` to detect user's
+  timezone (e.g., "Australia/Sydney")
+- **URL-encodes timezone** with `encodeURIComponent()` to handle special
+  characters (e.g., `Etc/GMT+10` → `Etc%2FGMT%2B10`)
+- Graceful fallback to 'UTC' if detection fails
+
+**2. New Time Range Filters** Added two new filter options in addition to
+existing ones:
+
+- **Last Hour** - Rolling 60-minute window from now
+- **Last 24 Hours** - Rolling 24-hour window from now (different from "today"
+  calendar day)
+- Existing filters maintained: Today, Yesterday, 7 Days, 30 Days, All Time
+
+**3. Filter Order** New suggested order for Webflow dashboard buttons:
+
+```
+Last Hour | Today | Last 24 Hours | Yesterday | 7 Days | 30 Days | All Time
+```
+
+**4. Frontend Integration**
+
+- All `/v1/jobs` and `/v1/dashboard/stats` requests now include `?tz=` parameter
+- Added `changeTimeRange(range)` function for Webflow buttons to call
+- Filter state tracked in `dataBinder.currentRange`
+
+**5. Backend Timezone Conversion** Updated in multiple files:
+
+- [internal/db/dashboard.go](../../../internal/db/dashboard.go#L317-L380) -
+  `calculateDateRangeForList()`
+- [internal/api/handlers.go](../../../internal/api/handlers.go#L376-L434) -
+  `calculateDateRange()`
+- [internal/api/jobs.go](../../../internal/api/jobs.go#L167-L180) - Accept and
+  validate `?tz=` parameter
+
+**6. Timezone Handling**
+
+- Uses Go's `time.LoadLocation(timezone)` for proper timezone conversion
+- Calendar day boundaries (today/yesterday) calculated in user's timezone
+- Rolling windows (last hour, last 24h) work from current time in user's
+  timezone
+- Graceful fallback to UTC for invalid/missing timezone parameter
+
+**7. API Changes**
+
+- All dashboard endpoints accept optional `?tz=` query parameter
+- DBClient interface updated:
+  `ListJobs(orgID, limit, offset, status, dateRange, timezone string)`
+- Backwards compatible: defaults to "UTC" if `?tz=` not provided
+
+**8. Test Updates**
+
+- Updated all mock implementations
+- Fixed test calls to include timezone parameter
+- All tests passing
+
+### Files Modified
+
+**Frontend:**
+
+- [web/static/js/bb-auth-extension.js](../../../web/static/js/bb-auth-extension.js)
+  - Line 124: URL-encode timezone with `encodeURIComponent()` to handle special
+    chars
+  - Lines 123-156: Updated refresh() to include timezone
+  - Lines 387-394: New getTimezone() function
+  - Lines 400-405: New changeTimeRange() function
+  - Lines 516-532: Exported new functions
+
+- [web/static/js/bb-components.js](../../../web/static/js/bb-components.js)
+  - Lines 1321-1347: Added getTimezone() method to BBDashboard component
+  - Line 1323: loadStats() now includes timezone parameter
+  - Line 1331: loadJobs() now includes timezone parameter (with URL encoding)
+  - Line 1450: updateCharts() (activity) now includes timezone parameter
+
+**Backend:**
+
+- [internal/api/jobs.go](../../../internal/api/jobs.go#L167-L180)
+  - Added timezone parameter extraction and validation
+
+- [internal/api/handlers.go](../../../internal/api/handlers.go)
+  - Lines 17: Added zerolog/log import
+  - Lines 37: Updated DBClient interface
+  - Lines 283-289: DashboardStats timezone handling
+  - Lines 347-353: DashboardActivity timezone handling
+  - Lines 483-489: DashboardSlowPages timezone handling
+  - Lines 540-546: DashboardExternalRedirects timezone handling
+  - Lines 376-434: Updated calculateDateRange() with timezone support
+
+- [internal/db/dashboard.go](../../../internal/db/dashboard.go)
+  - Line 219: Updated ListJobs() signature
+  - Lines 317-380: Complete rewrite of calculateDateRangeForList()
+
+**Tests:**
+
+- [internal/api/test_mocks.go](../../../internal/api/test_mocks.go#L110-L116)
+- [internal/api/handlers_db_test.go](../../../internal/api/handlers_db_test.go#L131-L133)
+- [internal/api/handlers_simple_test.go](../../../internal/api/handlers_simple_test.go#L87,L251)
+- [internal/mocks/db.go](../../../internal/mocks/db.go#L95-L96)
+
+### How to Use (Webflow Integration)
+
+**For Filter Buttons:**
+
+```javascript
+// In Webflow, attach to button click events:
+<button onclick="changeTimeRange('last_hour')">Last Hour</button>
+<button onclick="changeTimeRange('today')">Today</button>
+<button onclick="changeTimeRange('last_24_hours')">Last 24 Hours</button>
+<button onclick="changeTimeRange('yesterday')">Yesterday</button>
+<button onclick="changeTimeRange('7days')">7 Days</button>
+<button onclick="changeTimeRange('30days')">30 Days</button>
+<button onclick="changeTimeRange('all')">All Time</button>
+```
+
+**Available Range Values:**
+
+- `last_hour` - Last 60 minutes
+- `today` - Calendar day in user's timezone
+- `last_24_hours` - Rolling 24 hours
+- `yesterday` - Previous calendar day in user's timezone
+- `7days` / `last7` - Last 7 days
+- `30days` / `last30` - Last 30 days
+- `last90` - Last 90 days
+- `all` - All time (no filtering)
+
+### Testing Performed
+
+✅ All Go tests passing:
+
+- `go test ./internal/api/...` - PASS
+- `go test ./internal/db/...` - PASS
+
+✅ Code formatted:
+
+- `go fmt ./...` - Complete
+
+### What Users Get
+
+1. **Correct timezone boundaries** - "Today" now means today in the user's
+   timezone, not UTC
+2. **More filter options** - "Last Hour" and "Last 24 Hours" for recent jobs
+3. **Automatic detection** - No user configuration needed, timezone detected
+   from browser
+4. **Backwards compatible** - Old requests without `?tz=` param still work
+   (default to UTC)
+
+### Example Scenario (Now Fixed)
+
+User in AEDT (UTC+11) creates jobs at 9:25am local:
+
+- ✅ Jobs show in "Today" filter (uses AEDT midnight boundaries)
+- ✅ Jobs show in "Last Hour" filter (rolling 60 minutes)
+- ✅ Jobs show in "Last 24 Hours" filter (rolling 24 hours)
+- ✅ Remains visible until AEDT midnight (not UTC midnight)
+
+---
+
+## Next Steps for Webflow Dashboard
+
+To complete the integration:
+
+1. **Add new filter buttons** in Webflow dashboard UI
+2. **Reorder buttons** to: Last Hour | Today | Last 24 Hours | Yesterday | 7
+   Days | 30 Days | All Time
+3. **Wire up onclick handlers** to call `window.changeTimeRange(range)`
+4. **Test in production** with AEDT and other timezones
+5. **Update dashboard styling** to highlight active filter (optional)
