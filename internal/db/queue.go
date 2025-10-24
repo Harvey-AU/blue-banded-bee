@@ -259,39 +259,48 @@ type Task struct {
 }
 
 // GetNextTask gets a pending task using row-level locking
+// Uses FOR UPDATE SKIP LOCKED to prevent lock contention between workers
+// Combines SELECT and UPDATE in a CTE for atomic claiming
 func (q *DbQueue) GetNextTask(ctx context.Context, jobID string) (*Task, error) {
 	var task Task
+	now := time.Now()
 
 	err := q.Execute(ctx, func(tx *sql.Tx) error {
-		// Query for a pending task with FOR UPDATE SKIP LOCKED
-		// This allows concurrent workers to each get different tasks
+		// Use CTE to select and update in a single atomic query
+		// This reduces transaction time and minimises lock holding
 		query := `
-			SELECT id, job_id, page_id, path, created_at, retry_count, source_type, source_url, priority_score 
-			FROM tasks 
-			WHERE status = 'pending'
+			WITH next_task AS (
+				SELECT id, job_id, page_id, path, created_at, retry_count, source_type, source_url, priority_score
+				FROM tasks
+				WHERE status = 'pending'
 		`
 
 		// Add job filter if specified
-		args := []interface{}{}
+		args := []interface{}{now}
 		if jobID != "" {
-			query += " AND job_id = $1"
+			query += " AND job_id = $2"
 			args = append(args, jobID)
 		}
 
 		// Add ordering and locking - prioritise by priority_score DESC, then created_at ASC
+		// FOR UPDATE SKIP LOCKED allows other workers to skip this row and claim others
 		query += `
-			ORDER BY priority_score DESC, created_at ASC
-			LIMIT 1
-			FOR UPDATE SKIP LOCKED
+				ORDER BY priority_score DESC, created_at ASC
+				LIMIT 1
+				FOR UPDATE SKIP LOCKED
+			)
+			UPDATE tasks
+			SET status = 'running', started_at = $1
+			FROM next_task
+			WHERE tasks.id = next_task.id
+			RETURNING tasks.id, tasks.job_id, tasks.page_id, tasks.path,
+			          tasks.created_at, tasks.retry_count, tasks.source_type,
+			          tasks.source_url, tasks.priority_score
 		`
 
-		// Execute the query
+		// Execute the combined query
 		var row *sql.Row
-		if len(args) > 0 {
-			row = tx.QueryRowContext(ctx, query, args...)
-		} else {
-			row = tx.QueryRowContext(ctx, query)
-		}
+		row = tx.QueryRowContext(ctx, query, args...)
 
 		err := row.Scan(
 			&task.ID, &task.JobID, &task.PageID, &task.Path,
@@ -303,19 +312,7 @@ func (q *DbQueue) GetNextTask(ctx context.Context, jobID string) (*Task, error) 
 			return sql.ErrNoRows
 		}
 		if err != nil {
-			return fmt.Errorf("failed to query task: %w", err)
-		}
-
-		// Update the task status
-		now := time.Now()
-		_, err = tx.ExecContext(ctx, `
-			UPDATE tasks
-			SET status = 'running', started_at = $1
-			WHERE id = $2
-		`, now, task.ID)
-
-		if err != nil {
-			return fmt.Errorf("failed to update task status: %w", err)
+			return fmt.Errorf("failed to claim task: %w", err)
 		}
 
 		task.Status = "running"

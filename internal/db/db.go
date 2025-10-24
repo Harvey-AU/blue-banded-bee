@@ -727,24 +727,30 @@ func setupProgressTriggers(db *sql.DB) error {
 }
 
 // setupRLSPolicies creates Row Level Security policies for user data access
+// IMPORTANT: Uses (SELECT auth.uid()) pattern to prevent per-row evaluation
+// Reference: https://supabase.com/docs/guides/database/postgres/row-level-security#call-functions-with-select
 func setupRLSPolicies(db *sql.DB) error {
 	// Create policy for users table - users can only access their own data
+	// Uses (SELECT auth.uid()) to cache result per query instead of per-row evaluation
 	_, err := db.Exec(`
 		DROP POLICY IF EXISTS "Users can access own data" ON users;
 		CREATE POLICY "Users can access own data" ON users
-		FOR ALL USING (auth.uid() = id);
+		FOR ALL USING (id = (SELECT auth.uid()));
 	`)
 	if err != nil {
 		return fmt.Errorf("failed to create users RLS policy: %w", err)
 	}
 
 	// Create policy for organisations table - users can access their organisation
+	// Wraps auth.uid() in SELECT to prevent per-row re-evaluation
 	_, err = db.Exec(`
 		DROP POLICY IF EXISTS "Users can access own organisation" ON organisations;
 		CREATE POLICY "Users can access own organisation" ON organisations
 		FOR ALL USING (
-			id IN (
-				SELECT organisation_id FROM users WHERE users.id = auth.uid()
+			id = (
+				SELECT organisation_id
+				FROM users
+				WHERE id = (SELECT auth.uid())
 			)
 		);
 	`)
@@ -753,12 +759,15 @@ func setupRLSPolicies(db *sql.DB) error {
 	}
 
 	// Create policy for jobs table - organisation members can access shared jobs
+	// Uses cached auth.uid() to avoid 10,000x overhead on large result sets
 	_, err = db.Exec(`
 		DROP POLICY IF EXISTS "Organisation members can access jobs" ON jobs;
 		CREATE POLICY "Organisation members can access jobs" ON jobs
 		FOR ALL USING (
-			organisation_id IN (
-				SELECT organisation_id FROM users WHERE users.id = auth.uid()
+			organisation_id = (
+				SELECT organisation_id
+				FROM users
+				WHERE id = (SELECT auth.uid())
 			)
 		);
 	`)
@@ -767,19 +776,98 @@ func setupRLSPolicies(db *sql.DB) error {
 	}
 
 	// Create policy for tasks table - organisation members can access tasks for their jobs
+	// Uses EXISTS with cached auth.uid() for optimal performance on massive task tables
 	_, err = db.Exec(`
 		DROP POLICY IF EXISTS "Organisation members can access tasks" ON tasks;
 		CREATE POLICY "Organisation members can access tasks" ON tasks
 		FOR ALL USING (
-			job_id IN (
-				SELECT jobs.id FROM jobs WHERE organisation_id IN (
-					SELECT organisation_id FROM users WHERE users.id = auth.uid()
-				)
+			EXISTS (
+				SELECT 1
+				FROM jobs
+				WHERE jobs.id = tasks.job_id
+				  AND jobs.organisation_id = (
+					SELECT organisation_id
+					FROM users
+					WHERE id = (SELECT auth.uid())
+				  )
 			)
 		);
 	`)
 	if err != nil {
 		return fmt.Errorf("failed to create tasks RLS policy: %w", err)
+	}
+
+	// Domains table: Split policies for workflow + tenant isolation
+	// Allow INSERT without existing job, restrict SELECT to owned jobs
+	_, err = db.Exec(`
+		DROP POLICY IF EXISTS "Organisation members can access domains" ON domains;
+		DROP POLICY IF EXISTS "Users can read domains via jobs" ON domains;
+		DROP POLICY IF EXISTS "Authenticated users can create domains" ON domains;
+		DROP POLICY IF EXISTS "Users can update domains via jobs" ON domains;
+
+		-- Allow reading domains that have jobs in user's organisation
+		CREATE POLICY "Users can read domains via jobs"
+		ON domains FOR SELECT
+		USING (
+		  EXISTS (
+			SELECT 1
+			FROM jobs
+			WHERE jobs.domain_id = domains.id
+			  AND jobs.organisation_id = (
+				SELECT organisation_id
+				FROM users
+				WHERE id = (SELECT auth.uid())
+			  )
+		  )
+		);
+
+		-- Allow any authenticated user to create domains (checked at job level)
+		-- Workers need to create domains before jobs exist
+		CREATE POLICY "Authenticated users can create domains"
+		ON domains FOR INSERT
+		WITH CHECK (auth.role() = 'authenticated');
+
+		-- NO UPDATE POLICY: Domains are shared resources
+		-- Service role only can update to prevent cross-tenant data corruption
+	`)
+	if err != nil {
+		return fmt.Errorf("failed to create domains RLS policies: %w", err)
+	}
+
+	// Pages table: Similar split for tenant isolation while allowing worker inserts
+	_, err = db.Exec(`
+		DROP POLICY IF EXISTS "Organisation members can access pages" ON pages;
+		DROP POLICY IF EXISTS "Users can read pages via jobs" ON pages;
+		DROP POLICY IF EXISTS "Authenticated users can create pages" ON pages;
+		DROP POLICY IF EXISTS "Users can update pages via jobs" ON pages;
+
+		-- Allow reading pages that have jobs in user's organisation
+		CREATE POLICY "Users can read pages via jobs"
+		ON pages FOR SELECT
+		USING (
+		  EXISTS (
+			SELECT 1
+			FROM jobs
+			WHERE jobs.domain_id = pages.domain_id
+			  AND jobs.organisation_id = (
+				SELECT organisation_id
+				FROM users
+				WHERE id = (SELECT auth.uid())
+			  )
+		  )
+		);
+
+		-- Allow any authenticated user to create pages (checked at job level)
+		-- Workers discover and create pages during crawling
+		CREATE POLICY "Authenticated users can create pages"
+		ON pages FOR INSERT
+		WITH CHECK (auth.role() = 'authenticated');
+
+		-- NO UPDATE POLICY: Pages are shared resources
+		-- Service role only can update to prevent cross-tenant data corruption
+	`)
+	if err != nil {
+		return fmt.Errorf("failed to create pages RLS policies: %w", err)
 	}
 
 	return nil
