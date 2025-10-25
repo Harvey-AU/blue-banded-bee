@@ -347,6 +347,7 @@ func TestWorkerPoolProcessNextTask(t *testing.T) {
 			for _, jobID := range tt.activeJobs {
 				wp.jobs[jobID] = true
 				wp.jobInfoCache[jobID] = &JobInfo{
+					DomainID:   1,
 					DomainName: "example.com",
 					FindLinks:  false,
 				}

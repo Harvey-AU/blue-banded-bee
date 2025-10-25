@@ -75,6 +75,7 @@ type WorkerPool struct {
 
 // JobInfo caches job-specific data that doesn't change during execution
 type JobInfo struct {
+	DomainID    int
 	DomainName  string
 	FindLinks   bool
 	CrawlDelay  int
@@ -348,14 +349,15 @@ func (wp *WorkerPool) AddJob(jobID string, options *JobOptions) {
 
 	// When options is nil (recovery mode), fetch find_links from DB
 	// Otherwise use the provided options value
+	var domainID int
 	err := wp.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
 		query := `
-			SELECT d.name, d.crawl_delay_seconds, j.find_links
+			SELECT d.id, d.name, d.crawl_delay_seconds, j.find_links
 			FROM domains d
 			JOIN jobs j ON j.domain_id = d.id
 			WHERE j.id = $1
 		`
-		return tx.QueryRowContext(ctx, query, jobID).Scan(&domainName, &crawlDelay, &dbFindLinks)
+		return tx.QueryRowContext(ctx, query, jobID).Scan(&domainID, &domainName, &crawlDelay, &dbFindLinks)
 	})
 
 	if err == nil {
@@ -366,6 +368,7 @@ func (wp *WorkerPool) AddJob(jobID string, options *JobOptions) {
 		}
 
 		jobInfo := &JobInfo{
+			DomainID:   domainID,
 			DomainName: domainName,
 			FindLinks:  findLinks,
 			CrawlDelay: 0,
@@ -687,6 +690,7 @@ func (wp *WorkerPool) prepareTaskForProcessing(ctx context.Context, task *db.Tas
 	wp.jobInfoMutex.RUnlock()
 
 	if exists {
+		jobsTask.DomainID = jobInfo.DomainID
 		jobsTask.DomainName = jobInfo.DomainName
 		jobsTask.FindLinks = jobInfo.FindLinks
 		jobsTask.CrawlDelay = jobInfo.CrawlDelay
@@ -694,21 +698,23 @@ func (wp *WorkerPool) prepareTaskForProcessing(ctx context.Context, task *db.Tas
 		// Fallback to database if not in cache (shouldn't happen normally)
 		log.Warn().Str("job_id", task.JobID).Msg("Job info not in cache, querying database")
 
+		var domainID int
 		var domainName string
 		var findLinks bool
 		var crawlDelay sql.NullInt64
 		err := wp.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
 			return tx.QueryRowContext(ctx, `
-				SELECT d.name, j.find_links, d.crawl_delay_seconds
+				SELECT d.id, d.name, j.find_links, d.crawl_delay_seconds
 				FROM domains d
 				JOIN jobs j ON j.domain_id = d.id
 				WHERE j.id = $1
-			`, task.JobID).Scan(&domainName, &findLinks, &crawlDelay)
+			`, task.JobID).Scan(&domainID, &domainName, &findLinks, &crawlDelay)
 		})
 
 		if err != nil {
 			log.Error().Err(err).Str("job_id", task.JobID).Msg("Failed to get domain info")
 		} else {
+			jobsTask.DomainID = domainID
 			jobsTask.DomainName = domainName
 			jobsTask.FindLinks = findLinks
 			if crawlDelay.Valid {
@@ -1494,18 +1500,13 @@ func (wp *WorkerPool) processDiscoveredLinks(ctx context.Context, task *Task, re
 		Bool("find_links_enabled", task.FindLinks).
 		Msg("Starting link processing and priority assignment")
 
-	// Get domain ID for this job
-	var domainID int
-	err := wp.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
-		return tx.QueryRowContext(ctx, `
-			SELECT domain_id FROM jobs WHERE id = $1
-		`, task.JobID).Scan(&domainID)
-	})
-	if err != nil {
+	// Use domain ID from task (already populated from job cache)
+	domainID := task.DomainID
+	if domainID == 0 {
 		log.Error().
-			Err(err).
+			Str("task_id", task.ID).
 			Str("job_id", task.JobID).
-			Msg("Failed to get domain ID for discovered links")
+			Msg("Missing domain ID; skipping link processing")
 		return
 	}
 
