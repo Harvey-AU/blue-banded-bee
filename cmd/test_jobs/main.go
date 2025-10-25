@@ -66,7 +66,7 @@ func main() {
 	dbConfig := &db.Config{
 		DatabaseURL: dbURL,
 	}
-	workerPool := jobs.NewWorkerPool(database.GetDB(), dbQueue, crawler, jobWorkers, dbConfig)
+	workerPool := jobs.NewWorkerPool(database.GetDB(), dbQueue, crawler, jobWorkers, 1, dbConfig)
 	workerPool.Start(context.Background())
 	defer workerPool.Stop()
 

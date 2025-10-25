@@ -107,11 +107,11 @@ func TestNewWorkerPoolValidation(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if tt.expectPanic {
 				assert.PanicsWithValue(t, tt.panicMsg, func() {
-					NewWorkerPool(tt.db, tt.dbQueue, tt.crawler, tt.numWorkers, tt.dbConfig)
+					NewWorkerPool(tt.db, tt.dbQueue, tt.crawler, tt.numWorkers, 1, tt.dbConfig)
 				})
 			} else {
 				assert.NotPanics(t, func() {
-					wp := NewWorkerPool(tt.db, tt.dbQueue, tt.crawler, tt.numWorkers, tt.dbConfig)
+					wp := NewWorkerPool(tt.db, tt.dbQueue, tt.crawler, tt.numWorkers, 1, tt.dbConfig)
 					assert.NotNil(t, wp)
 					assert.Equal(t, tt.numWorkers, wp.numWorkers)
 					assert.NotNil(t, wp.jobs)
@@ -127,7 +127,7 @@ func TestNewWorkerPoolValidation(t *testing.T) {
 // Test job tracking methods using direct manipulation to avoid DB calls
 func TestWorkerPoolJobTracking(t *testing.T) {
 	// Create a worker pool with valid objects (not started)
-	wp := NewWorkerPool(&sql.DB{}, &simpleDbQueueMock{}, &simpleCrawlerMock{}, 2, &db.Config{})
+	wp := NewWorkerPool(&sql.DB{}, &simpleDbQueueMock{}, &simpleCrawlerMock{}, 2, 1, &db.Config{})
 
 	// Test adding jobs directly to the map (bypassing AddJob which queries DB)
 	wp.jobsMutex.Lock()
@@ -163,7 +163,7 @@ func TestWorkerPoolStopLifecycle(t *testing.T) {
 	t.Parallel()
 	t.Run("basic_shutdown", func(t *testing.T) {
 		// Create worker pool but don't start workers (to avoid DB calls)
-		wp := NewWorkerPool(&sql.DB{}, &simpleDbQueueMock{}, &simpleCrawlerMock{}, 2, &db.Config{})
+		wp := NewWorkerPool(&sql.DB{}, &simpleDbQueueMock{}, &simpleCrawlerMock{}, 2, 1, &db.Config{})
 
 		// Verify initial state
 		assert.False(t, wp.stopping.Load(), "should not be stopping initially")
@@ -187,7 +187,7 @@ func TestWorkerPoolStopLifecycle(t *testing.T) {
 
 	t.Run("idempotent_shutdown", func(t *testing.T) {
 		// Create worker pool
-		wp := NewWorkerPool(&sql.DB{}, &simpleDbQueueMock{}, &simpleCrawlerMock{}, 2, &db.Config{})
+		wp := NewWorkerPool(&sql.DB{}, &simpleDbQueueMock{}, &simpleCrawlerMock{}, 2, 1, &db.Config{})
 
 		// First stop should work
 		wp.Stop()
@@ -204,7 +204,7 @@ func TestWorkerPoolStopLifecycle(t *testing.T) {
 
 	t.Run("concurrent_shutdown", func(t *testing.T) {
 		// Create worker pool
-		wp := NewWorkerPool(&sql.DB{}, &simpleDbQueueMock{}, &simpleCrawlerMock{}, 2, &db.Config{})
+		wp := NewWorkerPool(&sql.DB{}, &simpleDbQueueMock{}, &simpleCrawlerMock{}, 2, 1, &db.Config{})
 
 		// Launch multiple concurrent Stop() calls
 		const numGoroutines = 10
@@ -227,7 +227,7 @@ func TestWorkerPoolStopLifecycle(t *testing.T) {
 
 	t.Run("resource_cleanup", func(t *testing.T) {
 		// Create worker pool
-		wp := NewWorkerPool(&sql.DB{}, &simpleDbQueueMock{}, &simpleCrawlerMock{}, 2, &db.Config{})
+		wp := NewWorkerPool(&sql.DB{}, &simpleDbQueueMock{}, &simpleCrawlerMock{}, 2, 1, &db.Config{})
 
 		// Verify batch manager is initialized
 		assert.NotNil(t, wp.batchManager, "batchManager should be initialized")

@@ -52,8 +52,10 @@ var (
 
 	workerTracer trace.Tracer
 
-	workerTaskDuration metric.Float64Histogram
-	workerTaskTotal    metric.Int64Counter
+	workerTaskDuration     metric.Float64Histogram
+	workerTaskTotal        metric.Int64Counter
+	workerConcurrentTasks  metric.Int64UpDownCounter
+	workerConcurrencyLimit metric.Int64Gauge
 )
 
 // Init configures tracing and metrics exporters. When cfg.Enabled is false the function is a no-op.
@@ -217,6 +219,22 @@ func initWorkerInstruments(meterProvider *sdkmetric.MeterProvider) error {
 		"bee.worker.task.total",
 		metric.WithDescription("Counts task outcomes processed by the worker pool"),
 	)
+	if err != nil {
+		return err
+	}
+
+	workerConcurrentTasks, err = meter.Int64UpDownCounter(
+		"bee.worker.concurrent_tasks",
+		metric.WithDescription("Current number of tasks being processed concurrently by a worker"),
+	)
+	if err != nil {
+		return err
+	}
+
+	workerConcurrencyLimit, err = meter.Int64Gauge(
+		"bee.worker.concurrency_capacity",
+		metric.WithDescription("Maximum concurrent tasks allowed per worker"),
+	)
 	return err
 }
 
@@ -264,5 +282,20 @@ func RecordWorkerTask(ctx context.Context, metrics WorkerTaskMetrics) {
 	if workerTaskTotal != nil {
 		workerTaskTotal.Add(ctx, 1,
 			metric.WithAttributes(attribute.String("job.id", metrics.JobID), attribute.String("task.status", metrics.Status)))
+	}
+}
+
+// RecordWorkerConcurrency records the change in concurrent tasks for a worker.
+// delta: +1 when starting a task, -1 when completing
+// capacity: the worker's concurrency limit (only recorded once per worker on startup)
+func RecordWorkerConcurrency(ctx context.Context, workerID int, delta int64, capacity int64) {
+	if workerConcurrentTasks != nil {
+		workerConcurrentTasks.Add(ctx, delta,
+			metric.WithAttributes(attribute.Int("worker.id", workerID)))
+	}
+
+	if capacity > 0 && workerConcurrencyLimit != nil {
+		workerConcurrencyLimit.Record(ctx, capacity,
+			metric.WithAttributes(attribute.Int("worker.id", workerID)))
 	}
 }
