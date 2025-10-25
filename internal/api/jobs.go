@@ -227,6 +227,12 @@ func (h *Handler) createJobFromRequest(ctx context.Context, user *db.User, req C
 	concurrency := 5
 	if req.Concurrency != nil {
 		concurrency = *req.Concurrency
+		// Validate concurrency limits (must match database constraints and worker capacity)
+		if concurrency < 1 {
+			concurrency = 1
+		} else if concurrency > 20 {
+			concurrency = 20
+		}
 	}
 
 	maxPages := 0

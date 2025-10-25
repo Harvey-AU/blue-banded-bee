@@ -126,7 +126,7 @@ func TestDbQueueGetNextTask(t *testing.T) {
 			setupMock: func(mock sqlmock.Sqlmock) {
 				mock.ExpectBegin()
 
-				// Expect combined CTE query with SELECT and UPDATE
+				// Expect new complex CTE query with job join and concurrency check
 				rows := sqlmock.NewRows([]string{
 					"id", "job_id", "page_id", "path", "created_at",
 					"retry_count", "source_type", "source_url", "priority_score",
@@ -135,7 +135,8 @@ func TestDbQueueGetNextTask(t *testing.T) {
 					0, "sitemap", "https://example.com/sitemap.xml", 1.0,
 				)
 
-				mock.ExpectQuery(`WITH next_task AS \( SELECT .* FROM tasks WHERE status = 'pending' AND job_id = .* ORDER BY .* LIMIT 1 FOR UPDATE SKIP LOCKED \) UPDATE tasks SET status = 'running', started_at = .* FROM next_task WHERE tasks\.id = next_task\.id RETURNING .*`).
+				// Updated regex to match new query with job join and running_tasks increment
+				mock.ExpectQuery(`WITH next_task AS \(.*SELECT.*FROM tasks t.*INNER JOIN jobs j.*WHERE.*status = 'pending'.*AND.*job_id.*FOR UPDATE OF.*\).*task_update AS \(.*UPDATE tasks.*\).*UPDATE jobs.*SET running_tasks.*RETURNING`).
 					WithArgs(sqlmock.AnyArg(), "test-job").
 					WillReturnRows(rows)
 
@@ -150,7 +151,8 @@ func TestDbQueueGetNextTask(t *testing.T) {
 			setupMock: func(mock sqlmock.Sqlmock) {
 				mock.ExpectBegin()
 
-				mock.ExpectQuery(`WITH next_task AS \( SELECT .* FROM tasks WHERE status = 'pending' AND job_id = .* ORDER BY .* LIMIT 1 FOR UPDATE SKIP LOCKED \) UPDATE tasks SET status = 'running', started_at = .* FROM next_task WHERE tasks\.id = next_task\.id RETURNING .*`).
+				// Updated regex to match new query structure
+				mock.ExpectQuery(`WITH next_task AS \(.*SELECT.*FROM tasks t.*INNER JOIN jobs j.*WHERE.*status = 'pending'.*AND.*job_id.*FOR UPDATE OF.*\).*task_update AS \(.*UPDATE tasks.*\).*UPDATE jobs.*SET running_tasks.*RETURNING`).
 					WithArgs(sqlmock.AnyArg(), "test-job").
 					WillReturnError(sql.ErrNoRows)
 
@@ -173,8 +175,8 @@ func TestDbQueueGetNextTask(t *testing.T) {
 					1, "discovery", "https://example.com", 0.5,
 				)
 
-				// Query without job_id filter
-				mock.ExpectQuery(`WITH next_task AS \( SELECT .* FROM tasks WHERE status = 'pending' ORDER BY .* LIMIT 1 FOR UPDATE SKIP LOCKED \) UPDATE tasks SET status = 'running', started_at = .* FROM next_task WHERE tasks\.id = next_task\.id RETURNING .*`).
+				// Query without job_id filter - updated regex to match new structure
+				mock.ExpectQuery(`WITH next_task AS \(.*SELECT.*FROM tasks t.*INNER JOIN jobs j.*WHERE.*status = 'pending'.*FOR UPDATE OF.*\).*task_update AS \(.*UPDATE tasks.*\).*UPDATE jobs.*SET running_tasks.*RETURNING`).
 					WithArgs(sqlmock.AnyArg()).
 					WillReturnRows(rows)
 
@@ -240,9 +242,11 @@ func TestDbQueueUpdateTaskStatus(t *testing.T) {
 			},
 			setupMock: func(mock sqlmock.Sqlmock) {
 				mock.ExpectBegin()
-				mock.ExpectExec(`UPDATE tasks\s+SET status = \$1, started_at = \$2\s+WHERE id = \$3`).
+				// Running now uses CTE to increment running_tasks
+				rows := sqlmock.NewRows([]string{"job_id"}).AddRow("test-job")
+				mock.ExpectQuery(`WITH task_update AS.*UPDATE tasks.*SET status.*started_at.*WHERE id.*RETURNING job_id.*UPDATE jobs.*SET running_tasks = running_tasks \+ 1.*RETURNING`).
 					WithArgs("running", sqlmock.AnyArg(), "task-1").
-					WillReturnResult(sqlmock.NewResult(0, 1))
+					WillReturnRows(rows)
 				mock.ExpectCommit()
 			},
 			wantErr: false,
@@ -257,9 +261,12 @@ func TestDbQueueUpdateTaskStatus(t *testing.T) {
 			},
 			setupMock: func(mock sqlmock.Sqlmock) {
 				mock.ExpectBegin()
-				mock.ExpectExec(`UPDATE tasks\s+SET status = \$1, completed_at = \$2, error = \$3, retry_count = \$4\s+WHERE id = \$5`).
+				// Now uses CTE with RETURNING to decrement running_tasks
+				// Failed status has 5 params: status, completed_at, error, retry_count, id
+				rows := sqlmock.NewRows([]string{"job_id"}).AddRow("test-job")
+				mock.ExpectQuery(`WITH task_update AS.*UPDATE tasks.*SET status.*completed_at.*error.*retry_count.*WHERE id.*RETURNING job_id.*UPDATE jobs.*SET running_tasks = GREATEST.*RETURNING`).
 					WithArgs("failed", sqlmock.AnyArg(), "boom", 2, "task-2").
-					WillReturnResult(sqlmock.NewResult(0, 1))
+					WillReturnRows(rows)
 				mock.ExpectCommit()
 			},
 			wantErr: false,
@@ -272,12 +279,13 @@ func TestDbQueueUpdateTaskStatus(t *testing.T) {
 			},
 			setupMock: func(mock sqlmock.Sqlmock) {
 				mock.ExpectBegin()
-				mock.ExpectExec(`UPDATE tasks\s+SET status = \$1, started_at = \$2\s+WHERE id = \$3`).
+				// Running uses CTE - return sql.ErrNoRows when task not found
+				mock.ExpectQuery(`WITH task_update AS.*UPDATE tasks.*SET status.*started_at.*WHERE id.*RETURNING job_id.*UPDATE jobs.*SET running_tasks = running_tasks \+ 1.*RETURNING`).
 					WithArgs("running", sqlmock.AnyArg(), "non-existent").
-					WillReturnResult(sqlmock.NewResult(0, 0))
-				mock.ExpectCommit()
+					WillReturnError(sql.ErrNoRows)
+				mock.ExpectRollback()
 			},
-			wantErr: false,
+			wantErr: true,
 		},
 		{
 			name: "database error (running)",
@@ -287,7 +295,8 @@ func TestDbQueueUpdateTaskStatus(t *testing.T) {
 			},
 			setupMock: func(mock sqlmock.Sqlmock) {
 				mock.ExpectBegin()
-				mock.ExpectExec(`UPDATE tasks\s+SET status = \$1, started_at = \$2\s+WHERE id = \$3`).
+				// Running uses CTE
+				mock.ExpectQuery(`WITH task_update AS.*UPDATE tasks.*SET status.*started_at.*WHERE id.*RETURNING job_id.*UPDATE jobs.*SET running_tasks = running_tasks \+ 1.*RETURNING`).
 					WithArgs("running", sqlmock.AnyArg(), "task-3").
 					WillReturnError(errors.New("database error"))
 				mock.ExpectRollback()

@@ -268,34 +268,51 @@ func (q *DbQueue) GetNextTask(ctx context.Context, jobID string) (*Task, error) 
 	err := q.Execute(ctx, func(tx *sql.Tx) error {
 		// Use CTE to select and update in a single atomic query
 		// This reduces transaction time and minimises lock holding
+		// Also enforces per-job concurrency limits by checking running_tasks < concurrency
+		// Only locks the specific job row for the task we claim (not all eligible jobs)
 		query := `
 			WITH next_task AS (
-				SELECT id, job_id, page_id, path, created_at, retry_count, source_type, source_url, priority_score
-				FROM tasks
-				WHERE status = 'pending'
+				-- Claim a task and check job concurrency in one step
+				SELECT t.id, t.job_id, t.page_id, t.path, t.created_at, t.retry_count,
+				       t.source_type, t.source_url, t.priority_score
+				FROM tasks t
+				INNER JOIN jobs j ON t.job_id = j.id
+				WHERE t.status = 'pending'
+				AND j.status = 'running'
+				-- Support legacy jobs with NULL or 0 concurrency (unlimited)
+				AND (j.concurrency IS NULL OR j.concurrency = 0 OR j.running_tasks < j.concurrency)
 		`
 
 		// Add job filter if specified
 		args := []interface{}{now}
 		if jobID != "" {
-			query += " AND job_id = $2"
+			query += " AND t.job_id = $2"
 			args = append(args, jobID)
 		}
 
-		// Add ordering and locking - prioritise by priority_score DESC, then created_at ASC
-		// FOR UPDATE SKIP LOCKED allows other workers to skip this row and claim others
 		query += `
-				ORDER BY priority_score DESC, created_at ASC
+				ORDER BY t.priority_score DESC, t.created_at ASC
 				LIMIT 1
-				FOR UPDATE SKIP LOCKED
+				-- Lock both the task and its job row (only for this specific task)
+				FOR UPDATE OF t, j SKIP LOCKED
+			),
+			task_update AS (
+				UPDATE tasks
+				SET status = 'running', started_at = $1
+				FROM next_task
+				WHERE tasks.id = next_task.id
+				RETURNING tasks.id, tasks.job_id, tasks.page_id, tasks.path,
+				          tasks.created_at, tasks.retry_count, tasks.source_type,
+				          tasks.source_url, tasks.priority_score
 			)
-			UPDATE tasks
-			SET status = 'running', started_at = $1
-			FROM next_task
-			WHERE tasks.id = next_task.id
-			RETURNING tasks.id, tasks.job_id, tasks.page_id, tasks.path,
-			          tasks.created_at, tasks.retry_count, tasks.source_type,
-			          tasks.source_url, tasks.priority_score
+			-- Atomically increment running_tasks for the job
+			UPDATE jobs
+			SET running_tasks = running_tasks + 1
+			FROM task_update
+			WHERE jobs.id = task_update.job_id
+			RETURNING task_update.id, task_update.job_id, task_update.page_id, task_update.path,
+			          task_update.created_at, task_update.retry_count, task_update.source_type,
+			          task_update.source_url, task_update.priority_score
 		`
 
 		// Execute the combined query
@@ -483,17 +500,28 @@ func (q *DbQueue) UpdateTaskStatus(ctx context.Context, task *Task) error {
 	}
 
 	// Update task in a transaction
+	// Also adjust running_tasks counter for the job when status changes
 	err := q.Execute(ctx, func(tx *sql.Tx) error {
 		var err error
+		var jobID string
 
 		// Use different update logic based on status
 		switch task.Status {
 		case "running":
-			_, err = tx.ExecContext(ctx, `
-				UPDATE tasks 
-				SET status = $1, started_at = $2
-				WHERE id = $3
-			`, task.Status, task.StartedAt, task.ID)
+			// Increment running_tasks when manually setting to running (rare, but handle it)
+			err = tx.QueryRowContext(ctx, `
+				WITH task_update AS (
+					UPDATE tasks
+					SET status = $1, started_at = $2
+					WHERE id = $3
+					RETURNING job_id
+				)
+				UPDATE jobs
+				SET running_tasks = running_tasks + 1
+				FROM task_update
+				WHERE jobs.id = task_update.job_id
+				RETURNING task_update.job_id
+			`, task.Status, task.StartedAt, task.ID).Scan(&jobID)
 
 		case "completed":
 			// Ensure JSONB fields are never nil and are valid JSON
@@ -518,20 +546,29 @@ func (q *DbQueue) UpdateTaskStatus(ctx context.Context, task *Task) error {
 				Str("cache_check_attempts", string(cacheCheckAttempts)).
 				Msg("Updating task with JSONB fields")
 
-			_, err = tx.ExecContext(ctx, `
-				UPDATE tasks
-				SET status = $1, completed_at = $2, status_code = $3,
-					response_time = $4, cache_status = $5, content_type = $6,
-					content_length = $7, headers = $8::jsonb, redirect_url = $9,
-					dns_lookup_time = $10, tcp_connection_time = $11, tls_handshake_time = $12,
-					ttfb = $13, content_transfer_time = $14,
-					second_response_time = $15, second_cache_status = $16,
-					second_content_length = $17, second_headers = $18::jsonb,
-					second_dns_lookup_time = $19, second_tcp_connection_time = $20,
-					second_tls_handshake_time = $21, second_ttfb = $22,
-					second_content_transfer_time = $23,
-					retry_count = $24, cache_check_attempts = $25::jsonb
-				WHERE id = $26
+			// Decrement running_tasks when completing
+			err = tx.QueryRowContext(ctx, `
+				WITH task_update AS (
+					UPDATE tasks
+					SET status = $1, completed_at = $2, status_code = $3,
+						response_time = $4, cache_status = $5, content_type = $6,
+						content_length = $7, headers = $8::jsonb, redirect_url = $9,
+						dns_lookup_time = $10, tcp_connection_time = $11, tls_handshake_time = $12,
+						ttfb = $13, content_transfer_time = $14,
+						second_response_time = $15, second_cache_status = $16,
+						second_content_length = $17, second_headers = $18::jsonb,
+						second_dns_lookup_time = $19, second_tcp_connection_time = $20,
+						second_tls_handshake_time = $21, second_ttfb = $22,
+						second_content_transfer_time = $23,
+						retry_count = $24, cache_check_attempts = $25::jsonb
+					WHERE id = $26
+					RETURNING job_id
+				)
+				UPDATE jobs
+				SET running_tasks = GREATEST(0, running_tasks - 1)
+				FROM task_update
+				WHERE jobs.id = task_update.job_id
+				RETURNING task_update.job_id
 			`, task.Status, task.CompletedAt, task.StatusCode,
 				task.ResponseTime, task.CacheStatus, task.ContentType,
 				task.ContentLength, string(headers), task.RedirectURL,
@@ -542,29 +579,56 @@ func (q *DbQueue) UpdateTaskStatus(ctx context.Context, task *Task) error {
 				task.SecondDNSLookupTime, task.SecondTCPConnectionTime,
 				task.SecondTLSHandshakeTime, task.SecondTTFB,
 				task.SecondContentTransferTime,
-				task.RetryCount, string(cacheCheckAttempts), task.ID)
+				task.RetryCount, string(cacheCheckAttempts), task.ID).Scan(&jobID)
 
 		case "failed":
-			_, err = tx.ExecContext(ctx, `
-				UPDATE tasks 
-				SET status = $1, completed_at = $2, error = $3, retry_count = $4
-				WHERE id = $5
-			`, task.Status, task.CompletedAt, task.Error, task.RetryCount, task.ID)
+			// Decrement running_tasks when failing
+			err = tx.QueryRowContext(ctx, `
+				WITH task_update AS (
+					UPDATE tasks
+					SET status = $1, completed_at = $2, error = $3, retry_count = $4
+					WHERE id = $5
+					RETURNING job_id
+				)
+				UPDATE jobs
+				SET running_tasks = GREATEST(0, running_tasks - 1)
+				FROM task_update
+				WHERE jobs.id = task_update.job_id
+				RETURNING task_update.job_id
+			`, task.Status, task.CompletedAt, task.Error, task.RetryCount, task.ID).Scan(&jobID)
 
 		case "skipped":
-			_, err = tx.ExecContext(ctx, `
-				UPDATE tasks
-				SET status = $1
-				WHERE id = $2
-			`, task.Status, task.ID)
+			// Decrement running_tasks when skipping
+			err = tx.QueryRowContext(ctx, `
+				WITH task_update AS (
+					UPDATE tasks
+					SET status = $1
+					WHERE id = $2
+					RETURNING job_id
+				)
+				UPDATE jobs
+				SET running_tasks = GREATEST(0, running_tasks - 1)
+				FROM task_update
+				WHERE jobs.id = task_update.job_id
+				RETURNING task_update.job_id
+			`, task.Status, task.ID).Scan(&jobID)
 
 		case "pending":
-			// Update retry count and reset started_at for pending (retry) status
-			_, err = tx.ExecContext(ctx, `
-				UPDATE tasks
-				SET status = $1, retry_count = $2, started_at = $3
-				WHERE id = $4
-			`, task.Status, task.RetryCount, task.StartedAt, task.ID)
+			// Decrement running_tasks when returning to pending (retry)
+			// The task will re-increment when claimed again
+			err = tx.QueryRowContext(ctx, `
+				WITH task_update AS (
+					UPDATE tasks
+					SET status = $1, retry_count = $2, started_at = $3
+					WHERE id = $4
+					RETURNING job_id
+				)
+				UPDATE jobs
+				SET running_tasks = GREATEST(0, running_tasks - 1)
+				FROM task_update
+				WHERE jobs.id = task_update.job_id
+				RETURNING task_update.job_id
+			`, task.Status, task.RetryCount, task.StartedAt, task.ID).Scan(&jobID)
 
 		default:
 			// Generic status update
