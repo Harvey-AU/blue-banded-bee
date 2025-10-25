@@ -90,7 +90,9 @@
       "WebFetch(domain:codingforseo.com)",
       "Bash(air)",
       "Bash(gofmt:*)",
-      "Bash(git tag:*)"
+      "Bash(git tag:*)",
+      "Read(///**)",
+      "Bash(flyctl status:*)"
     ],
     "deny": []
   },

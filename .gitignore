@@ -32,6 +32,7 @@ Thumbs.db
 # Logs
 *.log
 logs/
+load_test_jobs.csv
 
 # Testing
 coverage.out
@@ -64,3 +65,4 @@ supabase/.branches/
 
 # Grafana/observability config with secrets
 alloy.river
+

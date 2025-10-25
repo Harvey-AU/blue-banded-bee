@@ -4,12 +4,15 @@ Future features, implementation strategies, and technical planning documents.
 
 ## 📄 Active Plans
 
-### Current Development
+### In progress
+
+- **[throughput-optimisation.md](throughput-optimisation)** - Increase
+  throughput capacity
+
+### Future
 
 - **[content-storage-and-change-tracking.md](./content-storage-and-change-tracking.md)** -
   Content versioning strategy
-- **[dashboard-timezone-fix.md](./dashboard-timezone-fix.md)** - Dashboard
-  timezone handling
 - **[marketing-messaging.md](./marketing-messaging.md)** - Marketing and
   messaging strategy
 - **[platform-auth-architecture.md](./platform-auth-architecture.md)** -
@@ -18,11 +21,6 @@ Future features, implementation strategies, and technical planning documents.
   strategy
 - **[webflow-integration.md](./webflow-integration.md)** - Webflow marketplace
   integration
-
-## 📋 Completed Optimisations
-
-- **[performance-optimisations-completed.md](./performance-optimisations-completed.md)** -
-  Completed performance improvements tracker
 
 ## 🎯 Planning Process
 
@@ -35,4 +33,4 @@ Future features, implementation strategies, and technical planning documents.
 
 - [Roadmap](../../Roadmap.md) - High-level project roadmap
 - [Test Plan](../TEST_PLAN.md) - Testing requirements
-- [Architecture](../architecture/) - System design constraints
+- [Architecture](../architecture/README.md) - System design constraints
