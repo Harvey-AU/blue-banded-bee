@@ -552,6 +552,7 @@ func (wp *WorkerPool) worker(ctx context.Context, workerID int) {
 			// Wait for either the backoff duration, a notification, or task completion
 			select {
 			case <-time.After(sleepTime):
+				consecutiveNoTasks = 0 // Reset backoff to retry claiming
 			case <-wp.notifyCh:
 				consecutiveNoTasks = 0
 			case result := <-resultsCh:
