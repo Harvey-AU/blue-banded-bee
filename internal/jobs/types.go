@@ -73,6 +73,7 @@ type Task struct {
 	JobID       string     `json:"job_id"`
 	PageID      int        `json:"page_id"`
 	Path        string     `json:"path"`
+	DomainID    int        `json:"domain_id"`
 	DomainName  string     `json:"domain_name"`
 	Status      TaskStatus `json:"status"`
 	CreatedAt   time.Time  `json:"created_at"`
