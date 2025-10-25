@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"math/rand"
 	"net/url"
 	"os"
 	"runtime/debug"
@@ -546,8 +547,10 @@ func (wp *WorkerPool) worker(ctx context.Context, workerID int) {
 			if consecutiveNoTasks == 1 || consecutiveNoTasks%10 == 0 {
 				log.Debug().Int("consecutive_no_tasks", consecutiveNoTasks).Msg("Waiting for new tasks")
 			}
-			// Exponential backoff with a maximum
-			sleepTime := min(time.Duration(float64(baseSleep)*math.Pow(1.5, float64(min(consecutiveNoTasks, 10)))), maxSleep)
+			// Exponential backoff with a maximum, plus jitter to prevent thundering herd
+			baseSleepTime := min(time.Duration(float64(baseSleep)*math.Pow(1.5, float64(min(consecutiveNoTasks, 10)))), maxSleep)
+			jitter := time.Duration(rand.Int63n(2000)) * time.Millisecond // 0-2s jitter
+			sleepTime := baseSleepTime + jitter
 
 			// Wait for either the backoff duration, a notification, or task completion
 			select {
@@ -636,6 +639,10 @@ func (wp *WorkerPool) claimPendingTask(ctx context.Context) (*db.Task, error) {
 		task, err := wp.dbQueue.GetNextTask(ctx, jobID)
 		if err == sql.ErrNoRows {
 			continue // Try next job
+		}
+		if errors.Is(err, db.ErrPoolSaturated) {
+			// Pool saturated - treat like no tasks available and back off
+			return nil, sql.ErrNoRows
 		}
 		if err != nil {
 			log.Error().Err(err).Str("job_id", jobID).Msg("Error getting next pending task")
