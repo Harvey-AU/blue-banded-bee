@@ -166,7 +166,9 @@ func (wp *WorkerPool) Start(ctx context.Context) {
 
 	// Reconcile running_tasks counters before starting workers
 	// This prevents capacity leaks from deployments, crashes, or migration timing
-	if err := wp.reconcileRunningTaskCounters(ctx); err != nil {
+	reconcileCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	if err := wp.reconcileRunningTaskCounters(reconcileCtx); err != nil {
 		sentry.CaptureException(err)
 		log.Error().Err(err).Msg("Failed to reconcile running_tasks counters - workers may be blocked")
 		// Continue startup even if reconciliation fails (logged for monitoring)
