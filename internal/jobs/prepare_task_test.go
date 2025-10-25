@@ -29,6 +29,7 @@ func TestPrepareTaskForProcessingWithCache(t *testing.T) {
 	}
 
 	jobInfo := &JobInfo{
+		DomainID:   42,
 		DomainName: "example.com",
 		FindLinks:  true,
 		CrawlDelay: 2,
@@ -57,7 +58,8 @@ func TestPrepareTaskForProcessingWithCache(t *testing.T) {
 	assert.Equal(t, TaskStatus(dbTask.Status), result.Status)
 	assert.Equal(t, dbTask.PriorityScore, result.PriorityScore)
 
-	// Verify job info enrichment
+	// Verify job info enrichment including DomainID
+	assert.Equal(t, jobInfo.DomainID, result.DomainID)
 	assert.Equal(t, jobInfo.DomainName, result.DomainName)
 	assert.Equal(t, jobInfo.FindLinks, result.FindLinks)
 	assert.Equal(t, jobInfo.CrawlDelay, result.CrawlDelay)
@@ -120,7 +122,8 @@ func TestPrepareTaskForProcessingDatabaseError(t *testing.T) {
 	assert.Equal(t, dbTask.ID, result.ID)
 	assert.Equal(t, dbTask.JobID, result.JobID)
 
-	// Enrichment fields should be empty due to database error
+	// Enrichment fields should be empty/zero due to database error
+	assert.Equal(t, 0, result.DomainID)
 	assert.Empty(t, result.DomainName)
 	assert.False(t, result.FindLinks)
 	assert.Equal(t, 0, result.CrawlDelay)
@@ -148,6 +151,7 @@ func TestPrepareTaskForProcessingFieldMapping(t *testing.T) {
 	wp := &WorkerPool{
 		jobInfoCache: map[string]*JobInfo{
 			"job-def": {
+				DomainID:   999,
 				DomainName: "complex.example.com",
 				FindLinks:  true,
 				CrawlDelay: 5,
@@ -174,7 +178,8 @@ func TestPrepareTaskForProcessingFieldMapping(t *testing.T) {
 	assert.Equal(t, "https://example.com/sitemap.xml", result.SourceURL)
 	assert.Equal(t, 0.95, result.PriorityScore)
 
-	// Verify enrichment
+	// Verify enrichment including DomainID
+	assert.Equal(t, 999, result.DomainID)
 	assert.Equal(t, "complex.example.com", result.DomainName)
 	assert.True(t, result.FindLinks)
 	assert.Equal(t, 5, result.CrawlDelay)
