@@ -4,15 +4,47 @@ set -e
 # Simple Load Test Script
 # Calls the /v1/jobs API endpoint to create real jobs at intervals
 # Creates one job per unique domain in the DOMAINS array
-# Usage: ./load-test-simple.sh [interval:VALUE] [jobs:N]
+#
+# Usage: ./load-test-simple.sh [interval:VALUE] [jobs:N] [concurrency:N|random]
 #  - VALUE can be minutes (default), e.g. `interval:2` or `interval:2m`
 #  - or seconds via an `s` suffix, e.g. `interval:45s`
 #  - `batch:N` remains as a backwards-compatible alias for minutes
-# Example: ./load-test-simple.sh interval:1m jobs:10
+#  - `concurrency:N` sets the per-job concurrency limit (1-20)
+#  - `concurrency:random` generates random concurrency (1-10) for each job (default)
+#
+# Examples:
+#   ./load-test-simple.sh interval:1m jobs:10 concurrency:5
+#   ./load-test-simple.sh interval:30s jobs:20 concurrency:random
+#
+# Test Scenarios (Phase 3 - Throughput Optimisation):
+#
+# TEST 1 - Baseline (verify no regression)
+#   Server config: WORKER_CONCURRENCY=1, WORKER_POOL_SIZE=50
+#   Command: ./load-test-simple.sh interval:30s jobs:10 concurrency:3
+#   Expected: ~2-3 tasks/sec (same as before Phase 1 & 2)
+#
+# TEST 2 - Concurrent workers without job limits (sanity check)
+#   Server config: WORKER_CONCURRENCY=5, WORKER_POOL_SIZE=100
+#   Command: ./load-test-simple.sh interval:30s jobs:10 concurrency:20
+#   Expected: High throughput, no job-level throttling
+#
+# TEST 3 - Mixed job concurrency (production-like)
+#   Server config: WORKER_CONCURRENCY=5, WORKER_POOL_SIZE=100
+#   Command: ./load-test-simple.sh interval:30s jobs:30 concurrency:random
+#   Expected: Each job respects its own limit (1-10), fair distribution across all jobs
+#
+# TEST 4 - Target throughput (validation)
+#   Server config: WORKER_CONCURRENCY=5, WORKER_POOL_SIZE=100
+#   Command: ./load-test-simple.sh interval:15s jobs:62 concurrency:3
+#   Expected: 120-180 tasks/sec aggregate throughput
+#   Notes: 100 workers × 5 concurrency = 500 total capacity
+#          62 jobs × 3 concurrency = 186 max concurrent tasks
+#          Should sustain 120-180 tasks/sec with typical site response times
 
 # Parse command line arguments
 BATCH_INTERVAL_SECONDS=180
 JOBS_PER_BATCH=3
+JOB_CONCURRENCY="random"
 
 parse_interval_seconds() {
   local raw="$1"
@@ -71,9 +103,22 @@ for arg in "$@"; do
     jobs:*)
       JOBS_PER_BATCH="${arg#*:}"
       ;;
+    concurrency:*)
+      JOB_CONCURRENCY="${arg#*:}"
+      if [ "$JOB_CONCURRENCY" == "random" ]; then
+        # Random concurrency mode - will generate 1-10 per job
+        :
+      elif [[ ! "$JOB_CONCURRENCY" =~ ^[0-9]+$ ]]; then
+        echo "Invalid concurrency: $JOB_CONCURRENCY (expected integer 1-20 or 'random')"
+        exit 1
+      elif [ "$JOB_CONCURRENCY" -lt 1 ] || [ "$JOB_CONCURRENCY" -gt 20 ]; then
+        echo "Concurrency must be between 1 and 20 (got: $JOB_CONCURRENCY)"
+        exit 1
+      fi
+      ;;
     *)
       echo "Unknown argument: $arg"
-      echo "Usage: $0 [interval:VALUE] [jobs:N] [batch:N]"
+      echo "Usage: $0 [interval:VALUE] [jobs:N] [concurrency:N] [batch:N]"
       exit 1
       ;;
   esac
@@ -155,6 +200,11 @@ echo -e "${GREEN}=== Simple Load Test ===${NC}"
 echo "API URL:           $API_URL"
 echo "Batch interval:    $(format_interval "$BATCH_INTERVAL_SECONDS")"
 echo "Jobs per batch:    $JOBS_PER_BATCH"
+if [ "$JOB_CONCURRENCY" == "random" ]; then
+  echo "Job concurrency:   random (1-10 tasks/job)"
+else
+  echo "Job concurrency:   $JOB_CONCURRENCY tasks/job"
+fi
 echo "Available domains: ${#DOMAINS[@]}"
 echo ""
 
@@ -178,7 +228,16 @@ create_job() {
   local domain=$1
   local batch_num=$2
 
-  echo -e "${YELLOW}Creating job for $domain (batch $batch_num)${NC}"
+  # Generate random concurrency between 1 and 10 for mixed load testing
+  # Unless JOB_CONCURRENCY is explicitly set to a specific value
+  local job_concurrency
+  if [ "$JOB_CONCURRENCY" == "random" ]; then
+    job_concurrency=$((RANDOM % 10 + 1))
+    echo -e "${YELLOW}Creating job for $domain (batch $batch_num, concurrency: $job_concurrency)${NC}"
+  else
+    job_concurrency=$JOB_CONCURRENCY
+    echo -e "${YELLOW}Creating job for $domain (batch $batch_num)${NC}"
+  fi
 
   response=$(curl -s -w "\n%{http_code}" -X POST "$API_URL/v1/jobs" \
     -H "Authorization: Bearer $AUTH_TOKEN" \
@@ -188,7 +247,7 @@ create_job() {
       \"use_sitemap\": true,
       \"find_links\": true,
       \"max_pages\": 5000,
-      \"concurrency\": 3
+      \"concurrency\": $job_concurrency
     }")
 
   http_code=$(echo "$response" | tail -n1)
@@ -198,6 +257,7 @@ create_job() {
     job_id=$(echo "$body" | jq -r '.data.id // .job.id // .id' 2>/dev/null || echo "unknown")
     echo -e "${GREEN}✓ Created job $job_id for $domain${NC}"
     echo "$batch_num,$domain,$job_id,$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> ./logs/load_test_jobs.log
+    ((JOBS_CREATED++))
   else
     echo -e "${RED}✗ Failed to create job for $domain (HTTP $http_code)${NC}"
     echo "$body" | jq '.' 2>/dev/null || echo "$body"
@@ -213,6 +273,10 @@ create_job() {
 mkdir -p ./logs
 # Initialize results file
 echo "batch,domain,job_id,created_at" > ./logs/load_test_jobs.log
+
+# Track start time for throughput calculation
+START_TIME=$(date +%s)
+JOBS_CREATED=0
 
 # Shuffle all domains once at the start for global uniqueness
 all_shuffled=("${DOMAINS[@]}")
@@ -255,7 +319,30 @@ done
 
 echo ""
 echo -e "${GREEN}=== Load test complete ===${NC}"
-echo "Created jobs logged to: ./logs/load_test_jobs.log"
+
+# Calculate and display throughput metrics
+END_TIME=$(date +%s)
+ELAPSED_SECONDS=$((END_TIME - START_TIME))
+
+echo ""
+echo "Jobs created:      $JOBS_CREATED"
+echo "Total duration:    $(format_interval "$ELAPSED_SECONDS")"
+
+if [ "$JOBS_CREATED" -gt 0 ] && [ "$ELAPSED_SECONDS" -gt 0 ]; then
+  JOBS_PER_SECOND=$(echo "scale=2; $JOBS_CREATED / $ELAPSED_SECONDS" | bc)
+  echo "Job creation rate: ${JOBS_PER_SECOND} jobs/sec"
+  echo ""
+  echo "Expected task throughput (once jobs start):"
+  echo "  With WORKER_CONCURRENCY=1:  ~2-3 tasks/sec"
+  echo "  With WORKER_CONCURRENCY=5:  ~120-180 tasks/sec target"
+  echo "  (Actual throughput depends on server configuration and site response times)"
+fi
+
+echo ""
+echo "Results logged to: ./logs/load_test_jobs.log"
 echo ""
 echo "Check job status with:"
 echo "  curl -H 'Authorization: Bearer \$AUTH_TOKEN' $API_URL/v1/jobs"
+echo ""
+echo "Monitor job progress:"
+echo "  curl -H 'Authorization: Bearer \$AUTH_TOKEN' $API_URL/v1/jobs/<job-id>"

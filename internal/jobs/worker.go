@@ -58,6 +58,11 @@ type WorkerPool struct {
 	notifyCh         chan struct{}
 	jobManager       *JobManager // Reference to JobManager for duplicate checking
 
+	// Per-worker task concurrency
+	workerConcurrency int               // How many tasks each worker can process concurrently
+	workerSemaphores  []chan struct{}   // One semaphore per worker to limit concurrent tasks
+	workerWaitGroups  []*sync.WaitGroup // One wait group per worker for graceful shutdown
+
 	// Performance scaling
 	jobPerformance map[string]*JobPerformance
 	perfMutex      sync.RWMutex
@@ -75,7 +80,7 @@ type JobInfo struct {
 	RobotsRules *crawler.RobotsRules // Cached robots.txt rules for URL filtering
 }
 
-func NewWorkerPool(sqlDB *sql.DB, dbQueue DbQueueInterface, crawler CrawlerInterface, numWorkers int, dbConfig *db.Config) *WorkerPool {
+func NewWorkerPool(sqlDB *sql.DB, dbQueue DbQueueInterface, crawler CrawlerInterface, numWorkers int, workerConcurrency int, dbConfig *db.Config) *WorkerPool {
 	// Validate inputs
 	if sqlDB == nil {
 		panic("database connection is required")
@@ -89,6 +94,9 @@ func NewWorkerPool(sqlDB *sql.DB, dbQueue DbQueueInterface, crawler CrawlerInter
 	if numWorkers < 1 {
 		panic("numWorkers must be at least 1")
 	}
+	if workerConcurrency < 1 || workerConcurrency > 20 {
+		panic("workerConcurrency must be between 1 and 20")
+	}
 	if dbConfig == nil {
 		panic("database configuration is required")
 	}
@@ -101,6 +109,14 @@ func NewWorkerPool(sqlDB *sql.DB, dbQueue DbQueueInterface, crawler CrawlerInter
 
 	// Create batch manager before WorkerPool construction (db package reference must happen here)
 	batchMgr := db.NewBatchManager(dbQueue)
+
+	// Initialise per-worker structures for concurrency control
+	workerSemaphores := make([]chan struct{}, numWorkers)
+	workerWaitGroups := make([]*sync.WaitGroup, numWorkers)
+	for i := 0; i < numWorkers; i++ {
+		workerSemaphores[i] = make(chan struct{}, workerConcurrency)
+		workerWaitGroups[i] = &sync.WaitGroup{}
+	}
 
 	wp := &WorkerPool{
 		db:              sqlDB,
@@ -118,6 +134,11 @@ func NewWorkerPool(sqlDB *sql.DB, dbQueue DbQueueInterface, crawler CrawlerInter
 		notifyCh:         make(chan struct{}, 1), // Buffer of 1 to prevent blocking
 		recoveryInterval: 1 * time.Minute,
 		cleanupInterval:  time.Minute,
+
+		// Per-worker task concurrency
+		workerConcurrency: workerConcurrency,
+		workerSemaphores:  workerSemaphores,
+		workerWaitGroups:  workerWaitGroups,
 
 		// Performance scaling
 		jobPerformance: make(map[string]*JobPerformance),
@@ -331,14 +352,49 @@ func (wp *WorkerPool) RemoveJob(jobID string) {
 }
 
 func (wp *WorkerPool) worker(ctx context.Context, workerID int) {
-	log.Info().Int("worker_id", workerID).Msg("Starting worker")
+	log.Info().
+		Int("worker_id", workerID).
+		Int("concurrency", wp.workerConcurrency).
+		Msg("Starting worker")
 
-	// Track consecutive no-task counts for backoff
+	// Record worker capacity once at startup
+	observability.RecordWorkerConcurrency(ctx, workerID, 0, int64(wp.workerConcurrency))
+
+	// Get this worker's semaphore and wait group
+	sem := wp.workerSemaphores[workerID]
+	wg := wp.workerWaitGroups[workerID]
+
+	// Create a context for this worker that we can cancel on exit
+	workerCtx, cancelWorker := context.WithCancel(ctx)
+	defer cancelWorker()
+
+	// Track consecutive no-task counts for backoff (only in main goroutine)
 	consecutiveNoTasks := 0
-	maxSleep := 5 * time.Second         // Note: Changed from 30 to 5 seconds, to increase resonsiveness when inactive.
+	maxSleep := 5 * time.Second         // Note: Changed from 30 to 5 seconds, to increase responsiveness when inactive.
 	baseSleep := 200 * time.Millisecond // Faster processing when active
 
+	// Channel to receive task results from concurrent goroutines
+	type taskResult struct {
+		err error
+	}
+	resultsCh := make(chan taskResult, wp.workerConcurrency)
+
+	// Wait for all in-flight tasks to complete, then drain results channel
+	defer func() {
+		wg.Wait() // Wait for all task goroutines to complete
+		// Now drain any remaining results
+		for {
+			select {
+			case <-resultsCh:
+				// Discard
+			default:
+				return
+			}
+		}
+	}()
+
 	for {
+		// Check for stop signals or notifications
 		select {
 		case <-wp.stopCh:
 			log.Debug().Int("worker_id", workerID).Msg("Worker received stop signal")
@@ -349,44 +405,101 @@ func (wp *WorkerPool) worker(ctx context.Context, workerID int) {
 		case <-wp.notifyCh:
 			// Reset backoff when notified of new tasks
 			consecutiveNoTasks = 0
-		default:
-			// Check if this worker should exit (we've scaled down)
-			wp.workersMutex.RLock()
-			shouldExit := workerID >= wp.currentWorkers
-			wp.workersMutex.RUnlock()
-
-			if shouldExit {
-				return
-			}
-
-			if err := wp.processNextTask(ctx); err != nil {
-				if err == sql.ErrNoRows {
+		case result := <-resultsCh:
+			// Process result from concurrent task goroutine
+			if result.err != nil {
+				if errors.Is(result.err, sql.ErrNoRows) {
 					consecutiveNoTasks++
-					// Only log occasionally during quiet periods
-					if consecutiveNoTasks == 1 || consecutiveNoTasks%10 == 0 {
-						log.Debug().Msg("Waiting for new tasks")
-					}
-					// Exponential backoff with a maximum
-					sleepTime := min(time.Duration(float64(baseSleep)*math.Pow(1.5, float64(min(consecutiveNoTasks, 10)))), maxSleep)
-
-					// Wait for either the backoff duration or a notification
-					select {
-					case <-time.After(sleepTime):
-					case <-wp.notifyCh:
-						consecutiveNoTasks = 0
-					case <-wp.stopCh:
-						return
-					case <-ctx.Done():
-						return
-					}
 				} else {
-					log.Error().Err(err).Int("worker_id", workerID).Msg("Failed to process task")
-					time.Sleep(baseSleep)
+					log.Error().Err(result.err).Int("worker_id", workerID).Msg("Task processing failed")
 				}
 			} else {
 				consecutiveNoTasks = 0
-				// Quick sleep between tasks when active
-				time.Sleep(baseSleep)
+			}
+			continue
+		default:
+			// Continue to claim tasks
+		}
+
+		// Check if this worker should exit (we've scaled down)
+		wp.workersMutex.RLock()
+		shouldExit := workerID >= wp.currentWorkers
+		wp.workersMutex.RUnlock()
+
+		if shouldExit {
+			return
+		}
+
+		// Apply backoff logic when no tasks are available
+		if consecutiveNoTasks > 0 {
+			// Only log occasionally during quiet periods
+			if consecutiveNoTasks == 1 || consecutiveNoTasks%10 == 0 {
+				log.Debug().Int("consecutive_no_tasks", consecutiveNoTasks).Msg("Waiting for new tasks")
+			}
+			// Exponential backoff with a maximum
+			sleepTime := min(time.Duration(float64(baseSleep)*math.Pow(1.5, float64(min(consecutiveNoTasks, 10)))), maxSleep)
+
+			// Wait for either the backoff duration, a notification, or task completion
+			select {
+			case <-time.After(sleepTime):
+			case <-wp.notifyCh:
+				consecutiveNoTasks = 0
+			case result := <-resultsCh:
+				if result.err != nil {
+					if errors.Is(result.err, sql.ErrNoRows) {
+						consecutiveNoTasks++
+					}
+				} else {
+					consecutiveNoTasks = 0
+				}
+			case <-wp.stopCh:
+				return
+			case <-ctx.Done():
+				return
+			}
+			continue // Loop back to check signals before attempting to claim
+		}
+
+		// Try to acquire a semaphore slot (non-blocking)
+		select {
+		case sem <- struct{}{}:
+			// Successfully acquired slot, launch goroutine to process task
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				defer func() {
+					<-sem // Release semaphore slot
+					observability.RecordWorkerConcurrency(workerCtx, workerID, -1, 0)
+				}()
+
+				// Record task start
+				observability.RecordWorkerConcurrency(workerCtx, workerID, +1, 0)
+
+				err := wp.processNextTask(workerCtx)
+
+				// Non-blocking send to prevent shutdown hang
+				select {
+				case resultsCh <- taskResult{err: err}:
+				case <-workerCtx.Done():
+					// Worker cancelled, don't block (covers both worker exit and parent context)
+				}
+			}()
+		default:
+			// All slots full, wait briefly for a slot to free up or check for results
+			select {
+			case <-time.After(baseSleep):
+			case result := <-resultsCh:
+				if result.err != nil {
+					if errors.Is(result.err, sql.ErrNoRows) {
+						consecutiveNoTasks++
+					}
+				} else {
+					consecutiveNoTasks = 0
+				}
+			case <-wp.stopCh:
+				return
+			case <-ctx.Done():
+				return
 			}
 		}
 	}
@@ -1096,9 +1209,17 @@ func (wp *WorkerPool) scaleWorkers(ctx context.Context, targetWorkers int) {
 		Int("target_workers", targetWorkers).
 		Msg("Scaling worker pool")
 
-	// Start additional workers
+	// Initialise semaphores and wait groups for new workers
 	for i := 0; i < workersToAdd; i++ {
 		workerID := wp.currentWorkers + i
+
+		// Extend slices if needed
+		if workerID >= len(wp.workerSemaphores) {
+			wp.workerSemaphores = append(wp.workerSemaphores, make(chan struct{}, wp.workerConcurrency))
+			wp.workerWaitGroups = append(wp.workerWaitGroups, &sync.WaitGroup{})
+		}
+
+		// Start worker
 		wp.wg.Add(1)
 		go func(id int) {
 			defer wp.wg.Done()

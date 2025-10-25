@@ -403,8 +403,24 @@ func main() {
 	default:
 		jobWorkers = 5 // Development: minimal for local testing
 	}
-	log.Info().Int("workers", jobWorkers).Str("environment", appEnv).Msg("Configuring worker pool")
-	workerPool := jobs.NewWorkerPool(pgDB.GetDB(), dbQueue, cr, jobWorkers, pgDB.GetConfig())
+
+	// Configure worker concurrency (how many tasks each worker handles simultaneously)
+	workerConcurrency := getEnvInt("WORKER_CONCURRENCY", 1)
+	if workerConcurrency < 1 {
+		workerConcurrency = 1
+	} else if workerConcurrency > 20 {
+		workerConcurrency = 20
+	}
+
+	totalCapacity := jobWorkers * workerConcurrency
+	log.Info().
+		Int("workers", jobWorkers).
+		Int("concurrency_per_worker", workerConcurrency).
+		Int("total_capacity", totalCapacity).
+		Str("environment", appEnv).
+		Msg("Configuring worker pool")
+
+	workerPool := jobs.NewWorkerPool(pgDB.GetDB(), dbQueue, cr, jobWorkers, workerConcurrency, pgDB.GetConfig())
 
 	// Create job manager
 	jobsManager := jobs.NewJobManager(pgDB.GetDB(), dbQueue, cr, workerPool)
@@ -509,6 +525,26 @@ func getEnvWithDefault(key, defaultValue string) string {
 		return defaultValue
 	}
 	return value
+}
+
+// getEnvInt retrieves an environment variable as an integer or returns a default value if not set or invalid
+func getEnvInt(key string, defaultValue int) int {
+	value := os.Getenv(key)
+	if value == "" {
+		return defaultValue
+	}
+
+	var result int
+	if _, err := fmt.Sscanf(value, "%d", &result); err != nil {
+		log.Warn().
+			Str("key", key).
+			Str("value", value).
+			Int("default", defaultValue).
+			Msg("Invalid integer in environment variable, using default")
+		return defaultValue
+	}
+
+	return result
 }
 
 func parseOTLPHeaders(raw string) map[string]string {

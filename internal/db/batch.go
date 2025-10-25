@@ -561,65 +561,78 @@ func (bm *BatchManager) batchUpdateCompleted(ctx context.Context, tx *sql.Tx, ta
 	}
 
 	// Single UPDATE statement using unnest to batch update all tasks
+	// Also decrements running_tasks for affected jobs
 	query := `
-		UPDATE tasks
-		SET status = 'completed',
-			completed_at = updates.completed_at,
-			status_code = updates.status_code,
-			response_time = updates.response_time,
-			cache_status = updates.cache_status,
-			content_type = updates.content_type,
-			content_length = updates.content_length,
-			headers = updates.headers::jsonb,
-			redirect_url = updates.redirect_url,
-			dns_lookup_time = updates.dns_lookup_time,
-			tcp_connection_time = updates.tcp_connection_time,
-			tls_handshake_time = updates.tls_handshake_time,
-			ttfb = updates.ttfb,
-			content_transfer_time = updates.content_transfer_time,
-			second_response_time = updates.second_response_time,
-			second_cache_status = updates.second_cache_status,
-			second_content_length = updates.second_content_length,
-			second_headers = updates.second_headers::jsonb,
-			second_dns_lookup_time = updates.second_dns_lookup_time,
-			second_tcp_connection_time = updates.second_tcp_connection_time,
-			second_tls_handshake_time = updates.second_tls_handshake_time,
-			second_ttfb = updates.second_ttfb,
-			second_content_transfer_time = updates.second_content_transfer_time,
-			retry_count = updates.retry_count,
-			cache_check_attempts = updates.cache_check_attempts::jsonb
-		FROM (
-			SELECT
-				unnest($1::text[]) AS id,
-				unnest($2::timestamptz[]) AS completed_at,
-				unnest($3::integer[]) AS status_code,
-				unnest($4::bigint[]) AS response_time,
-				unnest($5::text[]) AS cache_status,
-				unnest($6::text[]) AS content_type,
-				unnest($7::bigint[]) AS content_length,
-				unnest($8::text[]) AS headers,
-				unnest($9::text[]) AS redirect_url,
-				unnest($10::bigint[]) AS dns_lookup_time,
-				unnest($11::bigint[]) AS tcp_connection_time,
-				unnest($12::bigint[]) AS tls_handshake_time,
-				unnest($13::bigint[]) AS ttfb,
-				unnest($14::bigint[]) AS content_transfer_time,
-				unnest($15::bigint[]) AS second_response_time,
-				unnest($16::text[]) AS second_cache_status,
-				unnest($17::bigint[]) AS second_content_length,
-				unnest($18::text[]) AS second_headers,
-				unnest($19::bigint[]) AS second_dns_lookup_time,
-				unnest($20::bigint[]) AS second_tcp_connection_time,
-				unnest($21::bigint[]) AS second_tls_handshake_time,
-				unnest($22::bigint[]) AS second_ttfb,
-				unnest($23::bigint[]) AS second_content_transfer_time,
-				unnest($24::integer[]) AS retry_count,
-				unnest($25::text[]) AS cache_check_attempts
-		) AS updates
-		WHERE tasks.id = updates.id
+		WITH task_updates AS (
+			UPDATE tasks
+			SET status = 'completed',
+				completed_at = updates.completed_at,
+				status_code = updates.status_code,
+				response_time = updates.response_time,
+				cache_status = updates.cache_status,
+				content_type = updates.content_type,
+				content_length = updates.content_length,
+				headers = updates.headers::jsonb,
+				redirect_url = updates.redirect_url,
+				dns_lookup_time = updates.dns_lookup_time,
+				tcp_connection_time = updates.tcp_connection_time,
+				tls_handshake_time = updates.tls_handshake_time,
+				ttfb = updates.ttfb,
+				content_transfer_time = updates.content_transfer_time,
+				second_response_time = updates.second_response_time,
+				second_cache_status = updates.second_cache_status,
+				second_content_length = updates.second_content_length,
+				second_headers = updates.second_headers::jsonb,
+				second_dns_lookup_time = updates.second_dns_lookup_time,
+				second_tcp_connection_time = updates.second_tcp_connection_time,
+				second_tls_handshake_time = updates.second_tls_handshake_time,
+				second_ttfb = updates.second_ttfb,
+				second_content_transfer_time = updates.second_content_transfer_time,
+				retry_count = updates.retry_count,
+				cache_check_attempts = updates.cache_check_attempts::jsonb
+			FROM (
+				SELECT
+					unnest($1::text[]) AS id,
+					unnest($2::timestamptz[]) AS completed_at,
+					unnest($3::integer[]) AS status_code,
+					unnest($4::bigint[]) AS response_time,
+					unnest($5::text[]) AS cache_status,
+					unnest($6::text[]) AS content_type,
+					unnest($7::bigint[]) AS content_length,
+					unnest($8::text[]) AS headers,
+					unnest($9::text[]) AS redirect_url,
+					unnest($10::bigint[]) AS dns_lookup_time,
+					unnest($11::bigint[]) AS tcp_connection_time,
+					unnest($12::bigint[]) AS tls_handshake_time,
+					unnest($13::bigint[]) AS ttfb,
+					unnest($14::bigint[]) AS content_transfer_time,
+					unnest($15::bigint[]) AS second_response_time,
+					unnest($16::text[]) AS second_cache_status,
+					unnest($17::bigint[]) AS second_content_length,
+					unnest($18::text[]) AS second_headers,
+					unnest($19::bigint[]) AS second_dns_lookup_time,
+					unnest($20::bigint[]) AS second_tcp_connection_time,
+					unnest($21::bigint[]) AS second_tls_handshake_time,
+					unnest($22::bigint[]) AS second_ttfb,
+					unnest($23::bigint[]) AS second_content_transfer_time,
+					unnest($24::integer[]) AS retry_count,
+					unnest($25::text[]) AS cache_check_attempts
+			) AS updates
+			WHERE tasks.id = updates.id
+			RETURNING tasks.job_id
+		),
+		job_counts AS (
+			SELECT job_id, COUNT(*) as completed_count
+			FROM task_updates
+			GROUP BY job_id
+		)
+		UPDATE jobs
+		SET running_tasks = GREATEST(0, running_tasks - job_counts.completed_count)
+		FROM job_counts
+		WHERE jobs.id = job_counts.job_id
 	`
 
-	result, err := tx.ExecContext(ctx, query,
+	_, err := tx.ExecContext(ctx, query,
 		pq.Array(ids),
 		pq.Array(completedAts),
 		pq.Array(statusCodes),
@@ -651,11 +664,9 @@ func (bm *BatchManager) batchUpdateCompleted(ctx context.Context, tx *sql.Tx, ta
 		return err
 	}
 
-	rowsAffected, _ := result.RowsAffected()
 	log.Debug().
 		Int("tasks_count", len(tasks)).
-		Int64("rows_affected", rowsAffected).
-		Msg("Batch updated completed tasks")
+		Msg("Batch updated completed tasks and decremented running_tasks")
 
 	return nil
 }
@@ -681,23 +692,35 @@ func (bm *BatchManager) batchUpdateFailed(ctx context.Context, tx *sql.Tx, tasks
 	}
 
 	query := `
-		UPDATE tasks
-		SET status = updates.status,
-			completed_at = updates.completed_at,
-			error = updates.error,
-			retry_count = updates.retry_count
-		FROM (
-			SELECT
-				unnest($1::text[]) AS id,
-				unnest($2::text[]) AS status,
-				unnest($3::timestamptz[]) AS completed_at,
-				unnest($4::text[]) AS error,
-				unnest($5::integer[]) AS retry_count
-		) AS updates
-		WHERE tasks.id = updates.id
+		WITH task_updates AS (
+			UPDATE tasks
+			SET status = updates.status,
+				completed_at = updates.completed_at,
+				error = updates.error,
+				retry_count = updates.retry_count
+			FROM (
+				SELECT
+					unnest($1::text[]) AS id,
+					unnest($2::text[]) AS status,
+					unnest($3::timestamptz[]) AS completed_at,
+					unnest($4::text[]) AS error,
+					unnest($5::integer[]) AS retry_count
+			) AS updates
+			WHERE tasks.id = updates.id
+			RETURNING tasks.job_id
+		),
+		job_counts AS (
+			SELECT job_id, COUNT(*) as failed_count
+			FROM task_updates
+			GROUP BY job_id
+		)
+		UPDATE jobs
+		SET running_tasks = GREATEST(0, running_tasks - job_counts.failed_count)
+		FROM job_counts
+		WHERE jobs.id = job_counts.job_id
 	`
 
-	result, err := tx.ExecContext(ctx, query,
+	_, err := tx.ExecContext(ctx, query,
 		pq.Array(ids),
 		pq.Array(statuses),
 		pq.Array(completedAts),
@@ -709,11 +732,9 @@ func (bm *BatchManager) batchUpdateFailed(ctx context.Context, tx *sql.Tx, tasks
 		return err
 	}
 
-	rowsAffected, _ := result.RowsAffected()
 	log.Debug().
 		Int("tasks_count", len(tasks)).
-		Int64("rows_affected", rowsAffected).
-		Msg("Batch updated failed tasks")
+		Msg("Batch updated failed tasks and decremented running_tasks")
 
 	return nil
 }
@@ -730,21 +751,31 @@ func (bm *BatchManager) batchUpdateSkipped(ctx context.Context, tx *sql.Tx, task
 	}
 
 	query := `
-		UPDATE tasks
-		SET status = 'skipped'
-		WHERE id = ANY($1::text[])
+		WITH task_updates AS (
+			UPDATE tasks
+			SET status = 'skipped'
+			WHERE id = ANY($1::text[])
+			RETURNING job_id
+		),
+		job_counts AS (
+			SELECT job_id, COUNT(*) as skipped_count
+			FROM task_updates
+			GROUP BY job_id
+		)
+		UPDATE jobs
+		SET running_tasks = GREATEST(0, running_tasks - job_counts.skipped_count)
+		FROM job_counts
+		WHERE jobs.id = job_counts.job_id
 	`
 
-	result, err := tx.ExecContext(ctx, query, pq.Array(ids))
+	_, err := tx.ExecContext(ctx, query, pq.Array(ids))
 	if err != nil {
 		return err
 	}
 
-	rowsAffected, _ := result.RowsAffected()
 	log.Debug().
 		Int("tasks_count", len(tasks)).
-		Int64("rows_affected", rowsAffected).
-		Msg("Batch updated skipped tasks")
+		Msg("Batch updated skipped tasks and decremented running_tasks")
 
 	return nil
 }
@@ -767,20 +798,32 @@ func (bm *BatchManager) batchUpdatePending(ctx context.Context, tx *sql.Tx, task
 	}
 
 	query := `
-		UPDATE tasks
-		SET status = 'pending',
-		    retry_count = updates.retry_count,
-		    started_at = updates.started_at
-		FROM (
-			SELECT
-				unnest($1::text[]) AS id,
-				unnest($2::int[]) AS retry_count,
-				unnest($3::timestamptz[]) AS started_at
-		) AS updates
-		WHERE tasks.id = updates.id
+		WITH task_updates AS (
+			UPDATE tasks
+			SET status = 'pending',
+			    retry_count = updates.retry_count,
+			    started_at = updates.started_at
+			FROM (
+				SELECT
+					unnest($1::text[]) AS id,
+					unnest($2::int[]) AS retry_count,
+					unnest($3::timestamptz[]) AS started_at
+			) AS updates
+			WHERE tasks.id = updates.id
+			RETURNING tasks.job_id
+		),
+		job_counts AS (
+			SELECT job_id, COUNT(*) as retried_count
+			FROM task_updates
+			GROUP BY job_id
+		)
+		UPDATE jobs
+		SET running_tasks = GREATEST(0, running_tasks - job_counts.retried_count)
+		FROM job_counts
+		WHERE jobs.id = job_counts.job_id
 	`
 
-	result, err := tx.ExecContext(ctx, query,
+	_, err := tx.ExecContext(ctx, query,
 		pq.Array(ids),
 		pq.Array(retryCounts),
 		pq.Array(startedAts),
@@ -790,11 +833,9 @@ func (bm *BatchManager) batchUpdatePending(ctx context.Context, tx *sql.Tx, task
 		return err
 	}
 
-	rowsAffected, _ := result.RowsAffected()
 	log.Debug().
 		Int("tasks_count", len(tasks)).
-		Int64("rows_affected", rowsAffected).
-		Msg("Batch updated pending tasks (retries)")
+		Msg("Batch updated pending tasks (retries) and decremented running_tasks")
 
 	return nil
 }
