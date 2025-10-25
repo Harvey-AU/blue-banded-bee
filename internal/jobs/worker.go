@@ -164,6 +164,14 @@ func NewWorkerPool(sqlDB *sql.DB, dbQueue DbQueueInterface, crawler CrawlerInter
 func (wp *WorkerPool) Start(ctx context.Context) {
 	log.Info().Int("workers", wp.numWorkers).Msg("Starting worker pool")
 
+	// Reconcile running_tasks counters before starting workers
+	// This prevents capacity leaks from deployments, crashes, or migration timing
+	if err := wp.reconcileRunningTaskCounters(ctx); err != nil {
+		sentry.CaptureException(err)
+		log.Error().Err(err).Msg("Failed to reconcile running_tasks counters - workers may be blocked")
+		// Continue startup even if reconciliation fails (logged for monitoring)
+	}
+
 	for i := 0; i < wp.numWorkers; i++ {
 		i := i
 		wp.wg.Add(1)
@@ -208,6 +216,106 @@ func (wp *WorkerPool) Stop() {
 		}
 		log.Debug().Msg("Worker pool stopped")
 	}
+}
+
+// reconcileRunningTaskCounters resets running_tasks to match actual task status
+// This fixes counter leaks from:
+// - Deployment race conditions (tasks completing during graceful shutdown)
+// - Crash recovery (batch manager unable to flush)
+// - Migration backfill timing (tasks counted as running but completed before new code started)
+func (wp *WorkerPool) reconcileRunningTaskCounters(ctx context.Context) error {
+	log.Info().Msg("Reconciling running_tasks counters with actual task status")
+
+	// Atomic query: Reset all running_tasks based on current task.status = 'running'
+	// Returns jobs that had mismatched counters for observability
+	query := `
+		WITH actual_counts AS (
+			SELECT
+				job_id,
+				COUNT(*) as actual_running
+			FROM tasks
+			WHERE status = 'running'
+			GROUP BY job_id
+		),
+		reconciled_jobs AS (
+			UPDATE jobs
+			SET running_tasks = COALESCE(ac.actual_running, 0)
+			FROM actual_counts ac
+			WHERE jobs.id = ac.job_id
+			  AND jobs.status IN ('running', 'pending')
+			  AND jobs.running_tasks != COALESCE(ac.actual_running, 0)
+			RETURNING
+				jobs.id,
+				jobs.running_tasks as old_value,
+				COALESCE(ac.actual_running, 0) as new_value
+		),
+		zero_out_jobs AS (
+			UPDATE jobs
+			SET running_tasks = 0
+			WHERE status IN ('running', 'pending')
+			  AND running_tasks > 0
+			  AND id NOT IN (SELECT job_id FROM actual_counts)
+			RETURNING
+				id,
+				running_tasks as old_value,
+				0 as new_value
+		)
+		SELECT
+			id,
+			old_value,
+			new_value,
+			old_value - new_value as leaked_tasks
+		FROM (
+			SELECT * FROM reconciled_jobs
+			UNION ALL
+			SELECT * FROM zero_out_jobs
+		) combined
+		ORDER BY leaked_tasks DESC
+	`
+
+	rows, err := wp.db.QueryContext(ctx, query)
+	if err != nil {
+		return fmt.Errorf("failed to reconcile running_tasks counters: %w", err)
+	}
+	defer rows.Close()
+
+	totalLeaked := 0
+	jobsFixed := 0
+
+	for rows.Next() {
+		var jobID string
+		var oldValue, newValue, leaked int
+
+		if err := rows.Scan(&jobID, &oldValue, &newValue, &leaked); err != nil {
+			log.Warn().Err(err).Msg("Failed to scan reconciliation result")
+			continue
+		}
+
+		totalLeaked += leaked
+		jobsFixed++
+
+		log.Info().
+			Str("job_id", jobID).
+			Int("old_counter", oldValue).
+			Int("actual_running", newValue).
+			Int("leaked_tasks", leaked).
+			Msg("Reconciled running_tasks counter")
+	}
+
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("error reading reconciliation results: %w", err)
+	}
+
+	if totalLeaked > 0 {
+		log.Warn().
+			Int("total_leaked_tasks", totalLeaked).
+			Int("jobs_fixed", jobsFixed).
+			Msg("Running_tasks counters reconciled - capacity leak detected and fixed")
+	} else {
+		log.Info().Msg("Running_tasks counters already accurate - no reconciliation needed")
+	}
+
+	return nil
 }
 
 // WaitForJobs waits for all active jobs to complete
