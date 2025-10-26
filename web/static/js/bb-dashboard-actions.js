@@ -20,6 +20,20 @@ function setupDashboardActions() {
     handleDashboardAction(action, element);
   });
 
+  // Setup date range filter dropdown
+  const dateRangeSelect = document.getElementById("dateRange");
+  if (dateRangeSelect) {
+    dateRangeSelect.addEventListener("change", (event) => {
+      const range = event.target.value;
+      if (window.changeTimeRange) {
+        window.changeTimeRange(range);
+      } else if (window.dataBinder) {
+        window.dataBinder.currentRange = range;
+        window.dataBinder.refresh();
+      }
+    });
+  }
+
   console.log("Dashboard action handlers initialised");
 }
 

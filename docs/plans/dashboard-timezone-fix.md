@@ -383,13 +383,23 @@ User in AEDT (UTC+11) creates jobs at 9:25am local:
 
 ---
 
-## Next Steps for Webflow Dashboard
+## Frontend Integration Status
 
-To complete the integration:
+✅ **COMPLETE** - All filter options now available in dashboard.html:
 
-1. **Add new filter buttons** in Webflow dashboard UI
-2. **Reorder buttons** to: Last Hour | Today | Last 24 Hours | Yesterday | 7
-   Days | 30 Days | All Time
-3. **Wire up onclick handlers** to call `window.changeTimeRange(range)`
-4. **Test in production** with AEDT and other timezones
-5. **Update dashboard styling** to highlight active filter (optional)
+1. **Added new filter options** to date range dropdown
+   (dashboard.html:1426-1433)
+   - Last Hour
+   - Today (default)
+   - Last 24 Hours
+   - Yesterday
+   - Last 7 Days
+   - Last 30 Days
+   - Last 90 Days
+   - All Time
+
+2. **Wired up event handler** in bb-dashboard-actions.js (lines 24-35)
+   - Dropdown changes call `changeTimeRange(range)` or fallback to dataBinder
+   - Automatically refreshes dashboard with selected filter
+
+3. **Ready for testing** in production with AEDT and other timezones
