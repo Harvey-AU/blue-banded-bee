@@ -172,6 +172,13 @@ func (h *Handler) listJobs(w http.ResponseWriter, r *http.Request) {
 		timezone = "UTC"
 	}
 
+	logger.Debug().
+		Str("range", dateRange).
+		Str("timezone", timezone).
+		Int("limit", limit).
+		Int("offset", offset).
+		Msg("List jobs request with timezone")
+
 	// Get jobs from database
 	orgID := ""
 	if user.OrganisationID != nil {

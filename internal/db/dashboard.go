@@ -240,11 +240,23 @@ func (db *DB) ListJobs(organisationID string, limit, offset int, status, dateRan
 			argCount++
 			baseQuery += fmt.Sprintf(" AND j.created_at >= $%d", argCount)
 			args = append(args, *startDate)
+			log.Debug().
+				Str("range", dateRange).
+				Str("timezone", timezone).
+				Time("start_date", *startDate).
+				Str("start_utc", startDate.UTC().Format(time.RFC3339)).
+				Msg("Date range filter start")
 		}
 		if endDate != nil {
 			argCount++
 			baseQuery += fmt.Sprintf(" AND j.created_at <= $%d", argCount)
 			args = append(args, *endDate)
+			log.Debug().
+				Str("range", dateRange).
+				Str("timezone", timezone).
+				Time("end_date", *endDate).
+				Str("end_utc", endDate.UTC().Format(time.RFC3339)).
+				Msg("Date range filter end")
 		}
 	}
 
