@@ -561,7 +561,7 @@ func (bm *BatchManager) batchUpdateCompleted(ctx context.Context, tx *sql.Tx, ta
 	}
 
 	// Single UPDATE statement using unnest to batch update all tasks
-	// Also decrements running_tasks for affected jobs
+	// Note: running_tasks counter is decremented immediately via DecrementRunningTasks(), not here
 	query := `
 		WITH task_updates AS (
 			UPDATE tasks
@@ -619,17 +619,6 @@ func (bm *BatchManager) batchUpdateCompleted(ctx context.Context, tx *sql.Tx, ta
 					unnest($25::text[]) AS cache_check_attempts
 			) AS updates
 			WHERE tasks.id = updates.id
-			RETURNING tasks.job_id
-		),
-		job_counts AS (
-			SELECT job_id, COUNT(*) as completed_count
-			FROM task_updates
-			GROUP BY job_id
-		)
-		UPDATE jobs
-		SET running_tasks = GREATEST(0, running_tasks - job_counts.completed_count)
-		FROM job_counts
-		WHERE jobs.id = job_counts.job_id
 	`
 
 	_, err := tx.ExecContext(ctx, query,
@@ -666,7 +655,7 @@ func (bm *BatchManager) batchUpdateCompleted(ctx context.Context, tx *sql.Tx, ta
 
 	log.Debug().
 		Int("tasks_count", len(tasks)).
-		Msg("Batch updated completed tasks and decremented running_tasks")
+		Msg("Batch updated completed tasks")
 
 	return nil
 }
@@ -707,17 +696,6 @@ func (bm *BatchManager) batchUpdateFailed(ctx context.Context, tx *sql.Tx, tasks
 					unnest($5::integer[]) AS retry_count
 			) AS updates
 			WHERE tasks.id = updates.id
-			RETURNING tasks.job_id
-		),
-		job_counts AS (
-			SELECT job_id, COUNT(*) as failed_count
-			FROM task_updates
-			GROUP BY job_id
-		)
-		UPDATE jobs
-		SET running_tasks = GREATEST(0, running_tasks - job_counts.failed_count)
-		FROM job_counts
-		WHERE jobs.id = job_counts.job_id
 	`
 
 	_, err := tx.ExecContext(ctx, query,
@@ -734,7 +712,7 @@ func (bm *BatchManager) batchUpdateFailed(ctx context.Context, tx *sql.Tx, tasks
 
 	log.Debug().
 		Int("tasks_count", len(tasks)).
-		Msg("Batch updated failed tasks and decremented running_tasks")
+		Msg("Batch updated failed tasks")
 
 	return nil
 }
@@ -751,21 +729,9 @@ func (bm *BatchManager) batchUpdateSkipped(ctx context.Context, tx *sql.Tx, task
 	}
 
 	query := `
-		WITH task_updates AS (
-			UPDATE tasks
-			SET status = 'skipped'
-			WHERE id = ANY($1::text[])
-			RETURNING job_id
-		),
-		job_counts AS (
-			SELECT job_id, COUNT(*) as skipped_count
-			FROM task_updates
-			GROUP BY job_id
-		)
-		UPDATE jobs
-		SET running_tasks = GREATEST(0, running_tasks - job_counts.skipped_count)
-		FROM job_counts
-		WHERE jobs.id = job_counts.job_id
+		UPDATE tasks
+		SET status = 'skipped'
+		WHERE id = ANY($1::text[])
 	`
 
 	_, err := tx.ExecContext(ctx, query, pq.Array(ids))
@@ -775,7 +741,7 @@ func (bm *BatchManager) batchUpdateSkipped(ctx context.Context, tx *sql.Tx, task
 
 	log.Debug().
 		Int("tasks_count", len(tasks)).
-		Msg("Batch updated skipped tasks and decremented running_tasks")
+		Msg("Batch updated skipped tasks")
 
 	return nil
 }
@@ -810,17 +776,6 @@ func (bm *BatchManager) batchUpdatePending(ctx context.Context, tx *sql.Tx, task
 					unnest($3::timestamptz[]) AS started_at
 			) AS updates
 			WHERE tasks.id = updates.id
-			RETURNING tasks.job_id
-		),
-		job_counts AS (
-			SELECT job_id, COUNT(*) as retried_count
-			FROM task_updates
-			GROUP BY job_id
-		)
-		UPDATE jobs
-		SET running_tasks = GREATEST(0, running_tasks - job_counts.retried_count)
-		FROM job_counts
-		WHERE jobs.id = job_counts.job_id
 	`
 
 	_, err := tx.ExecContext(ctx, query,
@@ -835,7 +790,7 @@ func (bm *BatchManager) batchUpdatePending(ctx context.Context, tx *sql.Tx, task
 
 	log.Debug().
 		Int("tasks_count", len(tasks)).
-		Msg("Batch updated pending tasks (retries) and decremented running_tasks")
+		Msg("Batch updated pending tasks (retries)")
 
 	return nil
 }

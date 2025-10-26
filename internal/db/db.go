@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -29,34 +30,216 @@ func (d *DB) GetConfig() *Config {
 
 // Config holds PostgreSQL connection configuration
 type Config struct {
-	Host         string        // Database host
-	Port         string        // Database port
-	User         string        // Database user
-	Password     string        // Database password
-	Database     string        // Database name
-	SSLMode      string        // SSL mode (disable, require, verify-ca, verify-full)
-	MaxIdleConns int           // Maximum number of idle connections
-	MaxOpenConns int           // Maximum number of open connections
-	MaxLifetime  time.Duration // Maximum lifetime of a connection
-	DatabaseURL  string        // Original DATABASE_URL if used
+	Host            string        // Database host
+	Port            string        // Database port
+	User            string        // Database user
+	Password        string        // Database password
+	Database        string        // Database name
+	SSLMode         string        // SSL mode (disable, require, verify-ca, verify-full)
+	MaxIdleConns    int           // Maximum number of idle connections
+	MaxOpenConns    int           // Maximum number of open connections
+	MaxLifetime     time.Duration // Maximum lifetime of a connection
+	DatabaseURL     string        // Original DATABASE_URL if used
+	ApplicationName string        // Identifier for this application instance
+}
+
+func sanitizeAppName(name string) string {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return ""
+	}
+
+	var builder strings.Builder
+	builder.Grow(len(name))
+	for _, r := range name {
+		switch {
+		case r >= 'a' && r <= 'z',
+			r >= 'A' && r <= 'Z',
+			r >= '0' && r <= '9',
+			r == '-', r == '_', r == ':', r == '.':
+			builder.WriteRune(r)
+		default:
+			// Skip unsupported characters to keep connection strings safe
+		}
+	}
+
+	result := builder.String()
+	if result == "" {
+		return ""
+	}
+	return result
+}
+
+func trimAppName(name string) string {
+	const maxLen = 60 // postgres application_name limit is 64 bytes
+	if len(name) <= maxLen {
+		return name
+	}
+	return name[:maxLen]
+}
+
+func determineApplicationName() string {
+	if override := sanitizeAppName(os.Getenv("DB_APP_NAME")); override != "" {
+		return trimAppName(override)
+	}
+
+	base := "bbb"
+	if env := sanitizeAppName(strings.ToLower(strings.TrimSpace(os.Getenv("APP_ENV")))); env != "" {
+		base = fmt.Sprintf("bbb-%s", env)
+	}
+
+	var parts []string
+	if machineID := sanitizeAppName(os.Getenv("FLY_MACHINE_ID")); machineID != "" {
+		parts = append(parts, machineID)
+	}
+	if host, err := os.Hostname(); err == nil {
+		if hostName := sanitizeAppName(host); hostName != "" {
+			parts = append(parts, hostName)
+		}
+	}
+	parts = append(parts, time.Now().UTC().Format("20060102T150405"))
+
+	if len(parts) == 0 {
+		return trimAppName(base)
+	}
+
+	return trimAppName(fmt.Sprintf("%s:%s", base, strings.Join(parts, ":")))
+}
+
+func addConnSetting(connStr, key, value string) (string, bool) {
+	if key == "" || value == "" {
+		return connStr, false
+	}
+
+	trimmed := strings.TrimSpace(connStr)
+	if trimmed == "" {
+		return connStr, false
+	}
+
+	if strings.Contains(trimmed, key+"=") {
+		return trimmed, false
+	}
+
+	isURL := strings.HasPrefix(trimmed, "postgres://") || strings.HasPrefix(trimmed, "postgresql://")
+
+	if isURL {
+		parsed, err := url.Parse(trimmed)
+		if err == nil {
+			q := parsed.Query()
+			if q.Get(key) != "" {
+				return trimmed, false
+			}
+			q.Set(key, value)
+			parsed.RawQuery = q.Encode()
+			return parsed.String(), true
+		}
+
+		separator := "?"
+		if strings.Contains(trimmed, "?") {
+			separator = "&"
+		}
+		return trimmed + separator + key + "=" + url.QueryEscape(value), true
+	}
+
+	escaped := strings.ReplaceAll(value, "'", "")
+	if escaped == "" {
+		return trimmed, false
+	}
+	return trimmed + fmt.Sprintf(" %s=%s", key, escaped), true
+}
+
+func cleanupAppConnections(ctx context.Context, client *sql.DB, appName string) {
+	if client == nil || appName == "" {
+		return
+	}
+
+	base := appName
+	if idx := strings.Index(base, ":"); idx != -1 {
+		base = base[:idx]
+	}
+	if base == "" {
+		return
+	}
+
+	pattern := base + ":%"
+	if base == appName {
+		pattern = base
+	}
+
+	cleanupCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	query := `
+		SELECT COALESCE(SUM(CASE WHEN pg_terminate_backend(pid) THEN 1 ELSE 0 END), 0)
+		FROM pg_stat_activity
+		WHERE pid != pg_backend_pid()
+		  AND usename = current_user
+		  AND state = 'idle'
+		  AND application_name LIKE $1
+		  AND application_name <> $2
+	`
+
+	var terminated int64
+	if err := client.QueryRowContext(cleanupCtx, query, pattern, appName).Scan(&terminated); err != nil {
+		log.Warn().Err(err).Msg("Failed to terminate stale PostgreSQL connections for application")
+		return
+	}
+
+	if terminated > 0 {
+		log.Info().
+			Str("application_name", appName).
+			Int64("terminated_connections", terminated).
+			Msg("Terminated stale PostgreSQL connections from previous deployment")
+	} else {
+		log.Debug().
+			Str("application_name", appName).
+			Msg("No stale PostgreSQL connections found for termination")
+	}
 }
 
 // ConnectionString returns the PostgreSQL connection string
 func (c *Config) ConnectionString() string {
-	// If we have a DatabaseURL, use it directly
-	if c.DatabaseURL != "" {
-		return c.DatabaseURL
+	connStr := strings.TrimSpace(c.DatabaseURL)
+	if connStr != "" {
+		connStr, _ = addConnSetting(connStr, "idle_in_transaction_session_timeout", "30000")
+		connStr, _ = addConnSetting(connStr, "statement_timeout", "60000")
+		if strings.Contains(connStr, "pooler.supabase.com") {
+			if newStr, added := addConnSetting(connStr, "default_query_exec_mode", "simple_protocol"); added {
+				log.Info().Msg("Added minimal prepared statement disabling for pooler connection")
+				connStr = newStr
+			} else {
+				connStr = newStr
+			}
+		}
+		if c.ApplicationName != "" {
+			connStr, _ = addConnSetting(connStr, "application_name", c.ApplicationName)
+		}
+		return connStr
 	}
 
-	// Set default SSLMode if not specified
 	sslMode := c.SSLMode
 	if sslMode == "" {
 		sslMode = "require"
 	}
 
-	// Otherwise use the individual components
-	return fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
+	connStr = fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
 		c.Host, c.Port, c.User, c.Password, c.Database, sslMode)
+
+	connStr, _ = addConnSetting(connStr, "idle_in_transaction_session_timeout", "30000")
+	connStr, _ = addConnSetting(connStr, "statement_timeout", "60000")
+	if strings.Contains(connStr, "pooler.supabase.com") {
+		if newStr, added := addConnSetting(connStr, "default_query_exec_mode", "simple_protocol"); added {
+			log.Info().Msg("Added minimal prepared statement disabling for pooler connection")
+			connStr = newStr
+		} else {
+			connStr = newStr
+		}
+	}
+	if c.ApplicationName != "" {
+		connStr, _ = addConnSetting(connStr, "application_name", c.ApplicationName)
+	}
+
+	return connStr
 }
 
 // Validate checks if the configuration is valid
@@ -125,53 +308,11 @@ func New(config *Config) (*DB, error) {
 		config.MaxLifetime = 5 * time.Minute // Shorter lifetime for pooler compatibility
 	}
 
-	// Add connection configuration to prevent prepared statement conflicts
+	if config.ApplicationName == "" {
+		config.ApplicationName = determineApplicationName()
+	}
+
 	connStr := config.ConnectionString()
-
-	// Add idle-in-transaction timeout if not present
-	if !strings.Contains(connStr, "idle_in_transaction_session_timeout") {
-		if strings.HasPrefix(connStr, "postgres://") || strings.HasPrefix(connStr, "postgresql://") {
-			separator := "?"
-			if strings.Contains(connStr, "?") {
-				separator = "&"
-			}
-			connStr += separator + "idle_in_transaction_session_timeout=30000" // 30 seconds
-		} else {
-			connStr += " idle_in_transaction_session_timeout=30000" // 30 seconds
-		}
-	}
-
-	// Add statement timeout if not present
-	if !strings.Contains(connStr, "statement_timeout") {
-		// Check if we're using URL format or key=value format
-		if strings.HasPrefix(connStr, "postgres://") || strings.HasPrefix(connStr, "postgresql://") {
-			// URL format - use query parameters
-			separator := "?"
-			if strings.Contains(connStr, "?") {
-				separator = "&"
-			}
-			connStr += separator + "statement_timeout=60000" // 60 seconds
-		} else {
-			// Key=value format - append as another key=value pair
-			connStr += " statement_timeout=60000" // 60 seconds
-		}
-	}
-
-	// Add minimal prepared statement parameter for pooler connections
-	if strings.Contains(connStr, "pooler.supabase.com") {
-		if !strings.Contains(connStr, "default_query_exec_mode=") {
-			if strings.HasPrefix(connStr, "postgres://") || strings.HasPrefix(connStr, "postgresql://") {
-				separator := "?"
-				if strings.Contains(connStr, "?") {
-					separator = "&"
-				}
-				connStr += separator + "default_query_exec_mode=simple_protocol"
-			} else {
-				connStr += " default_query_exec_mode=simple_protocol"
-			}
-			log.Info().Msg("Added minimal prepared statement disabling for pooler connection")
-		}
-	}
 
 	log.Info().Msg("Opening PostgreSQL connection")
 
@@ -190,6 +331,8 @@ func New(config *Config) (*DB, error) {
 	if err := client.Ping(); err != nil {
 		return nil, fmt.Errorf("failed to ping PostgreSQL: %w", err)
 	}
+
+	cleanupAppConnections(context.Background(), client, config.ApplicationName)
 
 	// Schema is managed by Supabase migrations - no setup required
 
@@ -218,50 +361,37 @@ func InitFromEnv() (*DB, error) {
 			maxIdle = 1 // Development: minimal idle buffer
 		}
 
+		appName := determineApplicationName()
+
 		config := &Config{
-			DatabaseURL:  url,
-			MaxIdleConns: maxIdle,
-			MaxOpenConns: maxOpen,
-			MaxLifetime:  5 * time.Minute, // Shorter lifetime for pooler compatibility
+			DatabaseURL:     url,
+			MaxIdleConns:    maxIdle,
+			MaxOpenConns:    maxOpen,
+			MaxLifetime:     5 * time.Minute, // Shorter lifetime for pooler compatibility
+			ApplicationName: appName,
 		}
 
-		// Add statement timeout and disable prepared statements to prevent cache conflicts
-		if !strings.Contains(url, "statement_timeout") {
-			separator := "?"
-			if strings.Contains(url, "?") {
-				separator = "&"
-			}
-			url += separator + "statement_timeout=60000" // 60 seconds
-		}
+		url, _ = addConnSetting(url, "statement_timeout", "60000")
+		url, _ = addConnSetting(url, "idle_in_transaction_session_timeout", "30000")
 
-		if !strings.Contains(url, "idle_in_transaction_session_timeout") {
-			separator := "?"
-			if strings.Contains(url, "?") {
-				separator = "&"
-			}
-			url += separator + "idle_in_transaction_session_timeout=30000" // 30 seconds
-		}
-
-		// Add minimal prepared statement parameter for pooler connections
 		if strings.Contains(url, "pooler.supabase.com") {
-			if !strings.Contains(url, "default_query_exec_mode=") {
-				separator := "?"
-				if strings.Contains(url, "?") {
-					separator = "&"
-				}
-				url += separator + "default_query_exec_mode=simple_protocol"
+			if newStr, added := addConnSetting(url, "default_query_exec_mode", "simple_protocol"); added {
 				log.Info().Msg("Added minimal prepared statement disabling for pooler connection")
+				url = newStr
+			} else {
+				url = newStr
 			}
 
-			// Enable transaction pooling mode to prevent pool exhaustion
-			if !strings.Contains(url, "pgbouncer=") {
-				separator := "?"
-				if strings.Contains(url, "?") {
-					separator = "&"
-				}
-				url += separator + "pgbouncer=true"
+			if newStr, added := addConnSetting(url, "pgbouncer", "true"); added {
 				log.Info().Msg("Enabled transaction pooling mode (pgbouncer=true)")
+				url = newStr
+			} else {
+				url = newStr
 			}
+		}
+
+		if appName != "" {
+			url, _ = addConnSetting(url, "application_name", appName)
 		}
 
 		// Persist the augmented URL back to config for consistency
@@ -285,6 +415,8 @@ func InitFromEnv() (*DB, error) {
 			return nil, fmt.Errorf("failed to ping PostgreSQL via DATABASE_URL: %w", err)
 		}
 
+		cleanupAppConnections(context.Background(), client, config.ApplicationName)
+
 		// Schema is managed by Supabase migrations - no setup required
 
 		// Create the cache
@@ -307,16 +439,19 @@ func InitFromEnv() (*DB, error) {
 		maxIdle = 1 // Development: minimal idle buffer
 	}
 
+	appName := determineApplicationName()
+
 	config := &Config{
-		Host:         os.Getenv("POSTGRES_HOST"),
-		Port:         os.Getenv("POSTGRES_PORT"),
-		User:         os.Getenv("POSTGRES_USER"),
-		Password:     os.Getenv("POSTGRES_PASSWORD"),
-		Database:     os.Getenv("POSTGRES_DB"),
-		SSLMode:      os.Getenv("POSTGRES_SSL_MODE"),
-		MaxIdleConns: maxIdle,
-		MaxOpenConns: maxOpen,
-		MaxLifetime:  5 * time.Minute,
+		Host:            os.Getenv("POSTGRES_HOST"),
+		Port:            os.Getenv("POSTGRES_PORT"),
+		User:            os.Getenv("POSTGRES_USER"),
+		Password:        os.Getenv("POSTGRES_PASSWORD"),
+		Database:        os.Getenv("POSTGRES_DB"),
+		SSLMode:         os.Getenv("POSTGRES_SSL_MODE"),
+		MaxIdleConns:    maxIdle,
+		MaxOpenConns:    maxOpen,
+		MaxLifetime:     5 * time.Minute,
+		ApplicationName: appName,
 	}
 
 	// Use defaults if not set

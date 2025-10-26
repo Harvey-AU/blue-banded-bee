@@ -216,6 +216,10 @@ func (m *TaskPrepMock) UpdateTaskStatus(ctx context.Context, task *db.Task) erro
 	return nil
 }
 
+func (m *TaskPrepMock) DecrementRunningTasks(ctx context.Context, jobID string) error {
+	return nil
+}
+
 func (m *TaskPrepMock) EnqueueURLs(ctx context.Context, jobID string, pages []db.Page, sourceType string, sourceURL string) error {
 	return nil
 }

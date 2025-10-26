@@ -640,3 +640,25 @@ func (q *DbQueue) UpdateTaskStatus(ctx context.Context, task *Task) error {
 
 	return nil
 }
+
+// DecrementRunningTasks immediately decrements the running_tasks counter for a job.
+// This is called when a task completes to free up concurrency slots without waiting for batch flush.
+// The actual task field updates are still handled by the batch manager for efficiency.
+func (q *DbQueue) DecrementRunningTasks(ctx context.Context, jobID string) error {
+	if jobID == "" {
+		return fmt.Errorf("jobID cannot be empty")
+	}
+
+	query := `
+		UPDATE jobs
+		SET running_tasks = GREATEST(0, running_tasks - 1)
+		WHERE id = $1
+	`
+
+	_, err := q.db.client.ExecContext(ctx, query, jobID)
+	if err != nil {
+		return fmt.Errorf("failed to decrement running_tasks for job %s: %w", jobID, err)
+	}
+
+	return nil
+}
