@@ -120,8 +120,8 @@ function setupDashboardRefresh(dataBinder) {
           '<span class="status-dot"></span><span>Refreshing...</span>';
       }
 
-      // Get user's timezone (URL-encode to handle special characters like + in Etc/GMT+10)
-      const timezone = encodeURIComponent(getTimezone());
+      // Get user's timezone offset in minutes (e.g., -660 for AEDT/UTC+11)
+      const tzOffset = getTimezoneOffset();
 
       // Get current filter range (defaults to 'today')
       const currentRange = this.currentRange || "today";
@@ -130,7 +130,7 @@ function setupDashboardRefresh(dataBinder) {
       let data;
       try {
         data = await this.loadAndBind({
-          stats: `/v1/dashboard/stats?range=${currentRange}&tz=${timezone}`,
+          stats: `/v1/dashboard/stats?range=${currentRange}&tzOffset=${tzOffset}`,
         });
       } catch (error) {
         // Handle stats API errors gracefully
@@ -149,7 +149,7 @@ function setupDashboardRefresh(dataBinder) {
       let jobsResponse, jobs;
       try {
         jobsResponse = await this.fetchData(
-          `/v1/jobs?limit=10&range=${currentRange}&tz=${timezone}`
+          `/v1/jobs?limit=10&range=${currentRange}&tzOffset=${tzOffset}`
         );
         jobs = jobsResponse.jobs || [];
       } catch (error) {
@@ -383,16 +383,12 @@ function updateNetworkStatus() {
 }
 
 /**
- * Get user's timezone using browser API
- * @returns {string} IANA timezone string (e.g., "Australia/Sydney")
+ * Get user's timezone offset in minutes from UTC
+ * @returns {number} Offset in minutes (negative for ahead of UTC, positive for behind)
+ * Example: AEDT (UTC+11) returns -660
  */
-function getTimezone() {
-  try {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone;
-  } catch (error) {
-    console.warn("Failed to detect timezone, falling back to UTC:", error);
-    return "UTC";
-  }
+function getTimezoneOffset() {
+  return new Date().getTimezoneOffset();
 }
 
 /**

@@ -325,6 +325,173 @@ func (db *DB) ListJobs(organisationID string, limit, offset int, status, dateRan
 	return jobs, total, nil
 }
 
+// ListJobsWithOffset lists jobs for an organisation with timezone offset-based date filtering
+func (db *DB) ListJobsWithOffset(organisationID string, limit, offset int, status, dateRange string, tzOffsetMinutes int) ([]JobWithDomain, int, error) {
+	// Build the base query
+	baseQuery := `
+		FROM jobs j
+		LEFT JOIN domains d ON j.domain_id = d.id
+		WHERE j.organisation_id = $1`
+
+	args := []interface{}{organisationID}
+	argCount := 1
+
+	// Add status filter if provided
+	if status != "" {
+		argCount++
+		baseQuery += fmt.Sprintf(" AND j.status = $%d", argCount)
+		args = append(args, status)
+	}
+
+	// Add date range filter if provided
+	if dateRange != "" {
+		startDate, endDate := calculateDateRangeWithOffset(dateRange, tzOffsetMinutes)
+		if startDate != nil {
+			argCount++
+			baseQuery += fmt.Sprintf(" AND j.created_at >= $%d", argCount)
+			args = append(args, *startDate)
+		}
+		if endDate != nil {
+			argCount++
+			baseQuery += fmt.Sprintf(" AND j.created_at <= $%d", argCount)
+			args = append(args, *endDate)
+		}
+	}
+
+	// Get total count
+	countQuery := "SELECT COUNT(*) " + baseQuery
+	var total int
+	err := db.client.QueryRow(countQuery, args...).Scan(&total)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to count jobs: %w", err)
+	}
+
+	// Get jobs with pagination
+	selectQuery := `
+		SELECT
+			j.id, j.status, j.progress, j.total_tasks, j.completed_tasks,
+			j.failed_tasks, j.sitemap_tasks, j.found_tasks, j.created_at,
+			j.started_at, j.completed_at, d.name as domain_name,
+			j.duration_seconds, j.avg_time_per_task_seconds
+		` + baseQuery + `
+		ORDER BY j.created_at DESC
+		LIMIT $` + fmt.Sprintf("%d", argCount+1) + ` OFFSET $` + fmt.Sprintf("%d", argCount+2)
+
+	args = append(args, limit, offset)
+
+	rows, err := db.client.Query(selectQuery, args...)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to query jobs: %w", err)
+	}
+	defer rows.Close()
+
+	var jobs []JobWithDomain
+	for rows.Next() {
+		var job JobWithDomain
+		var startedAt, completedAt sql.NullString
+		var domainName sql.NullString
+
+		err := rows.Scan(
+			&job.ID, &job.Status, &job.Progress, &job.TotalTasks, &job.CompletedTasks,
+			&job.FailedTasks, &job.SitemapTasks, &job.FoundTasks, &job.CreatedAt,
+			&startedAt, &completedAt, &domainName,
+			&job.DurationSeconds, &job.AvgTimePerTaskSeconds,
+		)
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to scan job row")
+			continue
+		}
+
+		// Handle nullable fields
+		if startedAt.Valid {
+			job.StartedAt = &startedAt.String
+		}
+		if completedAt.Valid {
+			job.CompletedAt = &completedAt.String
+		}
+		if domainName.Valid {
+			job.Domains = &Domain{Name: domainName.String}
+		}
+
+		jobs = append(jobs, job)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, 0, fmt.Errorf("error iterating job rows: %w", err)
+	}
+
+	return jobs, total, nil
+}
+
+// calculateDateRangeWithOffset calculates date range using UTC offset in minutes
+// offsetMinutes: negative for ahead of UTC (e.g., -660 for AEDT/UTC+11), positive for behind
+func calculateDateRangeWithOffset(dateRange string, offsetMinutes int) (*time.Time, *time.Time) {
+	// Get current time in UTC
+	now := time.Now().UTC()
+
+	// Apply offset to get user's local time
+	// JavaScript getTimezoneOffset() returns negative for ahead of UTC, so we negate it
+	userNow := now.Add(time.Duration(-offsetMinutes) * time.Minute)
+
+	var startDate, endDate *time.Time
+
+	switch dateRange {
+	case "last_hour":
+		// Rolling 1 hour window
+		start := now.Add(-1 * time.Hour)
+		startDate = &start
+		endDate = &now
+	case "today":
+		// Calendar day boundaries in user's timezone
+		start := time.Date(userNow.Year(), userNow.Month(), userNow.Day(), 0, 0, 0, 0, time.UTC)
+		end := time.Date(userNow.Year(), userNow.Month(), userNow.Day(), 23, 59, 59, 999999999, time.UTC)
+		// Convert back to UTC for database comparison
+		startUTC := start.Add(time.Duration(offsetMinutes) * time.Minute)
+		endUTC := end.Add(time.Duration(offsetMinutes) * time.Minute)
+		startDate = &startUTC
+		endDate = &endUTC
+	case "last_24_hours":
+		// Rolling 24 hour window
+		start := now.Add(-24 * time.Hour)
+		startDate = &start
+		endDate = &now
+	case "yesterday":
+		// Previous calendar day in user's timezone
+		yesterday := userNow.AddDate(0, 0, -1)
+		start := time.Date(yesterday.Year(), yesterday.Month(), yesterday.Day(), 0, 0, 0, 0, time.UTC)
+		end := time.Date(yesterday.Year(), yesterday.Month(), yesterday.Day(), 23, 59, 59, 999999999, time.UTC)
+		// Convert back to UTC
+		startUTC := start.Add(time.Duration(offsetMinutes) * time.Minute)
+		endUTC := end.Add(time.Duration(offsetMinutes) * time.Minute)
+		startDate = &startUTC
+		endDate = &endUTC
+	case "7days", "last7":
+		start := now.AddDate(0, 0, -7)
+		startDate = &start
+		endDate = &now
+	case "30days", "last30":
+		start := now.AddDate(0, 0, -30)
+		startDate = &start
+		endDate = &now
+	case "last90":
+		start := now.AddDate(0, 0, -90)
+		startDate = &start
+		endDate = &now
+	case "all":
+		return nil, nil
+	default:
+		// Default to today
+		start := time.Date(userNow.Year(), userNow.Month(), userNow.Day(), 0, 0, 0, 0, time.UTC)
+		end := time.Date(userNow.Year(), userNow.Month(), userNow.Day(), 23, 59, 59, 999999999, time.UTC)
+		startUTC := start.Add(time.Duration(offsetMinutes) * time.Minute)
+		endUTC := end.Add(time.Duration(offsetMinutes) * time.Minute)
+		startDate = &startUTC
+		endDate = &endUTC
+	}
+
+	return startDate, endDate
+}
+
 // calculateDateRangeForList is a helper function for list queries
 func calculateDateRangeForList(dateRange, timezone string) (*time.Time, *time.Time) {
 	// Map common timezone aliases to canonical IANA names

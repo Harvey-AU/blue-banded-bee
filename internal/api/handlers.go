@@ -35,6 +35,7 @@ type DBClient interface {
 	CreateUser(userID, email string, fullName *string, orgName string) (*db.User, *db.Organisation, error)
 	GetOrganisation(organisationID string) (*db.Organisation, error)
 	ListJobs(organisationID string, limit, offset int, status, dateRange, timezone string) ([]db.JobWithDomain, int, error)
+	ListJobsWithOffset(organisationID string, limit, offset int, status, dateRange string, tzOffsetMinutes int) ([]db.JobWithDomain, int, error)
 }
 
 // Handler holds dependencies for API handlers

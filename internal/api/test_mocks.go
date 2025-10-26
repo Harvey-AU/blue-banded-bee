@@ -115,6 +115,14 @@ func (m *MockDBClient) ListJobs(organisationID string, limit, offset int, status
 	return args.Get(0).([]db.JobWithDomain), args.Int(1), args.Error(2)
 }
 
+func (m *MockDBClient) ListJobsWithOffset(organisationID string, limit, offset int, status, dateRange string, tzOffsetMinutes int) ([]db.JobWithDomain, int, error) {
+	args := m.Called(organisationID, limit, offset, status, dateRange, tzOffsetMinutes)
+	if args.Get(0) == nil {
+		return nil, args.Int(1), args.Error(2)
+	}
+	return args.Get(0).([]db.JobWithDomain), args.Int(1), args.Error(2)
+}
+
 func (m *MockDBClient) GetJobStats(organisationID string, startDate, endDate *time.Time) (*db.JobStats, error) {
 	args := m.Called(organisationID, startDate, endDate)
 	if args.Get(0) == nil {
