@@ -1040,6 +1040,10 @@ func (wp *WorkerPool) recoverStaleTasks(ctx context.Context) error {
 			Int("tasks_failed", totalFailed).
 			Int("batches_processed", batchNum).
 			Msg("Completed stale task recovery")
+
+		if err := wp.reconcileRunningTaskCounters(ctx); err != nil {
+			log.Error().Err(err).Msg("Failed to reconcile running task counters after stale task recovery")
+		}
 	}
 
 	return nil
@@ -1281,6 +1285,10 @@ func (wp *WorkerPool) recoverRunningJobs(ctx context.Context) error {
 			Int("count", len(recoveredJobs)).
 			Strs("job_ids", recoveredJobs).
 			Msg("Successfully recovered running jobs from restart")
+
+		if err := wp.reconcileRunningTaskCounters(ctx); err != nil {
+			log.Error().Err(err).Msg("Failed to reconcile running task counters after job recovery")
+		}
 	} else {
 		log.Debug().Msg("No running jobs found to recover")
 	}
