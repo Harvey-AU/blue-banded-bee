@@ -534,29 +534,22 @@ func (q *DbQueue) UpdateTaskStatus(ctx context.Context, task *Task) error {
 				Str("cache_check_attempts", string(cacheCheckAttempts)).
 				Msg("Updating task with JSONB fields")
 
-			// Decrement running_tasks when completing
+			// Update task fields only (running_tasks decremented separately via DecrementRunningTasks)
 			err = tx.QueryRowContext(ctx, `
-				WITH task_update AS (
-					UPDATE tasks
-					SET status = $1, completed_at = $2, status_code = $3,
-						response_time = $4, cache_status = $5, content_type = $6,
-						content_length = $7, headers = $8::jsonb, redirect_url = $9,
-						dns_lookup_time = $10, tcp_connection_time = $11, tls_handshake_time = $12,
-						ttfb = $13, content_transfer_time = $14,
-						second_response_time = $15, second_cache_status = $16,
-						second_content_length = $17, second_headers = $18::jsonb,
-						second_dns_lookup_time = $19, second_tcp_connection_time = $20,
-						second_tls_handshake_time = $21, second_ttfb = $22,
-						second_content_transfer_time = $23,
-						retry_count = $24, cache_check_attempts = $25::jsonb
-					WHERE id = $26
-					RETURNING job_id
-				)
-				UPDATE jobs
-				SET running_tasks = GREATEST(0, running_tasks - 1)
-				FROM task_update
-				WHERE jobs.id = task_update.job_id
-				RETURNING task_update.job_id
+				UPDATE tasks
+				SET status = $1, completed_at = $2, status_code = $3,
+					response_time = $4, cache_status = $5, content_type = $6,
+					content_length = $7, headers = $8::jsonb, redirect_url = $9,
+					dns_lookup_time = $10, tcp_connection_time = $11, tls_handshake_time = $12,
+					ttfb = $13, content_transfer_time = $14,
+					second_response_time = $15, second_cache_status = $16,
+					second_content_length = $17, second_headers = $18::jsonb,
+					second_dns_lookup_time = $19, second_tcp_connection_time = $20,
+					second_tls_handshake_time = $21, second_ttfb = $22,
+					second_content_transfer_time = $23,
+					retry_count = $24, cache_check_attempts = $25::jsonb
+				WHERE id = $26
+				RETURNING job_id
 			`, task.Status, task.CompletedAt, task.StatusCode,
 				task.ResponseTime, task.CacheStatus, task.ContentType,
 				task.ContentLength, string(headers), task.RedirectURL,
@@ -570,52 +563,31 @@ func (q *DbQueue) UpdateTaskStatus(ctx context.Context, task *Task) error {
 				task.RetryCount, string(cacheCheckAttempts), task.ID).Scan(&jobID)
 
 		case "failed":
-			// Decrement running_tasks when failing
+			// Update task fields only (running_tasks decremented separately via DecrementRunningTasks)
 			err = tx.QueryRowContext(ctx, `
-				WITH task_update AS (
-					UPDATE tasks
-					SET status = $1, completed_at = $2, error = $3, retry_count = $4
-					WHERE id = $5
-					RETURNING job_id
-				)
-				UPDATE jobs
-				SET running_tasks = GREATEST(0, running_tasks - 1)
-				FROM task_update
-				WHERE jobs.id = task_update.job_id
-				RETURNING task_update.job_id
+				UPDATE tasks
+				SET status = $1, completed_at = $2, error = $3, retry_count = $4
+				WHERE id = $5
+				RETURNING job_id
 			`, task.Status, task.CompletedAt, task.Error, task.RetryCount, task.ID).Scan(&jobID)
 
 		case "skipped":
-			// Decrement running_tasks when skipping
+			// Update task fields only (running_tasks decremented separately via DecrementRunningTasks)
 			err = tx.QueryRowContext(ctx, `
-				WITH task_update AS (
-					UPDATE tasks
-					SET status = $1
-					WHERE id = $2
-					RETURNING job_id
-				)
-				UPDATE jobs
-				SET running_tasks = GREATEST(0, running_tasks - 1)
-				FROM task_update
-				WHERE jobs.id = task_update.job_id
-				RETURNING task_update.job_id
+				UPDATE tasks
+				SET status = $1
+				WHERE id = $2
+				RETURNING job_id
 			`, task.Status, task.ID).Scan(&jobID)
 
 		case "pending":
-			// Decrement running_tasks when returning to pending (retry)
+			// Update task fields only (running_tasks decremented separately via DecrementRunningTasks)
 			// The task will re-increment when claimed again
 			err = tx.QueryRowContext(ctx, `
-				WITH task_update AS (
-					UPDATE tasks
-					SET status = $1, retry_count = $2, started_at = $3
-					WHERE id = $4
-					RETURNING job_id
-				)
-				UPDATE jobs
-				SET running_tasks = GREATEST(0, running_tasks - 1)
-				FROM task_update
-				WHERE jobs.id = task_update.job_id
-				RETURNING task_update.job_id
+				UPDATE tasks
+				SET status = $1, retry_count = $2, started_at = $3
+				WHERE id = $4
+				RETURNING job_id
 			`, task.Status, task.RetryCount, task.StartedAt, task.ID).Scan(&jobID)
 
 		default:

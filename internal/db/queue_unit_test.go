@@ -261,10 +261,10 @@ func TestDbQueueUpdateTaskStatus(t *testing.T) {
 			},
 			setupMock: func(mock sqlmock.Sqlmock) {
 				mock.ExpectBegin()
-				// Now uses CTE with RETURNING to decrement running_tasks
+				// Simple UPDATE without CTE (running_tasks decremented separately via DecrementRunningTasks)
 				// Failed status has 5 params: status, completed_at, error, retry_count, id
 				rows := sqlmock.NewRows([]string{"job_id"}).AddRow("test-job")
-				mock.ExpectQuery(`WITH task_update AS.*UPDATE tasks.*SET status.*completed_at.*error.*retry_count.*WHERE id.*RETURNING job_id.*UPDATE jobs.*SET running_tasks = GREATEST.*RETURNING`).
+				mock.ExpectQuery(`UPDATE tasks SET status = .*, completed_at = .*, error = .*, retry_count = .* WHERE id = .* RETURNING job_id`).
 					WithArgs("failed", sqlmock.AnyArg(), "boom", 2, "task-2").
 					WillReturnRows(rows)
 				mock.ExpectCommit()

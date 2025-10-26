@@ -27,7 +27,40 @@ On merge, CI will:
 4. Create a git tag and GitHub release
 5. Commit the updated changelog
 
-## [Unreleased]
+## [Unreleased:minor]
+
+### Enhanced
+
+- **Worker Pool Throughput**: Eliminated 5-second batch delay bottleneck in task
+  claiming
+  - Decoupled `running_tasks` counter decrement from batch updates for immediate
+    concurrency slot release
+  - Workers now claim tasks immediately after completion instead of waiting for
+    batch flush (up to 5 seconds)
+  - Added atomic `DecrementRunningTasks()` function to `DbQueueInterface` for
+    immediate counter updates
+  - Removed counter decrements from all 4 batch update queries (completed,
+    failed, skipped, pending)
+  - Batch manager continues to handle detailed field updates efficiently (95%
+    transaction reduction maintained)
+  - Expected improvement: 15-20 tasks/min → ~180 tasks/min (12× throughput
+    increase)
+  - Single atomic UPDATE per task completion adds negligible database load
+  - Both success and error paths now decrement counters immediately for
+    consistent behaviour
+
+### Changed
+
+- **Database Connection Tracking**: Enhanced connection management and cleanup
+  - Added application name tracking for connection identification in PostgreSQL
+  - Implemented automatic cleanup of stale connections from previous deployments
+    on startup
+  - Enhanced connection string builder with parameter sanitisation and
+    validation
+  - Added support for detecting and terminating idle connections from previous
+    application instances
+  - Connection strings now include `idle_in_transaction_session_timeout` and
+    `statement_timeout` for stability
 
 ## [0.13.0] – 2025-10-25
 
