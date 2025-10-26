@@ -429,40 +429,41 @@ func calculateDateRangeWithOffset(dateRange string, offsetMinutes int) (*time.Ti
 	// Get current time in UTC
 	now := time.Now().UTC()
 
-	// Apply offset to get user's local time
-	// JavaScript getTimezoneOffset() returns negative for ahead of UTC, so we negate it
-	userNow := now.Add(time.Duration(-offsetMinutes) * time.Minute)
+	// Create a fixed offset location for user's timezone
+	// JavaScript returns negative for east of UTC, Go wants positive, so negate
+	userLoc := time.FixedZone("User", -offsetMinutes*60)
+
+	// Get current time in user's timezone
+	userNow := now.In(userLoc)
 
 	var startDate, endDate *time.Time
 
 	switch dateRange {
 	case "last_hour":
-		// Rolling 1 hour window
+		// Rolling 1 hour window in UTC
 		start := now.Add(-1 * time.Hour)
 		startDate = &start
 		endDate = &now
 	case "today":
-		// Calendar day boundaries in user's timezone
-		start := time.Date(userNow.Year(), userNow.Month(), userNow.Day(), 0, 0, 0, 0, time.UTC)
-		end := time.Date(userNow.Year(), userNow.Month(), userNow.Day(), 23, 59, 59, 999999999, time.UTC)
-		// Convert back to UTC for database comparison
-		startUTC := start.Add(time.Duration(offsetMinutes) * time.Minute)
-		endUTC := end.Add(time.Duration(offsetMinutes) * time.Minute)
+		// Calendar day boundaries in user's timezone, converted to UTC
+		startLocal := time.Date(userNow.Year(), userNow.Month(), userNow.Day(), 0, 0, 0, 0, userLoc)
+		endLocal := time.Date(userNow.Year(), userNow.Month(), userNow.Day(), 23, 59, 59, 999999999, userLoc)
+		startUTC := startLocal.UTC()
+		endUTC := endLocal.UTC()
 		startDate = &startUTC
 		endDate = &endUTC
 	case "last_24_hours":
-		// Rolling 24 hour window
+		// Rolling 24 hour window in UTC
 		start := now.Add(-24 * time.Hour)
 		startDate = &start
 		endDate = &now
 	case "yesterday":
-		// Previous calendar day in user's timezone
+		// Previous calendar day in user's timezone, converted to UTC
 		yesterday := userNow.AddDate(0, 0, -1)
-		start := time.Date(yesterday.Year(), yesterday.Month(), yesterday.Day(), 0, 0, 0, 0, time.UTC)
-		end := time.Date(yesterday.Year(), yesterday.Month(), yesterday.Day(), 23, 59, 59, 999999999, time.UTC)
-		// Convert back to UTC
-		startUTC := start.Add(time.Duration(offsetMinutes) * time.Minute)
-		endUTC := end.Add(time.Duration(offsetMinutes) * time.Minute)
+		startLocal := time.Date(yesterday.Year(), yesterday.Month(), yesterday.Day(), 0, 0, 0, 0, userLoc)
+		endLocal := time.Date(yesterday.Year(), yesterday.Month(), yesterday.Day(), 23, 59, 59, 999999999, userLoc)
+		startUTC := startLocal.UTC()
+		endUTC := endLocal.UTC()
 		startDate = &startUTC
 		endDate = &endUTC
 	case "7days", "last7":
@@ -481,10 +482,10 @@ func calculateDateRangeWithOffset(dateRange string, offsetMinutes int) (*time.Ti
 		return nil, nil
 	default:
 		// Default to today
-		start := time.Date(userNow.Year(), userNow.Month(), userNow.Day(), 0, 0, 0, 0, time.UTC)
-		end := time.Date(userNow.Year(), userNow.Month(), userNow.Day(), 23, 59, 59, 999999999, time.UTC)
-		startUTC := start.Add(time.Duration(offsetMinutes) * time.Minute)
-		endUTC := end.Add(time.Duration(offsetMinutes) * time.Minute)
+		startLocal := time.Date(userNow.Year(), userNow.Month(), userNow.Day(), 0, 0, 0, 0, userLoc)
+		endLocal := time.Date(userNow.Year(), userNow.Month(), userNow.Day(), 23, 59, 59, 999999999, userLoc)
+		startUTC := startLocal.UTC()
+		endUTC := endLocal.UTC()
 		startDate = &startUTC
 		endDate = &endUTC
 	}
