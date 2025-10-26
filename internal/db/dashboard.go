@@ -327,6 +327,21 @@ func (db *DB) ListJobs(organisationID string, limit, offset int, status, dateRan
 
 // calculateDateRangeForList is a helper function for list queries
 func calculateDateRangeForList(dateRange, timezone string) (*time.Time, *time.Time) {
+	// Map common timezone aliases to canonical IANA names
+	timezoneAliases := map[string]string{
+		"Australia/Melbourne": "Australia/Sydney", // Melbourne uses Sydney timezone (AEST/AEDT)
+		"Australia/ACT":       "Australia/Sydney", // ACT uses Sydney timezone
+		"Australia/Canberra":  "Australia/Sydney", // Canberra uses Sydney timezone
+		"Australia/NSW":       "Australia/Sydney", // NSW uses Sydney timezone
+		"Australia/Victoria":  "Australia/Sydney", // Victoria uses Sydney timezone
+	}
+
+	// Check if timezone needs aliasing
+	if canonical, exists := timezoneAliases[timezone]; exists {
+		log.Debug().Str("original", timezone).Str("canonical", canonical).Msg("Mapping timezone alias")
+		timezone = canonical
+	}
+
 	// Load timezone location, fall back to UTC if invalid
 	loc, err := time.LoadLocation(timezone)
 	if err != nil {
