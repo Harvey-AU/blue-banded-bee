@@ -19,7 +19,7 @@ func TestConfig_ConnectionString(t *testing.T) {
 			config: &Config{
 				DatabaseURL: "postgresql://user:pass@localhost:5432/mydb?sslmode=disable",
 			},
-			expected: "postgresql://user:pass@localhost:5432/mydb?sslmode=disable",
+			expected: "postgresql://user:pass@localhost:5432/mydb?idle_in_transaction_session_timeout=30000&sslmode=disable&statement_timeout=60000",
 		},
 		{
 			name: "with_individual_fields",
@@ -31,7 +31,7 @@ func TestConfig_ConnectionString(t *testing.T) {
 				Database: "testdb",
 				SSLMode:  "disable",
 			},
-			expected: "host=localhost port=5432 user=testuser password=testpass dbname=testdb sslmode=disable",
+			expected: "host=localhost port=5432 user=testuser password=testpass dbname=testdb sslmode=disable idle_in_transaction_session_timeout=30000 statement_timeout=60000",
 		},
 		{
 			name: "database_url_takes_precedence",
@@ -40,7 +40,7 @@ func TestConfig_ConnectionString(t *testing.T) {
 				Host:        "ignored",
 				Port:        "ignored",
 			},
-			expected: "postgresql://priority@host/db",
+			expected: "postgresql://priority@host/db?idle_in_transaction_session_timeout=30000&statement_timeout=60000",
 		},
 	}
 

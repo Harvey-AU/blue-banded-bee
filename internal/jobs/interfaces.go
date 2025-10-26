@@ -21,6 +21,7 @@ type CrawlerInterface interface {
 type DbQueueInterface interface {
 	GetNextTask(ctx context.Context, jobID string) (*db.Task, error)
 	UpdateTaskStatus(ctx context.Context, task *db.Task) error
+	DecrementRunningTasks(ctx context.Context, jobID string) error
 	Execute(ctx context.Context, fn func(*sql.Tx) error) error
 	ExecuteMaintenance(ctx context.Context, fn func(*sql.Tx) error) error
 }

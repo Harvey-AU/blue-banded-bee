@@ -166,6 +166,10 @@ func (m *ClaimTaskMock) UpdateTaskStatus(ctx context.Context, task *db.Task) err
 	return nil
 }
 
+func (m *ClaimTaskMock) DecrementRunningTasks(ctx context.Context, jobID string) error {
+	return nil
+}
+
 func (m *ClaimTaskMock) Execute(ctx context.Context, fn func(*sql.Tx) error) error {
 	return nil
 }

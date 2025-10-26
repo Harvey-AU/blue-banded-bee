@@ -1671,7 +1671,15 @@ func (wp *WorkerPool) handleTaskError(ctx context.Context, task *db.Task, taskEr
 			Msg("Task failed permanently")
 	}
 
-	// Queue task update for batch processing
+	// Immediately decrement running_tasks to free concurrency slot
+	// This allows workers to claim new tasks without waiting for batch flush
+	if err := wp.dbQueue.DecrementRunningTasks(ctx, task.JobID); err != nil {
+		log.Error().Err(err).Str("job_id", task.JobID).Str("task_id", task.ID).
+			Msg("Failed to decrement running_tasks counter")
+		// Don't return error - batch update will eventually sync the counter
+	}
+
+	// Queue task update for batch processing (detailed field updates)
 	wp.batchManager.QueueTaskUpdate(task)
 
 	return nil
@@ -1756,7 +1764,15 @@ func (wp *WorkerPool) handleTaskSuccess(ctx context.Context, task *db.Task, resu
 		}
 	}
 
-	// Queue task update for batch processing
+	// Immediately decrement running_tasks to free concurrency slot
+	// This allows workers to claim new tasks without waiting for batch flush
+	if err := wp.dbQueue.DecrementRunningTasks(ctx, task.JobID); err != nil {
+		log.Error().Err(err).Str("job_id", task.JobID).Str("task_id", task.ID).
+			Msg("Failed to decrement running_tasks counter")
+		// Don't return error - batch update will eventually sync the counter
+	}
+
+	// Queue task update for batch processing (detailed field updates)
 	wp.batchManager.QueueTaskUpdate(task)
 
 	// Evaluate job performance for scaling

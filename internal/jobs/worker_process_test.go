@@ -84,10 +84,11 @@ func (m *MockCrawler) GetUserAgent() string {
 
 // MockDbQueue implements a minimal DbQueue interface for testing
 type MockDbQueue struct {
-	GetNextTaskFunc        func(ctx context.Context, jobID string) (*db.Task, error)
-	UpdateTaskStatusFunc   func(ctx context.Context, task *db.Task) error
-	ExecuteFunc            func(ctx context.Context, fn func(*sql.Tx) error) error
-	ExecuteMaintenanceFunc func(ctx context.Context, fn func(*sql.Tx) error) error
+	GetNextTaskFunc           func(ctx context.Context, jobID string) (*db.Task, error)
+	UpdateTaskStatusFunc      func(ctx context.Context, task *db.Task) error
+	DecrementRunningTasksFunc func(ctx context.Context, jobID string) error
+	ExecuteFunc               func(ctx context.Context, fn func(*sql.Tx) error) error
+	ExecuteMaintenanceFunc    func(ctx context.Context, fn func(*sql.Tx) error) error
 }
 
 func (m *MockDbQueue) GetNextTask(ctx context.Context, jobID string) (*db.Task, error) {
@@ -100,6 +101,13 @@ func (m *MockDbQueue) GetNextTask(ctx context.Context, jobID string) (*db.Task, 
 func (m *MockDbQueue) UpdateTaskStatus(ctx context.Context, task *db.Task) error {
 	if m.UpdateTaskStatusFunc != nil {
 		return m.UpdateTaskStatusFunc(ctx, task)
+	}
+	return nil
+}
+
+func (m *MockDbQueue) DecrementRunningTasks(ctx context.Context, jobID string) error {
+	if m.DecrementRunningTasksFunc != nil {
+		return m.DecrementRunningTasksFunc(ctx, jobID)
 	}
 	return nil
 }

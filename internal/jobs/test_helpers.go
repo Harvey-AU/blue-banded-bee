@@ -78,6 +78,10 @@ func (m *simpleDbQueueMock) UpdateTaskStatus(ctx context.Context, task *db.Task)
 	return nil
 }
 
+func (m *simpleDbQueueMock) DecrementRunningTasks(ctx context.Context, jobID string) error {
+	return nil
+}
+
 func (m *simpleDbQueueMock) Execute(ctx context.Context, fn func(*sql.Tx) error) error {
 	return nil
 }
