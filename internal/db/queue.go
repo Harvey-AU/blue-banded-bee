@@ -621,15 +621,25 @@ func (q *DbQueue) DecrementRunningTasks(ctx context.Context, jobID string) error
 		return fmt.Errorf("jobID cannot be empty")
 	}
 
+	log.Debug().Str("job_id", jobID).Msg("DecrementRunningTasks called")
+
 	query := `
 		UPDATE jobs
 		SET running_tasks = GREATEST(0, running_tasks - 1)
 		WHERE id = $1
 	`
 
-	_, err := q.db.client.ExecContext(ctx, query, jobID)
+	result, err := q.db.client.ExecContext(ctx, query, jobID)
 	if err != nil {
+		log.Error().Err(err).Str("job_id", jobID).Msg("DecrementRunningTasks database error")
 		return fmt.Errorf("failed to decrement running_tasks for job %s: %w", jobID, err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		log.Error().Err(err).Str("job_id", jobID).Msg("DecrementRunningTasks failed to get rows affected")
+	} else {
+		log.Debug().Str("job_id", jobID).Int64("rows_affected", rowsAffected).Msg("DecrementRunningTasks executed")
 	}
 
 	return nil
