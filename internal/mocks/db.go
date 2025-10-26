@@ -105,6 +105,19 @@ func (m *MockDB) ListJobs(organisationID string, limit, offset int, status, date
 	return jobs, total, args.Error(2)
 }
 
+func (m *MockDB) ListJobsWithOffset(organisationID string, limit, offset int, status, dateRange string, tzOffsetMinutes int) ([]db.JobWithDomain, int, error) {
+	args := m.Called(organisationID, limit, offset, status, dateRange, tzOffsetMinutes)
+	var jobs []db.JobWithDomain
+	if v := args.Get(0); v != nil {
+		jobs = v.([]db.JobWithDomain)
+	}
+	total := 0
+	if v := args.Get(1); v != nil {
+		total = v.(int)
+	}
+	return jobs, total, args.Error(2)
+}
+
 // GetJobStats mocks the GetJobStats method
 func (m *MockDB) GetJobStats(organisationID string, startDate, endDate *time.Time) (*db.JobStats, error) {
 	args := m.Called(organisationID, startDate, endDate)

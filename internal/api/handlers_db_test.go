@@ -131,6 +131,9 @@ func (m *MockDBWithRealDB) GetOrganisation(organisationID string) (*db.Organisat
 func (m *MockDBWithRealDB) ListJobs(organisationID string, limit, offset int, status, dateRange, timezone string) ([]db.JobWithDomain, int, error) {
 	return nil, 0, nil
 }
+func (m *MockDBWithRealDB) ListJobsWithOffset(organisationID string, limit, offset int, status, dateRange string, tzOffsetMinutes int) ([]db.JobWithDomain, int, error) {
+	return nil, 0, nil
+}
 func (m *MockDBWithRealDB) GetSlowPages(organisationID string, startDate, endDate *time.Time) ([]db.SlowPage, error) {
 	return nil, nil
 }
