@@ -12,7 +12,7 @@ primary_region = 'syd'
   APP_ENV = "production"
 
 [deploy]
-  strategy = "immediate"
+  strategy = "rolling"
 
 [http_service]
   internal_port = 8080
