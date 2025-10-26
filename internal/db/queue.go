@@ -251,7 +251,7 @@ type Task struct {
 // Combines SELECT and UPDATE in a CTE for atomic claiming
 func (q *DbQueue) GetNextTask(ctx context.Context, jobID string) (*Task, error) {
 	var task Task
-	now := time.Now()
+	now := time.Now().UTC()
 
 	err := q.Execute(ctx, func(tx *sql.Tx) error {
 		// Use CTE to select and update in a single atomic query
@@ -397,7 +397,7 @@ func (q *DbQueue) EnqueueURLs(ctx context.Context, jobID string, pages []Page, s
 		`
 
 		// Insert each task with appropriate status
-		now := time.Now()
+		now := time.Now().UTC()
 		processedCount := 0
 		for _, page := range uniquePages {
 			if page.ID == 0 {
@@ -451,7 +451,7 @@ func (q *DbQueue) CleanupStuckJobs(ctx context.Context) error {
 		WHERE (status = $3 OR status = $4)
 		AND total_tasks > 0 
 		AND total_tasks = completed_tasks + failed_tasks
-	`, JobStatusCompleted, time.Now(), JobStatusPending, JobStatusRunning)
+	`, JobStatusCompleted, time.Now().UTC(), JobStatusPending, JobStatusRunning)
 
 	if err != nil {
 		span.SetTag("error", "true")
@@ -477,7 +477,7 @@ func (q *DbQueue) UpdateTaskStatus(ctx context.Context, task *Task) error {
 		return fmt.Errorf("cannot update nil task")
 	}
 
-	now := time.Now()
+	now := time.Now().UTC()
 
 	// Set appropriate timestamps based on status if not already set
 	if task.Status == "running" && task.StartedAt.IsZero() {

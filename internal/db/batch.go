@@ -145,7 +145,7 @@ func NewBatchManager(queue QueueExecutor) *BatchManager {
 func (bm *BatchManager) QueueTaskUpdate(task *Task) {
 	update := &TaskUpdate{
 		Task:      task,
-		UpdatedAt: time.Now(),
+		UpdatedAt: time.Now().UTC(),
 	}
 
 	select {
@@ -353,7 +353,7 @@ func (bm *BatchManager) flushTaskUpdates(ctx context.Context, updates []*TaskUpd
 		task := update.Task
 
 		// Set timestamps if not already set
-		now := time.Now()
+		now := time.Now().UTC()
 		if (task.Status == "completed" || task.Status == "failed") && task.CompletedAt.IsZero() {
 			task.CompletedAt = now
 		}

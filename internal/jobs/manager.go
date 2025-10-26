@@ -937,10 +937,10 @@ func (jm *JobManager) UpdateJobStatus(ctx context.Context, jobID string, status 
 		switch status {
 		case JobStatusCompleted:
 			query = "UPDATE jobs SET status = $1, completed_at = $2 WHERE id = $3"
-			args = []interface{}{string(status), time.Now(), jobID}
+			args = []interface{}{string(status), time.Now().UTC(), jobID}
 		case JobStatusRunning:
 			query = "UPDATE jobs SET status = $1, started_at = $2 WHERE id = $3"
-			args = []interface{}{string(status), time.Now(), jobID}
+			args = []interface{}{string(status), time.Now().UTC(), jobID}
 		default:
 			query = "UPDATE jobs SET status = $1 WHERE id = $2"
 			args = []interface{}{string(status), jobID}

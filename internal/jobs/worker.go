@@ -906,7 +906,7 @@ func (wp *WorkerPool) checkForPendingTasks(ctx context.Context) error {
 						status = $1,
 						started_at = CASE WHEN started_at IS NULL THEN $2 ELSE started_at END
 					WHERE id = $3 AND status = $4
-				`, JobStatusRunning, time.Now(), jobID, JobStatusPending)
+				`, JobStatusRunning, time.Now().UTC(), jobID, JobStatusPending)
 				return err
 			})
 
@@ -966,7 +966,7 @@ func (wp *WorkerPool) SetJobManager(jm *JobManager) {
 // Processes oldest tasks first, handles cancelled/failed jobs separately
 func (wp *WorkerPool) recoverStaleTasks(ctx context.Context) error {
 	const batchSize = 100
-	staleTime := time.Now().Add(-TaskStaleTimeout)
+	staleTime := time.Now().UTC().Add(-TaskStaleTimeout)
 
 	// STEP 1: Handle tasks from cancelled/failed jobs separately
 	// These should be marked as failed immediately, not retried
@@ -1077,7 +1077,7 @@ func (wp *WorkerPool) recoverTasksFromDeadJobs(ctx context.Context, staleTime ti
 						ORDER BY t.started_at ASC
 						LIMIT 100
 					)
-			`, TaskStatusFailed, "Job was cancelled or failed", time.Now(),
+			`, TaskStatusFailed, "Job was cancelled or failed", time.Now().UTC(),
 				TaskStatusRunning, staleTime, JobStatusCancelled, JobStatusFailed)
 
 			if err != nil {
@@ -1153,7 +1153,7 @@ func (wp *WorkerPool) recoverStaleBatch(ctx context.Context, staleTime time.Time
 			Msg("Processing stale task batch")
 
 		// Update tasks in this batch
-		now := time.Now()
+		now := time.Now().UTC()
 		for _, task := range tasks {
 			if task.retryCount >= MaxTaskRetries {
 				_, err = tx.ExecContext(ctx, `
@@ -1404,7 +1404,7 @@ func (wp *WorkerPool) CleanupStuckJobs(ctx context.Context) error {
 			WHERE (status = $3 OR status = $4)
 			AND total_tasks > 0
 			AND total_tasks = completed_tasks + failed_tasks
-		`, JobStatusCompleted, time.Now(), JobStatusPending, JobStatusRunning)
+		`, JobStatusCompleted, time.Now().UTC(), JobStatusPending, JobStatusRunning)
 
 		if err != nil {
 			return err
@@ -1442,7 +1442,7 @@ func (wp *WorkerPool) CleanupStuckJobs(ctx context.Context) error {
 					WHERE job_id = jobs.id
 				), created_at) < $6)
 			)
-		`, JobStatusFailed, time.Now(), JobStatusPending, time.Now().Add(-5*time.Minute), JobStatusRunning, time.Now().Add(-30*time.Minute))
+		`, JobStatusFailed, time.Now().UTC(), JobStatusPending, time.Now().UTC().Add(-5*time.Minute), JobStatusRunning, time.Now().UTC().Add(-30*time.Minute))
 
 		if err != nil {
 			return err
@@ -1618,7 +1618,7 @@ func (wp *WorkerPool) processDiscoveredLinks(ctx context.Context, task *Task, re
 
 // handleTaskError processes task failures with appropriate retry logic and status updates
 func (wp *WorkerPool) handleTaskError(ctx context.Context, task *db.Task, taskErr error) error {
-	now := time.Now()
+	now := time.Now().UTC()
 
 	// Check if this is a blocking error (403/429/503)
 	if isBlockingError(taskErr) {
@@ -1679,7 +1679,7 @@ func (wp *WorkerPool) handleTaskError(ctx context.Context, task *db.Task, taskEr
 
 // handleTaskSuccess processes successful task completion with metrics and database updates
 func (wp *WorkerPool) handleTaskSuccess(ctx context.Context, task *db.Task, result *crawler.CrawlResult) error {
-	now := time.Now()
+	now := time.Now().UTC()
 
 	// Mark as completed with basic metrics
 	task.Status = string(TaskStatusCompleted)
