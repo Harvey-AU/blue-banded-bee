@@ -36,7 +36,11 @@ func minInt(a, b int) int {
 }
 
 // startHealthMonitoring starts background monitoring for job completion and system health
-func startHealthMonitoring(pgDB *db.DB) {
+// It respects context cancellation for graceful shutdown
+// The WaitGroup must be marked Done when this function exits
+func startHealthMonitoring(ctx context.Context, wg *sync.WaitGroup, pgDB *db.DB) {
+	defer wg.Done() // Signal completion when exiting
+
 	completionTicker := time.NewTicker(30 * time.Second)
 	defer completionTicker.Stop()
 
@@ -231,8 +235,13 @@ func startHealthMonitoring(pgDB *db.DB) {
 	// Run initial checks
 	checkJobCompletion()
 
+	log.Info().Msg("Health monitoring started")
+
 	for {
 		select {
+		case <-ctx.Done():
+			log.Info().Msg("Health monitoring stopped")
+			return
 		case <-completionTicker.C:
 			checkJobCompletion()
 		case <-healthTicker.C:
@@ -380,7 +389,16 @@ func main() {
 		sentry.CaptureException(err)
 		log.Fatal().Err(err).Msg("Failed to connect to PostgreSQL database")
 	}
-	defer pgDB.Close()
+	// Defer DB close - will execute AFTER worker pool stops due to defer LIFO order
+	defer func() {
+		log.Info().Msg("Closing database connections")
+		// Give connections time to drain gracefully
+		time.Sleep(1 * time.Second)
+		if err := pgDB.Close(); err != nil {
+			log.Error().Err(err).Msg("Error closing database")
+		}
+		log.Info().Msg("Database closed")
+	}()
 
 	log.Info().Msg("Connected to PostgreSQL database")
 
@@ -428,12 +446,25 @@ func main() {
 	// Set the job manager in the worker pool for duplicate checking
 	workerPool.SetJobManager(jobsManager)
 
+	// Create context for background goroutines that need graceful shutdown
+	appCtx, appCancel := context.WithCancel(context.Background())
+	defer appCancel() // Ensure context is cancelled on exit
+
+	// WaitGroup to track background goroutines for clean shutdown
+	var backgroundWG sync.WaitGroup
+
 	// Start the worker pool
 	workerPool.Start(context.Background())
-	defer workerPool.Stop()
+	// Defer worker pool stop - will execute BEFORE database close due to defer LIFO order
+	defer func() {
+		log.Info().Msg("Stopping worker pool (waiting for in-flight tasks to complete)")
+		workerPool.Stop()
+		log.Info().Msg("Worker pool stopped - all tasks completed and batches flushed")
+	}()
 
-	// Start background health monitoring
-	go startHealthMonitoring(pgDB)
+	// Start background health monitoring with cancellable context
+	backgroundWG.Add(1)
+	go startHealthMonitoring(appCtx, &backgroundWG, pgDB)
 
 	// Create a rate limiter
 	limiter := newRateLimiter()
@@ -483,15 +514,29 @@ func main() {
 		log.Info().Msg("Shutting down server...")
 
 		// Create shutdown context with timeout
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-
+		// Allow enough time for:
+		// - In-flight crawls to complete (up to 2 min taskProcessingTimeout)
+		// - Batch updates to flush with retries (up to 10s)
+		// - Database connections to close cleanly
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 		defer cancel()
 
-		// Stop accepting new requests
+		// Step 1: Stop accepting new HTTP requests
 		if err := server.Shutdown(ctx); err != nil {
 			sentry.CaptureException(err)
 			log.Error().Err(err).Msg("Server forced to shutdown")
 		}
+
+		// Step 2: Cancel application context to stop background goroutines
+		// This signals health monitoring to stop
+		log.Info().Msg("Stopping background goroutines")
+		appCancel()
+
+		// Step 3: Wait for health monitoring to fully exit
+		// This ensures no DB queries are running before we close connections
+		log.Debug().Msg("Waiting for background goroutines to finish")
+		backgroundWG.Wait()
+		log.Info().Msg("All background goroutines stopped")
 
 		close(done)
 	}()
