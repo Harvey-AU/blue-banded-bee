@@ -31,8 +31,8 @@ type DbQueue struct {
 var ErrPoolSaturated = errors.New("database connection pool saturated")
 
 const (
-	defaultPoolWarnThreshold   = 0.80
-	defaultPoolRejectThreshold = 0.90
+	defaultPoolWarnThreshold   = 0.90
+	defaultPoolRejectThreshold = 0.95
 	poolLogCooldown            = 5 * time.Second
 )
 
