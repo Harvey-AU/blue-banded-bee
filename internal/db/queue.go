@@ -194,19 +194,7 @@ func (q *DbQueue) ensurePoolCapacity() error {
 			Int("max_open", maxOpen).
 			Float64("usage", usage).
 			Msg("DB pool nearing capacity")
-		sentry.WithScope(func(scope *sentry.Scope) {
-			scope.SetLevel(sentry.LevelInfo)
-			scope.SetTag("event_type", "db_pool")
-			scope.SetTag("state", "warn")
-			scope.SetContext("db_pool", map[string]interface{}{
-				"in_use":     stats.InUse,
-				"max_open":   maxOpen,
-				"idle":       stats.Idle,
-				"wait_count": stats.WaitCount,
-				"usage":      usage,
-			})
-			sentry.CaptureMessage("DB pool nearing capacity")
-		})
+		// Note: Not sending to Sentry to avoid noise - only capture actual rejections
 		q.lastWarnLog = time.Now()
 	}
 
