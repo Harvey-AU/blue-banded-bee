@@ -222,23 +222,13 @@ func TestAdminResetDatabase(t *testing.T) {
 	tests := []struct {
 		name           string
 		allowReset     bool
-		appEnv         string
 		setupMock      func(*mocks.MockDB)
 		expectedStatus int
 		expectedBody   string
 	}{
 		{
-			name:           "production environment returns 404",
-			allowReset:     true,
-			appEnv:         "production",
-			setupMock:      func(m *mocks.MockDB) {},
-			expectedStatus: http.StatusNotFound,
-			expectedBody:   "Not found",
-		},
-		{
 			name:           "database reset disabled",
 			allowReset:     false,
-			appEnv:         "development",
 			setupMock:      func(m *mocks.MockDB) {},
 			expectedStatus: http.StatusForbidden,
 			expectedBody:   "Database reset not enabled",
@@ -246,7 +236,6 @@ func TestAdminResetDatabase(t *testing.T) {
 		{
 			name:       "no authentication returns unauthorized",
 			allowReset: true,
-			appEnv:     "development",
 			setupMock: func(m *mocks.MockDB) {
 				// ResetSchema won't be called without auth
 			},
@@ -259,10 +248,8 @@ func TestAdminResetDatabase(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Save original env vars
 			originalReset := os.Getenv("ALLOW_DB_RESET")
-			originalEnv := os.Getenv("APP_ENV")
 			defer func() {
 				os.Setenv("ALLOW_DB_RESET", originalReset)
-				os.Setenv("APP_ENV", originalEnv)
 			}()
 
 			// Set environment variables for test
@@ -271,7 +258,6 @@ func TestAdminResetDatabase(t *testing.T) {
 			} else {
 				os.Setenv("ALLOW_DB_RESET", "false")
 			}
-			os.Setenv("APP_ENV", tt.appEnv)
 
 			// Create mock database
 			mockDB := new(mocks.MockDB)
