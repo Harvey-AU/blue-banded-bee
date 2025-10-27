@@ -18,13 +18,6 @@ func (h *Handler) AdminResetDatabase(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check if this is running in development environment
-	env := os.Getenv("APP_ENV")
-	if env == "production" {
-		NotFound(w, r, "Not found") // Return 404 in production to hide the endpoint
-		return
-	}
-
 	// Require explicit enablement
 	if os.Getenv("ALLOW_DB_RESET") != "true" {
 		Forbidden(w, r, "Database reset not enabled. Set ALLOW_DB_RESET=true to enable")
