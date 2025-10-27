@@ -1,5 +1,5 @@
--- Convert all TIMESTAMP columns to TIMESTAMPTZ for proper timezone handling
--- This ensures Go's time.Now().UTC() values are stored and retrieved correctly
+-- Convert top-level tables that don't participate in heavy FK relationships first.
+-- Jobs and tasks are handled in follow-up migrations to avoid long-lived locks.
 
 -- Domains table
 ALTER TABLE domains
@@ -18,41 +18,6 @@ ALTER TABLE organisations
 -- Pages table
 ALTER TABLE pages
   ALTER COLUMN created_at TYPE TIMESTAMPTZ USING created_at AT TIME ZONE 'UTC';
-
--- Jobs table - Need to drop generated columns first
-ALTER TABLE jobs
-  DROP COLUMN IF EXISTS duration_seconds,
-  DROP COLUMN IF EXISTS avg_time_per_task_seconds;
-
-ALTER TABLE jobs
-  ALTER COLUMN created_at TYPE TIMESTAMPTZ USING created_at AT TIME ZONE 'UTC',
-  ALTER COLUMN started_at TYPE TIMESTAMPTZ USING started_at AT TIME ZONE 'UTC',
-  ALTER COLUMN completed_at TYPE TIMESTAMPTZ USING completed_at AT TIME ZONE 'UTC';
-
--- Recreate generated columns with correct types
-ALTER TABLE jobs
-  ADD COLUMN duration_seconds INTEGER GENERATED ALWAYS AS (
-    CASE
-      WHEN started_at IS NOT NULL AND completed_at IS NOT NULL
-      THEN EXTRACT(EPOCH FROM (completed_at - started_at))::INTEGER
-      ELSE NULL
-    END
-  ) STORED;
-
-ALTER TABLE jobs
-  ADD COLUMN avg_time_per_task_seconds NUMERIC GENERATED ALWAYS AS (
-    CASE
-      WHEN started_at IS NOT NULL AND completed_at IS NOT NULL AND completed_tasks > 0
-      THEN EXTRACT(EPOCH FROM (completed_at - started_at))::NUMERIC / completed_tasks::NUMERIC
-      ELSE NULL
-    END
-  ) STORED;
-
--- Tasks table
-ALTER TABLE tasks
-  ALTER COLUMN created_at TYPE TIMESTAMPTZ USING created_at AT TIME ZONE 'UTC',
-  ALTER COLUMN started_at TYPE TIMESTAMPTZ USING started_at AT TIME ZONE 'UTC',
-  ALTER COLUMN completed_at TYPE TIMESTAMPTZ USING completed_at AT TIME ZONE 'UTC';
 
 -- Job share links table
 ALTER TABLE job_share_links
