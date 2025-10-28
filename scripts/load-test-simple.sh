@@ -257,7 +257,7 @@ create_job() {
     job_id=$(echo "$body" | jq -r '.data.id // .job.id // .id' 2>/dev/null || echo "unknown")
     echo -e "${GREEN}✓ Created job $job_id for $domain${NC}"
     echo "$batch_num,$domain,$job_id,$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> ./logs/load_test_jobs.log
-    ((JOBS_CREATED++))
+    JOBS_CREATED=$((JOBS_CREATED + 1))
   else
     echo -e "${RED}✗ Failed to create job for $domain (HTTP $http_code)${NC}"
     echo "$body" | jq '.' 2>/dev/null || echo "$body"
@@ -300,7 +300,7 @@ for ((batch=1; batch<=TOTAL_BATCHES; batch++)); do
   selected_domains=()
   for ((i=0; i<JOBS_PER_BATCH && domain_index<${#all_shuffled[@]}; i++)); do
     selected_domains+=("${all_shuffled[$domain_index]}")
-    ((domain_index++))
+    domain_index=$((domain_index + 1))
   done
 
   # Create jobs
