@@ -191,7 +191,7 @@ BEGIN
             'status_code_distribution', COALESCE(scd.distribution, '{}'::jsonb),
 
             -- Metadata
-            'calculated_at', NOW() AT TIME ZONE 'UTC',
+            'calculated_at', NOW(),
             'calculation_version', '3.0'
         ) INTO v_stats
         FROM task_stats
@@ -381,7 +381,7 @@ BEGIN
         ),
         'response_time_distribution', COALESCE(rtb.buckets, '{}'::jsonb),
         'status_code_distribution', COALESCE(scd.distribution, '{}'::jsonb),
-        'calculated_at', NOW() AT TIME ZONE 'UTC',
+        'calculated_at', NOW(),
         'calculation_version', '3.0'
     ) INTO v_stats
     FROM task_stats

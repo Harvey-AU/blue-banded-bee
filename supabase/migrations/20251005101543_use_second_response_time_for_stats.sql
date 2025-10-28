@@ -188,7 +188,7 @@ BEGIN
             'status_code_distribution', COALESCE(scd.distribution, '{}'::jsonb),
 
             -- Metadata
-            'calculated_at', NOW() AT TIME ZONE 'UTC',
+            'calculated_at', NOW(),
             'calculation_version', '2.0'
         ) INTO v_stats
         FROM task_stats

@@ -1,9 +1,6 @@
 -- Add stats column to jobs table for storing job completion statistics
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS stats JSONB;
 
--- Create index for common queries on stats
-CREATE INDEX IF NOT EXISTS idx_jobs_stats ON jobs USING GIN (stats);
-
 -- Function to calculate and store job statistics when job completes
 CREATE OR REPLACE FUNCTION calculate_job_stats()
 RETURNS TRIGGER AS $$
@@ -192,7 +189,7 @@ BEGIN
             'status_code_distribution', COALESCE(scd.distribution, '{}'::jsonb),
 
             -- Metadata
-            'calculated_at', NOW() AT TIME ZONE 'UTC',
+            'calculated_at', NOW(),
             'calculation_version', '1.0'
         ) INTO v_stats
         FROM task_stats
