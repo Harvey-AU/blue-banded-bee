@@ -453,19 +453,6 @@ func main() {
 	// WaitGroup to track background goroutines for clean shutdown
 	var backgroundWG sync.WaitGroup
 
-	// Start the worker pool
-	workerPool.Start(context.Background())
-	// Defer worker pool stop - will execute BEFORE database close due to defer LIFO order
-	defer func() {
-		log.Info().Msg("Stopping worker pool (waiting for in-flight tasks to complete)")
-		workerPool.Stop()
-		log.Info().Msg("Worker pool stopped - all tasks completed and batches flushed")
-	}()
-
-	// Start background health monitoring with cancellable context
-	backgroundWG.Add(1)
-	go startHealthMonitoring(appCtx, &backgroundWG, pgDB)
-
 	// Create a rate limiter
 	limiter := newRateLimiter()
 
@@ -509,57 +496,74 @@ func main() {
 	// Channel to signal when the server has shut down
 	done := make(chan struct{})
 
+	// Channel to receive server errors
+	serverErrCh := make(chan error, 1)
+
+	go func() {
+		log.Info().Str("port", config.Port).Msg("Starting server")
+
+		baseURL := fmt.Sprintf("http://localhost:%s", config.Port)
+		log.Info().Msg("🚀 Blue Banded Bee Development Server Ready!")
+		log.Info().Str("homepage", baseURL).Msg("📱 Open Homepage")
+		log.Info().Str("dashboard", baseURL+"/dashboard").Msg("📊 Open Dashboard")
+		log.Info().Str("health", baseURL+"/health").Msg("🔍 Health Check")
+		if config.Env == "development" {
+			log.Info().Str("supabase_studio", "http://localhost:54323").Msg("🗄️  Open Supabase Studio")
+		}
+
+		if err := server.ListenAndServe(); err != nil {
+			serverErrCh <- err
+			return
+		}
+		serverErrCh <- nil
+	}()
+
 	go func() {
 		<-stop
 		log.Info().Msg("Shutting down server...")
 
-		// Create shutdown context with timeout
-		// Allow enough time for:
-		// - In-flight crawls to complete (up to 2 min taskProcessingTimeout)
-		// - Batch updates to flush with retries (up to 10s)
-		// - Database connections to close cleanly
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 		defer cancel()
 
-		// Step 1: Stop accepting new HTTP requests
 		if err := server.Shutdown(ctx); err != nil {
 			sentry.CaptureException(err)
 			log.Error().Err(err).Msg("Server forced to shutdown")
 		}
 
-		// Step 2: Cancel application context to stop background goroutines
-		// This signals health monitoring to stop
-		log.Info().Msg("Stopping background goroutines")
-		appCancel()
-
-		// Step 3: Wait for health monitoring to fully exit
-		// This ensures no DB queries are running before we close connections
-		log.Debug().Msg("Waiting for background goroutines to finish")
-		backgroundWG.Wait()
-		log.Info().Msg("All background goroutines stopped")
-
 		close(done)
 	}()
 
-	// Start the server
-	log.Info().Str("port", config.Port).Msg("Starting server")
+	// Start the worker pool once the HTTP server goroutine is running
+	workerPool.Start(context.Background())
+	// Defer worker pool stop - will execute BEFORE database close due to defer LIFO order
+	defer func() {
+		log.Info().Msg("Stopping worker pool (waiting for in-flight tasks to complete)")
+		workerPool.Stop()
+		log.Info().Msg("Worker pool stopped - all tasks completed and batches flushed")
+	}()
 
-	// Print helpful development URLs
-	baseURL := fmt.Sprintf("http://localhost:%s", config.Port)
-	log.Info().Msg("🚀 Blue Banded Bee Development Server Ready!")
-	log.Info().Str("homepage", baseURL).Msg("📱 Open Homepage")
-	log.Info().Str("dashboard", baseURL+"/dashboard").Msg("📊 Open Dashboard")
-	log.Info().Str("health", baseURL+"/health").Msg("🔍 Health Check")
-	if config.Env == "development" {
-		log.Info().Str("supabase_studio", "http://localhost:54323").Msg("🗄️  Open Supabase Studio")
+	// Start background health monitoring with cancellable context
+	backgroundWG.Add(1)
+	go startHealthMonitoring(appCtx, &backgroundWG, pgDB)
+
+	// Wait for either the server to exit or shutdown signal completion
+	var serverErr error
+	select {
+	case serverErr = <-serverErrCh:
+	case <-done:
+		serverErr = <-serverErrCh
 	}
 
-	if err := server.ListenAndServe(); err != http.ErrServerClosed {
-		sentry.CaptureException(err)
-		log.Fatal().Err(err).Msg("Server error")
+	// Ensure background goroutines stop
+	appCancel()
+	backgroundWG.Wait()
+	log.Info().Msg("All background goroutines stopped")
+
+	if serverErr != nil && !errors.Is(serverErr, http.ErrServerClosed) {
+		sentry.CaptureException(serverErr)
+		log.Fatal().Err(serverErr).Msg("Server error")
 	}
 
-	<-done // Wait for the shutdown process to complete
 	log.Info().Msg("Server stopped")
 }
 
