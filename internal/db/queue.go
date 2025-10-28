@@ -281,26 +281,28 @@ func (q *DbQueue) GetNextTask(ctx context.Context, jobID string) (*Task, error) 
 		query += `
 				ORDER BY t.priority_score DESC, t.created_at ASC
 				LIMIT 1
-				-- Lock both the task and its job row (only for this specific task)
-				FOR UPDATE OF t, j SKIP LOCKED
+				FOR UPDATE OF t SKIP LOCKED
+			),
+			job_update AS (
+				UPDATE jobs j
+				SET running_tasks = running_tasks + 1
+				FROM next_task nt
+				WHERE j.id = nt.job_id
+				  AND (j.concurrency IS NULL OR j.concurrency = 0 OR j.running_tasks < j.concurrency)
+				RETURNING j.id
 			),
 			task_update AS (
 				UPDATE tasks
 				SET status = 'running', started_at = $1
-				FROM next_task
-				WHERE tasks.id = next_task.id
+				FROM next_task nt
+				JOIN job_update ju ON ju.id = nt.job_id
+				WHERE tasks.id = nt.id
 				RETURNING tasks.id, tasks.job_id, tasks.page_id, tasks.path,
 				          tasks.created_at, tasks.retry_count, tasks.source_type,
 				          tasks.source_url, tasks.priority_score
 			)
-			-- Atomically increment running_tasks for the job
-			UPDATE jobs
-			SET running_tasks = running_tasks + 1
+			SELECT id, job_id, page_id, path, created_at, retry_count, source_type, source_url, priority_score
 			FROM task_update
-			WHERE jobs.id = task_update.job_id
-			RETURNING task_update.id, task_update.job_id, task_update.page_id, task_update.path,
-			          task_update.created_at, task_update.retry_count, task_update.source_type,
-			          task_update.source_url, task_update.priority_score
 		`
 
 		// Execute the combined query

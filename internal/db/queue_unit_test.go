@@ -135,8 +135,7 @@ func TestDbQueueGetNextTask(t *testing.T) {
 					0, "sitemap", "https://example.com/sitemap.xml", 1.0,
 				)
 
-				// Updated regex to match new query with job join and running_tasks increment
-				mock.ExpectQuery(`WITH next_task AS \(.*SELECT.*FROM tasks t.*INNER JOIN jobs j.*WHERE.*status = 'pending'.*AND.*job_id.*FOR UPDATE OF.*\).*task_update AS \(.*UPDATE tasks.*\).*UPDATE jobs.*SET running_tasks.*RETURNING`).
+				mock.ExpectQuery(`WITH next_task AS \(.*SELECT.*FROM tasks t.*INNER JOIN jobs j.*WHERE.*status = 'pending'.*AND.*job_id.*FOR UPDATE OF t SKIP LOCKED.*\),\s*job_update AS \(.*UPDATE jobs.*running_tasks = running_tasks \+ 1.*\),\s*task_update AS \(.*UPDATE tasks.*JOIN job_update.*\).*SELECT id, job_id.*FROM task_update`).
 					WithArgs(sqlmock.AnyArg(), "test-job").
 					WillReturnRows(rows)
 
@@ -151,8 +150,7 @@ func TestDbQueueGetNextTask(t *testing.T) {
 			setupMock: func(mock sqlmock.Sqlmock) {
 				mock.ExpectBegin()
 
-				// Updated regex to match new query structure
-				mock.ExpectQuery(`WITH next_task AS \(.*SELECT.*FROM tasks t.*INNER JOIN jobs j.*WHERE.*status = 'pending'.*AND.*job_id.*FOR UPDATE OF.*\).*task_update AS \(.*UPDATE tasks.*\).*UPDATE jobs.*SET running_tasks.*RETURNING`).
+				mock.ExpectQuery(`WITH next_task AS \(.*SELECT.*FROM tasks t.*INNER JOIN jobs j.*WHERE.*status = 'pending'.*AND.*job_id.*FOR UPDATE OF t SKIP LOCKED.*\),\s*job_update AS \(.*UPDATE jobs.*running_tasks = running_tasks \+ 1.*\),\s*task_update AS \(.*UPDATE tasks.*JOIN job_update.*\).*SELECT id, job_id.*FROM task_update`).
 					WithArgs(sqlmock.AnyArg(), "test-job").
 					WillReturnError(sql.ErrNoRows)
 
@@ -175,8 +173,7 @@ func TestDbQueueGetNextTask(t *testing.T) {
 					1, "discovery", "https://example.com", 0.5,
 				)
 
-				// Query without job_id filter - updated regex to match new structure
-				mock.ExpectQuery(`WITH next_task AS \(.*SELECT.*FROM tasks t.*INNER JOIN jobs j.*WHERE.*status = 'pending'.*FOR UPDATE OF.*\).*task_update AS \(.*UPDATE tasks.*\).*UPDATE jobs.*SET running_tasks.*RETURNING`).
+				mock.ExpectQuery(`WITH next_task AS \(.*SELECT.*FROM tasks t.*INNER JOIN jobs j.*WHERE.*status = 'pending'.*FOR UPDATE OF t SKIP LOCKED.*\),\s*job_update AS \(.*UPDATE jobs.*running_tasks = running_tasks \+ 1.*\),\s*task_update AS \(.*UPDATE tasks.*JOIN job_update.*\).*SELECT id, job_id.*FROM task_update`).
 					WithArgs(sqlmock.AnyArg()).
 					WillReturnRows(rows)
 
