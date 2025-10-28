@@ -85,7 +85,7 @@ func (h *Handler) SetupRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/v1/webhooks/webflow/", h.WebflowWebhook) // Note: trailing slash for path params
 
 	// Admin endpoints (require authentication and admin role)
-	mux.Handle("/admin/reset-db", auth.AuthMiddleware(http.HandlerFunc(h.AdminResetDatabase)))
+	mux.Handle("/v1/admin/reset-db", auth.AuthMiddleware(http.HandlerFunc(h.AdminResetDatabase)))
 
 	// Protected pprof endpoints (system admin + auth required)
 	pprofProtected := func(handler http.Handler) http.Handler {

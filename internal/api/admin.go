@@ -70,7 +70,7 @@ func (h *Handler) AdminResetDatabase(w http.ResponseWriter, r *http.Request) {
 			Email: user.Email,
 		})
 		scope.SetContext("admin_action", map[string]interface{}{
-			"endpoint":   "/admin/reset-db",
+			"endpoint":   "/v1/admin/reset-db",
 			"user_agent": r.Header.Get("User-Agent"),
 			"ip_address": r.RemoteAddr,
 		})

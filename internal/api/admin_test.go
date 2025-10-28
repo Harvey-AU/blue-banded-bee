@@ -269,7 +269,7 @@ func TestAdminResetDatabase(t *testing.T) {
 			}
 
 			// Create request and recorder
-			req := httptest.NewRequest(http.MethodPost, "/admin/reset-db", nil)
+			req := httptest.NewRequest(http.MethodPost, "/v1/admin/reset-db", nil)
 			rec := httptest.NewRecorder()
 
 			// Execute
