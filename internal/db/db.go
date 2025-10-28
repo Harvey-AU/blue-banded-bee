@@ -484,8 +484,8 @@ func createCoreTables(db *sql.DB) error {
 		CREATE TABLE IF NOT EXISTS organisations (
 			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 			name TEXT NOT NULL,
-			created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-			updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 		)
 	`)
 	if err != nil {
@@ -499,8 +499,8 @@ func createCoreTables(db *sql.DB) error {
 			email TEXT NOT NULL,
 			full_name TEXT,
 			organisation_id UUID REFERENCES organisations(id),
-			created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-			updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 			UNIQUE(email)
 		)
 	`)
@@ -514,7 +514,7 @@ func createCoreTables(db *sql.DB) error {
 			id SERIAL PRIMARY KEY,
 			name TEXT NOT NULL UNIQUE,
 			crawl_delay INTEGER DEFAULT 1,
-			created_at TIMESTAMP NOT NULL DEFAULT NOW()
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 		)
 	`)
 	if err != nil {
@@ -527,7 +527,7 @@ func createCoreTables(db *sql.DB) error {
 			id SERIAL PRIMARY KEY,
 			domain_id INTEGER NOT NULL REFERENCES domains(id),
 			path TEXT NOT NULL,
-			created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 			UNIQUE(domain_id, path)
 		)
 	`)
@@ -550,9 +550,9 @@ func createCoreTables(db *sql.DB) error {
 			completed_tasks INTEGER NOT NULL DEFAULT 0,
 			failed_tasks INTEGER NOT NULL DEFAULT 0,
 			skipped_tasks INTEGER NOT NULL DEFAULT 0,
-			created_at TIMESTAMP NOT NULL,
-			started_at TIMESTAMP,
-			completed_at TIMESTAMP,
+			created_at TIMESTAMPTZ NOT NULL,
+			started_at TIMESTAMPTZ,
+			completed_at TIMESTAMPTZ,
 			concurrency INTEGER NOT NULL,
 			find_links BOOLEAN NOT NULL,
 			max_pages INTEGER NOT NULL,
@@ -584,9 +584,9 @@ func createCoreTables(db *sql.DB) error {
 			page_id INTEGER NOT NULL REFERENCES pages(id),
 			path TEXT NOT NULL,
 			status TEXT NOT NULL,
-			created_at TIMESTAMP NOT NULL,
-			started_at TIMESTAMP,
-			completed_at TIMESTAMP,
+			created_at TIMESTAMPTZ NOT NULL,
+			started_at TIMESTAMPTZ,
+			completed_at TIMESTAMPTZ,
 			retry_count INTEGER NOT NULL,
 			error TEXT,
 			source_type TEXT NOT NULL,
