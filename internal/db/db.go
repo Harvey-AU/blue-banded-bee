@@ -54,7 +54,7 @@ func poolLimitsForEnv(appEnv string) (maxOpen, maxIdle int) {
 	}
 }
 
-func sanitizeAppName(name string) string {
+func sanitiseAppName(name string) string {
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return ""
@@ -90,21 +90,21 @@ func trimAppName(name string) string {
 }
 
 func determineApplicationName() string {
-	if override := sanitizeAppName(os.Getenv("DB_APP_NAME")); override != "" {
+	if override := sanitiseAppName(os.Getenv("DB_APP_NAME")); override != "" {
 		return trimAppName(override)
 	}
 
 	base := "bbb"
-	if env := sanitizeAppName(strings.ToLower(strings.TrimSpace(os.Getenv("APP_ENV")))); env != "" {
+	if env := sanitiseAppName(strings.ToLower(strings.TrimSpace(os.Getenv("APP_ENV")))); env != "" {
 		base = fmt.Sprintf("bbb-%s", env)
 	}
 
 	var parts []string
-	if machineID := sanitizeAppName(os.Getenv("FLY_MACHINE_ID")); machineID != "" {
+	if machineID := sanitiseAppName(os.Getenv("FLY_MACHINE_ID")); machineID != "" {
 		parts = append(parts, machineID)
 	}
 	if host, err := os.Hostname(); err == nil {
-		if hostName := sanitizeAppName(host); hostName != "" {
+		if hostName := sanitiseAppName(host); hostName != "" {
 			parts = append(parts, hostName)
 		}
 	}
@@ -363,7 +363,7 @@ func InitFromURLWithSuffix(databaseURL string, appEnv string, appNameSuffix stri
 
 	maxOpen, maxIdle := poolLimitsForEnv(appEnv)
 	appName := determineApplicationName()
-	if suffix := sanitizeAppName(appNameSuffix); suffix != "" {
+	if suffix := sanitiseAppName(appNameSuffix); suffix != "" {
 		if appName != "" {
 			appName = trimAppName(fmt.Sprintf("%s:%s", appName, suffix))
 		} else {
