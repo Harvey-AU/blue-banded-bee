@@ -25,9 +25,12 @@ type DbQueue struct {
 	poolRejectThreshold float64
 	lastWarnLog         time.Time
 	lastRejectLog       time.Time
+	poolSemaphore       chan struct{}
+	preserveConnections int
 }
 
-// ErrPoolSaturated is returned when the database connection pool is saturated
+// ErrPoolSaturated is returned when the database connection pool cannot provide
+// a connection before the caller's context expires.
 var ErrPoolSaturated = errors.New("database connection pool saturated")
 
 const (
@@ -52,10 +55,26 @@ func NewDbQueue(db *DB) *DbQueue {
 		}
 	}
 
+	reserve := parseReservedConnections()
+	var semaphore chan struct{}
+	if db != nil && db.config != nil {
+		maxOpen := db.config.MaxOpenConns
+		if maxOpen > 0 {
+			poolCapacity := maxOpen - reserve
+			if poolCapacity < 1 {
+				poolCapacity = 1
+			}
+			reserve = maxOpen - poolCapacity
+			semaphore = make(chan struct{}, poolCapacity)
+		}
+	}
+
 	return &DbQueue{
 		db:                  db,
 		poolWarnThreshold:   warn,
 		poolRejectThreshold: reject,
+		poolSemaphore:       semaphore,
+		preserveConnections: reserve,
 	}
 }
 
@@ -68,6 +87,19 @@ func parseThresholdEnv(key string, fallback float64) float64 {
 	return fallback
 }
 
+func parseReservedConnections() int {
+	const defaultReserve = 4
+	if val := strings.TrimSpace(os.Getenv("DB_POOL_RESERVED_CONNECTIONS")); val != "" {
+		if parsed, err := strconv.Atoi(val); err == nil {
+			if parsed < 0 {
+				return 0
+			}
+			return parsed
+		}
+	}
+	return defaultReserve
+}
+
 // Execute runs a database operation in a transaction
 func (q *DbQueue) Execute(ctx context.Context, fn func(*sql.Tx) error) error {
 	// Add timeout to context if none exists
@@ -77,9 +109,11 @@ func (q *DbQueue) Execute(ctx context.Context, fn func(*sql.Tx) error) error {
 		defer cancel()
 	}
 
-	if err := q.ensurePoolCapacity(); err != nil {
+	release, err := q.ensurePoolCapacity(ctx)
+	if err != nil {
 		return err
 	}
+	defer release()
 
 	// Begin transaction
 	tx, err := q.db.client.BeginTx(ctx, nil)
@@ -147,9 +181,20 @@ func (q *DbQueue) ExecuteMaintenance(ctx context.Context, fn func(*sql.Tx) error
 	return nil
 }
 
-func (q *DbQueue) ensurePoolCapacity() error {
+func (q *DbQueue) ensurePoolCapacity(ctx context.Context) (func(), error) {
+	noop := func() {}
 	if q == nil || q.db == nil || q.db.client == nil {
-		return nil
+		return noop, nil
+	}
+
+	release := noop
+	if q.poolSemaphore != nil {
+		select {
+		case q.poolSemaphore <- struct{}{}:
+			release = func() { <-q.poolSemaphore }
+		case <-ctx.Done():
+			return noop, ErrPoolSaturated
+		}
 	}
 
 	stats := q.db.client.Stats()
@@ -158,47 +203,48 @@ func (q *DbQueue) ensurePoolCapacity() error {
 		maxOpen = q.db.config.MaxOpenConns
 	}
 	if maxOpen <= 0 {
-		return nil
+		return release, nil
 	}
 
 	usage := float64(stats.InUse) / float64(maxOpen)
 
-	if usage >= q.poolRejectThreshold {
-		if time.Since(q.lastRejectLog) > poolLogCooldown {
-			log.Warn().
-				Int("in_use", stats.InUse).
-				Int("max_open", maxOpen).
-				Float64("usage", usage).
-				Msg("DB pool saturated: rejecting request")
-			sentry.WithScope(func(scope *sentry.Scope) {
-				scope.SetLevel(sentry.LevelWarning)
-				scope.SetTag("event_type", "db_pool")
-				scope.SetTag("state", "reject")
-				scope.SetContext("db_pool", map[string]interface{}{
-					"in_use":     stats.InUse,
-					"max_open":   maxOpen,
-					"idle":       stats.Idle,
-					"wait_count": stats.WaitCount,
-					"usage":      usage,
-				})
-				sentry.CaptureMessage("DB pool saturated")
+	if usage >= q.poolRejectThreshold && time.Since(q.lastRejectLog) > poolLogCooldown {
+		log.Warn().
+			Int("in_use", stats.InUse).
+			Int("max_open", maxOpen).
+			Int("reserved", q.preserveConnections).
+			Float64("usage", usage).
+			Int64("wait_count", stats.WaitCount).
+			Msg("DB pool saturated: requests will queue")
+		sentry.WithScope(func(scope *sentry.Scope) {
+			scope.SetLevel(sentry.LevelWarning)
+			scope.SetTag("event_type", "db_pool")
+			scope.SetTag("state", "queue")
+			scope.SetContext("db_pool", map[string]interface{}{
+				"in_use":     stats.InUse,
+				"max_open":   maxOpen,
+				"reserved":   q.preserveConnections,
+				"idle":       stats.Idle,
+				"wait_count": stats.WaitCount,
+				"usage":      usage,
 			})
-			q.lastRejectLog = time.Now()
-		}
-		return ErrPoolSaturated
+			sentry.CaptureMessage("DB pool saturated (queuing)")
+		})
+		q.lastRejectLog = time.Now()
 	}
 
 	if usage >= q.poolWarnThreshold && time.Since(q.lastWarnLog) > poolLogCooldown {
 		log.Warn().
 			Int("in_use", stats.InUse).
 			Int("max_open", maxOpen).
+			Int("reserved", q.preserveConnections).
 			Float64("usage", usage).
+			Int64("wait_count", stats.WaitCount).
 			Msg("DB pool nearing capacity")
-		// Note: Not sending to Sentry to avoid noise - only capture actual rejections
 		q.lastWarnLog = time.Now()
 	}
 
-	return nil
+	return release, nil
 }
 
 // Task represents a task in the queue
