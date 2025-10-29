@@ -392,6 +392,23 @@ function getTimezoneOffset() {
 }
 
 /**
+ * Detect the user's IANA timezone identifier (e.g. "Australia/Sydney")
+ * Falls back to UTC when detection fails.
+ * @returns {string} URL-encoded timezone identifier
+ */
+function getTimezone() {
+  try {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (tz && typeof tz === "string") {
+      return encodeURIComponent(tz);
+    }
+  } catch (error) {
+    console.warn("Failed to detect timezone, defaulting to UTC", error);
+  }
+  return "UTC";
+}
+
+/**
  * Change the dashboard filter range and refresh data
  * @param {string} range - Range filter: 'last_hour', 'today', 'last_24_hours', 'yesterday', '7days', '30days', 'all'
  */
@@ -499,6 +516,7 @@ if (typeof module !== "undefined" && module.exports) {
     handleDashboardJobCreation,
     setupNetworkMonitoring,
     updateNetworkStatus,
+    getTimezone,
     initializeDashboard,
     setupQuickAuth,
   };
