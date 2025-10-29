@@ -383,6 +383,8 @@ func main() {
 		}
 	}
 
+	appEnv := os.Getenv("APP_ENV")
+
 	// Connect to PostgreSQL
 	pgDB, err := db.InitFromEnv()
 	if err != nil {
@@ -402,17 +404,37 @@ func main() {
 
 	log.Info().Msg("Connected to PostgreSQL database")
 
+	queueDB := pgDB
+	if queueURL := strings.TrimSpace(os.Getenv("DATABASE_QUEUE_URL")); queueURL != "" {
+		queueConn, err := db.InitFromURLWithSuffix(queueURL, appEnv, "queue")
+		if err != nil {
+			sentry.CaptureException(err)
+			log.Fatal().Err(err).Msg("Failed to connect to queue PostgreSQL database")
+		}
+
+		defer func() {
+			log.Info().Msg("Closing queue database connections")
+			time.Sleep(500 * time.Millisecond)
+			if err := queueConn.Close(); err != nil {
+				log.Error().Err(err).Msg("Error closing queue database")
+			}
+			log.Info().Msg("Queue database closed")
+		}()
+
+		queueDB = queueConn
+		log.Info().Msg("Queue database connection established")
+	}
+
 	// Initialise crawler
 	crawlerConfig := crawler.DefaultConfig()
 	cr := crawler.New(crawlerConfig) // QUESTION: Should we change cr to crawler for clarity, as others have clearer names.
 
 	// Create database queue for operations
-	dbQueue := db.NewDbQueue(pgDB)
+	dbQueue := db.NewDbQueue(queueDB)
 
 	// Create a worker pool for task processing
 	// Configure worker count based on environment to prevent resource exhaustion
 	var jobWorkers int
-	appEnv := os.Getenv("APP_ENV")
 	switch appEnv {
 	case "production":
 		jobWorkers = 50 // Production: high throughput
