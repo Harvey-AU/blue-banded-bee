@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"math/rand"
 	"net/http"
 	"net/http/httptrace"
 	"net/url"
@@ -302,24 +303,20 @@ func (c *Crawler) performCacheValidation(ctx context.Context, targetURL string, 
 		return nil
 	}
 
-	// Calculate dynamic delay based on response time
-	delayMs := int(float64(res.ResponseTime) * 1.5)
-	if delayMs < 500 {
-		delayMs = 500 // Minimum 500ms delay
-	} else if delayMs > 5000 {
-		delayMs = 5000 // Maximum 5 second delay
-	}
+	// Apply randomized delay between 500-1000ms to avoid hammering origins
+	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+	jitteredDelay := 500 + rng.Intn(501)
 
 	log.Debug().
 		Str("url", targetURL).
 		Str("cache_status", res.CacheStatus).
 		Int64("initial_response_time", res.ResponseTime).
-		Int("calculated_delay_ms", delayMs).
-		Msg("Cache MISS detected, using dynamic delay based on initial response time")
+		Int("calculated_delay_ms", jitteredDelay).
+		Msg("Cache MISS detected, applying jittered delay before cache validation")
 
 	// Wait for initial delay to allow CDN to process and cache
 	select {
-	case <-time.After(time.Duration(delayMs) * time.Millisecond):
+	case <-time.After(time.Duration(jitteredDelay) * time.Millisecond):
 		// Continue with cache check loop
 	case <-ctx.Done():
 		// Context cancelled during wait
@@ -328,8 +325,8 @@ func (c *Crawler) performCacheValidation(ctx context.Context, targetURL string, 
 	}
 
 	// Check cache status with HEAD requests in a loop
-	maxChecks := 10
-	checkDelay := 2000 // Initial 2 seconds delay
+	maxChecks := 3
+	checkDelay := 700 // Start with 700ms delay between HEAD checks
 	cacheHit := false
 
 	for i := 0; i < maxChecks; i++ {
@@ -362,6 +359,16 @@ func (c *Crawler) performCacheValidation(ctx context.Context, targetURL string, 
 				cacheHit = true
 				break
 			}
+
+			// If CDN indicates the response will not be cached, skip further checks
+			if !shouldMakeSecondRequest(cacheStatus) {
+				log.Debug().
+					Str("url", targetURL).
+					Str("cache_status", cacheStatus).
+					Int("check_attempt", i+1).
+					Msg("Cache status indicates resource will not warm; skipping additional checks")
+				break
+			}
 		}
 
 		// If not the last check, wait before next attempt
@@ -374,7 +381,7 @@ func (c *Crawler) performCacheValidation(ctx context.Context, targetURL string, 
 				return nil
 			}
 			// Increase delay for the next iteration
-			checkDelay += 1000
+			checkDelay += 300
 		}
 	}
 
@@ -390,34 +397,41 @@ func (c *Crawler) performCacheValidation(ctx context.Context, targetURL string, 
 			Msg("Cache did not become available after maximum checks")
 	}
 
-	// Perform second request to measure cached response time
-	secondResult, err := c.makeSecondRequest(ctx, targetURL)
-	if err != nil {
-		log.Warn().
-			Err(err).
-			Str("url", targetURL).
-			Msg("Second request failed, but first request succeeded")
-		// Don't return error - first request was successful
+	if cacheHit {
+		// Perform second request to measure cached response time
+		secondResult, err := c.makeSecondRequest(ctx, targetURL)
+		if err != nil {
+			log.Warn().
+				Err(err).
+				Str("url", targetURL).
+				Msg("Second request failed, but first request succeeded")
+			// Don't return error - first request was successful
+		} else {
+			res.SecondResponseTime = secondResult.ResponseTime
+			res.SecondCacheStatus = secondResult.CacheStatus
+			res.SecondContentLength = secondResult.ContentLength
+			res.SecondHeaders = secondResult.Headers
+			res.SecondPerformance = &secondResult.Performance
+
+			// Calculate improvement ratio for pattern analysis
+			improvementRatio := float64(res.ResponseTime) / float64(res.SecondResponseTime)
+
+			log.Debug().
+				Str("url", targetURL).
+				Str("first_cache_status", res.CacheStatus).
+				Str("second_cache_status", res.SecondCacheStatus).
+				Int64("first_response_time", res.ResponseTime).
+				Int64("second_response_time", res.SecondResponseTime).
+				Int("initial_delay_ms", jitteredDelay).
+				Float64("improvement_ratio", improvementRatio).
+				Bool("cache_hit_before_second", cacheHit).
+				Msg("Cache warming analysis - pattern data")
+		}
 	} else {
-		res.SecondResponseTime = secondResult.ResponseTime
-		res.SecondCacheStatus = secondResult.CacheStatus
-		res.SecondContentLength = secondResult.ContentLength
-		res.SecondHeaders = secondResult.Headers
-		res.SecondPerformance = &secondResult.Performance
-
-		// Calculate improvement ratio for pattern analysis
-		improvementRatio := float64(res.ResponseTime) / float64(res.SecondResponseTime)
-
 		log.Debug().
 			Str("url", targetURL).
-			Str("first_cache_status", res.CacheStatus).
-			Str("second_cache_status", res.SecondCacheStatus).
-			Int64("first_response_time", res.ResponseTime).
-			Int64("second_response_time", res.SecondResponseTime).
-			Int("initial_delay_ms", delayMs).
-			Float64("improvement_ratio", improvementRatio).
-			Bool("cache_hit_before_second", cacheHit).
-			Msg("Cache warming analysis - pattern data")
+			Str("cache_status", res.CacheStatus).
+			Msg("Cache status did not transition to HIT; skipping second request")
 	}
 
 	return nil
