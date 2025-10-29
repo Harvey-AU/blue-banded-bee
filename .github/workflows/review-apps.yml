@@ -22,8 +22,10 @@ jobs:
     if: |
       github.event.pull_request.draft == false &&
       github.event.action != 'closed' &&
-      !contains(github.event.pull_request.title, '[skip review app]') &&
-      !contains(github.event.pull_request.body, '[skip review app]')
+      (
+        contains(github.event.pull_request.title, '[preview app]') ||
+        contains(github.event.pull_request.body || '', '[preview app]')
+      )
     permissions:
       pull-requests: write
 
