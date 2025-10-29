@@ -86,6 +86,12 @@ func TestDbQueueExecute(t *testing.T) {
 			// Create DbQueue with mock
 			db := &DB{client: sqlDB}
 			q := NewDbQueue(db)
+			q.maxTxRetries = 1
+			q.retryBaseDelay = 0
+			q.retryMaxDelay = 0
+			q.maxTxRetries = 1
+			q.retryBaseDelay = 0
+			q.retryMaxDelay = 0
 
 			// Execute
 			ctx := context.Background()
@@ -197,6 +203,9 @@ func TestDbQueueGetNextTask(t *testing.T) {
 			// Create DbQueue with mock
 			db := &DB{client: sqlDB}
 			q := NewDbQueue(db)
+			q.maxTxRetries = 1
+			q.retryBaseDelay = 0
+			q.retryMaxDelay = 0
 
 			// Execute
 			ctx := context.Background()
@@ -315,6 +324,9 @@ func TestDbQueueUpdateTaskStatus(t *testing.T) {
 			// Create DbQueue with mock
 			db := &DB{client: sqlDB}
 			q := NewDbQueue(db)
+			q.maxTxRetries = 1
+			q.retryBaseDelay = 0
+			q.retryMaxDelay = 0
 
 			// Execute
 			ctx := context.Background()
