@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"math/rand"
+	"net"
 	"os"
 	"strconv"
 	"strings"
@@ -27,6 +29,10 @@ type DbQueue struct {
 	lastRejectLog       time.Time
 	poolSemaphore       chan struct{}
 	preserveConnections int
+	maxConcurrent       int
+	maxTxRetries        int
+	retryBaseDelay      time.Duration
+	retryMaxDelay       time.Duration
 }
 
 // ErrPoolSaturated is returned when the database connection pool cannot provide
@@ -37,6 +43,10 @@ const (
 	defaultPoolWarnThreshold   = 0.90
 	defaultPoolRejectThreshold = 0.95
 	poolLogCooldown            = 5 * time.Second
+	defaultQueueConcurrency    = 24
+	defaultTxRetries           = 3
+	defaultRetryBaseDelay      = 200 * time.Millisecond
+	defaultRetryMaxDelay       = 1500 * time.Millisecond
 )
 
 // NewDbQueue creates a PostgreSQL job queue
@@ -56,7 +66,16 @@ func NewDbQueue(db *DB) *DbQueue {
 	}
 
 	reserve := parseReservedConnections()
+	queueLimit := parseIntEnv("DB_QUEUE_MAX_CONCURRENCY", defaultQueueConcurrency)
+	txRetries := parseIntEnv("DB_TX_MAX_RETRIES", defaultTxRetries)
+	baseDelay := parseDurationEnvMS("DB_TX_BACKOFF_BASE_MS", defaultRetryBaseDelay)
+	maxDelay := parseDurationEnvMS("DB_TX_BACKOFF_MAX_MS", defaultRetryMaxDelay)
+	if maxDelay < baseDelay {
+		maxDelay = baseDelay
+	}
+
 	var semaphore chan struct{}
+	maxConcurrent := queueLimit
 	if db != nil && db.config != nil {
 		maxOpen := db.config.MaxOpenConns
 		if maxOpen > 0 {
@@ -64,10 +83,20 @@ func NewDbQueue(db *DB) *DbQueue {
 			if poolCapacity < 1 {
 				poolCapacity = 1
 			}
-			reserve = maxOpen - poolCapacity
-			semaphore = make(chan struct{}, poolCapacity)
+			if queueLimit > 0 && queueLimit < poolCapacity {
+				maxConcurrent = queueLimit
+			} else {
+				maxConcurrent = poolCapacity
+			}
+			reserve = maxOpen - maxConcurrent
 		}
 	}
+
+	if maxConcurrent < 1 {
+		maxConcurrent = 1
+	}
+
+	semaphore = make(chan struct{}, maxConcurrent)
 
 	return &DbQueue{
 		db:                  db,
@@ -75,7 +104,15 @@ func NewDbQueue(db *DB) *DbQueue {
 		poolRejectThreshold: reject,
 		poolSemaphore:       semaphore,
 		preserveConnections: reserve,
+		maxConcurrent:       maxConcurrent,
+		maxTxRetries:        txRetries,
+		retryBaseDelay:      baseDelay,
+		retryMaxDelay:       maxDelay,
 	}
+}
+
+func init() {
+	rand.Seed(time.Now().UnixNano())
 }
 
 func parseThresholdEnv(key string, fallback float64) float64 {
@@ -100,6 +137,27 @@ func parseReservedConnections() int {
 	return defaultReserve
 }
 
+func parseIntEnv(key string, fallback int) int {
+	if val := strings.TrimSpace(os.Getenv(key)); val != "" {
+		if parsed, err := strconv.Atoi(val); err == nil {
+			return parsed
+		}
+	}
+	return fallback
+}
+
+func parseDurationEnvMS(key string, fallback time.Duration) time.Duration {
+	if val := strings.TrimSpace(os.Getenv(key)); val != "" {
+		if parsed, err := strconv.Atoi(val); err == nil {
+			if parsed < 0 {
+				return fallback
+			}
+			return time.Duration(parsed) * time.Millisecond
+		}
+	}
+	return fallback
+}
+
 // Execute runs a database operation in a transaction
 func (q *DbQueue) Execute(ctx context.Context, fn func(*sql.Tx) error) error {
 	// Add timeout to context if none exists
@@ -109,34 +167,138 @@ func (q *DbQueue) Execute(ctx context.Context, fn func(*sql.Tx) error) error {
 		defer cancel()
 	}
 
-	release, err := q.ensurePoolCapacity(ctx)
-	if err != nil {
-		return err
+	maxAttempts := q.maxTxRetries
+	if maxAttempts < 1 {
+		maxAttempts = 1
 	}
-	defer release()
 
-	// Begin transaction
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		release, err := q.ensurePoolCapacity(ctx)
+		if err != nil {
+			if !q.shouldRetry(err) || attempt == maxAttempts-1 {
+				return err
+			}
+			if err := q.waitForRetry(ctx, attempt); err != nil {
+				return err
+			}
+			continue
+		}
+
+		execErr := q.executeOnce(ctx, fn)
+		release()
+
+		if execErr == nil {
+			return nil
+		}
+
+		if !q.shouldRetry(execErr) || attempt == maxAttempts-1 {
+			return execErr
+		}
+
+		if err := q.waitForRetry(ctx, attempt); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (q *DbQueue) executeOnce(ctx context.Context, fn func(*sql.Tx) error) error {
 	tx, err := q.db.client.BeginTx(ctx, nil)
 	if err != nil {
 		sentry.CaptureException(err)
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
 	defer func() {
-		_ = tx.Rollback() // Rollback is safe to call even after commit
+		_ = tx.Rollback()
 	}()
 
-	// Run the operation
 	if err := fn(tx); err != nil {
 		return err
 	}
 
-	// Commit the transaction
 	if err := tx.Commit(); err != nil {
 		sentry.CaptureException(err)
 		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
 	return nil
+}
+
+func (q *DbQueue) shouldRetry(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	if errors.Is(err, context.Canceled) {
+		return false
+	}
+
+	if errors.Is(err, context.DeadlineExceeded) {
+		return true
+	}
+
+	if errors.Is(err, ErrPoolSaturated) {
+		return true
+	}
+
+	var netErr net.Error
+	if errors.As(err, &netErr) {
+		if netErr.Timeout() || !netErr.Temporary() {
+			return true
+		}
+	}
+
+	errStr := strings.ToLower(err.Error())
+	retrySnippets := []string{
+		"failed to begin transaction",
+		"failed to commit transaction",
+		"too many clients",
+		"connection reset",
+		"connection refused",
+		"timeout",
+		"connection pool saturated",
+	}
+	for _, snippet := range retrySnippets {
+		if strings.Contains(errStr, snippet) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (q *DbQueue) waitForRetry(ctx context.Context, attempt int) error {
+	backoff := q.computeBackoff(attempt)
+	select {
+	case <-time.After(backoff):
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func (q *DbQueue) computeBackoff(attempt int) time.Duration {
+	base := q.retryBaseDelay
+	max := q.retryMaxDelay
+	if base <= 0 {
+		base = defaultRetryBaseDelay
+	}
+	if max < base {
+		max = base
+	}
+
+	factor := 1 << attempt
+	delay := time.Duration(factor) * base
+	if delay > max {
+		delay = max
+	}
+
+	jitterRange := delay / 5
+	if jitterRange <= 0 {
+		return delay
+	}
+	return delay - jitterRange + time.Duration(rand.Int63n(int64(jitterRange*2)))
 }
 
 // ExecuteMaintenance runs a low-impact transaction that bypasses pool saturation guards.

@@ -43,7 +43,18 @@ type Config struct {
 	ApplicationName string        // Identifier for this application instance
 }
 
-func sanitizeAppName(name string) string {
+func poolLimitsForEnv(appEnv string) (maxOpen, maxIdle int) {
+	switch appEnv {
+	case "production":
+		return 37, 15
+	case "staging":
+		return 5, 2
+	default:
+		return 2, 1
+	}
+}
+
+func sanitiseAppName(name string) string {
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return ""
@@ -79,21 +90,21 @@ func trimAppName(name string) string {
 }
 
 func determineApplicationName() string {
-	if override := sanitizeAppName(os.Getenv("DB_APP_NAME")); override != "" {
+	if override := sanitiseAppName(os.Getenv("DB_APP_NAME")); override != "" {
 		return trimAppName(override)
 	}
 
 	base := "bbb"
-	if env := sanitizeAppName(strings.ToLower(strings.TrimSpace(os.Getenv("APP_ENV")))); env != "" {
+	if env := sanitiseAppName(strings.ToLower(strings.TrimSpace(os.Getenv("APP_ENV")))); env != "" {
 		base = fmt.Sprintf("bbb-%s", env)
 	}
 
 	var parts []string
-	if machineID := sanitizeAppName(os.Getenv("FLY_MACHINE_ID")); machineID != "" {
+	if machineID := sanitiseAppName(os.Getenv("FLY_MACHINE_ID")); machineID != "" {
 		parts = append(parts, machineID)
 	}
 	if host, err := os.Hostname(); err == nil {
-		if hostName := sanitizeAppName(host); hostName != "" {
+		if hostName := sanitiseAppName(host); hostName != "" {
 			parts = append(parts, hostName)
 		}
 	}
@@ -342,24 +353,47 @@ func New(config *Config) (*DB, error) {
 	return &DB{client: client, config: config, Cache: dbCache}, nil
 }
 
+// InitFromURLWithSuffix creates a PostgreSQL connection using the provided URL and optional
+// application name suffix. It applies the same environment-based pooling limits as InitFromEnv.
+func InitFromURLWithSuffix(databaseURL string, appEnv string, appNameSuffix string) (*DB, error) {
+	trimmed := strings.TrimSpace(databaseURL)
+	if trimmed == "" {
+		return nil, fmt.Errorf("database url cannot be empty")
+	}
+
+	maxOpen, maxIdle := poolLimitsForEnv(appEnv)
+	appName := determineApplicationName()
+	if suffix := sanitiseAppName(appNameSuffix); suffix != "" {
+		if appName != "" {
+			appName = trimAppName(fmt.Sprintf("%s:%s", appName, suffix))
+		} else {
+			appName = trimAppName(suffix)
+		}
+	}
+
+	config := &Config{
+		DatabaseURL:     trimmed,
+		MaxIdleConns:    maxIdle,
+		MaxOpenConns:    maxOpen,
+		MaxLifetime:     5 * time.Minute,
+		ApplicationName: appName,
+	}
+
+	db, err := New(config)
+	if err != nil {
+		return nil, err
+	}
+
+	return db, nil
+}
+
 // InitFromEnv creates a PostgreSQL connection using environment variables
 func InitFromEnv() (*DB, error) {
 	// If DATABASE_URL is provided, use it with default config
 	// Trim whitespace as it causes pgx to ignore the URL and fall back to Unix socket
 	if url := strings.TrimSpace(os.Getenv("DATABASE_URL")); url != "" {
 		// Optimise connection limits based on environment
-		var maxOpen, maxIdle int
-		switch os.Getenv("APP_ENV") {
-		case "production":
-			maxOpen = 37 // Production: 48 total - 11 for Supabase services/dev/staging
-			maxIdle = 15 // Production: 40% idle buffer
-		case "staging":
-			maxOpen = 5 // Preview/staging: minimal for PR testing (10 workers)
-			maxIdle = 2 // Preview/staging: 40% idle buffer
-		default:
-			maxOpen = 2 // Development: minimal for local testing (5 workers)
-			maxIdle = 1 // Development: minimal idle buffer
-		}
+		maxOpen, maxIdle := poolLimitsForEnv(os.Getenv("APP_ENV"))
 
 		appName := determineApplicationName()
 
@@ -426,18 +460,7 @@ func InitFromEnv() (*DB, error) {
 	}
 
 	// Fallback to individual environment variables
-	var maxOpen, maxIdle int
-	switch os.Getenv("APP_ENV") {
-	case "production":
-		maxOpen = 37 // Production: 48 total - 11 for Supabase services/dev/staging
-		maxIdle = 15 // Production: 40% idle buffer
-	case "staging":
-		maxOpen = 5 // Preview/staging: minimal for PR testing (10 workers)
-		maxIdle = 2 // Preview/staging: 40% idle buffer
-	default:
-		maxOpen = 2 // Development: minimal for local testing (5 workers)
-		maxIdle = 1 // Development: minimal idle buffer
-	}
+	maxOpen, maxIdle := poolLimitsForEnv(os.Getenv("APP_ENV"))
 
 	appName := determineApplicationName()
 

@@ -29,6 +29,34 @@ On merge, CI will:
 
 ## [Unreleased]
 
+## [0.15.0] – 2025-10-29
+
+### Added
+
+- Optional `DATABASE_QUEUE_URL` so the worker queue can use a dedicated
+  session-mode Postgres connection while the rest of the app remains on the
+  pooled endpoint
+- Workflow flag `[preview app]` now opt-in deploys GitHub PR preview apps;
+  previews are skipped by default to reduce noise
+
+### Changed
+
+- Introduced an in-process semaphore and bounded retry/backoff logic around the
+  task queue transactions (`DB_QUEUE_MAX_CONCURRENCY`, `DB_TX_MAX_RETRIES`,
+  `DB_TX_BACKOFF_BASE_MS`, `DB_TX_BACKOFF_MAX_MS`) to keep Supabase from
+  saturating under bursts
+- Startup now reuses the shared pool for general queries while routing queue
+  traffic through the optional connection, improving resilience during deploys
+- Cache-warming second crawls now use a 500–1000 ms jittered delay with only
+  three lightweight HEAD probes, cutting typical task time from ~17 s to under
+  8 s
+
+### Fixed
+
+- Cleaned up recent migration churn (`running_tasks` counter column, timing
+  columns, job status CTE) so all environments apply schema changes without
+  manual intervention
+
 ## [0.14.2] – 2025-10-29
 
 ## [0.14.1] – 2025-10-26
