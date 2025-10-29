@@ -33,6 +33,8 @@ type DbQueue struct {
 	maxTxRetries        int
 	retryBaseDelay      time.Duration
 	retryMaxDelay       time.Duration
+	rng                 *rand.Rand
+	rngMutex            sync.Mutex
 }
 
 // ErrPoolSaturated is returned when the database connection pool cannot provide
@@ -108,11 +110,8 @@ func NewDbQueue(db *DB) *DbQueue {
 		maxTxRetries:        txRetries,
 		retryBaseDelay:      baseDelay,
 		retryMaxDelay:       maxDelay,
+		rng:                 rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
-}
-
-func init() {
-	rand.Seed(time.Now().UnixNano())
 }
 
 func parseThresholdEnv(key string, fallback float64) float64 {
@@ -244,7 +243,7 @@ func (q *DbQueue) shouldRetry(err error) bool {
 
 	var netErr net.Error
 	if errors.As(err, &netErr) {
-		if netErr.Timeout() || !netErr.Temporary() {
+		if netErr.Timeout() {
 			return true
 		}
 	}
@@ -298,7 +297,19 @@ func (q *DbQueue) computeBackoff(attempt int) time.Duration {
 	if jitterRange <= 0 {
 		return delay
 	}
-	return delay - jitterRange + time.Duration(rand.Int63n(int64(jitterRange*2)))
+	return delay - jitterRange + time.Duration(q.randInt63n(int64(jitterRange*2)))
+}
+
+func (q *DbQueue) randInt63n(n int64) int64 {
+	if n <= 0 {
+		return 0
+	}
+	q.rngMutex.Lock()
+	defer q.rngMutex.Unlock()
+	if q.rng == nil {
+		q.rng = rand.New(rand.NewSource(time.Now().UnixNano()))
+	}
+	return q.rng.Int63n(n)
 }
 
 // ExecuteMaintenance runs a low-impact transaction that bypasses pool saturation guards.
