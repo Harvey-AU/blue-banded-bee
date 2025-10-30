@@ -437,7 +437,7 @@ func main() {
 	var jobWorkers int
 	switch appEnv {
 	case "production":
-		jobWorkers = 50 // Production: high throughput
+		jobWorkers = 30 // Production: sized to stay under Supabase pool limits while keeping queue saturated
 	case "staging":
 		jobWorkers = 10 // Preview/staging: moderate throughput for PR testing
 	default:

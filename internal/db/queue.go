@@ -45,7 +45,7 @@ const (
 	defaultPoolWarnThreshold   = 0.90
 	defaultPoolRejectThreshold = 0.95
 	poolLogCooldown            = 5 * time.Second
-	defaultQueueConcurrency    = 24
+	defaultQueueConcurrency    = 12
 	defaultTxRetries           = 3
 	defaultRetryBaseDelay      = 200 * time.Millisecond
 	defaultRetryMaxDelay       = 1500 * time.Millisecond
