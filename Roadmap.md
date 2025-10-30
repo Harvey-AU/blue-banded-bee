@@ -423,10 +423,10 @@ Organisation model implemented:
   - [ ] Live presence indicators for multi-user organisations
   - [ ] Real-time dashboard updates without page refresh
 - [ ] **Database Optimisation**
-  - [ ] Move CPU-intensive analytics queries to PostgreSQL functions
+  - [x] Move CPU-intensive analytics queries to PostgreSQL functions
   - [ ] Optimise task acquisition with database-side logic
-  - [ ] Enhance Row Level Security policies for multi-tenant usage
-  - [ ] Consolidate database connection settings into single configuration
+  - [x] Enhance Row Level Security policies for multi-tenant usage
+  - [x] Consolidate database connection settings into single configuration
         location and make them configurable via environment variables
         ([internal/db/db.go:113-115](./internal/db/db.go#L113))
 - [ ] **File Storage & Edge Functions**
@@ -434,6 +434,8 @@ Organisation model implemented:
         Storage
   - [ ] Create Edge Functions for webhook handling and scheduled tasks
   - [ ] Handle Webflow publish events via Edge Functions
+  - [ ] Add managed Postgres proxy in front of edge/serverless workloads to
+        shield the primary pool
 
 ### 🔴 API & Integration Enhancements
 
@@ -455,6 +457,11 @@ Organisation model implemented:
   - [ ] Set up backup schedule and automated recovery testing
   - [ ] Implement data retention policies
   - [ ] Create comprehensive database health monitoring
+  - [ ] Implement burst-protected connection classes (separate Supabase
+        roles/DSNs for batch vs interactive traffic)
+  - [ ] Introduce read replica routing with lag monitoring and primary fallbacks
+  - [ ] Add tenant-level pool quotas with schema/role isolation to enforce
+        fairness
 - [ ] **Scheduling & Automation**
   - [ ] Create configuration UI for scheduling options
   - [ ] Implement cron-like scheduler for recurring runs
@@ -462,6 +469,8 @@ Organisation model implemented:
 - [ ] **Monitoring & Reporting**
   - [ ] Fix completion percentage to reflect actual completed vs skipped tasks
         (not always 100%) ([internal/db/db.go:404](./internal/db/db.go#L404))
+  - [ ] Publish OTEL metrics for connection pool saturation and wire Grafana
+        alerts
 
 ## ⚪ Stage 7: Feature Refinement & Launch Preparation
 
