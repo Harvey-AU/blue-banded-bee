@@ -29,6 +29,42 @@ On merge, CI will:
 
 ## [Unreleased]
 
+### Fixed
+
+- **Queue Performance Bottleneck**: Eliminated GetNextTask query performance
+  degradation causing 5ms-107s variance (21,000x)
+  - Root cause: Query scanned ~5,000 pending tasks looking for jobs with
+    available concurrency, causing table scan under load
+  - Introduced 'waiting' status for tasks blocked by job concurrency limits
+  - Only 'pending' tasks are now eligible for claiming, reducing typical scan
+    from 5,000 rows to <100 rows (98% reduction)
+  - Added capacity-aware enqueueing:
+    `available_slots = concurrency - (running_tasks + existing_pending_count)`
+  - New tasks only set to 'pending' if job has available capacity slots,
+    remainder go to 'waiting'
+  - Migration includes backfill UPDATE to immediately move existing blocked
+    pending tasks to waiting status
+  - DecrementRunningTasks now automatically promotes one waiting task to pending
+    when capacity frees
+  - Created partial indexes `idx_tasks_pending_ready` and
+    `idx_tasks_waiting_by_job` for optimised scans
+  - Added database functions `promote_waiting_task_for_job()` and
+    `job_has_capacity()` for atomic state transitions
+  - Expected improvement: Query times from 5-107s to consistent <10ms, reduced
+    pool contention, improved throughput
+
+### Added
+
+- **Queue Status Flow Documentation**: Comprehensive documentation of task
+  lifecycle and status split solution
+  - Visual state machine diagrams showing pending/waiting/running/completed
+    transitions
+  - Capacity calculation examples with concrete scenarios
+  - Query performance before/after comparisons with scan size analysis
+  - Implementation details for capacity-aware enqueueing and atomic promotion
+  - Edge case handling documentation (no concurrency limit, concurrent
+    completions, migration timing)
+
 ## [0.15.0] – 2025-10-29
 
 ### Added
