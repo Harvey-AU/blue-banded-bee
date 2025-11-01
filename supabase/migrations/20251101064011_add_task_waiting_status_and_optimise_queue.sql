@@ -23,13 +23,14 @@ END $$;
 -- Step 2: Create optimised partial index for ready-to-claim tasks
 -- This index only includes tasks that are actually claimable (status='pending')
 -- Ordered by priority_score DESC, created_at for optimal claim ordering
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_tasks_pending_ready
+-- Note: Cannot use CONCURRENTLY in Supabase migrations (runs in transaction)
+CREATE INDEX IF NOT EXISTS idx_tasks_pending_ready
   ON tasks (priority_score DESC, created_at, job_id)
   WHERE status = 'pending';
 
 -- Step 3: Create index for waiting tasks per job
 -- When a job frees capacity, we need to quickly find waiting tasks for that job
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_tasks_waiting_by_job
+CREATE INDEX IF NOT EXISTS idx_tasks_waiting_by_job
   ON tasks (job_id, priority_score DESC, created_at)
   WHERE status = 'waiting';
 
