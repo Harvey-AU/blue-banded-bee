@@ -32,6 +32,7 @@ type DBClient interface {
 	// Additional methods used by API handlers
 	GetUser(userID string) (*db.User, error)
 	ResetSchema() error
+	ResetDataOnly() error
 	CreateUser(userID, email string, fullName *string, orgName string) (*db.User, *db.Organisation, error)
 	GetOrganisation(organisationID string) (*db.Organisation, error)
 	ListJobs(organisationID string, limit, offset int, status, dateRange, timezone string) ([]db.JobWithDomain, int, error)
@@ -86,6 +87,7 @@ func (h *Handler) SetupRoutes(mux *http.ServeMux) {
 
 	// Admin endpoints (require authentication and admin role)
 	mux.Handle("/v1/admin/reset-db", auth.AuthMiddleware(http.HandlerFunc(h.AdminResetDatabase)))
+	mux.Handle("/v1/admin/reset-data", auth.AuthMiddleware(http.HandlerFunc(h.AdminResetData)))
 
 	// Protected pprof endpoints (system admin + auth required)
 	pprofProtected := func(handler http.Handler) http.Handler {

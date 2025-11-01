@@ -512,18 +512,98 @@ func (db *DB) GetDB() *sql.DB {
 	return db.client
 }
 
-// ResetSchema resets the database schema
+// ResetSchema performs a complete database reset by dropping all tables and clearing migration history.
+// This triggers Supabase to rebuild the entire schema from scratch.
+// WARNING: This is a nuclear option that destroys all data and schema.
 func (db *DB) ResetSchema() error {
 	startTime := time.Now()
-	log.Warn().Msg("=== DATABASE RESET STARTED ===")
-	log.Warn().Msg("Clearing all data from database tables")
+	log.Warn().Msg("=== NUCLEAR DATABASE RESET STARTED ===")
+	log.Warn().Msg("This will DROP all tables and rebuild schema from scratch")
+
+	// Step 1: Drop all tables in reverse dependency order
+	log.Info().Msg("Step 1/3: Dropping all tables")
+	tables := []string{"tasks", "jobs", "job_share_links", "pages", "domains", "users", "organisations"}
+	tablesDropped := 0
+
+	for i, table := range tables {
+		tableStart := time.Now()
+		log.Info().
+			Str("table", table).
+			Int("table_num", i+1).
+			Int("total_tables", len(tables)).
+			Msg("Dropping table")
+
+		_, err := db.client.Exec(fmt.Sprintf(`DROP TABLE IF EXISTS %s CASCADE`, table))
+		if err != nil {
+			log.Error().
+				Err(err).
+				Str("table", table).
+				Dur("elapsed", time.Since(tableStart)).
+				Msg("FAILED to drop table - reset aborted")
+			return fmt.Errorf("failed to drop table %s: %w", table, err)
+		}
+
+		tablesDropped++
+		log.Info().
+			Str("table", table).
+			Dur("duration", time.Since(tableStart)).
+			Msg("Dropped table successfully")
+	}
+
+	log.Info().
+		Int("tables_dropped", tablesDropped).
+		Dur("step_duration", time.Since(startTime)).
+		Msg("Step 1/3 completed: All tables dropped")
+
+	// Step 2: Clear migration history to trigger Supabase to reapply all migrations
+	migrationStart := time.Now()
+	log.Warn().Msg("Step 2/3: Clearing migration history")
+	log.Warn().Msg("This will trigger Supabase GitHub integration to reapply all migrations")
+
+	result, err := db.client.Exec(`DELETE FROM supabase_migrations.schema_migrations`)
+	if err != nil {
+		log.Error().
+			Err(err).
+			Dur("elapsed", time.Since(migrationStart)).
+			Msg("FAILED to clear migration history - reset incomplete")
+		return fmt.Errorf("failed to clear migration history: %w", err)
+	}
+
+	migrationsCleared, _ := result.RowsAffected()
+	log.Info().
+		Int64("migrations_cleared", migrationsCleared).
+		Dur("step_duration", time.Since(migrationStart)).
+		Msg("Step 2/3 completed: Migration history cleared")
+
+	// Step 3: Wait briefly for Supabase to detect and start reapplying migrations
+	log.Info().Msg("Step 3/3: Waiting for Supabase to detect schema changes")
+	time.Sleep(2 * time.Second)
+	log.Info().Msg("Step 3/3 completed: Database ready for migration reapplication")
+
+	totalDuration := time.Since(startTime)
+	log.Warn().
+		Dur("total_duration", totalDuration).
+		Int("tables_dropped", tablesDropped).
+		Int64("migrations_cleared", migrationsCleared).
+		Msg("=== NUCLEAR DATABASE RESET COMPLETED ===")
+	log.Warn().Msg("Supabase will now automatically reapply all migrations via GitHub integration")
+
+	return nil
+}
+
+// ResetDataOnly clears all data from tables but preserves the schema.
+// This is the safe option for clearing test data without triggering schema changes.
+func (db *DB) ResetDataOnly() error {
+	startTime := time.Now()
+	log.Warn().Msg("=== DATA-ONLY RESET STARTED ===")
+	log.Warn().Msg("Clearing all data from database tables (schema preserved)")
 
 	// Delete data in order that respects foreign key constraints
 	// Start with child tables first, then parent tables
 	tables := []string{"tasks", "jobs", "job_share_links", "pages", "domains"}
 	totalRowsDeleted := int64(0)
 
-	log.Info().Msg("Step 1/3: Deleting all data from tables")
+	log.Info().Msg("Step 1/2: Deleting all data from tables")
 	for i, table := range tables {
 		tableStart := time.Now()
 		log.Info().
@@ -554,11 +634,11 @@ func (db *DB) ResetSchema() error {
 	log.Info().
 		Int64("total_rows_deleted", totalRowsDeleted).
 		Dur("step_duration", time.Since(startTime)).
-		Msg("Step 1/3 completed: All table data cleared")
+		Msg("Step 1/2 completed: All table data cleared")
 
 	// Reset sequences to start from 1 again
 	sequenceStart := time.Now()
-	log.Info().Msg("Step 2/3: Resetting sequences")
+	log.Info().Msg("Step 2/2: Resetting sequences")
 	sequences := []struct {
 		name  string
 		table string
@@ -587,35 +667,14 @@ func (db *DB) ResetSchema() error {
 		Int("sequences_reset", sequencesReset).
 		Int("sequences_total", len(sequences)).
 		Dur("step_duration", time.Since(sequenceStart)).
-		Msg("Step 2/3 completed: Sequences reset")
-
-	// Step 3: Clear migration history to trigger Supabase to reapply all migrations via GitHub integration
-	migrationStart := time.Now()
-	log.Warn().Msg("Step 3/3: Clearing migration history")
-	log.Warn().Msg("This will trigger Supabase GitHub integration to reapply all migrations")
-
-	result, err := db.client.Exec(`DELETE FROM supabase_migrations.schema_migrations`)
-	if err != nil {
-		log.Error().
-			Err(err).
-			Dur("elapsed", time.Since(migrationStart)).
-			Msg("FAILED to clear migration history - reset incomplete")
-		return fmt.Errorf("failed to clear migration history: %w", err)
-	}
-
-	migrationsCleared, _ := result.RowsAffected()
-	log.Info().
-		Int64("migrations_cleared", migrationsCleared).
-		Dur("step_duration", time.Since(migrationStart)).
-		Msg("Step 3/3 completed: Migration history cleared")
+		Msg("Step 2/2 completed: Sequences reset")
 
 	totalDuration := time.Since(startTime)
 	log.Warn().
 		Dur("total_duration", totalDuration).
 		Int64("total_rows_deleted", totalRowsDeleted).
-		Int64("migrations_cleared", migrationsCleared).
-		Msg("=== DATABASE RESET COMPLETED SUCCESSFULLY ===")
-	log.Warn().Msg("Supabase will now automatically reapply all migrations via GitHub integration")
+		Msg("=== DATA-ONLY RESET COMPLETED SUCCESSFULLY ===")
+	log.Warn().Msg("Schema preserved - no migrations affected")
 
 	return nil
 }

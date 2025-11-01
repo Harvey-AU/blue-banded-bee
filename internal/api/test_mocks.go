@@ -168,6 +168,11 @@ func (m *MockDBClient) ResetSchema() error {
 	return args.Error(0)
 }
 
+func (m *MockDBClient) ResetDataOnly() error {
+	args := m.Called()
+	return args.Error(0)
+}
+
 func (m *MockDBClient) CreateUser(userID, email string, fullName *string, orgName string) (*db.User, *db.Organisation, error) {
 	args := m.Called(userID, email, fullName, orgName)
 	var user *db.User

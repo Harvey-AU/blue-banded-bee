@@ -50,6 +50,12 @@ func (m *MockDB) ResetSchema() error {
 	return args.Error(0)
 }
 
+// ResetDataOnly mocks the ResetDataOnly method for testing data-only resets
+func (m *MockDB) ResetDataOnly() error {
+	args := m.Called()
+	return args.Error(0)
+}
+
 // GetOrCreateUser mocks the GetOrCreateUser method
 func (m *MockDB) GetOrCreateUser(userID, email string, orgID *string) (*db.User, error) {
 	args := m.Called(userID, email, orgID)
