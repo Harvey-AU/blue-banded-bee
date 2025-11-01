@@ -514,26 +514,51 @@ func (db *DB) GetDB() *sql.DB {
 
 // ResetSchema resets the database schema
 func (db *DB) ResetSchema() error {
+	startTime := time.Now()
+	log.Warn().Msg("=== DATABASE RESET STARTED ===")
 	log.Warn().Msg("Clearing all data from database tables")
 
 	// Delete data in order that respects foreign key constraints
 	// Start with child tables first, then parent tables
 	tables := []string{"tasks", "jobs", "job_share_links", "pages", "domains"}
+	totalRowsDeleted := int64(0)
 
-	for _, table := range tables {
-		log.Debug().Str("table", table).Msg("Deleting all rows")
+	log.Info().Msg("Step 1/3: Deleting all data from tables")
+	for i, table := range tables {
+		tableStart := time.Now()
+		log.Info().
+			Str("table", table).
+			Int("table_num", i+1).
+			Int("total_tables", len(tables)).
+			Msg("Deleting table data")
+
 		result, err := db.client.Exec(fmt.Sprintf(`DELETE FROM %s`, table))
 		if err != nil {
-			log.Error().Err(err).Str("table", table).Msg("Failed to delete rows")
+			log.Error().
+				Err(err).
+				Str("table", table).
+				Dur("elapsed", time.Since(tableStart)).
+				Msg("FAILED to delete rows - reset aborted")
 			return fmt.Errorf("failed to delete rows from %s: %w", table, err)
 		}
 
 		rowsAffected, _ := result.RowsAffected()
-		log.Info().Str("table", table).Int64("rows_deleted", rowsAffected).Msg("Cleared table data")
+		totalRowsDeleted += rowsAffected
+		log.Info().
+			Str("table", table).
+			Int64("rows_deleted", rowsAffected).
+			Dur("duration", time.Since(tableStart)).
+			Msg("Cleared table data successfully")
 	}
 
+	log.Info().
+		Int64("total_rows_deleted", totalRowsDeleted).
+		Dur("step_duration", time.Since(startTime)).
+		Msg("Step 1/3 completed: All table data cleared")
+
 	// Reset sequences to start from 1 again
-	log.Debug().Msg("Resetting sequences")
+	sequenceStart := time.Now()
+	log.Info().Msg("Step 2/3: Resetting sequences")
 	sequences := []struct {
 		name  string
 		table string
@@ -542,25 +567,56 @@ func (db *DB) ResetSchema() error {
 		{"pages_id_seq", "pages"},
 	}
 
+	sequencesReset := 0
 	for _, seq := range sequences {
 		_, err := db.client.Exec(fmt.Sprintf(`ALTER SEQUENCE %s RESTART WITH 1`, seq.name))
 		if err != nil {
-			log.Warn().Err(err).Str("sequence", seq.name).Msg("Failed to reset sequence (may not exist)")
-			// Don't return error for sequences, as they may not exist
+			log.Warn().
+				Err(err).
+				Str("sequence", seq.name).
+				Msg("Failed to reset sequence (may not exist)")
 		} else {
-			log.Debug().Str("sequence", seq.name).Msg("Reset sequence to 1")
+			sequencesReset++
+			log.Info().
+				Str("sequence", seq.name).
+				Msg("Reset sequence to 1")
 		}
 	}
 
+	log.Info().
+		Int("sequences_reset", sequencesReset).
+		Int("sequences_total", len(sequences)).
+		Dur("step_duration", time.Since(sequenceStart)).
+		Msg("Step 2/3 completed: Sequences reset")
+
 	// Step 3: Clear migration history to trigger Supabase to reapply all migrations via GitHub integration
-	log.Warn().Msg("Clearing migration history - Supabase will reapply all migrations via GitHub integration")
-	_, err := db.client.Exec(`DELETE FROM supabase_migrations.schema_migrations`)
+	migrationStart := time.Now()
+	log.Warn().Msg("Step 3/3: Clearing migration history")
+	log.Warn().Msg("This will trigger Supabase GitHub integration to reapply all migrations")
+
+	result, err := db.client.Exec(`DELETE FROM supabase_migrations.schema_migrations`)
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to clear migration history")
+		log.Error().
+			Err(err).
+			Dur("elapsed", time.Since(migrationStart)).
+			Msg("FAILED to clear migration history - reset incomplete")
 		return fmt.Errorf("failed to clear migration history: %w", err)
 	}
 
-	log.Info().Msg("Successfully reset database - migrations will be reapplied automatically by Supabase GitHub integration")
+	migrationsCleared, _ := result.RowsAffected()
+	log.Info().
+		Int64("migrations_cleared", migrationsCleared).
+		Dur("step_duration", time.Since(migrationStart)).
+		Msg("Step 3/3 completed: Migration history cleared")
+
+	totalDuration := time.Since(startTime)
+	log.Warn().
+		Dur("total_duration", totalDuration).
+		Int64("total_rows_deleted", totalRowsDeleted).
+		Int64("migrations_cleared", migrationsCleared).
+		Msg("=== DATABASE RESET COMPLETED SUCCESSFULLY ===")
+	log.Warn().Msg("Supabase will now automatically reapply all migrations via GitHub integration")
+
 	return nil
 }
 

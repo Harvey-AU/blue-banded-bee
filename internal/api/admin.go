@@ -3,6 +3,7 @@ package api
 import (
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/Harvey-AU/blue-banded-bee/internal/auth"
 	"github.com/getsentry/sentry-go"
@@ -78,17 +79,55 @@ func (h *Handler) AdminResetDatabase(w http.ResponseWriter, r *http.Request) {
 	})
 
 	// Perform the database reset
+	resetStart := time.Now()
 	if err := h.DB.ResetSchema(); err != nil {
+		resetDuration := time.Since(resetStart)
 		logger.Error().Err(err).
 			Str("user_id", user.ID).
+			Dur("duration", resetDuration).
 			Msg("Failed to reset database schema")
+
+		// Capture failure in Sentry
+		sentry.WithScope(func(scope *sentry.Scope) {
+			scope.SetLevel(sentry.LevelError)
+			scope.SetTag("event_type", "admin_action_failed")
+			scope.SetTag("action", "database_reset")
+			scope.SetUser(sentry.User{
+				ID:    user.ID,
+				Email: user.Email,
+			})
+			scope.SetContext("error_details", map[string]interface{}{
+				"error":    err.Error(),
+				"duration": resetDuration.Milliseconds(),
+			})
+			sentry.CaptureException(err)
+		})
+
 		InternalError(w, r, err)
 		return
 	}
 
-	logger.Info().
+	resetDuration := time.Since(resetStart)
+	logger.Warn().
 		Str("user_id", user.ID).
-		Msg("Database schema reset completed by admin")
+		Dur("duration", resetDuration).
+		Msg("Database schema reset completed successfully by admin")
+
+	// Capture success in Sentry for audit trail
+	sentry.WithScope(func(scope *sentry.Scope) {
+		scope.SetLevel(sentry.LevelInfo)
+		scope.SetTag("event_type", "admin_action_success")
+		scope.SetTag("action", "database_reset")
+		scope.SetUser(sentry.User{
+			ID:    user.ID,
+			Email: user.Email,
+		})
+		scope.SetContext("success_details", map[string]interface{}{
+			"duration_ms": resetDuration.Milliseconds(),
+			"timestamp":   time.Now().UTC().Format(time.RFC3339),
+		})
+		sentry.CaptureMessage("Database reset completed successfully")
+	})
 
 	WriteSuccess(w, r, nil, "Database schema reset successfully")
 }
