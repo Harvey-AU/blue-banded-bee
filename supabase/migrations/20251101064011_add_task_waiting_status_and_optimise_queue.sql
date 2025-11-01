@@ -105,15 +105,9 @@ COMMENT ON FUNCTION job_has_capacity IS
 'Returns true if the job can accept more running tasks based on its concurrency limit.
 Used during task enqueueing to determine initial status (pending vs waiting).';
 
--- Step 7: Backfill existing pending tasks to waiting status
--- Move pending tasks to waiting if their job is at or over concurrency limit
--- This ensures the new index is immediately effective
-UPDATE tasks t
-SET status = 'waiting'
-FROM jobs j
-WHERE t.job_id = j.id
-  AND t.status = 'pending'
-  AND j.status = 'running'
-  AND j.concurrency IS NOT NULL
-  AND j.concurrency > 0
-  AND j.running_tasks >= j.concurrency;
+-- Step 7: Backfill removed - causes statement timeout on large tables
+-- The status split will apply naturally:
+-- - New tasks get correct status via EnqueueURLs capacity logic
+-- - Existing pending tasks remain pending and can be claimed
+-- - Over time, tasks will move to waiting as jobs reach capacity
+-- Note: Initial performance may be suboptimal until pending table shrinks naturally
