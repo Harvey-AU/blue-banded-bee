@@ -369,10 +369,11 @@ func TestDbQueueEnqueueURLs(t *testing.T) {
 			setupMock: func(mock sqlmock.Sqlmock) {
 				mock.ExpectBegin()
 
-				// Expect SELECT of job limits and current tasks
-				mock.ExpectQuery(`SELECT max_pages,\s+COALESCE\(\(SELECT COUNT\(\*\) FROM tasks WHERE job_id = \$1 AND status != 'skipped'\), 0\)\s+FROM jobs WHERE id = \$1`).
+				// Expect SELECT of job limits and current tasks (including concurrency, running_tasks, and pending count)
+				mock.ExpectQuery(`SELECT max_pages, concurrency, running_tasks,\s+COALESCE\(\(SELECT COUNT\(\*\) FROM tasks WHERE job_id = \$1 AND status != 'skipped'\), 0\),\s+COALESCE\(\(SELECT COUNT\(\*\) FROM tasks WHERE job_id = \$1 AND status = 'pending'\), 0\)\s+FROM jobs WHERE id = \$1`).
 					WithArgs("job-1").
-					WillReturnRows(sqlmock.NewRows([]string{"max_pages", "count"}).AddRow(0, 0))
+					WillReturnRows(sqlmock.NewRows([]string{"max_pages", "concurrency", "running_tasks", "total_count", "pending_count"}).
+						AddRow(0, nil, 0, 0, 0))
 
 				// Expect direct Exec (no prepared statement for Supabase pooler compatibility)
 				mock.ExpectExec("INSERT INTO tasks ").
@@ -405,9 +406,10 @@ func TestDbQueueEnqueueURLs(t *testing.T) {
 			setupMock: func(mock sqlmock.Sqlmock) {
 				mock.ExpectBegin()
 
-				mock.ExpectQuery(`SELECT max_pages,\s+COALESCE\(\(SELECT COUNT\(\*\) FROM tasks WHERE job_id = \$1 AND status != 'skipped'\), 0\)\s+FROM jobs WHERE id = \$1`).
+				mock.ExpectQuery(`SELECT max_pages, concurrency, running_tasks,\s+COALESCE\(\(SELECT COUNT\(\*\) FROM tasks WHERE job_id = \$1 AND status != 'skipped'\), 0\),\s+COALESCE\(\(SELECT COUNT\(\*\) FROM tasks WHERE job_id = \$1 AND status = 'pending'\), 0\)\s+FROM jobs WHERE id = \$1`).
 					WithArgs("job-2").
-					WillReturnRows(sqlmock.NewRows([]string{"max_pages", "count"}).AddRow(0, 0))
+					WillReturnRows(sqlmock.NewRows([]string{"max_pages", "concurrency", "running_tasks", "total_count", "pending_count"}).
+						AddRow(0, nil, 0, 0, 0))
 
 				// Expect three direct execs (no prepared statement for Supabase pooler compatibility)
 				mock.ExpectExec("INSERT INTO tasks ").
@@ -439,9 +441,10 @@ func TestDbQueueEnqueueURLs(t *testing.T) {
 			setupMock: func(mock sqlmock.Sqlmock) {
 				mock.ExpectBegin()
 
-				mock.ExpectQuery(`SELECT max_pages,\s+COALESCE\(\(SELECT COUNT\(\*\) FROM tasks WHERE job_id = \$1 AND status != 'skipped'\), 0\)\s+FROM jobs WHERE id = \$1`).
+				mock.ExpectQuery(`SELECT max_pages, concurrency, running_tasks,\s+COALESCE\(\(SELECT COUNT\(\*\) FROM tasks WHERE job_id = \$1 AND status != 'skipped'\), 0\),\s+COALESCE\(\(SELECT COUNT\(\*\) FROM tasks WHERE job_id = \$1 AND status = 'pending'\), 0\)\s+FROM jobs WHERE id = \$1`).
 					WithArgs("job-4").
-					WillReturnRows(sqlmock.NewRows([]string{"max_pages", "count"}).AddRow(0, 0))
+					WillReturnRows(sqlmock.NewRows([]string{"max_pages", "concurrency", "running_tasks", "total_count", "pending_count"}).
+						AddRow(0, nil, 0, 0, 0))
 
 				// Expect direct Exec (no prepared statement)
 				mock.ExpectExec("INSERT INTO tasks ").
