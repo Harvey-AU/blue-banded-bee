@@ -270,14 +270,18 @@ func (db *DB) ListJobs(organisationID string, limit, offset int, status, dateRan
 
 	// Get jobs with pagination
 	selectQuery := `
-		SELECT 
-			j.id, j.status, j.progress, j.total_tasks, j.completed_tasks, 
-			j.failed_tasks, j.sitemap_tasks, j.found_tasks, j.created_at,
-			j.started_at, j.completed_at, d.name as domain_name,
-			j.duration_seconds, j.avg_time_per_task_seconds
-		` + baseQuery + `
-		ORDER BY j.created_at DESC
-		LIMIT $` + fmt.Sprintf("%d", argCount+1) + ` OFFSET $` + fmt.Sprintf("%d", argCount+2)
+	SELECT 
+		j.id, j.status, j.progress, j.total_tasks, j.completed_tasks, 
+		j.failed_tasks, j.sitemap_tasks, j.found_tasks, j.created_at,
+		j.started_at, j.completed_at, d.name as domain_name,
+		j.duration_seconds,
+		CASE
+			WHEN j.completed_tasks > 0 AND j.duration_seconds IS NOT NULL THEN j.duration_seconds::double precision / NULLIF(j.completed_tasks, 0)
+			ELSE NULL
+		END AS avg_time_per_task_seconds
+	` + baseQuery + `
+	ORDER BY j.created_at DESC
+	LIMIT $` + fmt.Sprintf("%d", argCount+1) + ` OFFSET $` + fmt.Sprintf("%d", argCount+2)
 
 	args = append(args, limit, offset)
 
@@ -368,14 +372,18 @@ func (db *DB) ListJobsWithOffset(organisationID string, limit, offset int, statu
 
 	// Get jobs with pagination
 	selectQuery := `
-		SELECT
-			j.id, j.status, j.progress, j.total_tasks, j.completed_tasks,
-			j.failed_tasks, j.sitemap_tasks, j.found_tasks, j.created_at,
-			j.started_at, j.completed_at, d.name as domain_name,
-			j.duration_seconds, j.avg_time_per_task_seconds
-		` + baseQuery + `
-		ORDER BY j.created_at DESC
-		LIMIT $` + fmt.Sprintf("%d", argCount+1) + ` OFFSET $` + fmt.Sprintf("%d", argCount+2)
+	SELECT
+		j.id, j.status, j.progress, j.total_tasks, j.completed_tasks,
+		j.failed_tasks, j.sitemap_tasks, j.found_tasks, j.created_at,
+		j.started_at, j.completed_at, d.name as domain_name,
+		j.duration_seconds,
+		CASE
+			WHEN j.completed_tasks > 0 AND j.duration_seconds IS NOT NULL THEN j.duration_seconds::double precision / NULLIF(j.completed_tasks, 0)
+			ELSE NULL
+		END AS avg_time_per_task_seconds
+	` + baseQuery + `
+	ORDER BY j.created_at DESC
+	LIMIT $` + fmt.Sprintf("%d", argCount+1) + ` OFFSET $` + fmt.Sprintf("%d", argCount+2)
 
 	args = append(args, limit, offset)
 
