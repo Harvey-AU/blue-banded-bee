@@ -1619,11 +1619,13 @@ func (wp *WorkerPool) processDiscoveredLinks(ctx context.Context, task *Task, re
 // handleTaskError processes task failures with appropriate retry logic and status updates
 func (wp *WorkerPool) handleTaskError(ctx context.Context, task *db.Task, taskErr error) error {
 	now := time.Now().UTC()
+	retryReason := "non_retryable"
 
 	// Check if this is a blocking error (403/429/503)
 	if isBlockingError(taskErr) {
 		// For blocking errors, only retry twice (less aggressive)
 		if task.RetryCount < 2 {
+			retryReason = "blocking"
 			// Apply exponential backoff before retry
 			backoffDuration := calculateBackoffDuration(task.RetryCount)
 
@@ -1638,6 +1640,7 @@ func (wp *WorkerPool) handleTaskError(ctx context.Context, task *db.Task, taskEr
 				Int("retry_count", task.RetryCount).
 				Dur("backoff_duration", backoffDuration).
 				Msg("Blocking error (403/429/503), retry scheduled after exponential backoff")
+			observability.RecordWorkerTaskRetry(ctx, task.JobID, retryReason)
 		} else {
 			// Mark as permanently failed after 2 retries
 			task.Status = string(TaskStatusFailed)
@@ -1648,9 +1651,11 @@ func (wp *WorkerPool) handleTaskError(ctx context.Context, task *db.Task, taskEr
 				Str("task_id", task.ID).
 				Int("retry_count", task.RetryCount).
 				Msg("Task blocked permanently after 2 retries")
+			observability.RecordWorkerTaskFailure(ctx, task.JobID, "blocking")
 		}
 	} else if isRetryableError(taskErr) && task.RetryCount < MaxTaskRetries {
 		// For other retryable errors, use normal retry limit
+		retryReason = "retryable"
 		task.RetryCount++
 		task.Status = string(TaskStatusPending)
 		task.StartedAt = time.Time{} // Reset started time
@@ -1659,6 +1664,7 @@ func (wp *WorkerPool) handleTaskError(ctx context.Context, task *db.Task, taskEr
 			Str("task_id", task.ID).
 			Int("retry_count", task.RetryCount).
 			Msg("Task failed with retryable error, scheduling retry")
+		observability.RecordWorkerTaskRetry(ctx, task.JobID, retryReason)
 	} else {
 		// Mark as permanently failed
 		task.Status = string(TaskStatusFailed)
@@ -1669,6 +1675,15 @@ func (wp *WorkerPool) handleTaskError(ctx context.Context, task *db.Task, taskEr
 			Str("task_id", task.ID).
 			Int("retry_count", task.RetryCount).
 			Msg("Task failed permanently")
+		failureReason := retryReason
+		if !isBlockingError(taskErr) && !isRetryableError(taskErr) {
+			failureReason = "non_retryable"
+		} else if isRetryableError(taskErr) {
+			failureReason = "retryable_exhausted"
+		} else if isBlockingError(taskErr) {
+			failureReason = "blocking"
+		}
+		observability.RecordWorkerTaskFailure(ctx, task.JobID, failureReason)
 	}
 
 	// Immediately decrement running_tasks to free concurrency slot
@@ -1786,6 +1801,14 @@ func (wp *WorkerPool) handleTaskSuccess(ctx context.Context, task *db.Task, resu
 func (wp *WorkerPool) processTask(ctx context.Context, task *Task) (*crawler.CrawlResult, error) {
 	start := time.Now()
 	status := "success"
+	queueWait := time.Duration(0)
+	if !task.CreatedAt.IsZero() {
+		if !task.StartedAt.IsZero() {
+			queueWait = task.StartedAt.Sub(task.CreatedAt)
+		} else {
+			queueWait = time.Since(task.CreatedAt)
+		}
+	}
 
 	ctx, span := observability.StartWorkerTaskSpan(ctx, observability.WorkerTaskSpanInfo{
 		JobID:     task.JobID,
@@ -1797,10 +1820,17 @@ func (wp *WorkerPool) processTask(ctx context.Context, task *Task) (*crawler.Cra
 	defer span.End()
 
 	defer func() {
+		totalDuration := time.Duration(0)
+		if !task.CreatedAt.IsZero() {
+			totalDuration = time.Since(task.CreatedAt)
+		}
+
 		observability.RecordWorkerTask(ctx, observability.WorkerTaskMetrics{
-			JobID:    task.JobID,
-			Status:   status,
-			Duration: time.Since(start),
+			JobID:         task.JobID,
+			Status:        status,
+			Duration:      time.Since(start),
+			QueueWait:     queueWait,
+			TotalDuration: totalDuration,
 		})
 	}()
 

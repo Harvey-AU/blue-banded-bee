@@ -16,6 +16,8 @@ import (
 	"github.com/getsentry/sentry-go"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
+
+	"github.com/Harvey-AU/blue-banded-bee/internal/observability"
 )
 
 // DbQueue is a PostgreSQL implementation of a job queue
@@ -381,6 +383,16 @@ func (q *DbQueue) ensurePoolCapacity(ctx context.Context) (func(), error) {
 
 	usage := float64(stats.InUse) / float64(maxOpen)
 
+	observability.RecordDBPoolStats(ctx, observability.DBPoolSnapshot{
+		InUse:        stats.InUse,
+		Idle:         stats.Idle,
+		WaitCount:    stats.WaitCount,
+		WaitDuration: stats.WaitDuration,
+		MaxOpen:      maxOpen,
+		Reserved:     q.preserveConnections,
+		Usage:        usage,
+	})
+
 	if usage >= q.poolRejectThreshold && time.Since(q.lastRejectLog) > poolLogCooldown {
 		log.Warn().
 			Int("in_use", stats.InUse).
@@ -473,6 +485,7 @@ func (q *DbQueue) GetNextTask(ctx context.Context, jobID string) (*Task, error) 
 	now := time.Now().UTC()
 
 	err := q.Execute(ctx, func(tx *sql.Tx) error {
+		queryStart := time.Now()
 		// Use CTE to select and update in a single atomic query
 		// This reduces transaction time and minimises lock holding
 		// Also enforces per-job concurrency limits by checking running_tasks < concurrency
@@ -508,7 +521,7 @@ func (q *DbQueue) GetNextTask(ctx context.Context, jobID string) (*Task, error) 
 				FROM next_task nt
 				WHERE j.id = nt.job_id
 				  AND (j.concurrency IS NULL OR j.concurrency = 0 OR j.running_tasks < j.concurrency)
-				RETURNING j.id
+				RETURNING j.id, j.running_tasks, j.concurrency
 			),
 			task_update AS (
 				UPDATE tasks
@@ -518,30 +531,70 @@ func (q *DbQueue) GetNextTask(ctx context.Context, jobID string) (*Task, error) 
 				WHERE tasks.id = nt.id
 				RETURNING tasks.id, tasks.job_id, tasks.page_id, tasks.path,
 				          tasks.created_at, tasks.retry_count, tasks.source_type,
-				          tasks.source_url, tasks.priority_score
+				          tasks.source_url, tasks.priority_score,
+				          ju.running_tasks, ju.concurrency
 			)
-			SELECT id, job_id, page_id, path, created_at, retry_count, source_type, source_url, priority_score
+			SELECT id, job_id, page_id, path, created_at, retry_count, source_type, source_url, priority_score,
+			       running_tasks, concurrency
 			FROM task_update
 		`
 
 		// Execute the combined query
 		row := tx.QueryRowContext(ctx, query, args...)
 
+		var jobRunningTasks sql.NullInt64
+		var jobConcurrency sql.NullInt64
 		err := row.Scan(
 			&task.ID, &task.JobID, &task.PageID, &task.Path,
 			&task.CreatedAt, &task.RetryCount, &task.SourceType, &task.SourceURL,
-			&task.PriorityScore,
+			&task.PriorityScore, &jobRunningTasks, &jobConcurrency,
 		)
+		elapsed := time.Since(queryStart)
 
 		if err == sql.ErrNoRows {
+			log.Debug().
+				Str("job_id", jobID).
+				Dur("claim_duration", elapsed).
+				Msg("No pending task available for job")
+			observability.RecordTaskClaimAttempt(ctx, jobID, elapsed, "empty")
 			return sql.ErrNoRows
 		}
 		if err != nil {
+			log.Error().
+				Err(err).
+				Str("job_id", jobID).
+				Dur("claim_duration", elapsed).
+				Msg("Failed to claim next task")
+			observability.RecordTaskClaimAttempt(ctx, jobID, elapsed, "error")
 			return fmt.Errorf("failed to claim task: %w", err)
 		}
 
 		task.Status = "running"
 		task.StartedAt = now
+
+		runningValue := int64(0)
+		if jobRunningTasks.Valid {
+			runningValue = jobRunningTasks.Int64
+		}
+
+		concurrencyValue := int64(0)
+		unlimited := true
+		if jobConcurrency.Valid && jobConcurrency.Int64 > 0 {
+			concurrencyValue = jobConcurrency.Int64
+			unlimited = false
+		}
+
+		log.Debug().
+			Str("job_id", task.JobID).
+			Str("task_id", task.ID).
+			Dur("claim_duration", elapsed).
+			Int64("job_running_tasks", runningValue).
+			Int64("job_concurrency_limit", concurrencyValue).
+			Bool("job_concurrency_unlimited", unlimited).
+			Msg("Claimed next task")
+
+		observability.RecordTaskClaimAttempt(ctx, task.JobID, elapsed, "claimed")
+		observability.RecordJobConcurrencySnapshot(ctx, task.JobID, runningValue, concurrencyValue, unlimited)
 
 		return nil
 	})

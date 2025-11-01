@@ -136,9 +136,11 @@ func TestDbQueueGetNextTask(t *testing.T) {
 				rows := sqlmock.NewRows([]string{
 					"id", "job_id", "page_id", "path", "created_at",
 					"retry_count", "source_type", "source_url", "priority_score",
+					"running_tasks", "concurrency",
 				}).AddRow(
 					"task-1", "test-job", 1, "/page", fixedTime,
 					0, "sitemap", "https://example.com/sitemap.xml", 1.0,
+					2, 4,
 				)
 
 				mock.ExpectQuery(`WITH next_task AS \(.*SELECT.*FROM tasks t.*INNER JOIN jobs j.*WHERE.*status = 'pending'.*AND.*job_id.*FOR UPDATE OF t SKIP LOCKED.*\),\s*job_update AS \(.*UPDATE jobs.*running_tasks = running_tasks \+ 1.*\),\s*task_update AS \(.*UPDATE tasks.*JOIN job_update.*\).*SELECT id, job_id.*FROM task_update`).
@@ -174,9 +176,11 @@ func TestDbQueueGetNextTask(t *testing.T) {
 				rows := sqlmock.NewRows([]string{
 					"id", "job_id", "page_id", "path", "created_at",
 					"retry_count", "source_type", "source_url", "priority_score",
+					"running_tasks", "concurrency",
 				}).AddRow(
 					"task-2", "any-job", 2, "/other", fixedTime,
 					1, "discovery", "https://example.com", 0.5,
+					5, 0,
 				)
 
 				mock.ExpectQuery(`WITH next_task AS \(.*SELECT.*FROM tasks t.*INNER JOIN jobs j.*WHERE.*status = 'pending'.*FOR UPDATE OF t SKIP LOCKED.*\),\s*job_update AS \(.*UPDATE jobs.*running_tasks = running_tasks \+ 1.*\),\s*task_update AS \(.*UPDATE tasks.*JOIN job_update.*\).*SELECT id, job_id.*FROM task_update`).

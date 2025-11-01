@@ -56,6 +56,25 @@ var (
 	workerTaskTotal        metric.Int64Counter
 	workerConcurrentTasks  metric.Int64UpDownCounter
 	workerConcurrencyLimit metric.Int64Gauge
+
+	workerTaskQueueWait     metric.Float64Histogram
+	workerTaskTotalDuration metric.Float64Histogram
+
+	workerTaskClaimLatency metric.Float64Histogram
+
+	workerTaskRetryCounter   metric.Int64Counter
+	workerTaskFailureCounter metric.Int64Counter
+
+	jobRunningTasksGauge     metric.Int64Gauge
+	jobConcurrencyLimitGauge metric.Int64Gauge
+
+	dbPoolInUseGauge        metric.Int64Gauge
+	dbPoolIdleGauge         metric.Int64Gauge
+	dbPoolWaitCountGauge    metric.Int64Gauge
+	dbPoolWaitDurationGauge metric.Float64Gauge
+	dbPoolUsageGauge        metric.Float64Gauge
+	dbPoolMaxOpenGauge      metric.Int64Gauge
+	dbPoolReservedGauge     metric.Int64Gauge
 )
 
 // Init configures tracing and metrics exporters. When cfg.Enabled is false the function is a no-op.
@@ -143,6 +162,8 @@ func Init(ctx context.Context, cfg Config) (*Providers, error) {
 	initOnce.Do(func() {
 		workerTracer = tracerProvider.Tracer("blue-banded-bee/worker")
 		_ = initWorkerInstruments(meterProvider)
+		_ = initJobInstruments(meterProvider)
+		_ = initDBPoolInstruments(meterProvider)
 	})
 
 	shutdown := func(ctx context.Context) error {
@@ -235,6 +256,136 @@ func initWorkerInstruments(meterProvider *sdkmetric.MeterProvider) error {
 		"bee.worker.concurrency_capacity",
 		metric.WithDescription("Maximum concurrent tasks allowed per worker"),
 	)
+	if err != nil {
+		return err
+	}
+
+	workerTaskQueueWait, err = meter.Float64Histogram(
+		"bee.worker.task.queue_wait_ms",
+		metric.WithUnit("ms"),
+		metric.WithDescription("Time tasks spend waiting in the queue before a worker starts processing"),
+	)
+	if err != nil {
+		return err
+	}
+
+	workerTaskTotalDuration, err = meter.Float64Histogram(
+		"bee.worker.task.total_duration_ms",
+		metric.WithUnit("ms"),
+		metric.WithDescription("End-to-end time from task creation until completion"),
+	)
+	if err != nil {
+		return err
+	}
+
+	workerTaskClaimLatency, err = meter.Float64Histogram(
+		"bee.worker.task.claim_latency_ms",
+		metric.WithUnit("ms"),
+		metric.WithDescription("Latency to claim a task from the database"),
+	)
+	if err != nil {
+		return err
+	}
+
+	workerTaskRetryCounter, err = meter.Int64Counter(
+		"bee.worker.task.retries_total",
+		metric.WithDescription("Number of task retry attempts"),
+	)
+	if err != nil {
+		return err
+	}
+
+	workerTaskFailureCounter, err = meter.Int64Counter(
+		"bee.worker.task.failures_total",
+		metric.WithDescription("Number of permanently failed tasks"),
+	)
+	return err
+}
+
+func initJobInstruments(meterProvider *sdkmetric.MeterProvider) error {
+	if meterProvider == nil {
+		return nil
+	}
+
+	meter := meterProvider.Meter("blue-banded-bee/jobs")
+
+	var err error
+	jobRunningTasksGauge, err = meter.Int64Gauge(
+		"bee.jobs.running_tasks",
+		metric.WithDescription("Number of tasks currently running for a job"),
+	)
+	if err != nil {
+		return err
+	}
+
+	jobConcurrencyLimitGauge, err = meter.Int64Gauge(
+		"bee.jobs.concurrency_limit",
+		metric.WithDescription("Concurrency limit configured for a job (0 indicates unlimited)"),
+	)
+	return err
+}
+
+func initDBPoolInstruments(meterProvider *sdkmetric.MeterProvider) error {
+	if meterProvider == nil {
+		return nil
+	}
+
+	meter := meterProvider.Meter("blue-banded-bee/db_pool")
+
+	var err error
+	dbPoolInUseGauge, err = meter.Int64Gauge(
+		"bee.db.pool.in_use",
+		metric.WithDescription("Current number of connections in use"),
+	)
+	if err != nil {
+		return err
+	}
+
+	dbPoolIdleGauge, err = meter.Int64Gauge(
+		"bee.db.pool.idle",
+		metric.WithDescription("Current number of idle connections"),
+	)
+	if err != nil {
+		return err
+	}
+
+	dbPoolWaitCountGauge, err = meter.Int64Gauge(
+		"bee.db.pool.wait_count",
+		metric.WithDescription("Total number of waits for a database connection"),
+	)
+	if err != nil {
+		return err
+	}
+
+	dbPoolWaitDurationGauge, err = meter.Float64Gauge(
+		"bee.db.pool.wait_duration_ms",
+		metric.WithDescription("Total time spent waiting for database connections (milliseconds)"),
+		metric.WithUnit("ms"),
+	)
+	if err != nil {
+		return err
+	}
+
+	dbPoolUsageGauge, err = meter.Float64Gauge(
+		"bee.db.pool.usage_ratio",
+		metric.WithDescription("Connection pool usage ratio (in_use / max_open)"),
+	)
+	if err != nil {
+		return err
+	}
+
+	dbPoolMaxOpenGauge, err = meter.Int64Gauge(
+		"bee.db.pool.max_open",
+		metric.WithDescription("Maximum configured open connections"),
+	)
+	if err != nil {
+		return err
+	}
+
+	dbPoolReservedGauge, err = meter.Int64Gauge(
+		"bee.db.pool.reserved",
+		metric.WithDescription("Connections reserved for critical operations"),
+	)
 	return err
 }
 
@@ -249,9 +400,11 @@ type WorkerTaskSpanInfo struct {
 
 // WorkerTaskMetrics describes a processed task for metric recording.
 type WorkerTaskMetrics struct {
-	JobID    string
-	Status   string
-	Duration time.Duration
+	JobID         string
+	Status        string
+	Duration      time.Duration
+	QueueWait     time.Duration
+	TotalDuration time.Duration
 }
 
 // StartWorkerTaskSpan starts a span for an individual worker task.
@@ -279,6 +432,16 @@ func RecordWorkerTask(ctx context.Context, metrics WorkerTaskMetrics) {
 			metric.WithAttributes(attribute.String("job.id", metrics.JobID), attribute.String("task.status", metrics.Status)))
 	}
 
+	if metrics.QueueWait > 0 && workerTaskQueueWait != nil {
+		workerTaskQueueWait.Record(ctx, float64(metrics.QueueWait.Milliseconds()),
+			metric.WithAttributes(attribute.String("job.id", metrics.JobID), attribute.String("task.status", metrics.Status)))
+	}
+
+	if metrics.TotalDuration > 0 && workerTaskTotalDuration != nil {
+		workerTaskTotalDuration.Record(ctx, float64(metrics.TotalDuration.Milliseconds()),
+			metric.WithAttributes(attribute.String("job.id", metrics.JobID), attribute.String("task.status", metrics.Status)))
+	}
+
 	if workerTaskTotal != nil {
 		workerTaskTotal.Add(ctx, 1,
 			metric.WithAttributes(attribute.String("job.id", metrics.JobID), attribute.String("task.status", metrics.Status)))
@@ -297,5 +460,90 @@ func RecordWorkerConcurrency(ctx context.Context, workerID int, delta int64, cap
 	if capacity > 0 && workerConcurrencyLimit != nil {
 		workerConcurrencyLimit.Record(ctx, capacity,
 			metric.WithAttributes(attribute.Int("worker.id", workerID)))
+	}
+}
+
+// RecordJobConcurrencySnapshot captures the running task count and concurrency limit for a job.
+func RecordJobConcurrencySnapshot(ctx context.Context, jobID string, runningTasks int64, concurrencyLimit int64, unlimited bool) {
+	if jobRunningTasksGauge != nil {
+		jobRunningTasksGauge.Record(ctx, runningTasks,
+			metric.WithAttributes(attribute.String("job.id", jobID)))
+	}
+
+	if jobConcurrencyLimitGauge != nil {
+		jobConcurrencyLimitGauge.Record(ctx, concurrencyLimit,
+			metric.WithAttributes(
+				attribute.String("job.id", jobID),
+				attribute.Bool("job.concurrency_unlimited", unlimited),
+			))
+	}
+}
+
+// DBPoolSnapshot describes a database connection pool state.
+type DBPoolSnapshot struct {
+	InUse        int
+	Idle         int
+	WaitCount    int64
+	WaitDuration time.Duration
+	MaxOpen      int
+	Reserved     int
+	Usage        float64
+}
+
+// RecordDBPoolStats records database pool utilisation metrics.
+func RecordDBPoolStats(ctx context.Context, snapshot DBPoolSnapshot) {
+	if dbPoolInUseGauge != nil {
+		dbPoolInUseGauge.Record(ctx, int64(snapshot.InUse), metric.WithAttributes())
+	}
+	if dbPoolIdleGauge != nil {
+		dbPoolIdleGauge.Record(ctx, int64(snapshot.Idle), metric.WithAttributes())
+	}
+	if dbPoolWaitCountGauge != nil {
+		dbPoolWaitCountGauge.Record(ctx, snapshot.WaitCount, metric.WithAttributes())
+	}
+	if dbPoolWaitDurationGauge != nil {
+		dbPoolWaitDurationGauge.Record(ctx, float64(snapshot.WaitDuration)/float64(time.Millisecond), metric.WithAttributes())
+	}
+	if dbPoolUsageGauge != nil {
+		dbPoolUsageGauge.Record(ctx, snapshot.Usage, metric.WithAttributes())
+	}
+	if dbPoolMaxOpenGauge != nil {
+		dbPoolMaxOpenGauge.Record(ctx, int64(snapshot.MaxOpen), metric.WithAttributes())
+	}
+	if dbPoolReservedGauge != nil {
+		dbPoolReservedGauge.Record(ctx, int64(snapshot.Reserved), metric.WithAttributes())
+	}
+}
+
+// RecordTaskClaimAttempt records the latency of claiming a task from the queue.
+func RecordTaskClaimAttempt(ctx context.Context, jobID string, latency time.Duration, status string) {
+	if workerTaskClaimLatency != nil {
+		workerTaskClaimLatency.Record(ctx, float64(latency.Milliseconds()),
+			metric.WithAttributes(
+				attribute.String("job.id", jobID),
+				attribute.String("claim.status", status),
+			))
+	}
+}
+
+// RecordWorkerTaskRetry records a retry attempt for a task.
+func RecordWorkerTaskRetry(ctx context.Context, jobID string, reason string) {
+	if workerTaskRetryCounter != nil {
+		workerTaskRetryCounter.Add(ctx, 1,
+			metric.WithAttributes(
+				attribute.String("job.id", jobID),
+				attribute.String("task.retry_reason", reason),
+			))
+	}
+}
+
+// RecordWorkerTaskFailure records a permanently failed task.
+func RecordWorkerTaskFailure(ctx context.Context, jobID string, reason string) {
+	if workerTaskFailureCounter != nil {
+		workerTaskFailureCounter.Add(ctx, 1,
+			metric.WithAttributes(
+				attribute.String("job.id", jobID),
+				attribute.String("task.failure_reason", reason),
+			))
 	}
 }
