@@ -8,9 +8,17 @@
 --
 -- Performance impact: Reduces typical claim query from scanning 5,000 rows to <100 rows.
 
--- Step 1: Add 'waiting' status to task status enum
--- This allows tasks to be in a queue waiting for job capacity
-ALTER TYPE task_status ADD VALUE IF NOT EXISTS 'waiting';
+-- Step 1: Add check constraint for valid status values (status is TEXT, not ENUM)
+-- This ensures only valid status values can be inserted ('waiting' is now allowed)
+DO $$
+BEGIN
+  -- Drop existing constraint if it exists
+  ALTER TABLE tasks DROP CONSTRAINT IF EXISTS tasks_status_check;
+
+  -- Add new constraint including 'waiting' status
+  ALTER TABLE tasks ADD CONSTRAINT tasks_status_check
+    CHECK (status IN ('pending', 'running', 'completed', 'failed', 'skipped', 'waiting'));
+END $$;
 
 -- Step 2: Create optimised partial index for ready-to-claim tasks
 -- This index only includes tasks that are actually claimable (status='pending')
