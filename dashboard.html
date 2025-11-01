@@ -1743,8 +1743,8 @@
           } = await window.supabase.auth.getSession();
           if (session?.user) {
             const isSystemAdmin =
-              session.user.app_metadata?.role === "system-admin" ||
-              session.user.user_metadata?.role === "system-admin";
+              session.user.app_metadata?.system_role === "system_admin" ||
+              session.user.user_metadata?.system_role === "system_admin";
             if (isSystemAdmin) {
               const resetBtn = document.getElementById("resetDbBtn");
               if (resetBtn) {
