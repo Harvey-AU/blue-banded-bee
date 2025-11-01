@@ -1043,55 +1043,45 @@ func (db *DB) GetDB() *sql.DB {
 
 // ResetSchema resets the database schema
 func (db *DB) ResetSchema() error {
-	log.Warn().Msg("Resetting PostgreSQL schema")
+	log.Warn().Msg("Clearing all data from database tables")
 
-	// First drop any views that depend on the tables
-	log.Debug().Msg("Dropping views")
-	views := []string{"job_list", "job_dashboard", "job_status_summary", "task_status_summary"}
-	for _, view := range views {
-		_, err := db.client.Exec(fmt.Sprintf(`DROP VIEW IF EXISTS %s CASCADE`, view))
-		if err != nil {
-			log.Warn().Err(err).Str("view", view).Msg("Failed to drop view (may not exist)")
-			// Don't return error for views, as they may not exist
-		} else {
-			log.Debug().Str("view", view).Msg("Successfully dropped view")
-		}
-	}
-
-	// Drop tables in reverse order to respect foreign keys
-	// Use CASCADE to handle any remaining dependencies
-	tables := []string{"tasks", "jobs", "pages", "domains"}
+	// Delete data in order that respects foreign key constraints
+	// Start with child tables first, then parent tables
+	tables := []string{"tasks", "jobs", "job_share_links", "pages", "domains"}
 
 	for _, table := range tables {
-		log.Debug().Str("table", table).Msg("Dropping table")
-		_, err := db.client.Exec(fmt.Sprintf(`DROP TABLE IF EXISTS %s CASCADE`, table))
+		log.Debug().Str("table", table).Msg("Deleting all rows")
+		result, err := db.client.Exec(fmt.Sprintf(`DELETE FROM %s`, table))
 		if err != nil {
-			log.Error().Err(err).Str("table", table).Msg("Failed to drop table")
-			return fmt.Errorf("failed to drop table %s: %w", table, err)
+			log.Error().Err(err).Str("table", table).Msg("Failed to delete rows")
+			return fmt.Errorf("failed to delete rows from %s: %w", table, err)
 		}
-		log.Debug().Str("table", table).Msg("Successfully dropped table")
+
+		rowsAffected, _ := result.RowsAffected()
+		log.Info().Str("table", table).Int64("rows_deleted", rowsAffected).Msg("Cleared table data")
 	}
 
-	// Also drop any sequences that might exist
-	log.Debug().Msg("Dropping sequences")
-	sequences := []string{"domains_id_seq", "pages_id_seq"}
+	// Reset sequences to start from 1 again
+	log.Debug().Msg("Resetting sequences")
+	sequences := []struct {
+		name  string
+		table string
+	}{
+		{"domains_id_seq", "domains"},
+		{"pages_id_seq", "pages"},
+	}
+
 	for _, seq := range sequences {
-		_, err := db.client.Exec(fmt.Sprintf(`DROP SEQUENCE IF EXISTS %s CASCADE`, seq))
+		_, err := db.client.Exec(fmt.Sprintf(`ALTER SEQUENCE %s RESTART WITH 1`, seq.name))
 		if err != nil {
-			log.Warn().Err(err).Str("sequence", seq).Msg("Failed to drop sequence (may not exist)")
+			log.Warn().Err(err).Str("sequence", seq.name).Msg("Failed to reset sequence (may not exist)")
 			// Don't return error for sequences, as they may not exist
+		} else {
+			log.Debug().Str("sequence", seq.name).Msg("Reset sequence to 1")
 		}
 	}
 
-	log.Debug().Msg("Recreating schema")
-	// Recreate schema
-	err := setupSchema(db.client)
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to recreate schema")
-		return fmt.Errorf("failed to recreate schema: %w", err)
-	}
-
-	log.Info().Msg("Successfully reset database schema")
+	log.Info().Msg("Successfully cleared all database data")
 	return nil
 }
 
