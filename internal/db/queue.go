@@ -869,24 +869,34 @@ func (q *DbQueue) EnqueueURLs(ctx context.Context, jobID string, pages []Page, s
 			return nil
 		}
 
-		// Get job's max_pages setting and current task counts
+		// Get job's max_pages, concurrency, and current task counts
 		var maxPages int
 		var currentTaskCount int
+		var concurrency sql.NullInt64
+		var runningTasks int
 		err := tx.QueryRowContext(ctx, `
-			SELECT max_pages, 
+			SELECT max_pages, concurrency, running_tasks,
 				   COALESCE((SELECT COUNT(*) FROM tasks WHERE job_id = $1 AND status != 'skipped'), 0)
 			FROM jobs WHERE id = $1
-		`, jobID).Scan(&maxPages, &currentTaskCount)
+		`, jobID).Scan(&maxPages, &concurrency, &runningTasks, &currentTaskCount)
 		if err != nil {
-			return fmt.Errorf("failed to get job max_pages and task count: %w", err)
+			return fmt.Errorf("failed to get job configuration and task count: %w", err)
 		}
 
-		// Count how many tasks will be pending vs skipped
+		// Determine if job has capacity for more running tasks
+		hasCapacity := !concurrency.Valid || concurrency.Int64 == 0 || int64(runningTasks) < concurrency.Int64
+
+		// Count how many tasks will be pending/waiting vs skipped
 		pendingCount := 0
+		waitingCount := 0
 		skippedCount := 0
 		for range uniquePages {
-			if maxPages == 0 || currentTaskCount+pendingCount < maxPages {
-				pendingCount++
+			if maxPages == 0 || currentTaskCount+pendingCount+waitingCount < maxPages {
+				if hasCapacity {
+					pendingCount++
+				} else {
+					waitingCount++
+				}
 			} else {
 				skippedCount++
 			}
@@ -903,17 +913,23 @@ func (q *DbQueue) EnqueueURLs(ctx context.Context, jobID string, pages []Page, s
 
 		// Insert each task with appropriate status
 		now := time.Now().UTC()
-		processedCount := 0
+		processedPending := 0
+		processedWaiting := 0
 		for _, page := range uniquePages {
 			if page.ID == 0 {
 				continue
 			}
 
-			// Determine status based on max_pages limit
+			// Determine status based on max_pages limit and job capacity
 			var status string
-			if maxPages == 0 || currentTaskCount+processedCount < maxPages {
-				status = "pending"
-				processedCount++
+			if maxPages == 0 || currentTaskCount+processedPending+processedWaiting < maxPages {
+				if hasCapacity {
+					status = "pending"
+					processedPending++
+				} else {
+					status = "waiting"
+					processedWaiting++
+				}
 			} else {
 				status = "skipped"
 			}
@@ -925,6 +941,17 @@ func (q *DbQueue) EnqueueURLs(ctx context.Context, jobID string, pages []Page, s
 			if err != nil {
 				return fmt.Errorf("failed to insert task: %w", err)
 			}
+		}
+
+		// Log when tasks are placed in waiting status
+		if processedWaiting > 0 {
+			log.Debug().
+				Str("job_id", jobID).
+				Int("waiting_tasks", processedWaiting).
+				Int("pending_tasks", processedPending).
+				Int("running_tasks", runningTasks).
+				Int64("concurrency_limit", concurrency.Int64).
+				Msg("Created tasks in waiting status due to job concurrency limit")
 		}
 
 		return nil
@@ -1120,6 +1147,7 @@ func (q *DbQueue) UpdateTaskStatus(ctx context.Context, task *Task) error {
 
 // DecrementRunningTasks immediately decrements the running_tasks counter for a job.
 // This is called when a task completes to free up concurrency slots without waiting for batch flush.
+// Also promotes one waiting task to pending if job still has capacity.
 // The actual task field updates are still handled by the batch manager for efficiency.
 func (q *DbQueue) DecrementRunningTasks(ctx context.Context, jobID string) error {
 	if jobID == "" {
@@ -1128,14 +1156,14 @@ func (q *DbQueue) DecrementRunningTasks(ctx context.Context, jobID string) error
 
 	log.Debug().Str("job_id", jobID).Msg("DecrementRunningTasks called")
 
-	query := `
-        UPDATE jobs
-        SET running_tasks = GREATEST(0, running_tasks - 1)
-        WHERE id = $1
-    `
-
 	return q.Execute(ctx, func(tx *sql.Tx) error {
-		result, err := tx.ExecContext(ctx, query, jobID)
+		// Decrement running_tasks count
+		decrementQuery := `
+			UPDATE jobs
+			SET running_tasks = GREATEST(0, running_tasks - 1)
+			WHERE id = $1
+		`
+		result, err := tx.ExecContext(ctx, decrementQuery, jobID)
 		if err != nil {
 			log.Error().Err(err).Str("job_id", jobID).Msg("DecrementRunningTasks database error")
 			return fmt.Errorf("failed to decrement running_tasks for job %s: %w", jobID, err)
@@ -1146,6 +1174,14 @@ func (q *DbQueue) DecrementRunningTasks(ctx context.Context, jobID string) error
 			log.Error().Err(err).Str("job_id", jobID).Msg("DecrementRunningTasks failed to get rows affected")
 		} else {
 			log.Debug().Str("job_id", jobID).Int64("rows_affected", rowsAffected).Msg("DecrementRunningTasks executed")
+		}
+
+		// Promote one waiting task to pending (uses database function from migration)
+		// This automatically checks if job has capacity before promoting
+		_, err = tx.ExecContext(ctx, `SELECT promote_waiting_task_for_job($1)`, jobID)
+		if err != nil {
+			// Log but don't fail - promoting is best-effort
+			log.Warn().Err(err).Str("job_id", jobID).Msg("Failed to promote waiting task")
 		}
 
 		return nil
