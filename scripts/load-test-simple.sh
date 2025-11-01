@@ -10,7 +10,7 @@ set -e
 #  - or seconds via an `s` suffix, e.g. `interval:45s`
 #  - `batch:N` remains as a backwards-compatible alias for minutes
 #  - `concurrency:N` sets the per-job concurrency limit (1-20)
-#  - `concurrency:random` generates random concurrency (1-10) for each job (default)
+#  - `concurrency:random` generates random concurrency (1-20) for each job (default)
 #
 # Examples:
 #   ./load-test-simple.sh interval:1m jobs:10 concurrency:5
@@ -106,7 +106,7 @@ for arg in "$@"; do
     concurrency:*)
       JOB_CONCURRENCY="${arg#*:}"
       if [ "$JOB_CONCURRENCY" == "random" ]; then
-        # Random concurrency mode - will generate 1-10 per job
+        # Random concurrency mode - will generate 1-20 per job
         :
       elif [[ ! "$JOB_CONCURRENCY" =~ ^[0-9]+$ ]]; then
         echo "Invalid concurrency: $JOB_CONCURRENCY (expected integer 1-20 or 'random')"
@@ -201,7 +201,7 @@ echo "API URL:           $API_URL"
 echo "Batch interval:    $(format_interval "$BATCH_INTERVAL_SECONDS")"
 echo "Jobs per batch:    $JOBS_PER_BATCH"
 if [ "$JOB_CONCURRENCY" == "random" ]; then
-  echo "Job concurrency:   random (1-10 tasks/job)"
+  echo "Job concurrency:   random (1-20 tasks/job)"
 else
   echo "Job concurrency:   $JOB_CONCURRENCY tasks/job"
 fi
@@ -232,7 +232,7 @@ create_job() {
   # Unless JOB_CONCURRENCY is explicitly set to a specific value
   local job_concurrency
   if [ "$JOB_CONCURRENCY" == "random" ]; then
-    job_concurrency=$((RANDOM % 10 + 1))
+    job_concurrency=$((RANDOM % 20 + 1))
     echo -e "${YELLOW}Creating job for $domain (batch $batch_num, concurrency: $job_concurrency)${NC}"
   else
     job_concurrency=$JOB_CONCURRENCY
