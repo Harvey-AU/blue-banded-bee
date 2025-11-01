@@ -874,17 +874,31 @@ func (q *DbQueue) EnqueueURLs(ctx context.Context, jobID string, pages []Page, s
 		var currentTaskCount int
 		var concurrency sql.NullInt64
 		var runningTasks int
+		var pendingTaskCount int
 		err := tx.QueryRowContext(ctx, `
 			SELECT max_pages, concurrency, running_tasks,
-				   COALESCE((SELECT COUNT(*) FROM tasks WHERE job_id = $1 AND status != 'skipped'), 0)
+				   COALESCE((SELECT COUNT(*) FROM tasks WHERE job_id = $1 AND status != 'skipped'), 0),
+				   COALESCE((SELECT COUNT(*) FROM tasks WHERE job_id = $1 AND status = 'pending'), 0)
 			FROM jobs WHERE id = $1
-		`, jobID).Scan(&maxPages, &concurrency, &runningTasks, &currentTaskCount)
+		`, jobID).Scan(&maxPages, &concurrency, &runningTasks, &currentTaskCount, &pendingTaskCount)
 		if err != nil {
 			return fmt.Errorf("failed to get job configuration and task count: %w", err)
 		}
 
-		// Determine if job has capacity for more running tasks
-		hasCapacity := !concurrency.Valid || concurrency.Int64 == 0 || int64(runningTasks) < concurrency.Int64
+		// Calculate how many new pending tasks we can add before hitting concurrency limit
+		// Unlimited capacity if concurrency is NULL/0
+		var availableSlots int
+		if !concurrency.Valid || concurrency.Int64 == 0 {
+			availableSlots = len(uniquePages) // unlimited
+		} else {
+			// Capacity = concurrency - (running + existing_pending)
+			capacity := int(concurrency.Int64)
+			used := runningTasks + pendingTaskCount
+			availableSlots = capacity - used
+			if availableSlots < 0 {
+				availableSlots = 0
+			}
+		}
 
 		// Count how many tasks will be pending/waiting vs skipped
 		pendingCount := 0
@@ -892,7 +906,7 @@ func (q *DbQueue) EnqueueURLs(ctx context.Context, jobID string, pages []Page, s
 		skippedCount := 0
 		for range uniquePages {
 			if maxPages == 0 || currentTaskCount+pendingCount+waitingCount < maxPages {
-				if hasCapacity {
+				if pendingCount < availableSlots {
 					pendingCount++
 				} else {
 					waitingCount++
@@ -923,7 +937,7 @@ func (q *DbQueue) EnqueueURLs(ctx context.Context, jobID string, pages []Page, s
 			// Determine status based on max_pages limit and job capacity
 			var status string
 			if maxPages == 0 || currentTaskCount+processedPending+processedWaiting < maxPages {
-				if hasCapacity {
+				if processedPending < availableSlots {
 					status = "pending"
 					processedPending++
 				} else {
@@ -950,6 +964,8 @@ func (q *DbQueue) EnqueueURLs(ctx context.Context, jobID string, pages []Page, s
 				Int("waiting_tasks", processedWaiting).
 				Int("pending_tasks", processedPending).
 				Int("running_tasks", runningTasks).
+				Int("existing_pending", pendingTaskCount).
+				Int("available_slots", availableSlots).
 				Int64("concurrency_limit", concurrency.Int64).
 				Msg("Created tasks in waiting status due to job concurrency limit")
 		}

@@ -36,11 +36,11 @@ COMMENT ON COLUMN tasks.status IS
 - skipped: Excluded from processing (e.g., max_pages limit)
 
 State transitions:
-- pending ’ running (worker claims task)
-- running ’ completed/failed (task finishes)
-- running ’ pending (task retry)
-- waiting ’ pending (job frees capacity)
-- pending ’ waiting (job reaches concurrency limit during enqueue)';
+- pending -> running (worker claims task)
+- running -> completed/failed (task finishes)
+- running -> pending (task retry)
+- waiting -> pending (job frees capacity)
+- pending -> waiting (job reaches concurrency limit during enqueue)';
 
 -- Step 5: Create function to transition waiting tasks to pending
 -- Called when a task completes to free up a job concurrency slot
@@ -95,3 +95,16 @@ $$;
 COMMENT ON FUNCTION job_has_capacity IS
 'Returns true if the job can accept more running tasks based on its concurrency limit.
 Used during task enqueueing to determine initial status (pending vs waiting).';
+
+-- Step 7: Backfill existing pending tasks to waiting status
+-- Move pending tasks to waiting if their job is at or over concurrency limit
+-- This ensures the new index is immediately effective
+UPDATE tasks t
+SET status = 'waiting'
+FROM jobs j
+WHERE t.job_id = j.id
+  AND t.status = 'pending'
+  AND j.status = 'running'
+  AND j.concurrency IS NOT NULL
+  AND j.concurrency > 0
+  AND j.running_tasks >= j.concurrency;
