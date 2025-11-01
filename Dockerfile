@@ -33,6 +33,9 @@ COPY --from=builder /app/auth-modal.html .
 COPY --from=builder /app/web/static ./web/static
 COPY --from=builder /app/web/templates ./web/templates
 
+# Copy migration files (required for reset-db endpoint)
+COPY --from=builder /app/supabase/migrations ./supabase/migrations
+
 # Add healthcheck
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
     CMD wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1
