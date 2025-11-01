@@ -161,6 +161,8 @@ func parseDurationEnvMS(key string, fallback time.Duration) time.Duration {
 
 // Execute runs a database operation in a transaction
 func (q *DbQueue) Execute(ctx context.Context, fn func(*sql.Tx) error) error {
+	totalStart := time.Now()
+
 	// Add timeout to context if none exists
 	if _, ok := ctx.Deadline(); !ok {
 		var cancel context.CancelFunc
@@ -173,57 +175,207 @@ func (q *DbQueue) Execute(ctx context.Context, fn func(*sql.Tx) error) error {
 		maxAttempts = 1
 	}
 
+	var lastErr error
+	var poolWaitTotal time.Duration
+	var execTotal time.Duration
+
 	for attempt := 0; attempt < maxAttempts; attempt++ {
+		poolWaitStart := time.Now()
 		release, err := q.ensurePoolCapacity(ctx)
+		poolWait := time.Since(poolWaitStart)
+		poolWaitTotal += poolWait
+
 		if err != nil {
+			// Classify the error type for observability
+			errorClass := classifyError(err)
+
 			if !q.shouldRetry(err) || attempt == maxAttempts-1 {
+				// Log pool saturation details
+				log.Warn().
+					Err(err).
+					Str("error_class", errorClass).
+					Dur("pool_wait_total", poolWaitTotal).
+					Dur("total_duration", time.Since(totalStart)).
+					Int("attempt", attempt+1).
+					Int("max_attempts", maxAttempts).
+					Msg("Failed to acquire database connection")
 				return err
 			}
+
+			backoff := q.computeBackoff(attempt)
+			log.Debug().
+				Err(err).
+				Str("error_class", errorClass).
+				Dur("backoff", backoff).
+				Int("attempt", attempt+1).
+				Msg("Pool capacity check failed, retrying after backoff")
+
 			if err := q.waitForRetry(ctx, attempt); err != nil {
 				return err
 			}
 			continue
 		}
 
+		execStart := time.Now()
 		execErr := q.executeOnce(ctx, fn)
+		execDuration := time.Since(execStart)
+		execTotal += execDuration
 		release()
 
 		if execErr == nil {
+			totalDuration := time.Since(totalStart)
+			// Log if transaction was slow (>5s) to help diagnose performance issues
+			if totalDuration > 5*time.Second {
+				log.Warn().
+					Dur("total_duration", totalDuration).
+					Dur("pool_wait_total", poolWaitTotal).
+					Dur("exec_total", execTotal).
+					Int("attempts", attempt+1).
+					Msg("Slow database transaction completed")
+			}
 			return nil
 		}
 
+		lastErr = execErr
+		errorClass := classifyError(execErr)
+
 		if !q.shouldRetry(execErr) || attempt == maxAttempts-1 {
+			totalDuration := time.Since(totalStart)
+			log.Error().
+				Err(execErr).
+				Str("error_class", errorClass).
+				Dur("total_duration", totalDuration).
+				Dur("pool_wait_total", poolWaitTotal).
+				Dur("exec_total", execTotal).
+				Int("attempt", attempt+1).
+				Int("max_attempts", maxAttempts).
+				Bool("retryable", q.shouldRetry(execErr)).
+				Msg("Database transaction failed")
 			return execErr
 		}
+
+		backoff := q.computeBackoff(attempt)
+		log.Debug().
+			Err(execErr).
+			Str("error_class", errorClass).
+			Dur("backoff", backoff).
+			Dur("exec_duration", execDuration).
+			Int("attempt", attempt+1).
+			Msg("Transaction failed, retrying after backoff")
 
 		if err := q.waitForRetry(ctx, attempt); err != nil {
 			return err
 		}
 	}
 
-	return nil
+	return lastErr
 }
 
 func (q *DbQueue) executeOnce(ctx context.Context, fn func(*sql.Tx) error) error {
+	beginStart := time.Now()
 	tx, err := q.db.client.BeginTx(ctx, nil)
+	beginDuration := time.Since(beginStart)
+
 	if err != nil {
 		sentry.CaptureException(err)
+		log.Error().
+			Err(err).
+			Dur("begin_duration", beginDuration).
+			Msg("Failed to begin transaction")
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
 	defer func() {
 		_ = tx.Rollback()
 	}()
 
+	queryStart := time.Now()
 	if err := fn(tx); err != nil {
+		queryDuration := time.Since(queryStart)
+		// Log slow queries even when they fail
+		if queryDuration > 5*time.Second {
+			log.Warn().
+				Err(err).
+				Dur("begin_duration", beginDuration).
+				Dur("query_duration", queryDuration).
+				Msg("Slow query failed in transaction")
+		}
 		return err
 	}
+	queryDuration := time.Since(queryStart)
 
+	commitStart := time.Now()
 	if err := tx.Commit(); err != nil {
+		commitDuration := time.Since(commitStart)
 		sentry.CaptureException(err)
+		log.Error().
+			Err(err).
+			Dur("begin_duration", beginDuration).
+			Dur("query_duration", queryDuration).
+			Dur("commit_duration", commitDuration).
+			Msg("Failed to commit transaction")
 		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+	commitDuration := time.Since(commitStart)
+
+	// Log breakdown for slow transactions
+	totalDuration := beginDuration + queryDuration + commitDuration
+	if totalDuration > 5*time.Second {
+		log.Warn().
+			Dur("total", totalDuration).
+			Dur("begin", beginDuration).
+			Dur("query", queryDuration).
+			Dur("commit", commitDuration).
+			Msg("Slow transaction breakdown")
 	}
 
 	return nil
+}
+
+// classifyError categorises errors for observability and retry logging
+func classifyError(err error) string {
+	if err == nil {
+		return "none"
+	}
+
+	if errors.Is(err, context.Canceled) {
+		return "context_cancelled"
+	}
+
+	if errors.Is(err, context.DeadlineExceeded) {
+		return "deadline_exceeded"
+	}
+
+	if errors.Is(err, ErrPoolSaturated) {
+		return "pool_saturated"
+	}
+
+	var netErr net.Error
+	if errors.As(err, &netErr) {
+		if netErr.Timeout() {
+			return "network_timeout"
+		}
+		return "network_error"
+	}
+
+	errStr := strings.ToLower(err.Error())
+
+	if strings.Contains(errStr, "sqlstate") {
+		return "postgres_error"
+	}
+	if strings.Contains(errStr, "too many clients") {
+		return "too_many_clients"
+	}
+	if strings.Contains(errStr, "connection reset") {
+		return "connection_reset"
+	}
+	if strings.Contains(errStr, "connection refused") {
+		return "connection_refused"
+	}
+	if strings.Contains(errStr, "timeout") {
+		return "timeout"
+	}
+
+	return "unknown"
 }
 
 func (q *DbQueue) shouldRetry(err error) bool {
@@ -368,6 +520,13 @@ func (q *DbQueue) ensurePoolCapacity(ctx context.Context) (func(), error) {
 		case q.poolSemaphore <- struct{}{}:
 			release = func() { <-q.poolSemaphore }
 		case <-ctx.Done():
+			// Explicitly log pool rejections when context expires before acquiring semaphore
+			log.Debug().
+				Err(ctx.Err()).
+				Int("semaphore_capacity", cap(q.poolSemaphore)).
+				Int("semaphore_in_use", len(q.poolSemaphore)).
+				Msg("Pool semaphore rejected request - context done before acquiring slot")
+			observability.RecordDBPoolRejection(ctx)
 			return noop, ErrPoolSaturated
 		}
 	}
@@ -484,7 +643,12 @@ func (q *DbQueue) GetNextTask(ctx context.Context, jobID string) (*Task, error) 
 	var task Task
 	now := time.Now().UTC()
 
+	// Track total time including retries
+	totalStart := time.Now()
+	var attemptCount int
+
 	err := q.Execute(ctx, func(tx *sql.Tx) error {
+		attemptCount++
 		queryStart := time.Now()
 		// Use CTE to select and update in a single atomic query
 		// This reduces transaction time and minimises lock holding
@@ -552,20 +716,64 @@ func (q *DbQueue) GetNextTask(ctx context.Context, jobID string) (*Task, error) 
 		elapsed := time.Since(queryStart)
 
 		if err == sql.ErrNoRows {
-			log.Debug().
-				Str("job_id", jobID).
-				Dur("claim_duration", elapsed).
-				Msg("No pending task available for job")
-			observability.RecordTaskClaimAttempt(ctx, jobID, elapsed, "empty")
+			// Use sentinel value for metrics when jobID is empty (all-jobs query)
+			metricsJobID := jobID
+			if metricsJobID == "" {
+				metricsJobID = "__all__"
+			}
+
+			// Check if we have pending tasks but they're blocked by concurrency limits
+			// This helps distinguish "no work" from "work exists but job is at capacity"
+			var blockedCount int
+			checkQuery := `
+				SELECT COUNT(*)
+				FROM tasks t
+				INNER JOIN jobs j ON t.job_id = j.id
+				WHERE t.status = 'pending'
+				AND j.status = 'running'
+				AND j.concurrency IS NOT NULL
+				AND j.concurrency > 0
+				AND j.running_tasks >= j.concurrency
+			`
+			checkArgs := []interface{}{}
+			if jobID != "" {
+				checkQuery += " AND t.job_id = $1"
+				checkArgs = append(checkArgs, jobID)
+			}
+
+			_ = tx.QueryRowContext(ctx, checkQuery, checkArgs...).Scan(&blockedCount)
+
+			if blockedCount > 0 {
+				log.Debug().
+					Str("job_id", jobID).
+					Int("concurrency_blocked_tasks", blockedCount).
+					Dur("query_duration", elapsed).
+					Int("attempt", attemptCount).
+					Msg("Tasks available but blocked by job concurrency limit")
+				observability.RecordTaskClaimAttempt(ctx, metricsJobID, elapsed, "concurrency_blocked")
+			} else {
+				log.Debug().
+					Str("job_id", jobID).
+					Dur("query_duration", elapsed).
+					Int("attempt", attemptCount).
+					Msg("No pending task available for job")
+				observability.RecordTaskClaimAttempt(ctx, metricsJobID, elapsed, "empty")
+			}
 			return sql.ErrNoRows
 		}
 		if err != nil {
+			// Use sentinel value for metrics when jobID is empty (all-jobs query)
+			metricsJobID := jobID
+			if metricsJobID == "" {
+				metricsJobID = "__all__"
+			}
 			log.Error().
 				Err(err).
 				Str("job_id", jobID).
-				Dur("claim_duration", elapsed).
+				Dur("query_duration", elapsed).
+				Int("attempt", attemptCount).
 				Msg("Failed to claim next task")
-			observability.RecordTaskClaimAttempt(ctx, jobID, elapsed, "error")
+			observability.RecordTaskClaimAttempt(ctx, metricsJobID, elapsed, "error")
 			return fmt.Errorf("failed to claim task: %w", err)
 		}
 
@@ -587,7 +795,8 @@ func (q *DbQueue) GetNextTask(ctx context.Context, jobID string) (*Task, error) 
 		log.Debug().
 			Str("job_id", task.JobID).
 			Str("task_id", task.ID).
-			Dur("claim_duration", elapsed).
+			Dur("query_duration", elapsed).
+			Int("attempt", attemptCount).
 			Int64("job_running_tasks", runningValue).
 			Int64("job_concurrency_limit", concurrencyValue).
 			Bool("job_concurrency_unlimited", unlimited).
@@ -599,10 +808,32 @@ func (q *DbQueue) GetNextTask(ctx context.Context, jobID string) (*Task, error) 
 		return nil
 	})
 
+	totalElapsed := time.Since(totalStart)
+
+	// Log summary if there were retries or if total time was significantly longer than expected
+	if attemptCount > 1 || totalElapsed > 5*time.Second {
+		logEvent := log.Info()
+		if totalElapsed > 30*time.Second {
+			logEvent = log.Warn()
+		}
+		logEvent.
+			Str("job_id", jobID).
+			Dur("total_duration", totalElapsed).
+			Int("attempts", attemptCount).
+			Msg("Task claim completed after retries or slow execution")
+	}
+
 	if err == sql.ErrNoRows {
 		return nil, nil // No tasks available
 	}
 	if err != nil {
+		// Log error with total context
+		log.Error().
+			Err(err).
+			Str("job_id", jobID).
+			Dur("total_duration", totalElapsed).
+			Int("attempts", attemptCount).
+			Msg("Error getting next pending task")
 		return nil, err
 	}
 

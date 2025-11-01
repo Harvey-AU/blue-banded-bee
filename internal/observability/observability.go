@@ -75,6 +75,7 @@ var (
 	dbPoolUsageGauge        metric.Float64Gauge
 	dbPoolMaxOpenGauge      metric.Int64Gauge
 	dbPoolReservedGauge     metric.Int64Gauge
+	dbPoolRejectCounter     metric.Int64Counter
 )
 
 // Init configures tracing and metrics exporters. When cfg.Enabled is false the function is a no-op.
@@ -386,6 +387,14 @@ func initDBPoolInstruments(meterProvider *sdkmetric.MeterProvider) error {
 		"bee.db.pool.reserved",
 		metric.WithDescription("Connections reserved for critical operations"),
 	)
+	if err != nil {
+		return err
+	}
+
+	dbPoolRejectCounter, err = meter.Int64Counter(
+		"bee.db.pool.rejects_total",
+		metric.WithDescription("Number of pool rejections when context expires before acquiring connection"),
+	)
 	return err
 }
 
@@ -545,5 +554,12 @@ func RecordWorkerTaskFailure(ctx context.Context, jobID string, reason string) {
 				attribute.String("job.id", jobID),
 				attribute.String("task.failure_reason", reason),
 			))
+	}
+}
+
+// RecordDBPoolRejection increments the pool rejection counter when requests are rejected before acquiring a connection.
+func RecordDBPoolRejection(ctx context.Context) {
+	if dbPoolRejectCounter != nil {
+		dbPoolRejectCounter.Add(ctx, 1, metric.WithAttributes())
 	}
 }
