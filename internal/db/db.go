@@ -1081,7 +1081,15 @@ func (db *DB) ResetSchema() error {
 		}
 	}
 
-	log.Info().Msg("Successfully cleared all database data")
+	// Step 3: Clear migration history to trigger Supabase to reapply all migrations via GitHub integration
+	log.Warn().Msg("Clearing migration history - Supabase will reapply all migrations via GitHub integration")
+	_, err := db.client.Exec(`DELETE FROM supabase_migrations.schema_migrations`)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to clear migration history")
+		return fmt.Errorf("failed to clear migration history: %w", err)
+	}
+
+	log.Info().Msg("Successfully reset database - migrations will be reapplied automatically by Supabase GitHub integration")
 	return nil
 }
 
