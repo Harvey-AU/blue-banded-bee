@@ -404,6 +404,40 @@ func (bm *BatchManager) flushTaskUpdates(ctx context.Context, updates []*TaskUpd
 			}
 		}
 
+		// Promote waiting→pending for jobs that freed capacity
+		// Completed/failed/skipped tasks all free up job slots
+		jobIDsToPromote := make(map[string]bool)
+		for _, task := range completedTasks {
+			jobIDsToPromote[task.JobID] = true
+		}
+		for _, task := range failedTasks {
+			jobIDsToPromote[task.JobID] = true
+		}
+		for _, task := range skippedTasks {
+			jobIDsToPromote[task.JobID] = true
+		}
+
+		// Call promote_waiting_task_for_job() for each affected job
+		promotedCount := 0
+		for jobID := range jobIDsToPromote {
+			_, err := tx.ExecContext(ctx, `SELECT promote_waiting_task_for_job($1)`, jobID)
+			if err != nil {
+				log.Warn().
+					Err(err).
+					Str("job_id", jobID).
+					Msg("Failed to promote waiting task for job")
+				// Don't fail the entire batch - just log and continue
+			} else {
+				promotedCount++
+			}
+		}
+
+		if promotedCount > 0 {
+			log.Debug().
+				Int("jobs_promoted", promotedCount).
+				Msg("Promoted waiting tasks to pending")
+		}
+
 		return nil
 	})
 
