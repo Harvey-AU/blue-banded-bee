@@ -450,10 +450,6 @@ func (wp *WorkerPool) AddJob(jobID string, options *JobOptions) {
 				sentry.CaptureMessage(fmt.Sprintf("Failed to parse robots.txt for %s: %v", domainName, err))
 			}
 			jobInfo.RobotsRules = &crawler.RobotsRules{} // Empty rules = no restrictions
-			if robotsRules.CrawlDelay > 0 {
-				jobInfo.CrawlDelay = robotsRules.CrawlDelay
-				wp.ensureDomainLimiter().UpdateRobotsDelay(domainName, jobInfo.CrawlDelay)
-			}
 		} else {
 			jobInfo.RobotsRules = robotsRules
 		}
