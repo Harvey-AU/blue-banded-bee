@@ -223,13 +223,19 @@ func (db *DB) runMigrations() (int, error) {
 			return migrationsApplied, fmt.Errorf("failed to execute migration %s: %w", filename, err)
 		}
 
-		// Record migration in history
+		// Record migration in history using Supabase's expected version/name format
 		migrationName := strings.TrimSuffix(filename, ".sql")
+		version := migrationName
+		name := migrationName
+		if parts := strings.SplitN(migrationName, "_", 2); len(parts) == 2 {
+			version = parts[0]
+			name = parts[1]
+		}
 		_, err = db.client.Exec(`
 			INSERT INTO supabase_migrations.schema_migrations (version, name, statements)
 			VALUES ($1, $2, ARRAY[''])
 			ON CONFLICT (version) DO NOTHING
-		`, migrationName, migrationName)
+		`, version, name)
 		if err != nil {
 			log.Warn().
 				Err(err).
