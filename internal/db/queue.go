@@ -20,6 +20,10 @@ import (
 	"github.com/Harvey-AU/blue-banded-bee/internal/observability"
 )
 
+// ConcurrencyOverrideFunc is a callback to get effective concurrency for a job
+// Returns the effective concurrency limit, or 0 if no override exists
+type ConcurrencyOverrideFunc func(jobID string, domain string) int
+
 // DbQueue is a PostgreSQL implementation of a job queue
 type DbQueue struct {
 	db *DB
@@ -37,6 +41,9 @@ type DbQueue struct {
 	retryMaxDelay       time.Duration
 	rng                 *rand.Rand
 	rngMutex            sync.Mutex
+
+	// Optional callback to get effective concurrency overrides from domain limiter
+	concurrencyOverride ConcurrencyOverrideFunc
 }
 
 // ErrPoolSaturated is returned when the database connection pool cannot provide
@@ -114,6 +121,11 @@ func NewDbQueue(db *DB) *DbQueue {
 		retryMaxDelay:       maxDelay,
 		rng:                 rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
+}
+
+// SetConcurrencyOverride sets a callback to retrieve effective concurrency from the domain limiter
+func (q *DbQueue) SetConcurrencyOverride(fn ConcurrencyOverrideFunc) {
+	q.concurrencyOverride = fn
 }
 
 func parseThresholdEnv(key string, fallback float64) float64 {
@@ -880,30 +892,55 @@ func (q *DbQueue) EnqueueURLs(ctx context.Context, jobID string, pages []Page, s
 			return nil
 		}
 
-		// Get job's max_pages, concurrency, and current task counts
+		// Get job's max_pages, concurrency, domain, and current task counts
 		var maxPages int
 		var currentTaskCount int
 		var concurrency sql.NullInt64
 		var runningTasks int
 		var pendingTaskCount int
+		var domainName sql.NullString
 		err := tx.QueryRowContext(ctx, `
-			SELECT max_pages, concurrency, running_tasks,
+			SELECT j.max_pages, j.concurrency, j.running_tasks, d.name,
 				   COALESCE((SELECT COUNT(*) FROM tasks WHERE job_id = $1 AND status != 'skipped'), 0),
 				   COALESCE((SELECT COUNT(*) FROM tasks WHERE job_id = $1 AND status = 'pending'), 0)
-			FROM jobs WHERE id = $1
-		`, jobID).Scan(&maxPages, &concurrency, &runningTasks, &currentTaskCount, &pendingTaskCount)
+			FROM jobs j
+			LEFT JOIN domains d ON j.domain_id = d.id
+			WHERE j.id = $1
+		`, jobID).Scan(&maxPages, &concurrency, &runningTasks, &domainName, &currentTaskCount, &pendingTaskCount)
 		if err != nil {
 			return fmt.Errorf("failed to get job configuration and task count: %w", err)
 		}
 
 		// Calculate how many new pending tasks we can add before hitting concurrency limit
-		// Unlimited capacity if concurrency is NULL/0
+		// Check for domain limiter override first
+		effectiveConcurrency := concurrency
+		if q.concurrencyOverride != nil && domainName.Valid {
+			if override := q.concurrencyOverride(jobID, domainName.String); override > 0 {
+				// Use the minimum of configured concurrency and limiter override
+				if !concurrency.Valid || concurrency.Int64 == 0 {
+					effectiveConcurrency = sql.NullInt64{Int64: int64(override), Valid: true}
+				} else if int64(override) < concurrency.Int64 {
+					effectiveConcurrency = sql.NullInt64{Int64: int64(override), Valid: true}
+				}
+			}
+		}
+
 		var availableSlots int
-		if !concurrency.Valid || concurrency.Int64 == 0 {
-			availableSlots = len(uniquePages) // unlimited
+		if !effectiveConcurrency.Valid || effectiveConcurrency.Int64 == 0 {
+			// Even for unlimited concurrency jobs, cap pending queue to prevent flooding
+			const maxPendingQueueSize = 100
+			used := runningTasks + pendingTaskCount
+			availableSlots = maxPendingQueueSize - used
+			if availableSlots < 0 {
+				availableSlots = 0
+			}
+			// Ensure we don't try to create more tasks than we have pages
+			if availableSlots > len(uniquePages) {
+				availableSlots = len(uniquePages)
+			}
 		} else {
 			// Capacity = concurrency - (running + existing_pending)
-			capacity := int(concurrency.Int64)
+			capacity := int(effectiveConcurrency.Int64)
 			used := runningTasks + pendingTaskCount
 			availableSlots = capacity - used
 			if availableSlots < 0 {

@@ -461,6 +461,32 @@ func (dl *DomainLimiter) persistDomain(ctx context.Context, domain string, adapt
 	})
 }
 
+// GetEffectiveConcurrency returns the current effective concurrency for a job on a domain
+// Returns 0 if no override exists (use configured concurrency)
+func (dl *DomainLimiter) GetEffectiveConcurrency(jobID string, domain string) int {
+	if domain == "" {
+		return 0
+	}
+
+	dl.mu.Lock()
+	state, exists := dl.domains[domain]
+	dl.mu.Unlock()
+
+	if !exists {
+		return 0
+	}
+
+	state.mu.Lock()
+	defer state.mu.Unlock()
+
+	js, ok := state.jobStates[jobID]
+	if !ok {
+		return 0
+	}
+
+	return js.allowed
+}
+
 // Helper utility --------------------------------------------------------------------------------
 
 // IsRateLimitError returns true when error indicates an HTTP 429/403/503 blocking response.

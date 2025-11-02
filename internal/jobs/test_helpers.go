@@ -90,6 +90,10 @@ func (m *simpleDbQueueMock) ExecuteMaintenance(ctx context.Context, fn func(*sql
 	return nil
 }
 
+func (m *simpleDbQueueMock) SetConcurrencyOverride(fn db.ConcurrencyOverrideFunc) {
+	// No-op for simple mock
+}
+
 // simpleCrawlerMock is a minimal mock implementation of CrawlerInterface for unit tests
 type simpleCrawlerMock struct{}
 

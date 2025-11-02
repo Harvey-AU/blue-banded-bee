@@ -126,6 +126,10 @@ func (m *MockDbQueue) ExecuteMaintenance(ctx context.Context, fn func(*sql.Tx) e
 	return m.Execute(ctx, fn)
 }
 
+func (m *MockDbQueue) SetConcurrencyOverride(fn db.ConcurrencyOverrideFunc) {
+	// No-op for mock
+}
+
 // TestWorkerPoolProcessTask demonstrates the test structure for processTask
 // NOTE: This test cannot actually execute processTask due to concrete type dependencies.
 // It documents the test cases we would run if WorkerPool used interfaces instead of concrete types.

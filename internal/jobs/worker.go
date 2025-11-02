@@ -148,6 +148,11 @@ func NewWorkerPool(sqlDB *sql.DB, dbQueue DbQueueInterface, crawler CrawlerInter
 	batchMgr := db.NewBatchManager(dbQueue)
 	domainLimiter := newDomainLimiter(dbQueue)
 
+	// Wire up domain limiter concurrency override to queue
+	dbQueue.SetConcurrencyOverride(func(jobID string, domain string) int {
+		return domainLimiter.GetEffectiveConcurrency(jobID, domain)
+	})
+
 	// Initialise per-worker structures for concurrency control
 	workerSemaphores := make([]chan struct{}, numWorkers)
 	workerWaitGroups := make([]*sync.WaitGroup, numWorkers)
@@ -1834,14 +1839,15 @@ func (wp *WorkerPool) handleTaskError(ctx context.Context, task *db.Task, taskEr
 		if task.RetryCount < maxRetries {
 			retryReason = "blocking"
 			task.RetryCount++
-			task.Status = string(TaskStatusPending)
+			// Route retries through waiting to respect pending queue cap
+			task.Status = string(TaskStatusWaiting)
 			task.StartedAt = time.Time{} // Reset started time
 			log.Debug().
 				Err(taskErr).
 				Str("task_id", task.ID).
 				Int("retry_count", task.RetryCount).
 				Int("max_retries", maxRetries).
-				Msg("Blocking error (403/429/503), retry scheduled")
+				Msg("Blocking error (403/429/503), retry scheduled via waiting status")
 			observability.RecordWorkerTaskRetry(ctx, task.JobID, retryReason)
 		} else {
 			// Mark as permanently failed after 2 retries
@@ -1860,13 +1866,14 @@ func (wp *WorkerPool) handleTaskError(ctx context.Context, task *db.Task, taskEr
 		// For other retryable errors, use normal retry limit
 		retryReason = "retryable"
 		task.RetryCount++
-		task.Status = string(TaskStatusPending)
+		// Route retries through waiting to respect pending queue cap
+		task.Status = string(TaskStatusWaiting)
 		task.StartedAt = time.Time{} // Reset started time
 		log.Debug().
 			Err(taskErr).
 			Str("task_id", task.ID).
 			Int("retry_count", task.RetryCount).
-			Msg("Task failed with retryable error, scheduling retry")
+			Msg("Task failed with retryable error, scheduling retry via waiting status")
 		observability.RecordWorkerTaskRetry(ctx, task.JobID, retryReason)
 	} else {
 		// Mark as permanently failed
