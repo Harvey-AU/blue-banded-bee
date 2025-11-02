@@ -178,6 +178,8 @@ func (m *ClaimTaskMock) ExecuteMaintenance(ctx context.Context, fn func(*sql.Tx)
 	return m.Execute(ctx, fn)
 }
 
+func (m *ClaimTaskMock) SetConcurrencyOverride(fn db.ConcurrencyOverrideFunc) {}
+
 func (m *ClaimTaskMock) EnqueueURLs(ctx context.Context, jobID string, pages []db.Page, sourceType string, sourceURL string) error {
 	return nil
 }

@@ -29,6 +29,38 @@ On merge, CI will:
 
 ## [Unreleased]
 
+## [0.16.2] – 2025-11-02
+
+### Fixed
+
+- **Pending Queue Overflow**: Fixed pending task queue flooding to 2,673 tasks
+  (should be 50-100)
+  - Root cause analysis identified three critical issues causing queue overflow:
+    1. Unlimited concurrency jobs (NULL/0) set availableSlots to number of pages
+       (hundreds/thousands)
+    2. Task retries bypassed pending queue cap by going directly to 'pending'
+       status
+    3. Domain limiter concurrency overrides ignored when calculating available
+       slots
+  - **Fix #1**: Capped unlimited concurrency jobs to maximum 100 pending tasks
+  - **Fix #2**: Routed all retry paths (blocking errors 403/429/503 and
+    retryable errors) through 'waiting' status instead of directly to 'pending'
+    - Added `TaskStatusWaiting` constant to task status enum
+    - Modified retry logic in worker.go to set status to 'waiting' instead of
+      'pending'
+    - Ensures retries respect the pending queue capacity cap
+  - **Fix #3**: Implemented domain limiter concurrency override support in
+    availableSlots calculation
+    - Added `ConcurrencyOverrideFunc` callback mechanism to DbQueue
+    - Created `GetEffectiveConcurrency()` method on DomainLimiter to expose
+      adaptive throttling limits
+    - Modified `EnqueueURLs()` to query domain name and apply
+      `min(configuredConcurrency, limiterOverride)`
+    - Prevents over-promotion when domains are being adaptively throttled
+  - Updated unit tests to match new SQL query pattern with domain JOIN
+  - Expected improvement: Pending queue stays at 50-100 tasks instead of
+    flooding to 2,600+
+
 ## [0.16.1] – 2025-11-02
 
 ## [0.16.0] – 2025-11-02
