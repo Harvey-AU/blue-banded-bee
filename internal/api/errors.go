@@ -51,15 +51,26 @@ func WriteError(w http.ResponseWriter, r *http.Request, err error, status int, c
 		RequestID: requestID,
 	}
 
-	// Log the error with context
-	log.Error().
-		Err(err).
-		Str("request_id", requestID).
-		Str("method", r.Method).
-		Str("path", r.URL.Path).
-		Int("status", status).
-		Str("code", string(code)).
-		Msg("API error response")
+	// Log the error with context - 4xx are client errors (debug), 5xx are server errors (error)
+	if status >= 500 {
+		log.Error().
+			Err(err).
+			Str("request_id", requestID).
+			Str("method", r.Method).
+			Str("path", r.URL.Path).
+			Int("status", status).
+			Str("code", string(code)).
+			Msg("API error response")
+	} else {
+		log.Debug().
+			Err(err).
+			Str("request_id", requestID).
+			Str("method", r.Method).
+			Str("path", r.URL.Path).
+			Int("status", status).
+			Str("code", string(code)).
+			Msg("API client error response")
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
@@ -79,15 +90,26 @@ func WriteErrorMessage(w http.ResponseWriter, r *http.Request, message string, s
 		RequestID: requestID,
 	}
 
-	// Log the error with context
-	log.Error().
-		Str("request_id", requestID).
-		Str("method", r.Method).
-		Str("path", r.URL.Path).
-		Int("status", status).
-		Str("code", string(code)).
-		Str("message", message).
-		Msg("API error response")
+	// Log the error with context - 4xx are client errors (debug), 5xx are server errors (error)
+	if status >= 500 {
+		log.Error().
+			Str("request_id", requestID).
+			Str("method", r.Method).
+			Str("path", r.URL.Path).
+			Int("status", status).
+			Str("code", string(code)).
+			Str("message", message).
+			Msg("API error response")
+	} else {
+		log.Debug().
+			Str("request_id", requestID).
+			Str("method", r.Method).
+			Str("path", r.URL.Path).
+			Int("status", status).
+			Str("code", string(code)).
+			Str("message", message).
+			Msg("API client error response")
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)

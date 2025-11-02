@@ -2046,7 +2046,7 @@ func (wp *WorkerPool) processTask(ctx context.Context, task *Task) (*crawler.Cra
 	// Construct a proper URL for processing
 	urlStr := constructTaskURL(task.Path, task.DomainName)
 
-	log.Info().Str("url", urlStr).Str("task_id", task.ID).Msg("Starting URL warm")
+	log.Debug().Str("url", urlStr).Str("task_id", task.ID).Msg("Starting URL warm")
 
 	limiter := wp.ensureDomainLimiter()
 	permit, err := limiter.Acquire(ctx, DomainRequest{
@@ -2111,7 +2111,7 @@ func (wp *WorkerPool) processTask(ctx context.Context, task *Task) (*crawler.Cra
 	}
 	span.SetStatus(codes.Ok, "completed")
 
-	log.Info().
+	log.Debug().
 		Int("status_code", result.StatusCode).
 		Str("task_id", task.ID).
 		Int("links_found", len(result.Links)).
