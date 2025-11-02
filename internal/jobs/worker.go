@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
+	"net/http"
 	"net/url"
 	"os"
 	"runtime/debug"
@@ -2074,10 +2075,25 @@ func (wp *WorkerPool) processTask(ctx context.Context, task *Task) (*crawler.Cra
 		status = "error"
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
-		rateLimited := IsRateLimitError(err)
+		rateLimited := false
+		if result != nil {
+			switch result.StatusCode {
+			case http.StatusTooManyRequests, http.StatusForbidden, http.StatusServiceUnavailable:
+				rateLimited = true
+			}
+		}
+		if !rateLimited {
+			rateLimited = IsRateLimitError(err)
+		}
 		log.Error().Err(err).
 			Str("task_id", task.ID).
 			Bool("rate_limited", rateLimited).
+			Int("status_code", func() int {
+				if result != nil {
+					return result.StatusCode
+				}
+				return 0
+			}()).
 			Msg("Crawler failed")
 		permit.Release(false, rateLimited)
 		released = true
