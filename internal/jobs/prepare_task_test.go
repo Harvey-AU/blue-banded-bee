@@ -76,8 +76,9 @@ func TestPrepareTaskForProcessingCacheMiss(t *testing.T) {
 	mockQueue := &TaskPrepMock{}
 
 	wp := &WorkerPool{
-		jobInfoCache: map[string]*JobInfo{}, // Empty cache
-		dbQueue:      mockQueue,
+		jobInfoCache:  map[string]*JobInfo{}, // Empty cache
+		dbQueue:       mockQueue,
+		domainLimiter: newDomainLimiter(mockQueue),
 	}
 
 	ctx := context.Background()

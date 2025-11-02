@@ -33,6 +33,8 @@ CREATE TABLE IF NOT EXISTS domains (
     id SERIAL PRIMARY KEY,
     name TEXT UNIQUE NOT NULL,
     crawl_delay_seconds INTEGER DEFAULT NULL,
+    adaptive_delay_seconds INTEGER NOT NULL DEFAULT 0,
+    adaptive_delay_floor_seconds INTEGER NOT NULL DEFAULT 0,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -370,6 +372,8 @@ CREATE TRIGGER trigger_update_job_counters
 -- =============================================================================
 
 COMMENT ON COLUMN domains.crawl_delay_seconds IS 'Crawl delay in seconds from robots.txt for this domain';
+COMMENT ON COLUMN domains.adaptive_delay_seconds IS 'Learned baseline delay between requests (seconds) based on prior throttling';
+COMMENT ON COLUMN domains.adaptive_delay_floor_seconds IS 'Minimum safe delay established after probing (seconds)';
 COMMENT ON COLUMN jobs.duration_seconds IS 'Total job duration in seconds (calculated from started_at to completed_at)';
 COMMENT ON COLUMN jobs.avg_time_per_task_seconds IS 'Average time per completed task in seconds';
 COMMENT ON COLUMN jobs.running_tasks IS 'Number of tasks currently being processed (claimed but not yet completed/failed). Used to enforce per-job concurrency limits.';
