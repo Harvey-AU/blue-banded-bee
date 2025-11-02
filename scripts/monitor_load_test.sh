@@ -5,7 +5,8 @@
 
 DURATION_MINUTES=30
 CHECK_INTERVAL=60  # seconds
-LOG_FILE="load_test_monitoring_$(date +%Y%m%d_%H%M%S).log"
+mkdir -p ./logs
+LOG_FILE="./logs/load_test_monitoring_$(date +%Y%m%d_%H%M%S).log"
 
 echo "=== Blue Banded Bee Load Test Monitor ===" | tee -a "$LOG_FILE"
 echo "Started at: $(date)" | tee -a "$LOG_FILE"
