@@ -456,7 +456,7 @@ func (bm *BatchManager) flushTaskUpdates(ctx context.Context, updates []*TaskUpd
 		return err
 	}
 
-	log.Info().
+	log.Debug().
 		Int("total_tasks", len(updates)).
 		Int("completed", len(completedTasks)).
 		Int("failed", len(failedTasks)).

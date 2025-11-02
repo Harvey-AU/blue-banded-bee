@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"regexp"
 	"runtime/debug"
 	"strconv"
 	"strings"
@@ -458,7 +459,7 @@ func (wp *WorkerPool) AddJob(jobID string, options *JobOptions) {
 		wp.jobInfoCache[jobID] = jobInfo
 		wp.jobInfoMutex.Unlock()
 
-		log.Debug().
+		log.Trace().
 			Str("job_id", jobID).
 			Str("domain", domainName).
 			Int("crawl_delay", jobInfo.CrawlDelay).
@@ -582,7 +583,7 @@ func (wp *WorkerPool) recordJobFailure(ctx context.Context, jobID, taskID string
 	}
 
 	if streak > 0 {
-		log.Debug().
+		log.Trace().
 			Str("job_id", jobID).
 			Str("task_id", taskID).
 			Int("failure_streak", streak).
@@ -1835,7 +1836,7 @@ func (wp *WorkerPool) handleTaskError(ctx context.Context, task *db.Task, taskEr
 			task.RetryCount++
 			task.Status = string(TaskStatusPending)
 			task.StartedAt = time.Time{} // Reset started time
-			log.Warn().
+			log.Debug().
 				Err(taskErr).
 				Str("task_id", task.ID).
 				Int("retry_count", task.RetryCount).
@@ -1861,7 +1862,7 @@ func (wp *WorkerPool) handleTaskError(ctx context.Context, task *db.Task, taskEr
 		task.RetryCount++
 		task.Status = string(TaskStatusPending)
 		task.StartedAt = time.Time{} // Reset started time
-		log.Warn().
+		log.Debug().
 			Err(taskErr).
 			Str("task_id", task.ID).
 			Int("retry_count", task.RetryCount).
@@ -1872,7 +1873,11 @@ func (wp *WorkerPool) handleTaskError(ctx context.Context, task *db.Task, taskEr
 		task.Status = string(TaskStatusFailed)
 		task.CompletedAt = now
 		task.Error = taskErr.Error()
-		log.Error().
+		logger := log.Error()
+		if isClientOrRedirectError(taskErr) {
+			logger = log.Info()
+		}
+		logger.
 			Err(taskErr).
 			Str("task_id", task.ID).
 			Int("retry_count", task.RetryCount).
@@ -2168,6 +2173,48 @@ func isBlockingError(err error) bool {
 		strings.Contains(errorStr, "rate limit") ||
 		strings.Contains(errorStr, "503") ||
 		strings.Contains(errorStr, "service unavailable")
+}
+
+var statusCodePattern = regexp.MustCompile(`\b(\d{3})\b`)
+
+func isClientOrRedirectError(err error) bool {
+	if err == nil {
+		return false
+	}
+	lower := strings.ToLower(err.Error())
+	if strings.Contains(lower, "crawler error") {
+		keywords := []string{
+			"not found",
+			"bad request",
+			"unauthorized",
+			"forbidden",
+			"gone",
+			"method not allowed",
+			"temporary redirect",
+			"permanent redirect",
+			"moved permanently",
+			"see other",
+		}
+		for _, kw := range keywords {
+			if strings.Contains(lower, kw) {
+				return true
+			}
+		}
+	}
+	matches := statusCodePattern.FindAllStringSubmatch(lower, -1)
+	for _, match := range matches {
+		if len(match) < 2 {
+			continue
+		}
+		code, err := strconv.Atoi(match[1])
+		if err != nil {
+			continue
+		}
+		if code >= 400 && code < 500 {
+			return true
+		}
+	}
+	return false
 }
 
 // calculateBackoffDuration computes exponential backoff duration for retry attempts
