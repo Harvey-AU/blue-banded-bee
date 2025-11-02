@@ -28,17 +28,29 @@ func TestRecordJobFailureTriggersThresholdAndFailsJob(t *testing.T) {
 	message := "Job failed after 2 consecutive task failures (last error: 429 too many requests)"
 
 	mock.ExpectBegin()
+	// Expect job status update
 	mock.ExpectExec(regexp.QuoteMeta(`
-UPDATE jobs
-            SET status = $1,
-                completed_at = COALESCE(completed_at, $2),
-                error_message = $3
-            WHERE id = $4
-                AND status <> $5
-                AND status <> $6
-        `)).
+			UPDATE jobs
+			SET status = $1,
+				completed_at = COALESCE(completed_at, $2),
+				error_message = $3
+			WHERE id = $4
+				AND status <> $5
+				AND status <> $6
+		`)).
 		WithArgs(string(JobStatusFailed), sqlmock.AnyArg(), message, jobID, string(JobStatusFailed), string(JobStatusCancelled)).
 		WillReturnResult(sqlmock.NewResult(0, 1))
+	// Expect orphaned tasks cleanup
+	mock.ExpectExec(regexp.QuoteMeta(`
+			UPDATE tasks
+			SET status = 'skipped',
+				completed_at = $1,
+				error = $2
+			WHERE job_id = $3
+				AND status IN ('pending', 'waiting')
+		`)).
+		WithArgs(sqlmock.AnyArg(), "Job failed due to consecutive task failures", jobID).
+		WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectCommit()
 
 	queueMock := &MockDbQueue{}

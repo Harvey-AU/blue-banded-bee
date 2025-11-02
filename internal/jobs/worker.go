@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
+	"net/http"
 	"net/url"
 	"os"
 	"runtime/debug"
@@ -610,6 +611,9 @@ func (wp *WorkerPool) markJobFailedDueToConsecutiveFailures(ctx context.Context,
 	defer cancel()
 
 	updateErr := wp.dbQueue.Execute(failCtx, func(tx *sql.Tx) error {
+		now := time.Now().UTC()
+
+		// Mark job as failed
 		_, err := tx.ExecContext(failCtx, `
 			UPDATE jobs
 			SET status = $1,
@@ -618,8 +622,33 @@ func (wp *WorkerPool) markJobFailedDueToConsecutiveFailures(ctx context.Context,
 			WHERE id = $4
 				AND status <> $5
 				AND status <> $6
-		`, JobStatusFailed, time.Now().UTC(), message, jobID, JobStatusFailed, JobStatusCancelled)
-		return err
+		`, JobStatusFailed, now, message, jobID, JobStatusFailed, JobStatusCancelled)
+		if err != nil {
+			return fmt.Errorf("failed to update job status: %w", err)
+		}
+
+		// Clean up orphaned pending/waiting tasks
+		result, err := tx.ExecContext(failCtx, `
+			UPDATE tasks
+			SET status = 'skipped',
+				completed_at = $1,
+				error = $2
+			WHERE job_id = $3
+				AND status IN ('pending', 'waiting')
+		`, now, "Job failed due to consecutive task failures", jobID)
+		if err != nil {
+			return fmt.Errorf("failed to clean up orphaned tasks: %w", err)
+		}
+
+		orphanedCount, _ := result.RowsAffected()
+		if orphanedCount > 0 {
+			log.Info().
+				Str("job_id", jobID).
+				Int64("orphaned_tasks", orphanedCount).
+				Msg("Cleaned up orphaned tasks from failed job")
+		}
+
+		return nil
 	})
 
 	if updateErr != nil {
@@ -2046,8 +2075,26 @@ func (wp *WorkerPool) processTask(ctx context.Context, task *Task) (*crawler.Cra
 		status = "error"
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
-		log.Error().Err(err).Str("task_id", task.ID).Msg("Crawler failed")
-		rateLimited := IsRateLimitError(err)
+		rateLimited := false
+		if result != nil {
+			switch result.StatusCode {
+			case http.StatusTooManyRequests, http.StatusForbidden, http.StatusServiceUnavailable:
+				rateLimited = true
+			}
+		}
+		if !rateLimited {
+			rateLimited = IsRateLimitError(err)
+		}
+		log.Error().Err(err).
+			Str("task_id", task.ID).
+			Bool("rate_limited", rateLimited).
+			Int("status_code", func() int {
+				if result != nil {
+					return result.StatusCode
+				}
+				return 0
+			}()).
+			Msg("Crawler failed")
 		permit.Release(false, rateLimited)
 		released = true
 		return result, fmt.Errorf("crawler error: %w", err)
