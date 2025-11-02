@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"runtime/debug"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -29,6 +30,7 @@ import (
 
 const taskProcessingTimeout = 2 * time.Minute
 const poolSaturationBackoff = 2 * time.Second
+const defaultJobFailureThreshold = 20
 
 // JobPerformance tracks performance metrics for a specific job
 type JobPerformance struct {
@@ -42,6 +44,7 @@ type WorkerPool struct {
 	dbQueue          DbQueueInterface
 	dbConfig         *db.Config
 	crawler          CrawlerInterface
+	domainLimiter    *DomainLimiter
 	batchManager     *db.BatchManager // Batch manager for task updates
 	numWorkers       int
 	jobs             map[string]bool
@@ -71,15 +74,45 @@ type WorkerPool struct {
 	// Job info cache to avoid repeated DB lookups
 	jobInfoCache map[string]*JobInfo
 	jobInfoMutex sync.RWMutex
+
+	// Job failure tracking
+	jobFailureMutex     sync.Mutex
+	jobFailureCounters  map[string]*jobFailureState
+	jobFailureThreshold int
+}
+
+func (wp *WorkerPool) ensureDomainLimiter() *DomainLimiter {
+	if wp.domainLimiter == nil {
+		wp.domainLimiter = newDomainLimiter(wp.dbQueue)
+	}
+	return wp.domainLimiter
 }
 
 // JobInfo caches job-specific data that doesn't change during execution
 type JobInfo struct {
-	DomainID    int
-	DomainName  string
-	FindLinks   bool
-	CrawlDelay  int
-	RobotsRules *crawler.RobotsRules // Cached robots.txt rules for URL filtering
+	DomainID           int
+	DomainName         string
+	FindLinks          bool
+	CrawlDelay         int
+	Concurrency        int
+	AdaptiveDelay      int
+	AdaptiveDelayFloor int
+	RobotsRules        *crawler.RobotsRules // Cached robots.txt rules for URL filtering
+}
+
+type jobFailureState struct {
+	streak    int
+	triggered bool
+}
+
+func jobFailureThresholdFromEnv() int {
+	threshold := defaultJobFailureThreshold
+	if raw := strings.TrimSpace(os.Getenv("BBB_JOB_FAILURE_THRESHOLD")); raw != "" {
+		if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 {
+			threshold = parsed
+		}
+	}
+	return threshold
 }
 
 func NewWorkerPool(sqlDB *sql.DB, dbQueue DbQueueInterface, crawler CrawlerInterface, numWorkers int, workerConcurrency int, dbConfig *db.Config) *WorkerPool {
@@ -111,6 +144,7 @@ func NewWorkerPool(sqlDB *sql.DB, dbQueue DbQueueInterface, crawler CrawlerInter
 
 	// Create batch manager before WorkerPool construction (db package reference must happen here)
 	batchMgr := db.NewBatchManager(dbQueue)
+	domainLimiter := newDomainLimiter(dbQueue)
 
 	// Initialise per-worker structures for concurrency control
 	workerSemaphores := make([]chan struct{}, numWorkers)
@@ -120,11 +154,14 @@ func NewWorkerPool(sqlDB *sql.DB, dbQueue DbQueueInterface, crawler CrawlerInter
 		workerWaitGroups[i] = &sync.WaitGroup{}
 	}
 
+	failureThreshold := jobFailureThresholdFromEnv()
+
 	wp := &WorkerPool{
 		db:              sqlDB,
 		dbQueue:         dbQueue,
 		dbConfig:        dbConfig,
 		crawler:         crawler,
+		domainLimiter:   domainLimiter,
 		batchManager:    batchMgr,
 		numWorkers:      numWorkers,
 		baseWorkerCount: numWorkers,
@@ -147,6 +184,10 @@ func NewWorkerPool(sqlDB *sql.DB, dbQueue DbQueueInterface, crawler CrawlerInter
 
 		// Job info cache
 		jobInfoCache: make(map[string]*JobInfo),
+
+		// Job failure tracking
+		jobFailureCounters:  make(map[string]*jobFailureState),
+		jobFailureThreshold: failureThreshold,
 	}
 
 	// Start the notification listener when we have connection details available.
@@ -341,6 +382,10 @@ func (wp *WorkerPool) AddJob(jobID string, options *JobOptions) {
 	}
 	wp.perfMutex.Unlock()
 
+	wp.jobFailureMutex.Lock()
+	wp.jobFailureCounters[jobID] = &jobFailureState{}
+	wp.jobFailureMutex.Unlock()
+
 	// Cache job info to avoid repeated database lookups
 	ctx := context.Background()
 	var domainName string
@@ -350,14 +395,17 @@ func (wp *WorkerPool) AddJob(jobID string, options *JobOptions) {
 	// When options is nil (recovery mode), fetch find_links from DB
 	// Otherwise use the provided options value
 	var domainID int
+	var adaptiveDelay sql.NullInt64
+	var adaptiveFloor sql.NullInt64
+	var dbConcurrency int
 	err := wp.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
 		query := `
-			SELECT d.id, d.name, d.crawl_delay_seconds, j.find_links
+			SELECT d.id, d.name, d.crawl_delay_seconds, d.adaptive_delay_seconds, d.adaptive_delay_floor_seconds, j.find_links, j.concurrency
 			FROM domains d
 			JOIN jobs j ON j.domain_id = d.id
 			WHERE j.id = $1
 		`
-		return tx.QueryRowContext(ctx, query, jobID).Scan(&domainID, &domainName, &crawlDelay, &dbFindLinks)
+		return tx.QueryRowContext(ctx, query, jobID).Scan(&domainID, &domainName, &crawlDelay, &adaptiveDelay, &adaptiveFloor, &dbFindLinks, &dbConcurrency)
 	})
 
 	if err == nil {
@@ -366,16 +414,28 @@ func (wp *WorkerPool) AddJob(jobID string, options *JobOptions) {
 		if options != nil {
 			findLinks = options.FindLinks
 		}
+		concurrency := dbConcurrency
+		if options != nil && options.Concurrency > 0 {
+			concurrency = options.Concurrency
+		}
 
 		jobInfo := &JobInfo{
-			DomainID:   domainID,
-			DomainName: domainName,
-			FindLinks:  findLinks,
-			CrawlDelay: 0,
+			DomainID:    domainID,
+			DomainName:  domainName,
+			FindLinks:   findLinks,
+			CrawlDelay:  0,
+			Concurrency: concurrency,
 		}
 		if crawlDelay.Valid {
 			jobInfo.CrawlDelay = int(crawlDelay.Int64)
 		}
+		if adaptiveDelay.Valid {
+			jobInfo.AdaptiveDelay = int(adaptiveDelay.Int64)
+		}
+		if adaptiveFloor.Valid {
+			jobInfo.AdaptiveDelayFloor = int(adaptiveFloor.Int64)
+		}
+		wp.ensureDomainLimiter().Seed(domainName, jobInfo.CrawlDelay, jobInfo.AdaptiveDelay, jobInfo.AdaptiveDelayFloor)
 
 		// Parse robots.txt to get filtering rules
 		robotsRules, err := crawler.ParseRobotsTxt(ctx, domainName, wp.crawler.GetUserAgent())
@@ -389,6 +449,10 @@ func (wp *WorkerPool) AddJob(jobID string, options *JobOptions) {
 				sentry.CaptureMessage(fmt.Sprintf("Failed to parse robots.txt for %s: %v", domainName, err))
 			}
 			jobInfo.RobotsRules = &crawler.RobotsRules{} // Empty rules = no restrictions
+			if robotsRules.CrawlDelay > 0 {
+				jobInfo.CrawlDelay = robotsRules.CrawlDelay
+				wp.ensureDomainLimiter().UpdateRobotsDelay(domainName, jobInfo.CrawlDelay)
+			}
 		} else {
 			jobInfo.RobotsRules = robotsRules
 		}
@@ -401,6 +465,7 @@ func (wp *WorkerPool) AddJob(jobID string, options *JobOptions) {
 			Str("job_id", jobID).
 			Str("domain", domainName).
 			Int("crawl_delay", jobInfo.CrawlDelay).
+			Int("concurrency", jobInfo.Concurrency).
 			Int("disallow_patterns", len(jobInfo.RobotsRules.DisallowPatterns)).
 			Msg("Cached job info with robots rules")
 	} else {
@@ -445,6 +510,10 @@ func (wp *WorkerPool) RemoveJob(jobID string) {
 	delete(wp.jobInfoCache, jobID)
 	wp.jobInfoMutex.Unlock()
 
+	wp.jobFailureMutex.Lock()
+	delete(wp.jobFailureCounters, jobID)
+	wp.jobFailureMutex.Unlock()
+
 	// Simple scaling: remove 5 workers per job + any performance boost, minimum of base count
 	wp.workersMutex.Lock()
 	targetWorkers := max(wp.currentWorkers-5-jobBoost, wp.baseWorkerCount)
@@ -463,6 +532,101 @@ func (wp *WorkerPool) RemoveJob(jobID string) {
 	log.Debug().
 		Str("job_id", jobID).
 		Msg("Removed job from worker pool")
+}
+
+func (wp *WorkerPool) resetJobFailureStreak(jobID string) {
+	if jobID == "" || wp.jobFailureThreshold <= 0 {
+		return
+	}
+
+	wp.jobFailureMutex.Lock()
+	if state, ok := wp.jobFailureCounters[jobID]; ok && !state.triggered {
+		state.streak = 0
+	}
+	wp.jobFailureMutex.Unlock()
+}
+
+func (wp *WorkerPool) recordJobFailure(ctx context.Context, jobID, taskID string, taskErr error) {
+	if jobID == "" || wp.jobFailureThreshold <= 0 {
+		return
+	}
+
+	wp.jobsMutex.RLock()
+	_, active := wp.jobs[jobID]
+	wp.jobsMutex.RUnlock()
+	if !active {
+		return
+	}
+
+	var (
+		streak    int
+		triggered bool
+	)
+
+	wp.jobFailureMutex.Lock()
+	state, ok := wp.jobFailureCounters[jobID]
+	if !ok {
+		state = &jobFailureState{}
+		wp.jobFailureCounters[jobID] = state
+	}
+	if !state.triggered {
+		state.streak++
+		streak = state.streak
+		if state.streak >= wp.jobFailureThreshold {
+			state.triggered = true
+			triggered = true
+		}
+	}
+	wp.jobFailureMutex.Unlock()
+
+	if triggered {
+		wp.markJobFailedDueToConsecutiveFailures(ctx, jobID, streak, taskErr)
+		return
+	}
+
+	if streak > 0 {
+		log.Debug().
+			Str("job_id", jobID).
+			Str("task_id", taskID).
+			Int("failure_streak", streak).
+			Int("threshold", wp.jobFailureThreshold).
+			Msg("Incremented job failure streak")
+	}
+}
+
+func (wp *WorkerPool) markJobFailedDueToConsecutiveFailures(ctx context.Context, jobID string, streak int, lastErr error) {
+	message := fmt.Sprintf("Job failed after %d consecutive task failures", streak)
+	if lastErr != nil {
+		message = fmt.Sprintf("%s (last error: %s)", message, lastErr.Error())
+	}
+
+	log.Error().
+		Str("job_id", jobID).
+		Int("failure_streak", streak).
+		Int("threshold", wp.jobFailureThreshold).
+		Msg(message)
+
+	failCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	updateErr := wp.dbQueue.Execute(failCtx, func(tx *sql.Tx) error {
+		_, err := tx.ExecContext(failCtx, `
+			UPDATE jobs
+			SET status = $1,
+				completed_at = COALESCE(completed_at, $2),
+				error_message = $3
+			WHERE id = $4
+				AND status <> $5
+				AND status <> $6
+		`, JobStatusFailed, time.Now().UTC(), message, jobID, JobStatusFailed, JobStatusCancelled)
+		return err
+	})
+
+	if updateErr != nil {
+		log.Error().Err(updateErr).Str("job_id", jobID).Msg("Failed to mark job as failed after consecutive task failures")
+	}
+
+	wp.RemoveJob(jobID)
 }
 
 func (wp *WorkerPool) worker(ctx context.Context, workerID int) {
@@ -694,6 +858,9 @@ func (wp *WorkerPool) prepareTaskForProcessing(ctx context.Context, task *db.Tas
 		jobsTask.DomainName = jobInfo.DomainName
 		jobsTask.FindLinks = jobInfo.FindLinks
 		jobsTask.CrawlDelay = jobInfo.CrawlDelay
+		jobsTask.JobConcurrency = jobInfo.Concurrency
+		jobsTask.AdaptiveDelay = jobInfo.AdaptiveDelay
+		jobsTask.AdaptiveDelayFloor = jobInfo.AdaptiveDelayFloor
 	} else {
 		// Fallback to database if not in cache (shouldn't happen normally)
 		log.Warn().Str("job_id", task.JobID).Msg("Job info not in cache, querying database")
@@ -702,13 +869,16 @@ func (wp *WorkerPool) prepareTaskForProcessing(ctx context.Context, task *db.Tas
 		var domainName string
 		var findLinks bool
 		var crawlDelay sql.NullInt64
+		var adaptiveDelay sql.NullInt64
+		var adaptiveFloor sql.NullInt64
+		var concurrency int
 		err := wp.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
 			return tx.QueryRowContext(ctx, `
-				SELECT d.id, d.name, j.find_links, d.crawl_delay_seconds
+				SELECT d.id, d.name, j.find_links, d.crawl_delay_seconds, d.adaptive_delay_seconds, d.adaptive_delay_floor_seconds, j.concurrency
 				FROM domains d
 				JOIN jobs j ON j.domain_id = d.id
 				WHERE j.id = $1
-			`, task.JobID).Scan(&domainID, &domainName, &findLinks, &crawlDelay)
+			`, task.JobID).Scan(&domainID, &domainName, &findLinks, &crawlDelay, &adaptiveDelay, &adaptiveFloor, &concurrency)
 		})
 
 		if err != nil {
@@ -720,7 +890,18 @@ func (wp *WorkerPool) prepareTaskForProcessing(ctx context.Context, task *db.Tas
 			if crawlDelay.Valid {
 				jobsTask.CrawlDelay = int(crawlDelay.Int64)
 			}
+			jobsTask.JobConcurrency = concurrency
+			if adaptiveDelay.Valid {
+				jobsTask.AdaptiveDelay = int(adaptiveDelay.Int64)
+			}
+			if adaptiveFloor.Valid {
+				jobsTask.AdaptiveDelayFloor = int(adaptiveFloor.Int64)
+			}
+			wp.ensureDomainLimiter().Seed(domainName, jobsTask.CrawlDelay, jobsTask.AdaptiveDelay, jobsTask.AdaptiveDelayFloor)
 		}
+	}
+	if jobsTask.JobConcurrency <= 0 {
+		jobsTask.JobConcurrency = 1
 	}
 
 	return jobsTask, nil
@@ -1623,14 +1804,9 @@ func (wp *WorkerPool) handleTaskError(ctx context.Context, task *db.Task, taskEr
 
 	// Check if this is a blocking error (403/429/503)
 	if isBlockingError(taskErr) {
-		// For blocking errors, only retry twice (less aggressive)
-		if task.RetryCount < 2 {
+		maxRetries := wp.domainLimiter.cfg.MaxBlockingRetries
+		if task.RetryCount < maxRetries {
 			retryReason = "blocking"
-			// Apply exponential backoff before retry
-			backoffDuration := calculateBackoffDuration(task.RetryCount)
-
-			time.Sleep(backoffDuration)
-
 			task.RetryCount++
 			task.Status = string(TaskStatusPending)
 			task.StartedAt = time.Time{} // Reset started time
@@ -1638,8 +1814,8 @@ func (wp *WorkerPool) handleTaskError(ctx context.Context, task *db.Task, taskEr
 				Err(taskErr).
 				Str("task_id", task.ID).
 				Int("retry_count", task.RetryCount).
-				Dur("backoff_duration", backoffDuration).
-				Msg("Blocking error (403/429/503), retry scheduled after exponential backoff")
+				Int("max_retries", maxRetries).
+				Msg("Blocking error (403/429/503), retry scheduled")
 			observability.RecordWorkerTaskRetry(ctx, task.JobID, retryReason)
 		} else {
 			// Mark as permanently failed after 2 retries
@@ -1650,7 +1826,8 @@ func (wp *WorkerPool) handleTaskError(ctx context.Context, task *db.Task, taskEr
 				Err(taskErr).
 				Str("task_id", task.ID).
 				Int("retry_count", task.RetryCount).
-				Msg("Task blocked permanently after 2 retries")
+				Msg("Task blocked permanently after exhausting retries")
+			wp.recordJobFailure(ctx, task.JobID, task.ID, taskErr)
 			observability.RecordWorkerTaskFailure(ctx, task.JobID, "blocking")
 		}
 	} else if isRetryableError(taskErr) && task.RetryCount < MaxTaskRetries {
@@ -1675,6 +1852,7 @@ func (wp *WorkerPool) handleTaskError(ctx context.Context, task *db.Task, taskEr
 			Str("task_id", task.ID).
 			Int("retry_count", task.RetryCount).
 			Msg("Task failed permanently")
+		wp.recordJobFailure(ctx, task.JobID, task.ID, taskErr)
 		failureReason := retryReason
 		if !isBlockingError(taskErr) && !isRetryableError(taskErr) {
 			failureReason = "non_retryable"
@@ -1703,6 +1881,8 @@ func (wp *WorkerPool) handleTaskError(ctx context.Context, task *db.Task, taskEr
 // handleTaskSuccess processes successful task completion with metrics and database updates
 func (wp *WorkerPool) handleTaskSuccess(ctx context.Context, task *db.Task, result *crawler.CrawlResult) error {
 	now := time.Now().UTC()
+
+	wp.resetJobFailureStreak(task.JobID)
 
 	// Mark as completed with basic metrics
 	task.Status = string(TaskStatusCompleted)
@@ -1839,8 +2019,27 @@ func (wp *WorkerPool) processTask(ctx context.Context, task *Task) (*crawler.Cra
 
 	log.Info().Str("url", urlStr).Str("task_id", task.ID).Msg("Starting URL warm")
 
-	// Apply crawl delay if specified for this domain
-	applyCrawlDelay(task)
+	limiter := wp.ensureDomainLimiter()
+	permit, err := limiter.Acquire(ctx, DomainRequest{
+		Domain:      task.DomainName,
+		JobID:       task.JobID,
+		RobotsDelay: time.Duration(task.CrawlDelay) * time.Second,
+		JobConcurrency: func() int {
+			if task.JobConcurrency > 0 {
+				return task.JobConcurrency
+			}
+			return 1
+		}(),
+	})
+	if err != nil {
+		return nil, err
+	}
+	released := false
+	defer func() {
+		if !released {
+			permit.Release(false, false)
+		}
+	}()
 
 	result, err := wp.crawler.WarmURL(ctx, urlStr, task.FindLinks)
 	if err != nil {
@@ -1848,8 +2047,13 @@ func (wp *WorkerPool) processTask(ctx context.Context, task *Task) (*crawler.Cra
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
 		log.Error().Err(err).Str("task_id", task.ID).Msg("Crawler failed")
+		rateLimited := IsRateLimitError(err)
+		permit.Release(false, rateLimited)
+		released = true
 		return result, fmt.Errorf("crawler error: %w", err)
 	}
+	permit.Release(true, false)
+	released = true
 
 	if result != nil {
 		span.SetAttributes(

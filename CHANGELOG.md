@@ -55,6 +55,15 @@ On merge, CI will:
 
 ### Added
 
+- **Adaptive Domain Rate Limiter**: Shared per-domain throttle with persistence
+  and concurrency management to prevent 429 cascades
+  - Learns delays based on blocking responses and writes them back via
+    `adaptive_delay_seconds` / `adaptive_delay_floor_seconds`
+  - Applies shared backoff windows, linear (+1 s) growth, probing after
+    sustained success, and concurrency reduction for heavily throttled domains
+  - Configurable via `BBB_RATE_LIMIT_BASE_DELAY_MS`,
+    `BBB_RATE_LIMIT_MAX_DELAY_SECONDS`, `BBB_RATE_LIMIT_SUCCESS_THRESHOLD`, and
+    `BBB_RATE_LIMIT_MAX_RETRIES`
 - **Queue Status Flow Documentation**: Comprehensive documentation of task
   lifecycle and status split solution
   - Visual state machine diagrams showing pending/waiting/running/completed
@@ -64,6 +73,9 @@ On merge, CI will:
   - Implementation details for capacity-aware enqueueing and atomic promotion
   - Edge case handling documentation (no concurrency limit, concurrent
     completions, migration timing)
+- **Job Failure Guardrail**: Worker pool stops jobs after configurable
+  consecutive task failures (`BBB_JOB_FAILURE_THRESHOLD`, default 20) to
+  preserve resources when domains remain blocked indefinitely
 
 ## [0.15.0] – 2025-10-29
 

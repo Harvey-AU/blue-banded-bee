@@ -98,8 +98,11 @@ type Task struct {
 	PriorityScore float64 `json:"priority_score"`
 
 	// Job configuration that affects processing
-	FindLinks  bool `json:"-"`
-	CrawlDelay int  `json:"-"` // Crawl delay in seconds from robots.txt
+	FindLinks          bool `json:"-"`
+	CrawlDelay         int  `json:"-"` // Crawl delay in seconds from robots.txt
+	JobConcurrency     int  `json:"-"`
+	AdaptiveDelay      int  `json:"-"`
+	AdaptiveDelayFloor int  `json:"-"`
 }
 
 // JobOptions defines configuration options for a crawl job
