@@ -237,6 +237,17 @@ func (q *DbQueue) Execute(ctx context.Context, fn func(*sql.Tx) error) error {
 		}
 
 		lastErr = execErr
+		if errors.Is(execErr, sql.ErrNoRows) {
+			totalDuration := time.Since(totalStart)
+			log.Debug().
+				Err(execErr).
+				Dur("total_duration", totalDuration).
+				Dur("pool_wait_total", poolWaitTotal).
+				Dur("exec_total", execTotal).
+				Int("attempt", attempt+1).
+				Msg("Database transaction finished with no rows")
+			return execErr
+		}
 		errorClass := classifyError(execErr)
 
 		if !q.shouldRetry(execErr) || attempt == maxAttempts-1 {
