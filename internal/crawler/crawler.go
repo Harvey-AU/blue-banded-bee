@@ -284,7 +284,7 @@ func (c *Crawler) setupResponseHandlers(collyClone *colly.Collector, result *Cra
 		result.ResponseTime = time.Since(startTime).Milliseconds()
 		result.StatusCode = r.StatusCode
 
-		log.Error().
+		log.Debug().
 			Err(err).
 			Str("url", targetURL).
 			Dur("duration_ms", time.Duration(result.ResponseTime)*time.Millisecond).
@@ -530,7 +530,7 @@ func executeCollyRequest(ctx context.Context, collyClone *colly.Collector, targe
 	case err := <-done:
 		if err != nil {
 			res.Error = err.Error()
-			log.Error().
+			log.Debug().
 				Err(err).
 				Str("url", targetURL).
 				Msg("Colly visit failed")
@@ -539,7 +539,7 @@ func executeCollyRequest(ctx context.Context, collyClone *colly.Collector, targe
 		return nil
 	case <-ctx.Done():
 		res.Error = ctx.Err().Error()
-		log.Error().
+		log.Debug().
 			Err(ctx.Err()).
 			Str("url", targetURL).
 			Msg("URL warming cancelled due to context timeout")
@@ -594,14 +594,14 @@ func (c *Crawler) WarmURL(ctx context.Context, targetURL string, findLinks bool)
 	// Log results and return error if needed
 	if res.Error != "" {
 		if res.StatusCode < 200 || res.StatusCode >= 300 {
-			log.Warn().
+			log.Debug().
 				Int("status", res.StatusCode).
 				Str("url", targetURL).
 				Str("error", res.Error).
 				Dur("duration_ms", time.Duration(res.ResponseTime)*time.Millisecond).
 				Msg("URL warming returned non-success status")
 		} else {
-			log.Error().
+			log.Debug().
 				Str("url", targetURL).
 				Str("error", res.Error).
 				Dur("duration_ms", time.Duration(res.ResponseTime)*time.Millisecond).

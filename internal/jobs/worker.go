@@ -2085,7 +2085,7 @@ func (wp *WorkerPool) processTask(ctx context.Context, task *Task) (*crawler.Cra
 		if !rateLimited {
 			rateLimited = IsRateLimitError(err)
 		}
-		log.Error().Err(err).
+		log.Debug().Err(err).
 			Str("task_id", task.ID).
 			Bool("rate_limited", rateLimited).
 			Int("status_code", func() int {
