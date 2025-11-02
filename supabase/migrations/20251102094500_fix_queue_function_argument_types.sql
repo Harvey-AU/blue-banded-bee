@@ -1,5 +1,9 @@
 -- Fix queue helper functions to accept TEXT job IDs, matching the existing schema
 
+-- Remove legacy UUID-typed definitions so the new TEXT versions are authoritative
+DROP FUNCTION IF EXISTS promote_waiting_task_for_job(UUID);
+DROP FUNCTION IF EXISTS job_has_capacity(UUID);
+
 CREATE OR REPLACE FUNCTION promote_waiting_task_for_job(p_job_id TEXT)
 RETURNS VOID
 LANGUAGE plpgsql

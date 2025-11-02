@@ -55,6 +55,23 @@ func (db *DB) ResetSchema() error {
 		Dur("step_duration", time.Since(startTime)).
 		Msg("Step 1/4 completed: Job-related tables dropped")
 
+	// Clean up database functions that may conflict with migrations when re-applied.
+	log.Info().Msg("Cleaning up queue helper functions")
+	functionSignatures := []string{
+		"promote_waiting_task_for_job(UUID)",
+		"promote_waiting_task_for_job(TEXT)",
+		"job_has_capacity(UUID)",
+		"job_has_capacity(TEXT)",
+	}
+	for _, signature := range functionSignatures {
+		dropStart := time.Now()
+		if _, err := db.client.Exec(fmt.Sprintf("DROP FUNCTION IF EXISTS %s", signature)); err != nil {
+			log.Warn().Err(err).Str("function", signature).Msg("Failed to drop function during reset")
+		} else {
+			log.Info().Str("function", signature).Dur("duration", time.Since(dropStart)).Msg("Dropped function if existed")
+		}
+	}
+
 	// Step 2: Clear migration history
 	migrationStart := time.Now()
 	log.Info().Msg("Step 2/4: Clearing migration history")
