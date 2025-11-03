@@ -108,6 +108,7 @@ type TaskUpdate struct {
 // QueueExecutor defines the minimal interface needed for batch operations
 type QueueExecutor interface {
 	Execute(ctx context.Context, fn func(*sql.Tx) error) error
+	ExecuteWithContext(ctx context.Context, fn func(context.Context, *sql.Tx) error) error
 }
 
 // BatchManager coordinates batching of database operations
@@ -175,7 +176,10 @@ func (bm *BatchManager) processUpdateBatches() {
 			return
 		}
 
-		if err := bm.flushTaskUpdates(context.Background(), batch); err != nil {
+		flushCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		if err := bm.flushTaskUpdates(flushCtx, batch); err != nil {
 			// Classify the error
 			retryable := isRetryableError(err)
 
@@ -212,7 +216,10 @@ func (bm *BatchManager) processUpdateBatches() {
 					Int("batch_size", len(batch)).
 					Msg("Max consecutive data failures reached - attempting individual updates to isolate poison pill")
 
-				successCount, skippedCount := bm.flushIndividualUpdates(context.Background(), batch)
+				// Create fresh bounded context for individual updates (flushCtx may be deadline-exceeded)
+				fallbackCtx, fallbackCancel := context.WithTimeout(context.Background(), 30*time.Second)
+				successCount, skippedCount := bm.flushIndividualUpdates(fallbackCtx, batch)
+				fallbackCancel()
 
 				log.Info().
 					Int("total", len(batch)).
@@ -270,7 +277,9 @@ func (bm *BatchManager) processUpdateBatches() {
 					break
 				}
 
-				lastErr = bm.flushTaskUpdates(context.Background(), batch)
+				shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+				lastErr = bm.flushTaskUpdates(shutdownCtx, batch)
+				cancel()
 				if lastErr == nil {
 					log.Info().
 						Int("batch_size", len(batch)).
@@ -313,7 +322,10 @@ func (bm *BatchManager) processUpdateBatches() {
 						Bool("retryable", false).
 						Msg("Final batch flush failed due to data error - attempting individual updates to isolate poison pill")
 
-					successCount, skippedCount := bm.flushIndividualUpdates(context.Background(), batch)
+					// Create fresh bounded context for individual update fallback
+					fallbackCtx, fallbackCancel := context.WithTimeout(context.Background(), 30*time.Second)
+					successCount, skippedCount := bm.flushIndividualUpdates(fallbackCtx, batch)
+					fallbackCancel()
 
 					if skippedCount > 0 {
 						// Capture to Sentry - data corruption caused permanent loss on shutdown
@@ -375,31 +387,31 @@ func (bm *BatchManager) flushTaskUpdates(ctx context.Context, updates []*TaskUpd
 		}
 	}
 
-	err := bm.queue.Execute(ctx, func(tx *sql.Tx) error {
+	err := bm.queue.ExecuteWithContext(ctx, func(txCtx context.Context, tx *sql.Tx) error {
 		// Batch update completed tasks
 		if len(completedTasks) > 0 {
-			if err := bm.batchUpdateCompleted(ctx, tx, completedTasks); err != nil {
+			if err := bm.batchUpdateCompleted(txCtx, tx, completedTasks); err != nil {
 				return fmt.Errorf("failed to batch update completed tasks: %w", err)
 			}
 		}
 
 		// Batch update failed tasks
 		if len(failedTasks) > 0 {
-			if err := bm.batchUpdateFailed(ctx, tx, failedTasks); err != nil {
+			if err := bm.batchUpdateFailed(txCtx, tx, failedTasks); err != nil {
 				return fmt.Errorf("failed to batch update failed tasks: %w", err)
 			}
 		}
 
 		// Batch update skipped tasks
 		if len(skippedTasks) > 0 {
-			if err := bm.batchUpdateSkipped(ctx, tx, skippedTasks); err != nil {
+			if err := bm.batchUpdateSkipped(txCtx, tx, skippedTasks); err != nil {
 				return fmt.Errorf("failed to batch update skipped tasks: %w", err)
 			}
 		}
 
 		// Batch update pending tasks (retries)
 		if len(pendingTasks) > 0 {
-			if err := bm.batchUpdatePending(ctx, tx, pendingTasks); err != nil {
+			if err := bm.batchUpdatePending(txCtx, tx, pendingTasks); err != nil {
 				return fmt.Errorf("failed to batch update pending tasks: %w", err)
 			}
 		}
@@ -420,7 +432,7 @@ func (bm *BatchManager) flushTaskUpdates(ctx context.Context, updates []*TaskUpd
 		// Call promote_waiting_task_for_job() for each affected job
 		promotedCount := 0
 		for jobID := range jobIDsToPromote {
-			_, err := tx.ExecContext(ctx, `SELECT promote_waiting_task_for_job($1)`, jobID)
+			_, err := tx.ExecContext(txCtx, `SELECT promote_waiting_task_for_job($1)`, jobID)
 			if err != nil {
 				log.Warn().
 					Err(err).
@@ -476,20 +488,20 @@ func (bm *BatchManager) flushIndividualUpdates(ctx context.Context, updates []*T
 
 	for _, update := range updates {
 		// Try to update this single task
-		err := bm.queue.Execute(ctx, func(tx *sql.Tx) error {
+		err := bm.queue.ExecuteWithContext(ctx, func(txCtx context.Context, tx *sql.Tx) error {
 			// Use the original UpdateTaskStatus logic for single task
 			task := update.Task
 
 			var updateErr error
 			switch task.Status {
 			case "completed":
-				updateErr = bm.batchUpdateCompleted(ctx, tx, []*Task{task})
+				updateErr = bm.batchUpdateCompleted(txCtx, tx, []*Task{task})
 			case "failed", "blocked":
-				updateErr = bm.batchUpdateFailed(ctx, tx, []*Task{task})
+				updateErr = bm.batchUpdateFailed(txCtx, tx, []*Task{task})
 			case "skipped":
-				updateErr = bm.batchUpdateSkipped(ctx, tx, []*Task{task})
+				updateErr = bm.batchUpdateSkipped(txCtx, tx, []*Task{task})
 			case "pending":
-				updateErr = bm.batchUpdatePending(ctx, tx, []*Task{task})
+				updateErr = bm.batchUpdatePending(txCtx, tx, []*Task{task})
 			default:
 				return fmt.Errorf("unknown status: %s", task.Status)
 			}
