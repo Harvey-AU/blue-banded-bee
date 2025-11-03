@@ -50,6 +50,10 @@ type DbQueue struct {
 // a connection before the caller's context expires.
 var ErrPoolSaturated = errors.New("database connection pool saturated")
 
+// ErrConcurrencyBlocked is returned when pending tasks exist but all are blocked
+// by job concurrency limits. Workers should back off when receiving this error.
+var ErrConcurrencyBlocked = errors.New("tasks exist but blocked by concurrency limits")
+
 const (
 	defaultPoolWarnThreshold   = 0.90
 	defaultPoolRejectThreshold = 0.95
@@ -959,14 +963,15 @@ func (q *DbQueue) GetNextTask(ctx context.Context, jobID string) (*Task, error) 
 					Int("attempt", attemptCount).
 					Msg("Tasks available but blocked by job concurrency limit")
 				observability.RecordTaskClaimAttempt(ctx, metricsJobID, elapsed, "concurrency_blocked")
-			} else {
-				log.Debug().
-					Str("job_id", jobID).
-					Dur("query_duration", elapsed).
-					Int("attempt", attemptCount).
-					Msg("No pending task available for job")
-				observability.RecordTaskClaimAttempt(ctx, metricsJobID, elapsed, "empty")
+				return ErrConcurrencyBlocked
 			}
+
+			log.Debug().
+				Str("job_id", jobID).
+				Dur("query_duration", elapsed).
+				Int("attempt", attemptCount).
+				Msg("No pending task available for job")
+			observability.RecordTaskClaimAttempt(ctx, metricsJobID, elapsed, "empty")
 			return sql.ErrNoRows
 		}
 		if err != nil {

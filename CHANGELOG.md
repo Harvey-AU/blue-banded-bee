@@ -29,6 +29,23 @@ On merge, CI will:
 
 ## [Unreleased]
 
+## [0.16.6] – 2025-11-03
+
+### Fixed
+
+- **Worker Pool Query Spam**: Fixed critical issue where workers hammered
+  database with 200+ queries/second during concurrency blocking
+  - Workers now detect when all pending tasks are blocked by job concurrency
+    limits (`ErrConcurrencyBlocked`)
+  - `claimPendingTask` gracefully handles concurrency-blocked jobs without error
+    logging
+  - Exponential backoff (200ms → 5s) applied when tasks exist but are
+    concurrency-blocked
+  - Expected impact: Reduce database queries from ~3,600/sec to <20/sec during
+    high concurrency blocking
+  - Prevents CPU throttling and machine restarts from excessive query load
+  - Maintains same throughput - only reduces wasteful database polling
+
 ## [0.16.5] – 2025-11-03
 
 ### Added
