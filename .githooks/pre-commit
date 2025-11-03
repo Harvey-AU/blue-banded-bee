@@ -38,7 +38,8 @@ echo "🤖 Checking commit message for AI attribution..."
 # Note: This catches most cases, but commit-msg hook is more thorough
 COMMIT_MSG_FILE=".git/COMMIT_EDITMSG"
 if [ -f "$COMMIT_MSG_FILE" ]; then
-    COMMIT_MSG=$(cat "$COMMIT_MSG_FILE")
+    # Filter out comment lines (those starting with #)
+    COMMIT_MSG=$(grep -v '^#' "$COMMIT_MSG_FILE" || true)
 
     # Check for common AI attribution patterns (case-insensitive)
     if echo "$COMMIT_MSG" | grep -iE '(claude|gemini|chatgpt|gpt-|copilot|Generated with|Co-Authored-By: Claude)' > /dev/null; then
