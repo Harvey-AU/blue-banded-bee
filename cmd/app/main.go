@@ -385,8 +385,12 @@ func main() {
 
 	appEnv := os.Getenv("APP_ENV")
 
-	// Connect to PostgreSQL
-	pgDB, err := db.InitFromEnv()
+	// Connect to PostgreSQL with retry logic to handle temporary unavailability
+	// Use a generous timeout to allow for Supabase maintenance windows
+	dbCtx, dbCancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer dbCancel()
+
+	pgDB, err := db.WaitForDatabase(dbCtx, 5*time.Minute)
 	if err != nil {
 		sentry.CaptureException(err)
 		log.Fatal().Err(err).Msg("Failed to connect to PostgreSQL database")
@@ -406,7 +410,12 @@ func main() {
 
 	queueDB := pgDB
 	if queueURL := strings.TrimSpace(os.Getenv("DATABASE_QUEUE_URL")); queueURL != "" {
-		queueConn, err := db.InitFromURLWithSuffix(queueURL, appEnv, "queue")
+		// Create fresh context for queue connection to ensure full retry budget
+		// (primary connection may have consumed most of the shared context)
+		queueCtx, queueCancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		defer queueCancel()
+
+		queueConn, err := db.InitFromURLWithSuffixRetry(queueCtx, queueURL, appEnv, "queue")
 		if err != nil {
 			sentry.CaptureException(err)
 			log.Fatal().Err(err).Msg("Failed to connect to queue PostgreSQL database")

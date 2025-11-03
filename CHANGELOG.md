@@ -29,6 +29,20 @@ On merge, CI will:
 
 ## [Unreleased]
 
+### Added
+
+- **Database Connection Resilience**: Implemented exponential backoff retry
+  logic for database connections to prevent crash-looping during Supabase
+  maintenance windows
+  - Created `internal/db/retry.go` with configurable retry mechanisms
+  - Added `WaitForDatabase()` function with up to 5-minute wait period
+  - Added `InitFromURLWithSuffixRetry()` for queue database connections
+  - Application now gracefully waits for database availability instead of
+    crash-looping when Supabase terminates connections (SQLSTATE 57P01)
+  - Retry configuration: 10 attempts max, 1s-30s exponential backoff with jitter
+  - Prevents Fly.io machine restart exhaustion (observed: 10 restarts over 5
+    hours)
+
 ### Fixed
 
 - **Pending Queue Overflow**: Fixed pending task queue flooding to 2,673 tasks
