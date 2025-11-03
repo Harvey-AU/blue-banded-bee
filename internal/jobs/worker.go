@@ -765,7 +765,7 @@ func (wp *WorkerPool) worker(ctx context.Context, workerID int) {
 		case result := <-resultsCh:
 			// Process result from concurrent task goroutine
 			if result.err != nil {
-				if errors.Is(result.err, sql.ErrNoRows) {
+				if errors.Is(result.err, sql.ErrNoRows) || errors.Is(result.err, db.ErrConcurrencyBlocked) {
 					consecutiveNoTasks++
 				} else {
 					log.Error().Err(result.err).Int("worker_id", workerID).Msg("Task processing failed")
@@ -816,7 +816,7 @@ func (wp *WorkerPool) worker(ctx context.Context, workerID int) {
 				wp.clearWorkerIdle(workerID)
 			case result := <-resultsCh:
 				if result.err != nil {
-					if errors.Is(result.err, sql.ErrNoRows) {
+					if errors.Is(result.err, sql.ErrNoRows) || errors.Is(result.err, db.ErrConcurrencyBlocked) {
 						consecutiveNoTasks++
 					}
 				} else {
@@ -861,7 +861,7 @@ func (wp *WorkerPool) worker(ctx context.Context, workerID int) {
 			case <-time.After(baseSleep):
 			case result := <-resultsCh:
 				if result.err != nil {
-					if errors.Is(result.err, sql.ErrNoRows) {
+					if errors.Is(result.err, sql.ErrNoRows) || errors.Is(result.err, db.ErrConcurrencyBlocked) {
 						consecutiveNoTasks++
 					}
 				} else {
@@ -892,10 +892,18 @@ func (wp *WorkerPool) claimPendingTask(ctx context.Context) (*db.Task, error) {
 		return nil, sql.ErrNoRows
 	}
 
+	// Track if we saw any concurrency-blocked jobs
+	sawConcurrencyBlocked := false
+
 	// Try to get a task from each active job
 	for _, jobID := range activeJobs {
 		task, err := wp.dbQueue.GetNextTask(ctx, jobID)
 		if err == sql.ErrNoRows {
+			continue // Try next job
+		}
+		if errors.Is(err, db.ErrConcurrencyBlocked) {
+			// Job has tasks but they're blocked by concurrency limits
+			sawConcurrencyBlocked = true
 			continue // Try next job
 		}
 		if errors.Is(err, db.ErrPoolSaturated) {
@@ -916,6 +924,11 @@ func (wp *WorkerPool) claimPendingTask(ctx context.Context) (*db.Task, error) {
 				Msg("Found and claimed pending task")
 			return task, nil
 		}
+	}
+
+	// If all jobs were concurrency-blocked, return that instead of no rows
+	if sawConcurrencyBlocked {
+		return nil, db.ErrConcurrencyBlocked
 	}
 
 	// No tasks found in any job
@@ -1831,6 +1844,10 @@ func (wp *WorkerPool) healthProbe(ctx context.Context) {
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			log.Debug().Msg("Health probe: No work found")
+			return
+		}
+		if errors.Is(err, db.ErrConcurrencyBlocked) {
+			log.Debug().Msg("Health probe: Work exists but blocked by concurrency limits")
 			return
 		}
 		log.Error().Err(err).Msg("Health probe: Error claiming task")
