@@ -294,6 +294,131 @@ func (q *DbQueue) Execute(ctx context.Context, fn func(*sql.Tx) error) error {
 	return lastErr
 }
 
+// ExecuteWithContext runs a transactional operation with full context propagation.
+// The callback receives both the context and transaction, ensuring SQL statements
+// can respect timeouts. This should be preferred over Execute for all new code.
+func (q *DbQueue) ExecuteWithContext(ctx context.Context, fn func(context.Context, *sql.Tx) error) error {
+	totalStart := time.Now()
+
+	// Add timeout to context if none exists
+	if _, ok := ctx.Deadline(); !ok {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, 30*time.Second)
+		defer cancel()
+	}
+
+	maxAttempts := q.maxTxRetries
+	if maxAttempts < 1 {
+		maxAttempts = 1
+	}
+
+	var lastErr error
+	var poolWaitTotal time.Duration
+	var execTotal time.Duration
+
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		poolWaitStart := time.Now()
+		release, err := q.ensurePoolCapacity(ctx)
+		poolWait := time.Since(poolWaitStart)
+		poolWaitTotal += poolWait
+
+		if err != nil {
+			// Classify the error type for observability
+			errorClass := classifyError(err)
+
+			if !q.shouldRetry(err) || attempt == maxAttempts-1 {
+				// Log pool saturation details
+				log.Warn().
+					Err(err).
+					Str("error_class", errorClass).
+					Dur("pool_wait_total", poolWaitTotal).
+					Dur("total_duration", time.Since(totalStart)).
+					Int("attempt", attempt+1).
+					Int("max_attempts", maxAttempts).
+					Msg("Failed to acquire database connection")
+				return err
+			}
+
+			backoff := q.computeBackoff(attempt)
+			log.Debug().
+				Err(err).
+				Str("error_class", errorClass).
+				Dur("backoff", backoff).
+				Int("attempt", attempt+1).
+				Msg("Pool capacity check failed, retrying after backoff")
+
+			if err := q.waitForRetry(ctx, attempt); err != nil {
+				return err
+			}
+			continue
+		}
+
+		execStart := time.Now()
+		execErr := q.executeOnceWithContext(ctx, fn)
+		execDuration := time.Since(execStart)
+		execTotal += execDuration
+		release()
+
+		if execErr == nil {
+			totalDuration := time.Since(totalStart)
+			// Log if transaction was slow (>5s) to help diagnose performance issues
+			if totalDuration > 5*time.Second {
+				log.Warn().
+					Dur("total_duration", totalDuration).
+					Dur("pool_wait_total", poolWaitTotal).
+					Dur("exec_total", execTotal).
+					Int("attempts", attempt+1).
+					Msg("Slow database transaction completed")
+			}
+			return nil
+		}
+
+		lastErr = execErr
+		if errors.Is(execErr, sql.ErrNoRows) {
+			totalDuration := time.Since(totalStart)
+			log.Debug().
+				Err(execErr).
+				Dur("total_duration", totalDuration).
+				Dur("pool_wait_total", poolWaitTotal).
+				Dur("exec_total", execTotal).
+				Int("attempt", attempt+1).
+				Msg("Database transaction finished with no rows")
+			return execErr
+		}
+		errorClass := classifyError(execErr)
+
+		if !q.shouldRetry(execErr) || attempt == maxAttempts-1 {
+			totalDuration := time.Since(totalStart)
+			log.Error().
+				Err(execErr).
+				Str("error_class", errorClass).
+				Dur("total_duration", totalDuration).
+				Dur("pool_wait_total", poolWaitTotal).
+				Dur("exec_total", execTotal).
+				Int("attempt", attempt+1).
+				Int("max_attempts", maxAttempts).
+				Bool("retryable", q.shouldRetry(execErr)).
+				Msg("Database transaction failed")
+			return execErr
+		}
+
+		backoff := q.computeBackoff(attempt)
+		log.Debug().
+			Err(execErr).
+			Str("error_class", errorClass).
+			Dur("backoff", backoff).
+			Dur("exec_duration", execDuration).
+			Int("attempt", attempt+1).
+			Msg("Transaction failed, retrying after backoff")
+
+		if err := q.waitForRetry(ctx, attempt); err != nil {
+			return err
+		}
+	}
+
+	return lastErr
+}
+
 func (q *DbQueue) executeOnce(ctx context.Context, fn func(*sql.Tx) error) error {
 	beginStart := time.Now()
 	tx, err := q.db.client.BeginTx(ctx, nil)
@@ -313,6 +438,66 @@ func (q *DbQueue) executeOnce(ctx context.Context, fn func(*sql.Tx) error) error
 
 	queryStart := time.Now()
 	if err := fn(tx); err != nil {
+		queryDuration := time.Since(queryStart)
+		// Log slow queries even when they fail
+		if queryDuration > 5*time.Second {
+			log.Warn().
+				Err(err).
+				Dur("begin_duration", beginDuration).
+				Dur("query_duration", queryDuration).
+				Msg("Slow query failed in transaction")
+		}
+		return err
+	}
+	queryDuration := time.Since(queryStart)
+
+	commitStart := time.Now()
+	if err := tx.Commit(); err != nil {
+		commitDuration := time.Since(commitStart)
+		sentry.CaptureException(err)
+		log.Error().
+			Err(err).
+			Dur("begin_duration", beginDuration).
+			Dur("query_duration", queryDuration).
+			Dur("commit_duration", commitDuration).
+			Msg("Failed to commit transaction")
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+	commitDuration := time.Since(commitStart)
+
+	// Log breakdown for slow transactions
+	totalDuration := beginDuration + queryDuration + commitDuration
+	if totalDuration > 5*time.Second {
+		log.Warn().
+			Dur("total", totalDuration).
+			Dur("begin", beginDuration).
+			Dur("query", queryDuration).
+			Dur("commit", commitDuration).
+			Msg("Slow transaction breakdown")
+	}
+
+	return nil
+}
+
+func (q *DbQueue) executeOnceWithContext(ctx context.Context, fn func(context.Context, *sql.Tx) error) error {
+	beginStart := time.Now()
+	tx, err := q.db.client.BeginTx(ctx, nil)
+	beginDuration := time.Since(beginStart)
+
+	if err != nil {
+		sentry.CaptureException(err)
+		log.Error().
+			Err(err).
+			Dur("begin_duration", beginDuration).
+			Msg("Failed to begin transaction")
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer func() {
+		_ = tx.Rollback()
+	}()
+
+	queryStart := time.Now()
+	if err := fn(ctx, tx); err != nil {
 		queryDuration := time.Since(queryStart)
 		// Log slow queries even when they fail
 		if queryDuration > 5*time.Second {
@@ -1220,14 +1405,14 @@ func (q *DbQueue) DecrementRunningTasks(ctx context.Context, jobID string) error
 
 	log.Debug().Str("job_id", jobID).Msg("DecrementRunningTasks called")
 
-	return q.Execute(ctx, func(tx *sql.Tx) error {
+	return q.ExecuteWithContext(ctx, func(txCtx context.Context, tx *sql.Tx) error {
 		// Decrement running_tasks count
 		decrementQuery := `
 			UPDATE jobs
 			SET running_tasks = GREATEST(0, running_tasks - 1)
 			WHERE id = $1
 		`
-		result, err := tx.ExecContext(ctx, decrementQuery, jobID)
+		result, err := tx.ExecContext(txCtx, decrementQuery, jobID)
 		if err != nil {
 			log.Error().Err(err).Str("job_id", jobID).Msg("DecrementRunningTasks database error")
 			return fmt.Errorf("failed to decrement running_tasks for job %s: %w", jobID, err)
@@ -1242,7 +1427,7 @@ func (q *DbQueue) DecrementRunningTasks(ctx context.Context, jobID string) error
 
 		// Promote one waiting task to pending (uses database function from migration)
 		// This automatically checks if job has capacity before promoting
-		_, err = tx.ExecContext(ctx, `SELECT promote_waiting_task_for_job($1)`, jobID)
+		_, err = tx.ExecContext(txCtx, `SELECT promote_waiting_task_for_job($1)`, jobID)
 		if err != nil {
 			// Log but don't fail - promoting is best-effort
 			log.Warn().Err(err).Str("job_id", jobID).Msg("Failed to promote waiting task")

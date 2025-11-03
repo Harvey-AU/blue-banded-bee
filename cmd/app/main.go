@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"flag"
 	"fmt"
 	"net"
 	"net/http"
@@ -265,15 +266,25 @@ type Config struct {
 }
 
 func main() {
+	// Parse command line flags
+	logLevelFlag := flag.String("log-level", "", "Log level (debug, info, warn, error) - overrides LOG_LEVEL env var")
+	flag.Parse()
+
 	// Load .env files - .env.local takes priority for development
 	godotenv.Load(".env.local", ".env")
+
+	// Determine log level: command line flag takes priority over environment variable
+	logLevel := getEnvWithDefault("LOG_LEVEL", "info")
+	if *logLevelFlag != "" {
+		logLevel = *logLevelFlag
+	}
 
 	// Load configuration
 	config := &Config{
 		Port:                  getEnvWithDefault("PORT", "8080"),
 		Env:                   getEnvWithDefault("APP_ENV", "development"),
 		SentryDSN:             os.Getenv("SENTRY_DSN"),
-		LogLevel:              getEnvWithDefault("LOG_LEVEL", "info"),
+		LogLevel:              logLevel,
 		FlightRecorderEnabled: getEnvWithDefault("FLIGHT_RECORDER_ENABLED", "false") == "true",
 		ObservabilityEnabled:  getEnvWithDefault("OBSERVABILITY_ENABLED", "true") == "true",
 		MetricsAddr:           getEnvWithDefault("METRICS_ADDR", ":9464"),

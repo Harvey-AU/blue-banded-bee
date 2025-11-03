@@ -174,6 +174,10 @@ func (m *ClaimTaskMock) Execute(ctx context.Context, fn func(*sql.Tx) error) err
 	return nil
 }
 
+func (m *ClaimTaskMock) ExecuteWithContext(ctx context.Context, fn func(context.Context, *sql.Tx) error) error {
+	return nil
+}
+
 func (m *ClaimTaskMock) ExecuteMaintenance(ctx context.Context, fn func(*sql.Tx) error) error {
 	return m.Execute(ctx, fn)
 }

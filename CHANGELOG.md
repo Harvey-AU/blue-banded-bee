@@ -29,6 +29,15 @@ On merge, CI will:
 
 ## [Unreleased]
 
+- Batch manager flushes (including poison-pill fallbacks) now run with 30-second
+  contexts so task updates cannot hang indefinitely.
+- Added `ExecuteWithContext` with proper retry/backoff and migrated
+  `DecrementRunningTasks` plus mocks/tests to honour these deadlines.
+- Queue workers now propagate bounded contexts through database writes,
+  eliminating silent stalls under load.
+- Added a `--log-level` CLI flag that overrides `LOG_LEVEL` for quick production
+  debugging.
+
 ## [0.16.3] – 2025-11-03
 
 ### Added

@@ -119,6 +119,16 @@ func (m *MockDbQueue) Execute(ctx context.Context, fn func(*sql.Tx) error) error
 	return nil
 }
 
+func (m *MockDbQueue) ExecuteWithContext(ctx context.Context, fn func(context.Context, *sql.Tx) error) error {
+	if m.ExecuteFunc != nil {
+		// For simplicity, wrap to call ExecuteFunc
+		return m.ExecuteFunc(ctx, func(tx *sql.Tx) error {
+			return fn(ctx, tx)
+		})
+	}
+	return nil
+}
+
 func (m *MockDbQueue) ExecuteMaintenance(ctx context.Context, fn func(*sql.Tx) error) error {
 	if m.ExecuteMaintenanceFunc != nil {
 		return m.ExecuteMaintenanceFunc(ctx, fn)

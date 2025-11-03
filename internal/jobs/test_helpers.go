@@ -86,6 +86,10 @@ func (m *simpleDbQueueMock) Execute(ctx context.Context, fn func(*sql.Tx) error)
 	return nil
 }
 
+func (m *simpleDbQueueMock) ExecuteWithContext(ctx context.Context, fn func(context.Context, *sql.Tx) error) error {
+	return nil
+}
+
 func (m *simpleDbQueueMock) ExecuteMaintenance(ctx context.Context, fn func(*sql.Tx) error) error {
 	return nil
 }
