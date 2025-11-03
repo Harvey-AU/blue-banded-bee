@@ -36,6 +36,6 @@ primary_region = 'syd'
   app = "./main --log-level=debug"
 
 [[vm]]
-  memory = '2gb'
-  cpu_kind = 'performance'
+  memory = '1gb'
+  cpu_kind = 'shared'
   cpus = 1
