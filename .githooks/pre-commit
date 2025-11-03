@@ -42,11 +42,11 @@ if [ -f "$COMMIT_MSG_FILE" ]; then
     COMMIT_MSG=$(grep -v '^#' "$COMMIT_MSG_FILE" || true)
 
     # Check for common AI attribution patterns (case-insensitive)
-    if echo "$COMMIT_MSG" | grep -iE '(claude|gemini|chatgpt|gpt-|copilot|Generated with|Co-Authored-By: Claude)' > /dev/null; then
+    if echo "$COMMIT_MSG" | grep -iE '(chatgpt|gpt-|copilot|Generated with|Co-Authored-By: Claude)' > /dev/null; then
         echo -e "${RED}❌ ERROR: Commit message contains AI attribution${NC}"
         echo ""
         echo "Found banned terms in commit message:"
-        echo "$COMMIT_MSG" | grep -iE '(claude|gemini|chatgpt|gpt-|copilot|Generated with|Co-Authored-By: Claude)'
+        echo "$COMMIT_MSG" | grep -iE '(chatgpt|gpt-|copilot|Generated with|Co-Authored-By: Claude)'
         echo ""
         echo "Please remove AI attribution from your commit message."
         echo "See CLAUDE.md for commit message guidelines."

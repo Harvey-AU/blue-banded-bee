@@ -81,6 +81,16 @@ type WorkerPool struct {
 	jobFailureMutex     sync.Mutex
 	jobFailureCounters  map[string]*jobFailureState
 	jobFailureThreshold int
+
+	// Idle worker scaling
+	idleWorkers      map[int]time.Time // workerID -> when they went idle
+	idleWorkersMutex sync.RWMutex
+	lastScaleDown    time.Time
+	idleThreshold    int           // from BBB_WORKER_IDLE_THRESHOLD (default 0 = disabled)
+	scaleCooldown    time.Duration // from BBB_WORKER_SCALE_COOLDOWN_SECONDS (default 15s)
+
+	// Health probe
+	probeInterval time.Duration // from BBB_HEALTH_PROBE_INTERVAL_SECONDS (default 0 = disabled)
 }
 
 func (wp *WorkerPool) ensureDomainLimiter() *DomainLimiter {
@@ -115,6 +125,33 @@ func jobFailureThresholdFromEnv() int {
 		}
 	}
 	return threshold
+}
+
+func idleThresholdFromEnv() int {
+	if raw := strings.TrimSpace(os.Getenv("BBB_WORKER_IDLE_THRESHOLD")); raw != "" {
+		if parsed, err := strconv.Atoi(raw); err == nil && parsed >= 0 {
+			return parsed
+		}
+	}
+	return 0 // Default disabled
+}
+
+func scaleCooldownFromEnv() time.Duration {
+	if raw := strings.TrimSpace(os.Getenv("BBB_WORKER_SCALE_COOLDOWN_SECONDS")); raw != "" {
+		if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 {
+			return time.Duration(parsed) * time.Second
+		}
+	}
+	return 15 * time.Second // Default 15s
+}
+
+func probeIntervalFromEnv() time.Duration {
+	if raw := strings.TrimSpace(os.Getenv("BBB_HEALTH_PROBE_INTERVAL_SECONDS")); raw != "" {
+		if parsed, err := strconv.Atoi(raw); err == nil && parsed >= 10 {
+			return time.Duration(parsed) * time.Second
+		}
+	}
+	return 0 // Default disabled
 }
 
 func NewWorkerPool(sqlDB *sql.DB, dbQueue DbQueueInterface, crawler CrawlerInterface, numWorkers int, workerConcurrency int, dbConfig *db.Config) *WorkerPool {
@@ -162,6 +199,9 @@ func NewWorkerPool(sqlDB *sql.DB, dbQueue DbQueueInterface, crawler CrawlerInter
 	}
 
 	failureThreshold := jobFailureThresholdFromEnv()
+	idleThreshold := idleThresholdFromEnv()
+	scaleCooldown := scaleCooldownFromEnv()
+	probeInterval := probeIntervalFromEnv()
 
 	wp := &WorkerPool{
 		db:              sqlDB,
@@ -195,6 +235,14 @@ func NewWorkerPool(sqlDB *sql.DB, dbQueue DbQueueInterface, crawler CrawlerInter
 		// Job failure tracking
 		jobFailureCounters:  make(map[string]*jobFailureState),
 		jobFailureThreshold: failureThreshold,
+
+		// Idle worker scaling
+		idleWorkers:   make(map[int]time.Time),
+		idleThreshold: idleThreshold,
+		scaleCooldown: scaleCooldown,
+
+		// Health probe
+		probeInterval: probeInterval,
 	}
 
 	// Start the notification listener when we have connection details available.
@@ -724,6 +772,7 @@ func (wp *WorkerPool) worker(ctx context.Context, workerID int) {
 				}
 			} else {
 				consecutiveNoTasks = 0
+				wp.clearWorkerIdle(workerID)
 			}
 			continue
 		default:
@@ -741,6 +790,13 @@ func (wp *WorkerPool) worker(ctx context.Context, workerID int) {
 
 		// Apply backoff logic when no tasks are available
 		if consecutiveNoTasks > 0 {
+			// Track idle workers for scaling decisions (if feature enabled)
+			if wp.idleThreshold > 0 && consecutiveNoTasks >= wp.idleThreshold {
+				if wp.markWorkerIdle(workerID) {
+					wp.maybeScaleDown()
+				}
+			}
+
 			// Only log occasionally during quiet periods
 			if consecutiveNoTasks == 1 || consecutiveNoTasks%10 == 0 {
 				log.Debug().Int("consecutive_no_tasks", consecutiveNoTasks).Msg("Waiting for new tasks")
@@ -754,8 +810,10 @@ func (wp *WorkerPool) worker(ctx context.Context, workerID int) {
 			select {
 			case <-time.After(sleepTime):
 				consecutiveNoTasks = 0 // Reset backoff to retry claiming
+				wp.clearWorkerIdle(workerID)
 			case <-wp.notifyCh:
 				consecutiveNoTasks = 0
+				wp.clearWorkerIdle(workerID)
 			case result := <-resultsCh:
 				if result.err != nil {
 					if errors.Is(result.err, sql.ErrNoRows) {
@@ -763,6 +821,7 @@ func (wp *WorkerPool) worker(ctx context.Context, workerID int) {
 					}
 				} else {
 					consecutiveNoTasks = 0
+					wp.clearWorkerIdle(workerID)
 				}
 			case <-wp.stopCh:
 				return
@@ -807,6 +866,7 @@ func (wp *WorkerPool) worker(ctx context.Context, workerID int) {
 					}
 				} else {
 					consecutiveNoTasks = 0
+					wp.clearWorkerIdle(workerID)
 				}
 			case <-wp.stopCh:
 				return
@@ -1026,6 +1086,16 @@ func (wp *WorkerPool) StartTaskMonitor(ctx context.Context) {
 		ticker := time.NewTicker(30 * time.Second)
 		defer ticker.Stop()
 
+		// Health probe ticker (optional, disabled by default)
+		var probeTicker *time.Ticker
+		var probeCh <-chan time.Time
+		if wp.probeInterval > 0 {
+			probeTicker = time.NewTicker(wp.probeInterval)
+			probeCh = probeTicker.C
+			defer probeTicker.Stop()
+			log.Info().Dur("interval", wp.probeInterval).Msg("Health probe enabled")
+		}
+
 		for {
 			select {
 			case <-ctx.Done():
@@ -1038,6 +1108,10 @@ func (wp *WorkerPool) StartTaskMonitor(ctx context.Context) {
 				log.Debug().Msg("Task monitor checking for pending tasks")
 				if err := wp.checkForPendingTasks(ctx); err != nil {
 					log.Error().Err(err).Msg("Error checking for pending tasks")
+				}
+			case <-probeCh:
+				if probeCh != nil {
+					wp.healthProbe(ctx)
 				}
 			}
 		}
@@ -1572,6 +1646,214 @@ func (wp *WorkerPool) scaleWorkers(ctx context.Context, targetWorkers int) {
 	}
 
 	wp.currentWorkers = targetWorkers
+}
+
+// markWorkerIdle records that a worker has gone idle
+// Returns true if this is a new idle worker (wasn't already idle)
+func (wp *WorkerPool) markWorkerIdle(workerID int) bool {
+	wp.idleWorkersMutex.Lock()
+	defer wp.idleWorkersMutex.Unlock()
+
+	if _, exists := wp.idleWorkers[workerID]; exists {
+		return false // Already idle
+	}
+
+	wp.idleWorkers[workerID] = time.Now()
+	return true
+}
+
+// clearWorkerIdle removes a worker from the idle set
+func (wp *WorkerPool) clearWorkerIdle(workerID int) {
+	wp.idleWorkersMutex.Lock()
+	defer wp.idleWorkersMutex.Unlock()
+
+	delete(wp.idleWorkers, workerID)
+}
+
+// resetIdleTracking clears all idle worker tracking (called when work resumes)
+func (wp *WorkerPool) resetIdleTracking() {
+	wp.idleWorkersMutex.Lock()
+	defer wp.idleWorkersMutex.Unlock()
+
+	wp.idleWorkers = make(map[int]time.Time)
+}
+
+// maybeScaleDown checks if all workers are idle and scales down if appropriate
+func (wp *WorkerPool) maybeScaleDown() {
+	// Feature disabled
+	if wp.idleThreshold == 0 {
+		return
+	}
+
+	wp.idleWorkersMutex.RLock()
+	idleCount := len(wp.idleWorkers)
+	wp.idleWorkersMutex.RUnlock()
+
+	wp.workersMutex.RLock()
+	currentWorkers := wp.currentWorkers
+	wp.workersMutex.RUnlock()
+
+	// Not all workers are idle
+	if idleCount < currentWorkers {
+		return
+	}
+
+	// Check cooldown
+	if time.Since(wp.lastScaleDown) < wp.scaleCooldown {
+		return
+	}
+
+	// Calculate needed slots based on job concurrency
+	wp.jobsMutex.RLock()
+	wp.jobInfoMutex.RLock()
+	neededSlots := 0
+	for jobID := range wp.jobs {
+		jobInfo, exists := wp.jobInfoCache[jobID]
+		if !exists {
+			continue
+		}
+		effective := wp.domainLimiter.GetEffectiveConcurrency(jobID, jobInfo.DomainName)
+		neededSlots += effective
+	}
+	wp.jobInfoMutex.RUnlock()
+	wp.jobsMutex.RUnlock()
+
+	// Calculate target workers with buffer
+	target := wp.baseWorkerCount
+	if neededSlots > 0 {
+		target = int(math.Ceil(float64(neededSlots)/float64(wp.workerConcurrency))) + 2
+		if target < wp.baseWorkerCount {
+			target = wp.baseWorkerCount
+		}
+	}
+
+	// Only scale down if target is less than current
+	if target >= currentWorkers {
+		return
+	}
+
+	wp.scaleDownWorkers(target)
+}
+
+// scaleDownWorkers reduces the worker pool size to the target number
+// Workers will exit naturally when they check shouldExit()
+func (wp *WorkerPool) scaleDownWorkers(target int) {
+	wp.workersMutex.Lock()
+	defer wp.workersMutex.Unlock()
+
+	if target >= wp.currentWorkers {
+		return // No need to scale down
+	}
+
+	oldWorkers := wp.currentWorkers
+	wp.currentWorkers = target
+	wp.lastScaleDown = time.Now()
+
+	// Remove idle entries for workers being scaled down to prevent stale tracking
+	wp.idleWorkersMutex.Lock()
+	idleCount := len(wp.idleWorkers)
+	for workerID := range wp.idleWorkers {
+		if workerID >= target {
+			delete(wp.idleWorkers, workerID)
+		}
+	}
+	wp.idleWorkersMutex.Unlock()
+
+	log.Debug().
+		Int("old_workers", oldWorkers).
+		Int("new_workers", target).
+		Int("idle_workers", idleCount).
+		Msg("Scaling down worker pool")
+}
+
+// returnTaskToPending returns a claimed task back to pending status
+// Used by the health probe to check for work without actually processing it
+func (wp *WorkerPool) returnTaskToPending(ctx context.Context, task *db.Task) error {
+	return wp.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
+		// Return task to pending
+		_, err := tx.ExecContext(ctx, `
+			UPDATE tasks
+			SET status = $1, started_at = NULL
+			WHERE id = $2
+		`, TaskStatusPending, task.ID)
+		if err != nil {
+			return fmt.Errorf("failed to return task to pending: %w", err)
+		}
+
+		// Decrement running tasks counter
+		_, err = tx.ExecContext(ctx, `
+			UPDATE jobs
+			SET running_tasks = running_tasks - 1
+			WHERE id = $1 AND running_tasks > 0
+		`, task.JobID)
+		if err != nil {
+			return fmt.Errorf("failed to decrement running tasks: %w", err)
+		}
+
+		return nil
+	})
+}
+
+// healthProbe periodically checks for work when all workers are idle
+// It claims a task and immediately returns it to pending to detect work availability
+func (wp *WorkerPool) healthProbe(ctx context.Context) {
+	// Only probe when all workers are idle
+	wp.idleWorkersMutex.RLock()
+	idleCount := len(wp.idleWorkers)
+	wp.idleWorkersMutex.RUnlock()
+
+	wp.workersMutex.RLock()
+	currentWorkers := wp.currentWorkers
+	wp.workersMutex.RUnlock()
+
+	if idleCount < currentWorkers {
+		// Not all workers are idle, skip probe
+		return
+	}
+
+	log.Debug().Msg("Health probe: All workers idle, checking for work")
+
+	// Get list of active job IDs
+	wp.jobsMutex.RLock()
+	jobIDs := make([]string, 0, len(wp.jobs))
+	for jobID := range wp.jobs {
+		jobIDs = append(jobIDs, jobID)
+	}
+	wp.jobsMutex.RUnlock()
+
+	if len(jobIDs) == 0 {
+		log.Debug().Msg("Health probe: No active jobs")
+		return
+	}
+
+	// Try to claim any available task
+	task, err := wp.claimPendingTask(ctx)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			log.Debug().Msg("Health probe: No work found")
+			return
+		}
+		log.Error().Err(err).Msg("Health probe: Error claiming task")
+		return
+	}
+
+	// Found work! Return task to pending and wake workers
+	if err := wp.returnTaskToPending(ctx, task); err != nil {
+		log.Error().Err(err).Str("job_id", task.JobID).Str("task_id", task.ID).
+			Msg("Health probe: Failed to return task to pending")
+		// Task is claimed but we couldn't return it - let it be processed normally
+	}
+
+	log.Debug().Str("job_id", task.JobID).Msg("Health probe: Found work, waking workers")
+
+	// Wake workers (non-blocking send)
+	select {
+	case wp.notifyCh <- struct{}{}:
+	default:
+	}
+
+	// Reset idle tracking since work was found
+	wp.resetIdleTracking()
 }
 
 // StartCleanupMonitor starts the cleanup monitor goroutine

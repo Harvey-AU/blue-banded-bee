@@ -29,6 +29,32 @@ On merge, CI will:
 
 ## [Unreleased]
 
+## [0.16.5] – 2025-11-03
+
+### Added
+
+- **Idle Worker Scaling & Health Probe**: Automatic worker pool management to
+  reduce database query spam during concurrency blocking
+  - Idle worker tracking scales down workers when all are idle and no work is
+    available (configurable via `BBB_WORKER_IDLE_THRESHOLD`, default: disabled)
+  - Health probe periodically checks for work to wake idle workers (configurable
+    via `BBB_HEALTH_PROBE_INTERVAL_SECONDS`, default: disabled)
+  - Calculates needed workers based on effective job concurrency accounting for
+    domain throttling
+  - Expected impact: ~3,600 queries/sec → <10 queries/sec during idle periods,
+    maintaining <30s wake-up latency
+  - Both features disabled by default for backwards compatibility
+
+### Fixed
+
+- **Race Conditions in Worker Pool**: Resolved critical concurrency issues in
+  idle worker tracking
+  - Fixed map panic from concurrent read/write on `idleWorkers` map by capturing
+    count inside mutex lock
+  - Cleared stale worker IDs during scale-down to prevent perpetual "all idle"
+    state causing health probe spam
+  - Removed unused `probeJobIndex` field to avoid confusion
+
 ## [0.16.4] – 2025-11-03
 
 - Batch manager flushes (including poison-pill fallbacks) now run with 30-second
