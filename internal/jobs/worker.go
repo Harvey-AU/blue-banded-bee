@@ -708,6 +708,27 @@ func (wp *WorkerPool) markJobFailedDueToConsecutiveFailures(ctx context.Context,
 	wp.RemoveJob(jobID)
 }
 
+// processTaskResult handles the result from a task execution and updates backoff state
+func (wp *WorkerPool) processTaskResult(result error, workerID int, consecutiveNoTasks *int) {
+	if result != nil {
+		if errors.Is(result, sql.ErrNoRows) || errors.Is(result, db.ErrConcurrencyBlocked) {
+			*consecutiveNoTasks++
+		} else {
+			log.Error().Err(result).Int("worker_id", workerID).Msg("Task processing failed")
+		}
+	} else {
+		*consecutiveNoTasks = 0
+		wp.clearWorkerIdle(workerID)
+	}
+}
+
+// calculateBackoffSleep computes the sleep duration with exponential backoff and jitter
+func calculateBackoffSleep(consecutiveNoTasks int, baseSleep, maxSleep time.Duration) time.Duration {
+	baseSleepTime := min(time.Duration(float64(baseSleep)*math.Pow(1.5, float64(min(consecutiveNoTasks, 10)))), maxSleep)
+	jitter := time.Duration(rand.Int63n(2000)) * time.Millisecond // 0-2s jitter
+	return baseSleepTime + jitter
+}
+
 func (wp *WorkerPool) worker(ctx context.Context, workerID int) {
 	log.Info().
 		Int("worker_id", workerID).
@@ -764,16 +785,7 @@ func (wp *WorkerPool) worker(ctx context.Context, workerID int) {
 			consecutiveNoTasks = 0
 		case result := <-resultsCh:
 			// Process result from concurrent task goroutine
-			if result.err != nil {
-				if errors.Is(result.err, sql.ErrNoRows) || errors.Is(result.err, db.ErrConcurrencyBlocked) {
-					consecutiveNoTasks++
-				} else {
-					log.Error().Err(result.err).Int("worker_id", workerID).Msg("Task processing failed")
-				}
-			} else {
-				consecutiveNoTasks = 0
-				wp.clearWorkerIdle(workerID)
-			}
+			wp.processTaskResult(result.err, workerID, &consecutiveNoTasks)
 			continue
 		default:
 			// Continue to claim tasks
@@ -802,9 +814,7 @@ func (wp *WorkerPool) worker(ctx context.Context, workerID int) {
 				log.Debug().Int("consecutive_no_tasks", consecutiveNoTasks).Msg("Waiting for new tasks")
 			}
 			// Exponential backoff with a maximum, plus jitter to prevent thundering herd
-			baseSleepTime := min(time.Duration(float64(baseSleep)*math.Pow(1.5, float64(min(consecutiveNoTasks, 10)))), maxSleep)
-			jitter := time.Duration(rand.Int63n(2000)) * time.Millisecond // 0-2s jitter
-			sleepTime := baseSleepTime + jitter
+			sleepTime := calculateBackoffSleep(consecutiveNoTasks, baseSleep, maxSleep)
 
 			// Wait for either the backoff duration, a notification, or task completion
 			select {
@@ -815,14 +825,7 @@ func (wp *WorkerPool) worker(ctx context.Context, workerID int) {
 				consecutiveNoTasks = 0
 				wp.clearWorkerIdle(workerID)
 			case result := <-resultsCh:
-				if result.err != nil {
-					if errors.Is(result.err, sql.ErrNoRows) || errors.Is(result.err, db.ErrConcurrencyBlocked) {
-						consecutiveNoTasks++
-					}
-				} else {
-					consecutiveNoTasks = 0
-					wp.clearWorkerIdle(workerID)
-				}
+				wp.processTaskResult(result.err, workerID, &consecutiveNoTasks)
 			case <-wp.stopCh:
 				return
 			case <-ctx.Done():
@@ -860,14 +863,7 @@ func (wp *WorkerPool) worker(ctx context.Context, workerID int) {
 			select {
 			case <-time.After(baseSleep):
 			case result := <-resultsCh:
-				if result.err != nil {
-					if errors.Is(result.err, sql.ErrNoRows) || errors.Is(result.err, db.ErrConcurrencyBlocked) {
-						consecutiveNoTasks++
-					}
-				} else {
-					consecutiveNoTasks = 0
-					wp.clearWorkerIdle(workerID)
-				}
+				wp.processTaskResult(result.err, workerID, &consecutiveNoTasks)
 			case <-wp.stopCh:
 				return
 			case <-ctx.Done():
