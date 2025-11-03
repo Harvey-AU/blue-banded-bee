@@ -43,6 +43,8 @@ On merge, CI will:
   - Prevents Fly.io machine restart exhaustion (observed: 10 restarts over 5
     hours)
 
+## [0.16.2] – 2025-11-02
+
 ### Fixed
 
 - **Pending Queue Overflow**: Fixed pending task queue flooding to 2,673 tasks
