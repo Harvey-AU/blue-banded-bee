@@ -205,6 +205,16 @@ func (m *TaskPrepMock) Execute(ctx context.Context, fn func(*sql.Tx) error) erro
 	return nil
 }
 
+func (m *TaskPrepMock) ExecuteWithContext(ctx context.Context, fn func(context.Context, *sql.Tx) error) error {
+	m.executeCalled = true
+	if m.executeError != nil {
+		return m.executeError
+	}
+
+	// Simulate database query success
+	return nil
+}
+
 func (m *TaskPrepMock) ExecuteMaintenance(ctx context.Context, fn func(*sql.Tx) error) error {
 	return m.Execute(ctx, fn)
 }

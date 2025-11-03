@@ -23,6 +23,7 @@ type DbQueueInterface interface {
 	UpdateTaskStatus(ctx context.Context, task *db.Task) error
 	DecrementRunningTasks(ctx context.Context, jobID string) error
 	Execute(ctx context.Context, fn func(*sql.Tx) error) error
+	ExecuteWithContext(ctx context.Context, fn func(context.Context, *sql.Tx) error) error
 	ExecuteMaintenance(ctx context.Context, fn func(*sql.Tx) error) error
 	SetConcurrencyOverride(fn db.ConcurrencyOverrideFunc)
 }

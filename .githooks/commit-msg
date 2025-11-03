@@ -9,7 +9,8 @@ NC='\033[0m'
 
 # Get commit message from file passed as argument
 COMMIT_MSG_FILE=$1
-COMMIT_MSG=$(cat "$COMMIT_MSG_FILE")
+# Filter out comment lines (those starting with #)
+COMMIT_MSG=$(grep -v '^#' "$COMMIT_MSG_FILE" || true)
 
 # Check for AI attribution patterns (case-insensitive)
 if echo "$COMMIT_MSG" | grep -iqE '(claude|gemini|chatgpt|gpt-|copilot|generated with|co-authored-by: claude|co-authored-by: gemini|co-authored-by: chatgpt)'; then
