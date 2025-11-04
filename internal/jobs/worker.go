@@ -30,15 +30,33 @@ import (
 	"go.opentelemetry.io/otel/codes"
 )
 
-const taskProcessingTimeout = 2 * time.Minute
-const poolSaturationBackoff = 2 * time.Second
-const defaultJobFailureThreshold = 20
+const (
+	taskProcessingTimeout      = 2 * time.Minute
+	poolSaturationBackoff      = 2 * time.Second
+	defaultJobFailureThreshold = 20
+
+	// concurrencyBufferFactor controls the headroom applied when converting
+	// job-level concurrency into worker capacity so we keep a small cushion
+	// without overshooting.
+	concurrencyBufferFactor = 1.1
+
+	// fallbackJobConcurrency is used when a job does not report an explicit
+	// concurrency (or the limiter has not yet seeded a value). This mirrors
+	// the API default.
+	fallbackJobConcurrency = 5
+
+	// concurrencyBlockCooldown defines the window in which we consider a job
+	// recently concurrency-blocked for the purposes of suppressing scale ups.
+	concurrencyBlockCooldown = 30 * time.Second
+)
 
 // JobPerformance tracks performance metrics for a specific job
 type JobPerformance struct {
 	RecentTasks  []int64   // Last 5 task response times for this job
 	CurrentBoost int       // Current performance boost workers for this job
 	LastCheck    time.Time // When we last evaluated this job
+	// LastConcurrencyBlock captures when this job last hit a concurrency cap.
+	LastConcurrencyBlock time.Time
 }
 
 type WorkerPool struct {
@@ -524,22 +542,93 @@ func (wp *WorkerPool) AddJob(jobID string, options *JobOptions) {
 		sentry.CaptureException(fmt.Errorf("failed to cache job info for job %s: %w", jobID, err))
 	}
 
-	// Simple scaling: add 5 workers per job, respect environment-specific max
-	wp.workersMutex.Lock()
-	targetWorkers := min(wp.currentWorkers+5, wp.maxWorkers)
+	targetWorkers := wp.calculateConcurrencyTarget()
 
-	if targetWorkers > wp.currentWorkers {
-		wp.workersMutex.Unlock()
+	wp.workersMutex.RLock()
+	currentWorkers := wp.currentWorkers
+	wp.workersMutex.RUnlock()
+
+	if targetWorkers > currentWorkers {
 		wp.scaleWorkers(context.Background(), targetWorkers)
-	} else {
-		wp.workersMutex.Unlock()
 	}
 
 	log.Debug().
 		Str("job_id", jobID).
-		Int("current_workers", wp.currentWorkers).
+		Int("current_workers", currentWorkers).
 		Int("target_workers", targetWorkers).
 		Msg("Added job to worker pool")
+}
+
+// calculateConcurrencyTarget determines the desired worker count based on the
+// sum of per-job concurrency limits (after domain limiter adjustments) and the
+// configured per-worker concurrency. A small buffer is applied to keep the pool
+// responsive without significantly overshooting.
+func (wp *WorkerPool) calculateConcurrencyTarget() int {
+	wp.jobsMutex.RLock()
+	jobIDs := make([]string, 0, len(wp.jobs))
+	for jobID := range wp.jobs {
+		jobIDs = append(jobIDs, jobID)
+	}
+	wp.jobsMutex.RUnlock()
+
+	if len(jobIDs) == 0 {
+		target := wp.baseWorkerCount
+		if target > wp.maxWorkers {
+			target = wp.maxWorkers
+		}
+		return target
+	}
+
+	totalConcurrency := 0
+
+	wp.jobInfoMutex.RLock()
+	for _, jobID := range jobIDs {
+		concurrency := fallbackJobConcurrency
+		if jobInfo, exists := wp.jobInfoCache[jobID]; exists {
+			if jobInfo.Concurrency > 0 {
+				concurrency = jobInfo.Concurrency
+			}
+			if wp.domainLimiter != nil && jobInfo.DomainName != "" {
+				if effective := wp.domainLimiter.GetEffectiveConcurrency(jobID, jobInfo.DomainName); effective > 0 {
+					concurrency = effective
+				}
+			}
+		}
+		if concurrency < 1 {
+			concurrency = 1
+		}
+		totalConcurrency += concurrency
+	}
+	wp.jobInfoMutex.RUnlock()
+
+	perWorkerConcurrency := wp.workerConcurrency
+	if perWorkerConcurrency < 1 {
+		perWorkerConcurrency = 1
+	}
+
+	target := int(math.Ceil(float64(totalConcurrency) / float64(perWorkerConcurrency) * concurrencyBufferFactor))
+	if target < wp.baseWorkerCount {
+		target = wp.baseWorkerCount
+	}
+	if target > wp.maxWorkers {
+		target = wp.maxWorkers
+	}
+
+	return target
+}
+
+// recordConcurrencyBlock notes when a job hits its concurrency ceiling so that
+// performance scaling can avoid fighting those limits and gradually release any
+// boost that is no longer useful.
+func (wp *WorkerPool) recordConcurrencyBlock(jobID string) {
+	wp.perfMutex.Lock()
+	if perf, exists := wp.jobPerformance[jobID]; exists {
+		perf.LastConcurrencyBlock = time.Now()
+		if perf.CurrentBoost > 0 {
+			perf.CurrentBoost--
+		}
+	}
+	wp.perfMutex.Unlock()
 }
 
 func (wp *WorkerPool) RemoveJob(jobID string) {
@@ -905,6 +994,7 @@ func (wp *WorkerPool) claimPendingTask(ctx context.Context) (*db.Task, error) {
 		if errors.Is(err, db.ErrConcurrencyBlocked) {
 			// Job has tasks but they're blocked by concurrency limits
 			sawConcurrencyBlocked = true
+			wp.recordConcurrencyBlock(jobID)
 			continue // Try next job
 		}
 		if errors.Is(err, db.ErrPoolSaturated) {
@@ -1748,6 +1838,12 @@ func (wp *WorkerPool) maybeEmergencyScaleDown() {
 	if currentWorkers <= threshold {
 		return
 	}
+
+	wp.jobsMutex.RLock()
+	for jobID := range wp.jobs {
+		wp.recordConcurrencyBlock(jobID)
+	}
+	wp.jobsMutex.RUnlock()
 
 	log.Info().
 		Int("current_workers", currentWorkers).
@@ -2684,13 +2780,20 @@ func (wp *WorkerPool) updateTaskPriorities(ctx context.Context, jobID string, do
 	return nil
 }
 
-// evaluateJobPerformance checks if a job needs performance scaling
+// evaluateJobPerformance checks if a job needs performance scaling while
+// respecting concurrency-derived capacity limits.
 func (wp *WorkerPool) evaluateJobPerformance(jobID string, responseTime int64) {
-	wp.perfMutex.Lock()
-	defer wp.perfMutex.Unlock()
+	var (
+		avgResponseTime int64
+		oldBoost        int
+		neededBoost     int
+		recentBlocking  bool
+	)
 
+	wp.perfMutex.Lock()
 	perf, exists := wp.jobPerformance[jobID]
 	if !exists {
+		wp.perfMutex.Unlock()
 		return // Job not tracked
 	}
 
@@ -2700,72 +2803,96 @@ func (wp *WorkerPool) evaluateJobPerformance(jobID string, responseTime int64) {
 		perf.RecentTasks = perf.RecentTasks[1:] // Remove oldest
 	}
 
-	// Only evaluate after we have at least 3 tasks
+	// Only evaluate after we have enough samples for a stable average
 	if len(perf.RecentTasks) < 3 {
+		perf.LastCheck = time.Now()
+		wp.perfMutex.Unlock()
 		return
 	}
 
-	// Calculate average response time
 	var total int64
 	for _, rt := range perf.RecentTasks {
 		total += rt
 	}
-	avgResponseTime := total / int64(len(perf.RecentTasks))
+	avgResponseTime = total / int64(len(perf.RecentTasks))
 
-	// Determine needed boost workers based on performance tiers
-	var neededBoost int
+	oldBoost = perf.CurrentBoost
+	recentBlocking = !perf.LastConcurrencyBlock.IsZero() && time.Since(perf.LastConcurrencyBlock) < concurrencyBlockCooldown
+
 	switch {
-	case avgResponseTime >= 4000: // 4000ms+
+	case avgResponseTime >= 4000:
 		neededBoost = 20
-	case avgResponseTime >= 3000: // 3000-4000ms
+	case avgResponseTime >= 3000:
 		neededBoost = 15
-	case avgResponseTime >= 2000: // 2000-3000ms
+	case avgResponseTime >= 2000:
 		neededBoost = 10
-	case avgResponseTime >= 1000: // 1000-2000ms
+	case avgResponseTime >= 1000:
 		neededBoost = 5
-	default: // 0-1000ms
+	default:
 		neededBoost = 0
 	}
 
-	// Check if boost needs to change
-	if neededBoost != perf.CurrentBoost {
-		boostDiff := neededBoost - perf.CurrentBoost
-
-		log.Info().
-			Str("job_id", jobID).
-			Int64("avg_response_time", avgResponseTime).
-			Int("old_boost", perf.CurrentBoost).
-			Int("new_boost", neededBoost).
-			Int("boost_diff", boostDiff).
-			Msg("Job performance scaling triggered")
-
-		// Update current boost
-		perf.CurrentBoost = neededBoost
-		perf.LastCheck = time.Now()
-
-		// Apply scaling to worker pool
-		if boostDiff > 0 {
-			// Need more workers
-			wp.workersMutex.Lock()
-			targetWorkers := wp.currentWorkers + boostDiff
-			if targetWorkers > wp.maxWorkers { // Respect environment-specific max
-				targetWorkers = wp.maxWorkers
-				perf.CurrentBoost = perf.CurrentBoost - (wp.currentWorkers + boostDiff - wp.maxWorkers) // Adjust boost to actual
-			}
-			wp.workersMutex.Unlock()
-
-			if targetWorkers > wp.currentWorkers {
-				// Use detached context with timeout for worker scaling
-				scalingCtx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
-				go func() {
-					defer cancel()
-					wp.scaleWorkers(scalingCtx, targetWorkers)
-				}()
-			}
-		}
-		// Note: For scaling down (boostDiff < 0), we let workers naturally exit
-		// when they check shouldExit in the worker loop
+	if recentBlocking && neededBoost > oldBoost {
+		neededBoost = oldBoost
 	}
+
+	perf.LastCheck = time.Now()
+	wp.perfMutex.Unlock()
+
+	if neededBoost == oldBoost {
+		return
+	}
+
+	actualBoost := neededBoost
+
+	if neededBoost > oldBoost {
+		boostDiff := neededBoost - oldBoost
+		targetWorkers := wp.calculateConcurrencyTarget()
+
+		wp.workersMutex.RLock()
+		currentWorkers := wp.currentWorkers
+		wp.workersMutex.RUnlock()
+
+		desiredWorkers := currentWorkers + boostDiff
+		if desiredWorkers > targetWorkers {
+			desiredWorkers = targetWorkers
+		}
+		if desiredWorkers > wp.maxWorkers {
+			desiredWorkers = wp.maxWorkers
+		}
+
+		additionalWorkers := desiredWorkers - currentWorkers
+		if additionalWorkers <= 0 {
+			actualBoost = oldBoost
+		} else {
+			actualBoost = oldBoost + additionalWorkers
+			scalingCtx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+			target := desiredWorkers
+			go func() {
+				defer cancel()
+				wp.scaleWorkers(scalingCtx, target)
+			}()
+		}
+	}
+
+	clamped := neededBoost > oldBoost && actualBoost == oldBoost
+
+	log.Info().
+		Str("job_id", jobID).
+		Int64("avg_response_time", avgResponseTime).
+		Int("requested_boost", neededBoost).
+		Int("old_boost", oldBoost).
+		Int("new_boost", actualBoost).
+		Bool("recently_blocked", recentBlocking).
+		Bool("clamped_by_concurrency", clamped).
+		Msg("Job performance scaling evaluated")
+
+	wp.perfMutex.Lock()
+	if perf, exists := wp.jobPerformance[jobID]; exists {
+		perf.CurrentBoost = actualBoost
+		perf.LastCheck = time.Now()
+	}
+	wp.perfMutex.Unlock()
 }
 
 func hasNotificationConfig(cfg *db.Config) bool {
