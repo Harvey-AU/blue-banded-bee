@@ -286,8 +286,6 @@ func (ds *domainState) computeAllowedConcurrency(cfg DomainLimiterConfig, jobCon
 
 func (ds *domainState) acquire(ctx context.Context, cfg DomainLimiterConfig, nowFn func() time.Time, req DomainRequest) (time.Duration, error) {
 	ds.mu.Lock()
-	defer ds.mu.Unlock()
-
 	if req.JobConcurrency <= 0 {
 		req.JobConcurrency = 1
 	}
@@ -333,6 +331,7 @@ func (ds *domainState) acquire(ctx context.Context, cfg DomainLimiterConfig, now
 		js.active++
 		delay := ds.effectiveDelay(cfg)
 		ds.nextAvailable = now.Add(delay)
+		ds.mu.Unlock()
 		return delay, nil
 	}
 }
