@@ -84,6 +84,18 @@ after several rounds of iterating on a task, and before deploying.
   - Ensure API handlers log the `request_id` (already injected by middleware) so
     support can correlate client reports to backend events.
 
+## Monitoring Utilities
+
+- Use `scripts/monitor_logs.sh` for lightweight Fly log sampling. It collects a
+  raw snapshot every minute (configurable), writes the raw files under
+  `logs/raw_<run_id>/`, and saves structured summaries (per-minute log level and
+  message counts) under `logs/summary_<run_id>/`.
+- Each snapshot is processed by `scripts/process_logs.py`; tweak that helper if
+  you need different aggregation rules.
+- The monitor accepts flags such as `--interval`, `--samples`, `--iterations`
+  and `--run-id`, making it suitable for ad-hoc investigations without editing
+  the script.
+
 ## Testing Approach
 
 - Test locally first (`go test ./...`, targeted unit or integration suites,

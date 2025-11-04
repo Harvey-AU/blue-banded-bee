@@ -713,6 +713,11 @@ func (wp *WorkerPool) processTaskResult(result error, workerID int, consecutiveN
 	if result != nil {
 		if errors.Is(result, sql.ErrNoRows) || errors.Is(result, db.ErrConcurrencyBlocked) {
 			*consecutiveNoTasks++
+
+			// Trigger emergency scale-down when concurrency blocked
+			if errors.Is(result, db.ErrConcurrencyBlocked) {
+				wp.maybeEmergencyScaleDown()
+			}
 		} else {
 			log.Error().Err(result).Int("worker_id", workerID).Msg("Task processing failed")
 		}
@@ -1685,6 +1690,73 @@ func (wp *WorkerPool) resetIdleTracking() {
 	defer wp.idleWorkersMutex.Unlock()
 
 	wp.idleWorkers = make(map[int]time.Time)
+}
+
+// maybeEmergencyScaleDown immediately scales down when all jobs hit concurrency limits
+// Uses 2s cooldown and doesn't require all workers idle
+func (wp *WorkerPool) maybeEmergencyScaleDown() {
+	// Feature disabled
+	if wp.idleThreshold == 0 {
+		return
+	}
+
+	// Emergency scale-down uses 2s cooldown instead of normal cooldown
+	emergencyCooldown := 2 * time.Second
+	if time.Since(wp.lastScaleDown) < emergencyCooldown {
+		return
+	}
+
+	wp.workersMutex.RLock()
+	currentWorkers := wp.currentWorkers
+	wp.workersMutex.RUnlock()
+
+	// Calculate optimal workers based on active job concurrency
+	wp.jobsMutex.RLock()
+	wp.jobInfoMutex.RLock()
+	totalConcurrency := 0
+	for jobID := range wp.jobs {
+		jobInfo, exists := wp.jobInfoCache[jobID]
+		if !exists {
+			continue
+		}
+		effective := wp.domainLimiter.GetEffectiveConcurrency(jobID, jobInfo.DomainName)
+		totalConcurrency += effective
+	}
+	wp.jobInfoMutex.RUnlock()
+	wp.jobsMutex.RUnlock()
+
+	// If no jobs active, don't scale down (let normal scaling handle it)
+	if totalConcurrency == 0 {
+		return
+	}
+
+	// Calculate optimal workers with 1.2× buffer
+	optimalWorkers := int(math.Ceil(float64(totalConcurrency) / float64(wp.workerConcurrency) * 1.2))
+
+	// Ensure at least base worker count
+	if optimalWorkers < wp.baseWorkerCount {
+		optimalWorkers = wp.baseWorkerCount
+	}
+
+	// Cap at configured max workers
+	if optimalWorkers > wp.maxWorkers {
+		optimalWorkers = wp.maxWorkers
+	}
+
+	// Only scale down if we're significantly over-provisioned (more than 20% above optimal)
+	threshold := int(float64(optimalWorkers) * 1.2)
+	if currentWorkers <= threshold {
+		return
+	}
+
+	log.Info().
+		Int("current_workers", currentWorkers).
+		Int("optimal_workers", optimalWorkers).
+		Int("target_workers", optimalWorkers).
+		Int("total_concurrency", totalConcurrency).
+		Msg("Emergency scale-down triggered due to concurrency blocking")
+
+	wp.scaleDownWorkers(optimalWorkers)
 }
 
 // maybeScaleDown checks if all workers are idle and scales down if appropriate

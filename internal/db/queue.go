@@ -264,6 +264,11 @@ func (q *DbQueue) Execute(ctx context.Context, fn func(*sql.Tx) error) error {
 				Msg("Database transaction finished with no rows")
 			return execErr
 		}
+		// Don't log concurrency blocking as error - it's normal backoff behaviour
+		if errors.Is(execErr, ErrConcurrencyBlocked) {
+			return execErr
+		}
+
 		errorClass := classifyError(execErr)
 
 		if !q.shouldRetry(execErr) || attempt == maxAttempts-1 {
@@ -389,6 +394,11 @@ func (q *DbQueue) ExecuteWithContext(ctx context.Context, fn func(context.Contex
 				Msg("Database transaction finished with no rows")
 			return execErr
 		}
+		// Don't log concurrency blocking as error - it's normal backoff behaviour
+		if errors.Is(execErr, ErrConcurrencyBlocked) {
+			return execErr
+		}
+
 		errorClass := classifyError(execErr)
 
 		if !q.shouldRetry(execErr) || attempt == maxAttempts-1 {

@@ -198,6 +198,20 @@ internal/ ├── api/ # HTTP handlers and middleware ├── auth/ # Authen
 logic ├── crawler/ # Web crawling functionality ├── db/ # Database operations
 ├── jobs/ # Job queue and worker management └── util/ # Shared utilities
 
+## Monitoring Fly Logs
+
+For short-lived production investigations use `scripts/monitor_logs.sh`:
+
+```bash
+./scripts/monitor_logs.sh --app blue-banded-bee --interval 60 --samples 500 --iterations 30
+```
+
+The script fetches snapshots from `flyctl logs`, stores the raw output under
+`logs/raw_<run_id>/`, and writes structured summaries (per-minute counts by log
+level and message) to `logs/summary_<run_id>/`. Adjust the flags (or equivalent
+environment variables) to change cadence, sample size, or the number of
+iterations; use `--run-id` if you want predictable folder names.
+
 ### Development Patterns
 
 #### Error Handling
