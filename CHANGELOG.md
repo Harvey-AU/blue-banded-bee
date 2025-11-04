@@ -29,6 +29,17 @@ On merge, CI will:
 
 ## [Unreleased]
 
+### Fixed
+
+- **Worker Pool Error Logging**: Fixed spurious error logs for concurrency
+  blocking in `GetNextTask` retry wrapper
+  - Added check for `ErrConcurrencyBlocked` before error logging at retry
+    summary level
+  - Eliminates "Error getting next pending task" logs when tasks are blocked by
+    concurrency limits
+  - Completes the fix from 0.16.6 - now all code paths handle concurrency
+    blocking gracefully
+
 ## [0.16.6] – 2025-11-03
 
 ### Fixed

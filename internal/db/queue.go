@@ -1039,6 +1039,10 @@ func (q *DbQueue) GetNextTask(ctx context.Context, jobID string) (*Task, error) 
 	if err == sql.ErrNoRows {
 		return nil, nil // No tasks available
 	}
+	if errors.Is(err, ErrConcurrencyBlocked) {
+		// Tasks exist but blocked by concurrency - return sentinel for backoff
+		return nil, err
+	}
 	if err != nil {
 		// Log error with total context
 		log.Error().
