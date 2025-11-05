@@ -29,6 +29,41 @@ On merge, CI will:
 
 ## [Unreleased]
 
+### Fixed
+
+- **Duplicate Job Checking**: Fixed job duplicate checking for users without
+  organisations
+  - Previously checked `user_id IS NULL AND organisation_id = $1` when user had
+    no organisation, causing check to fail
+  - Now uses `user_id = $1 AND organisation_id IS NULL` to correctly match
+    user-created jobs
+  - Prevents false duplicate job creation for users without organisation
+    assignments
+
+### Added
+
+- **Organisation Auto-Join**: Business email users now automatically join
+  existing organisations
+  - Added `GetOrganisationByName()` for case-insensitive organisation lookup
+  - Added `isBusinessEmail()` to distinguish business vs personal email domains
+  - When users sign up with business emails (e.g., `@teamharvey.co`), they
+    automatically join existing organisation instead of creating duplicate
+  - Personal email users continue to get individual organisations
+  - Example: Second user signing up with `@acme.com` joins existing "Acme"
+    organisation
+
+- **Smart Organisation Names**: Organisation names now intelligently derived
+  from email addresses
+  - Business emails derive org name from domain: `simon@teamharvey.co` →
+    "Teamharvey"
+  - Personal emails with full name use the name: `user@gmail.com` + "John Doe" →
+    "John Doe"
+  - Personal emails without name use email prefix: `simon.smallchua@gmail.com` →
+    "Simon.Smallchua Organisation"
+  - Supports common TLDs (.com, .co.uk, .com.au, .io, .ai, .dev, .net, .org)
+  - Recognises personal email providers: Gmail, Outlook, Hotmail, Yahoo, iCloud,
+    ProtonMail, AOL, Zoho, Fastmail
+
 ## [0.16.9] – 2025-11-05
 
 ## [0.16.8] – 2025-11-04
