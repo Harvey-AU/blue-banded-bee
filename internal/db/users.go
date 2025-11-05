@@ -3,6 +3,7 @@ package db
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -91,11 +92,8 @@ func (db *DB) GetOrCreateUser(userID, email string, fullName *string) (*User, er
 		Str("email", email).
 		Msg("Auto-creating user from JWT token")
 
-	// Determine organisation name
-	orgName := "Personal Organisation"
-	if fullName != nil && *fullName != "" {
-		orgName = *fullName
-	}
+	// Determine organisation name based on email domain
+	orgName := deriveOrganisationName(email, fullName)
 
 	// Create the user
 	newUser, _, err := db.CreateUser(userID, email, fullName, orgName)
@@ -104,6 +102,75 @@ func (db *DB) GetOrCreateUser(userID, email string, fullName *string) (*User, er
 	}
 
 	return newUser, nil
+}
+
+// deriveOrganisationName extracts an organisation name from email and fullName
+// Business emails (non-common providers) use domain as org name
+// Personal emails (gmail, outlook, etc.) use fullName or "Personal Organisation"
+func deriveOrganisationName(email string, fullName *string) string {
+	// Common personal email providers
+	personalProviders := []string{
+		"gmail.com", "googlemail.com",
+		"outlook.com", "hotmail.com", "live.com",
+		"yahoo.com", "ymail.com",
+		"icloud.com", "me.com", "mac.com",
+		"protonmail.com", "proton.me",
+		"aol.com",
+		"zoho.com",
+		"fastmail.com",
+	}
+
+	// Extract domain from email
+	atIndex := strings.LastIndex(email, "@")
+	if atIndex == -1 {
+		// Invalid email format, fall back to personal
+		if fullName != nil && *fullName != "" {
+			return *fullName
+		}
+		return "Personal Organisation"
+	}
+
+	domain := strings.ToLower(email[atIndex+1:])
+
+	// Check for empty domain (e.g., "user@")
+	if domain == "" {
+		if fullName != nil && *fullName != "" {
+			return *fullName
+		}
+		return "Personal Organisation"
+	}
+
+	// Check if it's a personal email provider
+	for _, provider := range personalProviders {
+		if domain == provider {
+			// Personal email - use fullName or default
+			if fullName != nil && *fullName != "" {
+				return *fullName
+			}
+			return "Personal Organisation"
+		}
+	}
+
+	// Business email - derive organisation name from domain
+	// Remove common TLDs and convert to title case
+	orgName := domain
+
+	// Remove TLDs (.com, .co.uk, .com.au, etc.)
+	suffixes := []string{".com.au", ".co.uk", ".co.nz", ".com", ".co", ".net", ".org", ".io", ".ai", ".dev"}
+	for _, suffix := range suffixes {
+		if strings.HasSuffix(orgName, suffix) {
+			orgName = strings.TrimSuffix(orgName, suffix)
+			break
+		}
+	}
+
+	// Convert to title case (teamharvey -> Team Harvey)
+	// Simple approach: capitalize first letter
+	if len(orgName) > 0 {
+		orgName = strings.ToUpper(orgName[:1]) + orgName[1:]
+	}
+
+	return orgName
 }
 
 // CreateOrganisation creates a new organisation
