@@ -130,6 +130,7 @@ func deriveOrganisationName(email string, fullName *string) string {
 		return "Personal Organisation"
 	}
 
+	emailPrefix := email[:atIndex]
 	domain := strings.ToLower(email[atIndex+1:])
 
 	// Check for empty domain (e.g., "user@")
@@ -137,17 +138,18 @@ func deriveOrganisationName(email string, fullName *string) string {
 		if fullName != nil && *fullName != "" {
 			return *fullName
 		}
-		return "Personal Organisation"
+		// Use email prefix + " Organisation"
+		return titleCaseEmailPrefix(emailPrefix) + " Organisation"
 	}
 
 	// Check if it's a personal email provider
 	for _, provider := range personalProviders {
 		if domain == provider {
-			// Personal email - use fullName or default
+			// Personal email - use fullName or email prefix
 			if fullName != nil && *fullName != "" {
 				return *fullName
 			}
-			return "Personal Organisation"
+			return titleCaseEmailPrefix(emailPrefix) + " Organisation"
 		}
 	}
 
@@ -171,6 +173,29 @@ func deriveOrganisationName(email string, fullName *string) string {
 	}
 
 	return orgName
+}
+
+// titleCaseEmailPrefix converts email prefix to title case
+// Examples: "simon.smallchua" -> "Simon.Smallchua", "user" -> "User"
+func titleCaseEmailPrefix(prefix string) string {
+	if prefix == "" {
+		return ""
+	}
+
+	// Split on common separators (., -, _)
+	parts := strings.FieldsFunc(prefix, func(r rune) bool {
+		return r == '.' || r == '-' || r == '_'
+	})
+
+	// Capitalize first letter of each part
+	for i, part := range parts {
+		if len(part) > 0 {
+			parts[i] = strings.ToUpper(part[:1]) + strings.ToLower(part[1:])
+		}
+	}
+
+	// Rejoin with the original separator (use . for simplicity)
+	return strings.Join(parts, ".")
 }
 
 // CreateOrganisation creates a new organisation

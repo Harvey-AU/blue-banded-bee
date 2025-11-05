@@ -66,13 +66,19 @@ func TestDeriveOrganisationName(t *testing.T) {
 			name:     "gmail_without_fullname",
 			email:    "user@gmail.com",
 			fullName: nil,
-			expected: "Personal Organisation",
+			expected: "User Organisation",
 		},
 		{
 			name:     "gmail_with_empty_fullname",
 			email:    "user@gmail.com",
 			fullName: stringPtr(""),
-			expected: "Personal Organisation",
+			expected: "User Organisation",
+		},
+		{
+			name:     "gmail_dotted_username_without_fullname",
+			email:    "simon.smallchua@gmail.com",
+			fullName: nil,
+			expected: "Simon.Smallchua Organisation",
 		},
 		{
 			name:     "googlemail_with_fullname",
@@ -92,7 +98,7 @@ func TestDeriveOrganisationName(t *testing.T) {
 			name:     "hotmail_without_fullname",
 			email:    "user@hotmail.com",
 			fullName: nil,
-			expected: "Personal Organisation",
+			expected: "User Organisation",
 		},
 		{
 			name:     "live_with_fullname",
@@ -112,7 +118,7 @@ func TestDeriveOrganisationName(t *testing.T) {
 			name:     "ymail_without_fullname",
 			email:    "user@ymail.com",
 			fullName: nil,
-			expected: "Personal Organisation",
+			expected: "User Organisation",
 		},
 
 		// Personal email tests - iCloud
@@ -132,7 +138,7 @@ func TestDeriveOrganisationName(t *testing.T) {
 			name:     "mac_com_without_fullname",
 			email:    "user@mac.com",
 			fullName: nil,
-			expected: "Personal Organisation",
+			expected: "User Organisation",
 		},
 
 		// Personal email tests - Other providers
@@ -146,7 +152,7 @@ func TestDeriveOrganisationName(t *testing.T) {
 			name:     "proton_me_without_fullname",
 			email:    "user@proton.me",
 			fullName: nil,
-			expected: "Personal Organisation",
+			expected: "User Organisation",
 		},
 		{
 			name:     "aol_with_fullname",
@@ -158,7 +164,7 @@ func TestDeriveOrganisationName(t *testing.T) {
 			name:     "zoho_without_fullname",
 			email:    "user@zoho.com",
 			fullName: nil,
-			expected: "Personal Organisation",
+			expected: "User Organisation",
 		},
 		{
 			name:     "fastmail_with_fullname",
