@@ -10,6 +10,7 @@ from collections import Counter, defaultdict
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Iterable, Tuple
+from zoneinfo import ZoneInfo
 
 
 def _normalise_timestamp(record: Dict[str, Any]) -> str:
@@ -79,13 +80,17 @@ def summarise_logs(raw_path: Path) -> Dict[str, Any]:
             {"message": message, "count": count} for message, count in top
         ]
 
+    # Generate timestamp in Melbourne timezone
+    melbourne_tz = ZoneInfo("Australia/Melbourne")
+    now = datetime.now(melbourne_tz)
+
     summary = {
         "meta": {
             "source": str(raw_path),
             "total_lines": total,
             "parsed": parsed,
             "failed_to_parse": errors,
-            "generated_at": datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "generated_at": now.isoformat(),
         },
         "level_counts": {minute: dict(counter) for minute, counter in level_counts.items()},
         "message_counts": message_summary,

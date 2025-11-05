@@ -5,9 +5,9 @@ set -euo pipefail
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 APP="blue-banded-bee"
-INTERVAL=60
+INTERVAL=10
 SAMPLES=400
-ITERATIONS=60
+ITERATIONS=1440  # 4 hours at 10s intervals
 RUN_ID=""
 OUTPUT_ROOT="logs"
 
@@ -87,20 +87,57 @@ if ! [[ "$ITERATIONS" =~ ^[0-9]+$ ]]; then
     exit 1
 fi
 
-if [[ -z "$RUN_ID" ]]; then
-    RUN_ID=$(date -u +"%Y%m%d_%H%M%S")
+# Auto-generate settings suffix with appropriate units
+# Interval: use minutes if >= 60s, otherwise seconds
+if [[ "$INTERVAL" -ge 60 ]]; then
+    INTERVAL_MINUTES=$(( INTERVAL / 60 ))
+    INTERVAL_STR="${INTERVAL_MINUTES}m"
+else
+    INTERVAL_STR="${INTERVAL}s"
 fi
 
-RAW_DIR="$OUTPUT_ROOT/raw_${RUN_ID}"
-SUMMARY_DIR="$OUTPUT_ROOT/summary_${RUN_ID}"
-LOG_FILE="$OUTPUT_ROOT/monitor_${RUN_ID}.log"
+if [[ "$ITERATIONS" -eq 0 ]]; then
+    SETTINGS_SUFFIX="${INTERVAL_STR}_forever"
+else
+    # Calculate total duration in seconds
+    DURATION_SECONDS=$(( ITERATIONS * INTERVAL ))
 
-mkdir -p "$RAW_DIR" "$SUMMARY_DIR"
+    # Duration: use days if >= 24h, hours if >= 60m, otherwise minutes
+    if [[ "$DURATION_SECONDS" -ge 86400 ]]; then
+        DURATION_DAYS=$(( (DURATION_SECONDS + 43200) / 86400 ))
+        DURATION_STR="${DURATION_DAYS}d"
+    elif [[ "$DURATION_SECONDS" -ge 3600 ]]; then
+        DURATION_HOURS=$(( (DURATION_SECONDS + 1800) / 3600 ))
+        DURATION_STR="${DURATION_HOURS}h"
+    else
+        DURATION_MINUTES=$(( (DURATION_SECONDS + 30) / 60 ))
+        DURATION_STR="${DURATION_MINUTES}m"
+    fi
+
+    SETTINGS_SUFFIX="${INTERVAL_STR}_${DURATION_STR}"
+fi
+
+# Combine custom name (if provided) with settings
+if [[ -z "$RUN_ID" ]]; then
+    RUN_ID="$SETTINGS_SUFFIX"
+else
+    RUN_ID="${RUN_ID}_${SETTINGS_SUFFIX}"
+fi
+
+# Create directory structure: logs/YYYYMMDD/HHMM_run-id/
+DATE_DIR="$OUTPUT_ROOT/$(date +"%Y%m%d")"
+TIME_PREFIX=$(date +"%H%M")
+RUN_DIR="$DATE_DIR/${TIME_PREFIX}_${RUN_ID}"
+RAW_DIR="$RUN_DIR/raw"
+LOG_FILE="$RUN_DIR/monitor.log"
+
+mkdir -p "$RAW_DIR"
 
 echo "[$(date -u +"%Y-%m-%dT%H:%M:%SZ")] Starting log monitor" | tee -a "$LOG_FILE"
 echo "App: $APP | Interval: ${INTERVAL}s | Samples: $SAMPLES | Iterations: $ITERATIONS" | tee -a "$LOG_FILE"
+echo "Run directory: $RUN_DIR" | tee -a "$LOG_FILE"
 echo "Raw logs: $RAW_DIR" | tee -a "$LOG_FILE"
-echo "Summaries: $SUMMARY_DIR" | tee -a "$LOG_FILE"
+echo "Summaries: $RUN_DIR" | tee -a "$LOG_FILE"
 
 iteration=0
 
@@ -109,13 +146,16 @@ while true; do
 
     ts=$(date -u +"%Y%m%dT%H%M%SZ")
     raw_file="$RAW_DIR/${ts}_iter${iteration}.log"
-    summary_file="$SUMMARY_DIR/${ts}_iter${iteration}.json"
+    summary_file="$RUN_DIR/${ts}_iter${iteration}.json"
 
     echo "[$(date -u +"%Y-%m-%dT%H:%M:%SZ")] Iteration $iteration: capturing logs" | tee -a "$LOG_FILE"
 
-    if flyctl logs --app "$APP" --no-tail --max-lines "$SAMPLES" > "$raw_file" 2>&1; then
+    if flyctl logs --app "$APP" --no-tail 2>&1 | tail -n "$SAMPLES" > "$raw_file"; then
         if ! python3 "$SCRIPT_DIR/process_logs.py" "$raw_file" "$summary_file" >> "$LOG_FILE" 2>&1; then
             echo "[$(date -u +"%Y-%m-%dT%H:%M:%SZ")] Failed to process logs (see output above)" | tee -a "$LOG_FILE"
+        else
+            # Run aggregation after each successful batch
+            python3 "$SCRIPT_DIR/aggregate_logs.py" "$RUN_DIR" >> "$LOG_FILE" 2>&1
         fi
     else
         echo "[$(date -u +"%Y-%m-%dT%H:%M:%SZ")] Failed to fetch logs from Fly; raw output stored in $raw_file" | tee -a "$LOG_FILE"
@@ -129,3 +169,8 @@ while true; do
 done
 
 echo "[$(date -u +"%Y-%m-%dT%H:%M:%SZ")] Monitoring finished after $iteration iteration(s)" | tee -a "$LOG_FILE"
+
+# Final aggregation
+echo "[$(date -u +"%Y-%m-%dT%H:%M:%SZ")] Running final aggregation..." | tee -a "$LOG_FILE"
+python3 "$SCRIPT_DIR/aggregate_logs.py" "$RUN_DIR" >> "$LOG_FILE" 2>&1
+echo "[$(date -u +"%Y-%m-%dT%H:%M:%SZ")] Aggregation complete" | tee -a "$LOG_FILE"
