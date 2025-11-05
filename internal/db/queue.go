@@ -446,8 +446,11 @@ func (q *DbQueue) executeOnce(ctx context.Context, fn func(*sql.Tx) error) error
 			Msg("Failed to begin transaction")
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
+	var committed bool
 	defer func() {
-		_ = tx.Rollback()
+		if !committed {
+			_ = tx.Rollback()
+		}
 	}()
 
 	queryStart := time.Now()
@@ -477,6 +480,7 @@ func (q *DbQueue) executeOnce(ctx context.Context, fn func(*sql.Tx) error) error
 			Msg("Failed to commit transaction")
 		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
+	committed = true
 	commitDuration := time.Since(commitStart)
 
 	// Log breakdown for slow transactions
@@ -506,8 +510,11 @@ func (q *DbQueue) executeOnceWithContext(ctx context.Context, fn func(context.Co
 			Msg("Failed to begin transaction")
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
+	var committed bool
 	defer func() {
-		_ = tx.Rollback()
+		if !committed {
+			_ = tx.Rollback()
+		}
 	}()
 
 	queryStart := time.Now()
@@ -537,6 +544,7 @@ func (q *DbQueue) executeOnceWithContext(ctx context.Context, fn func(context.Co
 			Msg("Failed to commit transaction")
 		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
+	committed = true
 	commitDuration := time.Since(commitStart)
 
 	// Log breakdown for slow transactions
@@ -708,8 +716,11 @@ func (q *DbQueue) ExecuteMaintenance(ctx context.Context, fn func(*sql.Tx) error
 		sentry.CaptureException(err)
 		return fmt.Errorf("failed to begin maintenance transaction: %w", err)
 	}
+	var committed bool
 	defer func() {
-		_ = tx.Rollback()
+		if !committed {
+			_ = tx.Rollback()
+		}
 	}()
 
 	// Apply a statement timeout so maintenance never blocks the pool indefinitely.
@@ -726,6 +737,7 @@ func (q *DbQueue) ExecuteMaintenance(ctx context.Context, fn func(*sql.Tx) error
 		sentry.CaptureException(err)
 		return fmt.Errorf("failed to commit maintenance transaction: %w", err)
 	}
+	committed = true
 
 	return nil
 }
