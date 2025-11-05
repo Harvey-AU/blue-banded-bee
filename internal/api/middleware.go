@@ -102,12 +102,25 @@ func LoggingMiddleware(next http.Handler) http.Handler {
 // responseWrapper wraps http.ResponseWriter to capture status code
 type responseWrapper struct {
 	http.ResponseWriter
-	statusCode int
+	statusCode  int
+	wroteHeader bool
 }
 
 func (rw *responseWrapper) WriteHeader(code int) {
+	if rw.wroteHeader {
+		return
+	}
 	rw.statusCode = code
+	rw.wroteHeader = true
 	rw.ResponseWriter.WriteHeader(code)
+}
+
+func (rw *responseWrapper) Write(b []byte) (int, error) {
+	if !rw.wroteHeader {
+		// Mimic net/http behaviour: implicit 200 when Write is called before WriteHeader
+		rw.WriteHeader(rw.statusCode)
+	}
+	return rw.ResponseWriter.Write(b)
 }
 
 // CORSMiddleware adds CORS headers for browser requests

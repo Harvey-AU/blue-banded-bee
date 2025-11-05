@@ -379,6 +379,10 @@ func (bm *BatchManager) flushTaskUpdates(ctx context.Context, updates []*TaskUpd
 			skippedTasks = append(skippedTasks, task)
 		case "pending":
 			pendingTasks = append(pendingTasks, task)
+		case "waiting":
+			// Waiting tasks have not been promoted to pending yet. They should
+			// not be processed by the batch writer, so skip quietly.
+			continue
 		default:
 			log.Warn().
 				Str("task_id", task.ID).

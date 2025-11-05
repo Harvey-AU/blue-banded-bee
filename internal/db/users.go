@@ -175,6 +175,35 @@ func deriveOrganisationName(email string, fullName *string) string {
 	return orgName
 }
 
+// isBusinessEmail checks if an email is from a business domain (not a personal email provider)
+func isBusinessEmail(email string) bool {
+	personalProviders := []string{
+		"gmail.com", "googlemail.com",
+		"outlook.com", "hotmail.com", "live.com",
+		"yahoo.com", "ymail.com",
+		"icloud.com", "me.com", "mac.com",
+		"protonmail.com", "proton.me",
+		"aol.com",
+		"zoho.com",
+		"fastmail.com",
+	}
+
+	atIndex := strings.LastIndex(email, "@")
+	if atIndex == -1 {
+		return false
+	}
+
+	domain := strings.ToLower(email[atIndex+1:])
+
+	for _, provider := range personalProviders {
+		if domain == provider {
+			return false
+		}
+	}
+
+	return true
+}
+
 // titleCaseEmailPrefix converts email prefix to title case
 // Examples: "simon.smallchua" -> "Simon.Smallchua", "user" -> "User"
 func titleCaseEmailPrefix(prefix string) string {
@@ -196,6 +225,30 @@ func titleCaseEmailPrefix(prefix string) string {
 
 	// Rejoin with the original separator (use . for simplicity)
 	return strings.Join(parts, ".")
+}
+
+// GetOrganisationByName retrieves an organisation by name (case-insensitive)
+func (db *DB) GetOrganisationByName(name string) (*Organisation, error) {
+	org := &Organisation{}
+
+	query := `
+		SELECT id, name, created_at, updated_at
+		FROM organisations
+		WHERE LOWER(name) = LOWER($1)
+		LIMIT 1
+	`
+
+	err := db.client.QueryRow(query, name).Scan(
+		&org.ID, &org.Name, &org.CreatedAt, &org.UpdatedAt,
+	)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("organisation not found")
+		}
+		return nil, fmt.Errorf("failed to get organisation by name: %w", err)
+	}
+
+	return org, nil
 }
 
 // CreateOrganisation creates a new organisation
@@ -320,23 +373,41 @@ func (db *DB) CreateUser(userID, email string, fullName *string, orgName string)
 		_ = tx.Rollback() // Rollback is safe to call even after commit
 	}()
 
-	// Create organisation first
-	org := &Organisation{
-		ID:   uuid.New().String(),
-		Name: orgName,
+	// For business emails, check if organisation already exists
+	var org *Organisation
+	if isBusinessEmail(email) {
+		existingOrg, err := db.GetOrganisationByName(orgName)
+		if err == nil {
+			// Organisation exists, use it
+			org = existingOrg
+			log.Info().
+				Str("user_id", userID).
+				Str("email", email).
+				Str("organisation_id", org.ID).
+				Str("organisation_name", org.Name).
+				Msg("Joining existing organisation (business email)")
+		}
 	}
 
-	orgQuery := `
-		INSERT INTO organisations (id, name, created_at, updated_at)
-		VALUES ($1, $2, NOW(), NOW())
-		RETURNING created_at, updated_at
-	`
+	// If no existing organisation found (or personal email), create new one
+	if org == nil {
+		org = &Organisation{
+			ID:   uuid.New().String(),
+			Name: orgName,
+		}
 
-	err = tx.QueryRow(orgQuery, org.ID, org.Name).Scan(
-		&org.CreatedAt, &org.UpdatedAt,
-	)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to create organisation: %w", err)
+		orgQuery := `
+			INSERT INTO organisations (id, name, created_at, updated_at)
+			VALUES ($1, $2, NOW(), NOW())
+			RETURNING created_at, updated_at
+		`
+
+		err = tx.QueryRow(orgQuery, org.ID, org.Name).Scan(
+			&org.CreatedAt, &org.UpdatedAt,
+		)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to create organisation: %w", err)
+		}
 	}
 
 	// Create user with organisation reference
