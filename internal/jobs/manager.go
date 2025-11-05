@@ -69,18 +69,25 @@ func NewJobManager(db *sql.DB, dbQueue DbQueueProvider, crawler CrawlerInterface
 }
 
 // handleExistingJobs checks for existing active jobs and cancels them if found
-func (jm *JobManager) handleExistingJobs(ctx context.Context, domain string, organisationID *string) error {
-	if organisationID == nil || *organisationID == "" {
-		return nil // Skip check if no organisation ID
+func (jm *JobManager) handleExistingJobs(ctx context.Context, domain string, userID *string, organisationID *string) error {
+	// Need either user_id or organisation_id to check for duplicates
+	if (userID == nil || *userID == "") && (organisationID == nil || *organisationID == "") {
+		return nil // Skip check if neither ID is provided
 	}
 
 	var existingJobID string
 	var existingJobStatus string
-	var existingOrgID string
+	var existingOrgID sql.NullString
+	var existingUserID sql.NullString
 
-	err := jm.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
-		return tx.QueryRowContext(ctx, `
-			SELECT j.id, j.status, j.organisation_id
+	// Build query dynamically based on available IDs
+	var query string
+	var args []interface{}
+
+	if organisationID != nil && *organisationID != "" {
+		// Prefer organisation-level duplicate checking (multi-user organisations)
+		query = `
+			SELECT j.id, j.status, j.organisation_id, j.user_id
 			FROM jobs j
 			JOIN domains d ON j.domain_id = d.id
 			WHERE d.name = $1
@@ -88,17 +95,43 @@ func (jm *JobManager) handleExistingJobs(ctx context.Context, domain string, org
 			AND j.status IN ('pending', 'initializing', 'running', 'paused')
 			ORDER BY j.created_at DESC
 			LIMIT 1
-		`, domain, *organisationID).Scan(&existingJobID, &existingJobStatus, &existingOrgID)
+		`
+		args = []interface{}{domain, *organisationID}
+	} else {
+		// Fall back to user-level checking for users without organisations
+		query = `
+			SELECT j.id, j.status, j.organisation_id, j.user_id
+			FROM jobs j
+			JOIN domains d ON j.domain_id = d.id
+			WHERE d.name = $1
+			AND j.user_id = $2
+			AND j.status IN ('pending', 'initializing', 'running', 'paused')
+			ORDER BY j.created_at DESC
+			LIMIT 1
+		`
+		args = []interface{}{domain, *userID}
+	}
+
+	err := jm.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
+		return tx.QueryRowContext(ctx, query, args...).Scan(
+			&existingJobID, &existingJobStatus, &existingOrgID, &existingUserID)
 	})
 
 	if err == nil && existingJobID != "" {
-		// Found an existing active job for the same domain and organisation
-		log.Info().
+		// Found an existing active job for the same domain and user/organisation
+		logEvent := log.Info().
 			Str("existing_job_id", existingJobID).
 			Str("existing_job_status", existingJobStatus).
-			Str("domain", domain).
-			Str("organisation_id", *organisationID).
-			Msg("Found existing active job for domain, cancelling it")
+			Str("domain", domain)
+
+		if existingOrgID.Valid {
+			logEvent = logEvent.Str("organisation_id", existingOrgID.String)
+		}
+		if existingUserID.Valid {
+			logEvent = logEvent.Str("user_id", existingUserID.String)
+		}
+
+		logEvent.Msg("Found existing active job for domain, cancelling it")
 
 		if err := jm.CancelJob(ctx, existingJobID); err != nil {
 			log.Error().
@@ -333,8 +366,8 @@ func (jm *JobManager) CreateJob(ctx context.Context, options *JobOptions) (*Job,
 
 	normalisedDomain := util.NormaliseDomain(options.Domain)
 
-	// Handle any existing active jobs for the same domain and organisation
-	if err := jm.handleExistingJobs(ctx, normalisedDomain, options.OrganisationID); err != nil {
+	// Handle any existing active jobs for the same domain and user/organisation
+	if err := jm.handleExistingJobs(ctx, normalisedDomain, options.UserID, options.OrganisationID); err != nil {
 		return nil, fmt.Errorf("failed to handle existing jobs: %w", err)
 	}
 

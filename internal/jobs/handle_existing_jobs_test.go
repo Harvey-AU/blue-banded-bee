@@ -13,30 +13,49 @@ func TestHandleExistingJobsParameterValidation(t *testing.T) {
 	tests := []struct {
 		name           string
 		domain         string
+		userID         *string
 		organisationID *string
 		expectSkip     bool
 	}{
 		{
-			name:           "nil_organisation_id_skips_check",
+			name:           "nil_user_and_org_skips_check",
 			domain:         "example.com",
+			userID:         nil,
 			organisationID: nil,
 			expectSkip:     true,
 		},
 		{
-			name:           "empty_organisation_id_skips_check",
+			name:           "empty_user_and_org_skips_check",
 			domain:         "example.com",
+			userID:         func() *string { s := ""; return &s }(),
 			organisationID: func() *string { s := ""; return &s }(),
 			expectSkip:     true,
 		},
 		{
 			name:           "valid_organisation_id_performs_check",
 			domain:         "example.com",
+			userID:         nil,
 			organisationID: func() *string { s := "org-123"; return &s }(),
+			expectSkip:     false,
+		},
+		{
+			name:           "valid_user_id_performs_check",
+			domain:         "example.com",
+			userID:         func() *string { s := "user-456"; return &s }(),
+			organisationID: nil,
 			expectSkip:     false,
 		},
 		{
 			name:           "handles_complex_domain",
 			domain:         "test-domain.co.uk",
+			userID:         nil,
+			organisationID: func() *string { s := "org-456"; return &s }(),
+			expectSkip:     false,
+		},
+		{
+			name:           "prefers_org_over_user",
+			domain:         "example.com",
+			userID:         func() *string { s := "user-123"; return &s }(),
 			organisationID: func() *string { s := "org-456"; return &s }(),
 			expectSkip:     false,
 		},
@@ -54,7 +73,7 @@ func TestHandleExistingJobsParameterValidation(t *testing.T) {
 			}
 
 			ctx := context.Background()
-			err := jm.handleExistingJobs(ctx, tt.domain, tt.organisationID)
+			err := jm.handleExistingJobs(ctx, tt.domain, tt.userID, tt.organisationID)
 
 			// Function should always return nil (errors are logged but not propagated)
 			assert.NoError(t, err)
@@ -76,13 +95,22 @@ func TestHandleExistingJobsFunctionExists(t *testing.T) {
 
 	ctx := context.Background()
 
-	// Should not panic and should return nil
-	err := jm.handleExistingJobs(ctx, "test.com", nil)
+	// Should not panic and should return nil with both nil
+	err := jm.handleExistingJobs(ctx, "test.com", nil, nil)
 	assert.NoError(t, err)
 
+	// With org ID only
 	orgID := "test-org"
-	err = jm.handleExistingJobs(ctx, "test.com", &orgID)
-	// Will fail on actual DB operation but should not panic
+	err = jm.handleExistingJobs(ctx, "test.com", nil, &orgID)
+	assert.NoError(t, err)
+
+	// With user ID only
+	userID := "test-user"
+	err = jm.handleExistingJobs(ctx, "test.com", &userID, nil)
+	assert.NoError(t, err)
+
+	// With both IDs (org takes precedence)
+	err = jm.handleExistingJobs(ctx, "test.com", &userID, &orgID)
 	assert.NoError(t, err)
 }
 
