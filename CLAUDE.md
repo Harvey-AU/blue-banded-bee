@@ -86,15 +86,21 @@ after several rounds of iterating on a task, and before deploying.
 
 ## Monitoring Utilities
 
-- Use `scripts/monitor_logs.sh` for lightweight Fly log sampling. It collects a
-  raw snapshot every minute (configurable), writes the raw files under
-  `logs/raw_<run_id>/`, and saves structured summaries (per-minute log level and
-  message counts) under `logs/summary_<run_id>/`.
-- Each snapshot is processed by `scripts/process_logs.py`; tweak that helper if
-  you need different aggregation rules.
-- The monitor accepts flags such as `--interval`, `--samples`, `--iterations`
-  and `--run-id`, making it suitable for ad-hoc investigations without editing
-  the script.
+- Use `scripts/monitor_logs.sh` for Fly log sampling and analysis. Default:
+  10-second intervals for 4 hours.
+- Output folder format: `logs/YYYYMMDD/HHMM_<name>_<interval>s_<duration>h/`
+  - Example: `logs/20251105/0833_heavy-load-test_10s_4h/`
+  - Raw logs: `raw/<timestamp>_iter<N>.log`
+  - JSON summaries: `<timestamp>_iter<N>.json`
+  - Aggregated: `time_series.csv` and `summary.md`
+- Automatic aggregation via `scripts/aggregate_logs.py` runs after each
+  iteration
+- Usage:
+  ```bash
+  ./scripts/monitor_logs.sh                              # Default 4-hour run
+  ./scripts/monitor_logs.sh --run-id "custom-name"      # With descriptive name
+  ./scripts/monitor_logs.sh --interval 30 --iterations 120  # 30s for 1 hour
+  ```
 
 ## Testing Approach
 

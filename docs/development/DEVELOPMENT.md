@@ -200,17 +200,38 @@ logic ├── crawler/ # Web crawling functionality ├── db/ # Database o
 
 ## Monitoring Fly Logs
 
-For short-lived production investigations use `scripts/monitor_logs.sh`:
+For production investigations use `scripts/monitor_logs.sh`:
 
 ```bash
-./scripts/monitor_logs.sh --app blue-banded-bee --interval 60 --samples 500 --iterations 30
+# Default: 10-second intervals for 4 hours
+./scripts/monitor_logs.sh
+
+# Custom run with descriptive name
+./scripts/monitor_logs.sh --run-id "heavy-load-test"
+
+# Custom intervals and duration
+./scripts/monitor_logs.sh --interval 30 --iterations 120 --run-id "30min-check"
 ```
 
-The script fetches snapshots from `flyctl logs`, stores the raw output under
-`logs/raw_<run_id>/`, and writes structured summaries (per-minute counts by log
-level and message) to `logs/summary_<run_id>/`. Adjust the flags (or equivalent
-environment variables) to change cadence, sample size, or the number of
-iterations; use `--run-id` if you want predictable folder names.
+**Output structure:**
+
+- Folder: `logs/YYYYMMDD/HHMM_<name>_<interval>s_<duration>h/`
+  - Example: `logs/20251105/0833_heavy-load-test_10s_4h/`
+- Raw logs: `raw/<timestamp>_iter<N>.log`
+- JSON summaries: `<timestamp>_iter<N>.json`
+- Aggregated outputs:
+  - `time_series.csv` - per-minute log level counts
+  - `summary.md` - human-readable report with critical patterns
+  - Automatically regenerated after each iteration
+
+**Defaults:**
+
+- Interval: 10 seconds (better sampling than 60s)
+- Iterations: 1440 (4 hours)
+- Samples: 400 log lines per fetch
+
+The script runs `scripts/aggregate_logs.py` automatically to process JSON
+summaries into time-series data and markdown reports.
 
 ### Development Patterns
 
