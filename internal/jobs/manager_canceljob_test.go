@@ -83,11 +83,11 @@ func TestCancelJob_Unit(t *testing.T) {
 					WithArgs("cancelled", sqlmock.AnyArg(), "running-job-123").
 					WillReturnResult(sqlmock.NewResult(1, 1))
 
-				// Cancel pending tasks
+				// Cancel pending and waiting tasks
 				mock.ExpectExec(`UPDATE tasks
 				SET status = \$1
-				WHERE job_id = \$2 AND status = \$3`).
-					WithArgs("skipped", "running-job-123", "pending").
+				WHERE job_id = \$2 AND status IN \(\$3, \$4\)`).
+					WithArgs("skipped", "running-job-123", "pending", "waiting").
 					WillReturnResult(sqlmock.NewResult(1, 10))
 
 				mock.ExpectCommit()
@@ -155,8 +155,8 @@ func TestCancelJob_Unit(t *testing.T) {
 
 				mock.ExpectExec(`UPDATE tasks
 				SET status = \$1
-				WHERE job_id = \$2 AND status = \$3`).
-					WithArgs("skipped", "pending-job-123", "pending").
+				WHERE job_id = \$2 AND status IN \(\$3, \$4\)`).
+					WithArgs("skipped", "pending-job-123", "pending", "waiting").
 					WillReturnResult(sqlmock.NewResult(1, 0))
 
 				mock.ExpectCommit()
@@ -224,8 +224,8 @@ func TestCancelJob_Unit(t *testing.T) {
 
 				mock.ExpectExec(`UPDATE tasks
 				SET status = \$1
-				WHERE job_id = \$2 AND status = \$3`).
-					WithArgs("skipped", "paused-job-123", "pending").
+				WHERE job_id = \$2 AND status IN \(\$3, \$4\)`).
+					WithArgs("skipped", "paused-job-123", "pending", "waiting").
 					WillReturnResult(sqlmock.NewResult(1, 75))
 
 				mock.ExpectCommit()
