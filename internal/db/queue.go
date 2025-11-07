@@ -15,6 +15,7 @@ import (
 
 	"github.com/getsentry/sentry-go"
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 	"github.com/rs/zerolog/log"
 
 	"github.com/Harvey-AU/blue-banded-bee/internal/observability"
@@ -1258,25 +1259,81 @@ func (q *DbQueue) EnqueueURLs(ctx context.Context, jobID string, pages []Page, s
 			}
 		}
 
-		// Use direct query instead of prepared statement for Supabase pooler compatibility
+		// Use array-based insert to minimise round-trips and leverage Postgres batching
 		insertQuery := `
 			INSERT INTO tasks (
 				id, job_id, page_id, path, status, created_at, retry_count,
 				source_type, source_url, priority_score
-			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-			ON CONFLICT (job_id, page_id) DO NOTHING
+			)
+			SELECT
+				unnest_ids,
+				unnest_job_ids,
+				unnest_page_ids,
+				unnest_paths,
+				unnest_statuses,
+				unnest_created_at,
+				unnest_retry_counts,
+				unnest_source_types,
+				unnest_source_urls,
+				unnest_priorities
+			FROM UNNEST(
+				$1::uuid[],
+				$2::uuid[],
+				$3::int[],
+				$4::text[],
+				$5::text[],
+				$6::timestamptz[],
+				$7::int[],
+				$8::text[],
+				$9::text[],
+				$10::double precision[]
+			) AS t(
+				unnest_ids,
+				unnest_job_ids,
+				unnest_page_ids,
+				unnest_paths,
+				unnest_statuses,
+				unnest_created_at,
+				unnest_retry_counts,
+				unnest_source_types,
+				unnest_source_urls,
+				unnest_priorities
+			)
+			ON CONFLICT (job_id, page_id) DO UPDATE
+			SET status = EXCLUDED.status,
+				created_at = EXCLUDED.created_at,
+				retry_count = EXCLUDED.retry_count,
+				source_type = EXCLUDED.source_type,
+				source_url = EXCLUDED.source_url,
+				priority_score = GREATEST(tasks.priority_score, EXCLUDED.priority_score),
+				started_at = NULL,
+				completed_at = NULL,
+				error = NULL
+			WHERE tasks.status IN ('pending', 'waiting', 'skipped')
 		`
 
-		// Insert each task with appropriate status
 		now := time.Now().UTC()
 		processedPending := 0
 		processedWaiting := 0
+
+		var (
+			taskIDs     []string
+			jobIDs      []string
+			pageIDs     []int
+			paths       []string
+			statuses    []string
+			createdAts  []time.Time
+			retryCounts []int
+			sourceTypes []string
+			sourceURLs  []string
+			priorities  []float64
+		)
+
 		for _, page := range uniquePages {
 			if page.ID == 0 {
 				continue
 			}
 
-			// Determine status based on max_pages limit and job capacity
 			var status string
 			if maxPages == 0 || currentTaskCount+processedPending+processedWaiting < maxPages {
 				if processedPending < availableSlots {
@@ -1290,13 +1347,37 @@ func (q *DbQueue) EnqueueURLs(ctx context.Context, jobID string, pages []Page, s
 				status = "skipped"
 			}
 
-			taskID := uuid.New().String()
-			_, err = tx.ExecContext(ctx, insertQuery,
-				taskID, jobID, page.ID, page.Path, status, now, 0, sourceType, sourceURL, page.Priority)
+			taskIDs = append(taskIDs, uuid.New().String())
+			jobIDs = append(jobIDs, jobID)
+			pageIDs = append(pageIDs, page.ID)
+			paths = append(paths, page.Path)
+			statuses = append(statuses, status)
+			createdAts = append(createdAts, now)
+			retryCounts = append(retryCounts, 0)
+			sourceTypes = append(sourceTypes, sourceType)
+			sourceURLs = append(sourceURLs, sourceURL)
+			priorities = append(priorities, page.Priority)
+		}
 
-			if err != nil {
-				return fmt.Errorf("failed to insert task: %w", err)
-			}
+		if len(taskIDs) == 0 {
+			return nil
+		}
+
+		_, err = tx.ExecContext(ctx, insertQuery,
+			pq.Array(taskIDs),
+			pq.Array(jobIDs),
+			pq.Array(pageIDs),
+			pq.Array(paths),
+			pq.Array(statuses),
+			pq.Array(createdAts),
+			pq.Array(retryCounts),
+			pq.Array(sourceTypes),
+			pq.Array(sourceURLs),
+			pq.Array(priorities),
+		)
+
+		if err != nil {
+			return fmt.Errorf("failed to insert tasks: %w", err)
 		}
 
 		// Log when tasks are placed in waiting status

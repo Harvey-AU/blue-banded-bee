@@ -414,19 +414,18 @@ func TestDbQueueEnqueueURLs(t *testing.T) {
 					WillReturnRows(sqlmock.NewRows([]string{"max_pages", "concurrency", "running_tasks", "domain_name", "total_count", "pending_count"}).
 						AddRow(0, nil, 0, "example.com", 0, 0))
 
-				// Expect direct Exec (no prepared statement for Supabase pooler compatibility)
 				mock.ExpectExec("INSERT INTO tasks ").
 					WithArgs(
-						sqlmock.AnyArg(), // id
-						"job-1",          // job_id
-						1,                // page_id
-						"/page1",         // path
-						"pending",        // status
-						sqlmock.AnyArg(), // created_at
-						0,                // retry_count
-						"manual",         // source_type
-						"",               // source_url
-						1.0,              // priority_score
+						sqlmock.AnyArg(), // ids array
+						sqlmock.AnyArg(), // job_ids array
+						sqlmock.AnyArg(), // page_ids array
+						sqlmock.AnyArg(), // paths array
+						sqlmock.AnyArg(), // statuses array
+						sqlmock.AnyArg(), // created_at array
+						sqlmock.AnyArg(), // retry_count array
+						sqlmock.AnyArg(), // source_types array
+						sqlmock.AnyArg(), // source_urls array
+						sqlmock.AnyArg(), // priority_scores array
 					).
 					WillReturnResult(sqlmock.NewResult(1, 1))
 
@@ -450,12 +449,19 @@ func TestDbQueueEnqueueURLs(t *testing.T) {
 					WillReturnRows(sqlmock.NewRows([]string{"max_pages", "concurrency", "running_tasks", "domain_name", "total_count", "pending_count"}).
 						AddRow(0, nil, 0, "example.com", 0, 0))
 
-				// Expect three direct execs (no prepared statement for Supabase pooler compatibility)
 				mock.ExpectExec("INSERT INTO tasks ").
-					WillReturnResult(sqlmock.NewResult(1, 1))
-				mock.ExpectExec("INSERT INTO tasks ").
-					WillReturnResult(sqlmock.NewResult(1, 1))
-				mock.ExpectExec("INSERT INTO tasks ").
+					WithArgs(
+						sqlmock.AnyArg(),
+						sqlmock.AnyArg(),
+						sqlmock.AnyArg(),
+						sqlmock.AnyArg(),
+						sqlmock.AnyArg(),
+						sqlmock.AnyArg(),
+						sqlmock.AnyArg(),
+						sqlmock.AnyArg(),
+						sqlmock.AnyArg(),
+						sqlmock.AnyArg(),
+					).
 					WillReturnResult(sqlmock.NewResult(1, 1))
 
 				mock.ExpectCommit()
@@ -485,8 +491,19 @@ func TestDbQueueEnqueueURLs(t *testing.T) {
 					WillReturnRows(sqlmock.NewRows([]string{"max_pages", "concurrency", "running_tasks", "domain_name", "total_count", "pending_count"}).
 						AddRow(0, nil, 0, "example.com", 0, 0))
 
-				// Expect direct Exec (no prepared statement)
 				mock.ExpectExec("INSERT INTO tasks ").
+					WithArgs(
+						sqlmock.AnyArg(),
+						sqlmock.AnyArg(),
+						sqlmock.AnyArg(),
+						sqlmock.AnyArg(),
+						sqlmock.AnyArg(),
+						sqlmock.AnyArg(),
+						sqlmock.AnyArg(),
+						sqlmock.AnyArg(),
+						sqlmock.AnyArg(),
+						sqlmock.AnyArg(),
+					).
 					WillReturnError(errors.New("constraint violation"))
 
 				mock.ExpectRollback()
