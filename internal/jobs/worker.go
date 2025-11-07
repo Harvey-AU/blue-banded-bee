@@ -2200,7 +2200,7 @@ func (wp *WorkerPool) cleanupOrphanedTasks(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	// Select one failed job with orphaned tasks
 	// Uses EXISTS subquery to avoid DISTINCT (incompatible with FOR UPDATE)
