@@ -29,6 +29,41 @@ On merge, CI will:
 
 ## [Unreleased]
 
+## [0.17.0] – 2025-11-07
+
+### Fixed
+
+- **OpenTelemetry WriteHeader Warnings**: Eliminated "superfluous
+  response.WriteHeader" warnings in production logs
+  - Upgraded otelhttp from v0.54.0 to v0.63.0 (includes fix from PR #6055)
+  - Fixed known bug in otelhttp response writer wrapper
+    (open-telemetry/opentelemetry-go-contrib#6053)
+  - Warnings were occurring on static file routes (/, /robots.txt, /dashboard)
+
+### Changed
+
+- **OpenTelemetry Upgrade**: Major update to observability stack
+  - Core OTel packages: v1.32.0 → v1.38.0 (6 minor versions)
+  - OTel SDK: v1.32.0 → v1.38.0
+  - OTLP exporters: v1.28.0 → v1.38.0
+  - Prometheus exporter: v0.54.0 → v0.60.0
+  - All tests passing, no breaking changes
+
+- **Dependency Updates**:
+  - prometheus/client_golang: v1.20.5 → v1.23.0
+  - grpc: v1.64.1 → v1.75.0
+  - protobuf: v1.36.6 → v1.36.8
+  - Various transitive dependencies updated
+
+### Added
+
+- **Diagnostic Instrumentation**: Enhanced middleware logging for debugging
+  response writer issues
+  - Added request context tracking (requestID, path, method) to responseWrapper
+  - WARN-level logging for duplicate WriteHeader attempts with stack traces
+  - DEBUG-level logging for all WriteHeader calls
+  - Zero performance impact when not in debug mode
+
 ## [0.16.11] – 2025-11-07
 
 ## [0.16.10] – 2025-11-07
