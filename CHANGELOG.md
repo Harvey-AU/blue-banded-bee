@@ -29,6 +29,18 @@ On merge, CI will:
 
 ## [Unreleased]
 
+### Changed
+
+- **Dependency Refresh**: Bumped key libraries to their latest stable releases
+  before launch
+  - sentry-go 0.32.0 → 0.36.2, golang-jwt/jwt/v5 5.2.2 → 5.3.0, pgx/v5 5.7.5 →
+    5.7.6, prometheus/client_golang 1.23.0 → 1.23.2, golang.org/x/time 0.11.0 →
+    0.14.0
+  - Prometheus stack (common, procfs, otlptranslator) and grpc/genproto/
+    protobuf modules updated to latest patch levels
+  - Miscellaneous indirect upgrades (xmlquery/xpath, bitset, objx, go-difflib,
+    go-edlib, OTel auto SDK) via `go get -u ./...`
+
 ## [0.17.0] – 2025-11-07
 
 ### Fixed
