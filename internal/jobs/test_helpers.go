@@ -82,6 +82,10 @@ func (m *simpleDbQueueMock) DecrementRunningTasks(ctx context.Context, jobID str
 	return nil
 }
 
+func (m *simpleDbQueueMock) DecrementRunningTasksBy(ctx context.Context, jobID string, count int) error {
+	return nil
+}
+
 func (m *simpleDbQueueMock) Execute(ctx context.Context, fn func(*sql.Tx) error) error {
 	return nil
 }

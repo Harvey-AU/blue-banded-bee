@@ -231,6 +231,10 @@ func (m *TaskPrepMock) DecrementRunningTasks(ctx context.Context, jobID string) 
 	return nil
 }
 
+func (m *TaskPrepMock) DecrementRunningTasksBy(ctx context.Context, jobID string, count int) error {
+	return nil
+}
+
 func (m *TaskPrepMock) SetConcurrencyOverride(fn db.ConcurrencyOverrideFunc) {}
 
 func (m *TaskPrepMock) EnqueueURLs(ctx context.Context, jobID string, pages []db.Page, sourceType string, sourceURL string) error {

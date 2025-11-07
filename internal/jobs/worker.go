@@ -34,6 +34,8 @@ const (
 	taskProcessingTimeout      = 2 * time.Minute
 	poolSaturationBackoff      = 2 * time.Second
 	defaultJobFailureThreshold = 20
+	defaultRunningTaskBatch    = 4
+	defaultRunningTaskFlush    = 50 * time.Millisecond
 
 	// concurrencyBufferFactor controls the headroom applied when converting
 	// job-level concurrency into worker capacity so we keep a small cushion
@@ -109,6 +111,13 @@ type WorkerPool struct {
 
 	// Health probe
 	probeInterval time.Duration // from BBB_HEALTH_PROBE_INTERVAL_SECONDS (default 0 = disabled)
+
+	// Running task release batching
+	runningTaskReleaseCh            chan string
+	runningTaskReleaseBatchSize     int
+	runningTaskReleaseFlushInterval time.Duration
+	runningTaskReleaseMu            sync.Mutex
+	runningTaskReleasePending       map[string]int
 }
 
 func (wp *WorkerPool) ensureDomainLimiter() *DomainLimiter {
@@ -172,6 +181,24 @@ func probeIntervalFromEnv() time.Duration {
 	return 0 // Default disabled
 }
 
+func runningTaskBatchSizeFromEnv() int {
+	if raw := strings.TrimSpace(os.Getenv("BBB_RUNNING_TASK_BATCH_SIZE")); raw != "" {
+		if parsed, err := strconv.Atoi(raw); err == nil && parsed >= 1 {
+			return parsed
+		}
+	}
+	return defaultRunningTaskBatch
+}
+
+func runningTaskFlushIntervalFromEnv() time.Duration {
+	if raw := strings.TrimSpace(os.Getenv("BBB_RUNNING_TASK_FLUSH_INTERVAL_MS")); raw != "" {
+		if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 {
+			return time.Duration(parsed) * time.Millisecond
+		}
+	}
+	return defaultRunningTaskFlush
+}
+
 func NewWorkerPool(sqlDB *sql.DB, dbQueue DbQueueInterface, crawler CrawlerInterface, numWorkers int, workerConcurrency int, dbConfig *db.Config) *WorkerPool {
 	// Validate inputs
 	if sqlDB == nil {
@@ -220,6 +247,12 @@ func NewWorkerPool(sqlDB *sql.DB, dbQueue DbQueueInterface, crawler CrawlerInter
 	idleThreshold := idleThresholdFromEnv()
 	scaleCooldown := scaleCooldownFromEnv()
 	probeInterval := probeIntervalFromEnv()
+	runningTaskBatchSize := runningTaskBatchSizeFromEnv()
+	runningTaskFlushInterval := runningTaskFlushIntervalFromEnv()
+	runningTaskBuffer := numWorkers * workerConcurrency * 2
+	if runningTaskBuffer < 64 {
+		runningTaskBuffer = 64
+	}
 
 	wp := &WorkerPool{
 		db:              sqlDB,
@@ -261,6 +294,12 @@ func NewWorkerPool(sqlDB *sql.DB, dbQueue DbQueueInterface, crawler CrawlerInter
 
 		// Health probe
 		probeInterval: probeInterval,
+
+		// Running task release batching
+		runningTaskReleaseCh:            make(chan string, runningTaskBuffer),
+		runningTaskReleaseBatchSize:     runningTaskBatchSize,
+		runningTaskReleaseFlushInterval: runningTaskFlushInterval,
+		runningTaskReleasePending:       make(map[string]int),
 	}
 
 	// Start the notification listener when we have connection details available.
@@ -320,6 +359,7 @@ func (wp *WorkerPool) Start(ctx context.Context) {
 
 	wp.StartTaskMonitor(ctx)
 	wp.StartCleanupMonitor(ctx)
+	wp.startRunningTaskReleaseLoop(ctx)
 
 	// Start orphaned task cleanup loop
 	wp.wg.Add(1)
@@ -335,6 +375,7 @@ func (wp *WorkerPool) Stop() {
 		log.Debug().Msg("Stopping worker pool")
 		close(wp.stopCh)
 		wp.wg.Wait()
+		wp.flushRunningTaskReleases(context.Background())
 		// Stop batch manager to flush remaining updates
 		if wp.batchManager != nil {
 			wp.batchManager.Stop()
@@ -2277,6 +2318,126 @@ func (wp *WorkerPool) cleanupOrphanedTasks(ctx context.Context) error {
 	return nil
 }
 
+// startRunningTaskReleaseLoop batches running_tasks decrements to reduce contention.
+func (wp *WorkerPool) startRunningTaskReleaseLoop(ctx context.Context) {
+	if wp.runningTaskReleaseCh == nil {
+		return
+	}
+
+	wp.wg.Add(1)
+	go func() {
+		defer wp.wg.Done()
+
+		interval := wp.runningTaskReleaseFlushInterval
+		if interval <= 0 {
+			interval = defaultRunningTaskFlush
+		}
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				wp.flushRunningTaskReleases(context.Background())
+				return
+			case <-wp.stopCh:
+				wp.flushRunningTaskReleases(context.Background())
+				return
+			case jobID := <-wp.runningTaskReleaseCh:
+				if jobID == "" {
+					continue
+				}
+				count := wp.incrementPendingRunningTaskRelease(jobID)
+				if count >= wp.runningTaskReleaseBatchSize {
+					wp.flushRunningTaskReleaseForJob(ctx, jobID)
+				}
+			case <-ticker.C:
+				wp.flushRunningTaskReleases(ctx)
+			}
+		}
+	}()
+}
+
+func (wp *WorkerPool) incrementPendingRunningTaskRelease(jobID string) int {
+	wp.runningTaskReleaseMu.Lock()
+	defer wp.runningTaskReleaseMu.Unlock()
+	wp.runningTaskReleasePending[jobID]++
+	return wp.runningTaskReleasePending[jobID]
+}
+
+func (wp *WorkerPool) flushRunningTaskReleaseForJob(ctx context.Context, jobID string) {
+	wp.runningTaskReleaseMu.Lock()
+	count := wp.runningTaskReleasePending[jobID]
+	if count > 0 {
+		delete(wp.runningTaskReleasePending, jobID)
+	}
+	wp.runningTaskReleaseMu.Unlock()
+
+	if count > 0 {
+		wp.flushRunningTaskReleaseCount(ctx, jobID, count)
+	}
+}
+
+func (wp *WorkerPool) flushRunningTaskReleases(ctx context.Context) {
+	wp.runningTaskReleaseMu.Lock()
+	if len(wp.runningTaskReleasePending) == 0 {
+		wp.runningTaskReleaseMu.Unlock()
+		return
+	}
+	pending := make(map[string]int, len(wp.runningTaskReleasePending))
+	for jobID, count := range wp.runningTaskReleasePending {
+		pending[jobID] = count
+	}
+	wp.runningTaskReleasePending = make(map[string]int)
+	wp.runningTaskReleaseMu.Unlock()
+
+	for jobID, count := range pending {
+		wp.flushRunningTaskReleaseCount(ctx, jobID, count)
+	}
+}
+
+func (wp *WorkerPool) flushRunningTaskReleaseCount(ctx context.Context, jobID string, count int) {
+	if count <= 0 {
+		return
+	}
+
+	baseCtx := ctx
+	if baseCtx == nil || baseCtx.Err() != nil {
+		baseCtx = context.Background()
+	}
+
+	flushCtx, cancel := context.WithTimeout(baseCtx, 5*time.Second)
+	defer cancel()
+
+	if err := wp.dbQueue.DecrementRunningTasksBy(flushCtx, jobID, count); err != nil {
+		log.Error().
+			Err(err).
+			Str("job_id", jobID).
+			Int("release_count", count).
+			Msg("Failed to release running task slots")
+
+		// Requeue for retry on next tick
+		wp.runningTaskReleaseMu.Lock()
+		wp.runningTaskReleasePending[jobID] += count
+		wp.runningTaskReleaseMu.Unlock()
+	}
+}
+
+func (wp *WorkerPool) releaseRunningTaskSlot(jobID string) error {
+	if jobID == "" {
+		return fmt.Errorf("jobID cannot be empty")
+	}
+
+	select {
+	case wp.runningTaskReleaseCh <- jobID:
+		return nil
+	default:
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		return wp.dbQueue.DecrementRunningTasksBy(ctx, jobID, 1)
+	}
+}
+
 // processTask processes an individual task
 // constructTaskURL builds a proper URL from task path and domain information
 func constructTaskURL(path, domainName string) string {
@@ -2493,9 +2654,8 @@ func (wp *WorkerPool) handleTaskError(ctx context.Context, task *db.Task, taskEr
 		observability.RecordWorkerTaskFailure(ctx, task.JobID, failureReason)
 	}
 
-	// Immediately decrement running_tasks to free concurrency slot
-	// This allows workers to claim new tasks without waiting for batch flush
-	if err := wp.dbQueue.DecrementRunningTasks(ctx, task.JobID); err != nil {
+	// Immediately queue running_tasks decrement to free concurrency slots
+	if err := wp.releaseRunningTaskSlot(task.JobID); err != nil {
 		log.Error().Err(err).Str("job_id", task.JobID).Str("task_id", task.ID).
 			Msg("Failed to decrement running_tasks counter")
 		// Don't return error - batch update will eventually sync the counter
@@ -2588,9 +2748,8 @@ func (wp *WorkerPool) handleTaskSuccess(ctx context.Context, task *db.Task, resu
 		}
 	}
 
-	// Immediately decrement running_tasks to free concurrency slot
-	// This allows workers to claim new tasks without waiting for batch flush
-	if err := wp.dbQueue.DecrementRunningTasks(ctx, task.JobID); err != nil {
+	// Immediately queue running_tasks decrement to free concurrency slot
+	if err := wp.releaseRunningTaskSlot(task.JobID); err != nil {
 		log.Error().Err(err).Str("job_id", task.JobID).Str("task_id", task.ID).
 			Msg("Failed to decrement running_tasks counter")
 		// Don't return error - batch update will eventually sync the counter

@@ -870,6 +870,62 @@ type Task struct {
 	PriorityScore float64
 }
 
+// jobHasCapacityTx returns whether the job exists and currently has free capacity.
+// The second boolean indicates whether the job row exists (false = job missing/finished).
+func (q *DbQueue) jobHasCapacityTx(ctx context.Context, tx *sql.Tx, jobID string) (hasCapacity bool, jobExists bool, err error) {
+	var status string
+	var runningTasks sql.NullInt64
+	var concurrency sql.NullInt64
+
+	err = tx.QueryRowContext(ctx, `
+		SELECT status, running_tasks, concurrency
+		FROM jobs
+		WHERE id = $1
+		FOR SHARE
+	`, jobID).Scan(&status, &runningTasks, &concurrency)
+
+	if err == sql.ErrNoRows {
+		return false, false, nil
+	}
+	if err != nil {
+		return false, false, err
+	}
+
+	// Jobs that are no longer running (completed/cancelled/failed) cannot accept work.
+	if status != "running" {
+		return false, true, nil
+	}
+
+	var running int64
+	if runningTasks.Valid {
+		running = runningTasks.Int64
+	}
+
+	// Unlimited concurrency (NULL/0) should always allow more work.
+	if !concurrency.Valid || concurrency.Int64 == 0 {
+		return true, true, nil
+	}
+
+	return running < concurrency.Int64, true, nil
+}
+
+// jobHasPendingTasksTx returns true when the specified job still has pending tasks.
+func (q *DbQueue) jobHasPendingTasksTx(ctx context.Context, tx *sql.Tx, jobID string) (bool, error) {
+	var exists bool
+	err := tx.QueryRowContext(ctx, `
+		SELECT EXISTS (
+			SELECT 1
+			FROM tasks
+			WHERE job_id = $1
+			  AND status = 'pending'
+		)
+	`, jobID).Scan(&exists)
+	if err != nil {
+		return false, err
+	}
+	return exists, nil
+}
+
 // GetNextTask gets a pending task using row-level locking
 // Uses FOR UPDATE SKIP LOCKED to prevent lock contention between workers
 // Combines SELECT and UPDATE in a CTE for atomic claiming
@@ -884,6 +940,28 @@ func (q *DbQueue) GetNextTask(ctx context.Context, jobID string) (*Task, error) 
 	err := q.Execute(ctx, func(tx *sql.Tx) error {
 		attemptCount++
 		queryStart := time.Now()
+
+		if jobID != "" {
+			hasCapacity, jobExists, err := q.jobHasCapacityTx(ctx, tx, jobID)
+			if err != nil {
+				return err
+			}
+			if !jobExists {
+				return sql.ErrNoRows
+			}
+			if !hasCapacity {
+				pendingExists, err := q.jobHasPendingTasksTx(ctx, tx, jobID)
+				if err != nil {
+					return err
+				}
+				if pendingExists {
+					return ErrConcurrencyBlocked
+				}
+				// No pending tasks and no capacity means the job is effectively drained.
+				return sql.ErrNoRows
+			}
+		}
+
 		// Use CTE to select and update in a single atomic query
 		// This reduces transaction time and minimises lock holding
 		// Also enforces per-job concurrency limits by checking running_tasks < concurrency
@@ -1430,36 +1508,54 @@ func (q *DbQueue) UpdateTaskStatus(ctx context.Context, task *Task) error {
 // Also promotes one waiting task to pending if job still has capacity.
 // The actual task field updates are still handled by the batch manager for efficiency.
 func (q *DbQueue) DecrementRunningTasks(ctx context.Context, jobID string) error {
+	return q.DecrementRunningTasksBy(ctx, jobID, 1)
+}
+
+// DecrementRunningTasksBy releases multiple running task slots for a job in one trip.
+func (q *DbQueue) DecrementRunningTasksBy(ctx context.Context, jobID string, count int) error {
 	if jobID == "" {
 		return fmt.Errorf("jobID cannot be empty")
 	}
+	if count <= 0 {
+		return nil
+	}
 
-	log.Debug().Str("job_id", jobID).Msg("DecrementRunningTasks called")
+	log.Debug().
+		Str("job_id", jobID).
+		Int("release_count", count).
+		Msg("DecrementRunningTasksBy called")
 
 	return q.ExecuteWithContext(ctx, func(txCtx context.Context, tx *sql.Tx) error {
-		// Decrement running_tasks count
+		// Decrement running_tasks count in a single atomic update
 		decrementQuery := `
 			UPDATE jobs
-			SET running_tasks = GREATEST(0, running_tasks - 1)
-			WHERE id = $1
+			SET running_tasks = GREATEST(0, running_tasks - $2)
+			WHERE id = $1 AND running_tasks > 0
 		`
-		result, err := tx.ExecContext(txCtx, decrementQuery, jobID)
+		result, err := tx.ExecContext(txCtx, decrementQuery, jobID, count)
 		if err != nil {
-			log.Error().Err(err).Str("job_id", jobID).Msg("DecrementRunningTasks database error")
+			log.Error().Err(err).Str("job_id", jobID).Msg("DecrementRunningTasksBy database error")
 			return fmt.Errorf("failed to decrement running_tasks for job %s: %w", jobID, err)
 		}
 
 		rowsAffected, err := result.RowsAffected()
 		if err != nil {
-			log.Error().Err(err).Str("job_id", jobID).Msg("DecrementRunningTasks failed to get rows affected")
+			log.Error().Err(err).Str("job_id", jobID).Msg("DecrementRunningTasksBy failed to get rows affected")
 		} else {
-			log.Debug().Str("job_id", jobID).Int64("rows_affected", rowsAffected).Msg("DecrementRunningTasks executed")
+			log.Debug().
+				Str("job_id", jobID).
+				Int64("rows_affected", rowsAffected).
+				Int("requested_release", count).
+				Msg("DecrementRunningTasksBy executed")
 		}
 
-		// Promote one waiting task to pending (uses database function from migration)
-		// This automatically checks if job has capacity before promoting
-		_, err = tx.ExecContext(txCtx, `SELECT promote_waiting_task_for_job($1)`, jobID)
-		if err != nil {
+		if rowsAffected == 0 {
+			// No slots freed (job already at 0), nothing to promote
+			return nil
+		}
+
+		// Promote waiting tasks only when we actually free capacity.
+		if _, err = tx.ExecContext(txCtx, `SELECT promote_waiting_task_for_job($1)`, jobID); err != nil {
 			// Log but don't fail - promoting is best-effort
 			log.Warn().Err(err).Str("job_id", jobID).Msg("Failed to promote waiting task")
 		}

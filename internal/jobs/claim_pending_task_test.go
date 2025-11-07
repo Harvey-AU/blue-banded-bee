@@ -170,6 +170,10 @@ func (m *ClaimTaskMock) DecrementRunningTasks(ctx context.Context, jobID string)
 	return nil
 }
 
+func (m *ClaimTaskMock) DecrementRunningTasksBy(ctx context.Context, jobID string, count int) error {
+	return nil
+}
+
 func (m *ClaimTaskMock) Execute(ctx context.Context, fn func(*sql.Tx) error) error {
 	return nil
 }
