@@ -10,6 +10,9 @@ SAMPLES=400
 ITERATIONS=1440  # 4 hours at 10s intervals
 RUN_ID=""
 OUTPUT_ROOT="logs"
+CLEANUP_OLD=true
+CLEANUP_DAYS=1
+CLEANUP_MODE="zip"
 
 usage() {
     cat <<'USAGE'
@@ -18,16 +21,36 @@ Usage: monitor_logs.sh [options]
 Fetch recent Fly logs on a fixed cadence, archive the raw output, and write
 per-minute summaries describing how often each log level/message occurred.
 
+Automatic cleanup (enabled by default):
+  - Zips raw logs and iteration JSONs from runs older than 1 day
+  - Keeps summary.md, summary.json, and monitor.log
+  - Use --no-cleanup to disable or --cleanup-mode delete to remove everything
+
 Options:
-  --app NAME          Fly application name (default: blue-banded-bee)
-  --interval SECONDS  Seconds to wait between samples (default: 60)
-  --samples N         Number of log lines to request each run (default: 400)
-  --iterations N      Number of iterations to perform (0 = run forever)
-  --run-id ID         Identifier used when naming output directories
-  -h, --help          Show this message and exit
+  --app NAME            Fly application name (default: blue-banded-bee)
+  --interval SECONDS    Seconds to wait between samples (default: 60)
+  --samples N           Number of log lines to request each run (default: 400)
+  --iterations N        Number of iterations to perform (0 = run forever)
+  --run-id ID           Identifier used when naming output directories
+  --no-cleanup          Disable automatic cleanup (default: enabled)
+  --cleanup-days N      Clean runs older than N days (default: 1)
+  --cleanup-mode MODE   How to clean: 'zip' or 'delete' (default: zip)
+                        zip: archives raw/ and iteration JSONs, keeps summaries
+                        delete: removes entire run directory
+  -h, --help            Show this message and exit
 
 Environment variables with the same names (APP, INTERVAL, SAMPLES, ITERATIONS,
 RUN_ID) override the defaults as well.
+
+Examples:
+  # Default: auto-zip raw logs from runs older than 1 day
+  ./monitor_logs.sh
+
+  # Disable cleanup
+  ./monitor_logs.sh --no-cleanup
+
+  # Delete entire runs older than 3 days
+  ./monitor_logs.sh --cleanup-days 3 --cleanup-mode delete
 USAGE
 }
 
@@ -60,6 +83,18 @@ while [[ $# -gt 0 ]]; do
             RUN_ID="$2"
             shift 2
             ;;
+        --no-cleanup)
+            CLEANUP_OLD=false
+            shift
+            ;;
+        --cleanup-days)
+            CLEANUP_DAYS="$2"
+            shift 2
+            ;;
+        --cleanup-mode)
+            CLEANUP_MODE="$2"
+            shift 2
+            ;;
         -h|--help)
             usage
             exit 0
@@ -84,6 +119,16 @@ fi
 
 if ! [[ "$ITERATIONS" =~ ^[0-9]+$ ]]; then
     echo "iterations must be an integer >= 0" >&2
+    exit 1
+fi
+
+if ! [[ "$CLEANUP_DAYS" =~ ^[0-9]+$ && "$CLEANUP_DAYS" -ge 0 ]]; then
+    echo "cleanup-days must be a non-negative integer" >&2
+    exit 1
+fi
+
+if [[ "$CLEANUP_MODE" != "zip" && "$CLEANUP_MODE" != "delete" ]]; then
+    echo "cleanup-mode must be 'zip' or 'delete'" >&2
     exit 1
 fi
 
@@ -132,6 +177,73 @@ RAW_DIR="$RUN_DIR/raw"
 LOG_FILE="$RUN_DIR/monitor.log"
 
 mkdir -p "$RAW_DIR"
+
+# Cleanup old runs if requested
+if [[ "$CLEANUP_OLD" == "true" ]]; then
+    echo "[$(date -u +"%Y-%m-%dT%H:%M:%SZ")] Cleaning up old runs (older than $CLEANUP_DAYS days, mode: $CLEANUP_MODE)" | tee -a "$LOG_FILE"
+
+    # Calculate cutoff date (days ago)
+    if [[ "$(uname)" == "Darwin" ]]; then
+        # macOS date command
+        CUTOFF_DATE=$(date -u -v-${CLEANUP_DAYS}d +"%Y%m%d" 2>/dev/null || date -u +"%Y%m%d")
+    else
+        # GNU date command
+        CUTOFF_DATE=$(date -u -d "$CLEANUP_DAYS days ago" +"%Y%m%d" 2>/dev/null || date -u +"%Y%m%d")
+    fi
+
+    # Find old run directories
+    if [[ -d "$OUTPUT_ROOT" ]]; then
+        find "$OUTPUT_ROOT" -mindepth 2 -maxdepth 2 -type d | while read -r run_dir; do
+            # Extract date from path (logs/YYYYMMDD/HHMM_run-id)
+            date_dir=$(basename "$(dirname "$run_dir")")
+
+            # Skip if not a date directory
+            if ! [[ "$date_dir" =~ ^[0-9]{8}$ ]]; then
+                continue
+            fi
+
+            # Skip if directory is from today or newer than cutoff
+            if [[ "$date_dir" -ge "$CUTOFF_DATE" ]]; then
+                continue
+            fi
+
+            run_name=$(basename "$run_dir")
+
+            if [[ "$CLEANUP_MODE" == "zip" ]]; then
+                # Zip mode: archive raw/ and iteration JSONs, keep summaries
+
+                # Skip if raw already zipped
+                if [[ -f "$run_dir/raw.zip" ]]; then
+                    continue
+                fi
+
+                # Check if raw/ directory exists
+                if [[ -d "$run_dir/raw" ]]; then
+                    echo "  Zipping raw logs: $date_dir/$run_name/raw" | tee -a "$LOG_FILE"
+                    (cd "$run_dir" && zip -q -r "raw.zip" "raw" && rm -rf "raw") || {
+                        echo "  Failed to zip raw directory in $run_dir" | tee -a "$LOG_FILE"
+                    }
+                fi
+
+                # Remove iteration JSON files (keep summary.md, summary.json, monitor.log)
+                if compgen -G "$run_dir/*_iter*.json" > /dev/null 2>&1; then
+                    echo "  Removing iteration JSONs: $date_dir/$run_name" | tee -a "$LOG_FILE"
+                    rm -f "$run_dir"/*_iter*.json || {
+                        echo "  Failed to remove iteration JSONs in $run_dir" | tee -a "$LOG_FILE"
+                    }
+                fi
+            else
+                # Delete mode: remove entire run directory
+                echo "  Deleting: $date_dir/$run_name" | tee -a "$LOG_FILE"
+                rm -rf "$run_dir" || {
+                    echo "  Failed to delete $run_dir" | tee -a "$LOG_FILE"
+                }
+            fi
+        done
+    fi
+
+    echo "[$(date -u +"%Y-%m-%dT%H:%M:%SZ")] Cleanup complete" | tee -a "$LOG_FILE"
+fi
 
 echo "[$(date -u +"%Y-%m-%dT%H:%M:%SZ")] Starting log monitor" | tee -a "$LOG_FILE"
 echo "App: $APP | Interval: ${INTERVAL}s | Samples: $SAMPLES | Iterations: $ITERATIONS" | tee -a "$LOG_FILE"

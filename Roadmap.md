@@ -467,7 +467,7 @@ Organisation model implemented:
   - [ ] Implement cron-like scheduler for recurring runs
   - [ ] Automatic cache warming based on Webflow publish events
 - [ ] **Monitoring & Reporting**
-  - [ ] Fix completion percentage to reflect actual completed vs skipped tasks
+  - [x] Fix completion percentage to reflect actual completed vs skipped tasks
         (not always 100%) ([internal/db/db.go:404](./internal/db/db.go#L404))
   - [ ] Publish OTEL metrics for connection pool saturation and wire Grafana
         alerts

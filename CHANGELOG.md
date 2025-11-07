@@ -29,6 +29,8 @@ On merge, CI will:
 
 ## [Unreleased]
 
+## [0.16.10] – 2025-11-07
+
 ### Fixed
 
 - **Duplicate Job Checking**: Fixed job duplicate checking for users without
