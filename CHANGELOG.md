@@ -29,6 +29,16 @@ On merge, CI will:
 
 ## [Unreleased]
 
+### Changed
+
+- **Database Connection Pool**: Increased production connection pool from 37 to
+  70 max connections (idle: 15 → 20)
+  - Utilises available Supabase capacity (90 max connections)
+  - Provides better concurrency during load bursts
+  - Leaves 20 connections headroom for admin/monitoring
+  - With Supavisor transaction pooling: ~150 MB memory impact (70 logical →
+    ~10-15 actual connections)
+
 ## [0.16.13] – 2025-11-07
 
 ### Fixed
