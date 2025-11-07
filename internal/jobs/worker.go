@@ -320,6 +320,13 @@ func (wp *WorkerPool) Start(ctx context.Context) {
 
 	wp.StartTaskMonitor(ctx)
 	wp.StartCleanupMonitor(ctx)
+
+	// Start orphaned task cleanup loop
+	wp.wg.Add(1)
+	go func() {
+		defer wp.wg.Done()
+		wp.cleanupOrphanedTasksLoop(ctx)
+	}()
 }
 
 func (wp *WorkerPool) Stop() {
@@ -2124,7 +2131,14 @@ func (wp *WorkerPool) CleanupStuckJobs(ctx context.Context) error {
 		}
 
 		timedOutJobs, err = result.RowsAffected()
-		return err
+		if err != nil {
+			return err
+		}
+
+		// Orphaned task cleanup now runs in separate goroutine (cleanupOrphanedTasksLoop)
+		// to avoid 60s transaction timeout constraint
+
+		return nil
 	})
 
 	if err != nil {
@@ -2144,6 +2158,121 @@ func (wp *WorkerPool) CleanupStuckJobs(ctx context.Context) error {
 			Int64("jobs_failed", timedOutJobs).
 			Msg("Marked timed-out jobs as failed")
 	}
+
+	return nil
+}
+
+// cleanupOrphanedTasksLoop runs as a separate goroutine to clean up orphaned tasks
+// from failed jobs. Runs outside the 60s maintenance transaction to avoid timeout
+// with large task counts.
+func (wp *WorkerPool) cleanupOrphanedTasksLoop(ctx context.Context) {
+	// Run every 30 seconds (more frequent than maintenance cycle)
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+
+	log.Info().Msg("Orphaned task cleanup loop started")
+
+	for {
+		select {
+		case <-ctx.Done():
+			log.Info().Msg("Orphaned task cleanup loop stopped (context cancelled)")
+			return
+		case <-wp.stopCh:
+			log.Info().Msg("Orphaned task cleanup loop stopped (worker pool stopped)")
+			return
+		case <-ticker.C:
+			if err := wp.cleanupOrphanedTasks(ctx); err != nil {
+				// Log but continue - this is a background cleanup process
+				log.Error().Err(err).Msg("Failed to cleanup orphaned tasks")
+			}
+		}
+	}
+}
+
+// cleanupOrphanedTasks processes one failed job with orphaned tasks
+// Uses a separate transaction with no timeout constraint
+func (wp *WorkerPool) cleanupOrphanedTasks(ctx context.Context) error {
+	span := sentry.StartSpan(ctx, "jobs.cleanup_orphaned_tasks")
+	defer span.Finish()
+
+	// Begin a new transaction (not the maintenance transaction)
+	tx, err := wp.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	// Select one failed job with orphaned tasks
+	// Uses EXISTS subquery to avoid DISTINCT (incompatible with FOR UPDATE)
+	// Orders by created_at for deterministic oldest-first processing
+	var targetJobID string
+	var jobErrorMsg sql.NullString
+	err = tx.QueryRowContext(ctx, `
+		SELECT j.id, j.error_message
+		FROM jobs j
+		WHERE j.status = $1
+			AND EXISTS (
+				SELECT 1 FROM tasks t
+				WHERE t.job_id = j.id
+					AND t.status IN ($2, $3)
+			)
+		ORDER BY j.created_at ASC
+		LIMIT 1
+		FOR UPDATE SKIP LOCKED
+	`, JobStatusFailed, TaskStatusPending, TaskStatusWaiting).Scan(&targetJobID, &jobErrorMsg)
+
+	if err == sql.ErrNoRows {
+		// No failed jobs with orphaned tasks - nothing to do
+		return nil
+	} else if err != nil {
+		return fmt.Errorf("failed to select failed job with orphaned tasks: %w", err)
+	}
+
+	// Determine error message to use for orphaned tasks
+	errorMsg := "Job failed"
+	if jobErrorMsg.Valid && jobErrorMsg.String != "" {
+		errorMsg = jobErrorMsg.String
+	}
+
+	cleanupStart := time.Now()
+
+	// Update all orphaned tasks for this job in one go
+	// No batching, no cycle limits - we have no timeout constraint
+	result, err := tx.ExecContext(ctx, `
+		UPDATE tasks
+		SET status = $1,
+			error = $2,
+			completed_at = $3
+		WHERE job_id = $4
+			AND status IN ($5, $6)
+	`, TaskStatusFailed, errorMsg, time.Now().UTC(), targetJobID, TaskStatusPending, TaskStatusWaiting)
+
+	if err != nil {
+		return fmt.Errorf("failed to update orphaned tasks for job %s: %w", targetJobID, err)
+	}
+
+	tasksUpdated, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get affected rows: %w", err)
+	}
+
+	// Commit the transaction
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	cleanupDuration := time.Since(cleanupStart)
+
+	// Log success with metrics
+	log.Info().
+		Str("job_id", targetJobID).
+		Int64("tasks_cleaned", tasksUpdated).
+		Dur("duration_ms", cleanupDuration).
+		Msg("Orphaned task cleanup completed for job")
+
+	span.SetData("job_id", targetJobID)
+	span.SetData("tasks_cleaned", tasksUpdated)
+	span.SetData("duration_ms", cleanupDuration.Milliseconds())
 
 	return nil
 }

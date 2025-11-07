@@ -29,6 +29,25 @@ On merge, CI will:
 
 ## [Unreleased]
 
+## [0.16.13] – 2025-11-07
+
+### Fixed
+
+- **Orphaned Task Cleanup**: Resolved systemic issue where orphaned tasks from
+  failed jobs weren't being cleaned up
+  - Moved cleanup from 60-second maintenance transaction to dedicated goroutine
+    running every 30 seconds
+  - Processes entire jobs at once with no timeout constraint (eliminates O(n²)
+    trigger overhead risk)
+  - Handles jobs with 50,000+ orphaned tasks without timing out
+  - Fixed job selection query: replaced invalid `SELECT DISTINCT` with `EXISTS`
+    subquery (PostgreSQL incompatibility with `ORDER BY` + `FOR UPDATE`)
+  - Fixed CancelJob to mark both 'pending' and 'waiting' tasks as skipped
+    (previously only handled 'pending')
+  - Added comprehensive integration tests covering failed job cleanup, cancelled
+    job exclusion, and incremental processing
+  - Expected impact: Prevents 16,000+ task backlogs from accumulating over weeks
+
 ## [0.16.12] – 2025-11-07
 
 ### Changed

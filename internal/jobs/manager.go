@@ -590,12 +590,12 @@ func (jm *JobManager) CancelJob(ctx context.Context, jobID string) error {
 			return err
 		}
 
-		// Cancel pending tasks
+		// Cancel pending and waiting tasks
 		_, err = tx.ExecContext(ctx, `
 			UPDATE tasks
 			SET status = $1
-			WHERE job_id = $2 AND status = $3
-		`, TaskStatusSkipped, job.ID, TaskStatusPending)
+			WHERE job_id = $2 AND status IN ($3, $4)
+		`, TaskStatusSkipped, job.ID, TaskStatusPending, TaskStatusWaiting)
 
 		return err
 	})
