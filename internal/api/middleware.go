@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"fmt"
 	"net/http"
+	"runtime/debug"
 	"strings"
 	"time"
 
@@ -80,6 +81,9 @@ func LoggingMiddleware(next http.Handler) http.Handler {
 		wrapper := &responseWrapper{
 			ResponseWriter: w,
 			statusCode:     http.StatusOK,
+			requestID:      requestID,
+			requestPath:    r.URL.Path,
+			requestMethod:  r.Method,
 		}
 
 		next.ServeHTTP(wrapper, r)
@@ -102,14 +106,44 @@ func LoggingMiddleware(next http.Handler) http.Handler {
 // responseWrapper wraps http.ResponseWriter to capture status code
 type responseWrapper struct {
 	http.ResponseWriter
-	statusCode  int
-	wroteHeader bool
+	statusCode    int
+	wroteHeader   bool
+	requestID     string
+	requestPath   string
+	requestMethod string
 }
 
 func (rw *responseWrapper) WriteHeader(code int) {
 	if rw.wroteHeader {
+		// Duplicate WriteHeader call detected - log with stack trace
+		// Only capture expensive stack trace if WARN level is enabled
+		evt := log.Warn().
+			Str("request_id", rw.requestID).
+			Str("method", rw.requestMethod).
+			Str("path", rw.requestPath).
+			Int("previous_code", rw.statusCode).
+			Int("attempted_code", code)
+
+		// Conditionally capture stack trace only when this event will be logged
+		if evt.Enabled() {
+			evt = evt.Str("stack_trace", string(debug.Stack()))
+		}
+
+		evt.Msg("DIAGNOSTIC: Blocked duplicate WriteHeader call")
 		return
 	}
+
+	// Log the first WriteHeader call for diagnostic purposes
+	// Only log for non-health-check paths to reduce noise
+	if rw.requestPath != "/health" {
+		log.Debug().
+			Str("request_id", rw.requestID).
+			Str("method", rw.requestMethod).
+			Str("path", rw.requestPath).
+			Int("status_code", code).
+			Msg("DIAGNOSTIC: WriteHeader called")
+	}
+
 	rw.statusCode = code
 	rw.wroteHeader = true
 	rw.ResponseWriter.WriteHeader(code)
