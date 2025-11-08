@@ -29,7 +29,16 @@ On merge, CI will:
 
 ## [Unreleased]
 
-## [0.17.1] – 2025-11-08
+## [0.17.2] – 2025-11-08
+
+- Queue stability improvements:
+  - Added `jobs.pending_tasks` / `jobs.waiting_tasks` counters plus a backfill +
+    trigger to keep them in sync.
+  - `EnqueueURLs` and the idle monitor now read those counters under
+    `FOR UPDATE`, so pending slots are computed accurately without scanning
+    `tasks`.
+  - Worker rebalancer logs aggregated queue depth and demotes overflow pending
+    rows using the counters (no more full-table queries).
 
 ## [0.17.0] – 2025-11-08
 
