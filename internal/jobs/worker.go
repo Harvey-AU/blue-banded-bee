@@ -115,6 +115,10 @@ type WorkerPool struct {
 	jobFailureCounters  map[string]*jobFailureState
 	jobFailureThreshold int
 
+	// Priority update debouncing
+	priorityMutex         sync.Mutex
+	priorityUpdateTracker map[string]*priorityUpdateState
+
 	// Idle worker scaling
 	idleWorkers      map[int]time.Time // workerID -> when they went idle
 	idleWorkersMutex sync.RWMutex
@@ -259,6 +263,57 @@ func (wp *WorkerPool) loadJobInfo(ctx context.Context, jobID string, options *Jo
 	return nil, fmt.Errorf("unexpected job info type for job %s", jobID)
 }
 
+func (wp *WorkerPool) shouldThrottlePriorityUpdate(jobID string, priority float64) (bool, time.Duration) {
+	var cooldown time.Duration
+	var tier string
+
+	switch {
+	case priority >= 0.8:
+		return false, 0
+	case priority >= 0.4:
+		cooldown = 5 * time.Second
+		tier = "medium"
+	default:
+		cooldown = 30 * time.Second
+		tier = "low"
+	}
+
+	now := time.Now()
+
+	wp.priorityMutex.Lock()
+	defer wp.priorityMutex.Unlock()
+
+	state, exists := wp.priorityUpdateTracker[jobID]
+	if !exists {
+		state = &priorityUpdateState{}
+		wp.priorityUpdateTracker[jobID] = state
+	}
+
+	var last time.Time
+	switch tier {
+	case "medium":
+		last = state.lastMedium
+	case "low":
+		last = state.lastLow
+	}
+
+	if !last.IsZero() {
+		elapsed := now.Sub(last)
+		if elapsed < cooldown {
+			return true, cooldown - elapsed
+		}
+	}
+
+	switch tier {
+	case "medium":
+		state.lastMedium = now
+	case "low":
+		state.lastLow = now
+	}
+
+	return false, 0
+}
+
 // JobInfo caches job-specific data that doesn't change during execution
 type JobInfo struct {
 	DomainID           int
@@ -274,6 +329,11 @@ type JobInfo struct {
 type jobFailureState struct {
 	streak    int
 	triggered bool
+}
+
+type priorityUpdateState struct {
+	lastMedium time.Time
+	lastLow    time.Time
 }
 
 func jobFailureThresholdFromEnv() int {
@@ -418,6 +478,8 @@ func NewWorkerPool(sqlDB *sql.DB, dbQueue DbQueueInterface, crawler CrawlerInter
 		// Job failure tracking
 		jobFailureCounters:  make(map[string]*jobFailureState),
 		jobFailureThreshold: failureThreshold,
+
+		priorityUpdateTracker: make(map[string]*priorityUpdateState),
 
 		// Idle worker scaling
 		idleWorkers:   make(map[int]time.Time),
@@ -790,6 +852,10 @@ func (wp *WorkerPool) RemoveJob(jobID string) {
 	wp.jobInfoMutex.Lock()
 	delete(wp.jobInfoCache, jobID)
 	wp.jobInfoMutex.Unlock()
+
+	wp.priorityMutex.Lock()
+	delete(wp.priorityUpdateTracker, jobID)
+	wp.priorityMutex.Unlock()
 
 	wp.jobFailureMutex.Lock()
 	delete(wp.jobFailureCounters, jobID)
@@ -3132,6 +3198,15 @@ func isSameOrSubDomain(hostname, targetDomain string) bool {
 // updateTaskPriorities updates the priority scores for tasks of linked pages
 func (wp *WorkerPool) updateTaskPriorities(ctx context.Context, jobID string, domainID int, newPriority float64, paths []string) error {
 	if len(paths) == 0 {
+		return nil
+	}
+
+	if skip, wait := wp.shouldThrottlePriorityUpdate(jobID, newPriority); skip {
+		log.Debug().
+			Str("job_id", jobID).
+			Float64("priority", newPriority).
+			Dur("cooldown_remaining", wait).
+			Msg("Debounced priority update")
 		return nil
 	}
 
