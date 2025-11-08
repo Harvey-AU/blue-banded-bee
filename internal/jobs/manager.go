@@ -366,6 +366,18 @@ func (jm *JobManager) CreateJob(ctx context.Context, options *JobOptions) (*Job,
 
 	normalisedDomain := util.NormaliseDomain(options.Domain)
 
+	if options.Concurrency <= 0 {
+		defaultConcurrency := fallbackJobConcurrency
+		if jm.workerPool != nil && jm.workerPool.maxWorkers > 0 {
+			defaultConcurrency = jm.workerPool.maxWorkers
+		}
+		log.Info().
+			Str("domain", normalisedDomain).
+			Int("default_concurrency", defaultConcurrency).
+			Msg("Concurrency not specified; using worker pool maximum")
+		options.Concurrency = defaultConcurrency
+	}
+
 	// Handle any existing active jobs for the same domain and user/organisation
 	if err := jm.handleExistingJobs(ctx, normalisedDomain, options.UserID, options.OrganisationID); err != nil {
 		return nil, fmt.Errorf("failed to handle existing jobs: %w", err)

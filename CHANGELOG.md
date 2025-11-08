@@ -29,6 +29,8 @@ On merge, CI will:
 
 ## [Unreleased]
 
+## [0.17.1] – 2025-11-08
+
 ## [0.17.0] – 2025-11-08
 
 Series of minor optimisations to improve throughput and resource usage.
