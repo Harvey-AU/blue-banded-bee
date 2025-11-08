@@ -27,7 +27,9 @@ On merge, CI will:
 4. Create a git tag and GitHub release
 5. Commit the updated changelog
 
-## [Unreleased]
+## [Unreleased:minor]
+
+Series of minor optimisations to improve throughput and resource usage.
 
 ### Changed
 
@@ -38,6 +40,68 @@ On merge, CI will:
   - Leaves 20 connections headroom for admin/monitoring
   - With Supavisor transaction pooling: ~150 MB memory impact (70 logical →
     ~10-15 actual connections)
+
+### Enhanced
+
+- **Task Claim Performance**: Optimised hot path with covering indexes and
+  capacity pre-checks
+  - Added partial indexes on tasks(job_id, priority_score, created_at) and
+    jobs(id) with INCLUDE columns
+  - Pre-check job capacity before expensive claim query (eliminates wasted CTE
+    executions)
+  - Replaced COUNT(\*) concurrency checks with EXISTS queries (faster
+    short-circuit evaluation)
+- **Batch Task Enqueuing**: Improved throughput for bulk task creation
+  - Batch INSERT operations for discovered links and sitemap URLs
+  - Reduced per-task overhead during link discovery phase
+- **Worker Scaling Observability**: Scaling decisions now log their reason,
+  worker deltas, and job counts
+  - Captures `scale_up`, `scale_down`, and `no_change` outcomes with contextual
+    metadata
+  - Emergency/idle scale-down paths surface cooldowns, idle worker counts, and
+    total job concurrency
+- **Waiting Task Telemetry**: Added structured logging + metrics for tasks
+  entering the `waiting` state
+  - Records waiting reason (`concurrency_limit`, `blocking_retry`,
+    `retryable_error`) and per-job counts via OpenTelemetry counter
+  - Worker retries now emit explicit waiting reason logs to correlate backlog
+    with root cause
+- **Job Info Fetching**: Worker pool now deduplicates database lookups for job
+  metadata via singleflight caching
+  - Concurrent AddJob/prepareTask calls share the same DB query for domain info
+  - Cache fallbacks reuse the same loader, eliminating redundant queries under
+    load
+- **Priority Update Debounce**: Prevents redundant sitemap/link priority updates
+  during bursts
+  - High-priority pages still update immediately; mid-tier waits 5s, low-tier
+    30s between updates
+  - Skips DB work when no lower-priority tasks exist or when cooldown is active
+- **Job Info Cache Metrics**: Added hit/miss/invalidation counters and
+  cache-size gauge
+  - Worker pool logs cache hits/misses per job and exposes Grafana-friendly
+    metrics for dashboarding
+
+### Added
+
+- **Load Test Analysis**: Comprehensive documentation of 82-minute 10x load test
+  results
+  - Documented priority update storm, waiting task backlog, worker scaling,
+    cache behaviour, DB transactions
+  - Resource utilisation analysis (Supabase memory/CPU scaling patterns)
+  - Phased optimisation recommendations (immediate, short-term, long-term)
+- **Database Optimisation Research**: Documented query performance bottlenecks
+  and index recommendations
+  - CTE claim query analysis (~53% total time), running_tasks counter contention
+    (~20%), INSERT conflicts (~19%)
+  - Covering index recommendations, batch update strategies, connection pooling
+    guidance
+- **Pages Lookup Index**: Added composite index on `pages(domain_id, path)` to
+  accelerate path lookups during task enqueue and deduplication
+
+### Removed
+
+- **Legacy Load Test Scripts**: Deleted outdated `load-test-simple.sh` and
+  README in favour of generate-test-jobs utility
 
 ## [0.16.13] – 2025-11-07
 
