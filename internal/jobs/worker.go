@@ -127,6 +127,29 @@ func (wp *WorkerPool) ensureDomainLimiter() *DomainLimiter {
 	return wp.domainLimiter
 }
 
+// activeJobCount returns the number of jobs currently tracked by the worker pool.
+func (wp *WorkerPool) activeJobCount() int {
+	wp.jobsMutex.RLock()
+	defer wp.jobsMutex.RUnlock()
+	return len(wp.jobs)
+}
+
+func (wp *WorkerPool) logScalingDecision(decision, reason string, currentWorkers, targetWorkers int, metadata map[string]int) {
+	event := log.Info().
+		Str("decision", decision).
+		Str("reason", reason).
+		Int("current_workers", currentWorkers).
+		Int("target_workers", targetWorkers).
+		Int("max_workers", wp.maxWorkers).
+		Int("active_jobs", wp.activeJobCount())
+
+	for key, value := range metadata {
+		event = event.Int(key, value)
+	}
+
+	event.Msg("Scaling evaluation completed")
+}
+
 // JobInfo caches job-specific data that doesn't change during execution
 type JobInfo struct {
 	DomainID           int
@@ -596,9 +619,18 @@ func (wp *WorkerPool) AddJob(jobID string, options *JobOptions) {
 	currentWorkers := wp.currentWorkers
 	wp.workersMutex.RUnlock()
 
+	decision := "no_change"
+	reason := "capacity_sufficient"
+
 	if targetWorkers > currentWorkers {
 		wp.scaleWorkers(context.Background(), targetWorkers)
+		decision = "scale_up"
+		reason = "job_added"
+	} else if currentWorkers >= wp.maxWorkers {
+		reason = "at_max_workers"
 	}
+
+	wp.logScalingDecision(decision, reason, currentWorkers, targetWorkers, nil)
 
 	log.Debug().
 		Str("job_id", jobID).
@@ -704,11 +736,12 @@ func (wp *WorkerPool) RemoveJob(jobID string) {
 
 	// Simple scaling: remove 5 workers per job + any performance boost, minimum of base count
 	wp.workersMutex.Lock()
+	oldWorkers := wp.currentWorkers
 	targetWorkers := max(wp.currentWorkers-5-jobBoost, wp.baseWorkerCount)
 
 	log.Debug().
 		Str("job_id", jobID).
-		Int("current_workers", wp.currentWorkers).
+		Int("current_workers", oldWorkers).
 		Int("target_workers", targetWorkers).
 		Int("job_boost_removed", jobBoost).
 		Msg("Scaling down worker pool")
@@ -716,6 +749,16 @@ func (wp *WorkerPool) RemoveJob(jobID string) {
 	wp.currentWorkers = targetWorkers
 	// Note: We don't actually stop excess workers, they'll exit on next task completion
 	wp.workersMutex.Unlock()
+
+	decision := "no_change"
+	reason := "base_capacity"
+	if targetWorkers < oldWorkers {
+		decision = "scale_down"
+		reason = "job_removed"
+	}
+	wp.logScalingDecision(decision, reason, oldWorkers, targetWorkers, map[string]int{
+		"job_boost_removed": jobBoost,
+	})
 
 	log.Debug().
 		Str("job_id", jobID).
@@ -1841,6 +1884,10 @@ func (wp *WorkerPool) maybeEmergencyScaleDown() {
 	// Emergency scale-down uses 2s cooldown instead of normal cooldown
 	emergencyCooldown := 2 * time.Second
 	if time.Since(wp.lastScaleDown) < emergencyCooldown {
+		wp.workersMutex.RLock()
+		currentWorkers := wp.currentWorkers
+		wp.workersMutex.RUnlock()
+		wp.logScalingDecision("no_change", "emergency_cooldown_active", currentWorkers, currentWorkers, nil)
 		return
 	}
 
@@ -1865,6 +1912,7 @@ func (wp *WorkerPool) maybeEmergencyScaleDown() {
 
 	// If no jobs active, don't scale down (let normal scaling handle it)
 	if totalConcurrency == 0 {
+		wp.logScalingDecision("no_change", "no_active_jobs", currentWorkers, currentWorkers, nil)
 		return
 	}
 
@@ -1884,6 +1932,9 @@ func (wp *WorkerPool) maybeEmergencyScaleDown() {
 	// Only scale down if we're significantly over-provisioned (more than 20% above optimal)
 	threshold := int(float64(optimalWorkers) * 1.2)
 	if currentWorkers <= threshold {
+		wp.logScalingDecision("no_change", "within_optimal_threshold", currentWorkers, optimalWorkers, map[string]int{
+			"total_concurrency": totalConcurrency,
+		})
 		return
 	}
 
@@ -1893,12 +1944,9 @@ func (wp *WorkerPool) maybeEmergencyScaleDown() {
 	}
 	wp.jobsMutex.RUnlock()
 
-	log.Info().
-		Int("current_workers", currentWorkers).
-		Int("optimal_workers", optimalWorkers).
-		Int("target_workers", optimalWorkers).
-		Int("total_concurrency", totalConcurrency).
-		Msg("Emergency scale-down triggered due to concurrency blocking")
+	wp.logScalingDecision("scale_down", "concurrency_blocked", currentWorkers, optimalWorkers, map[string]int{
+		"total_concurrency": totalConcurrency,
+	})
 
 	wp.scaleDownWorkers(optimalWorkers)
 }
@@ -1920,11 +1968,17 @@ func (wp *WorkerPool) maybeScaleDown() {
 
 	// Not all workers are idle
 	if idleCount < currentWorkers {
+		wp.logScalingDecision("no_change", "workers_still_active", currentWorkers, currentWorkers, map[string]int{
+			"idle_workers": idleCount,
+		})
 		return
 	}
 
 	// Check cooldown
 	if time.Since(wp.lastScaleDown) < wp.scaleCooldown {
+		wp.logScalingDecision("no_change", "scale_cooldown_active", currentWorkers, currentWorkers, map[string]int{
+			"idle_workers": idleCount,
+		})
 		return
 	}
 
@@ -1954,9 +2008,17 @@ func (wp *WorkerPool) maybeScaleDown() {
 
 	// Only scale down if target is less than current
 	if target >= currentWorkers {
+		wp.logScalingDecision("no_change", "at_min_capacity", currentWorkers, target, map[string]int{
+			"idle_workers": idleCount,
+			"needed_slots": neededSlots,
+		})
 		return
 	}
 
+	wp.logScalingDecision("scale_down", "idle_capacity", currentWorkers, target, map[string]int{
+		"idle_workers": idleCount,
+		"needed_slots": neededSlots,
+	})
 	wp.scaleDownWorkers(target)
 }
 
