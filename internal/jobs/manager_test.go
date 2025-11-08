@@ -125,6 +125,37 @@ func TestCreateJob(t *testing.T) {
 	assert.Equal(t, 1, count, "Job should exist in database")
 }
 
+func TestCreateJobDefaultsConcurrencyToWorkerPoolMax(t *testing.T) {
+	database := setupTest(t)
+	ctx := context.Background()
+	sqlDB := database.GetDB()
+	dbQueue := db.NewDbQueue(database)
+
+	wp := &WorkerPool{
+		maxWorkers: 12,
+	}
+
+	jm := NewJobManager(sqlDB, dbQueue, nil, wp)
+
+	options := &JobOptions{
+		Domain:      "test-default-concurrency.example.com",
+		Concurrency: 0,
+		FindLinks:   true,
+		MaxPages:    10,
+		UseSitemap:  true,
+	}
+
+	job, err := jm.CreateJob(ctx, options)
+	require.NoError(t, err)
+	require.NotNil(t, job)
+	assert.Equal(t, wp.maxWorkers, job.Concurrency, "Concurrency should default to worker pool max when zero")
+
+	t.Cleanup(func() {
+		_, _ = sqlDB.ExecContext(ctx, "DELETE FROM tasks WHERE job_id = $1", job.ID)
+		_, _ = sqlDB.ExecContext(ctx, "DELETE FROM jobs WHERE id = $1", job.ID)
+	})
+}
+
 func TestCancelJob(t *testing.T) {
 	// Connect to test database
 	database := setupTest(t)
