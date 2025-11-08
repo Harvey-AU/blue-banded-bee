@@ -25,15 +25,19 @@ import (
 	"github.com/Harvey-AU/blue-banded-bee/internal/util"
 	"github.com/getsentry/sentry-go"
 	"github.com/jackc/pgx/v5"
+	"github.com/lib/pq"
 	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
+	"golang.org/x/sync/singleflight"
 )
 
 const (
 	taskProcessingTimeout      = 2 * time.Minute
 	poolSaturationBackoff      = 2 * time.Second
 	defaultJobFailureThreshold = 20
+	defaultRunningTaskBatch    = 4
+	defaultRunningTaskFlush    = 50 * time.Millisecond
 
 	// concurrencyBufferFactor controls the headroom applied when converting
 	// job-level concurrency into worker capacity so we keep a small cushion
@@ -48,6 +52,16 @@ const (
 	// concurrencyBlockCooldown defines the window in which we consider a job
 	// recently concurrency-blocked for the purposes of suppressing scale ups.
 	concurrencyBlockCooldown = 30 * time.Second
+)
+
+type WaitingReason string
+
+const (
+	waitingReasonDomainDelay    WaitingReason = "domain_delay"
+	waitingReasonWorkerCapacity WaitingReason = "worker_capacity"
+	waitingReasonConcurrencyCap WaitingReason = "concurrency_limit"
+	waitingReasonBlockingRetry  WaitingReason = "blocking_retry"
+	waitingReasonRetryableError WaitingReason = "retryable_error"
 )
 
 // JobPerformance tracks performance metrics for a specific job
@@ -94,11 +108,16 @@ type WorkerPool struct {
 	// Job info cache to avoid repeated DB lookups
 	jobInfoCache map[string]*JobInfo
 	jobInfoMutex sync.RWMutex
+	jobInfoGroup singleflight.Group
 
 	// Job failure tracking
 	jobFailureMutex     sync.Mutex
 	jobFailureCounters  map[string]*jobFailureState
 	jobFailureThreshold int
+
+	// Priority update debouncing
+	priorityMutex         sync.Mutex
+	priorityUpdateTracker map[string]*priorityUpdateState
 
 	// Idle worker scaling
 	idleWorkers      map[int]time.Time // workerID -> when they went idle
@@ -109,6 +128,13 @@ type WorkerPool struct {
 
 	// Health probe
 	probeInterval time.Duration // from BBB_HEALTH_PROBE_INTERVAL_SECONDS (default 0 = disabled)
+
+	// Running task release batching
+	runningTaskReleaseCh            chan string
+	runningTaskReleaseBatchSize     int
+	runningTaskReleaseFlushInterval time.Duration
+	runningTaskReleaseMu            sync.Mutex
+	runningTaskReleasePending       map[string]int
 }
 
 func (wp *WorkerPool) ensureDomainLimiter() *DomainLimiter {
@@ -116,6 +142,187 @@ func (wp *WorkerPool) ensureDomainLimiter() *DomainLimiter {
 		wp.domainLimiter = newDomainLimiter(wp.dbQueue)
 	}
 	return wp.domainLimiter
+}
+
+// activeJobCount returns the number of jobs currently tracked by the worker pool.
+func (wp *WorkerPool) activeJobCount() int {
+	wp.jobsMutex.RLock()
+	defer wp.jobsMutex.RUnlock()
+	return len(wp.jobs)
+}
+
+func (wp *WorkerPool) logScalingDecision(decision, reason string, currentWorkers, targetWorkers int, metadata map[string]int) {
+	event := log.Info().
+		Str("decision", decision).
+		Str("reason", reason).
+		Int("current_workers", currentWorkers).
+		Int("target_workers", targetWorkers).
+		Int("max_workers", wp.maxWorkers).
+		Int("active_jobs", wp.activeJobCount())
+
+	for key, value := range metadata {
+		event = event.Int(key, value)
+	}
+
+	event.Msg("Scaling evaluation completed")
+}
+
+func (wp *WorkerPool) recordWaitingTask(ctx context.Context, task *db.Task, reason WaitingReason) {
+	if task == nil {
+		return
+	}
+
+	observability.RecordTaskWaiting(ctx, task.JobID, string(reason), 1)
+
+	log.Info().
+		Str("task_id", task.ID).
+		Str("job_id", task.JobID).
+		Str("waiting_reason", string(reason)).
+		Msg("Task transitioned to waiting state")
+}
+
+func (wp *WorkerPool) fetchJobInfoFromDB(ctx context.Context, jobID string) (*JobInfo, error) {
+	var (
+		domainID      int
+		domainName    string
+		crawlDelay    sql.NullInt64
+		adaptiveDelay sql.NullInt64
+		adaptiveFloor sql.NullInt64
+		findLinks     bool
+		concurrency   int
+	)
+
+	err := wp.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
+		return tx.QueryRowContext(ctx, `
+			SELECT d.id, d.name, d.crawl_delay_seconds, d.adaptive_delay_seconds, d.adaptive_delay_floor_seconds,
+			       j.find_links, j.concurrency
+			FROM domains d
+			JOIN jobs j ON j.domain_id = d.id
+			WHERE j.id = $1
+		`, jobID).Scan(&domainID, &domainName, &crawlDelay, &adaptiveDelay, &adaptiveFloor, &findLinks, &concurrency)
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	info := &JobInfo{
+		DomainID:    domainID,
+		DomainName:  domainName,
+		FindLinks:   findLinks,
+		Concurrency: concurrency,
+	}
+	if crawlDelay.Valid {
+		info.CrawlDelay = int(crawlDelay.Int64)
+	}
+	if adaptiveDelay.Valid {
+		info.AdaptiveDelay = int(adaptiveDelay.Int64)
+	}
+	if adaptiveFloor.Valid {
+		info.AdaptiveDelayFloor = int(adaptiveFloor.Int64)
+	}
+
+	return info, nil
+}
+
+func (wp *WorkerPool) loadJobInfo(ctx context.Context, jobID string, options *JobOptions) (*JobInfo, error) {
+	wp.jobInfoMutex.RLock()
+	if info, exists := wp.jobInfoCache[jobID]; exists {
+		wp.jobInfoMutex.RUnlock()
+		observability.RecordJobInfoCacheHit(ctx, jobID)
+		return info, nil
+	}
+	wp.jobInfoMutex.RUnlock()
+
+	observability.RecordJobInfoCacheMiss(ctx, jobID)
+
+	val, err, _ := wp.jobInfoGroup.Do(jobID, func() (interface{}, error) {
+		info, fetchErr := wp.fetchJobInfoFromDB(ctx, jobID)
+		if fetchErr != nil {
+			return nil, fetchErr
+		}
+
+		if options != nil {
+			info.FindLinks = options.FindLinks
+			if options.Concurrency > 0 {
+				info.Concurrency = options.Concurrency
+			}
+		}
+
+		wp.jobInfoMutex.Lock()
+		wp.jobInfoCache[jobID] = info
+		wp.jobInfoMutex.Unlock()
+		wp.recordJobInfoCacheSize(ctx)
+
+		return info, nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	if info, ok := val.(*JobInfo); ok {
+		return info, nil
+	}
+
+	return nil, fmt.Errorf("unexpected job info type for job %s", jobID)
+}
+
+func (wp *WorkerPool) shouldThrottlePriorityUpdate(jobID string, priority float64) (bool, time.Duration) {
+	var cooldown time.Duration
+	var tier string
+
+	switch {
+	case priority >= 0.8:
+		return false, 0
+	case priority >= 0.4:
+		cooldown = 5 * time.Second
+		tier = "medium"
+	default:
+		cooldown = 30 * time.Second
+		tier = "low"
+	}
+
+	now := time.Now()
+
+	wp.priorityMutex.Lock()
+	defer wp.priorityMutex.Unlock()
+
+	state, exists := wp.priorityUpdateTracker[jobID]
+	if !exists {
+		state = &priorityUpdateState{}
+		wp.priorityUpdateTracker[jobID] = state
+	}
+
+	var last time.Time
+	switch tier {
+	case "medium":
+		last = state.lastMedium
+	case "low":
+		last = state.lastLow
+	}
+
+	if !last.IsZero() {
+		elapsed := now.Sub(last)
+		if elapsed < cooldown {
+			return true, cooldown - elapsed
+		}
+	}
+
+	switch tier {
+	case "medium":
+		state.lastMedium = now
+	case "low":
+		state.lastLow = now
+	}
+
+	return false, 0
+}
+
+func (wp *WorkerPool) recordJobInfoCacheSize(ctx context.Context) {
+	wp.jobInfoMutex.RLock()
+	size := len(wp.jobInfoCache)
+	wp.jobInfoMutex.RUnlock()
+	observability.RecordJobInfoCacheSize(ctx, size)
 }
 
 // JobInfo caches job-specific data that doesn't change during execution
@@ -133,6 +340,11 @@ type JobInfo struct {
 type jobFailureState struct {
 	streak    int
 	triggered bool
+}
+
+type priorityUpdateState struct {
+	lastMedium time.Time
+	lastLow    time.Time
 }
 
 func jobFailureThresholdFromEnv() int {
@@ -170,6 +382,24 @@ func probeIntervalFromEnv() time.Duration {
 		}
 	}
 	return 0 // Default disabled
+}
+
+func runningTaskBatchSizeFromEnv() int {
+	if raw := strings.TrimSpace(os.Getenv("BBB_RUNNING_TASK_BATCH_SIZE")); raw != "" {
+		if parsed, err := strconv.Atoi(raw); err == nil && parsed >= 1 {
+			return parsed
+		}
+	}
+	return defaultRunningTaskBatch
+}
+
+func runningTaskFlushIntervalFromEnv() time.Duration {
+	if raw := strings.TrimSpace(os.Getenv("BBB_RUNNING_TASK_FLUSH_INTERVAL_MS")); raw != "" {
+		if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 {
+			return time.Duration(parsed) * time.Millisecond
+		}
+	}
+	return defaultRunningTaskFlush
 }
 
 func NewWorkerPool(sqlDB *sql.DB, dbQueue DbQueueInterface, crawler CrawlerInterface, numWorkers int, workerConcurrency int, dbConfig *db.Config) *WorkerPool {
@@ -220,6 +450,12 @@ func NewWorkerPool(sqlDB *sql.DB, dbQueue DbQueueInterface, crawler CrawlerInter
 	idleThreshold := idleThresholdFromEnv()
 	scaleCooldown := scaleCooldownFromEnv()
 	probeInterval := probeIntervalFromEnv()
+	runningTaskBatchSize := runningTaskBatchSizeFromEnv()
+	runningTaskFlushInterval := runningTaskFlushIntervalFromEnv()
+	runningTaskBuffer := numWorkers * workerConcurrency * 2
+	if runningTaskBuffer < 64 {
+		runningTaskBuffer = 64
+	}
 
 	wp := &WorkerPool{
 		db:              sqlDB,
@@ -254,6 +490,8 @@ func NewWorkerPool(sqlDB *sql.DB, dbQueue DbQueueInterface, crawler CrawlerInter
 		jobFailureCounters:  make(map[string]*jobFailureState),
 		jobFailureThreshold: failureThreshold,
 
+		priorityUpdateTracker: make(map[string]*priorityUpdateState),
+
 		// Idle worker scaling
 		idleWorkers:   make(map[int]time.Time),
 		idleThreshold: idleThreshold,
@@ -261,6 +499,12 @@ func NewWorkerPool(sqlDB *sql.DB, dbQueue DbQueueInterface, crawler CrawlerInter
 
 		// Health probe
 		probeInterval: probeInterval,
+
+		// Running task release batching
+		runningTaskReleaseCh:            make(chan string, runningTaskBuffer),
+		runningTaskReleaseBatchSize:     runningTaskBatchSize,
+		runningTaskReleaseFlushInterval: runningTaskFlushInterval,
+		runningTaskReleasePending:       make(map[string]int),
 	}
 
 	// Start the notification listener when we have connection details available.
@@ -320,6 +564,7 @@ func (wp *WorkerPool) Start(ctx context.Context) {
 
 	wp.StartTaskMonitor(ctx)
 	wp.StartCleanupMonitor(ctx)
+	wp.startRunningTaskReleaseLoop(ctx)
 
 	// Start orphaned task cleanup loop
 	wp.wg.Add(1)
@@ -335,6 +580,7 @@ func (wp *WorkerPool) Stop() {
 		log.Debug().Msg("Stopping worker pool")
 		close(wp.stopCh)
 		wp.wg.Wait()
+		wp.flushRunningTaskReleases(context.Background())
 		// Stop batch manager to flush remaining updates
 		if wp.batchManager != nil {
 			wp.batchManager.Stop()
@@ -468,78 +714,30 @@ func (wp *WorkerPool) AddJob(jobID string, options *JobOptions) {
 
 	// Cache job info to avoid repeated database lookups
 	ctx := context.Background()
-	var domainName string
-	var crawlDelay sql.NullInt64
-	var dbFindLinks bool
-
-	// When options is nil (recovery mode), fetch find_links from DB
-	// Otherwise use the provided options value
-	var domainID int
-	var adaptiveDelay sql.NullInt64
-	var adaptiveFloor sql.NullInt64
-	var dbConcurrency int
-	err := wp.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
-		query := `
-			SELECT d.id, d.name, d.crawl_delay_seconds, d.adaptive_delay_seconds, d.adaptive_delay_floor_seconds, j.find_links, j.concurrency
-			FROM domains d
-			JOIN jobs j ON j.domain_id = d.id
-			WHERE j.id = $1
-		`
-		return tx.QueryRowContext(ctx, query, jobID).Scan(&domainID, &domainName, &crawlDelay, &adaptiveDelay, &adaptiveFloor, &dbFindLinks, &dbConcurrency)
-	})
+	jobInfo, err := wp.loadJobInfo(ctx, jobID, options)
 
 	if err == nil {
-		// Use DB value when options is nil (recovery), otherwise use provided value
-		findLinks := dbFindLinks
-		if options != nil {
-			findLinks = options.FindLinks
-		}
-		concurrency := dbConcurrency
-		if options != nil && options.Concurrency > 0 {
-			concurrency = options.Concurrency
-		}
-
-		jobInfo := &JobInfo{
-			DomainID:    domainID,
-			DomainName:  domainName,
-			FindLinks:   findLinks,
-			CrawlDelay:  0,
-			Concurrency: concurrency,
-		}
-		if crawlDelay.Valid {
-			jobInfo.CrawlDelay = int(crawlDelay.Int64)
-		}
-		if adaptiveDelay.Valid {
-			jobInfo.AdaptiveDelay = int(adaptiveDelay.Int64)
-		}
-		if adaptiveFloor.Valid {
-			jobInfo.AdaptiveDelayFloor = int(adaptiveFloor.Int64)
-		}
-		wp.ensureDomainLimiter().Seed(domainName, jobInfo.CrawlDelay, jobInfo.AdaptiveDelay, jobInfo.AdaptiveDelayFloor)
+		wp.ensureDomainLimiter().Seed(jobInfo.DomainName, jobInfo.CrawlDelay, jobInfo.AdaptiveDelay, jobInfo.AdaptiveDelayFloor)
 
 		// Parse robots.txt to get filtering rules
-		robotsRules, err := crawler.ParseRobotsTxt(ctx, domainName, wp.crawler.GetUserAgent())
+		robotsRules, err := crawler.ParseRobotsTxt(ctx, jobInfo.DomainName, wp.crawler.GetUserAgent())
 		if err != nil {
 			log.Debug().
 				Err(err).
-				Str("domain", domainName).
+				Str("domain", jobInfo.DomainName).
 				Msg("Failed to parse robots.txt, proceeding without restrictions")
 			// Only capture to Sentry if it's not a 404 (which is normal)
 			if !strings.Contains(err.Error(), "404") {
-				sentry.CaptureMessage(fmt.Sprintf("Failed to parse robots.txt for %s: %v", domainName, err))
+				sentry.CaptureMessage(fmt.Sprintf("Failed to parse robots.txt for %s: %v", jobInfo.DomainName, err))
 			}
 			jobInfo.RobotsRules = &crawler.RobotsRules{} // Empty rules = no restrictions
 		} else {
 			jobInfo.RobotsRules = robotsRules
 		}
 
-		wp.jobInfoMutex.Lock()
-		wp.jobInfoCache[jobID] = jobInfo
-		wp.jobInfoMutex.Unlock()
-
 		log.Trace().
 			Str("job_id", jobID).
-			Str("domain", domainName).
+			Str("domain", jobInfo.DomainName).
 			Int("crawl_delay", jobInfo.CrawlDelay).
 			Int("concurrency", jobInfo.Concurrency).
 			Int("disallow_patterns", len(jobInfo.RobotsRules.DisallowPatterns)).
@@ -555,9 +753,18 @@ func (wp *WorkerPool) AddJob(jobID string, options *JobOptions) {
 	currentWorkers := wp.currentWorkers
 	wp.workersMutex.RUnlock()
 
+	decision := "no_change"
+	reason := "capacity_sufficient"
+
 	if targetWorkers > currentWorkers {
 		wp.scaleWorkers(context.Background(), targetWorkers)
+		decision = "scale_up"
+		reason = "job_added"
+	} else if currentWorkers >= wp.maxWorkers {
+		reason = "at_max_workers"
 	}
+
+	wp.logScalingDecision(decision, reason, currentWorkers, targetWorkers, nil)
 
 	log.Debug().
 		Str("job_id", jobID).
@@ -656,6 +863,12 @@ func (wp *WorkerPool) RemoveJob(jobID string) {
 	wp.jobInfoMutex.Lock()
 	delete(wp.jobInfoCache, jobID)
 	wp.jobInfoMutex.Unlock()
+	observability.RecordJobInfoCacheInvalidation(context.Background(), jobID, "job_removed")
+	wp.recordJobInfoCacheSize(context.Background())
+
+	wp.priorityMutex.Lock()
+	delete(wp.priorityUpdateTracker, jobID)
+	wp.priorityMutex.Unlock()
 
 	wp.jobFailureMutex.Lock()
 	delete(wp.jobFailureCounters, jobID)
@@ -663,11 +876,12 @@ func (wp *WorkerPool) RemoveJob(jobID string) {
 
 	// Simple scaling: remove 5 workers per job + any performance boost, minimum of base count
 	wp.workersMutex.Lock()
+	oldWorkers := wp.currentWorkers
 	targetWorkers := max(wp.currentWorkers-5-jobBoost, wp.baseWorkerCount)
 
 	log.Debug().
 		Str("job_id", jobID).
-		Int("current_workers", wp.currentWorkers).
+		Int("current_workers", oldWorkers).
 		Int("target_workers", targetWorkers).
 		Int("job_boost_removed", jobBoost).
 		Msg("Scaling down worker pool")
@@ -675,6 +889,16 @@ func (wp *WorkerPool) RemoveJob(jobID string) {
 	wp.currentWorkers = targetWorkers
 	// Note: We don't actually stop excess workers, they'll exit on next task completion
 	wp.workersMutex.Unlock()
+
+	decision := "no_change"
+	reason := "base_capacity"
+	if targetWorkers < oldWorkers {
+		decision = "scale_down"
+		reason = "job_removed"
+	}
+	wp.logScalingDecision(decision, reason, oldWorkers, targetWorkers, map[string]int{
+		"job_boost_removed": jobBoost,
+	})
 
 	log.Debug().
 		Str("job_id", jobID).
@@ -1067,39 +1291,18 @@ func (wp *WorkerPool) prepareTaskForProcessing(ctx context.Context, task *db.Tas
 		// Fallback to database if not in cache (shouldn't happen normally)
 		log.Warn().Str("job_id", task.JobID).Msg("Job info not in cache, querying database")
 
-		var domainID int
-		var domainName string
-		var findLinks bool
-		var crawlDelay sql.NullInt64
-		var adaptiveDelay sql.NullInt64
-		var adaptiveFloor sql.NullInt64
-		var concurrency int
-		err := wp.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
-			return tx.QueryRowContext(ctx, `
-				SELECT d.id, d.name, j.find_links, d.crawl_delay_seconds, d.adaptive_delay_seconds, d.adaptive_delay_floor_seconds, j.concurrency
-				FROM domains d
-				JOIN jobs j ON j.domain_id = d.id
-				WHERE j.id = $1
-			`, task.JobID).Scan(&domainID, &domainName, &findLinks, &crawlDelay, &adaptiveDelay, &adaptiveFloor, &concurrency)
-		})
-
+		info, err := wp.loadJobInfo(ctx, task.JobID, nil)
 		if err != nil {
 			log.Error().Err(err).Str("job_id", task.JobID).Msg("Failed to get domain info")
 		} else {
-			jobsTask.DomainID = domainID
-			jobsTask.DomainName = domainName
-			jobsTask.FindLinks = findLinks
-			if crawlDelay.Valid {
-				jobsTask.CrawlDelay = int(crawlDelay.Int64)
-			}
-			jobsTask.JobConcurrency = concurrency
-			if adaptiveDelay.Valid {
-				jobsTask.AdaptiveDelay = int(adaptiveDelay.Int64)
-			}
-			if adaptiveFloor.Valid {
-				jobsTask.AdaptiveDelayFloor = int(adaptiveFloor.Int64)
-			}
-			wp.ensureDomainLimiter().Seed(domainName, jobsTask.CrawlDelay, jobsTask.AdaptiveDelay, jobsTask.AdaptiveDelayFloor)
+			jobsTask.DomainID = info.DomainID
+			jobsTask.DomainName = info.DomainName
+			jobsTask.FindLinks = info.FindLinks
+			jobsTask.CrawlDelay = info.CrawlDelay
+			jobsTask.JobConcurrency = info.Concurrency
+			jobsTask.AdaptiveDelay = info.AdaptiveDelay
+			jobsTask.AdaptiveDelayFloor = info.AdaptiveDelayFloor
+			wp.ensureDomainLimiter().Seed(info.DomainName, info.CrawlDelay, info.AdaptiveDelay, info.AdaptiveDelayFloor)
 		}
 	}
 	if jobsTask.JobConcurrency <= 0 {
@@ -1800,6 +2003,10 @@ func (wp *WorkerPool) maybeEmergencyScaleDown() {
 	// Emergency scale-down uses 2s cooldown instead of normal cooldown
 	emergencyCooldown := 2 * time.Second
 	if time.Since(wp.lastScaleDown) < emergencyCooldown {
+		wp.workersMutex.RLock()
+		currentWorkers := wp.currentWorkers
+		wp.workersMutex.RUnlock()
+		wp.logScalingDecision("no_change", "emergency_cooldown_active", currentWorkers, currentWorkers, nil)
 		return
 	}
 
@@ -1824,6 +2031,7 @@ func (wp *WorkerPool) maybeEmergencyScaleDown() {
 
 	// If no jobs active, don't scale down (let normal scaling handle it)
 	if totalConcurrency == 0 {
+		wp.logScalingDecision("no_change", "no_active_jobs", currentWorkers, currentWorkers, nil)
 		return
 	}
 
@@ -1843,6 +2051,9 @@ func (wp *WorkerPool) maybeEmergencyScaleDown() {
 	// Only scale down if we're significantly over-provisioned (more than 20% above optimal)
 	threshold := int(float64(optimalWorkers) * 1.2)
 	if currentWorkers <= threshold {
+		wp.logScalingDecision("no_change", "within_optimal_threshold", currentWorkers, optimalWorkers, map[string]int{
+			"total_concurrency": totalConcurrency,
+		})
 		return
 	}
 
@@ -1852,12 +2063,9 @@ func (wp *WorkerPool) maybeEmergencyScaleDown() {
 	}
 	wp.jobsMutex.RUnlock()
 
-	log.Info().
-		Int("current_workers", currentWorkers).
-		Int("optimal_workers", optimalWorkers).
-		Int("target_workers", optimalWorkers).
-		Int("total_concurrency", totalConcurrency).
-		Msg("Emergency scale-down triggered due to concurrency blocking")
+	wp.logScalingDecision("scale_down", "concurrency_blocked", currentWorkers, optimalWorkers, map[string]int{
+		"total_concurrency": totalConcurrency,
+	})
 
 	wp.scaleDownWorkers(optimalWorkers)
 }
@@ -1879,11 +2087,17 @@ func (wp *WorkerPool) maybeScaleDown() {
 
 	// Not all workers are idle
 	if idleCount < currentWorkers {
+		wp.logScalingDecision("no_change", "workers_still_active", currentWorkers, currentWorkers, map[string]int{
+			"idle_workers": idleCount,
+		})
 		return
 	}
 
 	// Check cooldown
 	if time.Since(wp.lastScaleDown) < wp.scaleCooldown {
+		wp.logScalingDecision("no_change", "scale_cooldown_active", currentWorkers, currentWorkers, map[string]int{
+			"idle_workers": idleCount,
+		})
 		return
 	}
 
@@ -1913,9 +2127,17 @@ func (wp *WorkerPool) maybeScaleDown() {
 
 	// Only scale down if target is less than current
 	if target >= currentWorkers {
+		wp.logScalingDecision("no_change", "at_min_capacity", currentWorkers, target, map[string]int{
+			"idle_workers": idleCount,
+			"needed_slots": neededSlots,
+		})
 		return
 	}
 
+	wp.logScalingDecision("scale_down", "idle_capacity", currentWorkers, target, map[string]int{
+		"idle_workers": idleCount,
+		"needed_slots": neededSlots,
+	})
 	wp.scaleDownWorkers(target)
 }
 
@@ -2277,6 +2499,126 @@ func (wp *WorkerPool) cleanupOrphanedTasks(ctx context.Context) error {
 	return nil
 }
 
+// startRunningTaskReleaseLoop batches running_tasks decrements to reduce contention.
+func (wp *WorkerPool) startRunningTaskReleaseLoop(ctx context.Context) {
+	if wp.runningTaskReleaseCh == nil {
+		return
+	}
+
+	wp.wg.Add(1)
+	go func() {
+		defer wp.wg.Done()
+
+		interval := wp.runningTaskReleaseFlushInterval
+		if interval <= 0 {
+			interval = defaultRunningTaskFlush
+		}
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				wp.flushRunningTaskReleases(context.Background())
+				return
+			case <-wp.stopCh:
+				wp.flushRunningTaskReleases(context.Background())
+				return
+			case jobID := <-wp.runningTaskReleaseCh:
+				if jobID == "" {
+					continue
+				}
+				count := wp.incrementPendingRunningTaskRelease(jobID)
+				if count >= wp.runningTaskReleaseBatchSize {
+					wp.flushRunningTaskReleaseForJob(ctx, jobID)
+				}
+			case <-ticker.C:
+				wp.flushRunningTaskReleases(ctx)
+			}
+		}
+	}()
+}
+
+func (wp *WorkerPool) incrementPendingRunningTaskRelease(jobID string) int {
+	wp.runningTaskReleaseMu.Lock()
+	defer wp.runningTaskReleaseMu.Unlock()
+	wp.runningTaskReleasePending[jobID]++
+	return wp.runningTaskReleasePending[jobID]
+}
+
+func (wp *WorkerPool) flushRunningTaskReleaseForJob(ctx context.Context, jobID string) {
+	wp.runningTaskReleaseMu.Lock()
+	count := wp.runningTaskReleasePending[jobID]
+	if count > 0 {
+		delete(wp.runningTaskReleasePending, jobID)
+	}
+	wp.runningTaskReleaseMu.Unlock()
+
+	if count > 0 {
+		wp.flushRunningTaskReleaseCount(ctx, jobID, count)
+	}
+}
+
+func (wp *WorkerPool) flushRunningTaskReleases(ctx context.Context) {
+	wp.runningTaskReleaseMu.Lock()
+	if len(wp.runningTaskReleasePending) == 0 {
+		wp.runningTaskReleaseMu.Unlock()
+		return
+	}
+	pending := make(map[string]int, len(wp.runningTaskReleasePending))
+	for jobID, count := range wp.runningTaskReleasePending {
+		pending[jobID] = count
+	}
+	wp.runningTaskReleasePending = make(map[string]int)
+	wp.runningTaskReleaseMu.Unlock()
+
+	for jobID, count := range pending {
+		wp.flushRunningTaskReleaseCount(ctx, jobID, count)
+	}
+}
+
+func (wp *WorkerPool) flushRunningTaskReleaseCount(ctx context.Context, jobID string, count int) {
+	if count <= 0 {
+		return
+	}
+
+	baseCtx := ctx
+	if baseCtx == nil || baseCtx.Err() != nil {
+		baseCtx = context.Background()
+	}
+
+	flushCtx, cancel := context.WithTimeout(baseCtx, 5*time.Second)
+	defer cancel()
+
+	if err := wp.dbQueue.DecrementRunningTasksBy(flushCtx, jobID, count); err != nil {
+		log.Error().
+			Err(err).
+			Str("job_id", jobID).
+			Int("release_count", count).
+			Msg("Failed to release running task slots")
+
+		// Requeue for retry on next tick
+		wp.runningTaskReleaseMu.Lock()
+		wp.runningTaskReleasePending[jobID] += count
+		wp.runningTaskReleaseMu.Unlock()
+	}
+}
+
+func (wp *WorkerPool) releaseRunningTaskSlot(jobID string) error {
+	if jobID == "" {
+		return fmt.Errorf("jobID cannot be empty")
+	}
+
+	select {
+	case wp.runningTaskReleaseCh <- jobID:
+		return nil
+	default:
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		return wp.dbQueue.DecrementRunningTasksBy(ctx, jobID, 1)
+	}
+}
+
 // processTask processes an individual task
 // constructTaskURL builds a proper URL from task path and domain information
 func constructTaskURL(path, domainName string) string {
@@ -2434,6 +2776,7 @@ func (wp *WorkerPool) handleTaskError(ctx context.Context, task *db.Task, taskEr
 			// Route retries through waiting to respect pending queue cap
 			task.Status = string(TaskStatusWaiting)
 			task.StartedAt = time.Time{} // Reset started time
+			wp.recordWaitingTask(ctx, task, waitingReasonBlockingRetry)
 			log.Debug().
 				Err(taskErr).
 				Str("task_id", task.ID).
@@ -2461,6 +2804,7 @@ func (wp *WorkerPool) handleTaskError(ctx context.Context, task *db.Task, taskEr
 		// Route retries through waiting to respect pending queue cap
 		task.Status = string(TaskStatusWaiting)
 		task.StartedAt = time.Time{} // Reset started time
+		wp.recordWaitingTask(ctx, task, waitingReasonRetryableError)
 		log.Debug().
 			Err(taskErr).
 			Str("task_id", task.ID).
@@ -2493,9 +2837,8 @@ func (wp *WorkerPool) handleTaskError(ctx context.Context, task *db.Task, taskEr
 		observability.RecordWorkerTaskFailure(ctx, task.JobID, failureReason)
 	}
 
-	// Immediately decrement running_tasks to free concurrency slot
-	// This allows workers to claim new tasks without waiting for batch flush
-	if err := wp.dbQueue.DecrementRunningTasks(ctx, task.JobID); err != nil {
+	// Immediately queue running_tasks decrement to free concurrency slots
+	if err := wp.releaseRunningTaskSlot(task.JobID); err != nil {
 		log.Error().Err(err).Str("job_id", task.JobID).Str("task_id", task.ID).
 			Msg("Failed to decrement running_tasks counter")
 		// Don't return error - batch update will eventually sync the counter
@@ -2588,9 +2931,8 @@ func (wp *WorkerPool) handleTaskSuccess(ctx context.Context, task *db.Task, resu
 		}
 	}
 
-	// Immediately decrement running_tasks to free concurrency slot
-	// This allows workers to claim new tasks without waiting for batch flush
-	if err := wp.dbQueue.DecrementRunningTasks(ctx, task.JobID); err != nil {
+	// Immediately queue running_tasks decrement to free concurrency slot
+	if err := wp.releaseRunningTaskSlot(task.JobID); err != nil {
 		log.Error().Err(err).Str("job_id", task.JobID).Str("task_id", task.ID).
 			Msg("Failed to decrement running_tasks counter")
 		// Don't return error - batch update will eventually sync the counter
@@ -2872,8 +3214,51 @@ func (wp *WorkerPool) updateTaskPriorities(ctx context.Context, jobID string, do
 		return nil
 	}
 
+	if skip, wait := wp.shouldThrottlePriorityUpdate(jobID, newPriority); skip {
+		log.Debug().
+			Str("job_id", jobID).
+			Float64("priority", newPriority).
+			Dur("cooldown_remaining", wait).
+			Msg("Debounced priority update")
+		return nil
+	}
+
+	uniquePaths := make([]string, 0, len(paths))
+	seen := make(map[string]struct{}, len(paths))
+	for _, p := range paths {
+		if _, exists := seen[p]; exists {
+			continue
+		}
+		seen[p] = struct{}{}
+		uniquePaths = append(uniquePaths, p)
+	}
+
 	var rowsAffected int64
 	err := wp.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
+		var needsUpdate bool
+		checkErr := tx.QueryRowContext(ctx, `
+			SELECT EXISTS (
+				SELECT 1
+				FROM tasks t
+				JOIN pages p ON t.page_id = p.id
+				WHERE t.job_id = $1
+				  AND p.domain_id = $2
+				  AND p.path = ANY($3)
+				  AND t.priority_score < $4
+			)
+		`, jobID, domainID, pq.Array(uniquePaths), newPriority).Scan(&needsUpdate)
+		if checkErr != nil {
+			return checkErr
+		}
+		if !needsUpdate {
+			log.Debug().
+				Str("job_id", jobID).
+				Float64("priority", newPriority).
+				Int("paths", len(uniquePaths)).
+				Msg("Skipped priority update (already at or above target)")
+			return nil
+		}
+
 		// Update all task priorities in a single query
 		result, err := tx.ExecContext(ctx, `
 			UPDATE tasks t
@@ -2884,7 +3269,7 @@ func (wp *WorkerPool) updateTaskPriorities(ctx context.Context, jobID string, do
 			AND p.domain_id = $3
 			AND p.path = ANY($4)
 			AND t.priority_score < $1
-		`, newPriority, jobID, domainID, paths)
+		`, newPriority, jobID, domainID, pq.Array(uniquePaths))
 
 		if err != nil {
 			return err
@@ -2904,6 +3289,12 @@ func (wp *WorkerPool) updateTaskPriorities(ctx context.Context, jobID string, do
 			Int64("tasks_updated", rowsAffected).
 			Float64("new_priority", newPriority).
 			Msg("Updated task priorities for discovered links")
+	} else {
+		log.Debug().
+			Str("job_id", jobID).
+			Float64("priority", newPriority).
+			Int("paths", len(uniquePaths)).
+			Msg("Priority update skipped (no lower-priority tasks found)")
 	}
 
 	return nil

@@ -46,7 +46,7 @@ type Config struct {
 func poolLimitsForEnv(appEnv string) (maxOpen, maxIdle int) {
 	switch appEnv {
 	case "production":
-		return 37, 15
+		return 70, 20
 	case "staging":
 		return 5, 2
 	default:
@@ -294,10 +294,10 @@ func New(config *Config) (*DB, error) {
 		config.SSLMode = "disable"
 	}
 	if config.MaxIdleConns == 0 {
-		// Environment-based idle connection limits (40% of max open)
+		// Environment-based idle connection limits (~30% of max open)
 		switch os.Getenv("APP_ENV") {
 		case "production":
-			config.MaxIdleConns = 13
+			config.MaxIdleConns = 20
 		case "staging":
 			config.MaxIdleConns = 4
 		default:
@@ -308,7 +308,7 @@ func New(config *Config) (*DB, error) {
 		// Environment-based connection limits to prevent pool exhaustion
 		switch os.Getenv("APP_ENV") {
 		case "production":
-			config.MaxOpenConns = 32
+			config.MaxOpenConns = 70
 		case "staging":
 			config.MaxOpenConns = 10
 		default:

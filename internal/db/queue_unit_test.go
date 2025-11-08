@@ -120,17 +120,24 @@ func TestDbQueueGetNextTask(t *testing.T) {
 	fixedTime := time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC)
 
 	tests := []struct {
-		name      string
-		jobID     string
-		setupMock func(sqlmock.Sqlmock)
-		wantTask  bool
-		wantErr   bool
+		name               string
+		jobID              string
+		setupMock          func(sqlmock.Sqlmock)
+		wantTask           bool
+		wantErr            bool
+		wantConcurrencyErr bool
 	}{
 		{
 			name:  "successful task retrieval",
 			jobID: "test-job",
 			setupMock: func(mock sqlmock.Sqlmock) {
 				mock.ExpectBegin()
+
+				capacityRows := sqlmock.NewRows([]string{"status", "running_tasks", "concurrency"}).
+					AddRow("running", 1, 5)
+				mock.ExpectQuery(`(?s)SELECT status, running_tasks, concurrency\s+FROM jobs\s+WHERE id = \$1\s+FOR SHARE`).
+					WithArgs("test-job").
+					WillReturnRows(capacityRows)
 
 				// Expect new complex CTE query with job join and concurrency check
 				rows := sqlmock.NewRows([]string{
@@ -157,6 +164,12 @@ func TestDbQueueGetNextTask(t *testing.T) {
 			jobID: "test-job",
 			setupMock: func(mock sqlmock.Sqlmock) {
 				mock.ExpectBegin()
+
+				capacityRows := sqlmock.NewRows([]string{"status", "running_tasks", "concurrency"}).
+					AddRow("running", 0, 10)
+				mock.ExpectQuery(`(?s)SELECT status, running_tasks, concurrency\s+FROM jobs\s+WHERE id = \$1\s+FOR SHARE`).
+					WithArgs("test-job").
+					WillReturnRows(capacityRows)
 
 				mock.ExpectQuery(`WITH next_task AS \(.*SELECT.*FROM tasks t.*INNER JOIN jobs j.*WHERE.*status = 'pending'.*AND.*job_id.*FOR UPDATE OF t SKIP LOCKED.*\),\s*job_update AS \(.*UPDATE jobs.*running_tasks = running_tasks \+ 1.*\),\s*task_update AS \(.*UPDATE tasks.*JOIN job_update.*\).*SELECT id, job_id.*FROM task_update`).
 					WithArgs(sqlmock.AnyArg(), "test-job").
@@ -192,6 +205,29 @@ func TestDbQueueGetNextTask(t *testing.T) {
 			wantTask: true,
 			wantErr:  false,
 		},
+		{
+			name:  "job at capacity short-circuits before claim",
+			jobID: "blocked-job",
+			setupMock: func(mock sqlmock.Sqlmock) {
+				mock.ExpectBegin()
+
+				capacityRows := sqlmock.NewRows([]string{"status", "running_tasks", "concurrency"}).
+					AddRow("running", 5, 5)
+				mock.ExpectQuery(`(?s)SELECT status, running_tasks, concurrency\s+FROM jobs\s+WHERE id = \$1\s+FOR SHARE`).
+					WithArgs("blocked-job").
+					WillReturnRows(capacityRows)
+
+				waitingRows := sqlmock.NewRows([]string{"exists"}).AddRow(true)
+				mock.ExpectQuery(`(?s)SELECT EXISTS \(.*FROM tasks.*job_id = \$1.*status = 'pending'.*\)`).
+					WithArgs("blocked-job").
+					WillReturnRows(waitingRows)
+
+				mock.ExpectRollback()
+			},
+			wantTask:           false,
+			wantErr:            true,
+			wantConcurrencyErr: true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -218,6 +254,9 @@ func TestDbQueueGetNextTask(t *testing.T) {
 			// Assert
 			if tt.wantErr {
 				assert.Error(t, err)
+				if tt.wantConcurrencyErr {
+					assert.ErrorIs(t, err, ErrConcurrencyBlocked)
+				}
 				assert.Nil(t, task)
 			} else {
 				assert.NoError(t, err)
@@ -375,19 +414,18 @@ func TestDbQueueEnqueueURLs(t *testing.T) {
 					WillReturnRows(sqlmock.NewRows([]string{"max_pages", "concurrency", "running_tasks", "domain_name", "total_count", "pending_count"}).
 						AddRow(0, nil, 0, "example.com", 0, 0))
 
-				// Expect direct Exec (no prepared statement for Supabase pooler compatibility)
 				mock.ExpectExec("INSERT INTO tasks ").
 					WithArgs(
-						sqlmock.AnyArg(), // id
-						"job-1",          // job_id
-						1,                // page_id
-						"/page1",         // path
-						"pending",        // status
-						sqlmock.AnyArg(), // created_at
-						0,                // retry_count
-						"manual",         // source_type
-						"",               // source_url
-						1.0,              // priority_score
+						sqlmock.AnyArg(), // ids array
+						sqlmock.AnyArg(), // job_ids array
+						sqlmock.AnyArg(), // page_ids array
+						sqlmock.AnyArg(), // paths array
+						sqlmock.AnyArg(), // statuses array
+						sqlmock.AnyArg(), // created_at array
+						sqlmock.AnyArg(), // retry_count array
+						sqlmock.AnyArg(), // source_types array
+						sqlmock.AnyArg(), // source_urls array
+						sqlmock.AnyArg(), // priority_scores array
 					).
 					WillReturnResult(sqlmock.NewResult(1, 1))
 
@@ -411,12 +449,19 @@ func TestDbQueueEnqueueURLs(t *testing.T) {
 					WillReturnRows(sqlmock.NewRows([]string{"max_pages", "concurrency", "running_tasks", "domain_name", "total_count", "pending_count"}).
 						AddRow(0, nil, 0, "example.com", 0, 0))
 
-				// Expect three direct execs (no prepared statement for Supabase pooler compatibility)
 				mock.ExpectExec("INSERT INTO tasks ").
-					WillReturnResult(sqlmock.NewResult(1, 1))
-				mock.ExpectExec("INSERT INTO tasks ").
-					WillReturnResult(sqlmock.NewResult(1, 1))
-				mock.ExpectExec("INSERT INTO tasks ").
+					WithArgs(
+						sqlmock.AnyArg(),
+						sqlmock.AnyArg(),
+						sqlmock.AnyArg(),
+						sqlmock.AnyArg(),
+						sqlmock.AnyArg(),
+						sqlmock.AnyArg(),
+						sqlmock.AnyArg(),
+						sqlmock.AnyArg(),
+						sqlmock.AnyArg(),
+						sqlmock.AnyArg(),
+					).
 					WillReturnResult(sqlmock.NewResult(1, 1))
 
 				mock.ExpectCommit()
@@ -446,8 +491,19 @@ func TestDbQueueEnqueueURLs(t *testing.T) {
 					WillReturnRows(sqlmock.NewRows([]string{"max_pages", "concurrency", "running_tasks", "domain_name", "total_count", "pending_count"}).
 						AddRow(0, nil, 0, "example.com", 0, 0))
 
-				// Expect direct Exec (no prepared statement)
 				mock.ExpectExec("INSERT INTO tasks ").
+					WithArgs(
+						sqlmock.AnyArg(),
+						sqlmock.AnyArg(),
+						sqlmock.AnyArg(),
+						sqlmock.AnyArg(),
+						sqlmock.AnyArg(),
+						sqlmock.AnyArg(),
+						sqlmock.AnyArg(),
+						sqlmock.AnyArg(),
+						sqlmock.AnyArg(),
+						sqlmock.AnyArg(),
+					).
 					WillReturnError(errors.New("constraint violation"))
 
 				mock.ExpectRollback()

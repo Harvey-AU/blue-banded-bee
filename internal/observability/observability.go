@@ -64,9 +64,14 @@ var (
 
 	workerTaskRetryCounter   metric.Int64Counter
 	workerTaskFailureCounter metric.Int64Counter
+	workerTaskWaitingCounter metric.Int64Counter
 
 	jobRunningTasksGauge     metric.Int64Gauge
 	jobConcurrencyLimitGauge metric.Int64Gauge
+	jobInfoCacheHitsCounter  metric.Int64Counter
+	jobInfoCacheMissCounter  metric.Int64Counter
+	jobInfoCacheInvalidation metric.Int64Counter
+	jobInfoCacheSizeGauge    metric.Int64Gauge
 
 	dbPoolInUseGauge        metric.Int64Gauge
 	dbPoolIdleGauge         metric.Int64Gauge
@@ -300,6 +305,14 @@ func initWorkerInstruments(meterProvider *sdkmetric.MeterProvider) error {
 		"bee.worker.task.failures_total",
 		metric.WithDescription("Number of permanently failed tasks"),
 	)
+	if err != nil {
+		return err
+	}
+
+	workerTaskWaitingCounter, err = meter.Int64Counter(
+		"bee.worker.task.waiting_total",
+		metric.WithDescription("Number of times tasks enter waiting state"),
+	)
 	return err
 }
 
@@ -322,6 +335,38 @@ func initJobInstruments(meterProvider *sdkmetric.MeterProvider) error {
 	jobConcurrencyLimitGauge, err = meter.Int64Gauge(
 		"bee.jobs.concurrency_limit",
 		metric.WithDescription("Concurrency limit configured for a job (0 indicates unlimited)"),
+	)
+	if err != nil {
+		return err
+	}
+
+	jobInfoCacheHitsCounter, err = meter.Int64Counter(
+		"bee.jobs.cache_hits_total",
+		metric.WithDescription("Job info cache hits"),
+	)
+	if err != nil {
+		return err
+	}
+
+	jobInfoCacheMissCounter, err = meter.Int64Counter(
+		"bee.jobs.cache_misses_total",
+		metric.WithDescription("Job info cache misses"),
+	)
+	if err != nil {
+		return err
+	}
+
+	jobInfoCacheInvalidation, err = meter.Int64Counter(
+		"bee.jobs.cache_invalidations_total",
+		metric.WithDescription("Job info cache invalidations by reason"),
+	)
+	if err != nil {
+		return err
+	}
+
+	jobInfoCacheSizeGauge, err = meter.Int64Gauge(
+		"bee.jobs.cache_size",
+		metric.WithDescription("Current job info cache size"),
 	)
 	return err
 }
@@ -488,6 +533,40 @@ func RecordJobConcurrencySnapshot(ctx context.Context, jobID string, runningTask
 	}
 }
 
+func RecordJobInfoCacheHit(ctx context.Context, jobID string) {
+	if jobInfoCacheHitsCounter == nil {
+		return
+	}
+	jobInfoCacheHitsCounter.Add(ctx, 1,
+		metric.WithAttributes(attribute.String("job.id", jobID)))
+}
+
+func RecordJobInfoCacheMiss(ctx context.Context, jobID string) {
+	if jobInfoCacheMissCounter == nil {
+		return
+	}
+	jobInfoCacheMissCounter.Add(ctx, 1,
+		metric.WithAttributes(attribute.String("job.id", jobID)))
+}
+
+func RecordJobInfoCacheInvalidation(ctx context.Context, jobID, reason string) {
+	if jobInfoCacheInvalidation == nil {
+		return
+	}
+	jobInfoCacheInvalidation.Add(ctx, 1,
+		metric.WithAttributes(
+			attribute.String("job.id", jobID),
+			attribute.String("cache.reason", reason),
+		))
+}
+
+func RecordJobInfoCacheSize(ctx context.Context, size int) {
+	if jobInfoCacheSizeGauge == nil {
+		return
+	}
+	jobInfoCacheSizeGauge.Record(ctx, int64(size))
+}
+
 // DBPoolSnapshot describes a database connection pool state.
 type DBPoolSnapshot struct {
 	InUse        int
@@ -555,6 +634,22 @@ func RecordWorkerTaskFailure(ctx context.Context, jobID string, reason string) {
 				attribute.String("task.failure_reason", reason),
 			))
 	}
+}
+
+// RecordTaskWaiting records when tasks move into the waiting queue along with the reason.
+func RecordTaskWaiting(ctx context.Context, jobID string, reason string, count int) {
+	if workerTaskWaitingCounter == nil || count <= 0 {
+		return
+	}
+
+	attrs := []attribute.KeyValue{
+		attribute.String("task.waiting_reason", reason),
+	}
+	if jobID != "" {
+		attrs = append(attrs, attribute.String("job.id", jobID))
+	}
+
+	workerTaskWaitingCounter.Add(ctx, int64(count), metric.WithAttributes(attrs...))
 }
 
 // RecordDBPoolRejection increments the pool rejection counter when requests are rejected before acquiring a connection.
