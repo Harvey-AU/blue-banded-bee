@@ -29,6 +29,8 @@ On merge, CI will:
 
 ## [Unreleased]
 
+## [0.17.3] – 2025-11-08
+
 ## [0.17.2] – 2025-11-08
 
 - Queue stability improvements:
