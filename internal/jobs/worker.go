@@ -52,6 +52,16 @@ const (
 	concurrencyBlockCooldown = 30 * time.Second
 )
 
+type WaitingReason string
+
+const (
+	waitingReasonDomainDelay    WaitingReason = "domain_delay"
+	waitingReasonWorkerCapacity WaitingReason = "worker_capacity"
+	waitingReasonConcurrencyCap WaitingReason = "concurrency_limit"
+	waitingReasonBlockingRetry  WaitingReason = "blocking_retry"
+	waitingReasonRetryableError WaitingReason = "retryable_error"
+)
+
 // JobPerformance tracks performance metrics for a specific job
 type JobPerformance struct {
 	RecentTasks  []int64   // Last 5 task response times for this job
@@ -148,6 +158,20 @@ func (wp *WorkerPool) logScalingDecision(decision, reason string, currentWorkers
 	}
 
 	event.Msg("Scaling evaluation completed")
+}
+
+func (wp *WorkerPool) recordWaitingTask(ctx context.Context, task *db.Task, reason WaitingReason) {
+	if task == nil {
+		return
+	}
+
+	observability.RecordTaskWaiting(ctx, task.JobID, string(reason), 1)
+
+	log.Info().
+		Str("task_id", task.ID).
+		Str("job_id", task.JobID).
+		Str("waiting_reason", string(reason)).
+		Msg("Task transitioned to waiting state")
 }
 
 // JobInfo caches job-specific data that doesn't change during execution
@@ -2657,6 +2681,7 @@ func (wp *WorkerPool) handleTaskError(ctx context.Context, task *db.Task, taskEr
 			// Route retries through waiting to respect pending queue cap
 			task.Status = string(TaskStatusWaiting)
 			task.StartedAt = time.Time{} // Reset started time
+			wp.recordWaitingTask(ctx, task, waitingReasonBlockingRetry)
 			log.Debug().
 				Err(taskErr).
 				Str("task_id", task.ID).
@@ -2684,6 +2709,7 @@ func (wp *WorkerPool) handleTaskError(ctx context.Context, task *db.Task, taskEr
 		// Route retries through waiting to respect pending queue cap
 		task.Status = string(TaskStatusWaiting)
 		task.StartedAt = time.Time{} // Reset started time
+		wp.recordWaitingTask(ctx, task, waitingReasonRetryableError)
 		log.Debug().
 			Err(taskErr).
 			Str("task_id", task.ID).

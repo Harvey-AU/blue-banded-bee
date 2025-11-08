@@ -64,6 +64,7 @@ var (
 
 	workerTaskRetryCounter   metric.Int64Counter
 	workerTaskFailureCounter metric.Int64Counter
+	workerTaskWaitingCounter metric.Int64Counter
 
 	jobRunningTasksGauge     metric.Int64Gauge
 	jobConcurrencyLimitGauge metric.Int64Gauge
@@ -299,6 +300,14 @@ func initWorkerInstruments(meterProvider *sdkmetric.MeterProvider) error {
 	workerTaskFailureCounter, err = meter.Int64Counter(
 		"bee.worker.task.failures_total",
 		metric.WithDescription("Number of permanently failed tasks"),
+	)
+	if err != nil {
+		return err
+	}
+
+	workerTaskWaitingCounter, err = meter.Int64Counter(
+		"bee.worker.task.waiting_total",
+		metric.WithDescription("Number of times tasks enter waiting state"),
 	)
 	return err
 }
@@ -555,6 +564,22 @@ func RecordWorkerTaskFailure(ctx context.Context, jobID string, reason string) {
 				attribute.String("task.failure_reason", reason),
 			))
 	}
+}
+
+// RecordTaskWaiting records when tasks move into the waiting queue along with the reason.
+func RecordTaskWaiting(ctx context.Context, jobID string, reason string, count int) {
+	if workerTaskWaitingCounter == nil || count <= 0 {
+		return
+	}
+
+	attrs := []attribute.KeyValue{
+		attribute.String("task.waiting_reason", reason),
+	}
+	if jobID != "" {
+		attrs = append(attrs, attribute.String("job.id", jobID))
+	}
+
+	workerTaskWaitingCounter.Add(ctx, int64(count), metric.WithAttributes(attrs...))
 }
 
 // RecordDBPoolRejection increments the pool rejection counter when requests are rejected before acquiring a connection.

@@ -63,6 +63,8 @@ const (
 	defaultTxRetries           = 3
 	defaultRetryBaseDelay      = 200 * time.Millisecond
 	defaultRetryMaxDelay       = 1500 * time.Millisecond
+
+	waitingReasonConcurrencyLimit = "concurrency_limit"
 )
 
 // NewDbQueue creates a PostgreSQL job queue
@@ -1371,6 +1373,7 @@ func (q *DbQueue) EnqueueURLs(ctx context.Context, jobID string, pages []Page, s
 
 		// Log when tasks are placed in waiting status
 		if processedWaiting > 0 {
+			observability.RecordTaskWaiting(ctx, jobID, waitingReasonConcurrencyLimit, processedWaiting)
 			log.Debug().
 				Str("job_id", jobID).
 				Int("waiting_tasks", processedWaiting).
@@ -1379,6 +1382,7 @@ func (q *DbQueue) EnqueueURLs(ctx context.Context, jobID string, pages []Page, s
 				Int("existing_pending", pendingTaskCount).
 				Int("available_slots", availableSlots).
 				Int64("concurrency_limit", concurrency.Int64).
+				Str("waiting_reason", waitingReasonConcurrencyLimit).
 				Msg("Created tasks in waiting status due to job concurrency limit")
 		}
 
