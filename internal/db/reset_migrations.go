@@ -20,6 +20,12 @@ func (db *DB) ResetSchema() error {
 	log.Warn().Msg("Dropping job-related tables, clearing migrations, and rebuilding schema")
 	log.Warn().Msg("Users and organisations will be preserved")
 
+	// Step 0: Terminate active connections that may have locks on tables we need to drop
+	log.Info().Msg("Step 0/4: Terminating active backend connections to release locks")
+	if err := db.terminateActiveConnections(); err != nil {
+		log.Warn().Err(err).Msg("Failed to terminate some connections (continuing anyway)")
+	}
+
 	// Step 1: Drop job-related tables only (preserve users & organisations)
 	log.Info().Msg("Step 1/4: Dropping job-related tables")
 	tables := []string{"tasks", "jobs", "job_share_links", "pages", "domains"}
@@ -268,4 +274,35 @@ func (db *DB) runMigrations() (int, error) {
 	}
 
 	return migrationsApplied, nil
+}
+
+// terminateActiveConnections terminates all backend connections except the current one
+// This releases locks on tables/rows so we can perform DROP TABLE or DELETE operations
+func (db *DB) terminateActiveConnections() error {
+	// Get current backend PID to avoid terminating our own connection
+	var currentPID int
+	err := db.client.QueryRow("SELECT pg_backend_pid()").Scan(&currentPID)
+	if err != nil {
+		return fmt.Errorf("failed to get current backend PID: %w", err)
+	}
+
+	log.Info().Int("current_pid", currentPID).Msg("Current backend PID identified")
+
+	// Terminate all other backend connections
+	result, err := db.client.Exec(`
+		SELECT pg_terminate_backend(pid)
+		FROM pg_stat_activity
+		WHERE pid <> pg_backend_pid()
+		  AND datname = current_database()
+	`)
+	if err != nil {
+		return fmt.Errorf("failed to terminate connections: %w", err)
+	}
+
+	connectionsTerminated, _ := result.RowsAffected()
+	log.Info().
+		Int64("connections_terminated", connectionsTerminated).
+		Msg("Terminated active backend connections")
+
+	return nil
 }

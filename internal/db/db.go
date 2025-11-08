@@ -519,6 +519,12 @@ func (db *DB) ResetDataOnly() error {
 	log.Warn().Msg("=== DATA-ONLY RESET STARTED ===")
 	log.Warn().Msg("Clearing all data from database tables (schema preserved)")
 
+	// Step 0: Terminate active connections that may have locks on rows we need to delete
+	log.Info().Msg("Step 0/2: Terminating active backend connections to release locks")
+	if err := db.terminateActiveConnections(); err != nil {
+		log.Warn().Err(err).Msg("Failed to terminate some connections (continuing anyway)")
+	}
+
 	// Delete data in order that respects foreign key constraints
 	// Start with child tables first, then parent tables
 	tables := []string{"tasks", "jobs", "job_share_links", "pages", "domains"}
