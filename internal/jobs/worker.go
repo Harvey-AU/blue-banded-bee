@@ -25,6 +25,7 @@ import (
 	"github.com/Harvey-AU/blue-banded-bee/internal/util"
 	"github.com/getsentry/sentry-go"
 	"github.com/jackc/pgx/v5"
+	"github.com/lib/pq"
 	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -3134,8 +3135,42 @@ func (wp *WorkerPool) updateTaskPriorities(ctx context.Context, jobID string, do
 		return nil
 	}
 
+	uniquePaths := make([]string, 0, len(paths))
+	seen := make(map[string]struct{}, len(paths))
+	for _, p := range paths {
+		if _, exists := seen[p]; exists {
+			continue
+		}
+		seen[p] = struct{}{}
+		uniquePaths = append(uniquePaths, p)
+	}
+
 	var rowsAffected int64
 	err := wp.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
+		var needsUpdate bool
+		checkErr := tx.QueryRowContext(ctx, `
+			SELECT EXISTS (
+				SELECT 1
+				FROM tasks t
+				JOIN pages p ON t.page_id = p.id
+				WHERE t.job_id = $1
+				  AND p.domain_id = $2
+				  AND p.path = ANY($3)
+				  AND t.priority_score < $4
+			)
+		`, jobID, domainID, pq.Array(uniquePaths), newPriority).Scan(&needsUpdate)
+		if checkErr != nil {
+			return checkErr
+		}
+		if !needsUpdate {
+			log.Debug().
+				Str("job_id", jobID).
+				Float64("priority", newPriority).
+				Int("paths", len(uniquePaths)).
+				Msg("Skipped priority update (already at or above target)")
+			return nil
+		}
+
 		// Update all task priorities in a single query
 		result, err := tx.ExecContext(ctx, `
 			UPDATE tasks t
@@ -3146,7 +3181,7 @@ func (wp *WorkerPool) updateTaskPriorities(ctx context.Context, jobID string, do
 			AND p.domain_id = $3
 			AND p.path = ANY($4)
 			AND t.priority_score < $1
-		`, newPriority, jobID, domainID, paths)
+		`, newPriority, jobID, domainID, pq.Array(uniquePaths))
 
 		if err != nil {
 			return err
@@ -3166,6 +3201,12 @@ func (wp *WorkerPool) updateTaskPriorities(ctx context.Context, jobID string, do
 			Int64("tasks_updated", rowsAffected).
 			Float64("new_priority", newPriority).
 			Msg("Updated task priorities for discovered links")
+	} else {
+		log.Debug().
+			Str("job_id", jobID).
+			Float64("priority", newPriority).
+			Int("paths", len(uniquePaths)).
+			Msg("Priority update skipped (no lower-priority tasks found)")
 	}
 
 	return nil
