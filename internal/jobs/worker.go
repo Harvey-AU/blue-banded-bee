@@ -28,6 +28,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
+	"golang.org/x/sync/singleflight"
 )
 
 const (
@@ -106,6 +107,7 @@ type WorkerPool struct {
 	// Job info cache to avoid repeated DB lookups
 	jobInfoCache map[string]*JobInfo
 	jobInfoMutex sync.RWMutex
+	jobInfoGroup singleflight.Group
 
 	// Job failure tracking
 	jobFailureMutex     sync.Mutex
@@ -172,6 +174,88 @@ func (wp *WorkerPool) recordWaitingTask(ctx context.Context, task *db.Task, reas
 		Str("job_id", task.JobID).
 		Str("waiting_reason", string(reason)).
 		Msg("Task transitioned to waiting state")
+}
+
+func (wp *WorkerPool) fetchJobInfoFromDB(ctx context.Context, jobID string) (*JobInfo, error) {
+	var (
+		domainID      int
+		domainName    string
+		crawlDelay    sql.NullInt64
+		adaptiveDelay sql.NullInt64
+		adaptiveFloor sql.NullInt64
+		findLinks     bool
+		concurrency   int
+	)
+
+	err := wp.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
+		return tx.QueryRowContext(ctx, `
+			SELECT d.id, d.name, d.crawl_delay_seconds, d.adaptive_delay_seconds, d.adaptive_delay_floor_seconds,
+			       j.find_links, j.concurrency
+			FROM domains d
+			JOIN jobs j ON j.domain_id = d.id
+			WHERE j.id = $1
+		`, jobID).Scan(&domainID, &domainName, &crawlDelay, &adaptiveDelay, &adaptiveFloor, &findLinks, &concurrency)
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	info := &JobInfo{
+		DomainID:    domainID,
+		DomainName:  domainName,
+		FindLinks:   findLinks,
+		Concurrency: concurrency,
+	}
+	if crawlDelay.Valid {
+		info.CrawlDelay = int(crawlDelay.Int64)
+	}
+	if adaptiveDelay.Valid {
+		info.AdaptiveDelay = int(adaptiveDelay.Int64)
+	}
+	if adaptiveFloor.Valid {
+		info.AdaptiveDelayFloor = int(adaptiveFloor.Int64)
+	}
+
+	return info, nil
+}
+
+func (wp *WorkerPool) loadJobInfo(ctx context.Context, jobID string, options *JobOptions) (*JobInfo, error) {
+	wp.jobInfoMutex.RLock()
+	if info, exists := wp.jobInfoCache[jobID]; exists {
+		wp.jobInfoMutex.RUnlock()
+		return info, nil
+	}
+	wp.jobInfoMutex.RUnlock()
+
+	val, err, _ := wp.jobInfoGroup.Do(jobID, func() (interface{}, error) {
+		info, fetchErr := wp.fetchJobInfoFromDB(ctx, jobID)
+		if fetchErr != nil {
+			return nil, fetchErr
+		}
+
+		if options != nil {
+			info.FindLinks = options.FindLinks
+			if options.Concurrency > 0 {
+				info.Concurrency = options.Concurrency
+			}
+		}
+
+		wp.jobInfoMutex.Lock()
+		wp.jobInfoCache[jobID] = info
+		wp.jobInfoMutex.Unlock()
+
+		return info, nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	if info, ok := val.(*JobInfo); ok {
+		return info, nil
+	}
+
+	return nil, fmt.Errorf("unexpected job info type for job %s", jobID)
 }
 
 // JobInfo caches job-specific data that doesn't change during execution
@@ -556,78 +640,30 @@ func (wp *WorkerPool) AddJob(jobID string, options *JobOptions) {
 
 	// Cache job info to avoid repeated database lookups
 	ctx := context.Background()
-	var domainName string
-	var crawlDelay sql.NullInt64
-	var dbFindLinks bool
-
-	// When options is nil (recovery mode), fetch find_links from DB
-	// Otherwise use the provided options value
-	var domainID int
-	var adaptiveDelay sql.NullInt64
-	var adaptiveFloor sql.NullInt64
-	var dbConcurrency int
-	err := wp.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
-		query := `
-			SELECT d.id, d.name, d.crawl_delay_seconds, d.adaptive_delay_seconds, d.adaptive_delay_floor_seconds, j.find_links, j.concurrency
-			FROM domains d
-			JOIN jobs j ON j.domain_id = d.id
-			WHERE j.id = $1
-		`
-		return tx.QueryRowContext(ctx, query, jobID).Scan(&domainID, &domainName, &crawlDelay, &adaptiveDelay, &adaptiveFloor, &dbFindLinks, &dbConcurrency)
-	})
+	jobInfo, err := wp.loadJobInfo(ctx, jobID, options)
 
 	if err == nil {
-		// Use DB value when options is nil (recovery), otherwise use provided value
-		findLinks := dbFindLinks
-		if options != nil {
-			findLinks = options.FindLinks
-		}
-		concurrency := dbConcurrency
-		if options != nil && options.Concurrency > 0 {
-			concurrency = options.Concurrency
-		}
-
-		jobInfo := &JobInfo{
-			DomainID:    domainID,
-			DomainName:  domainName,
-			FindLinks:   findLinks,
-			CrawlDelay:  0,
-			Concurrency: concurrency,
-		}
-		if crawlDelay.Valid {
-			jobInfo.CrawlDelay = int(crawlDelay.Int64)
-		}
-		if adaptiveDelay.Valid {
-			jobInfo.AdaptiveDelay = int(adaptiveDelay.Int64)
-		}
-		if adaptiveFloor.Valid {
-			jobInfo.AdaptiveDelayFloor = int(adaptiveFloor.Int64)
-		}
-		wp.ensureDomainLimiter().Seed(domainName, jobInfo.CrawlDelay, jobInfo.AdaptiveDelay, jobInfo.AdaptiveDelayFloor)
+		wp.ensureDomainLimiter().Seed(jobInfo.DomainName, jobInfo.CrawlDelay, jobInfo.AdaptiveDelay, jobInfo.AdaptiveDelayFloor)
 
 		// Parse robots.txt to get filtering rules
-		robotsRules, err := crawler.ParseRobotsTxt(ctx, domainName, wp.crawler.GetUserAgent())
+		robotsRules, err := crawler.ParseRobotsTxt(ctx, jobInfo.DomainName, wp.crawler.GetUserAgent())
 		if err != nil {
 			log.Debug().
 				Err(err).
-				Str("domain", domainName).
+				Str("domain", jobInfo.DomainName).
 				Msg("Failed to parse robots.txt, proceeding without restrictions")
 			// Only capture to Sentry if it's not a 404 (which is normal)
 			if !strings.Contains(err.Error(), "404") {
-				sentry.CaptureMessage(fmt.Sprintf("Failed to parse robots.txt for %s: %v", domainName, err))
+				sentry.CaptureMessage(fmt.Sprintf("Failed to parse robots.txt for %s: %v", jobInfo.DomainName, err))
 			}
 			jobInfo.RobotsRules = &crawler.RobotsRules{} // Empty rules = no restrictions
 		} else {
 			jobInfo.RobotsRules = robotsRules
 		}
 
-		wp.jobInfoMutex.Lock()
-		wp.jobInfoCache[jobID] = jobInfo
-		wp.jobInfoMutex.Unlock()
-
 		log.Trace().
 			Str("job_id", jobID).
-			Str("domain", domainName).
+			Str("domain", jobInfo.DomainName).
 			Int("crawl_delay", jobInfo.CrawlDelay).
 			Int("concurrency", jobInfo.Concurrency).
 			Int("disallow_patterns", len(jobInfo.RobotsRules.DisallowPatterns)).
@@ -1175,39 +1211,18 @@ func (wp *WorkerPool) prepareTaskForProcessing(ctx context.Context, task *db.Tas
 		// Fallback to database if not in cache (shouldn't happen normally)
 		log.Warn().Str("job_id", task.JobID).Msg("Job info not in cache, querying database")
 
-		var domainID int
-		var domainName string
-		var findLinks bool
-		var crawlDelay sql.NullInt64
-		var adaptiveDelay sql.NullInt64
-		var adaptiveFloor sql.NullInt64
-		var concurrency int
-		err := wp.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
-			return tx.QueryRowContext(ctx, `
-				SELECT d.id, d.name, j.find_links, d.crawl_delay_seconds, d.adaptive_delay_seconds, d.adaptive_delay_floor_seconds, j.concurrency
-				FROM domains d
-				JOIN jobs j ON j.domain_id = d.id
-				WHERE j.id = $1
-			`, task.JobID).Scan(&domainID, &domainName, &findLinks, &crawlDelay, &adaptiveDelay, &adaptiveFloor, &concurrency)
-		})
-
+		info, err := wp.loadJobInfo(ctx, task.JobID, nil)
 		if err != nil {
 			log.Error().Err(err).Str("job_id", task.JobID).Msg("Failed to get domain info")
 		} else {
-			jobsTask.DomainID = domainID
-			jobsTask.DomainName = domainName
-			jobsTask.FindLinks = findLinks
-			if crawlDelay.Valid {
-				jobsTask.CrawlDelay = int(crawlDelay.Int64)
-			}
-			jobsTask.JobConcurrency = concurrency
-			if adaptiveDelay.Valid {
-				jobsTask.AdaptiveDelay = int(adaptiveDelay.Int64)
-			}
-			if adaptiveFloor.Valid {
-				jobsTask.AdaptiveDelayFloor = int(adaptiveFloor.Int64)
-			}
-			wp.ensureDomainLimiter().Seed(domainName, jobsTask.CrawlDelay, jobsTask.AdaptiveDelay, jobsTask.AdaptiveDelayFloor)
+			jobsTask.DomainID = info.DomainID
+			jobsTask.DomainName = info.DomainName
+			jobsTask.FindLinks = info.FindLinks
+			jobsTask.CrawlDelay = info.CrawlDelay
+			jobsTask.JobConcurrency = info.Concurrency
+			jobsTask.AdaptiveDelay = info.AdaptiveDelay
+			jobsTask.AdaptiveDelayFloor = info.AdaptiveDelayFloor
+			wp.ensureDomainLimiter().Seed(info.DomainName, info.CrawlDelay, info.AdaptiveDelay, info.AdaptiveDelayFloor)
 		}
 	}
 	if jobsTask.JobConcurrency <= 0 {
