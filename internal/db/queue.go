@@ -1035,31 +1035,20 @@ func (q *DbQueue) GetNextTask(ctx context.Context, jobID string) (*Task, error) 
 				metricsJobID = "__all__"
 			}
 
-			// Check if we have pending tasks but they're blocked by concurrency limits
-			// This helps distinguish "no work" from "work exists but job is at capacity"
-			var blockedCount int
-			checkQuery := `
-				SELECT COUNT(*)
-				FROM tasks t
-				INNER JOIN jobs j ON t.job_id = j.id
-				WHERE t.status = 'pending'
-				AND j.status = 'running'
-				AND j.concurrency IS NOT NULL
-				AND j.concurrency > 0
-				AND j.running_tasks >= j.concurrency
-			`
-			checkArgs := []interface{}{}
-			if jobID != "" {
-				checkQuery += " AND t.job_id = $1"
-				checkArgs = append(checkArgs, jobID)
-			}
-
-			_ = tx.QueryRowContext(ctx, checkQuery, checkArgs...).Scan(&blockedCount)
-
-			if blockedCount > 0 {
+			if jobID == "" {
+				hasBlocked := q.hasAnyConcurrencyBlockedTasks(ctx, tx)
+				if hasBlocked {
+					log.Debug().
+						Str("job_id", jobID).
+						Dur("query_duration", elapsed).
+						Int("attempt", attemptCount).
+						Msg("Tasks available but blocked by job concurrency limit")
+					observability.RecordTaskClaimAttempt(ctx, metricsJobID, elapsed, "concurrency_blocked")
+					return ErrConcurrencyBlocked
+				}
+			} else if q.jobHasConcurrencyBlockedTasks(ctx, tx, jobID) {
 				log.Debug().
 					Str("job_id", jobID).
-					Int("concurrency_blocked_tasks", blockedCount).
 					Dur("query_duration", elapsed).
 					Int("attempt", attemptCount).
 					Msg("Tasks available but blocked by job concurrency limit")
@@ -1643,4 +1632,47 @@ func (q *DbQueue) DecrementRunningTasksBy(ctx context.Context, jobID string, cou
 
 		return nil
 	})
+}
+func (q *DbQueue) hasAnyConcurrencyBlockedTasks(ctx context.Context, tx *sql.Tx) bool {
+	query := `
+		SELECT EXISTS (
+			SELECT 1
+			FROM jobs
+			WHERE status = 'running'
+			  AND concurrency IS NOT NULL
+			  AND concurrency > 0
+			  AND running_tasks >= concurrency
+			  AND pending_tasks > 0
+		)
+	`
+	var exists bool
+	if err := tx.QueryRowContext(ctx, query).Scan(&exists); err != nil {
+		log.Warn().Err(err).Msg("hasAnyConcurrencyBlockedTasks fallback query failed")
+		return false
+	}
+	return exists
+}
+
+func (q *DbQueue) jobHasConcurrencyBlockedTasks(ctx context.Context, tx *sql.Tx, jobID string) bool {
+	if jobID == "" {
+		return false
+	}
+	query := `
+		SELECT EXISTS (
+			SELECT 1
+			FROM jobs
+			WHERE id = $1
+			  AND status = 'running'
+			  AND concurrency IS NOT NULL
+			  AND concurrency > 0
+			  AND running_tasks >= concurrency
+			  AND pending_tasks > 0
+		)
+	`
+	var exists bool
+	if err := tx.QueryRowContext(ctx, query, jobID).Scan(&exists); err != nil {
+		log.Warn().Err(err).Str("job_id", jobID).Msg("jobHasConcurrencyBlockedTasks query failed")
+		return false
+	}
+	return exists
 }
