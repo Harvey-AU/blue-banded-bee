@@ -217,8 +217,8 @@ func TestDbQueueGetNextTask(t *testing.T) {
 					WithArgs("blocked-job").
 					WillReturnRows(capacityRows)
 
-				waitingRows := sqlmock.NewRows([]string{"exists"}).AddRow(true)
-				mock.ExpectQuery(`(?s)SELECT EXISTS \(.*FROM tasks.*job_id = \$1.*status = 'pending'.*\)`).
+				waitingRows := sqlmock.NewRows([]string{"pending_tasks"}).AddRow(3)
+				mock.ExpectQuery(`SELECT pending_tasks\s+FROM jobs\s+WHERE id = \$1\s+FOR SHARE`).
 					WithArgs("blocked-job").
 					WillReturnRows(waitingRows)
 
@@ -409,10 +409,10 @@ func TestDbQueueEnqueueURLs(t *testing.T) {
 				mock.ExpectBegin()
 
 				// Expect SELECT of job limits and current tasks (including concurrency, running_tasks, pending count, and domain name)
-				mock.ExpectQuery(`SELECT j\.max_pages, j\.concurrency, j\.running_tasks, d\.name,\s+COALESCE\(\(SELECT COUNT\(\*\) FROM tasks WHERE job_id = \$1 AND status != 'skipped'\), 0\),\s+COALESCE\(\(SELECT COUNT\(\*\) FROM tasks WHERE job_id = \$1 AND status = 'pending'\), 0\)\s+FROM jobs j\s+LEFT JOIN domains d ON j\.domain_id = d\.id\s+WHERE j\.id = \$1`).
+				mock.ExpectQuery(`SELECT j\.max_pages, j\.concurrency, j\.running_tasks, j\.pending_tasks, d\.name,\s+COALESCE\(\(SELECT COUNT\(\*\) FROM tasks WHERE job_id = \$1 AND status != 'skipped'\), 0\)\s+FROM jobs j\s+LEFT JOIN domains d ON j\.domain_id = d\.id\s+WHERE j\.id = \$1`).
 					WithArgs("job-1").
-					WillReturnRows(sqlmock.NewRows([]string{"max_pages", "concurrency", "running_tasks", "domain_name", "total_count", "pending_count"}).
-						AddRow(0, nil, 0, "example.com", 0, 0))
+					WillReturnRows(sqlmock.NewRows([]string{"max_pages", "concurrency", "running_tasks", "pending_tasks", "domain_name", "total_count"}).
+						AddRow(0, nil, 0, 0, "example.com", 0))
 
 				mock.ExpectExec("INSERT INTO tasks ").
 					WithArgs(
@@ -444,10 +444,10 @@ func TestDbQueueEnqueueURLs(t *testing.T) {
 			setupMock: func(mock sqlmock.Sqlmock) {
 				mock.ExpectBegin()
 
-				mock.ExpectQuery(`SELECT j\.max_pages, j\.concurrency, j\.running_tasks, d\.name,\s+COALESCE\(\(SELECT COUNT\(\*\) FROM tasks WHERE job_id = \$1 AND status != 'skipped'\), 0\),\s+COALESCE\(\(SELECT COUNT\(\*\) FROM tasks WHERE job_id = \$1 AND status = 'pending'\), 0\)\s+FROM jobs j\s+LEFT JOIN domains d ON j\.domain_id = d\.id\s+WHERE j\.id = \$1`).
+				mock.ExpectQuery(`SELECT j\.max_pages, j\.concurrency, j\.running_tasks, j\.pending_tasks, d\.name,\s+COALESCE\(\(SELECT COUNT\(\*\) FROM tasks WHERE job_id = \$1 AND status != 'skipped'\), 0\)\s+FROM jobs j\s+LEFT JOIN domains d ON j\.domain_id = d\.id\s+WHERE j\.id = \$1`).
 					WithArgs("job-2").
-					WillReturnRows(sqlmock.NewRows([]string{"max_pages", "concurrency", "running_tasks", "domain_name", "total_count", "pending_count"}).
-						AddRow(0, nil, 0, "example.com", 0, 0))
+					WillReturnRows(sqlmock.NewRows([]string{"max_pages", "concurrency", "running_tasks", "pending_tasks", "domain_name", "total_count"}).
+						AddRow(0, nil, 0, 0, "example.com", 0))
 
 				mock.ExpectExec("INSERT INTO tasks ").
 					WithArgs(
@@ -486,10 +486,10 @@ func TestDbQueueEnqueueURLs(t *testing.T) {
 			setupMock: func(mock sqlmock.Sqlmock) {
 				mock.ExpectBegin()
 
-				mock.ExpectQuery(`SELECT j\.max_pages, j\.concurrency, j\.running_tasks, d\.name,\s+COALESCE\(\(SELECT COUNT\(\*\) FROM tasks WHERE job_id = \$1 AND status != 'skipped'\), 0\),\s+COALESCE\(\(SELECT COUNT\(\*\) FROM tasks WHERE job_id = \$1 AND status = 'pending'\), 0\)\s+FROM jobs j\s+LEFT JOIN domains d ON j\.domain_id = d\.id\s+WHERE j\.id = \$1`).
+				mock.ExpectQuery(`SELECT j\.max_pages, j\.concurrency, j\.running_tasks, j\.pending_tasks, d\.name,\s+COALESCE\(\(SELECT COUNT\(\*\) FROM tasks WHERE job_id = \$1 AND status != 'skipped'\), 0\)\s+FROM jobs j\s+LEFT JOIN domains d ON j\.domain_id = d\.id\s+WHERE j\.id = \$1`).
 					WithArgs("job-4").
-					WillReturnRows(sqlmock.NewRows([]string{"max_pages", "concurrency", "running_tasks", "domain_name", "total_count", "pending_count"}).
-						AddRow(0, nil, 0, "example.com", 0, 0))
+					WillReturnRows(sqlmock.NewRows([]string{"max_pages", "concurrency", "running_tasks", "pending_tasks", "domain_name", "total_count"}).
+						AddRow(0, nil, 0, 0, "example.com", 0))
 
 				mock.ExpectExec("INSERT INTO tasks ").
 					WithArgs(

@@ -52,6 +52,10 @@ const (
 	// concurrencyBlockCooldown defines the window in which we consider a job
 	// recently concurrency-blocked for the purposes of suppressing scale ups.
 	concurrencyBlockCooldown = 30 * time.Second
+
+	pendingRebalanceInterval = 5 * time.Minute
+	pendingRebalanceJobLimit = 25
+	pendingUnlimitedCap      = 100
 )
 
 type WaitingReason string
@@ -684,6 +688,161 @@ func (wp *WorkerPool) reconcileRunningTaskCounters(ctx context.Context) error {
 			Msg("Running_tasks counters reconciled - capacity leak detected and fixed")
 	} else {
 		log.Info().Msg("Running_tasks counters already accurate - no reconciliation needed")
+	}
+
+	return nil
+}
+
+type jobCapacity struct {
+	id      string
+	cap     int
+	pending int
+}
+
+var pendingOverflowJobsQuery = fmt.Sprintf(`
+	SELECT
+		id,
+		CASE
+			WHEN concurrency IS NULL OR concurrency = 0 THEN %d
+			ELSE concurrency
+		END as cap,
+		pending_tasks
+	FROM jobs
+	WHERE status = 'running'
+	  AND pending_tasks > CASE
+			WHEN concurrency IS NULL OR concurrency = 0 THEN %d
+			ELSE concurrency
+		END
+	ORDER BY pending_tasks - CASE
+			WHEN concurrency IS NULL OR concurrency = 0 THEN %d
+			ELSE concurrency
+		END DESC
+	LIMIT $1
+`, pendingUnlimitedCap, pendingUnlimitedCap, pendingUnlimitedCap)
+
+var rebalanceJobPendingQuery = `
+	WITH ranked_tasks AS (
+		SELECT
+			id,
+			ROW_NUMBER() OVER (
+				ORDER BY priority_score DESC, created_at ASC
+			) as rank
+		FROM tasks
+		WHERE job_id = $1
+		  AND status = 'pending'
+	)
+	UPDATE tasks
+	SET status = 'waiting'
+	WHERE id IN (
+		SELECT id FROM ranked_tasks WHERE rank > $2
+	)
+`
+
+// rebalancePendingQueues ensures each running job's pending queue doesn't exceed concurrency
+// This is a safety guardrail against bugs that cause pending queue overflow
+// For each job, keeps only the highest-priority pending tasks (up to concurrency limit)
+// and demotes the rest to waiting status
+func (wp *WorkerPool) rebalancePendingQueues(ctx context.Context) error {
+	if wp.db == nil {
+		return errors.New("worker pool database is not configured")
+	}
+
+	runCtx := ctx
+	if runCtx == nil {
+		runCtx = context.Background()
+	}
+
+	log.Debug().Msg("Rebalancing pending queues across running jobs")
+
+	// Get system-wide task status counts for observability
+	var totalPending, totalWaiting, totalRunning, totalCompleted, totalFailed int
+	err := wp.db.QueryRowContext(runCtx, `
+		SELECT
+			COALESCE(SUM(pending_tasks), 0) AS pending,
+			COALESCE(SUM(waiting_tasks), 0) AS waiting,
+			COALESCE(SUM(running_tasks), 0) AS running,
+			COALESCE(SUM(completed_tasks), 0) AS completed,
+			COALESCE(SUM(failed_tasks), 0) AS failed
+		FROM jobs
+		WHERE status = 'running'
+	`).Scan(&totalPending, &totalWaiting, &totalRunning, &totalCompleted, &totalFailed)
+
+	if err != nil {
+		log.Warn().Err(err).Msg("Failed to get system task status counts")
+	} else {
+		log.Info().
+			Int("pending", totalPending).
+			Int("waiting", totalWaiting).
+			Int("running", totalRunning).
+			Int("completed", totalCompleted).
+			Int("failed", totalFailed).
+			Msg("System task status counts")
+	}
+
+	rows, err := wp.db.QueryContext(runCtx, pendingOverflowJobsQuery, pendingRebalanceJobLimit)
+	if err != nil {
+		return fmt.Errorf("failed to query pending queue overflows: %w", err)
+	}
+	defer rows.Close()
+
+	var overflowJobs []jobCapacity
+	for rows.Next() {
+		var jc jobCapacity
+		if err := rows.Scan(&jc.id, &jc.cap, &jc.pending); err != nil {
+			return fmt.Errorf("failed to scan pending overflow row: %w", err)
+		}
+		overflowJobs = append(overflowJobs, jc)
+	}
+
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("error reading pending overflow rows: %w", err)
+	}
+
+	if len(overflowJobs) == 0 {
+		log.Debug().Msg("All pending queues within limits - no rebalancing needed")
+		return nil
+	}
+
+	totalDemoted := 0
+	correctedJobs := 0
+
+	for _, job := range overflowJobs {
+		result, err := wp.db.ExecContext(runCtx, rebalanceJobPendingQuery, job.id, job.cap)
+		if err != nil {
+			log.Error().
+				Err(err).
+				Str("job_id", job.id).
+				Msg("Failed to demote excess pending tasks")
+			continue
+		}
+
+		demoted, err := result.RowsAffected()
+		if err != nil {
+			log.Warn().
+				Err(err).
+				Str("job_id", job.id).
+				Msg("Failed to read demoted row count")
+			continue
+		}
+
+		if demoted == 0 {
+			continue
+		}
+
+		totalDemoted += int(demoted)
+		correctedJobs++
+
+		log.Info().
+			Str("job_id", job.id).
+			Int64("demoted_count", demoted).
+			Msg("Demoted excess pending tasks to waiting")
+	}
+
+	if totalDemoted > 0 {
+		log.Warn().
+			Int("total_demoted", totalDemoted).
+			Int("jobs_rebalanced", correctedJobs).
+			Msg("Pending queue overflow detected and corrected")
 	}
 
 	return nil
@@ -1400,6 +1559,13 @@ func (wp *WorkerPool) StartTaskMonitor(ctx context.Context) {
 		ticker := time.NewTicker(30 * time.Second)
 		defer ticker.Stop()
 
+		// Pending queue rebalancer ticker - demote excess pending to waiting
+		rebalanceTicker := time.NewTicker(pendingRebalanceInterval)
+		defer rebalanceTicker.Stop()
+		log.Info().
+			Dur("interval", pendingRebalanceInterval).
+			Msg("Pending queue rebalancer enabled")
+
 		// Health probe ticker (optional, disabled by default)
 		var probeTicker *time.Ticker
 		var probeCh <-chan time.Time
@@ -1423,6 +1589,11 @@ func (wp *WorkerPool) StartTaskMonitor(ctx context.Context) {
 				if err := wp.checkForPendingTasks(ctx); err != nil {
 					log.Error().Err(err).Msg("Error checking for pending tasks")
 				}
+			case <-rebalanceTicker.C:
+				log.Debug().Msg("Running pending queue rebalancer")
+				if err := wp.rebalancePendingQueues(ctx); err != nil {
+					log.Error().Err(err).Msg("Error rebalancing pending queues")
+				}
 			case <-probeCh:
 				if probeCh != nil {
 					wp.healthProbe(ctx)
@@ -1440,12 +1611,14 @@ func (wp *WorkerPool) checkForPendingTasks(ctx context.Context) error {
 
 	var jobIDs []string
 	err := wp.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
-		// Query for jobs with pending tasks
+		// Query for jobs with pending tasks using job counters
 		rows, err := tx.QueryContext(ctx, `
-			SELECT DISTINCT job_id FROM tasks 
-			WHERE status = $1 
+			SELECT id
+			FROM jobs
+			WHERE status = 'running'
+			  AND pending_tasks > 0
 			LIMIT 100
-		`, TaskStatusPending)
+		`)
 
 		if err != nil {
 			return err

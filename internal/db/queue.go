@@ -914,19 +914,20 @@ func (q *DbQueue) jobHasCapacityTx(ctx context.Context, tx *sql.Tx, jobID string
 
 // jobHasPendingTasksTx returns true when the specified job still has pending tasks.
 func (q *DbQueue) jobHasPendingTasksTx(ctx context.Context, tx *sql.Tx, jobID string) (bool, error) {
-	var exists bool
+	var pending int
 	err := tx.QueryRowContext(ctx, `
-		SELECT EXISTS (
-			SELECT 1
-			FROM tasks
-			WHERE job_id = $1
-			  AND status = 'pending'
-		)
-	`, jobID).Scan(&exists)
+		SELECT pending_tasks
+		FROM jobs
+		WHERE id = $1
+		FOR SHARE
+	`, jobID).Scan(&pending)
+	if err == sql.ErrNoRows {
+		return false, nil
+	}
 	if err != nil {
 		return false, err
 	}
-	return exists, nil
+	return pending > 0, nil
 }
 
 // GetNextTask gets a pending task using row-level locking
@@ -1186,13 +1187,13 @@ func (q *DbQueue) EnqueueURLs(ctx context.Context, jobID string, pages []Page, s
 		var pendingTaskCount int
 		var domainName sql.NullString
 		err := tx.QueryRowContext(ctx, `
-			SELECT j.max_pages, j.concurrency, j.running_tasks, d.name,
-				   COALESCE((SELECT COUNT(*) FROM tasks WHERE job_id = $1 AND status != 'skipped'), 0),
-				   COALESCE((SELECT COUNT(*) FROM tasks WHERE job_id = $1 AND status = 'pending'), 0)
+			SELECT j.max_pages, j.concurrency, j.running_tasks, j.pending_tasks, d.name,
+				   COALESCE((SELECT COUNT(*) FROM tasks WHERE job_id = $1 AND status != 'skipped'), 0)
 			FROM jobs j
 			LEFT JOIN domains d ON j.domain_id = d.id
 			WHERE j.id = $1
-		`, jobID).Scan(&maxPages, &concurrency, &runningTasks, &domainName, &currentTaskCount, &pendingTaskCount)
+			FOR UPDATE OF j
+		`, jobID).Scan(&maxPages, &concurrency, &runningTasks, &pendingTaskCount, &domainName, &currentTaskCount)
 		if err != nil {
 			return fmt.Errorf("failed to get job configuration and task count: %w", err)
 		}
