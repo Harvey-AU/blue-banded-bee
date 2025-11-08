@@ -68,6 +68,10 @@ var (
 
 	jobRunningTasksGauge     metric.Int64Gauge
 	jobConcurrencyLimitGauge metric.Int64Gauge
+	jobInfoCacheHitsCounter  metric.Int64Counter
+	jobInfoCacheMissCounter  metric.Int64Counter
+	jobInfoCacheInvalidation metric.Int64Counter
+	jobInfoCacheSizeGauge    metric.Int64Gauge
 
 	dbPoolInUseGauge        metric.Int64Gauge
 	dbPoolIdleGauge         metric.Int64Gauge
@@ -332,6 +336,38 @@ func initJobInstruments(meterProvider *sdkmetric.MeterProvider) error {
 		"bee.jobs.concurrency_limit",
 		metric.WithDescription("Concurrency limit configured for a job (0 indicates unlimited)"),
 	)
+	if err != nil {
+		return err
+	}
+
+	jobInfoCacheHitsCounter, err = meter.Int64Counter(
+		"bee.jobs.cache_hits_total",
+		metric.WithDescription("Job info cache hits"),
+	)
+	if err != nil {
+		return err
+	}
+
+	jobInfoCacheMissCounter, err = meter.Int64Counter(
+		"bee.jobs.cache_misses_total",
+		metric.WithDescription("Job info cache misses"),
+	)
+	if err != nil {
+		return err
+	}
+
+	jobInfoCacheInvalidation, err = meter.Int64Counter(
+		"bee.jobs.cache_invalidations_total",
+		metric.WithDescription("Job info cache invalidations by reason"),
+	)
+	if err != nil {
+		return err
+	}
+
+	jobInfoCacheSizeGauge, err = meter.Int64Gauge(
+		"bee.jobs.cache_size",
+		metric.WithDescription("Current job info cache size"),
+	)
 	return err
 }
 
@@ -495,6 +531,40 @@ func RecordJobConcurrencySnapshot(ctx context.Context, jobID string, runningTask
 				attribute.Bool("job.concurrency_unlimited", unlimited),
 			))
 	}
+}
+
+func RecordJobInfoCacheHit(ctx context.Context, jobID string) {
+	if jobInfoCacheHitsCounter == nil {
+		return
+	}
+	jobInfoCacheHitsCounter.Add(ctx, 1,
+		metric.WithAttributes(attribute.String("job.id", jobID)))
+}
+
+func RecordJobInfoCacheMiss(ctx context.Context, jobID string) {
+	if jobInfoCacheMissCounter == nil {
+		return
+	}
+	jobInfoCacheMissCounter.Add(ctx, 1,
+		metric.WithAttributes(attribute.String("job.id", jobID)))
+}
+
+func RecordJobInfoCacheInvalidation(ctx context.Context, jobID, reason string) {
+	if jobInfoCacheInvalidation == nil {
+		return
+	}
+	jobInfoCacheInvalidation.Add(ctx, 1,
+		metric.WithAttributes(
+			attribute.String("job.id", jobID),
+			attribute.String("cache.reason", reason),
+		))
+}
+
+func RecordJobInfoCacheSize(ctx context.Context, size int) {
+	if jobInfoCacheSizeGauge == nil {
+		return
+	}
+	jobInfoCacheSizeGauge.Record(ctx, int64(size))
 }
 
 // DBPoolSnapshot describes a database connection pool state.

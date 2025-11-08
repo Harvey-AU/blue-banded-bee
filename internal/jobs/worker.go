@@ -228,9 +228,12 @@ func (wp *WorkerPool) loadJobInfo(ctx context.Context, jobID string, options *Jo
 	wp.jobInfoMutex.RLock()
 	if info, exists := wp.jobInfoCache[jobID]; exists {
 		wp.jobInfoMutex.RUnlock()
+		observability.RecordJobInfoCacheHit(ctx, jobID)
 		return info, nil
 	}
 	wp.jobInfoMutex.RUnlock()
+
+	observability.RecordJobInfoCacheMiss(ctx, jobID)
 
 	val, err, _ := wp.jobInfoGroup.Do(jobID, func() (interface{}, error) {
 		info, fetchErr := wp.fetchJobInfoFromDB(ctx, jobID)
@@ -248,6 +251,7 @@ func (wp *WorkerPool) loadJobInfo(ctx context.Context, jobID string, options *Jo
 		wp.jobInfoMutex.Lock()
 		wp.jobInfoCache[jobID] = info
 		wp.jobInfoMutex.Unlock()
+		wp.recordJobInfoCacheSize(ctx)
 
 		return info, nil
 	})
@@ -312,6 +316,13 @@ func (wp *WorkerPool) shouldThrottlePriorityUpdate(jobID string, priority float6
 	}
 
 	return false, 0
+}
+
+func (wp *WorkerPool) recordJobInfoCacheSize(ctx context.Context) {
+	wp.jobInfoMutex.RLock()
+	size := len(wp.jobInfoCache)
+	wp.jobInfoMutex.RUnlock()
+	observability.RecordJobInfoCacheSize(ctx, size)
 }
 
 // JobInfo caches job-specific data that doesn't change during execution
@@ -852,6 +863,8 @@ func (wp *WorkerPool) RemoveJob(jobID string) {
 	wp.jobInfoMutex.Lock()
 	delete(wp.jobInfoCache, jobID)
 	wp.jobInfoMutex.Unlock()
+	observability.RecordJobInfoCacheInvalidation(context.Background(), jobID, "job_removed")
+	wp.recordJobInfoCacheSize(context.Background())
 
 	wp.priorityMutex.Lock()
 	delete(wp.priorityUpdateTracker, jobID)
