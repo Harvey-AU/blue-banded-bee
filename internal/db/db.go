@@ -519,43 +519,47 @@ func (db *DB) ResetDataOnly() error {
 	log.Warn().Msg("=== DATA-ONLY RESET STARTED ===")
 	log.Warn().Msg("Clearing all data from database tables (schema preserved)")
 
-	// Step 0: Terminate active connections that may have locks on rows we need to delete
+	// Step 0: Terminate active connections that might hold locks
 	log.Info().Msg("Step 0/2: Terminating active backend connections to release locks")
 	if err := db.terminateActiveConnections(); err != nil {
 		log.Warn().Err(err).Msg("Failed to terminate some connections (continuing anyway)")
 	}
 
-	// Delete data in order that respects foreign key constraints
-	// Start with child tables first, then parent tables
+	// Use TRUNCATE instead of DELETE - it's atomic, faster, and doesn't care about row locks
+	// TRUNCATE automatically handles foreign key constraints with CASCADE
 	tables := []string{"tasks", "jobs", "job_share_links", "pages", "domains"}
 	totalRowsDeleted := int64(0)
 
-	log.Info().Msg("Step 1/2: Deleting all data from tables")
+	log.Info().Msg("Step 1/2: Truncating all data from tables")
 	for i, table := range tables {
 		tableStart := time.Now()
 		log.Info().
 			Str("table", table).
 			Int("table_num", i+1).
 			Int("total_tables", len(tables)).
-			Msg("Deleting table data")
+			Msg("Truncating table data")
 
-		result, err := db.client.Exec(fmt.Sprintf(`DELETE FROM %s`, table))
+		// Get row count before truncate
+		var rowCount int64
+		db.client.QueryRow(fmt.Sprintf(`SELECT COUNT(*) FROM %s`, table)).Scan(&rowCount)
+
+		// TRUNCATE is atomic and releases all locks immediately
+		_, err := db.client.Exec(fmt.Sprintf(`TRUNCATE TABLE %s CASCADE`, table))
 		if err != nil {
 			log.Error().
 				Err(err).
 				Str("table", table).
 				Dur("elapsed", time.Since(tableStart)).
-				Msg("FAILED to delete rows - reset aborted")
-			return fmt.Errorf("failed to delete rows from %s: %w", table, err)
+				Msg("FAILED to truncate table - reset aborted")
+			return fmt.Errorf("failed to truncate table %s: %w", table, err)
 		}
 
-		rowsAffected, _ := result.RowsAffected()
-		totalRowsDeleted += rowsAffected
+		totalRowsDeleted += rowCount
 		log.Info().
 			Str("table", table).
-			Int64("rows_deleted", rowsAffected).
+			Int64("rows_deleted", rowCount).
 			Dur("duration", time.Since(tableStart)).
-			Msg("Cleared table data successfully")
+			Msg("Truncated table data successfully")
 	}
 
 	log.Info().
