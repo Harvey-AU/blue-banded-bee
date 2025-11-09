@@ -92,8 +92,8 @@ elif [ -n "$STAGED_GO_FILES" ]; then
     # Run golangci-lint on staged files only
     echo "Running golangci-lint on staged files..."
 
-    # Run linter with same config as CI
-    if ! golangci-lint run --config .golangci.yml $STAGED_GO_FILES; then
+    # Run linter with same config as CI (package-aware so type info isn't lost)
+    if ! golangci-lint run --config .golangci.yml --modules-download-mode=mod; then
         echo ""
         echo -e "${RED}❌ Linting failed${NC}"
         echo ""
