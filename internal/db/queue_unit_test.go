@@ -133,12 +133,6 @@ func TestDbQueueGetNextTask(t *testing.T) {
 			setupMock: func(mock sqlmock.Sqlmock) {
 				mock.ExpectBegin()
 
-				capacityRows := sqlmock.NewRows([]string{"status", "running_tasks", "concurrency"}).
-					AddRow("running", 1, 5)
-				mock.ExpectQuery(`(?s)SELECT status, running_tasks, concurrency\s+FROM jobs\s+WHERE id = \$1\s+FOR SHARE`).
-					WithArgs("test-job").
-					WillReturnRows(capacityRows)
-
 				// Expect new complex CTE query with job join and concurrency check
 				rows := sqlmock.NewRows([]string{
 					"id", "job_id", "page_id", "path", "created_at",
@@ -165,15 +159,14 @@ func TestDbQueueGetNextTask(t *testing.T) {
 			setupMock: func(mock sqlmock.Sqlmock) {
 				mock.ExpectBegin()
 
-				capacityRows := sqlmock.NewRows([]string{"status", "running_tasks", "concurrency"}).
-					AddRow("running", 0, 10)
-				mock.ExpectQuery(`(?s)SELECT status, running_tasks, concurrency\s+FROM jobs\s+WHERE id = \$1\s+FOR SHARE`).
-					WithArgs("test-job").
-					WillReturnRows(capacityRows)
-
 				mock.ExpectQuery(`WITH next_task AS \(.*SELECT.*FROM tasks t.*INNER JOIN jobs j.*WHERE.*status = 'pending'.*AND.*job_id.*FOR UPDATE OF t SKIP LOCKED.*\),\s*job_update AS \(.*UPDATE jobs.*running_tasks = running_tasks \+ 1.*\),\s*task_update AS \(.*UPDATE tasks.*JOIN job_update.*\).*SELECT id, job_id.*FROM task_update`).
 					WithArgs(sqlmock.AnyArg(), "test-job").
 					WillReturnError(sql.ErrNoRows)
+
+				blockedRows := sqlmock.NewRows([]string{"exists"}).AddRow(false)
+				mock.ExpectQuery(`SELECT EXISTS\s*\(\s*SELECT 1\s*FROM jobs\s*WHERE id = \$1\s*AND status = 'running'\s*AND concurrency IS NOT NULL\s*AND concurrency > 0\s*AND running_tasks >= concurrency\s*AND pending_tasks > 0\s*\)`).
+					WithArgs("test-job").
+					WillReturnRows(blockedRows)
 
 				mock.ExpectRollback()
 			},
@@ -206,21 +199,19 @@ func TestDbQueueGetNextTask(t *testing.T) {
 			wantErr:  false,
 		},
 		{
-			name:  "job at capacity short-circuits before claim",
+			name:  "job at capacity returns concurrency blocked",
 			jobID: "blocked-job",
 			setupMock: func(mock sqlmock.Sqlmock) {
 				mock.ExpectBegin()
 
-				capacityRows := sqlmock.NewRows([]string{"status", "running_tasks", "concurrency"}).
-					AddRow("running", 5, 5)
-				mock.ExpectQuery(`(?s)SELECT status, running_tasks, concurrency\s+FROM jobs\s+WHERE id = \$1\s+FOR SHARE`).
-					WithArgs("blocked-job").
-					WillReturnRows(capacityRows)
+				mock.ExpectQuery(`WITH next_task AS \(.*SELECT.*FROM tasks t.*INNER JOIN jobs j.*WHERE.*status = 'pending'.*AND.*job_id.*FOR UPDATE OF t SKIP LOCKED.*\),\s*job_update AS \(.*UPDATE jobs.*running_tasks = running_tasks \+ 1.*\),\s*task_update AS \(.*UPDATE tasks.*JOIN job_update.*\).*SELECT id, job_id.*FROM task_update`).
+					WithArgs(sqlmock.AnyArg(), "blocked-job").
+					WillReturnError(sql.ErrNoRows)
 
-				waitingRows := sqlmock.NewRows([]string{"pending_tasks"}).AddRow(3)
-				mock.ExpectQuery(`SELECT pending_tasks\s+FROM jobs\s+WHERE id = \$1\s+FOR SHARE`).
+				blockedRows := sqlmock.NewRows([]string{"exists"}).AddRow(true)
+				mock.ExpectQuery(`SELECT EXISTS\s*\(\s*SELECT 1\s*FROM jobs\s*WHERE id = \$1\s*AND status = 'running'\s*AND concurrency IS NOT NULL\s*AND concurrency > 0\s*AND running_tasks >= concurrency\s*AND pending_tasks > 0\s*\)`).
 					WithArgs("blocked-job").
-					WillReturnRows(waitingRows)
+					WillReturnRows(blockedRows)
 
 				mock.ExpectRollback()
 			},

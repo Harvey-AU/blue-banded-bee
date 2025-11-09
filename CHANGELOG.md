@@ -29,7 +29,17 @@ On merge, CI will:
 
 ## [Unreleased]
 
+## [0.17.6] – 2025-11-09
+
 ## [0.17.5] – 2025-11-09
+
+- Queue claiming:
+  - Removed the standalone `jobHasCapacityTx` / `jobHasPendingTasksTx`
+    pre-checks (and their `FOR SHARE` locks) so workers no longer lock a job row
+    twice before updating `running_tasks`.
+  - All concurrency/emptiness checks now happen inside the existing claim CTE,
+    eliminating the lock-upgrade deadlocks introduced in the 0.17.0
+    optimisations.
 
 ## [0.17.4] – 2025-11-09
 

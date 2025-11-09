@@ -873,63 +873,6 @@ type Task struct {
 	PriorityScore float64
 }
 
-// jobHasCapacityTx returns whether the job exists and currently has free capacity.
-// The second boolean indicates whether the job row exists (false = job missing/finished).
-func (q *DbQueue) jobHasCapacityTx(ctx context.Context, tx *sql.Tx, jobID string) (hasCapacity bool, jobExists bool, err error) {
-	var status string
-	var runningTasks sql.NullInt64
-	var concurrency sql.NullInt64
-
-	err = tx.QueryRowContext(ctx, `
-		SELECT status, running_tasks, concurrency
-		FROM jobs
-		WHERE id = $1
-		FOR SHARE
-	`, jobID).Scan(&status, &runningTasks, &concurrency)
-
-	if err == sql.ErrNoRows {
-		return false, false, nil
-	}
-	if err != nil {
-		return false, false, err
-	}
-
-	// Jobs that are no longer running (completed/cancelled/failed) cannot accept work.
-	if status != "running" {
-		return false, true, nil
-	}
-
-	var running int64
-	if runningTasks.Valid {
-		running = runningTasks.Int64
-	}
-
-	// Unlimited concurrency (NULL/0) should always allow more work.
-	if !concurrency.Valid || concurrency.Int64 == 0 {
-		return true, true, nil
-	}
-
-	return running < concurrency.Int64, true, nil
-}
-
-// jobHasPendingTasksTx returns true when the specified job still has pending tasks.
-func (q *DbQueue) jobHasPendingTasksTx(ctx context.Context, tx *sql.Tx, jobID string) (bool, error) {
-	var pending int
-	err := tx.QueryRowContext(ctx, `
-		SELECT pending_tasks
-		FROM jobs
-		WHERE id = $1
-		FOR SHARE
-	`, jobID).Scan(&pending)
-	if err == sql.ErrNoRows {
-		return false, nil
-	}
-	if err != nil {
-		return false, err
-	}
-	return pending > 0, nil
-}
-
 // GetNextTask gets a pending task using row-level locking
 // Uses FOR UPDATE SKIP LOCKED to prevent lock contention between workers
 // Combines SELECT and UPDATE in a CTE for atomic claiming
@@ -944,27 +887,6 @@ func (q *DbQueue) GetNextTask(ctx context.Context, jobID string) (*Task, error) 
 	err := q.Execute(ctx, func(tx *sql.Tx) error {
 		attemptCount++
 		queryStart := time.Now()
-
-		if jobID != "" {
-			hasCapacity, jobExists, err := q.jobHasCapacityTx(ctx, tx, jobID)
-			if err != nil {
-				return err
-			}
-			if !jobExists {
-				return sql.ErrNoRows
-			}
-			if !hasCapacity {
-				pendingExists, err := q.jobHasPendingTasksTx(ctx, tx, jobID)
-				if err != nil {
-					return err
-				}
-				if pendingExists {
-					return ErrConcurrencyBlocked
-				}
-				// No pending tasks and no capacity means the job is effectively drained.
-				return sql.ErrNoRows
-			}
-		}
 
 		// Use CTE to select and update in a single atomic query
 		// This reduces transaction time and minimises lock holding
