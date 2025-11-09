@@ -36,7 +36,8 @@ excellent resilience:
 
 - Added covering indexes: `idx_tasks_pending_by_job_priority`,
   `idx_jobs_running_capacity`
-- Pre-check job capacity before expensive CTE query (`jobHasCapacityTx`)
+- Ensure job capacity checks happen inside the atomic claim CTE (avoid
+  pre-locking the same job row twice)
 - Replaced COUNT(\*) with EXISTS for concurrency blocking checks
 - Implemented batch INSERT for task enqueuing
 
