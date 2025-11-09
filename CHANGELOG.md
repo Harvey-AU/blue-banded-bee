@@ -29,6 +29,10 @@ On merge, CI will:
 
 ## [Unreleased]
 
+## [0.17.3] – 2025-11-08
+
+## [0.17.2] – 2025-11-08
+
 - Queue stability improvements:
   - Added `jobs.pending_tasks` / `jobs.waiting_tasks` counters plus a backfill +
     trigger to keep them in sync.
