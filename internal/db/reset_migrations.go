@@ -277,7 +277,7 @@ func (db *DB) runMigrations() (int, error) {
 }
 
 // terminateActiveConnections terminates all backend connections except the current one
-// This releases locks on tables/rows so we can perform DROP TABLE or DELETE operations
+// This releases locks on tables/rows so we can perform DROP TABLE operations
 func (db *DB) terminateActiveConnections() error {
 	// Get current backend PID to avoid terminating our own connection
 	var currentPID int
@@ -288,9 +288,35 @@ func (db *DB) terminateActiveConnections() error {
 
 	log.Info().Int("current_pid", currentPID).Msg("Current backend PID identified")
 
-	// Terminate all other backend connections
-	result, err := db.client.Exec(`
-		SELECT pg_terminate_backend(pid)
+	// Step 1: Cancel all running queries first (gentle approach)
+	rows, err := db.client.Query(`
+		SELECT pid, pg_cancel_backend(pid) as cancelled
+		FROM pg_stat_activity
+		WHERE pid <> pg_backend_pid()
+		  AND datname = current_database()
+		  AND state = 'active'
+	`)
+	if err != nil {
+		log.Warn().Err(err).Msg("Failed to cancel queries (continuing)")
+	} else {
+		cancelledCount := 0
+		for rows.Next() {
+			var pid int
+			var cancelled bool
+			if err := rows.Scan(&pid, &cancelled); err == nil && cancelled {
+				cancelledCount++
+			}
+		}
+		rows.Close()
+		log.Info().Int("queries_cancelled", cancelledCount).Msg("Cancelled running queries")
+	}
+
+	// Step 2: Wait briefly for cancellations to take effect
+	time.Sleep(100 * time.Millisecond)
+
+	// Step 3: Terminate all other backend connections
+	rows, err = db.client.Query(`
+		SELECT pid, pg_terminate_backend(pid) as terminated
 		FROM pg_stat_activity
 		WHERE pid <> pg_backend_pid()
 		  AND datname = current_database()
@@ -298,10 +324,19 @@ func (db *DB) terminateActiveConnections() error {
 	if err != nil {
 		return fmt.Errorf("failed to terminate connections: %w", err)
 	}
+	defer rows.Close()
 
-	connectionsTerminated, _ := result.RowsAffected()
+	terminatedCount := 0
+	for rows.Next() {
+		var pid int
+		var terminated bool
+		if err := rows.Scan(&pid, &terminated); err == nil && terminated {
+			terminatedCount++
+		}
+	}
+
 	log.Info().
-		Int64("connections_terminated", connectionsTerminated).
+		Int("connections_terminated", terminatedCount).
 		Msg("Terminated active backend connections")
 
 	return nil

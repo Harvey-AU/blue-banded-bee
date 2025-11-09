@@ -80,6 +80,32 @@ else
     echo "  ℹ️  No Go files to format"
 fi
 
+# === LINT GO FILES ===
+echo ""
+echo "🔍 Linting Go files..."
+
+# Check if golangci-lint is installed
+if ! command -v golangci-lint &> /dev/null; then
+    echo -e "${YELLOW}⚠️  golangci-lint not installed. Install with: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest${NC}"
+    echo "Skipping linting... (CI will still check)"
+elif [ -n "$STAGED_GO_FILES" ]; then
+    # Run golangci-lint on staged files only
+    echo "Running golangci-lint on staged files..."
+
+    # Run linter with same config as CI
+    if ! golangci-lint run --config .golangci.yml $STAGED_GO_FILES; then
+        echo ""
+        echo -e "${RED}❌ Linting failed${NC}"
+        echo ""
+        echo "Fix the issues above or use 'git commit --no-verify' to skip checks"
+        exit 1
+    fi
+
+    echo "  ✅ Linting passed"
+else
+    echo "  ℹ️  No Go files to lint"
+fi
+
 # === FORMAT DOCS/CONFIG FILES ===
 echo ""
 echo "📝 Formatting docs and config files..."
