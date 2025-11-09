@@ -519,13 +519,7 @@ func (db *DB) ResetDataOnly() error {
 	log.Warn().Msg("=== DATA-ONLY RESET STARTED ===")
 	log.Warn().Msg("Clearing all data from database tables (schema preserved)")
 
-	// Step 0: Terminate active connections that might hold locks
-	log.Info().Msg("Step 0/2: Terminating active backend connections to release locks")
-	if err := db.terminateActiveConnections(); err != nil {
-		log.Warn().Err(err).Msg("Failed to terminate some connections (continuing anyway)")
-	}
-
-	// Use TRUNCATE instead of DELETE - it's atomic, faster, and doesn't care about row locks
+	// Use TRUNCATE instead of DELETE - it's atomic, faster, and handles concurrent access better
 	// TRUNCATE automatically handles foreign key constraints with CASCADE
 	tables := []string{"tasks", "jobs", "job_share_links", "pages", "domains"}
 	totalRowsDeleted := int64(0)
@@ -539,9 +533,11 @@ func (db *DB) ResetDataOnly() error {
 			Int("total_tables", len(tables)).
 			Msg("Truncating table data")
 
-		// Get row count before truncate
+		// Get row count before truncate (warn if it fails but keep going)
 		var rowCount int64
-		db.client.QueryRow(fmt.Sprintf(`SELECT COUNT(*) FROM %s`, table)).Scan(&rowCount)
+		if err := db.client.QueryRow(fmt.Sprintf(`SELECT COUNT(*) FROM %s`, table)).Scan(&rowCount); err != nil {
+			log.Warn().Err(err).Str("table", table).Msg("Failed to count rows before truncate")
+		}
 
 		// TRUNCATE is atomic and releases all locks immediately
 		_, err := db.client.Exec(fmt.Sprintf(`TRUNCATE TABLE %s CASCADE`, table))
