@@ -133,12 +133,6 @@ func TestDbQueueGetNextTask(t *testing.T) {
 			setupMock: func(mock sqlmock.Sqlmock) {
 				mock.ExpectBegin()
 
-				capacityRows := sqlmock.NewRows([]string{"status", "running_tasks", "concurrency"}).
-					AddRow("running", 1, 5)
-				mock.ExpectQuery(`(?s)SELECT status, running_tasks, concurrency\s+FROM jobs\s+WHERE id = \$1\s+FOR SHARE`).
-					WithArgs("test-job").
-					WillReturnRows(capacityRows)
-
 				// Expect new complex CTE query with job join and concurrency check
 				rows := sqlmock.NewRows([]string{
 					"id", "job_id", "page_id", "path", "created_at",
