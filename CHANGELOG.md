@@ -29,6 +29,8 @@ On merge, CI will:
 
 ## [Unreleased]
 
+## [0.17.5] – 2025-11-09
+
 - Queue claiming:
   - Removed the standalone `jobHasCapacityTx` / `jobHasPendingTasksTx`
     pre-checks (and their `FOR SHARE` locks) so workers no longer lock a job row
