@@ -1600,7 +1600,9 @@ func (q *DbQueue) DecrementRunningTasksBy(ctx context.Context, jobID string, cou
 		Int("release_count", count).
 		Msg("DecrementRunningTasksBy called")
 
-	return q.ExecuteWithContext(ctx, func(txCtx context.Context, tx *sql.Tx) error {
+	var freedCapacity bool
+
+	err := q.ExecuteWithContext(ctx, func(txCtx context.Context, tx *sql.Tx) error {
 		// Decrement running_tasks count in a single atomic update
 		decrementQuery := `
 			UPDATE jobs
@@ -1624,18 +1626,38 @@ func (q *DbQueue) DecrementRunningTasksBy(ctx context.Context, jobID string, cou
 				Msg("DecrementRunningTasksBy executed")
 		}
 
-		if rowsAffected == 0 {
-			// No slots freed (job already at 0), nothing to promote
-			return nil
-		}
-
-		// Promote waiting tasks only when we actually free capacity.
-		if _, err = tx.ExecContext(txCtx, `SELECT promote_waiting_task_for_job($1)`, jobID); err != nil {
-			// Log but don't fail - promoting is best-effort
-			log.Warn().Err(err).Str("job_id", jobID).Msg("Failed to promote waiting task")
-		}
+		freedCapacity = rowsAffected > 0
 
 		return nil
+	})
+
+	if err != nil {
+		return err
+	}
+
+	if !freedCapacity {
+		// No slots freed (job already at 0), nothing to promote
+		return nil
+	}
+
+	// Run promotion outside the job update transaction to avoid holding both job and
+	// task locks concurrently, which was leading to deadlocks under load.
+	promoteCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := q.promoteWaitingTask(promoteCtx, jobID); err != nil {
+		// Best-effort: log but don't fail – the caller already freed slots.
+		log.Warn().Err(err).Str("job_id", jobID).Msg("Failed to promote waiting task after slot release")
+	}
+
+	return nil
+}
+
+// promoteWaitingTask best-effort promotes a single waiting task for the given job.
+func (q *DbQueue) promoteWaitingTask(ctx context.Context, jobID string) error {
+	return q.ExecuteWithContext(ctx, func(txCtx context.Context, tx *sql.Tx) error {
+		_, err := tx.ExecContext(txCtx, `SELECT promote_waiting_task_for_job($1)`, jobID)
+		return err
 	})
 }
 func (q *DbQueue) hasAnyConcurrencyBlockedTasks(ctx context.Context, tx *sql.Tx) bool {
