@@ -1612,10 +1612,11 @@ func (wp *WorkerPool) checkForPendingTasks(ctx context.Context) error {
 	var jobIDs []string
 	err := wp.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
 		// Query for jobs with pending tasks using job counters
+		// Include pending jobs so fresh jobs after a reset get picked up immediately.
 		rows, err := tx.QueryContext(ctx, `
 			SELECT id
 			FROM jobs
-			WHERE status = 'running'
+			WHERE status IN ('pending', 'running')
 			  AND pending_tasks > 0
 			LIMIT 100
 		`)
