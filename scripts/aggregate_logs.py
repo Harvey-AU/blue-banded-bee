@@ -40,7 +40,7 @@ def save_state(log_dir, state):
     with open(state_file, 'w') as f:
         json.dump(state, f, indent=2)
 
-def load_existing_data(csv_path):
+def load_existing_data(csv_path, messages_csv_path):
     """Load existing CSV data into memory."""
     by_minute = defaultdict(lambda: {
         'level_counts': defaultdict(int),
@@ -50,24 +50,38 @@ def load_existing_data(csv_path):
         'failed_to_parse': 0
     })
 
-    if not csv_path.exists():
-        return by_minute
+    # Load level counts from time_series.csv
+    if csv_path.exists():
+        try:
+            with open(csv_path) as f:
+                next(f)  # Skip header
+                for line in f:
+                    parts = line.strip().split(',')
+                    if len(parts) >= 7:
+                        timestamp = parts[0]
+                        by_minute[timestamp]['samples'] = int(parts[1])
+                        by_minute[timestamp]['total_lines'] = int(parts[2])
+                        by_minute[timestamp]['level_counts']['info'] = int(parts[3])
+                        by_minute[timestamp]['level_counts']['warn'] = int(parts[4])
+                        by_minute[timestamp]['level_counts']['error'] = int(parts[5])
+                        by_minute[timestamp]['level_counts']['debug'] = int(parts[6])
+        except Exception as e:
+            print(f"Warning: Could not load existing CSV: {e}", file=sys.stderr)
 
-    try:
-        with open(csv_path) as f:
-            next(f)  # Skip header
-            for line in f:
-                parts = line.strip().split(',')
-                if len(parts) >= 7:
-                    timestamp = parts[0]
-                    by_minute[timestamp]['samples'] = int(parts[1])
-                    by_minute[timestamp]['total_lines'] = int(parts[2])
-                    by_minute[timestamp]['level_counts']['info'] = int(parts[3])
-                    by_minute[timestamp]['level_counts']['warn'] = int(parts[4])
-                    by_minute[timestamp]['level_counts']['error'] = int(parts[5])
-                    by_minute[timestamp]['level_counts']['debug'] = int(parts[6])
-    except Exception as e:
-        print(f"Warning: Could not load existing CSV: {e}", file=sys.stderr)
+    # Load message counts from messages_per_minute.csv
+    if messages_csv_path.exists():
+        try:
+            import csv
+            with open(messages_csv_path) as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    timestamp = row.pop('timestamp')
+                    for message, count_str in row.items():
+                        count = int(count_str)
+                        if count > 0:
+                            by_minute[timestamp]['message_counts'][message] = count
+        except Exception as e:
+            print(f"Warning: Could not load existing messages CSV: {e}", file=sys.stderr)
 
     return by_minute
 
@@ -118,6 +132,36 @@ def write_csv(csv_path, by_minute):
             f.write(f"{minute},{data['samples']},{data['total_lines']},"
                    f"{levels.get('info', 0)},{levels.get('warn', 0)},"
                    f"{levels.get('error', 0)},{levels.get('debug', 0)}\n")
+
+def write_messages_csv(csv_path, by_minute, top_n=20):
+    """Write messages per minute to CSV.
+
+    Args:
+        csv_path: Path to write the CSV file
+        by_minute: Dictionary of minute data with message_counts
+        top_n: Number of top messages to include as columns (default: 20)
+    """
+    # Collect all messages and their total counts
+    all_message_totals = defaultdict(int)
+    for data in by_minute.values():
+        for message, count in data['message_counts'].items():
+            all_message_totals[message] += count
+
+    # Get top N messages by total count
+    top_messages = sorted(all_message_totals.items(), key=lambda x: x[1], reverse=True)[:top_n]
+    top_message_names = [msg for msg, _ in top_messages]
+
+    # Write CSV
+    with open(csv_path, 'w') as f:
+        # Header: timestamp + message names
+        header = "timestamp," + ",".join(f'"{msg}"' for msg in top_message_names)
+        f.write(header + "\n")
+
+        # Data rows
+        for minute in sorted(by_minute.keys()):
+            data = by_minute[minute]
+            counts = [str(data['message_counts'].get(msg, 0)) for msg in top_message_names]
+            f.write(f"{minute}," + ",".join(counts) + "\n")
 
 def write_summary(summary_path, by_minute, all_messages, new_files_count):
     """Write markdown summary."""
@@ -224,7 +268,8 @@ def aggregate_logs(log_dir, incremental=True):
             return False
 
     # Load existing data if incremental
-    by_minute = load_existing_data(csv_path) if incremental and csv_path.exists() else defaultdict(lambda: {
+    messages_csv_path = log_path / "messages_per_minute.csv"
+    by_minute = load_existing_data(csv_path, messages_csv_path) if incremental else defaultdict(lambda: {
         'level_counts': defaultdict(int),
         'message_counts': defaultdict(int),
         'samples': 0,
@@ -234,33 +279,13 @@ def aggregate_logs(log_dir, incremental=True):
 
     all_messages = defaultdict(int)
 
-    # IMPORTANT: Message counts are NOT in the CSV, so we need to reprocess ALL files
-    # to get accurate message counts. We process all files but only update level_counts
-    # for new files (to maintain CSV incremental updates).
-    files_to_process_for_messages = all_json_files
-    print(f"Reprocessing {len(files_to_process_for_messages)} total files for message counts...")
+    # Rebuild all_messages from by_minute (for global totals in summary)
+    for data in by_minute.values():
+        for message, count in data['message_counts'].items():
+            all_messages[message] += count
 
-    # First pass: Process ALL files for message counts only
-    for json_file in files_to_process_for_messages:
-        try:
-            with open(json_file) as f:
-                data = json.load(f)
-
-            # Only extract message counts from all files
-            for timestamp, messages in data.get('message_counts', {}).items():
-                minute_key = timestamp[:16]
-                for msg_data in messages:
-                    message = msg_data.get('message', 'unknown')
-                    count = msg_data.get('count', 0)
-                    # Only update message counts in by_minute if this is a new file
-                    if json_file.name in processed_set or json_file in new_files:
-                        # For all files, update all_messages (global message counter)
-                        all_messages[message] += count
-        except Exception as e:
-            print(f"Warning: Could not extract messages from {json_file}: {e}", file=sys.stderr)
-
-    # Second pass: Process only new files for level counts
-    print(f"Processing {len(new_files)} new files for level counts...")
+    # Process only new files (incremental)
+    print(f"Processing {len(new_files)} new files...")
     success_count = 0
     for json_file in new_files:
         try:
@@ -272,7 +297,7 @@ def aggregate_logs(log_dir, incremental=True):
             total_lines = meta.get('total_lines', 0)
             failed_to_parse = meta.get('failed_to_parse', 0)
 
-            # Process level counts for new files only
+            # Process level counts
             for timestamp, levels in data.get('level_counts', {}).items():
                 minute_key = timestamp[:16]
 
@@ -283,13 +308,14 @@ def aggregate_logs(log_dir, incremental=True):
                 for level, count in levels.items():
                     by_minute[minute_key]['level_counts'][level] += count
 
-            # Also update message counts for by_minute (needed for per-minute tracking)
+            # Process message counts
             for timestamp, messages in data.get('message_counts', {}).items():
                 minute_key = timestamp[:16]
                 for msg_data in messages:
                     message = msg_data.get('message', 'unknown')
                     count = msg_data.get('count', 0)
                     by_minute[minute_key]['message_counts'][message] += count
+                    all_messages[message] += count
 
             processed_set.add(json_file.name)
             success_count += 1
@@ -302,6 +328,7 @@ def aggregate_logs(log_dir, incremental=True):
 
     # Write outputs
     write_csv(csv_path, by_minute)
+    write_messages_csv(messages_csv_path, by_minute, top_n=50)
     write_summary(summary_path, by_minute, all_messages, len(new_files))
 
     # Save state
@@ -311,6 +338,7 @@ def aggregate_logs(log_dir, incremental=True):
 
     print(f"\nOutputs written:")
     print(f"  CSV: {csv_path}")
+    print(f"  Messages CSV: {messages_csv_path}")
     print(f"  Summary: {summary_path}")
 
     return True

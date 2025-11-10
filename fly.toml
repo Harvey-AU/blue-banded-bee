@@ -10,7 +10,7 @@ primary_region = 'syd'
 
 [env]
   APP_ENV = "production"
-  WORKER_CONCURRENCY = "10"
+  WORKER_CONCURRENCY = "10" # Increasing this pushes Supabase small plan past CPU limit
   ALLOW_DB_RESET = "true"
   BBB_HEALTH_PROBE_INTERVAL_SECONDS = "30"
   BBB_WORKER_IDLE_THRESHOLD = "0.10"
