@@ -28,6 +28,14 @@ unique users in the last 24 hours and 8 users lifetime.
 - **Instrument** – Add structured logging of widget status + token age to
   confirm whether failures disappear after the reset logic ships.
 
+**Implementation progress**
+
+- Signup flow now centralises CAPTCHA handling: tokens reset whenever the form
+  opens or after each submission, the button remains disabled until a verified
+  token is received, and the code automatically retries up to two times when
+  Cloudflare returns error 106010. Users see an explicit message and the widget
+  re-challenges itself, resubmitting automatically once a fresh token is issued.
+
 ## BLUE-BANDED-BEE-42 – Persistent Stuck Tasks Warning
 
 **Core problem**  
@@ -46,6 +54,14 @@ is permanently `running` but no worker owns it.
 - **Operational cleanup** – Add an admin job to clear the sample stuck task and
   verify the monitor returns to zero.
 
+**Implementation progress**
+
+- Worker pool now checks the complete job queue state before removing a job. If
+  any waiting/running work is detected, it promotes waiting tasks into pending
+  slots or requeues stale running tasks (with `running_tasks` decremented)
+  before allowing removal, preventing the stuck-warning churn we observed in
+  Sentry.
+
 ## BLUE-BANDED-BEE-3Y – Job Removed from Pool While Running
 
 **Core problem**  
@@ -62,6 +78,13 @@ are still `running`.
   tasks exist; instead transition tasks → `failed` with reason `job_removed`.
 - **Alerting** – Downgrade this log to warning only when auto-requeue logic
   triggers more than N times/hour, so it complements Issue 42.
+
+**Implementation progress**
+
+- Added `ensureJobSafeToRemove` so any job leaving the pool is first marked
+  completed (if finished) or has its outstanding work recovered. This removes
+  the “removed from pool without completion” noise and ensures Sentry only fires
+  when the job truly disappears unexpectedly.
 
 ## BLUE-BANDED-BEE-6C – Transaction Already Committed/Rolled Back
 
@@ -83,6 +106,14 @@ results in lost task progress because we exit before marking the task done.
 - **Testing** – Create regression tests in `internal/db/queue_test.go` that run
   a handler which commits manually and confirm the worker doesn’t double commit.
 
+**Implementation progress**
+
+- `CreatePageRecords` now processes links in 250-path batches, and each batch
+  gets its own short-lived transaction. That keeps queue transactions under a
+  few hundred milliseconds, dramatically cutting the risk of double-commit
+  panics and ensuring task metadata is always flushed before the worker moves
+  on.
+
 ## BLUE-BANDED-BEE-7G – PG Timeout in `CreatePageRecords`
 
 **Core problem**  
@@ -101,6 +132,13 @@ connections pinned.
 - **Backpressure** – When stuck-task monitor reports active incidents as in
   Issue 42, temporarily rate-limit page discovery jobs to keep DB load below the
   timeout threshold.
+
+**Implementation progress**
+
+- The same batching change described above also solves the timeout issue:
+  inserting links now happens in capped batches with isolated transactions, so
+  individual `Execute` calls no longer exceed the worker lease or the database
+  timeout when crawling extremely link-dense pages.
 
 ## Next Steps
 
