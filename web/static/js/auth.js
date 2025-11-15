@@ -607,7 +607,7 @@ async function executeEmailSignup() {
     if (error) throw error;
 
     console.log("Email signup successful:", data.user?.email);
-    recordTurnstileEvent("signup_success", { user: data.user?.email });
+    recordTurnstileEvent("signup_success", { userId: data.user?.id || null });
 
     pendingSignupSubmission = null;
     turnstileRetryCount = 0;
