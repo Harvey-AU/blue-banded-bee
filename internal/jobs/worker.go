@@ -1713,22 +1713,216 @@ func (wp *WorkerPool) checkForPendingTasks(ctx context.Context) error {
 	}
 	wp.jobsMutex.RUnlock()
 	for _, id := range toRemove {
-		log.Info().Str("job_id", id).Msg("Job has no pending tasks, removing from worker pool")
-
-		// Check if job actually completed or is stuck
-		var status string
-		err := wp.dbQueue.Execute(context.Background(), func(tx *sql.Tx) error {
-			return tx.QueryRow("SELECT status FROM jobs WHERE id = $1", id).Scan(&status)
-		})
-		if err == nil && status != "completed" {
-			// Job removed but not completed - potential issue
-			sentry.CaptureMessage(fmt.Sprintf("Job %s removed from pool without completion (status: %s)", id, status))
+		removable, err := wp.ensureJobSafeToRemove(ctx, id)
+		if err != nil {
+			log.Error().Err(err).Str("job_id", id).Msg("Failed to verify job removal safety")
+			continue
+		}
+		if !removable {
+			continue
 		}
 
+		log.Info().Str("job_id", id).Msg("Job has no pending tasks, removing from worker pool")
 		wp.RemoveJob(id)
 	}
 
 	return nil
+}
+
+type jobQueueState struct {
+	Status      string
+	Pending     int
+	Waiting     int
+	Running     int
+	Total       int
+	Completed   int
+	Failed      int
+	Concurrency sql.NullInt64
+}
+
+func (s jobQueueState) remainingWork() int {
+	remaining := s.Total - (s.Completed + s.Failed)
+	if remaining < 0 {
+		return 0
+	}
+	return remaining
+}
+
+func (s jobQueueState) availablePendingSlots() int {
+	if s.Concurrency.Valid && s.Concurrency.Int64 > 0 {
+		slots := int(s.Concurrency.Int64) - (s.Running + s.Pending)
+		if slots < 0 {
+			return 0
+		}
+		return slots
+	}
+
+	capacity := pendingUnlimitedCap - (s.Running + s.Pending)
+	if capacity < 0 {
+		return 0
+	}
+	return capacity
+}
+
+func (wp *WorkerPool) ensureJobSafeToRemove(ctx context.Context, jobID string) (bool, error) {
+	state, err := wp.loadJobQueueState(ctx, jobID)
+	if err != nil {
+		return false, err
+	}
+
+	switch JobStatus(state.Status) {
+	case JobStatusCompleted, JobStatusCancelled, JobStatusFailed:
+		return true, nil
+	}
+
+	if state.remainingWork() == 0 && state.Pending == 0 && state.Waiting == 0 && state.Running == 0 {
+		if err := wp.markJobCompleted(ctx, jobID); err != nil {
+			return false, fmt.Errorf("failed to mark job %s complete: %w", jobID, err)
+		}
+		return true, nil
+	}
+
+	if state.Running > 0 {
+		recovered, recErr := wp.requeueStaleRunningTasks(ctx, jobID, time.Now().UTC().Add(-TaskStaleTimeout))
+		if recErr != nil {
+			return false, recErr
+		}
+		if recovered > 0 {
+			log.Warn().
+				Str("job_id", jobID).
+				Int64("tasks_requeued", recovered).
+				Msg("Recovered stale running tasks before removing job")
+		}
+		return false, nil
+	}
+
+	if state.Waiting > 0 {
+		slots := state.availablePendingSlots()
+		if slots <= 0 {
+			return false, nil
+		}
+		promoted, promoteErr := wp.promoteWaitingTasks(ctx, jobID, slots)
+		if promoteErr != nil {
+			return false, promoteErr
+		}
+		if promoted > 0 {
+			log.Info().
+				Str("job_id", jobID).
+				Int64("tasks_promoted", promoted).
+				Int("available_slots", slots).
+				Msg("Promoted waiting tasks to pending before job removal")
+		}
+		return false, nil
+	}
+
+	if state.Pending > 0 {
+		return false, nil
+	}
+
+	if err := wp.markJobCompleted(ctx, jobID); err != nil {
+		return false, fmt.Errorf("failed to mark quiet job %s complete: %w", jobID, err)
+	}
+	return true, nil
+}
+
+func (wp *WorkerPool) loadJobQueueState(ctx context.Context, jobID string) (*jobQueueState, error) {
+	state := &jobQueueState{}
+	err := wp.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
+		return tx.QueryRowContext(ctx, `
+			SELECT status, pending_tasks, waiting_tasks, running_tasks,
+			       total_tasks, completed_tasks, failed_tasks, concurrency
+			FROM jobs
+			WHERE id = $1
+		`, jobID).Scan(
+			&state.Status,
+			&state.Pending,
+			&state.Waiting,
+			&state.Running,
+			&state.Total,
+			&state.Completed,
+			&state.Failed,
+			&state.Concurrency,
+		)
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to load job state: %w", err)
+	}
+	return state, nil
+}
+
+func (wp *WorkerPool) markJobCompleted(ctx context.Context, jobID string) error {
+	return wp.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
+		_, err := tx.ExecContext(ctx, `
+			UPDATE jobs
+			SET status = $1,
+				completed_at = COALESCE(completed_at, $2),
+				progress = 100.0
+			WHERE id = $3
+		`, JobStatusCompleted, time.Now().UTC(), jobID)
+		return err
+	})
+}
+
+func (wp *WorkerPool) promoteWaitingTasks(ctx context.Context, jobID string, limit int) (int64, error) {
+	if limit <= 0 {
+		return 0, nil
+	}
+	var promoted int64
+	err := wp.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
+		result, err := tx.ExecContext(ctx, `
+			WITH cte AS (
+				SELECT id
+				FROM tasks
+				WHERE job_id = $1 AND status = $2
+				ORDER BY created_at ASC
+				LIMIT $3
+			)
+			UPDATE tasks
+			SET status = $4,
+				started_at = NULL
+			WHERE id IN (SELECT id FROM cte)
+		`, jobID, TaskStatusWaiting, limit, TaskStatusPending)
+		if err != nil {
+			return err
+		}
+		promoted, err = result.RowsAffected()
+		return err
+	})
+	return promoted, err
+}
+
+func (wp *WorkerPool) requeueStaleRunningTasks(ctx context.Context, jobID string, staleBefore time.Time) (int64, error) {
+	var recovered int64
+	err := wp.dbQueue.ExecuteMaintenance(ctx, func(tx *sql.Tx) error {
+		result, err := tx.ExecContext(ctx, `
+			WITH cte AS (
+				SELECT id
+				FROM tasks
+				WHERE job_id = $1
+				  AND status = $2
+				  AND (started_at IS NULL OR started_at < $3)
+				ORDER BY started_at NULLS FIRST
+				LIMIT 200
+			)
+			UPDATE tasks
+			SET status = $4,
+				started_at = NULL,
+				retry_count = retry_count + 1
+			WHERE id IN (SELECT id FROM cte)
+		`, jobID, TaskStatusRunning, staleBefore, TaskStatusPending)
+		if err != nil {
+			return err
+		}
+		recovered, err = result.RowsAffected()
+		return err
+	})
+	if err != nil || recovered == 0 {
+		return recovered, err
+	}
+	if decErr := wp.dbQueue.DecrementRunningTasksBy(ctx, jobID, int(recovered)); decErr != nil {
+		return recovered, fmt.Errorf("failed to release running slots for job %s: %w", jobID, decErr)
+	}
+	return recovered, nil
 }
 
 // SetJobManager sets the JobManager reference for duplicate task checking
