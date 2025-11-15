@@ -3023,14 +3023,16 @@ func (wp *WorkerPool) releaseRunningTaskSlot(jobID string) error {
 	case wp.runningTaskReleaseCh <- jobID:
 		return nil
 	default:
-		flushCtx, flushCancel := context.WithTimeout(context.Background(), 10*time.Second)
-		wp.flushRunningTaskReleases(flushCtx)
+		log.Debug().Str("job_id", jobID).Msg("Running task release channel full, forcing flush")
+		flushCtx, flushCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		wp.flushRunningTaskReleaseForJob(flushCtx, jobID)
 		flushCancel()
 
 		select {
 		case wp.runningTaskReleaseCh <- jobID:
 			return nil
 		default:
+			log.Warn().Str("job_id", jobID).Msg("Falling back to direct running_tasks decrement")
 			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 			defer cancel()
 			return wp.dbQueue.DecrementRunningTasksBy(ctx, jobID, 1)

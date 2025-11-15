@@ -33,13 +33,27 @@ var (
 
 func init() {
 	if val := strings.TrimSpace(os.Getenv("BBB_BATCH_CHANNEL_SIZE")); val != "" {
-		if parsed, err := strconv.Atoi(val); err == nil && parsed > 0 {
+		if parsed, err := strconv.Atoi(val); err == nil {
+			if parsed < 500 {
+				log.Warn().Int("requested", parsed).Msg("BBB_BATCH_CHANNEL_SIZE below minimum, using 500")
+				parsed = 500
+			} else if parsed > 20000 {
+				log.Warn().Int("requested", parsed).Msg("BBB_BATCH_CHANNEL_SIZE above maximum, using 20000")
+				parsed = 20000
+			}
 			BatchChannelSize = parsed
 		}
 	}
 
 	if val := strings.TrimSpace(os.Getenv("BBB_BATCH_MAX_INTERVAL_MS")); val != "" {
-		if parsed, err := strconv.Atoi(val); err == nil && parsed > 0 {
+		if parsed, err := strconv.Atoi(val); err == nil {
+			if parsed < 100 {
+				log.Warn().Int("requested", parsed).Msg("BBB_BATCH_MAX_INTERVAL_MS below minimum, using 100ms")
+				parsed = 100
+			} else if parsed > 10000 {
+				log.Warn().Int("requested", parsed).Msg("BBB_BATCH_MAX_INTERVAL_MS above maximum, using 10s")
+				parsed = 10000
+			}
 			MaxBatchInterval = time.Duration(parsed) * time.Millisecond
 		}
 	}
