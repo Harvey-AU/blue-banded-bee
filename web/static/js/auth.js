@@ -27,6 +27,7 @@ const MAX_TURNSTILE_RETRIES = 2;
 let pendingSignupSubmission = null;
 let turnstileRetryCount = 0;
 let awaitingCaptchaRefresh = false;
+let captchaIssuedAt = null;
 
 /**
  * Initialise Supabase client
@@ -432,6 +433,7 @@ function getTurnstileWidget() {
 
 function resetTurnstileWidget(reason = "manual") {
   captchaToken = null;
+  captchaIssuedAt = null;
   setSignupButtonEnabled(false);
 
   if (!window.turnstile) {
@@ -464,6 +466,31 @@ function shouldRetryTurnstile(error) {
     return true;
   }
   return error.status === 400;
+}
+
+function recordTurnstileEvent(event, metadata = {}) {
+  const details = {
+    event,
+    tokenAgeMs: getCaptchaTokenAgeMs(),
+    retries: turnstileRetryCount,
+    awaitingCaptchaRefresh,
+    ...metadata,
+  };
+  console.debug("Turnstile event", details);
+  if (window.Sentry) {
+    window.Sentry.captureMessage(`turnstile.${event}`, {
+      level: "info",
+      tags: { component: "auth", feature: "turnstile" },
+      extra: details,
+    });
+  }
+}
+
+function getCaptchaTokenAgeMs() {
+  if (!captchaIssuedAt) {
+    return null;
+  }
+  return Date.now() - captchaIssuedAt;
 }
 
 /**
@@ -566,6 +593,9 @@ async function executeEmailSignup() {
 
   showAuthLoading();
   clearAuthError();
+  recordTurnstileEvent("signup_attempt", {
+    tokenPresent: Boolean(captchaToken),
+  });
 
   try {
     const { data, error } = await supabase.auth.signUp({
@@ -577,6 +607,7 @@ async function executeEmailSignup() {
     if (error) throw error;
 
     console.log("Email signup successful:", data.user?.email);
+    recordTurnstileEvent("signup_success", { user: data.user?.email });
 
     pendingSignupSubmission = null;
     turnstileRetryCount = 0;
@@ -601,6 +632,11 @@ async function executeEmailSignup() {
     }
   } catch (error) {
     const retryable = shouldRetryTurnstile(error);
+    recordTurnstileEvent("signup_error", {
+      retryable,
+      message: error.message,
+      status: error.status,
+    });
 
     if (retryable && turnstileRetryCount < MAX_TURNSTILE_RETRIES) {
       turnstileRetryCount += 1;
@@ -1064,7 +1100,9 @@ function setupLoginPageHandlers() {
 // CAPTCHA success callback (global function)
 window.onTurnstileSuccess = function (token) {
   captchaToken = token;
+  captchaIssuedAt = Date.now();
   setSignupButtonEnabled(true);
+  recordTurnstileEvent("token_received");
 
   if (awaitingCaptchaRefresh && pendingSignupSubmission) {
     awaitingCaptchaRefresh = false;

@@ -35,6 +35,9 @@ unique users in the last 24 hours and 8 users lifetime.
   token is received, and the code automatically retries up to two times when
   Cloudflare returns error 106010. Users see an explicit message and the widget
   re-challenges itself, resubmitting automatically once a fresh token is issued.
+- Added structured instrumentation (`turnstile.*` Sentry events) capturing token
+  age, retry counts, and widget lifecycle transitions so we can monitor future
+  106010 spikes and diagnose browser-specific failures.
 
 ## BLUE-BANDED-BEE-42 – Persistent Stuck Tasks Warning
 
