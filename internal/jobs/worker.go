@@ -2826,42 +2826,84 @@ func (wp *WorkerPool) cleanupOrphanedTasks(ctx context.Context) error {
 
 	cleanupStart := time.Now()
 
-	// Update all orphaned tasks for this job in one go
-	// No batching, no cycle limits - we have no timeout constraint
-	result, err := tx.ExecContext(ctx, `
-		UPDATE tasks
-		SET status = $1,
-			error = $2,
-			completed_at = $3
-		WHERE job_id = $4
-			AND status IN ($5, $6)
-	`, TaskStatusFailed, errorMsg, time.Now().UTC(), targetJobID, TaskStatusPending, TaskStatusWaiting)
-
-	if err != nil {
-		return fmt.Errorf("failed to update orphaned tasks for job %s: %w", targetJobID, err)
-	}
-
-	tasksUpdated, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("failed to get affected rows: %w", err)
-	}
-
-	// Commit the transaction
+	// Release the selection transaction before batched updates
 	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("failed to commit transaction: %w", err)
+		return fmt.Errorf("failed to release job selection lock: %w", err)
+	}
+
+	const batchSize = 1000
+	const maxIterations = 1000
+	now := time.Now().UTC()
+	totalCleaned := int64(0)
+	iterations := 0
+
+	for {
+		if ctx.Err() != nil {
+			span.SetData("tasks_cleaned", totalCleaned)
+			span.SetData("partial_cleanup", true)
+			return fmt.Errorf("cleanup cancelled after processing %d tasks: %w", totalCleaned, ctx.Err())
+		}
+
+		iterations++
+		if iterations > maxIterations {
+			log.Warn().
+				Str("job_id", targetJobID).
+				Int64("tasks_cleaned", totalCleaned).
+				Int("iterations", iterations).
+				Msg("Orphaned task cleanup stopped: maximum iteration limit reached")
+			span.SetData("tasks_cleaned", totalCleaned)
+			span.SetData("iteration_limit_reached", true)
+			break
+		}
+
+		batchTx, err := wp.db.BeginTx(ctx, nil)
+		if err != nil {
+			return fmt.Errorf("failed to begin batch transaction: %w", err)
+		}
+
+		result, err := batchTx.ExecContext(ctx, `
+			WITH batch AS (
+				SELECT id
+				FROM tasks
+				WHERE job_id = $1 AND status IN ($2, $3)
+				ORDER BY id
+				LIMIT $4
+			)
+			UPDATE tasks
+			SET status = $5,
+				error = $6,
+				completed_at = $7
+			WHERE id IN (SELECT id FROM batch)
+		`, targetJobID, TaskStatusPending, TaskStatusWaiting, batchSize, TaskStatusFailed, errorMsg, now)
+		if err != nil {
+			_ = batchTx.Rollback()
+			return fmt.Errorf("failed to update orphaned tasks for job %s: %w", targetJobID, err)
+		}
+		cleaned, err := result.RowsAffected()
+		if err != nil {
+			_ = batchTx.Rollback()
+			return fmt.Errorf("failed to get affected rows: %w", err)
+		}
+		if err := batchTx.Commit(); err != nil {
+			return fmt.Errorf("failed to commit batch transaction: %w", err)
+		}
+
+		totalCleaned += cleaned
+		if cleaned < batchSize {
+			break
+		}
 	}
 
 	cleanupDuration := time.Since(cleanupStart)
 
-	// Log success with metrics
 	log.Info().
 		Str("job_id", targetJobID).
-		Int64("tasks_cleaned", tasksUpdated).
+		Int64("tasks_cleaned", totalCleaned).
 		Dur("duration_ms", cleanupDuration).
 		Msg("Orphaned task cleanup completed for job")
 
 	span.SetData("job_id", targetJobID)
-	span.SetData("tasks_cleaned", tasksUpdated)
+	span.SetData("tasks_cleaned", totalCleaned)
 	span.SetData("duration_ms", cleanupDuration.Milliseconds())
 
 	return nil

@@ -29,6 +29,8 @@ On merge, CI will:
 
 ## [Unreleased]
 
+## [0.17.9] – 2025-11-15
+
 ## [0.17.8] – 2025-11-15
 
 ### Fixed
@@ -45,6 +47,9 @@ On merge, CI will:
   106010 challenges automatically, and emits `turnstile.*` telemetry to Sentry
   capturing token age, retries, and lifecycle transitions for better
   diagnostics.
+- Orphaned task cleanup now batches updates (1000 at a time) to avoid hitting
+  statement timeouts on jobs with huge backlogs, eliminating the repeated
+  "Failed to cleanup orphaned tasks" log spam.
 
 ## [0.17.7] – 2025-11-10
 
