@@ -33,7 +33,10 @@ var (
 
 func init() {
 	if val := strings.TrimSpace(os.Getenv("BBB_BATCH_CHANNEL_SIZE")); val != "" {
-		if parsed, err := strconv.Atoi(val); err == nil {
+		parsed, err := strconv.Atoi(val)
+		if err != nil {
+			log.Warn().Str("value", val).Msg("Failed to parse BBB_BATCH_CHANNEL_SIZE override")
+		} else {
 			if parsed < 500 {
 				log.Warn().Int("requested", parsed).Msg("BBB_BATCH_CHANNEL_SIZE below minimum, using 500")
 				parsed = 500
@@ -47,7 +50,10 @@ func init() {
 	}
 
 	if val := strings.TrimSpace(os.Getenv("BBB_BATCH_MAX_INTERVAL_MS")); val != "" {
-		if parsed, err := strconv.Atoi(val); err == nil {
+		parsed, err := strconv.Atoi(val)
+		if err != nil {
+			log.Warn().Str("value", val).Msg("Failed to parse BBB_BATCH_MAX_INTERVAL_MS override")
+		} else {
 			if parsed < 100 {
 				log.Warn().Int("requested", parsed).Msg("BBB_BATCH_MAX_INTERVAL_MS below minimum, using 100ms")
 				parsed = 100
