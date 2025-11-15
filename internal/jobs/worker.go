@@ -2826,12 +2826,22 @@ func (wp *WorkerPool) cleanupOrphanedTasks(ctx context.Context) error {
 
 	cleanupStart := time.Now()
 
+	// Release the selection transaction before batched updates
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to release job selection lock: %w", err)
+	}
+
 	const batchSize = 1000
 	now := time.Now().UTC()
 	totalCleaned := int64(0)
 
 	for {
-		result, err := tx.ExecContext(ctx, `
+		batchTx, err := wp.db.BeginTx(ctx, nil)
+		if err != nil {
+			return fmt.Errorf("failed to begin batch transaction: %w", err)
+		}
+
+		result, err := batchTx.ExecContext(ctx, `
 			WITH batch AS (
 				SELECT id
 				FROM tasks
@@ -2846,20 +2856,22 @@ func (wp *WorkerPool) cleanupOrphanedTasks(ctx context.Context) error {
 			WHERE id IN (SELECT id FROM batch)
 		`, targetJobID, TaskStatusPending, TaskStatusWaiting, batchSize, TaskStatusFailed, errorMsg, now)
 		if err != nil {
+			_ = batchTx.Rollback()
 			return fmt.Errorf("failed to update orphaned tasks for job %s: %w", targetJobID, err)
 		}
 		cleaned, err := result.RowsAffected()
 		if err != nil {
+			_ = batchTx.Rollback()
 			return fmt.Errorf("failed to get affected rows: %w", err)
 		}
+		if err := batchTx.Commit(); err != nil {
+			return fmt.Errorf("failed to commit batch transaction: %w", err)
+		}
+
 		totalCleaned += cleaned
 		if cleaned < batchSize {
 			break
 		}
-	}
-
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
 	cleanupDuration := time.Since(cleanupStart)
