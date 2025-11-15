@@ -465,7 +465,7 @@ function shouldRetryTurnstile(error) {
   if (rawMessage.includes("turnstile") || rawMessage.includes("captcha")) {
     return true;
   }
-  return error.status === 400;
+  return false;
 }
 
 function recordTurnstileEvent(event, metadata = {}) {
