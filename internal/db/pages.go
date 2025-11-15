@@ -102,23 +102,16 @@ func ensurePageBatch(ctx context.Context, q TransactionExecutor, domainID int, b
 	insertQuery := `
 		INSERT INTO pages (domain_id, path)
 		VALUES ($1, $2)
-		ON CONFLICT (domain_id, path) DO NOTHING
+		ON CONFLICT (domain_id, path)
+		DO UPDATE SET path = EXCLUDED.path
 		RETURNING id
-	`
-	selectQuery := `
-		SELECT id FROM pages WHERE domain_id = $1 AND path = $2
 	`
 
 	return q.Execute(ctx, func(tx *sql.Tx) error {
 		for _, path := range unique {
 			var pageID int
-			err := tx.QueryRowContext(ctx, insertQuery, domainID, path).Scan(&pageID)
-			if err == sql.ErrNoRows {
-				if err := tx.QueryRowContext(ctx, selectQuery, domainID, path).Scan(&pageID); err != nil {
-					return fmt.Errorf("failed to lookup existing page record: %w", err)
-				}
-			} else if err != nil {
-				return fmt.Errorf("failed to insert page record: %w", err)
+			if err := tx.QueryRowContext(ctx, insertQuery, domainID, path).Scan(&pageID); err != nil {
+				return fmt.Errorf("failed to upsert page record: %w", err)
 			}
 
 			seen[path] = pageID
