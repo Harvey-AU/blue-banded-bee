@@ -10,6 +10,8 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+const maxPageRecordBatchSize = 250
+
 // Page represents a page to be enqueued with its priority
 type Page struct {
 	ID       int
@@ -25,61 +27,97 @@ type TransactionExecutor interface {
 // CreatePageRecords finds existing pages or creates new ones for the given URLs.
 // It returns the page IDs and their corresponding paths.
 func CreatePageRecords(ctx context.Context, q TransactionExecutor, domainID int, domain string, urls []string) ([]int, []string, error) {
+	if len(urls) == 0 {
+		return nil, nil, nil
+	}
+
 	var pageIDs []int
 	var paths []string
+	seen := make(map[string]int, len(urls))
+	batched := make([]string, 0, maxPageRecordBatchSize)
 
-	err := q.Execute(ctx, func(tx *sql.Tx) error {
-		// Use direct queries instead of prepared statements for Supabase pooler compatibility
-		insertQuery := `
-			INSERT INTO pages (domain_id, path)
-			VALUES ($1, $2)
-			ON CONFLICT (domain_id, path) DO NOTHING
-			RETURNING id
-		`
-		selectQuery := `
-			SELECT id FROM pages WHERE domain_id = $1 AND path = $2
-		`
+	flushBatch := func() error {
+		if len(batched) == 0 {
+			return nil
+		}
 
-		seen := make(map[string]int, len(urls))
+		if err := ensurePageBatch(ctx, q, domainID, batched, seen); err != nil {
+			return err
+		}
 
-		for _, u := range urls {
-			// Normalise URL to get just the path
-			path, err := normaliseURLPath(u, domain)
-			if err != nil {
-				log.Warn().Err(err).Str("url", u).Msg("Skipping invalid URL")
+		for _, path := range batched {
+			id, ok := seen[path]
+			if !ok {
 				continue
 			}
-
-			// Skip duplicates within this batch and reuse cached IDs
-			if id, ok := seen[path]; ok {
-				pageIDs = append(pageIDs, id)
-				paths = append(paths, path)
-				continue
-			}
-
-			// Get or create the page record without touching existing rows unnecessarily
-			var pageID int
-			err = tx.QueryRowContext(ctx, insertQuery, domainID, path).Scan(&pageID)
-			if err == sql.ErrNoRows {
-				if err := tx.QueryRowContext(ctx, selectQuery, domainID, path).Scan(&pageID); err != nil {
-					return fmt.Errorf("failed to lookup existing page record: %w", err)
-				}
-			} else if err != nil {
-				return fmt.Errorf("failed to insert page record: %w", err)
-			}
-
-			seen[path] = pageID
-			pageIDs = append(pageIDs, pageID)
+			pageIDs = append(pageIDs, id)
 			paths = append(paths, path)
 		}
-		return nil
-	})
 
-	if err != nil {
+		batched = batched[:0]
+		return nil
+	}
+
+	for _, u := range urls {
+		path, err := normaliseURLPath(u, domain)
+		if err != nil {
+			log.Warn().Err(err).Str("url", u).Msg("Skipping invalid URL")
+			continue
+		}
+
+		if id, ok := seen[path]; ok {
+			pageIDs = append(pageIDs, id)
+			paths = append(paths, path)
+			continue
+		}
+
+		batched = append(batched, path)
+		if len(batched) >= maxPageRecordBatchSize {
+			if err := flushBatch(); err != nil {
+				return nil, nil, err
+			}
+		}
+	}
+
+	if err := flushBatch(); err != nil {
 		return nil, nil, err
 	}
 
 	return pageIDs, paths, nil
+}
+
+func ensurePageBatch(ctx context.Context, q TransactionExecutor, domainID int, batch []string, seen map[string]int) error {
+	unique := make([]string, 0, len(batch))
+	for _, path := range batch {
+		if _, ok := seen[path]; ok {
+			continue
+		}
+		unique = append(unique, path)
+	}
+
+	if len(unique) == 0 {
+		return nil
+	}
+
+	insertQuery := `
+		INSERT INTO pages (domain_id, path)
+		VALUES ($1, $2)
+		ON CONFLICT (domain_id, path)
+		DO UPDATE SET path = EXCLUDED.path
+		RETURNING id
+	`
+
+	return q.Execute(ctx, func(tx *sql.Tx) error {
+		for _, path := range unique {
+			var pageID int
+			if err := tx.QueryRowContext(ctx, insertQuery, domainID, path).Scan(&pageID); err != nil {
+				return fmt.Errorf("failed to upsert page record: %w", err)
+			}
+
+			seen[path] = pageID
+		}
+		return nil
+	})
 }
 
 func normaliseURLPath(u string, domain string) (string, error) {

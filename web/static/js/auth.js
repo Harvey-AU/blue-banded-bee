@@ -23,6 +23,11 @@ const SUPABASE_ANON_KEY =
 // Global state
 let supabase;
 let captchaToken = null;
+const MAX_TURNSTILE_RETRIES = 2;
+let pendingSignupSubmission = null;
+let turnstileRetryCount = 0;
+let awaitingCaptchaRefresh = false;
+let captchaIssuedAt = null;
 
 /**
  * Initialise Supabase client
@@ -117,7 +122,7 @@ async function handleAuthCallback() {
       });
 
       if (session) {
-        console.log("User authenticated via callback:", session.user.email);
+        console.log("User authenticated via callback:", session.user.id);
 
         // Clear the URL hash to clean up the URL
         history.replaceState(null, null, window.location.pathname);
@@ -133,7 +138,7 @@ async function handleAuthCallback() {
         data: { session },
       } = await supabase.auth.getSession();
       if (session) {
-        console.log("User already authenticated:", session.user.email);
+        console.log("User already authenticated:", session.user.id);
         return true;
       }
     }
@@ -307,7 +312,7 @@ async function updateUserInfo() {
       const initials = getInitials(email);
       userAvatarElement.textContent = initials;
 
-      console.log("User info updated:", email);
+      console.log("User info updated");
     } else {
       // No session, reset to defaults
       userEmailElement.textContent = "Loading...";
@@ -407,21 +412,85 @@ function showAuthForm(formType) {
   // Reset CAPTCHA state for signup form
   if (formType === "signup") {
     captchaToken = null;
-    const signupBtn = document.getElementById("signupSubmitBtn");
-    if (signupBtn) {
-      signupBtn.disabled = true;
-    }
-    // Reset Turnstile widget if it exists
-    if (window.turnstile) {
-      const turnstileWidget = document.querySelector(".cf-turnstile");
-      if (turnstileWidget) {
-        window.turnstile.reset(turnstileWidget);
-      }
-    }
+    setSignupButtonEnabled(false);
+    resetTurnstileWidget("show_form");
   }
 
   clearAuthError();
   hideAuthLoading();
+}
+
+function setSignupButtonEnabled(enabled) {
+  const signupBtn = document.getElementById("signupSubmitBtn");
+  if (signupBtn) {
+    signupBtn.disabled = !enabled;
+  }
+}
+
+function getTurnstileWidget() {
+  return document.querySelector(".cf-turnstile");
+}
+
+function resetTurnstileWidget(reason = "manual") {
+  captchaToken = null;
+  captchaIssuedAt = null;
+  setSignupButtonEnabled(false);
+
+  if (!window.turnstile) {
+    return;
+  }
+
+  const widget = getTurnstileWidget();
+  if (!widget) {
+    return;
+  }
+
+  try {
+    window.turnstile.reset(widget);
+    console.debug("Turnstile reset", { reason });
+  } catch (error) {
+    console.warn("Failed to reset Turnstile widget", error);
+  }
+}
+
+function shouldRetryTurnstile(error) {
+  if (!error) {
+    return false;
+  }
+  const rawMessage =
+    `${error.message || ""} ${error.error_description || ""}`.toLowerCase();
+  if (rawMessage.includes("106010")) {
+    return true;
+  }
+  if (rawMessage.includes("turnstile") || rawMessage.includes("captcha")) {
+    return true;
+  }
+  return false;
+}
+
+function recordTurnstileEvent(event, metadata = {}) {
+  const details = {
+    event,
+    tokenAgeMs: getCaptchaTokenAgeMs(),
+    retries: turnstileRetryCount,
+    awaitingCaptchaRefresh,
+    ...metadata,
+  };
+  console.debug("Turnstile event", details);
+  if (window.Sentry) {
+    window.Sentry.captureMessage(`turnstile.${event}`, {
+      level: "info",
+      tags: { component: "auth", feature: "turnstile" },
+      extra: details,
+    });
+  }
+}
+
+function getCaptchaTokenAgeMs() {
+  if (!captchaIssuedAt) {
+    return null;
+  }
+  return Date.now() - captchaIssuedAt;
 }
 
 /**
@@ -445,7 +514,7 @@ async function handleEmailLogin(event) {
 
     if (error) throw error;
 
-    console.log("Email login successful:", data.user.email);
+    console.log("Email login successful:", data.user.id);
 
     // Register user with backend (in case they don't exist)
     await registerUserWithBackend(data.user);
@@ -488,9 +557,23 @@ async function handleEmailLogin(event) {
 async function handleEmailSignup(event) {
   event.preventDefault();
   const formData = new FormData(event.target);
-  const email = formData.get("email");
-  const password = formData.get("password");
-  const passwordConfirm = formData.get("passwordConfirm");
+  pendingSignupSubmission = {
+    email: formData.get("email"),
+    password: formData.get("password"),
+    passwordConfirm: formData.get("passwordConfirm"),
+  };
+  turnstileRetryCount = 0;
+  awaitingCaptchaRefresh = false;
+
+  await executeEmailSignup();
+}
+
+async function executeEmailSignup() {
+  if (!pendingSignupSubmission) {
+    return;
+  }
+
+  const { email, password, passwordConfirm } = pendingSignupSubmission;
 
   if (password !== passwordConfirm) {
     showAuthError("Passwords do not match.");
@@ -504,11 +587,15 @@ async function handleEmailSignup(event) {
 
   if (!captchaToken) {
     showAuthError("Please complete the CAPTCHA verification.");
+    setSignupButtonEnabled(false);
     return;
   }
 
   showAuthLoading();
   clearAuthError();
+  recordTurnstileEvent("signup_attempt", {
+    tokenPresent: Boolean(captchaToken),
+  });
 
   try {
     const { data, error } = await supabase.auth.signUp({
@@ -519,7 +606,13 @@ async function handleEmailSignup(event) {
 
     if (error) throw error;
 
-    console.log("Email signup successful:", data.user?.email);
+    console.log("Email signup successful:", data.user?.id);
+    recordTurnstileEvent("signup_success", { userId: data.user?.id || null });
+
+    pendingSignupSubmission = null;
+    turnstileRetryCount = 0;
+    awaitingCaptchaRefresh = false;
+    resetTurnstileWidget("post_signup_success");
 
     if (data.user && !data.user.email_confirmed_at) {
       showAuthError(
@@ -527,11 +620,9 @@ async function handleEmailSignup(event) {
       );
       showAuthForm("login");
     } else if (data.user) {
-      // Register user with backend
       await registerUserWithBackend(data.user);
 
       closeAuthModal();
-      // Update user info and refresh dashboard
       updateUserInfo();
       updateAuthState(true);
       if (window.dataBinder) {
@@ -540,8 +631,31 @@ async function handleEmailSignup(event) {
       await handlePendingDomain();
     }
   } catch (error) {
+    const retryable = shouldRetryTurnstile(error);
+    recordTurnstileEvent("signup_error", {
+      retryable,
+      message: error.message,
+      status: error.status,
+    });
+
+    if (retryable && turnstileRetryCount < MAX_TURNSTILE_RETRIES) {
+      turnstileRetryCount += 1;
+      awaitingCaptchaRefresh = true;
+      console.warn("Turnstile token rejected, scheduling retry", {
+        attempt: turnstileRetryCount,
+      });
+      showAuthError(
+        "Security check expired. Please complete the verification again."
+      );
+      hideAuthLoading();
+      resetTurnstileWidget("captcha_retry");
+      return;
+    }
+
+    awaitingCaptchaRefresh = false;
+    pendingSignupSubmission = null;
     console.error("Email signup error:", error);
-    if (window.Sentry) {
+    if (!retryable && window.Sentry) {
       window.Sentry.captureException(error, {
         tags: { component: "auth", action: "email_signup" },
         level: "warning",
@@ -549,7 +663,9 @@ async function handleEmailSignup(event) {
     }
     showAuthError(error.message || "Signup failed. Please try again.");
   } finally {
-    hideAuthLoading();
+    if (!awaitingCaptchaRefresh) {
+      hideAuthLoading();
+    }
   }
 }
 
@@ -984,9 +1100,13 @@ function setupLoginPageHandlers() {
 // CAPTCHA success callback (global function)
 window.onTurnstileSuccess = function (token) {
   captchaToken = token;
-  const signupBtn = document.getElementById("signupSubmitBtn");
-  if (signupBtn) {
-    signupBtn.disabled = false;
+  captchaIssuedAt = Date.now();
+  setSignupButtonEnabled(true);
+  recordTurnstileEvent("token_received");
+
+  if (awaitingCaptchaRefresh && pendingSignupSubmission) {
+    awaitingCaptchaRefresh = false;
+    executeEmailSignup();
   }
 };
 

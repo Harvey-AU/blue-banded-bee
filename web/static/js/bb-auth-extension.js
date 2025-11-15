@@ -54,7 +54,7 @@ async function initializeAuthWithDataBinder(dataBinder, options = {}) {
   if (window.supabase) {
     window.supabase.auth.onAuthStateChange(async (event, session) => {
       if (debug) {
-        console.log("Auth state changed:", event, session?.user?.email);
+        console.log("Auth state changed:", event, session?.user?.id);
       }
 
       // Register user with backend on sign in (handles OAuth returns)
@@ -83,7 +83,7 @@ async function initializeAuthWithDataBinder(dataBinder, options = {}) {
     console.log("Auth state after init:", {
       hasAuth: !!dataBinder.authManager,
       isAuthenticated: dataBinder.authManager?.isAuthenticated,
-      user: dataBinder.authManager?.user?.email,
+      user: dataBinder.authManager?.user?.id,
     });
   }
 

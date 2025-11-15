@@ -29,6 +29,23 @@ On merge, CI will:
 
 ## [Unreleased]
 
+## [0.17.8] – 2025-11-15
+
+### Fixed
+
+- Queue worker now inspects per-job counters before removing jobs, requeues
+  stale running tasks, promotes waiting work into pending slots, and
+  auto-completes jobs whose tasks finished—eliminating the stuck task warnings
+  seen in Sentry.
+- `CreatePageRecords` processes discovered links in ≤250 item batches using a
+  single `INSERT ... ON CONFLICT DO UPDATE RETURNING` upsert, preventing
+  long-running transactions and the "transaction already committed"/timeout
+  alerts.
+- Cloudflare Turnstile signup flow resets tokens on every attempt, retries error
+  106010 challenges automatically, and emits `turnstile.*` telemetry to Sentry
+  capturing token age, retries, and lifecycle transitions for better
+  diagnostics.
+
 ## [0.17.7] – 2025-11-10
 
 ## [0.17.6] – 2025-11-09
