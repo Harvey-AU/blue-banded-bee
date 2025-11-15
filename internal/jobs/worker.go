@@ -2839,6 +2839,8 @@ func (wp *WorkerPool) cleanupOrphanedTasks(ctx context.Context) error {
 
 	for {
 		if ctx.Err() != nil {
+			span.SetData("tasks_cleaned", totalCleaned)
+			span.SetData("partial_cleanup", true)
 			return fmt.Errorf("cleanup cancelled after processing %d tasks: %w", totalCleaned, ctx.Err())
 		}
 
@@ -2849,6 +2851,8 @@ func (wp *WorkerPool) cleanupOrphanedTasks(ctx context.Context) error {
 				Int64("tasks_cleaned", totalCleaned).
 				Int("iterations", iterations).
 				Msg("Orphaned task cleanup stopped: maximum iteration limit reached")
+			span.SetData("tasks_cleaned", totalCleaned)
+			span.SetData("iteration_limit_reached", true)
 			break
 		}
 
