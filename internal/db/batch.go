@@ -42,6 +42,7 @@ func init() {
 				parsed = 20000
 			}
 			BatchChannelSize = parsed
+			log.Info().Int("channel_size", parsed).Msg("BBB_BATCH_CHANNEL_SIZE override applied")
 		}
 	}
 
@@ -55,6 +56,7 @@ func init() {
 				parsed = 10000
 			}
 			MaxBatchInterval = time.Duration(parsed) * time.Millisecond
+			log.Info().Int("interval_ms", parsed).Msg("BBB_BATCH_MAX_INTERVAL_MS override applied")
 		}
 	}
 }
