@@ -89,7 +89,6 @@ func (db *DB) GetOrCreateUser(userID, email string, fullName *string) (*User, er
 	// User doesn't exist, auto-create them with a default organisation
 	log.Info().
 		Str("user_id", userID).
-		Str("email", email).
 		Msg("Auto-creating user from JWT token")
 
 	// Determine organisation name based on email domain
@@ -351,14 +350,12 @@ func (db *DB) CreateUser(userID, email string, fullName *string, orgName string)
 			}
 			log.Info().
 				Str("user_id", userID).
-				Str("email", email).
 				Msg("User already exists, returning existing user and organisation")
 			return existingUser, org, nil
 		}
 		// User exists but has no organisation - this shouldn't happen but handle gracefully
 		log.Info().
 			Str("user_id", userID).
-			Str("email", email).
 			Msg("User already exists but has no organisation")
 		return existingUser, nil, nil
 	}
@@ -382,7 +379,6 @@ func (db *DB) CreateUser(userID, email string, fullName *string, orgName string)
 			org = existingOrg
 			log.Info().
 				Str("user_id", userID).
-				Str("email", email).
 				Str("organisation_id", org.ID).
 				Str("organisation_name", org.Name).
 				Msg("Joining existing organisation (business email)")
@@ -438,7 +434,6 @@ func (db *DB) CreateUser(userID, email string, fullName *string, orgName string)
 
 	log.Info().
 		Str("user_id", user.ID).
-		Str("email", user.Email).
 		Str("organisation_id", org.ID).
 		Str("organisation_name", org.Name).
 		Msg("Created new user with organisation")

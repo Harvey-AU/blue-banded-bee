@@ -27,11 +27,6 @@
 
         // User context
         beforeSend(event) {
-          // Add user email if logged in
-          const userEmail = localStorage.getItem("userEmail");
-          if (userEmail) {
-            event.user = { email: userEmail };
-          }
           return event;
         },
 

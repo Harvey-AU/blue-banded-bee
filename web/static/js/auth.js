@@ -122,7 +122,7 @@ async function handleAuthCallback() {
       });
 
       if (session) {
-        console.log("User authenticated via callback:", session.user.email);
+        console.log("User authenticated via callback:", session.user.id);
 
         // Clear the URL hash to clean up the URL
         history.replaceState(null, null, window.location.pathname);
@@ -138,7 +138,7 @@ async function handleAuthCallback() {
         data: { session },
       } = await supabase.auth.getSession();
       if (session) {
-        console.log("User already authenticated:", session.user.email);
+        console.log("User already authenticated:", session.user.id);
         return true;
       }
     }
@@ -312,7 +312,7 @@ async function updateUserInfo() {
       const initials = getInitials(email);
       userAvatarElement.textContent = initials;
 
-      console.log("User info updated:", email);
+      console.log("User info updated");
     } else {
       // No session, reset to defaults
       userEmailElement.textContent = "Loading...";
@@ -514,7 +514,7 @@ async function handleEmailLogin(event) {
 
     if (error) throw error;
 
-    console.log("Email login successful:", data.user.email);
+    console.log("Email login successful:", data.user.id);
 
     // Register user with backend (in case they don't exist)
     await registerUserWithBackend(data.user);
@@ -606,7 +606,7 @@ async function executeEmailSignup() {
 
     if (error) throw error;
 
-    console.log("Email signup successful:", data.user?.email);
+    console.log("Email signup successful:", data.user?.id);
     recordTurnstileEvent("signup_success", { userId: data.user?.id || null });
 
     pendingSignupSubmission = null;
