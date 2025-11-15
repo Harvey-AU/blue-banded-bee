@@ -2826,42 +2826,51 @@ func (wp *WorkerPool) cleanupOrphanedTasks(ctx context.Context) error {
 
 	cleanupStart := time.Now()
 
-	// Update all orphaned tasks for this job in one go
-	// No batching, no cycle limits - we have no timeout constraint
-	result, err := tx.ExecContext(ctx, `
-		UPDATE tasks
-		SET status = $1,
-			error = $2,
-			completed_at = $3
-		WHERE job_id = $4
-			AND status IN ($5, $6)
-	`, TaskStatusFailed, errorMsg, time.Now().UTC(), targetJobID, TaskStatusPending, TaskStatusWaiting)
+	const batchSize = 1000
+	totalCleaned := int64(0)
 
-	if err != nil {
-		return fmt.Errorf("failed to update orphaned tasks for job %s: %w", targetJobID, err)
+	for {
+		result, err := tx.ExecContext(ctx, `
+			WITH batch AS (
+				SELECT id
+				FROM tasks
+				WHERE job_id = $1 AND status IN ($2, $3)
+				ORDER BY id
+				LIMIT $4
+			)
+			UPDATE tasks
+			SET status = $5,
+				error = $6,
+				completed_at = $7
+			WHERE id IN (SELECT id FROM batch)
+		`, targetJobID, TaskStatusPending, TaskStatusWaiting, batchSize, TaskStatusFailed, errorMsg, time.Now().UTC())
+		if err != nil {
+			return fmt.Errorf("failed to update orphaned tasks for job %s: %w", targetJobID, err)
+		}
+		cleaned, err := result.RowsAffected()
+		if err != nil {
+			return fmt.Errorf("failed to get affected rows: %w", err)
+		}
+		totalCleaned += cleaned
+		if cleaned < batchSize {
+			break
+		}
 	}
 
-	tasksUpdated, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("failed to get affected rows: %w", err)
-	}
-
-	// Commit the transaction
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
 	cleanupDuration := time.Since(cleanupStart)
 
-	// Log success with metrics
 	log.Info().
 		Str("job_id", targetJobID).
-		Int64("tasks_cleaned", tasksUpdated).
+		Int64("tasks_cleaned", totalCleaned).
 		Dur("duration_ms", cleanupDuration).
 		Msg("Orphaned task cleanup completed for job")
 
 	span.SetData("job_id", targetJobID)
-	span.SetData("tasks_cleaned", tasksUpdated)
+	span.SetData("tasks_cleaned", totalCleaned)
 	span.SetData("duration_ms", cleanupDuration.Milliseconds())
 
 	return nil
