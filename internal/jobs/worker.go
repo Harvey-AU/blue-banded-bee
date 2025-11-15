@@ -2832,10 +2832,26 @@ func (wp *WorkerPool) cleanupOrphanedTasks(ctx context.Context) error {
 	}
 
 	const batchSize = 1000
+	const maxIterations = 1000
 	now := time.Now().UTC()
 	totalCleaned := int64(0)
+	iterations := 0
 
 	for {
+		if ctx.Err() != nil {
+			return fmt.Errorf("cleanup cancelled after processing %d tasks: %w", totalCleaned, ctx.Err())
+		}
+
+		iterations++
+		if iterations > maxIterations {
+			log.Warn().
+				Str("job_id", targetJobID).
+				Int64("tasks_cleaned", totalCleaned).
+				Int("iterations", iterations).
+				Msg("Orphaned task cleanup stopped: maximum iteration limit reached")
+			break
+		}
+
 		batchTx, err := wp.db.BeginTx(ctx, nil)
 		if err != nil {
 			return fmt.Errorf("failed to begin batch transaction: %w", err)
