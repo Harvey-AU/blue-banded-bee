@@ -3023,9 +3023,18 @@ func (wp *WorkerPool) releaseRunningTaskSlot(jobID string) error {
 	case wp.runningTaskReleaseCh <- jobID:
 		return nil
 	default:
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		return wp.dbQueue.DecrementRunningTasksBy(ctx, jobID, 1)
+		flushCtx, flushCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		wp.flushRunningTaskReleases(flushCtx)
+		flushCancel()
+
+		select {
+		case wp.runningTaskReleaseCh <- jobID:
+			return nil
+		default:
+			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+			defer cancel()
+			return wp.dbQueue.DecrementRunningTasksBy(ctx, jobID, 1)
+		}
 	}
 }
 

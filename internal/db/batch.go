@@ -5,6 +5,9 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"os"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -13,13 +16,13 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-const (
+var (
 	// MaxBatchSize is the maximum number of tasks to batch before forcing a flush
 	MaxBatchSize = 100
 	// MaxBatchInterval is the maximum time to wait before flushing a batch
-	MaxBatchInterval = 5 * time.Second
+	MaxBatchInterval = 2 * time.Second
 	// BatchChannelSize is the buffer size for the update channel
-	BatchChannelSize = 500
+	BatchChannelSize = 2000
 	// MaxConsecutiveFailures before falling back to individual updates
 	MaxConsecutiveFailures = 3
 	// MaxShutdownRetries for final flush attempts
@@ -27,6 +30,20 @@ const (
 	// ShutdownRetryDelay between retry attempts
 	ShutdownRetryDelay = 500 * time.Millisecond
 )
+
+func init() {
+	if val := strings.TrimSpace(os.Getenv("BBB_BATCH_CHANNEL_SIZE")); val != "" {
+		if parsed, err := strconv.Atoi(val); err == nil && parsed > 0 {
+			BatchChannelSize = parsed
+		}
+	}
+
+	if val := strings.TrimSpace(os.Getenv("BBB_BATCH_MAX_INTERVAL_MS")); val != "" {
+		if parsed, err := strconv.Atoi(val); err == nil && parsed > 0 {
+			MaxBatchInterval = time.Duration(parsed) * time.Millisecond
+		}
+	}
+}
 
 // isRetryableError determines if an error is infrastructure-related (should retry)
 // vs data-related (poison pill that should be skipped)
