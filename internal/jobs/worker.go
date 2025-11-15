@@ -2827,6 +2827,7 @@ func (wp *WorkerPool) cleanupOrphanedTasks(ctx context.Context) error {
 	cleanupStart := time.Now()
 
 	const batchSize = 1000
+	now := time.Now().UTC()
 	totalCleaned := int64(0)
 
 	for {
@@ -2843,7 +2844,7 @@ func (wp *WorkerPool) cleanupOrphanedTasks(ctx context.Context) error {
 				error = $6,
 				completed_at = $7
 			WHERE id IN (SELECT id FROM batch)
-		`, targetJobID, TaskStatusPending, TaskStatusWaiting, batchSize, TaskStatusFailed, errorMsg, time.Now().UTC())
+		`, targetJobID, TaskStatusPending, TaskStatusWaiting, batchSize, TaskStatusFailed, errorMsg, now)
 		if err != nil {
 			return fmt.Errorf("failed to update orphaned tasks for job %s: %w", targetJobID, err)
 		}
