@@ -16,8 +16,10 @@
  */
 
 // Supabase configuration
-const SUPABASE_URL = "https://auth.bluebandedbee.co";
+const SUPABASE_URL =
+  window.BBB_CONFIG?.supabaseUrl || "https://auth.bluebandedbee.co";
 const SUPABASE_ANON_KEY =
+  window.BBB_CONFIG?.supabaseAnonKey ||
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdwemp0Ymd0ZGp4bmFjZGZ1anZ4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDUwNjYxNjMsImV4cCI6MjA2MDY0MjE2M30.eJjM2-3X8oXsFex_lQKvFkP1-_yLMHsueIn7_hCF6YI";
 
 // Global state
@@ -80,6 +82,28 @@ async function loadAuthModal() {
       });
     }
   }
+}
+
+function waitForAuthScript(pollIntervalMs = 50, timeoutMs = 12000) {
+  return new Promise((resolve, reject) => {
+    let attempts = 0;
+    const maxAttempts = Math.ceil(timeoutMs / pollIntervalMs);
+    const timer = setInterval(() => {
+      if (
+        typeof window.setupAuthHandlers === "function" &&
+        typeof window.showAuthModal === "function"
+      ) {
+        clearInterval(timer);
+        resolve();
+        return;
+      }
+      attempts += 1;
+      if (attempts >= maxAttempts) {
+        clearInterval(timer);
+        reject(new Error("Authentication modal script failed to load"));
+      }
+    }, pollIntervalMs);
+  });
 }
 
 /**
@@ -1097,6 +1121,197 @@ function setupLoginPageHandlers() {
   console.log("Login page handlers setup - using event delegation");
 }
 
+function initCliAuthPage() {
+  const params = new URLSearchParams(window.location.search);
+  const callbackUrl = params.get("callback") || "";
+  const state = params.get("state") || "";
+  const providerHint = params.get("provider") || null;
+  const statusEl = document.getElementById("cliStatus");
+  const modalContainer = document.getElementById("authModalContainer");
+  if (!statusEl || !modalContainer) {
+    console.warn("CLI auth: required elements missing");
+    return;
+  }
+
+  function setStatus(message, isError = false) {
+    statusEl.textContent = message;
+    statusEl.classList.toggle("error", Boolean(isError));
+  }
+
+  function validateCallback(url) {
+    try {
+      const parsed = new URL(url);
+      const isLoopback =
+        parsed.hostname === "127.0.0.1" ||
+        parsed.hostname === "localhost" ||
+        parsed.hostname === "::1";
+      return isLoopback && parsed.protocol === "http:";
+    } catch (error) {
+      return false;
+    }
+  }
+
+  const callbackValid =
+    Boolean(callbackUrl) && Boolean(state) && validateCallback(callbackUrl);
+  if (!callbackValid) {
+    setStatus(
+      "Invalid CLI callback parameters. Close this tab and re-run the CLI login command.",
+      true
+    );
+    return;
+  }
+
+  initializeSupabase();
+
+  let sessionSent = false;
+
+  async function sendSessionToCli() {
+    if (sessionSent) {
+      setStatus("Session already delivered to CLI. You can close this tab.");
+      return;
+    }
+
+    if (!supabase) {
+      throw new Error("Supabase client is unavailable");
+    }
+
+    const {
+      data: { session },
+      error,
+    } = await supabase.auth.getSession();
+
+    if (error || !session) {
+      throw new Error(error?.message || "Unable to read Supabase session");
+    }
+
+    const response = await fetch(callbackUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ session, state }),
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(
+        `CLI callback failed (${response.status}): ${text || "Unknown error"}`
+      );
+    }
+    sessionSent = true;
+  }
+
+  function overrideHandleAuthSuccess() {
+    if (typeof window.handleAuthSuccess !== "function") {
+      return;
+    }
+
+    window.handleAuthSuccess = async function (user) {
+      try {
+        setStatus("Auth successful. Finalising session…");
+        if (typeof window.registerUserWithBackend === "function") {
+          try {
+            await window.registerUserWithBackend(user);
+          } catch (registerError) {
+            console.warn("Backend registration failed:", registerError);
+          }
+        }
+        await sendSessionToCli();
+        setStatus("Session sent to CLI. You can close this tab.");
+        if (typeof window.closeAuthModal === "function") {
+          window.closeAuthModal();
+        }
+      } catch (error) {
+        console.error(error);
+        setStatus(
+          error.message || "Failed to deliver session to CLI. Please retry.",
+          true
+        );
+        sessionSent = false;
+      }
+    };
+  }
+
+  function overrideHandleSocialLogin() {
+    if (typeof window.handleSocialLogin !== "function") {
+      return;
+    }
+
+    window.handleSocialLogin = async function (provider) {
+      if (typeof window.showAuthLoading === "function") {
+        window.showAuthLoading();
+      }
+      if (typeof window.clearAuthError === "function") {
+        window.clearAuthError();
+      }
+      try {
+        const { error } = await supabase.auth.signInWithOAuth({
+          provider,
+          options: {
+            redirectTo: window.location.href,
+          },
+        });
+
+        if (error) throw error;
+      } catch (error) {
+        console.error(error);
+        if (typeof window.showAuthError === "function") {
+          window.showAuthError(error.message || `${provider} login failed.`);
+        }
+        if (typeof window.hideAuthLoading === "function") {
+          window.hideAuthLoading();
+        }
+        setStatus(
+          error.message || `${provider} login failed – please retry.`,
+          true
+        );
+      }
+    };
+  }
+
+  const reopenButton = document.getElementById("reopenModalBtn");
+  if (reopenButton) {
+    reopenButton.addEventListener("click", () => {
+      if (typeof window.showAuthModal === "function") {
+        window.showAuthModal();
+        setStatus("Sign-in modal reopened. Continue authentication.");
+      }
+    });
+  }
+
+  (async () => {
+    try {
+      await loadAuthModal();
+      await waitForAuthScript();
+      if (typeof window.setupAuthHandlers === "function") {
+        window.setupAuthHandlers();
+      }
+      if (typeof window.showLoginForm === "function") {
+        window.showLoginForm();
+      }
+      if (typeof window.showAuthModal === "function") {
+        window.showAuthModal();
+      }
+      if (providerHint) {
+        const button = document.querySelector(
+          `.bb-social-btn[data-provider="${providerHint}"]`
+        );
+        if (button) {
+          button.focus();
+        }
+      }
+      overrideHandleAuthSuccess();
+      overrideHandleSocialLogin();
+      setStatus("Sign-in modal ready. Continue authentication.");
+    } catch (error) {
+      console.error(error);
+      setStatus(
+        error.message ||
+          "Unable to load auth modal. Please try again or contact support.",
+        true
+      );
+    }
+  })();
+}
+
 // CAPTCHA success callback (global function)
 window.onTurnstileSuccess = function (token) {
   captchaToken = token;
@@ -1116,6 +1331,7 @@ if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     initializeSupabase,
     loadAuthModal,
+    waitForAuthScript,
     handleAuthCallback,
     registerUserWithBackend,
     updateAuthState,
@@ -1138,12 +1354,14 @@ if (typeof module !== "undefined" && module.exports) {
     setupAuthModalHandlers,
     setupLoginPageHandlers,
     handleLogout,
+    initCliAuthPage,
   };
 } else {
   // Browser environment - make functions globally available
   window.BBAuth = {
     initializeSupabase,
     loadAuthModal,
+    waitForAuthScript,
     handleAuthCallback,
     registerUserWithBackend,
     updateAuthState,
@@ -1166,11 +1384,13 @@ if (typeof module !== "undefined" && module.exports) {
     setupAuthModalHandlers,
     setupLoginPageHandlers,
     handleLogout,
+    initCliAuthPage,
   };
 
   // Also make individual functions available globally for backward compatibility
   window.initializeSupabase = initializeSupabase;
   window.loadAuthModal = loadAuthModal;
+  window.waitForAuthScript = waitForAuthScript;
   window.handleAuthCallback = handleAuthCallback;
   window.registerUserWithBackend = registerUserWithBackend;
   window.updateAuthState = updateAuthState;
@@ -1193,6 +1413,7 @@ if (typeof module !== "undefined" && module.exports) {
   window.setupAuthModalHandlers = setupAuthModalHandlers;
   window.setupLoginPageHandlers = setupLoginPageHandlers;
   window.handleLogout = handleLogout;
+  window.initCliAuthPage = initCliAuthPage;
 
   // Convenience functions for common auth form actions
   window.showLoginForm = () => showAuthForm("login");
