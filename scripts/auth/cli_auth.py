@@ -18,18 +18,14 @@ import urllib.request
 import webbrowser
 from pathlib import Path
 
-DEFAULT_AUTH_URL = os.environ.get("SUPABASE_AUTH_URL", "https://auth.bluebandedbee.co")
+try:
+    from . import config
+except ImportError:
+    # Fall back when running as a standalone script
+    import config
 
-def _require_env_var(name: str) -> str:
-    value = os.environ.get(name)
-    if not value:
-        raise RuntimeError(
-            f"Environment variable {name} must be set; see docs/auth for rotation instructions"
-        )
-    return value
-
-
-DEFAULT_ANON_KEY = _require_env_var("SUPABASE_ANON_KEY")
+DEFAULT_AUTH_URL = os.environ.get("SUPABASE_AUTH_URL", config.SUPABASE_URL)
+DEFAULT_ANON_KEY = os.environ.get("SUPABASE_ANON_KEY", config.DEFAULT_SUPABASE_ANON_KEY)
 DEFAULT_PROVIDER = os.environ.get("BBB_AUTH_PROVIDER", "google")
 DEFAULT_CALLBACK_PORT = int(os.environ.get("BBB_AUTH_CALLBACK_PORT", "8765"))
 LOGIN_PAGE_URL = os.environ.get("BBB_LOGIN_URL", "https://app.bluebandedbee.co/cli-login.html")

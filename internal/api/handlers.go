@@ -130,6 +130,7 @@ func (h *Handler) SetupRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/dashboard", h.ServeDashboard)
 	mux.HandleFunc("/dashboard-new", h.ServeNewDashboard)
 	mux.HandleFunc("/auth-modal.html", h.ServeAuthModal)
+	mux.HandleFunc("/cli-login.html", h.ServeCliLogin)
 	mux.HandleFunc("/debug-auth.html", h.ServeDebugAuth)
 	mux.HandleFunc("/jobs/", h.ServeJobDetails)
 
@@ -220,6 +221,11 @@ func (h *Handler) ServeAuthModal(w http.ResponseWriter, r *http.Request) {
 // ServeDebugAuth serves the debug auth test page
 func (h *Handler) ServeDebugAuth(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, "debug-auth.html")
+}
+
+// ServeCliLogin serves the CLI login page for browser-based auth flows
+func (h *Handler) ServeCliLogin(w http.ResponseWriter, r *http.Request) {
+	http.ServeFile(w, r, "cli-login.html")
 }
 
 // ServeJobDetails serves the standalone job details page
