@@ -24,6 +24,7 @@
 *.swp
 .obsidian/
 .aider*
+__pycache__/
 
 # OS
 .DS_Store
@@ -65,4 +66,3 @@ supabase/.branches/
 
 # Grafana/observability config with secrets
 alloy.river
-

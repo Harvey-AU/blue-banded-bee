@@ -6,6 +6,7 @@ import argparse
 import base64
 import hashlib
 import http.server
+import importlib.util
 import json
 import os
 import secrets
@@ -18,18 +19,20 @@ import urllib.request
 import webbrowser
 from pathlib import Path
 
-DEFAULT_AUTH_URL = os.environ.get("SUPABASE_AUTH_URL", "https://auth.bluebandedbee.co")
+SCRIPT_DIR = Path(__file__).resolve().parent
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
 
-def _require_env_var(name: str) -> str:
-    value = os.environ.get(name)
-    if not value:
-        raise RuntimeError(
-            f"Environment variable {name} must be set; see docs/auth for rotation instructions"
-        )
-    return value
+_config_spec = importlib.util.spec_from_file_location(
+    "cli_auth_config", SCRIPT_DIR / "config.py"
+)
+if _config_spec is None or _config_spec.loader is None:
+    raise RuntimeError("Failed to load CLI auth config")
+config = importlib.util.module_from_spec(_config_spec)
+_config_spec.loader.exec_module(config)
 
-
-DEFAULT_ANON_KEY = _require_env_var("SUPABASE_ANON_KEY")
+DEFAULT_AUTH_URL = os.environ.get("SUPABASE_AUTH_URL", config.SUPABASE_URL)
+DEFAULT_ANON_KEY = os.environ.get("SUPABASE_ANON_KEY", config.DEFAULT_SUPABASE_ANON_KEY)
 DEFAULT_PROVIDER = os.environ.get("BBB_AUTH_PROVIDER", "google")
 DEFAULT_CALLBACK_PORT = int(os.environ.get("BBB_AUTH_CALLBACK_PORT", "8765"))
 LOGIN_PAGE_URL = os.environ.get("BBB_LOGIN_URL", "https://app.bluebandedbee.co/cli-login.html")
