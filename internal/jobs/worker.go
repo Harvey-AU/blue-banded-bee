@@ -3023,9 +3023,26 @@ func (wp *WorkerPool) releaseRunningTaskSlot(jobID string) error {
 	case wp.runningTaskReleaseCh <- jobID:
 		return nil
 	default:
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		return wp.dbQueue.DecrementRunningTasksBy(ctx, jobID, 1)
+		log.Debug().Str("job_id", jobID).Msg("Running task release channel full, forcing flush")
+		flushCtx, flushCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		wp.flushRunningTaskReleaseForJob(flushCtx, jobID)
+		flushCancel()
+
+		select {
+		case wp.runningTaskReleaseCh <- jobID:
+			return nil
+		default:
+			log.Warn().Str("job_id", jobID).Msg("Falling back to direct running_tasks decrement")
+			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+			defer cancel()
+			if err := wp.dbQueue.DecrementRunningTasksBy(ctx, jobID, 1); err != nil {
+				wp.runningTaskReleaseMu.Lock()
+				wp.runningTaskReleasePending[jobID]++
+				wp.runningTaskReleaseMu.Unlock()
+				return err
+			}
+			return nil
+		}
 	}
 }
 
@@ -3251,7 +3268,7 @@ func (wp *WorkerPool) handleTaskError(ctx context.Context, task *db.Task, taskEr
 	if err := wp.releaseRunningTaskSlot(task.JobID); err != nil {
 		log.Error().Err(err).Str("job_id", task.JobID).Str("task_id", task.ID).
 			Msg("Failed to decrement running_tasks counter")
-		// Don't return error - batch update will eventually sync the counter
+		// Don't return error here; failed decrements are buffered/retried and reconciliation fixes any drift
 	}
 
 	// Queue task update for batch processing (detailed field updates)
@@ -3345,7 +3362,7 @@ func (wp *WorkerPool) handleTaskSuccess(ctx context.Context, task *db.Task, resu
 	if err := wp.releaseRunningTaskSlot(task.JobID); err != nil {
 		log.Error().Err(err).Str("job_id", task.JobID).Str("task_id", task.ID).
 			Msg("Failed to decrement running_tasks counter")
-		// Don't return error - batch update will eventually sync the counter
+		// Don't return error here; failed decrements are buffered/retried and reconciliation keeps counters accurate
 	}
 
 	// Queue task update for batch processing (detailed field updates)

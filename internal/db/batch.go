@@ -5,6 +5,9 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"os"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -13,13 +16,13 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-const (
+var (
 	// MaxBatchSize is the maximum number of tasks to batch before forcing a flush
 	MaxBatchSize = 100
 	// MaxBatchInterval is the maximum time to wait before flushing a batch
-	MaxBatchInterval = 5 * time.Second
+	MaxBatchInterval = 2 * time.Second
 	// BatchChannelSize is the buffer size for the update channel
-	BatchChannelSize = 500
+	BatchChannelSize = 2000
 	// MaxConsecutiveFailures before falling back to individual updates
 	MaxConsecutiveFailures = 3
 	// MaxShutdownRetries for final flush attempts
@@ -27,6 +30,42 @@ const (
 	// ShutdownRetryDelay between retry attempts
 	ShutdownRetryDelay = 500 * time.Millisecond
 )
+
+func init() {
+	if val := strings.TrimSpace(os.Getenv("BBB_BATCH_CHANNEL_SIZE")); val != "" {
+		parsed, err := strconv.Atoi(val)
+		if err != nil {
+			log.Warn().Str("value", val).Msg("Failed to parse BBB_BATCH_CHANNEL_SIZE override")
+		} else {
+			if parsed < 500 {
+				log.Warn().Int("requested", parsed).Msg("BBB_BATCH_CHANNEL_SIZE below minimum, using 500")
+				parsed = 500
+			} else if parsed > 20000 {
+				log.Warn().Int("requested", parsed).Msg("BBB_BATCH_CHANNEL_SIZE above maximum, using 20000")
+				parsed = 20000
+			}
+			BatchChannelSize = parsed
+			log.Info().Int("channel_size", parsed).Msg("BBB_BATCH_CHANNEL_SIZE override applied")
+		}
+	}
+
+	if val := strings.TrimSpace(os.Getenv("BBB_BATCH_MAX_INTERVAL_MS")); val != "" {
+		parsed, err := strconv.Atoi(val)
+		if err != nil {
+			log.Warn().Str("value", val).Msg("Failed to parse BBB_BATCH_MAX_INTERVAL_MS override")
+		} else {
+			if parsed < 100 {
+				log.Warn().Int("requested", parsed).Msg("BBB_BATCH_MAX_INTERVAL_MS below minimum, using 100ms")
+				parsed = 100
+			} else if parsed > 10000 {
+				log.Warn().Int("requested", parsed).Msg("BBB_BATCH_MAX_INTERVAL_MS above maximum, using 10s")
+				parsed = 10000
+			}
+			MaxBatchInterval = time.Duration(parsed) * time.Millisecond
+			log.Info().Int("interval_ms", parsed).Msg("BBB_BATCH_MAX_INTERVAL_MS override applied")
+		}
+	}
+}
 
 // isRetryableError determines if an error is infrastructure-related (should retry)
 // vs data-related (poison pill that should be skipped)

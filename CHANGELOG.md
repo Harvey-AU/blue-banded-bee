@@ -29,6 +29,16 @@ On merge, CI will:
 
 ## [Unreleased]
 
+### Changed
+
+- Batch manager now defaults to a 2 s flush interval with a 2000-item channel,
+  and both settings can be tuned via `BBB_BATCH_MAX_INTERVAL_MS` and
+  `BBB_BATCH_CHANNEL_SIZE` to absorb heavy task churn without blocking workers.
+- Running task slot releases flush pending batches before falling back to a
+  direct `DecrementRunningTasksBy` call, and the fallback timeout was extended
+  (15 s) to avoid spurious "DecrementRunningTasksBy database error" warnings
+  during spikes.
+
 ## [0.17.9] – 2025-11-15
 
 ## [0.17.8] – 2025-11-15
