@@ -273,6 +273,18 @@ def _start_callback_server(state: str, port: int):
 def _perform_login(auth_url: str, provider: str, port: int) -> dict:
     state = secrets.token_urlsafe(24)
     server, done_event, result = _start_callback_server(state, port)
+    shutdown_lock = threading.Lock()
+    shutdown_called = False
+
+    def safe_shutdown() -> None:
+        nonlocal shutdown_called
+        with shutdown_lock:
+            if shutdown_called:
+                return
+            shutdown_called = True
+            server.shutdown()
+            server.server_close()
+
     redirect_url = f"http://127.0.0.1:{port}/callback"
     callback_with_state = f"{redirect_url}?state={urllib.parse.quote(state, safe='')}"
 
@@ -290,11 +302,10 @@ def _perform_login(auth_url: str, provider: str, port: int) -> dict:
         _debug("Please copy the URL above into your browser.")
 
     if not done_event.wait(timeout=300):
-        server.shutdown()
+        safe_shutdown()
         raise RuntimeError("Timed out waiting for authentication. Please try again.")
 
-    server.shutdown()
-    server.server_close()
+    safe_shutdown()
 
     if result.get("error"):
         raise RuntimeError(f"Authentication failed: {result['error']}")
@@ -332,7 +343,11 @@ def ensure_token(*, force_login: bool = False) -> str:
             refreshed = _refresh_session(DEFAULT_AUTH_URL, session["refresh_token"])
             return refreshed["access_token"]
         except Exception as exc:  # noqa: BLE001
-            _debug(f"Failed to refresh session: {exc}")
+            _debug(f"Failed to refresh session: {exc!r}")
+            if os.environ.get("BBB_AUTH_DEBUG"):
+                import traceback
+
+                _debug(traceback.format_exc())
 
     _debug("No valid Supabase session found. Starting login flow...")
     session = _perform_login(DEFAULT_AUTH_URL, DEFAULT_PROVIDER, DEFAULT_CALLBACK_PORT)

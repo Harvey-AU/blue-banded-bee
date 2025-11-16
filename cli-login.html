@@ -407,6 +407,8 @@
       const state = params.get("state") || "";
       const providerHint = params.get("provider") || null;
       let sessionSent = false;
+      const AUTH_SCRIPT_POLL_INTERVAL_MS = 50;
+      const AUTH_SCRIPT_TIMEOUT_MS = 12000;
 
       function setStatus(message, isError = false) {
         const el = document.getElementById("cliStatus");
@@ -538,7 +540,10 @@
               true
             );
             // Only reset if we're certain the delivery failed
-            if (error.message && !error.message.includes("CLI callback failed")) {
+            if (
+              error.message &&
+              !error.message.includes("CLI callback failed")
+            ) {
               sessionSent = false;
             }
           }
@@ -585,7 +590,9 @@
       function waitForAuthScript() {
         return new Promise((resolve, reject) => {
           let attempts = 0;
-          const maxAttempts = 120;
+          const maxAttempts = Math.ceil(
+            AUTH_SCRIPT_TIMEOUT_MS / AUTH_SCRIPT_POLL_INTERVAL_MS
+          );
           const timer = setInterval(() => {
             if (
               typeof window.setupAuthHandlers === "function" &&
@@ -600,7 +607,7 @@
               clearInterval(timer);
               reject(new Error("Authentication modal script failed to load"));
             }
-          }, 50);
+          }, AUTH_SCRIPT_POLL_INTERVAL_MS);
         });
       }
 
