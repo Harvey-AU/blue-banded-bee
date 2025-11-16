@@ -41,6 +41,10 @@ On merge, CI will:
   direct `DecrementRunningTasksBy` call, and the fallback timeout was extended
   (15 s) to avoid spurious "DecrementRunningTasksBy database error" warnings
   during spikes.
+- CLI auth flow now has a dedicated `cli-login.html` that reuses the Supabase
+  modal without leaking users' sessions, and the helper
+  (`scripts/auth/cli_auth.py`) drives browser-based login, handles CORS
+  securely, and caches tokens for load test scripts.
 
 ## [0.17.9] – 2025-11-15
 
