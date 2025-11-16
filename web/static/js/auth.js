@@ -552,29 +552,11 @@ async function handleEmailLogin(event) {
 
     console.log("Email login successful:", data.user.id);
 
-    if (typeof window.handleAuthSuccess === "function") {
-      await window.handleAuthSuccess(data.user);
-      return;
-    }
-
-    // Register user with backend (in case they don't exist)
-    await registerUserWithBackend(data.user);
-
-    closeAuthModal();
-
-    // Update user info immediately
-    updateUserInfo();
-
-    // Update auth state
-    updateAuthState(true);
-
-    // Refresh dashboard data if dataBinder exists
-    if (window.dataBinder) {
-      await window.dataBinder.refresh();
-    }
-
-    // Handle any pending domain
-    await handlePendingDomain();
+    const handler =
+      typeof window.handleAuthSuccess === "function"
+        ? window.handleAuthSuccess
+        : defaultHandleAuthSuccess;
+    await handler(data.user);
   } catch (error) {
     console.error("Email login error:", error);
     if (window.Sentry) {
@@ -708,6 +690,17 @@ async function executeEmailSignup() {
       hideAuthLoading();
     }
   }
+}
+
+async function defaultHandleAuthSuccess(user) {
+  await registerUserWithBackend(user);
+  closeAuthModal();
+  updateUserInfo();
+  updateAuthState(true);
+  if (window.dataBinder) {
+    await window.dataBinder.refresh();
+  }
+  await handlePendingDomain();
 }
 
 /**
@@ -1221,20 +1214,15 @@ function initCliAuthPage() {
   }
 
   function overrideHandleAuthSuccess() {
-    if (typeof window.handleAuthSuccess !== "function") {
-      return;
-    }
+    const baseHandler =
+      typeof window.handleAuthSuccess === "function"
+        ? window.handleAuthSuccess
+        : defaultHandleAuthSuccess;
 
     window.handleAuthSuccess = async function (user) {
       try {
         setStatus("Auth successful. Finalising session…");
-        if (typeof window.registerUserWithBackend === "function") {
-          try {
-            await window.registerUserWithBackend(user);
-          } catch (registerError) {
-            console.warn("Backend registration failed:", registerError);
-          }
-        }
+        await baseHandler(user);
         await sendSessionToCli();
         setStatus("Session sent to CLI. You can close this tab.");
         if (typeof window.closeAuthModal === "function") {
@@ -1375,6 +1363,7 @@ if (typeof module !== "undefined" && module.exports) {
     setupAuthModalHandlers,
     setupLoginPageHandlers,
     handleLogout,
+    defaultHandleAuthSuccess,
     initCliAuthPage,
   };
 } else {
@@ -1434,6 +1423,7 @@ if (typeof module !== "undefined" && module.exports) {
   window.setupAuthModalHandlers = setupAuthModalHandlers;
   window.setupLoginPageHandlers = setupLoginPageHandlers;
   window.handleLogout = handleLogout;
+  window.handleAuthSuccess = defaultHandleAuthSuccess;
   window.initCliAuthPage = initCliAuthPage;
 
   // Convenience functions for common auth form actions

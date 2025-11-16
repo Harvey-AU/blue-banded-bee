@@ -1691,6 +1691,9 @@
       // Initialize dashboard with unified authentication system
       document.addEventListener("DOMContentLoaded", async () => {
         try {
+          if (window.BB_APP?.coreReady) {
+            await window.BB_APP.coreReady;
+          }
           // Initialize the complete dashboard with auth integration
           await initializeDashboard({
             debug: false, // Disable noisy console logging

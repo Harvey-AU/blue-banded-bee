@@ -202,7 +202,13 @@
     </div>
 
     <!-- Error Message -->
-    <div id="authError" class="bb-auth-error" style="display: none"></div>
+    <div
+      id="authError"
+      class="bb-auth-error"
+      style="display: none"
+      role="status"
+      aria-live="polite"
+    ></div>
   </div>
 </div>
 
@@ -210,6 +216,31 @@
   // Shared auth modal JavaScript
   let supabase;
   let captchaToken = null;
+
+  function disableAuthForms(message) {
+    const errorDiv = document.getElementById("authError");
+    if (errorDiv) {
+      errorDiv.textContent = message;
+      errorDiv.style.display = "block";
+      errorDiv.setAttribute("role", "status");
+      errorDiv.setAttribute("aria-live", "assertive");
+      errorDiv.setAttribute("tabindex", "-1");
+      if (typeof errorDiv.focus === "function") {
+        errorDiv.focus({ preventScroll: true });
+      }
+    }
+
+    document
+      .querySelectorAll(
+        ".bb-auth-form input, .bb-auth-form button, .bb-social-btn"
+      )
+      .forEach((el) => {
+        el.setAttribute("disabled", "disabled");
+        el.setAttribute("aria-disabled", "true");
+        el.style.cursor = "not-allowed";
+        el.style.opacity = "0.6";
+      });
+  }
 
   function disableAuthForms(message) {
     const errorDiv = document.getElementById("authError");

@@ -157,9 +157,8 @@
   window.BB_APP.coreReady = coreReady;
 
   coreReady.catch((err) => {
-    // Error already logged above; this suppresses unhandled rejection warnings
-    if (window && window.console) {
-      console.debug("coreReady rejected", err);
+    if (typeof window !== "undefined" && window.console) {
+      window.console.debug("coreReady rejected", err);
     }
   });
 
