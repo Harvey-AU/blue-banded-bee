@@ -446,7 +446,7 @@
         const contentType = response.headers.get("Content-Type") || "";
         if (!response.ok) {
           throw new Error(
-            `Failed to load auth modal from /auth-modal.html (${response.status} ${response.statusText}). Ensure the static asset is deployed."
+            `Failed to load auth modal from /auth-modal.html (${response.status} ${response.statusText}). Ensure the static asset is deployed.`
           );
         }
         if (!contentType.toLowerCase().startsWith("text/html")) {
