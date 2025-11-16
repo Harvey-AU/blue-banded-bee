@@ -66,3 +66,5 @@ supabase/.branches/
 # Grafana/observability config with secrets
 alloy.river
 
+__pycache__/
+*.pyc
