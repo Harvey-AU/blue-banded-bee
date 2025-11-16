@@ -34,6 +34,9 @@ func buildConfigSnippet() ([]byte, error) {
 	if key == "" {
 		return nil, fmt.Errorf("SUPABASE_PUBLISHABLE_KEY not set")
 	}
+	if !strings.HasPrefix(key, "sb_") && !strings.HasPrefix(key, "eyJ") {
+		return nil, fmt.Errorf("invalid SUPABASE_PUBLISHABLE_KEY format")
+	}
 	config := map[string]interface{}{
 		"supabaseUrl":     authURL,
 		"supabaseAnonKey": key,
@@ -50,6 +53,7 @@ func buildConfigSnippet() ([]byte, error) {
 				Msg("invalid BBB_ENABLE_TURNSTILE value; falling back to default")
 		}
 	} else {
+		// Default: enable Turnstile only in production unless explicitly overridden
 		config["enableTurnstile"] = os.Getenv("APP_ENV") == "production"
 	}
 	bytes, err := json.Marshal(config)

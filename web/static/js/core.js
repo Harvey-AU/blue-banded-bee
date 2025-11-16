@@ -59,7 +59,14 @@
     if (window.BBB_CONFIG) {
       return;
     }
-    await loadScript("/config.js");
+    try {
+      await loadScript("/config.js");
+    } catch (error) {
+      throw new Error("Failed to load /config.js: " + error.message);
+    }
+    if (!window.BBB_CONFIG) {
+      throw new Error("BBB_CONFIG missing after loading /config.js");
+    }
   }
 
   function ensureSupabase() {
@@ -104,8 +111,6 @@
     const attrs = overrideSrc
       ? { async: true, defer: true }
       : {
-          integrity:
-            "sha384-+EHVdF/Q7De3+QlNfcmFQlzlSz2DvshhruIEntjsTyek4LyjZHkT/mDxfFg2Ai+y",
           crossorigin: "anonymous",
           async: true,
           defer: true,
@@ -150,6 +155,10 @@
   window.BB_APP.coreReady = coreReady;
 
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", () => coreReady);
+    document.addEventListener("DOMContentLoaded", () => {
+      coreReady.catch((err) => {
+        console.error("Core initialization failed after DOMContentLoaded", err);
+      });
+    });
   }
 })();

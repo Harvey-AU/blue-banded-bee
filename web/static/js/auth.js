@@ -16,11 +16,23 @@
  */
 
 // Supabase configuration
-const SUPABASE_URL =
-  window.BBB_CONFIG?.supabaseUrl || "https://auth.bluebandedbee.co";
-const SUPABASE_ANON_KEY =
-  window.BBB_CONFIG?.supabaseAnonKey ||
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdwemp0Ymd0ZGp4bmFjZGZ1anZ4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDUwNjYxNjMsImV4cCI6MjA2MDY0MjE2M30.eJjM2-3X8oXsFex_lQKvFkP1-_yLMHsueIn7_hCF6YI";
+const runtimeConfig =
+  (typeof window !== "undefined" && window.BBB_CONFIG) ||
+  (typeof process !== "undefined"
+    ? {
+        supabaseUrl: process.env.SUPABASE_AUTH_URL,
+        supabaseAnonKey: process.env.SUPABASE_PUBLISHABLE_KEY,
+      }
+    : null);
+
+if (!runtimeConfig?.supabaseUrl || !runtimeConfig?.supabaseAnonKey) {
+  throw new Error(
+    "Supabase configuration unavailable — ensure BBB_CONFIG or environment vars are set"
+  );
+}
+
+const SUPABASE_URL = runtimeConfig.supabaseUrl;
+const SUPABASE_ANON_KEY = runtimeConfig.supabaseAnonKey;
 
 // Global state
 let supabase;

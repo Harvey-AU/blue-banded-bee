@@ -213,16 +213,23 @@
 
   // Initialize Supabase
   function initializeSupabase() {
-    if (window.supabase && window.supabase.createClient) {
-      const SUPABASE_URL =
-        window.BBB_CONFIG?.supabaseUrl || "https://auth.bluebandedbee.co";
-      const SUPABASE_ANON_KEY =
-        window.BBB_CONFIG?.supabaseAnonKey ||
-        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdwemp0Ymd0ZGp4bmFjZGZ1anZ4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDUwNjYxNjMsImV4cCI6MjA2MDY0MjE2M30.eJjM2-3X8oXsFex_lQKvFkP1-_yLMHsueIn7_hCF6YI";
-      supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-      return true;
+    if (!window.supabase || !window.supabase.createClient) {
+      return false;
     }
-    return false;
+    if (
+      !window.BBB_CONFIG?.supabaseUrl ||
+      !window.BBB_CONFIG?.supabaseAnonKey
+    ) {
+      console.error(
+        "BBB_CONFIG is missing Supabase settings; auth modal unavailable"
+      );
+      return false;
+    }
+    supabase = window.supabase.createClient(
+      window.BBB_CONFIG.supabaseUrl,
+      window.BBB_CONFIG.supabaseAnonKey
+    );
+    return true;
   }
 
   // CAPTCHA success callback
