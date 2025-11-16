@@ -318,7 +318,7 @@ def _refresh_session(auth_url: str, refresh_token: str) -> dict:
     return response
 
 
-def ensure_token(force_login: bool) -> str:
+def ensure_token(*, force_login: bool = False) -> str:
     if force_login:
         session = _perform_login(DEFAULT_AUTH_URL, DEFAULT_PROVIDER, DEFAULT_CALLBACK_PORT)
         return session["access_token"]
