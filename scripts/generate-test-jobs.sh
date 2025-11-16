@@ -1,6 +1,12 @@
 #!/bin/bash
 set -e
 
+# Colours
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+RED='\033[0;31m'
+NC='\033[0m'
+
 # Simple Load Test Script
 # Calls the /v1/jobs API endpoint to create real jobs at intervals
 # Creates one job per unique domain in the DOMAINS array
@@ -9,8 +15,8 @@ set -e
 #  - VALUE can be minutes (default), e.g. `interval:2` or `interval:2m`
 #  - or seconds via an `s` suffix, e.g. `interval:45s`
 #  - `batch:N` remains as a backwards-compatible alias for minutes
-#  - `concurrency:N` sets the per-job concurrency limit (1-20)
-#  - `concurrency:random` generates random concurrency (1-20) for each job (default)
+#  - `concurrency:N` sets the per-job concurrency limit (1-50)
+#  - `concurrency:random` generates random concurrency (10-50) for each job (default)
 #
 # Examples:
 #   ./load-test-simple.sh interval:1m jobs:10 concurrency:5
@@ -31,7 +37,7 @@ set -e
 # TEST 3 - Mixed job concurrency (production-like)
 #   Server config: WORKER_CONCURRENCY=5, WORKER_POOL_SIZE=100
 #   Command: ./load-test-simple.sh interval:30s jobs:30 concurrency:random
-#   Expected: Each job respects its own limit (1-10), fair distribution across all jobs
+#   Expected: Each job respects its own limit (10-50), fair distribution across all jobs
 #
 # TEST 4 - Target throughput (validation)
 #   Server config: WORKER_CONCURRENCY=5, WORKER_POOL_SIZE=100
@@ -106,13 +112,13 @@ for arg in "$@"; do
     concurrency:*)
       JOB_CONCURRENCY="${arg#*:}"
       if [ "$JOB_CONCURRENCY" == "random" ]; then
-        # Random concurrency mode - will generate 1-20 per job
+        # Random concurrency mode - will generate 10-50 per job
         :
       elif [[ ! "$JOB_CONCURRENCY" =~ ^[0-9]+$ ]]; then
-        echo "Invalid concurrency: $JOB_CONCURRENCY (expected integer 1-20 or 'random')"
+        echo "Invalid concurrency: $JOB_CONCURRENCY (expected integer 1-50 or 'random')"
         exit 1
-      elif [ "$JOB_CONCURRENCY" -lt 1 ] || [ "$JOB_CONCURRENCY" -gt 20 ]; then
-        echo "Concurrency must be between 1 and 20 (got: $JOB_CONCURRENCY)"
+      elif [ "$JOB_CONCURRENCY" -lt 1 ] || [ "$JOB_CONCURRENCY" -gt 50 ]; then
+        echo "Concurrency must be between 1 and 50 (got: $JOB_CONCURRENCY)"
         exit 1
       fi
       ;;
@@ -130,14 +136,44 @@ if [ "$BATCH_INTERVAL_SECONDS" -le 0 ]; then
 fi
 
 # Configuration (can still be overridden by environment variables)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+TOKEN_FILE="${TOKEN_FILE_PATH:-$REPO_ROOT/sb-auth-auth-token}"
+AUTH_HELPER="$REPO_ROOT/scripts/auth/cli_auth.py"
+
 API_URL="${API_URL:-https://blue-banded-bee.fly.dev}"
 AUTH_TOKEN="${AUTH_TOKEN:-}"
 
-# Colours
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-RED='\033[0;31m'
-NC='\033[0m'
+if [ -z "$AUTH_TOKEN" ] && [ -f "$TOKEN_FILE" ]; then
+  if ! token_from_file=$(
+    python3 - "$TOKEN_FILE" <<'PY'
+import json
+import sys
+
+try:
+    with open(sys.argv[1], "r", encoding="utf-8") as fh:
+        data = json.load(fh)
+    token = (data.get("access_token") or "").strip()
+    if not token:
+        raise SystemExit("access_token missing in sb-auth-auth-token")
+    print(token, end="")
+except FileNotFoundError:
+    raise SystemExit("Token file not found")
+PY
+  ); then
+    echo -e "${RED}ERROR: Failed to parse $TOKEN_FILE for access_token${NC}"
+    exit 1
+  fi
+  AUTH_TOKEN="$token_from_file"
+fi
+
+if [ -z "$AUTH_TOKEN" ] && [ -x "$AUTH_HELPER" ]; then
+  if token_from_helper=$(python3 "$AUTH_HELPER" ensure); then
+    AUTH_TOKEN="$token_from_helper"
+  else
+    echo -e "${YELLOW}Warning: automatic Supabase login failed. Run 'python3 $AUTH_HELPER login'.${NC}"
+  fi
+fi
 
 # Test domains - 115 diverse real-world sites (all under 50k pages)
 DOMAINS=(
@@ -191,8 +227,13 @@ DOMAINS=(
 # Check prerequisites
 if [ -z "$AUTH_TOKEN" ]; then
   echo -e "${RED}ERROR: AUTH_TOKEN not set${NC}"
-  echo "Get a token from your app and run:"
-  echo "  export AUTH_TOKEN='your-jwt-token'"
+  if [ -x "$AUTH_HELPER" ]; then
+    echo "Run the login helper:"
+    echo "  python3 $AUTH_HELPER login"
+  else
+    echo "Get a token from your app and run:"
+    echo "  export AUTH_TOKEN='your-jwt-token'"
+  fi
   exit 1
 fi
 
@@ -201,7 +242,7 @@ echo "API URL:           $API_URL"
 echo "Batch interval:    $(format_interval "$BATCH_INTERVAL_SECONDS")"
 echo "Jobs per batch:    $JOBS_PER_BATCH"
 if [ "$JOB_CONCURRENCY" == "random" ]; then
-  echo "Job concurrency:   random (1-20 tasks/job)"
+  echo "Job concurrency:   random (10-50 tasks/job)"
 else
   echo "Job concurrency:   $JOB_CONCURRENCY tasks/job"
 fi
@@ -228,11 +269,11 @@ create_job() {
   local domain=$1
   local batch_num=$2
 
-  # Generate random concurrency between 1 and 10 for mixed load testing
+  # Generate random concurrency between 10 and 50 for mixed load testing
   # Unless JOB_CONCURRENCY is explicitly set to a specific value
   local job_concurrency
   if [ "$JOB_CONCURRENCY" == "random" ]; then
-    job_concurrency=$((RANDOM % 20 + 1))
+    job_concurrency=$((RANDOM % 41 + 10))
     echo -e "${YELLOW}Creating job for $domain (batch $batch_num, concurrency: $job_concurrency)${NC}"
   else
     job_concurrency=$JOB_CONCURRENCY
@@ -246,7 +287,7 @@ create_job() {
       \"domain\": \"$domain\",
       \"use_sitemap\": true,
       \"find_links\": true,
-      \"max_pages\": 5000,
+      \"max_pages\": 10000,
       \"concurrency\": $job_concurrency
     }")
 
@@ -256,7 +297,6 @@ create_job() {
   if [ "$http_code" -eq 200 ] || [ "$http_code" -eq 201 ]; then
     job_id=$(echo "$body" | jq -r '.data.id // .job.id // .id' 2>/dev/null || echo "unknown")
     echo -e "${GREEN}✓ Created job $job_id for $domain${NC}"
-    echo "$batch_num,$domain,$job_id,$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> ./logs/load_test_jobs.log
     JOBS_CREATED=$((JOBS_CREATED + 1))
   else
     echo -e "${RED}✗ Failed to create job for $domain (HTTP $http_code)${NC}"
@@ -271,8 +311,6 @@ create_job() {
 }
 
 mkdir -p ./logs
-# Initialize results file
-echo "batch,domain,job_id,created_at" > ./logs/load_test_jobs.log
 
 # Track start time for throughput calculation
 START_TIME=$(date +%s)
@@ -338,8 +376,6 @@ if [ "$JOBS_CREATED" -gt 0 ] && [ "$ELAPSED_SECONDS" -gt 0 ]; then
   echo "  (Actual throughput depends on server configuration and site response times)"
 fi
 
-echo ""
-echo "Results logged to: ./logs/load_test_jobs.log"
 echo ""
 echo "Check job status with:"
 echo "  curl -H 'Authorization: Bearer \$AUTH_TOKEN' $API_URL/v1/jobs"

@@ -29,17 +29,24 @@ On merge, CI will:
 
 ## [Unreleased]
 
+## [0.17.11] – 2025-11-16
+
 ## [0.17.10] – 2025-11-16
 
 ### Changed
 
 - Batch manager now defaults to a 2 s flush interval with a 2000-item channel,
   and both settings can be tuned via `BBB_BATCH_MAX_INTERVAL_MS` and
-  `BBB_BATCH_CHANNEL_SIZE` to absorb heavy task churn without blocking workers.
+  `BBB_BATCH_CHANNEL_SIZE` (clamped to 100‑10 000 ms and 500‑20 000 items) to
+  absorb heavy task churn without blocking workers.
 - Running task slot releases flush pending batches before falling back to a
   direct `DecrementRunningTasksBy` call, and the fallback timeout was extended
   (15 s) to avoid spurious "DecrementRunningTasksBy database error" warnings
   during spikes.
+- CLI auth flow now has a dedicated `cli-login.html` that reuses the Supabase
+  modal without leaking users' sessions, and the helper
+  (`scripts/auth/cli_auth.py`) drives browser-based login, handles CORS
+  securely, and caches tokens for load test scripts.
 
 ## [0.17.9] – 2025-11-15
 
