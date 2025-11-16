@@ -29,6 +29,8 @@ On merge, CI will:
 
 ## [Unreleased]
 
+## [0.17.10] – 2025-11-16
+
 ### Changed
 
 - Batch manager now defaults to a 2 s flush interval with a 2000-item channel,
