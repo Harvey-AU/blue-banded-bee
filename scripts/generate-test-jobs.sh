@@ -1,6 +1,12 @@
 #!/bin/bash
 set -e
 
+# Colours
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+RED='\033[0;31m'
+NC='\033[0m'
+
 # Simple Load Test Script
 # Calls the /v1/jobs API endpoint to create real jobs at intervals
 # Creates one job per unique domain in the DOMAINS array
@@ -168,12 +174,6 @@ if [ -z "$AUTH_TOKEN" ] && [ -x "$AUTH_HELPER" ]; then
     echo -e "${YELLOW}Warning: automatic Supabase login failed. Run 'python3 $AUTH_HELPER login'.${NC}"
   fi
 fi
-
-# Colours
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-RED='\033[0;31m'
-NC='\033[0m'
 
 # Test domains - 115 diverse real-world sites (all under 50k pages)
 DOMAINS=(

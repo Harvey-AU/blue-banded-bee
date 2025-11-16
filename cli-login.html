@@ -408,22 +408,24 @@
       function validateCallback(url) {
         try {
           const parsed = new URL(url);
-          return (
-            (parsed.hostname === "127.0.0.1" ||
-              parsed.hostname === "localhost") &&
-            parsed.protocol === "http:"
-          );
+          const isLoopback =
+            parsed.hostname === "127.0.0.1" ||
+            parsed.hostname === "localhost" ||
+            parsed.hostname === "::1";
+          return isLoopback && parsed.protocol === "http:";
         } catch (error) {
           return false;
         }
       }
 
-      if (!callbackUrl || !state || !validateCallback(callbackUrl)) {
+      const callbackValid =
+        Boolean(callbackUrl) && Boolean(state) && validateCallback(callbackUrl);
+
+      if (!callbackValid) {
         setStatus(
           "Invalid CLI callback parameters. Close this tab and re-run the CLI login command.",
           true
         );
-        throw new Error("Invalid CLI callback parameters");
       }
 
       async function loadAuthModal() {
@@ -601,30 +603,33 @@
         overrideHandleSocialLogin();
       }
 
-      document
-        .getElementById("reopenModalBtn")
-        .addEventListener("click", () => {
-          if (typeof showAuthModal === "function") {
-            showAuthModal();
-            setStatus("Sign-in modal reopened. Continue authentication.");
+      if (callbackValid) {
+        const reopenButton = document.getElementById("reopenModalBtn");
+        if (reopenButton) {
+          reopenButton.addEventListener("click", () => {
+            if (typeof showAuthModal === "function") {
+              showAuthModal();
+              setStatus("Sign-in modal reopened. Continue authentication.");
+            }
+          });
+        }
+
+        document.addEventListener("DOMContentLoaded", async () => {
+          try {
+            await loadAuthModal();
+            await waitForAuthScript();
+            initialiseAuthModal();
+            setStatus("Sign-in modal ready. Continue authentication.");
+          } catch (error) {
+            console.error(error);
+            setStatus(
+              error.message ||
+                "Unable to load auth modal. Please try again or contact support.",
+              true
+            );
           }
         });
-
-      document.addEventListener("DOMContentLoaded", async () => {
-        try {
-          await loadAuthModal();
-          await waitForAuthScript();
-          initialiseAuthModal();
-          setStatus("Sign-in modal ready. Continue authentication.");
-        } catch (error) {
-          console.error(error);
-          setStatus(
-            error.message ||
-              "Unable to load auth modal. Please try again or contact support.",
-            true
-          );
-        }
-      });
+      }
     </script>
   </body>
 </html>
