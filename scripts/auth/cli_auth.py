@@ -146,10 +146,12 @@ class _AuthCallbackHandler(http.server.BaseHTTPRequestHandler):
             parsed = urllib.parse.urlparse(origin)
         except ValueError:
             return None
-        host = parsed.hostname or ""
+        host = (parsed.hostname or "").lower()
         if host in {"127.0.0.1", "localhost"}:
             return origin
-        if host.endswith(".bluebandedbee.co") or host.endswith(".fly.dev"):
+        if host == "bluebandedbee.co" or host.endswith(".bluebandedbee.co"):
+            return origin
+        if host == "fly.dev" or host.endswith(".fly.dev"):
             return origin
         return None
 

@@ -10,10 +10,20 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap"
       rel="stylesheet"
     />
-    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
-    <script src="https://cdn.jsdelivr.net/npm/zxcvbn@4.4.2/dist/zxcvbn.js"></script>
+    <script
+      src="https://unpkg.com/@supabase/supabase-js@2.80.0/dist/umd/supabase.js"
+      integrity="sha384-i0m00Vn1ERlKXxNWSa87g6OUB7eLxpmsQoNF68IHuQVtfJTebIca7XhFsYt9h/gN"
+      crossorigin="anonymous"
+    ></script>
+    <script
+      src="https://cdn.jsdelivr.net/npm/zxcvbn@4.4.2/dist/zxcvbn.js"
+      integrity="sha384-LXuP8lknSGBOLVn4fwVOl+rWR+zOEtZx6CF9ZLaN6gKBgLByU4D79VWWjV4/gefq"
+      crossorigin="anonymous"
+    ></script>
     <script
       src="https://challenges.cloudflare.com/turnstile/v0/api.js"
+      integrity="sha384-+EHVdF/Q7De3+QlNfcmFQlzlSz2DvshhruIEntjsTyek4LyjZHkT/mDxfFg2Ai+y"
+      crossorigin="anonymous"
       async
       defer
     ></script>
@@ -430,24 +440,34 @@
 
       async function loadAuthModal() {
         const container = document.getElementById("authModalContainer");
-        const response = await fetch("/auth-modal.html");
+        const response = await fetch("/auth-modal.html", {
+          headers: { Accept: "text/html" },
+        });
+        const contentType = response.headers.get("Content-Type") || "";
         if (!response.ok) {
           throw new Error(
-            `Failed to load auth modal (${response.status} ${response.statusText})`
+            `Failed to load auth modal from /auth-modal.html (${response.status} ${response.statusText}). Ensure the static asset is deployed."
+          );
+        }
+        if (!contentType.toLowerCase().startsWith("text/html")) {
+          throw new Error(
+            `Unexpected content type for auth modal (${contentType || "unknown"}).`
           );
         }
         const html = await response.text();
         container.innerHTML = html;
 
-        const scripts = container.querySelectorAll("script");
+        const scripts = container.querySelectorAll("script[src]");
         for (const script of scripts) {
-          const tmp = document.createElement("script");
-          if (script.src) {
-            tmp.src = script.src;
-          } else {
-            tmp.textContent = script.textContent;
+          const url = new URL(script.src, window.location.origin);
+          if (url.origin !== window.location.origin) {
+            continue;
           }
-          document.head.appendChild(tmp);
+          const clone = document.createElement("script");
+          clone.src = url.href;
+          clone.defer = script.defer;
+          clone.async = script.async;
+          document.head.appendChild(clone);
         }
       }
 
