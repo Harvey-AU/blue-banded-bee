@@ -537,7 +537,10 @@
                 "Failed to deliver session to CLI. Please retry.",
               true
             );
-            sessionSent = false;
+            // Only reset if we're certain the delivery failed
+            if (error.message && !error.message.includes("CLI callback failed")) {
+              sessionSent = false;
+            }
           }
         };
       }
