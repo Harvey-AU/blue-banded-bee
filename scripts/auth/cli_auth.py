@@ -135,7 +135,7 @@ class _AuthCallbackHandler(http.server.BaseHTTPRequestHandler):
     event: threading.Event | None = None
     result: dict | None = None
 
-    def log_message(self, format: str, *args) -> None:  # noqa: A003
+    def log_message(self, format: str, *args) -> None:
         return  # Silence default logging
 
     def _allowed_origin(self) -> str | None:
@@ -163,7 +163,7 @@ class _AuthCallbackHandler(http.server.BaseHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
         self.send_header("Access-Control-Max-Age", "600")
 
-    def do_OPTIONS(self) -> None:  # noqa: N802
+    def do_OPTIONS(self) -> None:
         parsed = urllib.parse.urlparse(self.path)
         if parsed.path != "/callback":
             self.send_response(404)
@@ -190,7 +190,7 @@ class _AuthCallbackHandler(http.server.BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body.encode("utf-8"))
 
-    def do_GET(self) -> None:  # noqa: N802
+    def do_GET(self) -> None:
         parsed = urllib.parse.urlparse(self.path)
         if parsed.path != "/callback":
             self._finish(404, "Callback path not found")
@@ -202,7 +202,7 @@ class _AuthCallbackHandler(http.server.BaseHTTPRequestHandler):
 
         self._finish(200, "Waiting for CLI login...")
 
-    def do_POST(self) -> None:  # noqa: N802
+    def do_POST(self) -> None:
         parsed = urllib.parse.urlparse(self.path)
         if parsed.path != "/callback":
             self._finish(404, "Callback path not found")

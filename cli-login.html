@@ -528,7 +528,7 @@
             await sendSessionToCli();
             setStatus("Session sent to CLI. You can close this tab.");
             if (typeof window.closeAuthModal === "function") {
-              closeAuthModal();
+              window.closeAuthModal();
             }
           } catch (error) {
             console.error(error);
