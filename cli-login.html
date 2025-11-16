@@ -461,19 +461,28 @@
 
         const scripts = container.querySelectorAll("script");
         for (const script of scripts) {
-          const clone = document.createElement("script");
-          if (script.src) {
-            const url = new URL(script.src, window.location.origin);
-            if (url.origin !== window.location.origin) {
-              continue;
+          try {
+            const clone = document.createElement("script");
+            if (script.src) {
+              const url = new URL(script.src, window.location.origin);
+              if (url.origin !== window.location.origin) {
+                continue;
+              }
+              clone.src = url.href;
+              clone.defer = script.defer;
+              clone.async = script.async;
+            } else {
+              clone.textContent = script.textContent;
             }
-            clone.src = url.href;
-            clone.defer = script.defer;
-            clone.async = script.async;
-          } else {
-            clone.textContent = script.textContent;
+            document.head.appendChild(clone);
+          } catch (error) {
+            console.error("Failed to load auth modal script", error);
+            setStatus(
+              "Authentication assets failed to load. Please refresh the page.",
+              true
+            );
+            throw error;
           }
-          document.head.appendChild(clone);
         }
       }
 
