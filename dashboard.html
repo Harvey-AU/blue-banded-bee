@@ -1681,18 +1681,11 @@
       </div>
     </div>
 
-    <!-- Include the data binding library -->
-    <script src="/js/bb-data-binder.js"></script>
-
-    <!-- Include the unified authentication system -->
-    <script src="/js/auth.js"></script>
-    <script src="/js/bb-auth-extension.js"></script>
-
-    <!-- Include metrics metadata system -->
-    <script src="/js/bb-metadata.js"></script>
-
-    <!-- Include dashboard actions handler -->
-    <script src="/js/bb-dashboard-actions.js"></script>
+    <!-- Include the data binding and dashboard logic -->
+    <script src="/js/bb-data-binder.js" defer></script>
+    <script src="/js/bb-auth-extension.js" defer></script>
+    <script src="/js/bb-metadata.js" defer></script>
+    <script src="/js/bb-dashboard-actions.js" defer></script>
 
     <script>
       // Initialize dashboard with unified authentication system

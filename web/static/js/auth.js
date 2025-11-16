@@ -552,6 +552,11 @@ async function handleEmailLogin(event) {
 
     console.log("Email login successful:", data.user.id);
 
+    if (typeof window.handleAuthSuccess === "function") {
+      await window.handleAuthSuccess(data.user);
+      return;
+    }
+
     // Register user with backend (in case they don't exist)
     await registerUserWithBackend(data.user);
 
@@ -1109,7 +1114,11 @@ function setupAuthModalHandlers() {
       e.preventDefault();
       const button = e.target.closest(".bb-social-btn[data-provider]");
       const provider = button.dataset.provider;
-      handleSocialLogin(provider);
+      const handler =
+        typeof window.handleSocialLogin === "function"
+          ? window.handleSocialLogin
+          : handleSocialLogin;
+      handler(provider);
     }
 
     // Handle modal close

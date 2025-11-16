@@ -11,7 +11,9 @@
     if (existing) {
       if (
         existing.dataset.bbReady === "true" ||
-        existing.dataset.bbLoader === "true"
+        existing.dataset.bbLoader === "true" ||
+        existing.getAttribute("data-bb-ready") === "true" ||
+        existing.readyState === "complete"
       ) {
         const promise = Promise.resolve();
         loadedScripts.set(src, promise);
@@ -153,6 +155,13 @@
 
   window.BB_APP = window.BB_APP || {};
   window.BB_APP.coreReady = coreReady;
+
+  coreReady.catch((err) => {
+    // Error already logged above; this suppresses unhandled rejection warnings
+    if (window && window.console) {
+      console.debug("coreReady rejected", err);
+    }
+  });
 
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", () => {

@@ -211,9 +211,29 @@
   let supabase;
   let captchaToken = null;
 
+  function disableAuthForms(message) {
+    const errorDiv = document.getElementById("authError");
+    if (errorDiv) {
+      errorDiv.textContent = message;
+      errorDiv.style.display = "block";
+    }
+    document
+      .querySelectorAll(
+        ".bb-auth-form input, .bb-auth-form button, .bb-social-btn"
+      )
+      .forEach((el) => {
+        el.setAttribute("disabled", "disabled");
+        el.style.cursor = "not-allowed";
+        el.style.opacity = "0.6";
+      });
+  }
+
   // Initialize Supabase
   function initializeSupabase() {
     if (!window.supabase || !window.supabase.createClient) {
+      disableAuthForms(
+        "Authentication scripts failed to load. Please refresh and try again."
+      );
       return false;
     }
     if (
@@ -222,6 +242,9 @@
     ) {
       console.error(
         "BBB_CONFIG is missing Supabase settings; auth modal unavailable"
+      );
+      disableAuthForms(
+        "Authentication configuration is unavailable. Please contact support."
       );
       return false;
     }
