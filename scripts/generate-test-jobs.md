@@ -85,6 +85,11 @@ modal (email/password, Google, GitHub) that the app uses; when the page reports
 success, return to your terminal. Make sure that file is deployed alongside the
 rest of the static assets.
 
+The helper already bundles our publishable Supabase anon key, so no additional
+environment variables are required for local usage. Only override
+`SUPABASE_AUTH_URL` / `SUPABASE_ANON_KEY` if you need to target a different
+Supabase project (e.g. staging).
+
 ### From Dashboard (Browser DevTools)
 
 1. Log into dashboard
