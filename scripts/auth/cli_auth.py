@@ -6,7 +6,6 @@ import argparse
 import base64
 import hashlib
 import http.server
-import importlib.util
 import json
 import os
 import secrets
@@ -19,17 +18,11 @@ import urllib.request
 import webbrowser
 from pathlib import Path
 
-SCRIPT_DIR = Path(__file__).resolve().parent
-if str(SCRIPT_DIR) not in sys.path:
-    sys.path.insert(0, str(SCRIPT_DIR))
-
-_config_spec = importlib.util.spec_from_file_location(
-    "cli_auth_config", SCRIPT_DIR / "config.py"
-)
-if _config_spec is None or _config_spec.loader is None:
-    raise RuntimeError("Failed to load CLI auth config")
-config = importlib.util.module_from_spec(_config_spec)
-_config_spec.loader.exec_module(config)
+try:
+    from . import config
+except ImportError:
+    # Fall back when running as a standalone script
+    import config
 
 DEFAULT_AUTH_URL = os.environ.get("SUPABASE_AUTH_URL", config.SUPABASE_URL)
 DEFAULT_ANON_KEY = os.environ.get("SUPABASE_ANON_KEY", config.DEFAULT_SUPABASE_ANON_KEY)
