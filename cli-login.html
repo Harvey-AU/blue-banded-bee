@@ -459,16 +459,20 @@
         const html = await response.text();
         container.innerHTML = html;
 
-        const scripts = container.querySelectorAll("script[src]");
+        const scripts = container.querySelectorAll("script");
         for (const script of scripts) {
-          const url = new URL(script.src, window.location.origin);
-          if (url.origin !== window.location.origin) {
-            continue;
-          }
           const clone = document.createElement("script");
-          clone.src = url.href;
-          clone.defer = script.defer;
-          clone.async = script.async;
+          if (script.src) {
+            const url = new URL(script.src, window.location.origin);
+            if (url.origin !== window.location.origin) {
+              continue;
+            }
+            clone.src = url.href;
+            clone.defer = script.defer;
+            clone.async = script.async;
+          } else {
+            clone.textContent = script.textContent;
+          }
           document.head.appendChild(clone);
         }
       }
