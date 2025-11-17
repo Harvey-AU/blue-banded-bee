@@ -166,67 +166,19 @@
     <div id="authModalContainer"></div>
 
     <script>
-      document.addEventListener("DOMContentLoaded", async () => {
-        // Load the shared authentication modal
-        await loadAuthModal();
-
-        // Set up page-specific event handlers
-        setupHomepageHandlers();
-      });
-
-      // Load the shared authentication modal
-      async function loadAuthModal() {
-        try {
-          console.log("Loading auth modal...");
-          const response = await fetch("/auth-modal.html");
-
-          if (!response.ok) {
-            throw new Error(
-              `Failed to fetch auth modal: ${response.status} ${response.statusText}`
-            );
+      async function initializeHomepage() {
+        if (window.BB_APP?.coreReady) {
+          try {
+            await window.BB_APP.coreReady;
+          } catch (error) {
+            console.error("Core initialisation failed", error);
+            return;
           }
-
-          const modalHTML = await response.text();
-          console.log("Auth modal HTML loaded, length:", modalHTML.length);
-
-          document.getElementById("authModalContainer").innerHTML = modalHTML;
-
-          // Verify the modal was inserted
-          const authModal = document.getElementById("authModal");
-          console.log("Auth modal element after insertion:", authModal);
-
-          // Execute the script from auth-modal.html
-          const scripts = document
-            .getElementById("authModalContainer")
-            .querySelectorAll("script");
-          scripts.forEach((script) => {
-            const newScript = document.createElement("script");
-            if (script.src) {
-              newScript.src = script.src;
-            } else {
-              newScript.textContent = script.textContent;
-            }
-            document.head.appendChild(newScript);
-          });
-
-          console.log("Auth modal script executed");
-
-          // Set default to signup form for homepage and ensure handlers are set up
-          setTimeout(() => {
-            if (typeof showSignupForm === "function") {
-              showSignupForm();
-            }
-
-            // Ensure social login handlers are attached
-            if (typeof setupAuthHandlers === "function") {
-              setupAuthHandlers();
-              console.log("Auth handlers set up after script execution");
-            }
-          }, 100);
-        } catch (error) {
-          console.error("Failed to load auth modal:", error);
         }
+        setupHomepageHandlers();
       }
+
+      document.addEventListener("DOMContentLoaded", initializeHomepage);
 
       function setupHomepageHandlers() {
         // Marketing form handler
