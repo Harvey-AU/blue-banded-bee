@@ -46,6 +46,15 @@ jobs:
 
       - name: Deploy Review App
         run: |
+          DB_URL="${{ secrets.TEST_DATABASE_URL }}"
+          if [ -z "$DB_URL" ]; then
+            DB_URL="${{ secrets.DATABASE_URL }}"
+          fi
+          if [ -z "$DB_URL" ]; then
+            echo "DATABASE_URL secret is missing. Set TEST_DATABASE_URL or DATABASE_URL." >&2
+            exit 1
+          fi
+
           # Create review app name
           APP_NAME="blue-banded-bee-pr-${{ github.event.number }}"
 
@@ -59,7 +68,7 @@ jobs:
 
           # Set secrets for Review App WITHOUT triggering deployment
           echo "Setting test database connection and auth secrets for review app..."
-          flyctl secrets set DATABASE_URL="${{ secrets.TEST_DATABASE_URL }}" \
+          flyctl secrets set DATABASE_URL="$DB_URL" \
             SUPABASE_JWT_SECRET="${{ secrets.SUPABASE_JWT_SECRET }}" \
             SUPABASE_AUTH_URL="${{ secrets.SUPABASE_AUTH_URL }}" \
             SUPABASE_PUBLISHABLE_KEY="${{ secrets.SUPABASE_PUBLISHABLE_KEY }}" \
