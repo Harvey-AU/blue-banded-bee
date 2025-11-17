@@ -61,6 +61,8 @@ jobs:
           echo "Setting test database connection and auth secrets for review app..."
           flyctl secrets set DATABASE_URL="${{ secrets.TEST_DATABASE_URL }}" \
             SUPABASE_JWT_SECRET="${{ secrets.SUPABASE_JWT_SECRET }}" \
+            SUPABASE_AUTH_URL="${{ secrets.SUPABASE_AUTH_URL }}" \
+            SUPABASE_PUBLISHABLE_KEY="${{ secrets.SUPABASE_PUBLISHABLE_KEY }}" \
             SENTRY_DSN="${{ secrets.SENTRY_DSN }}" \
             --app $APP_NAME --stage
 
