@@ -15,6 +15,8 @@
  * - Sentry error tracking for auth failures
  */
 
+const CLI_AUTH_STORAGE_KEY = "bbb_cli_auth_state";
+
 // Supabase configuration
 const runtimeConfig =
   (typeof window !== "undefined" && window.BBB_CONFIG) ||
@@ -1135,6 +1137,78 @@ function setupLoginPageHandlers() {
   console.log("Login page handlers setup - using event delegation");
 }
 
+function isLoopbackCallback(url) {
+  try {
+    const parsed = new URL(url);
+    const isLoopback =
+      parsed.hostname === "127.0.0.1" ||
+      parsed.hostname === "localhost" ||
+      parsed.hostname === "::1";
+    return isLoopback && parsed.protocol === "http:";
+  } catch (error) {
+    return false;
+  }
+}
+
+async function resumeCliAuthFromStorage() {
+  if (!window.sessionStorage) {
+    return;
+  }
+
+  const raw = window.sessionStorage.getItem(CLI_AUTH_STORAGE_KEY);
+  if (!raw) {
+    return;
+  }
+
+  let payload;
+  try {
+    payload = JSON.parse(raw);
+  } catch (error) {
+    console.warn("CLI auth: invalid stored payload, clearing", error);
+    window.sessionStorage.removeItem(CLI_AUTH_STORAGE_KEY);
+    return;
+  }
+
+  const { callbackUrl, state } = payload || {};
+  if (!callbackUrl || !state || !isLoopbackCallback(callbackUrl)) {
+    window.sessionStorage.removeItem(CLI_AUTH_STORAGE_KEY);
+    return;
+  }
+
+  try {
+    if (!supabase) {
+      await initializeSupabase();
+    }
+
+    const {
+      data: { session },
+      error,
+    } = await supabase.auth.getSession();
+
+    if (error || !session) {
+      return;
+    }
+
+    const response = await fetch(callbackUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ session, state }),
+    });
+
+    if (!response.ok) {
+      console.error(
+        `CLI auth resume failed (${response.status})`,
+        await response.text()
+      );
+      return;
+    }
+
+    window.sessionStorage.removeItem(CLI_AUTH_STORAGE_KEY);
+  } catch (error) {
+    console.error("Failed to resume CLI auth", error);
+  }
+}
+
 function initCliAuthPage() {
   const params = new URLSearchParams(window.location.search);
   const callbackUrl = params.get("callback") || "";
@@ -1152,21 +1226,8 @@ function initCliAuthPage() {
     statusEl.classList.toggle("error", Boolean(isError));
   }
 
-  function validateCallback(url) {
-    try {
-      const parsed = new URL(url);
-      const isLoopback =
-        parsed.hostname === "127.0.0.1" ||
-        parsed.hostname === "localhost" ||
-        parsed.hostname === "::1";
-      return isLoopback && parsed.protocol === "http:";
-    } catch (error) {
-      return false;
-    }
-  }
-
   const callbackValid =
-    Boolean(callbackUrl) && Boolean(state) && validateCallback(callbackUrl);
+    Boolean(callbackUrl) && Boolean(state) && isLoopbackCallback(callbackUrl);
   if (!callbackValid) {
     setStatus(
       "Invalid CLI callback parameters. Close this tab and re-run the CLI login command.",
@@ -1176,6 +1237,29 @@ function initCliAuthPage() {
   }
 
   initializeSupabase();
+
+  supabase.auth.getSession().then((existing) => {
+    if (existing?.data?.session) {
+      setStatus("Session already active. Completing CLI login…");
+      sendSessionToCli().catch((error) => {
+        console.error(error);
+        setStatus(
+          error.message ||
+            "Failed to deliver existing session to CLI. Please retry.",
+          true
+        );
+      });
+    }
+  });
+
+  try {
+    window.sessionStorage.setItem(
+      CLI_AUTH_STORAGE_KEY,
+      JSON.stringify({ callbackUrl, state })
+    );
+  } catch (error) {
+    console.warn("CLI auth: unable to persist state", error);
+  }
 
   let sessionSent = false;
 
@@ -1211,6 +1295,11 @@ function initCliAuthPage() {
       );
     }
     sessionSent = true;
+    try {
+      window.sessionStorage.removeItem(CLI_AUTH_STORAGE_KEY);
+    } catch (error) {
+      console.warn("CLI auth: unable to clear stored state", error);
+    }
   }
 
   function overrideHandleAuthSuccess() {
@@ -1365,6 +1454,7 @@ if (typeof module !== "undefined" && module.exports) {
     handleLogout,
     defaultHandleAuthSuccess,
     initCliAuthPage,
+    resumeCliAuthFromStorage,
   };
 } else {
   // Browser environment - make functions globally available
@@ -1395,6 +1485,7 @@ if (typeof module !== "undefined" && module.exports) {
     setupLoginPageHandlers,
     handleLogout,
     initCliAuthPage,
+    resumeCliAuthFromStorage,
   };
 
   // Also make individual functions available globally for backward compatibility
@@ -1425,6 +1516,7 @@ if (typeof module !== "undefined" && module.exports) {
   window.handleLogout = handleLogout;
   window.handleAuthSuccess = defaultHandleAuthSuccess;
   window.initCliAuthPage = initCliAuthPage;
+  window.resumeCliAuthFromStorage = resumeCliAuthFromStorage;
 
   // Convenience functions for common auth form actions
   window.showLoginForm = () => showAuthForm("login");

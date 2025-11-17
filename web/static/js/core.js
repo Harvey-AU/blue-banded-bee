@@ -130,6 +130,10 @@
     await Promise.all([ensurePasswordStrength(), ensureTurnstile()]);
     await ensureAuthBundle();
 
+    if (typeof window.BBAuth?.resumeCliAuthFromStorage === "function") {
+      window.BBAuth.resumeCliAuthFromStorage();
+    }
+
     if (window.BB_APP?.cliAuth && window.BBAuth?.initCliAuthPage) {
       window.BBAuth.initCliAuthPage();
       return;
