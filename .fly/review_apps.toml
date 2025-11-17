@@ -22,6 +22,8 @@ PORT = "8080"
 
 # Explicitly source DATABASE_URL from secrets
 DATABASE_URL = { from_secret = "DATABASE_URL" }
+SUPABASE_AUTH_URL = { from_secret = "SUPABASE_AUTH_URL" }
+SUPABASE_PUBLISHABLE_KEY = { from_secret = "SUPABASE_PUBLISHABLE_KEY" }
 
 # Use same machine config as production but smaller
 [vm]
