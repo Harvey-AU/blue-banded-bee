@@ -30,6 +30,9 @@ func buildConfigSnippet() ([]byte, error) {
 	if _, err := url.ParseRequestURI(authURL); err != nil {
 		return nil, fmt.Errorf("invalid SUPABASE_AUTH_URL: %w", err)
 	}
+	if os.Getenv("APP_ENV") == "production" && !strings.HasPrefix(authURL, "https://") {
+		return nil, fmt.Errorf("SUPABASE_AUTH_URL must use https in production")
+	}
 	key := os.Getenv("SUPABASE_PUBLISHABLE_KEY")
 	if key == "" {
 		return nil, fmt.Errorf("SUPABASE_PUBLISHABLE_KEY not set")
