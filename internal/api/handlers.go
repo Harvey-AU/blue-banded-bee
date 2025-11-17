@@ -23,22 +23,34 @@ import (
 var Version = "0.4.1"
 
 func buildConfigSnippet() ([]byte, error) {
+	appEnv := os.Getenv("APP_ENV")
 	authURL := strings.TrimSuffix(os.Getenv("SUPABASE_AUTH_URL"), "/")
 	if authURL == "" {
 		return nil, fmt.Errorf("SUPABASE_AUTH_URL not set")
 	}
-	if _, err := url.ParseRequestURI(authURL); err != nil {
+	parsedURL, err := url.ParseRequestURI(authURL)
+	if err != nil {
 		return nil, fmt.Errorf("invalid SUPABASE_AUTH_URL: %w", err)
 	}
-	if os.Getenv("APP_ENV") == "production" && !strings.HasPrefix(authURL, "https://") {
+	if parsedURL.Path != "" && parsedURL.Path != "/" {
+		return nil, fmt.Errorf("SUPABASE_AUTH_URL should not include a path")
+	}
+	if appEnv == "production" && parsedURL.Scheme != "https" {
 		return nil, fmt.Errorf("SUPABASE_AUTH_URL must use https in production")
 	}
 	key := os.Getenv("SUPABASE_PUBLISHABLE_KEY")
 	if key == "" {
 		return nil, fmt.Errorf("SUPABASE_PUBLISHABLE_KEY not set")
 	}
-	if !strings.HasPrefix(key, "sb_") && !strings.HasPrefix(key, "eyJ") {
-		return nil, fmt.Errorf("invalid SUPABASE_PUBLISHABLE_KEY format")
+	validKey := false
+	for _, prefix := range []string{"sb_", "sbp_", "eyJ", "public-"} {
+		if strings.HasPrefix(key, prefix) {
+			validKey = true
+			break
+		}
+	}
+	if !validKey {
+		log.Warn().Msg("SUPABASE_PUBLISHABLE_KEY has unexpected format; proceeding anyway")
 	}
 	config := map[string]interface{}{
 		"supabaseUrl":     authURL,
