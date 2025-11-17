@@ -32,9 +32,6 @@ func buildConfigSnippet() ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("invalid SUPABASE_AUTH_URL: %w", err)
 	}
-	if parsedURL.Path != "" && parsedURL.Path != "/" {
-		return nil, fmt.Errorf("SUPABASE_AUTH_URL should not include a path")
-	}
 	if appEnv == "production" && parsedURL.Scheme != "https" {
 		return nil, fmt.Errorf("SUPABASE_AUTH_URL must use https in production")
 	}
