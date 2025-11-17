@@ -26,6 +26,13 @@ func buildConfigSnippet() ([]byte, error) {
 	appEnv := os.Getenv("APP_ENV")
 	authURL := strings.TrimSuffix(os.Getenv("SUPABASE_AUTH_URL"), "/")
 	if authURL == "" {
+		legacyURL := strings.TrimSuffix(os.Getenv("SUPABASE_URL"), "/")
+		if legacyURL != "" {
+			log.Warn().Msg("SUPABASE_AUTH_URL missing; using legacy SUPABASE_URL fallback")
+			authURL = legacyURL
+		}
+	}
+	if authURL == "" {
 		return nil, fmt.Errorf("SUPABASE_AUTH_URL not set")
 	}
 	parsedURL, err := url.ParseRequestURI(authURL)
@@ -36,6 +43,13 @@ func buildConfigSnippet() ([]byte, error) {
 		return nil, fmt.Errorf("SUPABASE_AUTH_URL must use https in production")
 	}
 	key := os.Getenv("SUPABASE_PUBLISHABLE_KEY")
+	if key == "" {
+		legacyKey := os.Getenv("SUPABASE_ANON_KEY")
+		if legacyKey != "" {
+			log.Warn().Msg("SUPABASE_PUBLISHABLE_KEY missing; using legacy SUPABASE_ANON_KEY fallback")
+			key = legacyKey
+		}
+	}
 	if key == "" {
 		return nil, fmt.Errorf("SUPABASE_PUBLISHABLE_KEY not set")
 	}
@@ -326,7 +340,11 @@ func (h *Handler) ServeConfigJS(w http.ResponseWriter, r *http.Request) {
 	snippet, err := buildConfigSnippet()
 	if err != nil {
 		log.Error().Err(err).Msg("supabase config missing")
-		http.Error(w, "Supabase config unavailable", http.StatusInternalServerError)
+		message := "Supabase config unavailable"
+		if os.Getenv("APP_ENV") != "production" {
+			message = fmt.Sprintf("%s: %v", message, err)
+		}
+		http.Error(w, message, http.StatusInternalServerError)
 		return
 	}
 	if _, err := w.Write(snippet); err != nil {
