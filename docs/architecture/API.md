@@ -164,7 +164,7 @@ Authorization: Bearer <token>
     "use_sitemap": true,
     "find_links": true,
     "max_pages": 100,
-    "concurrency": 5
+    "concurrency": 20
   }
 }
 ```
@@ -183,7 +183,7 @@ Authorization: Bearer <token>
       "use_sitemap": true,
       "find_links": true,
       "max_pages": 100,
-      "concurrency": 5
+      "concurrency": 20
     },
     "created_at": "2023-05-18T12:34:56Z"
   },
@@ -270,7 +270,7 @@ Authorization: Bearer <token>
       "use_sitemap": true,
       "find_links": true,
       "max_pages": 100,
-      "concurrency": 5
+      "concurrency": 20
     },
     "created_at": "2023-05-18T12:34:56Z",
     "updated_at": "2023-05-18T12:45:12Z",
