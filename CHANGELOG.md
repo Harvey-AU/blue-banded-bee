@@ -36,6 +36,8 @@ On merge, CI will:
 - Dashboard auto-refresh interval reduced from 10 seconds to 1 second.
 - Job details page now auto-refreshes every 1 second while job is
   running/pending, stopping automatically when job completes.
+- Workers now stagger startup by 50ms each to prevent thundering herd on cold
+  start and scale-up events.
 
 ### Added
 

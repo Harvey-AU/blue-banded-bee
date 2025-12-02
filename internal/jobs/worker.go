@@ -543,6 +543,7 @@ func (wp *WorkerPool) Start(ctx context.Context) {
 		wp.wg.Add(1)
 		go func() {
 			defer wp.wg.Done()
+			time.Sleep(time.Duration(i*50) * time.Millisecond)
 			wp.worker(ctx, i)
 		}()
 	}
@@ -2319,12 +2320,12 @@ func (wp *WorkerPool) scaleWorkers(ctx context.Context, targetWorkers int) {
 			wp.workerWaitGroups = append(wp.workerWaitGroups, &sync.WaitGroup{})
 		}
 
-		// Start worker
 		wp.wg.Add(1)
-		go func(id int) {
+		go func(id, idx int) {
 			defer wp.wg.Done()
+			time.Sleep(time.Duration(idx*50) * time.Millisecond)
 			wp.worker(ctx, id)
-		}(workerID)
+		}(workerID, i)
 	}
 
 	wp.currentWorkers = targetWorkers
