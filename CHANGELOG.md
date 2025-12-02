@@ -29,6 +29,30 @@ On merge, CI will:
 
 ## [Unreleased]
 
+## [0.17.13] – 2025-12-02
+
+### Changed
+
+- Default job concurrency increased from 5 to 20 for dashboard/API jobs and from
+  3 to 20 for webhook jobs; maximum allowed concurrency raised from 20 to 100.
+- Dashboard auto-refresh interval reduced from 10 seconds to 1 second.
+- Job details page now auto-refreshes every 1 second while job is
+  running/pending, stopping automatically when job completes.
+- Workers now stagger startup by 50ms each to prevent thundering herd on cold
+  start and scale-up events.
+
+### Added
+
+- Concurrency dropdown added to dashboard job creation form with "Default"
+  option (uses server default of 20) plus values 1-100.
+- Webhook endpoint now accepts optional `?concurrency=N` query parameter to
+  override the default concurrency for Webflow-triggered jobs.
+
+### Removed
+
+- Removed manual refresh interval dropdown from dashboard form (auto-refresh is
+  now always enabled at 1 second).
+
 ## [0.17.12] – 2025-11-16
 
 ## [0.17.11] – 2025-11-16

@@ -53,7 +53,7 @@ func TestCreateJobIntegration(t *testing.T) {
 					return opts.Domain == "example.com" &&
 						opts.UseSitemap == true &&
 						opts.FindLinks == true &&
-						opts.Concurrency == 5 &&
+						opts.Concurrency == 20 && // Default concurrency
 						opts.MaxPages == 0 &&
 						opts.UserID != nil && *opts.UserID == "test-user-123" &&
 						opts.OrganisationID != nil && *opts.OrganisationID == "org-123"
