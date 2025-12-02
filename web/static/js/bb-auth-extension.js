@@ -277,6 +277,7 @@ async function handleDashboardJobCreation(event) {
 
   const domain = formData.get("domain");
   const maxPages = parseInt(formData.get("max_pages"));
+  const concurrencyValue = formData.get("concurrency");
 
   // Basic validation
   if (!domain) {
@@ -293,19 +294,32 @@ async function handleDashboardJobCreation(event) {
     return;
   }
 
+  // Build request body - only include concurrency if explicitly set
+  const requestBody = {
+    domain: domain,
+    max_pages: maxPages,
+    use_sitemap: true,
+    find_links: true,
+  };
+  if (
+    concurrencyValue &&
+    concurrencyValue !== "" &&
+    concurrencyValue !== "default"
+  ) {
+    requestBody.concurrency = parseInt(concurrencyValue);
+  }
+
   try {
-    console.log("Creating job from dashboard form:", { domain, maxPages });
+    console.log("Creating job from dashboard form:", {
+      domain,
+      maxPages,
+      concurrency: requestBody.concurrency,
+    });
 
     const response = await window.dataBinder.fetchData("/v1/jobs", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        domain: domain,
-        max_pages: maxPages,
-        concurrency: 5,
-        use_sitemap: true,
-        find_links: true,
-      }),
+      body: JSON.stringify(requestBody),
     });
 
     console.log("Dashboard job created successfully:", response);
@@ -427,7 +441,7 @@ function changeTimeRange(range) {
 async function initializeDashboard(config = {}) {
   const {
     debug = false,
-    refreshInterval = 10,
+    refreshInterval = 1,
     apiBaseUrl = "",
     autoRefresh = true,
     networkMonitoring = true,

@@ -227,14 +227,11 @@ func (h *Handler) createJobFromRequest(ctx context.Context, user *db.User, req C
 		findLinks = *req.FindLinks
 	}
 
-	concurrency := 5
-	if req.Concurrency != nil {
+	concurrency := 20 // Default concurrency
+	if req.Concurrency != nil && *req.Concurrency > 0 {
 		concurrency = *req.Concurrency
-		// Validate concurrency limits (must match database constraints and worker capacity)
-		if concurrency < 1 {
-			concurrency = 1
-		} else if concurrency > 20 {
-			concurrency = 20
+		if concurrency > 100 {
+			concurrency = 100
 		}
 	}
 

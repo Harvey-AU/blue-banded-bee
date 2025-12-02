@@ -1469,6 +1469,33 @@ document.addEventListener("DOMContentLoaded", async () => {
       await loadTasks(state);
     }
     setupInteractions(state);
+
+    // Auto-refresh every 1 second for running/pending jobs
+    let autoRefreshInterval = null;
+    const startAutoRefresh = () => {
+      if (autoRefreshInterval) return;
+      autoRefreshInterval = setInterval(async () => {
+        try {
+          const job = await loadJob(state);
+          await loadTasks(state);
+          // Stop auto-refresh if job is no longer active
+          if (job && !["running", "pending"].includes(job.status)) {
+            clearInterval(autoRefreshInterval);
+            autoRefreshInterval = null;
+          }
+        } catch (err) {
+          console.warn("Auto-refresh failed:", err);
+        }
+      }, 1000);
+    };
+    startAutoRefresh();
+
+    // Clean up on page unload
+    window.addEventListener("beforeunload", () => {
+      if (autoRefreshInterval) {
+        clearInterval(autoRefreshInterval);
+      }
+    });
   } catch (error) {
     console.error("Failed to initialise job page:", error);
     showToast("Failed to load job details.", true);

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/pprof"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -663,7 +664,15 @@ func (h *Handler) WebflowWebhook(w http.ResponseWriter, r *http.Request) {
 	// Create job using shared logic with webhook defaults
 	useSitemap := true
 	findLinks := true
-	concurrency := 3
+	concurrency := 20 // Default concurrency for webhook jobs
+	if concurrencyParam := r.URL.Query().Get("concurrency"); concurrencyParam != "" {
+		if parsed, err := strconv.Atoi(concurrencyParam); err == nil && parsed > 0 {
+			concurrency = parsed
+			if concurrency > 100 {
+				concurrency = 100
+			}
+		}
+	}
 	maxPages := 0 // Unlimited pages for webhook-triggered jobs
 	sourceType := "webflow_webhook"
 	sourceDetail := payload.Payload.PublishedBy.DisplayName
