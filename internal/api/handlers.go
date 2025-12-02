@@ -666,11 +666,18 @@ func (h *Handler) WebflowWebhook(w http.ResponseWriter, r *http.Request) {
 	findLinks := true
 	concurrency := 20 // Default concurrency for webhook jobs
 	if concurrencyParam := r.URL.Query().Get("concurrency"); concurrencyParam != "" {
-		if parsed, err := strconv.Atoi(concurrencyParam); err == nil && parsed > 0 {
-			concurrency = parsed
-			if concurrency > 100 {
-				concurrency = 100
-			}
+		parsed, err := strconv.Atoi(concurrencyParam)
+		if err != nil {
+			BadRequest(w, r, "concurrency must be a positive integer")
+			return
+		}
+		if parsed <= 0 {
+			BadRequest(w, r, "concurrency must be a positive integer")
+			return
+		}
+		concurrency = parsed
+		if concurrency > 100 {
+			concurrency = 100
 		}
 	}
 	maxPages := 0 // Unlimited pages for webhook-triggered jobs
