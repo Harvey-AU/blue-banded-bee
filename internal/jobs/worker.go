@@ -2286,6 +2286,10 @@ func (wp *WorkerPool) recoveryMonitor(ctx context.Context) {
 
 // scaleWorkers increases the worker pool size to the target number
 func (wp *WorkerPool) scaleWorkers(ctx context.Context, targetWorkers int) {
+	if wp.stopping.Load() {
+		return
+	}
+
 	defer func() {
 		if r := recover(); r != nil {
 			log.Error().
@@ -3815,7 +3819,9 @@ func (wp *WorkerPool) evaluateJobPerformance(jobID string, responseTime int64) {
 		} else {
 			actualBoost = oldBoost + additionalWorkers
 			target := desiredWorkers
-			go wp.scaleWorkers(context.Background(), target)
+			if !wp.stopping.Load() {
+				go wp.scaleWorkers(context.Background(), target)
+			}
 		}
 	}
 
