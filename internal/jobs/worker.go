@@ -47,7 +47,7 @@ const (
 	// fallbackJobConcurrency is used when a job does not report an explicit
 	// concurrency (or the limiter has not yet seeded a value). This mirrors
 	// the API default.
-	fallbackJobConcurrency = 5
+	fallbackJobConcurrency = 20
 
 	// concurrencyBlockCooldown defines the window in which we consider a job
 	// recently concurrency-blocked for the purposes of suppressing scale ups.
@@ -3814,12 +3814,8 @@ func (wp *WorkerPool) evaluateJobPerformance(jobID string, responseTime int64) {
 			actualBoost = oldBoost
 		} else {
 			actualBoost = oldBoost + additionalWorkers
-			scalingCtx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 			target := desiredWorkers
-			go func() {
-				defer cancel()
-				wp.scaleWorkers(scalingCtx, target)
-			}()
+			go wp.scaleWorkers(context.Background(), target)
 		}
 	}
 
