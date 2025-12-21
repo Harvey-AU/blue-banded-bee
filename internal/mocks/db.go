@@ -168,3 +168,69 @@ func (m *MockDB) GetUserByWebhookToken(token string) (*db.User, error) {
 	}
 	return args.Get(0).(*db.User), args.Error(1)
 }
+
+// CreateScheduler mocks the CreateScheduler method
+func (m *MockDB) CreateScheduler(ctx context.Context, scheduler *db.Scheduler) error {
+	args := m.Called(ctx, scheduler)
+	return args.Error(0)
+}
+
+// GetScheduler mocks the GetScheduler method
+func (m *MockDB) GetScheduler(ctx context.Context, schedulerID string) (*db.Scheduler, error) {
+	args := m.Called(ctx, schedulerID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*db.Scheduler), args.Error(1)
+}
+
+// ListSchedulers mocks the ListSchedulers method
+func (m *MockDB) ListSchedulers(ctx context.Context, organisationID string) ([]*db.Scheduler, error) {
+	args := m.Called(ctx, organisationID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*db.Scheduler), args.Error(1)
+}
+
+// UpdateScheduler mocks the UpdateScheduler method
+func (m *MockDB) UpdateScheduler(ctx context.Context, schedulerID string, updates *db.Scheduler) error {
+	args := m.Called(ctx, schedulerID, updates)
+	return args.Error(0)
+}
+
+// DeleteScheduler mocks the DeleteScheduler method
+func (m *MockDB) DeleteScheduler(ctx context.Context, schedulerID string) error {
+	args := m.Called(ctx, schedulerID)
+	return args.Error(0)
+}
+
+// GetSchedulersReadyToRun mocks the GetSchedulersReadyToRun method
+func (m *MockDB) GetSchedulersReadyToRun(ctx context.Context, limit int) ([]*db.Scheduler, error) {
+	args := m.Called(ctx, limit)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*db.Scheduler), args.Error(1)
+}
+
+// UpdateSchedulerNextRun mocks the UpdateSchedulerNextRun method
+func (m *MockDB) UpdateSchedulerNextRun(ctx context.Context, schedulerID string, nextRun time.Time) error {
+	args := m.Called(ctx, schedulerID, nextRun)
+	return args.Error(0)
+}
+
+// GetDomainNameByID mocks the GetDomainNameByID method
+func (m *MockDB) GetDomainNameByID(ctx context.Context, domainID int) (string, error) {
+	args := m.Called(ctx, domainID)
+	return args.String(0), args.Error(1)
+}
+
+// GetDomainNames mocks the GetDomainNames method
+func (m *MockDB) GetDomainNames(ctx context.Context, domainIDs []int) (map[int]string, error) {
+	args := m.Called(ctx, domainIDs)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(map[int]string), args.Error(1)
+}

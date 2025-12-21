@@ -141,3 +141,39 @@ func (m *MockDBWithRealDB) GetSlowPages(organisationID string, startDate, endDat
 func (m *MockDBWithRealDB) GetExternalRedirects(organisationID string, startDate, endDate *time.Time) ([]db.ExternalRedirect, error) {
 	return nil, nil
 }
+
+func (m *MockDBWithRealDB) CreateScheduler(ctx context.Context, scheduler *db.Scheduler) error {
+	return nil
+}
+
+func (m *MockDBWithRealDB) GetScheduler(ctx context.Context, schedulerID string) (*db.Scheduler, error) {
+	return nil, nil
+}
+
+func (m *MockDBWithRealDB) ListSchedulers(ctx context.Context, organisationID string) ([]*db.Scheduler, error) {
+	return nil, nil
+}
+
+func (m *MockDBWithRealDB) UpdateScheduler(ctx context.Context, schedulerID string, updates *db.Scheduler) error {
+	return nil
+}
+
+func (m *MockDBWithRealDB) DeleteScheduler(ctx context.Context, schedulerID string) error {
+	return nil
+}
+
+func (m *MockDBWithRealDB) GetSchedulersReadyToRun(ctx context.Context, limit int) ([]*db.Scheduler, error) {
+	return nil, nil
+}
+
+func (m *MockDBWithRealDB) UpdateSchedulerNextRun(ctx context.Context, schedulerID string, nextRun time.Time) error {
+	return nil
+}
+
+func (m *MockDBWithRealDB) GetDomainNameByID(ctx context.Context, domainID int) (string, error) {
+	return "", nil
+}
+
+func (m *MockDBWithRealDB) GetDomainNames(ctx context.Context, domainIDs []int) (map[int]string, error) {
+	return nil, nil
+}

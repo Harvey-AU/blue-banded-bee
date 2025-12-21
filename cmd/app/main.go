@@ -36,6 +36,89 @@ func minInt(a, b int) int {
 	return b
 }
 
+// startJobScheduler starts background service to create jobs from schedulers
+// It respects context cancellation for graceful shutdown
+// The WaitGroup must be marked Done when this function exits
+func startJobScheduler(ctx context.Context, wg *sync.WaitGroup, jobsManager *jobs.JobManager, pgDB *db.DB) {
+	defer wg.Done()
+
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+
+	log.Info().Msg("Job scheduler started")
+
+	for {
+		select {
+		case <-ctx.Done():
+			log.Info().Msg("Job scheduler stopped")
+			return
+		case <-ticker.C:
+			schedulers, err := pgDB.GetSchedulersReadyToRun(ctx, 50)
+			if err != nil {
+				log.Error().Err(err).Msg("Failed to get schedulers ready to run")
+				continue
+			}
+
+			// Batch lookup all domain names to avoid N+1 queries
+			domainIDs := make([]int, 0, len(schedulers))
+			for _, scheduler := range schedulers {
+				domainIDs = append(domainIDs, scheduler.DomainID)
+			}
+
+			domainNames, err := pgDB.GetDomainNames(ctx, domainIDs)
+			if err != nil {
+				log.Error().Err(err).Msg("Failed to get domain names for schedulers")
+				continue
+			}
+
+			for _, scheduler := range schedulers {
+				domainName, ok := domainNames[scheduler.DomainID]
+				if !ok {
+					log.Warn().Int("domain_id", scheduler.DomainID).Str("scheduler_id", scheduler.ID).Msg("Domain name not found")
+					continue
+				}
+
+				// Create JobOptions from scheduler
+				sourceType := "scheduler"
+				opts := &jobs.JobOptions{
+					Domain:          domainName,
+					OrganisationID:  &scheduler.OrganisationID,
+					UseSitemap:      true,
+					Concurrency:     scheduler.Concurrency,
+					FindLinks:       scheduler.FindLinks,
+					MaxPages:        scheduler.MaxPages,
+					IncludePaths:    scheduler.IncludePaths,
+					ExcludePaths:    scheduler.ExcludePaths,
+					RequiredWorkers: scheduler.RequiredWorkers,
+					SourceType:      &sourceType,
+					SourceDetail:    &scheduler.ID,
+					SchedulerID:     &scheduler.ID,
+				}
+
+				// Create job (standard flow)
+				job, err := jobsManager.CreateJob(ctx, opts)
+				if err != nil {
+					log.Error().Err(err).Str("scheduler_id", scheduler.ID).Msg("Failed to create scheduled job")
+					continue
+				}
+
+				// Update scheduler next_run_at
+				nextRun := time.Now().UTC().Add(time.Duration(scheduler.ScheduleIntervalHours) * time.Hour)
+				if err := pgDB.UpdateSchedulerNextRun(ctx, scheduler.ID, nextRun); err != nil {
+					log.Error().Err(err).Str("scheduler_id", scheduler.ID).Msg("Failed to update scheduler next run")
+				} else {
+					log.Info().
+						Str("scheduler_id", scheduler.ID).
+						Str("job_id", job.ID).
+						Str("domain", domainName).
+						Time("next_run_at", nextRun).
+						Msg("Created scheduled job")
+				}
+			}
+		}
+	}
+}
+
 // startHealthMonitoring starts background monitoring for job completion and system health
 // It respects context cancellation for graceful shutdown
 // The WaitGroup must be marked Done when this function exits
@@ -587,6 +670,10 @@ func main() {
 	// Start background health monitoring with cancellable context
 	backgroundWG.Add(1)
 	go startHealthMonitoring(appCtx, &backgroundWG, pgDB)
+
+	// Start scheduler service
+	backgroundWG.Add(1)
+	go startJobScheduler(appCtx, &backgroundWG, jobsManager, pgDB)
 
 	// Wait for either the server to exit or shutdown signal completion
 	var serverErr error

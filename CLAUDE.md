@@ -126,9 +126,9 @@ after several rounds of iterating on a task, and before deploying.
 - **Type and borrow with intent**: Embrace strong typing (`TypeScript` `never`,
   `satisfies`), respect ownership/borrowing in Rust, and avoid stray `clone()`
   or `any`.
-- **Test rigorously**: Maintain unit plus integration coverage (`cargo test`,
-  `go test ./...`, `npm test`), vet snapshot updates carefully, and map failures
-  to fast reruns (e.g. `<leader>t`).
+- **Test strategically**: Write tests for critical paths and complex logic
+  (`cargo test`, `go test ./...`, `npm test`), vet snapshot updates carefully,
+  and map failures to fast reruns (e.g. `<leader>t`).
 - **Algorithmic literacy**: Re-derive core patterns (binary search, sliding
   windows, ring buffers) so solutions rest on understanding, not cargo-culting.
 - **Transparent debugging**: Log state thoughtfully (`dbg!`, structured logs),
@@ -204,7 +204,7 @@ for docs/config).
 6. **docs/architecture/API.md** - RESTful API reference
 7. **docs/development/BRANCHING.md** - Git workflow and PR process
 8. **Roadmap.md** - Upcoming work and priorities
-9. **docs/TEST_PLAN.md** - Testing requirements and coverage gaps
+9. **docs/TEST_PLAN.md** - Testing strategy and approach
 
 **Additional references as needed:**
 
@@ -303,8 +303,7 @@ When encountering functions >50 lines, apply this proven systematic approach:
 **Benefits achieved:**
 
 - 80% complexity reduction
-- 350+ new test cases
-- 38.9% total coverage (up from 30%)
+- 350+ test cases written during refactoring
 - Zero functional regressions
 - Dramatically improved maintainability
 

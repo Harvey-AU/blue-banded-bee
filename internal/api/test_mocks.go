@@ -194,6 +194,63 @@ func (m *MockDBClient) GetOrganisation(organisationID string) (*db.Organisation,
 	return args.Get(0).(*db.Organisation), args.Error(1)
 }
 
+func (m *MockDBClient) CreateScheduler(ctx context.Context, scheduler *db.Scheduler) error {
+	args := m.Called(ctx, scheduler)
+	return args.Error(0)
+}
+
+func (m *MockDBClient) GetScheduler(ctx context.Context, schedulerID string) (*db.Scheduler, error) {
+	args := m.Called(ctx, schedulerID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*db.Scheduler), args.Error(1)
+}
+
+func (m *MockDBClient) ListSchedulers(ctx context.Context, organisationID string) ([]*db.Scheduler, error) {
+	args := m.Called(ctx, organisationID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*db.Scheduler), args.Error(1)
+}
+
+func (m *MockDBClient) UpdateScheduler(ctx context.Context, schedulerID string, updates *db.Scheduler) error {
+	args := m.Called(ctx, schedulerID, updates)
+	return args.Error(0)
+}
+
+func (m *MockDBClient) DeleteScheduler(ctx context.Context, schedulerID string) error {
+	args := m.Called(ctx, schedulerID)
+	return args.Error(0)
+}
+
+func (m *MockDBClient) GetSchedulersReadyToRun(ctx context.Context, limit int) ([]*db.Scheduler, error) {
+	args := m.Called(ctx, limit)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*db.Scheduler), args.Error(1)
+}
+
+func (m *MockDBClient) UpdateSchedulerNextRun(ctx context.Context, schedulerID string, nextRun time.Time) error {
+	args := m.Called(ctx, schedulerID, nextRun)
+	return args.Error(0)
+}
+
+func (m *MockDBClient) GetDomainNameByID(ctx context.Context, domainID int) (string, error) {
+	args := m.Called(ctx, domainID)
+	return args.String(0), args.Error(1)
+}
+
+func (m *MockDBClient) GetDomainNames(ctx context.Context, domainIDs []int) (map[int]string, error) {
+	args := m.Called(ctx, domainIDs)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(map[int]string), args.Error(1)
+}
+
 // Test helpers
 func createTestHandler() (*Handler, *MockDBClient, *MockJobManager) {
 	mockDB := new(MockDBClient)

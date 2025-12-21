@@ -100,7 +100,7 @@ Keep messages concise (5-6 words max).
 
 2. **Review Focus**:
    - Code quality and standards
-   - Test coverage
+   - Critical functionality works correctly
    - Documentation completeness
    - Security considerations
 

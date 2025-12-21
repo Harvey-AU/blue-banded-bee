@@ -455,6 +455,31 @@
         margin-bottom: 16px;
       }
 
+      .bb-schedule-info {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        font-size: 14px;
+        color: #6b7280;
+      }
+
+      .bb-schedule-status {
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 12px;
+        font-weight: 500;
+      }
+
+      .bb-schedule-enabled {
+        background: #d1fae5;
+        color: #065f46;
+      }
+
+      .bb-schedule-disabled {
+        background: #fee2e2;
+        color: #991b1b;
+      }
+
       .bb-job-header {
         display: flex;
         justify-content: space-between;
@@ -1262,7 +1287,11 @@
 
           <!-- Show when logged out -->
           <div bbb-auth="guest" class="auth-buttons">
-            <button id="loginBtn" class="bb-button bb-button-primary">
+            <button
+              id="loginBtn"
+              class="bb-button bb-button-primary"
+              aria-label="Sign in to your account"
+            >
               Sign In
             </button>
           </div>
@@ -1282,10 +1311,15 @@
                 display: none;
               "
               title="Delete all jobs and tasks - USE WITH CAUTION"
+              aria-label="Reset database - delete all jobs and tasks"
             >
               Reset DB
             </button>
-            <button id="logoutBtn" class="bb-button bb-button-outline">
+            <button
+              id="logoutBtn"
+              class="bb-button bb-button-outline"
+              aria-label="Sign out of your account"
+            >
               Sign Out
             </button>
           </div>
@@ -1342,6 +1376,7 @@
               name="domain"
               required
               placeholder="example.com"
+              aria-label="Domain to crawl"
               style="
                 width: 100%;
                 padding: 12px 16px;
@@ -1373,6 +1408,7 @@
               min="0"
               max="10000"
               value="0"
+              aria-label="Maximum number of pages to crawl"
               style="
                 width: 100%;
                 padding: 12px 16px;
@@ -1401,6 +1437,7 @@
               class="filter-select"
               id="dashboardConcurrency"
               name="concurrency"
+              aria-label="Concurrency level for crawling"
               style="
                 width: 100%;
                 padding: 12px;
@@ -1432,6 +1469,7 @@
             type="submit"
             class="bb-button bb-button-primary"
             style="padding: 12px 24px; white-space: nowrap"
+            aria-label="Start cache warming crawl"
           >
             Start Crawl
           </button>
@@ -1443,7 +1481,11 @@
         <div class="dashboard-filters">
           <div class="filter-group">
             <label class="filter-label">Date Range</label>
-            <select class="filter-select" id="dateRange">
+            <select
+              class="filter-select"
+              id="dateRange"
+              aria-label="Filter jobs by date range"
+            >
               <option value="last_hour">Last Hour</option>
               <option value="today" selected>Today</option>
               <option value="last_24_hours">Last 24 Hours</option>
@@ -1460,6 +1502,7 @@
           <button
             class="bb-btn bb-btn-secondary"
             bbb-action="refresh-dashboard"
+            aria-label="Refresh dashboard data"
           >
             <span>↻</span> Refresh
           </button>
@@ -1500,6 +1543,7 @@
               id="showLoginBtn"
               class="bb-button bb-button-primary"
               style="flex: 1"
+              aria-label="Show sign in form"
             >
               Sign In
             </button>
@@ -1507,6 +1551,7 @@
               id="showSignupBtn"
               class="bb-button bb-button-outline"
               style="flex: 1"
+              aria-label="Show create account form"
             >
               Create Account
             </button>
@@ -1548,10 +1593,15 @@
               <button
                 class="bb-btn bb-btn-secondary"
                 bbb-action="refresh-dashboard"
+                aria-label="Refresh jobs list"
               >
                 <span>↻</span> Refresh
               </button>
-              <button class="bb-btn bb-btn-primary" bbb-action="create-job">
+              <button
+                class="bb-btn bb-btn-primary"
+                bbb-action="create-job"
+                aria-label="Create a new job"
+              >
                 <span>+</span> New Job
               </button>
             </div>
@@ -1598,6 +1648,7 @@
                     bbb-action="restart-job"
                     bbb-id="{id}"
                     bbb-show="status=completed,failed,cancelled"
+                    aria-label="Restart this job"
                   >
                     Restart
                   </button>
@@ -1606,11 +1657,96 @@
                     bbb-action="cancel-job"
                     bbb-id="{id}"
                     bbb-show="status=running,pending"
+                    aria-label="Cancel this job"
                   >
                     Cancel
                   </button>
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Schedules Section -->
+        <div class="bb-jobs-section" style="margin-top: 32px">
+          <div class="bb-section-header">
+            <h3>Schedules</h3>
+            <div class="bb-section-actions">
+              <button
+                class="bb-btn bb-btn-secondary"
+                bbb-action="refresh-schedules"
+                aria-label="Refresh schedules list"
+              >
+                <span>↻</span> Refresh
+              </button>
+            </div>
+          </div>
+
+          <div class="bb-jobs-list" id="schedulesList">
+            <!-- Schedule Template -->
+            <div
+              class="bb-job-card"
+              bbb-template="schedule"
+              style="display: none"
+            >
+              <div class="bb-job-header">
+                <div class="bb-job-domain" bbb-text="domain">example.com</div>
+                <div class="bb-schedule-info">
+                  <span bbb-text="schedule_interval_hours">24</span> hours
+                  <span
+                    class="bb-schedule-status"
+                    bbb-class="bb-schedule-{is_enabled}"
+                    bbb-text="is_enabled_text"
+                  >
+                    Enabled
+                  </span>
+                </div>
+              </div>
+              <div class="bb-job-footer">
+                <div>
+                  <span style="font-weight: 500">Next run:</span>
+                  <span bbb-text="next_run_at_formatted">-</span>
+                </div>
+                <div class="bb-job-actions">
+                  <button
+                    class="bb-job-link"
+                    bbb-action="toggle-schedule"
+                    bbb-id="{id}"
+                    bbb-text="toggle_text"
+                    aria-label="Toggle schedule enabled or disabled"
+                  >
+                    Disable
+                  </button>
+                  <button
+                    class="bb-job-link"
+                    bbb-action="view-schedule-jobs"
+                    bbb-id="{id}"
+                    aria-label="View jobs for this schedule"
+                  >
+                    View Jobs
+                  </button>
+                  <button
+                    class="bb-job-link"
+                    bbb-action="delete-schedule"
+                    bbb-id="{id}"
+                    style="color: #dc2626"
+                    aria-label="Delete this schedule"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div
+              id="schedulesEmpty"
+              style="
+                text-align: center;
+                padding: 40px;
+                color: #6b7280;
+                display: none;
+              "
+            >
+              No schedules configured. Create a scheduled job to get started.
             </div>
           </div>
         </div>
@@ -1625,7 +1761,11 @@
       <div class="bb-modal-content" style="max-width: 600px">
         <div class="bb-modal-header">
           <h2 class="bb-modal-title">Create New Job</h2>
-          <button class="bb-modal-close" bbb-action="close-create-job-modal">
+          <button
+            class="bb-modal-close"
+            bbb-action="close-create-job-modal"
+            aria-label="Close create job modal"
+          >
             &times;
           </button>
         </div>
@@ -1640,6 +1780,7 @@
               required
               placeholder="example.com"
               class="bb-form-input"
+              aria-label="Domain to crawl"
             />
             <div
               class="bb-field-error"
@@ -1658,9 +1799,29 @@
               max="10000"
               value="0"
               class="bb-form-input"
+              aria-label="Maximum number of pages to crawl"
             />
             <div style="font-size: 12px; color: #6b7280; margin-top: 4px">
               Maximum number of pages to crawl (set to 0 for unlimited)
+            </div>
+          </div>
+
+          <div class="bb-form-group">
+            <label for="scheduleInterval">Schedule</label>
+            <select
+              id="scheduleInterval"
+              name="schedule_interval_hours"
+              class="bb-form-input"
+              aria-label="Schedule frequency for recurring jobs"
+            >
+              <option value="">Run once</option>
+              <option value="6">Every 6 hours</option>
+              <option value="12">Every 12 hours</option>
+              <option value="24">Every 24 hours</option>
+              <option value="48">Every 48 hours</option>
+            </select>
+            <div style="font-size: 12px; color: #6b7280; margin-top: 4px">
+              Select a frequency to create a recurring schedule for this domain
             </div>
           </div>
 
@@ -1681,6 +1842,7 @@
               type="button"
               class="bb-button bb-button-outline"
               bbb-action="close-create-job-modal"
+              aria-label="Cancel job creation"
             >
               Cancel
             </button>
@@ -1688,6 +1850,7 @@
               type="submit"
               class="bb-button bb-button-primary"
               id="createJobSubmitBtn"
+              aria-label="Create the job"
             >
               Create Job
             </button>
@@ -1742,6 +1905,20 @@
           // Setup dashboard action handlers
           if (window.setupDashboardActions) {
             window.setupDashboardActions();
+          }
+
+          // Setup job creation form handler
+          const createJobForm = document.getElementById("createJobForm");
+          if (createJobForm && window.handleDashboardJobCreation) {
+            createJobForm.addEventListener(
+              "submit",
+              window.handleDashboardJobCreation
+            );
+          }
+
+          // Load schedules on dashboard load
+          if (window.loadSchedules) {
+            window.loadSchedules();
           }
 
           // Check for system-admin role to show Reset DB button
