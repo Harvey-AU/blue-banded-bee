@@ -779,9 +779,15 @@ function setupInteractions(state) {
       if (button.dataset.status !== undefined) {
         state.statusFilter = button.dataset.status || "";
         state.cacheFilter = "";
+        state.pathFilter = "";
+        const pathInput = document.getElementById("pathFilter");
+        if (pathInput) pathInput.value = "";
       } else if (button.dataset.cache !== undefined) {
         state.cacheFilter = button.dataset.cache || "";
         state.statusFilter = "";
+        state.pathFilter = "";
+        const pathInput = document.getElementById("pathFilter");
+        if (pathInput) pathInput.value = "";
       }
 
       state.page = 0;
@@ -789,6 +795,39 @@ function setupInteractions(state) {
         console.error("Failed to apply filter:", error);
         showToast("Failed to apply filter.", true);
       });
+    });
+  }
+
+  const pathFilterInput = document.getElementById("pathFilter");
+  if (pathFilterInput) {
+    let pathFilterTimer = null;
+    pathFilterInput.addEventListener("input", (event) => {
+      clearTimeout(pathFilterTimer);
+      const value = event.target.value.trim();
+
+      pathFilterTimer = setTimeout(() => {
+        if (value.length === 0 || value.length >= 3) {
+          state.pathFilter = value;
+          state.page = 0;
+
+          // Clear status and cache filters when searching by path
+          if (value.length > 0) {
+            state.statusFilter = "";
+            state.cacheFilter = "";
+            filterTabs?.querySelectorAll("button").forEach((btn) => {
+              btn.classList.remove("active");
+            });
+            filterTabs
+              ?.querySelector("button[data-status='']")
+              ?.classList.add("active");
+          }
+
+          loadTasks(state).catch((error) => {
+            console.error("Failed to apply path filter:", error);
+            showToast("Failed to filter by path.", true);
+          });
+        }
+      }, 300);
     });
   }
 
@@ -1483,6 +1522,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     sortColumn: "created_at",
     sortDirection: "desc",
     statusFilter: "",
+    cacheFilter: "",
+    pathFilter: "",
     totalTasks: 0,
     hasPrev: false,
     hasNext: false,
