@@ -1035,19 +1035,14 @@ async function initialiseAuth(state) {
     state.binder.updateAuthElements();
   }
 
-  const user = data.session.user;
-  const userEmailEl = document.getElementById("userEmail");
-  if (userEmailEl) {
-    userEmailEl.textContent = user?.email || "Signed in";
+  // Use the unified auth system to update user info
+  // This handles both email display and avatar properly
+  if (window.BBAuth?.updateUserInfo) {
+    await window.BBAuth.updateUserInfo();
   }
 
-  const logoutBtn = document.getElementById("logoutBtn");
-  if (logoutBtn) {
-    logoutBtn.addEventListener("click", async () => {
-      await window.supabase.auth.signOut();
-      window.location.href = "/dashboard";
-    });
-  }
+  // Logout handler is already set up by setupAuthHandlers() in auth.js
+  // via core.js initialization - no need to duplicate it here
 }
 
 async function fetchSharedJSON(path) {
