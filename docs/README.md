@@ -26,8 +26,7 @@ Performance analyses, bug fixes, and optimisation documentation.
 
 ## 📚 Key Documents
 
-- **[Test Plan](./TEST_PLAN.md)** - Comprehensive testing requirements and
-  coverage tracking
+- **[Test Plan](./TEST_PLAN.md)** - Testing strategy and approach
 - **[Q&A](./QandA.md)** - Frequently asked questions and answers
 
 ## 🔍 Quick Links

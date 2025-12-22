@@ -175,6 +175,7 @@ func createJobObject(options *JobOptions, normalisedDomain string) *Job {
 		SourceType:      options.SourceType,
 		SourceDetail:    options.SourceDetail,
 		SourceInfo:      options.SourceInfo,
+		SchedulerID:     options.SchedulerID,
 	}
 }
 
@@ -199,14 +200,15 @@ func (jm *JobManager) setupJobDatabase(ctx context.Context, job *Job, normalised
 				id, domain_id, user_id, organisation_id, status, progress, total_tasks, completed_tasks, failed_tasks, skipped_tasks,
 				created_at, concurrency, find_links, include_paths, exclude_paths,
 				required_workers, max_pages,
-				found_tasks, sitemap_tasks, source_type, source_detail, source_info
-			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)`,
+				found_tasks, sitemap_tasks, source_type, source_detail, source_info, scheduler_id
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)`,
 			job.ID, domainID, job.UserID, job.OrganisationID, string(job.Status), job.Progress,
 			job.TotalTasks, job.CompletedTasks, job.FailedTasks, job.SkippedTasks,
 			job.CreatedAt, job.Concurrency, job.FindLinks,
 			db.Serialise(job.IncludePaths), db.Serialise(job.ExcludePaths),
 			job.RequiredWorkers, job.MaxPages,
 			job.FoundTasks, job.SitemapTasks, job.SourceType, job.SourceDetail, job.SourceInfo,
+			job.SchedulerID,
 		)
 		return err
 	})

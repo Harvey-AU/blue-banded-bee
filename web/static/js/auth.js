@@ -789,7 +789,7 @@ async function handlePendingDomain() {
           use_sitemap: true,
           find_links: true,
           max_pages: 0,
-          concurrency: 5,
+          // concurrency omitted - uses server default (20)
         }),
       });
 

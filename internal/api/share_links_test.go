@@ -346,11 +346,11 @@ func TestSharedJobHandlerReturnsJob(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows([]string{
 			"total_tasks", "completed_tasks", "failed_tasks", "skipped_tasks", "status",
 			"domain", "created_at", "started_at", "completed_at", "duration_seconds",
-			"avg_time_per_task_seconds", "stats",
+			"avg_time_per_task_seconds", "stats", "scheduler_id",
 		}).AddRow(
 			10, 8, 1, 1, "completed",
 			"example.com", now, now, now,
-			int64(120), float64(12.5), []byte(`{}`),
+			int64(120), float64(12.5), []byte(`{}`), nil,
 		))
 
 	req := httptest.NewRequest(http.MethodGet, "/v1/shared/jobs/token-123", nil)

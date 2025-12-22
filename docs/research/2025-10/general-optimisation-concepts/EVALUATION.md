@@ -409,7 +409,7 @@ articles above.
 - **Deployment**: Fly.io with Cloudflare CDN
 - **Auth**: Supabase Auth (JWT)
 - **Monitoring**: Sentry (errors + performance)
-- **Testing**: 350+ tests, 38.9% coverage, testify framework
+- **Testing**: 350+ tests using testify framework
 
 ### Key Components
 

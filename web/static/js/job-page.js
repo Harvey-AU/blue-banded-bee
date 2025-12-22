@@ -231,8 +231,28 @@ function formatJobForBinding(job, jobId) {
   }
   const progressDisplay = `${Math.round(Math.max(0, Math.min(100, progress)))}%`;
 
-  const avgSeconds = job.avg_time_per_task_seconds ?? job.avgTimePerTaskSeconds;
   const domain = job.domain ?? job.domains?.name ?? job.domain_name ?? "—";
+
+  // Calculate duration: use API value for completed jobs, or elapsed time for running jobs
+  let durationSeconds = job.duration_seconds ?? job.durationSeconds;
+  const startedAt = job.started_at ?? job.startedAt;
+  if (
+    durationSeconds == null &&
+    startedAt &&
+    ["running", "pending"].includes(statusRaw)
+  ) {
+    const startTime = new Date(startedAt).getTime();
+    if (!Number.isNaN(startTime)) {
+      durationSeconds = (Date.now() - startTime) / 1000;
+    }
+  }
+
+  // Calculate average per task based on duration and completed tasks
+  const processedTasks = completedTasks + failedTasks;
+  const avgSeconds =
+    processedTasks > 0 && durationSeconds > 0
+      ? durationSeconds / processedTasks
+      : (job.avg_time_per_task_seconds ?? job.avgTimePerTaskSeconds);
 
   return {
     id: job.id || jobId,
@@ -246,9 +266,7 @@ function formatJobForBinding(job, jobId) {
     failed_tasks_display: formatCount(failedTasks),
     started_at_display: formatDateTime(job.started_at ?? job.startedAt),
     completed_at_display: formatDateTime(job.completed_at ?? job.completedAt),
-    duration_display: formatDuration(
-      job.duration_seconds ?? job.durationSeconds
-    ),
+    duration_display: formatDuration(durationSeconds),
     avg_time_display: formatAverageSeconds(avgSeconds),
     can_restart: ["completed", "failed", "cancelled"].includes(statusRaw),
     can_cancel: ["running", "pending"].includes(statusRaw),
@@ -1469,6 +1487,33 @@ document.addEventListener("DOMContentLoaded", async () => {
       await loadTasks(state);
     }
     setupInteractions(state);
+
+    // Auto-refresh every 1 second for running/pending jobs
+    let autoRefreshInterval = null;
+    const startAutoRefresh = () => {
+      if (autoRefreshInterval) return;
+      autoRefreshInterval = setInterval(async () => {
+        try {
+          const job = await loadJob(state);
+          await loadTasks(state);
+          // Stop auto-refresh if job is no longer active
+          if (job && !["running", "pending"].includes(job.status)) {
+            clearInterval(autoRefreshInterval);
+            autoRefreshInterval = null;
+          }
+        } catch (err) {
+          console.warn("Auto-refresh failed:", err);
+        }
+      }, 1000);
+    };
+    startAutoRefresh();
+
+    // Clean up on page unload
+    window.addEventListener("beforeunload", () => {
+      if (autoRefreshInterval) {
+        clearInterval(autoRefreshInterval);
+      }
+    });
   } catch (error) {
     console.error("Failed to initialise job page:", error);
     showToast("Failed to load job details.", true);

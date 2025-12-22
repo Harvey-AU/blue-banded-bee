@@ -63,6 +63,7 @@ type Job struct {
 	SourceDetail    *string   `json:"source_detail,omitempty"`
 	SourceInfo      *string   `json:"source_info,omitempty"`
 	ErrorMessage    string    `json:"error_message,omitempty"`
+	SchedulerID     *string   `json:"scheduler_id,omitempty"`
 	// Calculated fields from database
 	DurationSeconds       *int     `json:"duration_seconds,omitempty"`
 	AvgTimePerTaskSeconds *float64 `json:"avg_time_per_task_seconds,omitempty"`
@@ -121,4 +122,5 @@ type JobOptions struct {
 	SourceType      *string  `json:"source_type,omitempty"`
 	SourceDetail    *string  `json:"source_detail,omitempty"`
 	SourceInfo      *string  `json:"source_info,omitempty"`
+	SchedulerID     *string  `json:"scheduler_id,omitempty"`
 }

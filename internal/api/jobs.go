@@ -124,6 +124,7 @@ type JobResponse struct {
 	DurationSeconds       *int                   `json:"duration_seconds,omitempty"`
 	AvgTimePerTaskSeconds *float64               `json:"avg_time_per_task_seconds,omitempty"`
 	Stats                 map[string]interface{} `json:"stats,omitempty"`
+	SchedulerID           *string                `json:"scheduler_id,omitempty"`
 }
 
 // listJobs handles GET /v1/jobs
@@ -227,14 +228,11 @@ func (h *Handler) createJobFromRequest(ctx context.Context, user *db.User, req C
 		findLinks = *req.FindLinks
 	}
 
-	concurrency := 5
-	if req.Concurrency != nil {
+	concurrency := 20 // Default concurrency
+	if req.Concurrency != nil && *req.Concurrency > 0 {
 		concurrency = *req.Concurrency
-		// Validate concurrency limits (must match database constraints and worker capacity)
-		if concurrency < 1 {
-			concurrency = 1
-		} else if concurrency > 20 {
-			concurrency = 20
+		if concurrency > 100 {
+			concurrency = 100
 		}
 	}
 
@@ -384,6 +382,7 @@ func (h *Handler) fetchJobResponse(ctx context.Context, jobID string, organisati
 	var durationSeconds sql.NullInt64
 	var avgTimePerTaskSeconds sql.NullFloat64
 	var statsJSON []byte
+	var schedulerID sql.NullString
 
 	query := `
 		SELECT j.total_tasks, j.completed_tasks, j.failed_tasks, j.skipped_tasks, j.status,
@@ -392,7 +391,7 @@ func (h *Handler) fetchJobResponse(ctx context.Context, jobID string, organisati
 		       CASE WHEN j.completed_tasks > 0 THEN
 		           EXTRACT(EPOCH FROM (j.completed_at - j.started_at)) / j.completed_tasks
 		       END as avg_time_per_task_seconds,
-		       j.stats
+		       j.stats, j.scheduler_id
 		FROM jobs j
 		JOIN domains d ON j.domain_id = d.id
 		WHERE j.id = $1`
@@ -404,7 +403,7 @@ func (h *Handler) fetchJobResponse(ctx context.Context, jobID string, organisati
 	}
 
 	row := h.DB.GetDB().QueryRowContext(ctx, query, args...)
-	err := row.Scan(&total, &completed, &failed, &skipped, &status, &domain, &createdAt, &startedAt, &completedAt, &durationSeconds, &avgTimePerTaskSeconds, &statsJSON)
+	err := row.Scan(&total, &completed, &failed, &skipped, &status, &domain, &createdAt, &startedAt, &completedAt, &durationSeconds, &avgTimePerTaskSeconds, &statsJSON, &schedulerID)
 	if err != nil {
 		return JobResponse{}, err
 	}
@@ -453,6 +452,9 @@ func (h *Handler) fetchJobResponse(ctx context.Context, jobID string, organisati
 	if completedAt.Valid {
 		completed := completedAt.Time.Format(time.RFC3339)
 		response.CompletedAt = &completed
+	}
+	if schedulerID.Valid {
+		response.SchedulerID = &schedulerID.String
 	}
 
 	return response, nil

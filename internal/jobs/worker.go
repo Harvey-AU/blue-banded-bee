@@ -47,7 +47,7 @@ const (
 	// fallbackJobConcurrency is used when a job does not report an explicit
 	// concurrency (or the limiter has not yet seeded a value). This mirrors
 	// the API default.
-	fallbackJobConcurrency = 5
+	fallbackJobConcurrency = 20
 
 	// concurrencyBlockCooldown defines the window in which we consider a job
 	// recently concurrency-blocked for the purposes of suppressing scale ups.
@@ -543,6 +543,7 @@ func (wp *WorkerPool) Start(ctx context.Context) {
 		wp.wg.Add(1)
 		go func() {
 			defer wp.wg.Done()
+			time.Sleep(time.Duration(i*50) * time.Millisecond)
 			wp.worker(ctx, i)
 		}()
 	}
@@ -2285,6 +2286,10 @@ func (wp *WorkerPool) recoveryMonitor(ctx context.Context) {
 
 // scaleWorkers increases the worker pool size to the target number
 func (wp *WorkerPool) scaleWorkers(ctx context.Context, targetWorkers int) {
+	if wp.stopping.Load() {
+		return
+	}
+
 	defer func() {
 		if r := recover(); r != nil {
 			log.Error().
@@ -2319,12 +2324,12 @@ func (wp *WorkerPool) scaleWorkers(ctx context.Context, targetWorkers int) {
 			wp.workerWaitGroups = append(wp.workerWaitGroups, &sync.WaitGroup{})
 		}
 
-		// Start worker
 		wp.wg.Add(1)
-		go func(id int) {
+		go func(id, idx int) {
 			defer wp.wg.Done()
+			time.Sleep(time.Duration(idx*50) * time.Millisecond)
 			wp.worker(ctx, id)
-		}(workerID)
+		}(workerID, i)
 	}
 
 	wp.currentWorkers = targetWorkers
@@ -3813,12 +3818,10 @@ func (wp *WorkerPool) evaluateJobPerformance(jobID string, responseTime int64) {
 			actualBoost = oldBoost
 		} else {
 			actualBoost = oldBoost + additionalWorkers
-			scalingCtx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 			target := desiredWorkers
-			go func() {
-				defer cancel()
-				wp.scaleWorkers(scalingCtx, target)
-			}()
+			if !wp.stopping.Load() {
+				go wp.scaleWorkers(context.Background(), target)
+			}
 		}
 	}
 

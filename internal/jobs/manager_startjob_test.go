@@ -109,6 +109,7 @@ func TestStartJob_Unit(t *testing.T) {
 						nil,              // source_type
 						nil,              // source_detail
 						nil,              // source_info
+						nil,              // scheduler_id
 					).
 					WillReturnResult(sqlmock.NewResult(1, 1))
 
@@ -198,6 +199,7 @@ func TestStartJob_Unit(t *testing.T) {
 						nil,
 						nil,
 						nil,
+						nil, // scheduler_id
 					).
 					WillReturnResult(sqlmock.NewResult(1, 1))
 
@@ -287,6 +289,7 @@ func TestStartJob_Unit(t *testing.T) {
 						nil,
 						nil,
 						nil,
+						nil, // scheduler_id
 					).
 					WillReturnResult(sqlmock.NewResult(1, 1))
 

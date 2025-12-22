@@ -179,7 +179,7 @@ through systematic refactoring:
 
 - **Function Size**: Functions kept under 50 lines where possible
 - **Single Responsibility**: Each function has one clear purpose
-- **Comprehensive Testing**: 350+ test cases with 38.9% total coverage
+- **Testing**: Strategic test coverage for critical paths and complex logic
 - **Extract + Test + Commit**: Proven methodology for safe refactoring
 
 ### Application Entry Points (`cmd/`)
@@ -189,7 +189,7 @@ through systematic refactoring:
 
 ### Core Business Logic (`internal/`)
 
-#### API Layer (`internal/api/`) - 47.2% Test Coverage
+#### API Layer (`internal/api/`)
 
 - `handlers.go` - HTTP route handlers and middleware
 - `auth.go` - JWT authentication and user validation
@@ -201,7 +201,7 @@ through systematic refactoring:
 - `response.go` - Standardised response formats
 - `errors.go` - Error handling and codes
 
-#### Database Layer (`internal/db/`) - 37.9% Test Coverage
+#### Database Layer (`internal/db/`)
 
 - `db.go` - **Refactored**: PostgreSQL connection and setup
   - `createCoreTables()` - Table creation with dependency management
@@ -212,7 +212,7 @@ through systematic refactoring:
 - `users.go` - User and organisation data
 - `health.go` - Database health monitoring
 
-#### Job System (`internal/jobs/`) - 33.2% Test Coverage
+#### Job System (`internal/jobs/`)
 
 - `manager.go` - **Refactored**: Job lifecycle management
   - `handleExistingJobs()` - Existing job conflict resolution
@@ -226,7 +226,7 @@ through systematic refactoring:
   - `prepareTaskForProcessing()` - Task preparation and enrichment
 - `types.go` - Job and task type definitions
 
-#### Crawler (`internal/crawler/`) - 65.8% Test Coverage
+#### Crawler (`internal/crawler/`)
 
 - `crawler.go` - **Refactored**: HTTP client and URL processing
   - `validateCrawlRequest()` - URL validation and parsing
@@ -238,7 +238,7 @@ through systematic refactoring:
 - `config.go` - Crawler configuration and rate limiting
 - `types.go` - Crawler response types
 
-#### Utilities (`internal/util/`) - 81.1% Test Coverage
+#### Utilities (`internal/util/`)
 
 - `url.go` - URL normalisation and validation
 
