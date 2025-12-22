@@ -196,7 +196,7 @@ func SecurityHeadersMiddleware(next http.Handler) http.Handler {
 			default-src 'self';
 			script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com https://unpkg.com https://cdn.jsdelivr.net https://www.googletagmanager.com https://browser.sentry-cdn.com https://static.cloudflareinsights.com;
 			style-src 'self' 'unsafe-inline';
-			connect-src 'self' https://challenges.cloudflare.com https://cdn.jsdelivr.net https://www.google-analytics.com https://www.googletagmanager.com https://analytics.google.com https://auth.bluebandedbee.co https://*.sentry.io https://*.ingest.sentry.io https://browser.sentry-cdn.com https://cloudflareinsights.com;
+			connect-src 'self' https://challenges.cloudflare.com https://cdn.jsdelivr.net https://www.google-analytics.com https://www.googletagmanager.com https://analytics.google.com https://auth.bluebandedbee.co https://gpzjtbgtdjxnacdfujvx.supabase.co https://*.sentry.io https://*.ingest.sentry.io https://browser.sentry-cdn.com https://cloudflareinsights.com;
 			frame-src https://challenges.cloudflare.com;
 			img-src 'self' data: https://www.google-analytics.com https://www.googletagmanager.com https://ssl.gstatic.com;
 			font-src 'self' data:;
