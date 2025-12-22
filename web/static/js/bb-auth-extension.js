@@ -562,15 +562,15 @@ async function initializeDashboard(config = {}) {
     window.dataBinder = dataBinder;
   }
 
-  // Initialise auth with data binder integration
+  // Initialise data binder FIRST so auth is available
+  await dataBinder.init();
+
+  // Initialise auth with data binder integration (after auth manager is set up)
   await initializeAuthWithDataBinder(dataBinder, {
     debug,
     autoRefresh,
     networkMonitoring,
   });
-
-  // Initialise data binder
-  await dataBinder.init();
 
   // Setup dashboard-specific refresh method
   setupDashboardRefresh(dataBinder);
