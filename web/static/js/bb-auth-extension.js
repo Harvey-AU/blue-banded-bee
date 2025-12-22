@@ -334,13 +334,32 @@ async function handleDashboardJobCreation(event) {
       console.log("Scheduler created:", schedulerResponse);
 
       // Create job immediately (scheduler will handle future runs)
-      const jobResponse = await window.dataBinder.fetchData("/v1/jobs", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(requestBody),
-      });
+      try {
+        const jobResponse = await window.dataBinder.fetchData("/v1/jobs", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(requestBody),
+        });
 
-      console.log("Scheduled job created:", jobResponse);
+        console.log("Scheduled job created:", jobResponse);
+      } catch (jobError) {
+        // If job creation fails, attempt to clean up the scheduler
+        console.error(
+          "Failed to create initial job, cleaning up scheduler:",
+          jobError
+        );
+        try {
+          await window.dataBinder.fetchData(
+            `/v1/schedulers/${encodeURIComponent(schedulerResponse.id)}`,
+            { method: "DELETE" }
+          );
+          console.log("Scheduler cleanup successful");
+        } catch (cleanupError) {
+          console.error("Failed to clean up scheduler:", cleanupError);
+        }
+        // Re-throw the original error
+        throw jobError;
+      }
 
       // Refresh schedules and dashboard
       if (window.loadSchedules) {

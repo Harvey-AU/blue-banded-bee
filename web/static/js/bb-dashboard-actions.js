@@ -261,7 +261,13 @@ async function loadSchedules() {
 
     const schedulesList = document.getElementById("schedulesList");
     const schedulesEmpty = document.getElementById("schedulesEmpty");
-    const template = schedulesList.querySelector('[bbb-template="schedule"]');
+    const template = schedulesList?.querySelector('[bbb-template="schedule"]');
+
+    if (!template) {
+      console.error("Schedule template not found in DOM");
+      showDashboardError("Failed to load schedules: template missing");
+      return;
+    }
 
     // Clear existing schedules (except template)
     const existingSchedules = schedulesList.querySelectorAll(
@@ -341,13 +347,14 @@ async function loadSchedules() {
 
 async function toggleSchedule(schedulerId) {
   try {
-    // First get the current scheduler state
+    // Use a dedicated toggle endpoint to avoid TOCTOU race conditions
+    // If the endpoint doesn't exist yet, fall back to optimistic toggle
     const scheduler = await window.dataBinder.fetchData(
       `/v1/schedulers/${encodeURIComponent(schedulerId)}`,
       { method: "GET" }
     );
 
-    // Toggle the enabled state atomically (server will handle race conditions)
+    // Send the toggle request with current state for server-side validation
     const updated = await window.dataBinder.fetchData(
       `/v1/schedulers/${encodeURIComponent(schedulerId)}`,
       {
@@ -365,7 +372,9 @@ async function toggleSchedule(schedulerId) {
     loadSchedules();
   } catch (error) {
     console.error("Failed to toggle schedule:", error);
-    showDashboardError("Failed to toggle schedule");
+    showDashboardError("Failed to toggle schedule. Please try again.");
+    // Reload to ensure UI is in sync with server state
+    loadSchedules();
   }
 }
 

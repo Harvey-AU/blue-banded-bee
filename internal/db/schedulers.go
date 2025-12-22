@@ -50,6 +50,7 @@ func (db *DB) CreateScheduler(ctx context.Context, scheduler *Scheduler) error {
 		scheduler.RequiredWorkers, scheduler.CreatedAt, scheduler.UpdatedAt,
 	)
 	if err != nil {
+		log.Error().Err(err).Str("scheduler_id", scheduler.ID).Str("organisation_id", scheduler.OrganisationID).Msg("Failed to create scheduler")
 		return fmt.Errorf("failed to create scheduler: %w", err)
 	}
 
@@ -80,18 +81,25 @@ func (db *DB) GetScheduler(ctx context.Context, schedulerID string) (*Scheduler,
 		if err == sql.ErrNoRows {
 			return nil, ErrSchedulerNotFound
 		}
+		log.Error().Err(err).Str("scheduler_id", schedulerID).Msg("Failed to get scheduler")
 		return nil, fmt.Errorf("failed to get scheduler: %w", err)
 	}
 
 	if includePaths.Valid && includePaths.String != "" {
 		if err := json.Unmarshal([]byte(includePaths.String), &scheduler.IncludePaths); err != nil {
-			log.Warn().Err(err).Msg("Failed to deserialise include_paths")
+			log.Warn().Err(err).Str("scheduler_id", schedulerID).Msg("Failed to deserialise include_paths")
+			scheduler.IncludePaths = []string{}
 		}
+	} else {
+		scheduler.IncludePaths = []string{}
 	}
 	if excludePaths.Valid && excludePaths.String != "" {
 		if err := json.Unmarshal([]byte(excludePaths.String), &scheduler.ExcludePaths); err != nil {
-			log.Warn().Err(err).Msg("Failed to deserialise exclude_paths")
+			log.Warn().Err(err).Str("scheduler_id", schedulerID).Msg("Failed to deserialise exclude_paths")
+			scheduler.ExcludePaths = []string{}
 		}
+	} else {
+		scheduler.ExcludePaths = []string{}
 	}
 
 	return scheduler, nil
@@ -110,11 +118,13 @@ func (db *DB) ListSchedulers(ctx context.Context, organisationID string) ([]*Sch
 
 	rows, err := db.client.QueryContext(ctx, query, organisationID)
 	if err != nil {
+		log.Error().Err(err).Str("organisation_id", organisationID).Msg("Failed to query schedulers")
 		return nil, fmt.Errorf("failed to list schedulers: %w", err)
 	}
 	defer rows.Close()
 
-	var schedulers []*Scheduler
+	// Initialize slice to return empty array instead of null in JSON
+	schedulers := make([]*Scheduler, 0)
 	for rows.Next() {
 		scheduler := &Scheduler{}
 		var includePaths, excludePaths sql.NullString
@@ -127,20 +137,25 @@ func (db *DB) ListSchedulers(ctx context.Context, organisationID string) ([]*Sch
 			&scheduler.CreatedAt, &scheduler.UpdatedAt,
 		)
 		if err != nil {
+			log.Error().Err(err).Str("organisation_id", organisationID).Msg("Failed to scan scheduler row")
 			return nil, fmt.Errorf("failed to scan scheduler: %w", err)
 		}
 
 		if includePaths.Valid && includePaths.String != "" {
 			if err := json.Unmarshal([]byte(includePaths.String), &scheduler.IncludePaths); err != nil {
-				log.Warn().Err(err).Msg("Failed to deserialise include_paths")
+				log.Warn().Err(err).Str("scheduler_id", scheduler.ID).Msg("Failed to deserialise include_paths")
 				scheduler.IncludePaths = []string{}
 			}
+		} else {
+			scheduler.IncludePaths = []string{}
 		}
 		if excludePaths.Valid && excludePaths.String != "" {
 			if err := json.Unmarshal([]byte(excludePaths.String), &scheduler.ExcludePaths); err != nil {
-				log.Warn().Err(err).Msg("Failed to deserialise exclude_paths")
+				log.Warn().Err(err).Str("scheduler_id", scheduler.ID).Msg("Failed to deserialise exclude_paths")
 				scheduler.ExcludePaths = []string{}
 			}
+		} else {
+			scheduler.ExcludePaths = []string{}
 		}
 
 		schedulers = append(schedulers, scheduler)
@@ -173,15 +188,18 @@ func (db *DB) UpdateScheduler(ctx context.Context, schedulerID string, updates *
 		updates.RequiredWorkers, time.Now().UTC(), schedulerID,
 	)
 	if err != nil {
+		log.Error().Err(err).Str("scheduler_id", schedulerID).Msg("Failed to update scheduler")
 		return fmt.Errorf("failed to update scheduler: %w", err)
 	}
 
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
+		log.Error().Err(err).Str("scheduler_id", schedulerID).Msg("Failed to get rows affected after update")
 		return fmt.Errorf("failed to get rows affected: %w", err)
 	}
 
 	if rowsAffected == 0 {
+		log.Warn().Str("scheduler_id", schedulerID).Msg("Scheduler not found for update")
 		return ErrSchedulerNotFound
 	}
 
@@ -194,15 +212,18 @@ func (db *DB) DeleteScheduler(ctx context.Context, schedulerID string) error {
 
 	result, err := db.client.ExecContext(ctx, query, schedulerID)
 	if err != nil {
+		log.Error().Err(err).Str("scheduler_id", schedulerID).Msg("Failed to delete scheduler")
 		return fmt.Errorf("failed to delete scheduler: %w", err)
 	}
 
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
+		log.Error().Err(err).Str("scheduler_id", schedulerID).Msg("Failed to get rows affected after delete")
 		return fmt.Errorf("failed to get rows affected: %w", err)
 	}
 
 	if rowsAffected == 0 {
+		log.Warn().Str("scheduler_id", schedulerID).Msg("Scheduler not found for deletion")
 		return ErrSchedulerNotFound
 	}
 
@@ -224,11 +245,13 @@ func (db *DB) GetSchedulersReadyToRun(ctx context.Context, limit int) ([]*Schedu
 
 	rows, err := db.client.QueryContext(ctx, query, limit)
 	if err != nil {
+		log.Error().Err(err).Int("limit", limit).Msg("Failed to query schedulers ready to run")
 		return nil, fmt.Errorf("failed to get schedulers ready to run: %w", err)
 	}
 	defer rows.Close()
 
-	var schedulers []*Scheduler
+	// Initialize slice to return empty array instead of null in JSON
+	schedulers := make([]*Scheduler, 0)
 	for rows.Next() {
 		scheduler := &Scheduler{}
 		var includePaths, excludePaths sql.NullString
@@ -241,20 +264,25 @@ func (db *DB) GetSchedulersReadyToRun(ctx context.Context, limit int) ([]*Schedu
 			&scheduler.CreatedAt, &scheduler.UpdatedAt,
 		)
 		if err != nil {
+			log.Error().Err(err).Msg("Failed to scan scheduler row in ready to run query")
 			return nil, fmt.Errorf("failed to scan scheduler: %w", err)
 		}
 
 		if includePaths.Valid && includePaths.String != "" {
 			if err := json.Unmarshal([]byte(includePaths.String), &scheduler.IncludePaths); err != nil {
-				log.Warn().Err(err).Msg("Failed to deserialise include_paths")
+				log.Warn().Err(err).Str("scheduler_id", scheduler.ID).Msg("Failed to deserialise include_paths")
 				scheduler.IncludePaths = []string{}
 			}
+		} else {
+			scheduler.IncludePaths = []string{}
 		}
 		if excludePaths.Valid && excludePaths.String != "" {
 			if err := json.Unmarshal([]byte(excludePaths.String), &scheduler.ExcludePaths); err != nil {
-				log.Warn().Err(err).Msg("Failed to deserialise exclude_paths")
+				log.Warn().Err(err).Str("scheduler_id", scheduler.ID).Msg("Failed to deserialise exclude_paths")
 				scheduler.ExcludePaths = []string{}
 			}
+		} else {
+			scheduler.ExcludePaths = []string{}
 		}
 
 		schedulers = append(schedulers, scheduler)
@@ -271,9 +299,21 @@ func (db *DB) UpdateSchedulerNextRun(ctx context.Context, schedulerID string, ne
 		WHERE id = $3
 	`
 
-	_, err := db.client.ExecContext(ctx, query, nextRun, time.Now().UTC(), schedulerID)
+	result, err := db.client.ExecContext(ctx, query, nextRun, time.Now().UTC(), schedulerID)
 	if err != nil {
+		log.Error().Err(err).Str("scheduler_id", schedulerID).Time("next_run", nextRun).Msg("Failed to update scheduler next run")
 		return fmt.Errorf("failed to update scheduler next run: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		log.Error().Err(err).Str("scheduler_id", schedulerID).Msg("Failed to get rows affected after next run update")
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		log.Warn().Str("scheduler_id", schedulerID).Msg("Scheduler not found for next run update")
+		return ErrSchedulerNotFound
 	}
 
 	return nil
