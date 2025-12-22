@@ -29,6 +29,42 @@ On merge, CI will:
 
 ## [Unreleased]
 
+### Added
+
+- Recurring job scheduling system with support for 6, 12, 24, and 48-hour
+  intervals
+- Scheduler management API endpoints (`/v1/schedulers`) for creating, updating,
+  deleting, and listing schedules
+- Dashboard UI for managing schedules with enable/disable, view jobs, and delete
+  functionality
+- Schedule dropdown in job creation modal to optionally create recurring
+  schedules
+- Background scheduler service that checks for ready schedules every 30 seconds
+  and creates jobs automatically
+- Jobs created from schedulers are linked via `scheduler_id` and marked with
+  `source_type='scheduler'`
+
+### Fixed
+
+- Replaced string error comparisons with sentinel errors
+  (`ErrSchedulerNotFound`) for proper error handling
+- Fixed N+1 query pattern in `startJobScheduler` by batching domain name lookups
+- Added `GetDomainNames()` and `GetDomainNameByID()` helper functions to
+  eliminate duplicate domain lookup code
+- Improved validation: `ScheduleIntervalHours` now uses pointer type for
+  explicit optional updates in API requests
+- Added comprehensive aria-labels to all interactive elements in dashboard for
+  improved accessibility
+- Extracted time formatting logic into reusable `formatNextRunTime()` helper
+  function
+
+### Changed
+
+- Scheduler API now uses pointer types for optional update fields to make intent
+  explicit (nil = no update, value = update requested)
+- Domain lookups now use consistent helper functions across scheduler code,
+  eliminating inline queries
+
 ## [0.17.13] – 2025-12-02
 
 ### Changed
