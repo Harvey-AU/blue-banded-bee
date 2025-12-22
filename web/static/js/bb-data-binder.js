@@ -68,6 +68,9 @@ class BBDataBinder {
 
       this.log("Auth initialized", {
         authenticated: this.authManager.isAuthenticated,
+        hasSession: !!session,
+        hasAccessToken: !!session?.access_token,
+        tokenPreview: session?.access_token?.substring(0, 20) + "...",
       });
     } catch (error) {
       this.log("Auth initialization failed", error);
@@ -780,6 +783,12 @@ class BBDataBinder {
       if (this.authManager?.session?.access_token) {
         headers["Authorization"] =
           `Bearer ${this.authManager.session.access_token}`;
+      } else if (this.debug) {
+        console.warn("No auth token available for request to", endpoint, {
+          hasAuthManager: !!this.authManager,
+          hasSession: !!this.authManager?.session,
+          hasAccessToken: !!this.authManager?.session?.access_token,
+        });
       }
 
       const fetchOptions = {

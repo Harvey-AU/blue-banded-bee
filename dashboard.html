@@ -1873,8 +1873,8 @@
           }
           // Initialize the complete dashboard with auth integration
           await initializeDashboard({
-            debug: false, // Disable noisy console logging
-            refreshInterval: 1, // Auto-refresh every 1 second
+            debug: true, // Enable debug logging to diagnose auth issues
+            refreshInterval: 30000, // Auto-refresh every 30 seconds (in milliseconds)
             apiBaseUrl: "", // Production config
             autoRefresh: true,
             networkMonitoring: true,
