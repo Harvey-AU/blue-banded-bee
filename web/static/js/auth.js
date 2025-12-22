@@ -907,8 +907,13 @@ function setupPasswordStrength() {
   const strengthText = document.getElementById("strengthText");
   const strengthFeedback = document.getElementById("strengthFeedback");
 
-  if (!passwordInput || typeof zxcvbn === "undefined") {
-    console.warn("Password strength checking not available");
+  // Exit silently if elements don't exist (not on a signup page)
+  if (!passwordInput || !confirmInput) {
+    return;
+  }
+
+  // Exit silently if zxcvbn library not loaded
+  if (typeof zxcvbn === "undefined") {
     return;
   }
 
@@ -1068,7 +1073,7 @@ function setupAuthHandlers() {
   // Set up modal form handlers
   setupAuthModalHandlers();
 
-  // Set up password strength checking
+  // Set up password strength checking if signup form is present
   setupPasswordStrength();
 }
 
