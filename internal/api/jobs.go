@@ -595,10 +595,11 @@ func (h *Handler) cancelJob(w http.ResponseWriter, r *http.Request, jobID string
 
 // TaskQueryParams holds parameters for task listing queries
 type TaskQueryParams struct {
-	Limit   int
-	Offset  int
-	Status  string
-	OrderBy string
+	Limit       int
+	Offset      int
+	Status      string
+	CacheFilter string
+	OrderBy     string
 }
 
 // parseTaskQueryParams extracts and validates query parameters for task listing
@@ -620,7 +621,8 @@ func parseTaskQueryParams(r *http.Request) TaskQueryParams {
 	}
 
 	// Parse status filter
-	status := r.URL.Query().Get("status") // Optional status filter
+	status := r.URL.Query().Get("status")     // Optional status filter
+	cacheFilter := r.URL.Query().Get("cache") // Optional cache filter (hit/miss)
 
 	// Parse sort parameter
 	sortParam := r.URL.Query().Get("sort") // Optional sort parameter
@@ -659,10 +661,11 @@ func parseTaskQueryParams(r *http.Request) TaskQueryParams {
 	}
 
 	return TaskQueryParams{
-		Limit:   limit,
-		Offset:  offset,
-		Status:  status,
-		OrderBy: orderBy,
+		Limit:       limit,
+		Offset:      offset,
+		Status:      status,
+		CacheFilter: cacheFilter,
+		OrderBy:     orderBy,
 	}
 }
 
@@ -733,9 +736,21 @@ func buildTaskQuery(jobID string, params TaskQueryParams) TaskQueryBuilder {
 
 	// Add status filter if provided
 	if params.Status != "" {
-		baseQuery += ` AND t.status = $2`
-		countQuery += ` AND t.status = $2`
+		baseQuery += ` AND t.status = $` + strconv.Itoa(len(args)+1)
+		countQuery += ` AND t.status = $` + strconv.Itoa(len(args)+1)
 		args = append(args, params.Status)
+	}
+
+	// Add cache filter if provided
+	if params.CacheFilter != "" {
+		if params.CacheFilter == "miss" {
+			// Miss includes MISS, EXPIRED, and NULL
+			baseQuery += ` AND (t.cache_status = 'MISS' OR t.cache_status = 'EXPIRED' OR t.cache_status IS NULL)`
+			countQuery += ` AND (t.cache_status = 'MISS' OR t.cache_status = 'EXPIRED' OR t.cache_status IS NULL)`
+		} else if params.CacheFilter == "hit" {
+			baseQuery += ` AND t.cache_status = 'HIT'`
+			countQuery += ` AND t.cache_status = 'HIT'`
+		}
 	}
 
 	// Add ordering, limit, and offset

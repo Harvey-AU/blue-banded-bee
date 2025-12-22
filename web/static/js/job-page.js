@@ -762,7 +762,9 @@ function setupInteractions(state) {
   const filterTabs = document.getElementById("taskFilters");
   if (filterTabs) {
     filterTabs.addEventListener("click", (event) => {
-      const button = event.target.closest("button[data-status]");
+      const button = event.target.closest(
+        "button[data-status], button[data-cache]"
+      );
       if (!button) {
         return;
       }
@@ -772,7 +774,16 @@ function setupInteractions(state) {
         .querySelectorAll("button")
         .forEach((btn) => btn.classList.remove("active"));
       button.classList.add("active");
-      state.statusFilter = button.dataset.status || "";
+
+      // Handle either status or cache filter
+      if (button.dataset.status !== undefined) {
+        state.statusFilter = button.dataset.status || "";
+        state.cacheFilter = "";
+      } else if (button.dataset.cache !== undefined) {
+        state.cacheFilter = button.dataset.cache || "";
+        state.statusFilter = "";
+      }
+
       state.page = 0;
       loadTasks(state).catch((error) => {
         console.error("Failed to apply filter:", error);
@@ -1105,6 +1116,9 @@ async function loadTasks(state) {
   );
   if (state.statusFilter) {
     params.set("status", state.statusFilter);
+  }
+  if (state.cacheFilter) {
+    params.set("cache", state.cacheFilter);
   }
 
   const loadingEl = document.getElementById("tasksLoading");
