@@ -49,7 +49,7 @@ let captchaIssuedAt = null;
  * Initialise Supabase client
  * @returns {boolean} Success status
  */
-function initializeSupabase() {
+function initialiseSupabase() {
   if (window.supabase && window.supabase.createClient) {
     supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     window.supabase = supabase; // Ensure it's globally available
@@ -1177,7 +1177,7 @@ async function resumeCliAuthFromStorage() {
 
   try {
     if (!supabase) {
-      if (!initializeSupabase()) {
+      if (!initialiseSupabase()) {
         console.warn("CLI auth resume: Supabase initialisation failed");
         return;
       }
@@ -1239,7 +1239,7 @@ function initCliAuthPage() {
     return;
   }
 
-  if (!initializeSupabase()) {
+  if (!initialiseSupabase()) {
     console.error("CLI auth: Supabase initialisation failed");
     return;
   }
@@ -1431,7 +1431,7 @@ window.onTurnstileSuccess = function (token) {
 if (typeof module !== "undefined" && module.exports) {
   // Node.js environment
   module.exports = {
-    initializeSupabase,
+    initialiseSupabase,
     loadAuthModal,
     waitForAuthScript,
     handleAuthCallback,
@@ -1463,7 +1463,7 @@ if (typeof module !== "undefined" && module.exports) {
 } else {
   // Browser environment - make functions globally available
   window.BBAuth = {
-    initializeSupabase,
+    initialiseSupabase,
     loadAuthModal,
     waitForAuthScript,
     handleAuthCallback,
@@ -1493,7 +1493,7 @@ if (typeof module !== "undefined" && module.exports) {
   };
 
   // Also make individual functions available globally for backward compatibility
-  window.initializeSupabase = initializeSupabase;
+  window.initialiseSupabase = initialiseSupabase;
   window.loadAuthModal = loadAuthModal;
   window.waitForAuthScript = waitForAuthScript;
   window.handleAuthCallback = handleAuthCallback;

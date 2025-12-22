@@ -130,11 +130,11 @@
     await Promise.all([ensurePasswordStrength(), ensureTurnstile()]);
     await ensureAuthBundle();
 
-    // Initialize Supabase client after loading SDK and auth bundle
-    if (typeof window.BBAuth?.initializeSupabase === "function") {
-      const initialized = window.BBAuth.initializeSupabase();
-      if (!initialized) {
-        console.error("Failed to initialize Supabase client");
+    // Initialise Supabase client after loading SDK and auth bundle
+    if (typeof window.BBAuth?.initialiseSupabase === "function") {
+      const initialised = window.BBAuth.initialiseSupabase();
+      if (!initialised) {
+        console.error("Failed to initialise Supabase client");
       }
     }
 

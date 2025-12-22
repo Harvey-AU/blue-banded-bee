@@ -1004,13 +1004,13 @@ function setupInteractions(state) {
 }
 
 async function initialiseAuth(state) {
-  // Wait for core.js to finish initialization
+  // Wait for core.js to finish initialisation
   if (window.BB_APP?.coreReady) {
     await window.BB_APP.coreReady;
   }
 
   if (!window.supabase) {
-    throw new Error("Supabase client not initialized");
+    throw new Error("Supabase client not initialised");
   }
 
   const { data, error } = await window.supabase.auth.getSession();
@@ -1042,7 +1042,7 @@ async function initialiseAuth(state) {
   }
 
   // Logout handler is already set up by setupAuthHandlers() in auth.js
-  // via core.js initialization - no need to duplicate it here
+  // via core.js initialisation - no need to duplicate it here
 }
 
 async function fetchSharedJSON(path) {
