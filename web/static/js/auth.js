@@ -50,6 +50,12 @@ let captchaIssuedAt = null;
  * @returns {boolean} Success status
  */
 function initialiseSupabase() {
+  // If already initialised (client has auth property), return success
+  if (window.supabase && window.supabase.auth) {
+    return true;
+  }
+
+  // Otherwise, create the client from the SDK
   if (window.supabase && window.supabase.createClient) {
     supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     window.supabase = supabase; // Ensure it's globally available

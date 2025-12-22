@@ -22,8 +22,9 @@ PORT = "8080"
 
 # Explicitly source DATABASE_URL from secrets
 DATABASE_URL = { from_secret = "DATABASE_URL" }
-SUPABASE_AUTH_URL = { from_secret = "SUPABASE_AUTH_URL" }
-SUPABASE_PUBLISHABLE_KEY = { from_secret = "SUPABASE_PUBLISHABLE_KEY" }
+# Public configuration - same as production
+SUPABASE_AUTH_URL = "https://auth.bluebandedbee.co"
+SUPABASE_PUBLISHABLE_KEY = "sb_publishable_xCn-z8wEo4MPJnbPq6cvXg_09fINjIp"
 
 # Use same machine config as production but smaller
 [vm]
