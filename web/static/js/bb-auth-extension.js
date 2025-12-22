@@ -26,12 +26,6 @@ async function initializeAuthWithDataBinder(dataBinder, options = {}) {
     networkMonitoring = true,
   } = options;
 
-  // Ensure Supabase is ready
-  if (!window.BBAuth.initializeSupabase()) {
-    console.error("Supabase not available");
-    return;
-  }
-
   // Handle auth callback tokens
   const hasToken = await window.BBAuth.handleAuthCallback();
 
