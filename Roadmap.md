@@ -324,6 +324,19 @@ Organisation model implemented:
 - [x] **Blocking Avoidance**
   - [x] Series of tweaks to reduce blocking
 
+### ✅ Recurring Job Scheduling (Completed v0.18.0)
+
+- [x] **Scheduler System Implementation**
+  - [x] Database schema with schedulers table and scheduler_id foreign key
+  - [x] Support for 6, 12, 24, and 48-hour intervals
+  - [x] Background service polls for ready schedules every 30 seconds
+  - [x] Jobs created from schedulers marked with source_type='scheduler'
+  - [x] Scheduler management API endpoints (create, update, delete, list)
+  - [x] Dashboard UI for managing schedules (enable/disable, view jobs, delete)
+  - [x] Schedule dropdown in job creation modal for optional recurring schedules
+  - [x] Comprehensive error handling with structured logging
+  - [x] Input validation and rollback logic for failed operations
+
 ### 🔴 Webflow App Integration
 
 - [ ] **Webflow Developer Registration**
@@ -334,7 +347,8 @@ Organisation model implemented:
   - [ ] User login with existing Supabase Auth (no separate auth)
   - [ ] Show last crawl status for current Webflow site
   - [ ] "Crawl Now" button to trigger immediate cache warming
-  - [ ] "Auto-crawl on publish" toggle for webhook setup
+  - [ ] "Auto-crawl on publish" toggle for webhook setup (can use existing
+        scheduler system)
   - [ ] Webhook integration to trigger crawls on site publish
 
 ### 🔴 Slack Integration
@@ -462,9 +476,12 @@ Organisation model implemented:
   - [ ] Introduce read replica routing with lag monitoring and primary fallbacks
   - [ ] Add tenant-level pool quotas with schema/role isolation to enforce
         fairness
-- [ ] **Scheduling & Automation**
-  - [ ] Create configuration UI for scheduling options
-  - [ ] Implement cron-like scheduler for recurring runs
+- [x] **Scheduling & Automation**
+  - [x] Create configuration UI for scheduling options (completed v0.18.0)
+  - [x] Implement recurring job scheduler for 6/12/24/48 hour intervals
+        (completed v0.18.0)
+  - [x] Background service checks for ready schedules every 30 seconds
+        (completed v0.18.0)
   - [ ] Automatic cache warming based on Webflow publish events
 - [ ] **Monitoring & Reporting**
   - [x] Fix completion percentage to reflect actual completed vs skipped tasks

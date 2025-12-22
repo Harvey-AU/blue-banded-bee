@@ -252,6 +252,62 @@ CREATE INDEX idx_tasks_pending ON tasks(created_at) WHERE status = 'pending';
 - `failed` - Task failed after retries
 - `skipped` - Task skipped due to limits
 
+### Scheduler Tables
+
+#### Schedulers Table
+
+Manages recurring job schedules for automatic cache warming.
+
+```sql
+CREATE TABLE schedulers (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    domain_id INTEGER NOT NULL REFERENCES domains(id),
+    organisation_id UUID NOT NULL REFERENCES organisations(id),
+    schedule_interval_hours INTEGER NOT NULL CHECK (schedule_interval_hours IN (6, 12, 24, 48)),
+    next_run_at TIMESTAMPTZ NOT NULL,
+    is_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+
+    -- Job configuration template
+    concurrency INTEGER NOT NULL DEFAULT 20,
+    find_links BOOLEAN NOT NULL DEFAULT TRUE,
+    max_pages INTEGER NOT NULL DEFAULT 0,
+    include_paths TEXT,
+    exclude_paths TEXT,
+    required_workers INTEGER NOT NULL DEFAULT 1,
+
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    CONSTRAINT unique_domain_org UNIQUE(domain_id, organisation_id)
+);
+
+CREATE INDEX idx_schedulers_next_run ON schedulers(next_run_at) WHERE is_enabled = TRUE;
+CREATE INDEX idx_schedulers_organisation ON schedulers(organisation_id);
+```
+
+**Key Features:**
+
+- **Interval Constraints**: Only allows 6, 12, 24, or 48-hour intervals
+- **Automatic Execution**: Background service polls `next_run_at` every 30
+  seconds
+- **Job Templates**: Stores full job configuration for automatic creation
+- **Organisation Isolation**: One active scheduler per domain per organisation
+- **Indexed Polling**: Efficient query for ready schedules via indexed
+  `next_run_at`
+
+**Scheduler-Job Linking:**
+
+Jobs created from schedulers are linked via `jobs.scheduler_id`:
+
+```sql
+-- Added to jobs table
+ALTER TABLE jobs ADD COLUMN scheduler_id UUID REFERENCES schedulers(id);
+CREATE INDEX idx_jobs_scheduler_id ON jobs(scheduler_id);
+```
+
+Jobs created by schedulers are marked with `source_type='scheduler'` for
+tracking and reporting.
+
 ### Authentication Tables
 
 #### Users Table
