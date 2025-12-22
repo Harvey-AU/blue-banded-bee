@@ -1894,15 +1894,15 @@
             );
           }
 
-          // Load schedules on dashboard load
-          if (window.loadSchedules) {
-            window.loadSchedules();
-          }
-
-          // Check for system-admin role to show Reset DB button
+          // Check for system-admin role and load schedules
           const {
             data: { session },
           } = await window.supabase.auth.getSession();
+
+          // Load schedules after auth is confirmed
+          if (session?.user && window.loadSchedules) {
+            window.loadSchedules();
+          }
           if (session?.user) {
             const isSystemAdmin =
               session.user.app_metadata?.system_role === "system_admin" ||
