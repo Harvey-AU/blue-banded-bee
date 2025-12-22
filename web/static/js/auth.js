@@ -1391,8 +1391,10 @@ function initCliAuthPage() {
         window.showAuthModal();
       }
       if (providerHint) {
+        // Sanitise provider hint to prevent CSS selector injection
+        const sanitised = providerHint.replace(/[^a-z0-9_-]/gi, "");
         const button = document.querySelector(
-          `.bb-social-btn[data-provider="${providerHint}"]`
+          `.bb-social-btn[data-provider="${sanitised}"]`
         );
         if (button) {
           button.focus();
