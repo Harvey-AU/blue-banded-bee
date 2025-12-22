@@ -187,24 +187,11 @@ func validateSupabaseToken(ctx context.Context, tokenString string) (*UserClaims
 		return nil, fmt.Errorf("SUPABASE_AUTH_URL environment variable not set")
 	}
 
-	// Accept both custom domain and original Supabase domain as valid issuers
-	// This handles the transition period when custom domain is configured but tokens
-	// are still issued by the original Supabase domain
-	validIssuers := []string{
-		fmt.Sprintf("%s/auth/v1", authURL),
-	}
-
-	// If using custom domain, also accept the original Supabase domain
-	// Extract original domain from custom domain DNS or use fallback
-	if strings.Contains(authURL, "auth.bluebandedbee.co") {
-		validIssuers = append(validIssuers, "https://gpzjtbgtdjxnacdfujvx.supabase.co/auth/v1")
-	}
-
+	// Parse token without issuer validation first
 	token, err := jwt.ParseWithClaims(
 		tokenString,
 		&UserClaims{},
 		jwks.Keyfunc,
-		jwt.WithIssuers(validIssuers...),
 		jwt.WithValidMethods([]string{
 			jwt.SigningMethodRS256.Name, // RSA keys
 			jwt.SigningMethodES256.Name, // Elliptic Curve keys (P-256)
@@ -217,6 +204,35 @@ func validateSupabaseToken(ctx context.Context, tokenString string) (*UserClaims
 	claims, ok := token.Claims.(*UserClaims)
 	if !ok || !token.Valid {
 		return nil, fmt.Errorf("invalid token claims")
+	}
+
+	// Accept both custom domain and original Supabase domain as valid issuers
+	// This handles the transition period when custom domain is configured but tokens
+	// are still issued by the original Supabase domain
+	validIssuers := []string{
+		fmt.Sprintf("%s/auth/v1", authURL),
+	}
+
+	// If using custom domain, also accept the original Supabase domain
+	if strings.Contains(authURL, "auth.bluebandedbee.co") {
+		validIssuers = append(validIssuers, "https://gpzjtbgtdjxnacdfujvx.supabase.co/auth/v1")
+	}
+
+	// Manually validate issuer against allowed list
+	issuer, err := claims.GetIssuer()
+	if err != nil {
+		return nil, fmt.Errorf("failed to read issuer: %w", err)
+	}
+
+	validIssuer := false
+	for _, allowed := range validIssuers {
+		if issuer == allowed {
+			validIssuer = true
+			break
+		}
+	}
+	if !validIssuer {
+		return nil, fmt.Errorf("token has unexpected issuer: %s", issuer)
 	}
 
 	audiences, err := claims.GetAudience()
