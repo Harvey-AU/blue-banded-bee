@@ -202,7 +202,13 @@
     </div>
 
     <!-- Error Message -->
-    <div id="authError" class="bb-auth-error" style="display: none"></div>
+    <div
+      id="authError"
+      class="bb-auth-error"
+      style="display: none"
+      role="status"
+      aria-live="polite"
+    ></div>
   </div>
 </div>
 
@@ -211,16 +217,56 @@
   let supabase;
   let captchaToken = null;
 
+  function disableAuthForms(message) {
+    const errorDiv = document.getElementById("authError");
+    if (errorDiv) {
+      errorDiv.textContent = message;
+      errorDiv.style.display = "block";
+      errorDiv.setAttribute("role", "status");
+      errorDiv.setAttribute("aria-live", "assertive");
+      errorDiv.setAttribute("tabindex", "-1");
+      if (typeof errorDiv.focus === "function") {
+        errorDiv.focus({ preventScroll: true });
+      }
+    }
+
+    document
+      .querySelectorAll(
+        ".bb-auth-form input, .bb-auth-form button, .bb-social-btn"
+      )
+      .forEach((el) => {
+        el.setAttribute("disabled", "disabled");
+        el.setAttribute("aria-disabled", "true");
+        el.style.cursor = "not-allowed";
+        el.style.opacity = "0.6";
+      });
+  }
+
   // Initialize Supabase
   function initializeSupabase() {
-    if (window.supabase && window.supabase.createClient) {
-      const SUPABASE_URL = "https://auth.bluebandedbee.co";
-      const SUPABASE_ANON_KEY =
-        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdwemp0Ymd0ZGp4bmFjZGZ1anZ4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDUwNjYxNjMsImV4cCI6MjA2MDY0MjE2M30.eJjM2-3X8oXsFex_lQKvFkP1-_yLMHsueIn7_hCF6YI";
-      supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-      return true;
+    if (!window.supabase || !window.supabase.createClient) {
+      disableAuthForms(
+        "Authentication scripts failed to load. Please refresh and try again."
+      );
+      return false;
     }
-    return false;
+    if (
+      !window.BBB_CONFIG?.supabaseUrl ||
+      !window.BBB_CONFIG?.supabaseAnonKey
+    ) {
+      console.error(
+        "BBB_CONFIG is missing Supabase settings; auth modal unavailable"
+      );
+      disableAuthForms(
+        "Authentication configuration is unavailable. Please contact support."
+      );
+      return false;
+    }
+    supabase = window.supabase.createClient(
+      window.BBB_CONFIG.supabaseUrl,
+      window.BBB_CONFIG.supabaseAnonKey
+    );
+    return true;
   }
 
   // CAPTCHA success callback

@@ -234,3 +234,12 @@ func (m *MockDB) GetDomainNames(ctx context.Context, domainIDs []int) (map[int]s
 	}
 	return args.Get(0).(map[int]string), args.Error(1)
 }
+
+// GetLastJobStartTimeForScheduler mocks the GetLastJobStartTimeForScheduler method
+func (m *MockDB) GetLastJobStartTimeForScheduler(ctx context.Context, schedulerID string) (*time.Time, error) {
+	args := m.Called(ctx, schedulerID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*time.Time), args.Error(1)
+}

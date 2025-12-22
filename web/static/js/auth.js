@@ -15,10 +15,26 @@
  * - Sentry error tracking for auth failures
  */
 
+const CLI_AUTH_STORAGE_KEY = "bbb_cli_auth_state";
+
 // Supabase configuration
-const SUPABASE_URL = "https://auth.bluebandedbee.co";
-const SUPABASE_ANON_KEY =
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdwemp0Ymd0ZGp4bmFjZGZ1anZ4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDUwNjYxNjMsImV4cCI6MjA2MDY0MjE2M30.eJjM2-3X8oXsFex_lQKvFkP1-_yLMHsueIn7_hCF6YI";
+const runtimeConfig =
+  (typeof window !== "undefined" && window.BBB_CONFIG) ||
+  (typeof process !== "undefined"
+    ? {
+        supabaseUrl: process.env.SUPABASE_AUTH_URL,
+        supabaseAnonKey: process.env.SUPABASE_PUBLISHABLE_KEY,
+      }
+    : null);
+
+if (!runtimeConfig?.supabaseUrl || !runtimeConfig?.supabaseAnonKey) {
+  throw new Error(
+    "Supabase configuration unavailable — ensure BBB_CONFIG or environment vars are set"
+  );
+}
+
+const SUPABASE_URL = runtimeConfig.supabaseUrl;
+const SUPABASE_ANON_KEY = runtimeConfig.supabaseAnonKey;
 
 // Global state
 let supabase;
@@ -33,7 +49,7 @@ let captchaIssuedAt = null;
  * Initialise Supabase client
  * @returns {boolean} Success status
  */
-function initializeSupabase() {
+function initialiseSupabase() {
   if (window.supabase && window.supabase.createClient) {
     supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     window.supabase = supabase; // Ensure it's globally available
@@ -80,6 +96,28 @@ async function loadAuthModal() {
       });
     }
   }
+}
+
+function waitForAuthScript(pollIntervalMs = 50, timeoutMs = 12000) {
+  return new Promise((resolve, reject) => {
+    let attempts = 0;
+    const maxAttempts = Math.ceil(timeoutMs / pollIntervalMs);
+    const timer = setInterval(() => {
+      if (
+        typeof window.setupAuthHandlers === "function" &&
+        typeof window.showAuthModal === "function"
+      ) {
+        clearInterval(timer);
+        resolve();
+        return;
+      }
+      attempts += 1;
+      if (attempts >= maxAttempts) {
+        clearInterval(timer);
+        reject(new Error("Authentication modal script failed to load"));
+      }
+    }, pollIntervalMs);
+  });
 }
 
 /**
@@ -516,24 +554,11 @@ async function handleEmailLogin(event) {
 
     console.log("Email login successful:", data.user.id);
 
-    // Register user with backend (in case they don't exist)
-    await registerUserWithBackend(data.user);
-
-    closeAuthModal();
-
-    // Update user info immediately
-    updateUserInfo();
-
-    // Update auth state
-    updateAuthState(true);
-
-    // Refresh dashboard data if dataBinder exists
-    if (window.dataBinder) {
-      await window.dataBinder.refresh();
-    }
-
-    // Handle any pending domain
-    await handlePendingDomain();
+    const handler =
+      typeof window.handleAuthSuccess === "function"
+        ? window.handleAuthSuccess
+        : defaultHandleAuthSuccess;
+    await handler(data.user);
   } catch (error) {
     console.error("Email login error:", error);
     if (window.Sentry) {
@@ -667,6 +692,17 @@ async function executeEmailSignup() {
       hideAuthLoading();
     }
   }
+}
+
+async function defaultHandleAuthSuccess(user) {
+  await registerUserWithBackend(user);
+  closeAuthModal();
+  updateUserInfo();
+  updateAuthState(true);
+  if (window.dataBinder) {
+    await window.dataBinder.refresh();
+  }
+  await handlePendingDomain();
 }
 
 /**
@@ -1073,7 +1109,11 @@ function setupAuthModalHandlers() {
       e.preventDefault();
       const button = e.target.closest(".bb-social-btn[data-provider]");
       const provider = button.dataset.provider;
-      handleSocialLogin(provider);
+      const handler =
+        typeof window.handleSocialLogin === "function"
+          ? window.handleSocialLogin
+          : handleSocialLogin;
+      handler(provider);
     }
 
     // Handle modal close
@@ -1097,6 +1137,283 @@ function setupLoginPageHandlers() {
   console.log("Login page handlers setup - using event delegation");
 }
 
+function isLoopbackCallback(url) {
+  try {
+    const parsed = new URL(url);
+    const isLoopback =
+      parsed.hostname === "127.0.0.1" ||
+      parsed.hostname === "localhost" ||
+      parsed.hostname === "::1";
+    return isLoopback && parsed.protocol === "http:";
+  } catch (error) {
+    return false;
+  }
+}
+
+async function resumeCliAuthFromStorage() {
+  if (!window.sessionStorage) {
+    return;
+  }
+
+  const raw = window.sessionStorage.getItem(CLI_AUTH_STORAGE_KEY);
+  if (!raw) {
+    return;
+  }
+
+  let payload;
+  try {
+    payload = JSON.parse(raw);
+  } catch (error) {
+    console.warn("CLI auth: invalid stored payload, clearing", error);
+    window.sessionStorage.removeItem(CLI_AUTH_STORAGE_KEY);
+    return;
+  }
+
+  const { callbackUrl, state } = payload || {};
+  if (!callbackUrl || !state || !isLoopbackCallback(callbackUrl)) {
+    window.sessionStorage.removeItem(CLI_AUTH_STORAGE_KEY);
+    return;
+  }
+
+  try {
+    if (!supabase) {
+      if (!initialiseSupabase()) {
+        console.warn("CLI auth resume: Supabase initialisation failed");
+        return;
+      }
+    }
+
+    const {
+      data: { session },
+      error,
+    } = await supabase.auth.getSession();
+
+    if (error || !session) {
+      return;
+    }
+
+    const response = await fetch(callbackUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ session, state }),
+    });
+
+    if (!response.ok) {
+      console.error(
+        `CLI auth resume failed (${response.status})`,
+        await response.text()
+      );
+      return;
+    }
+
+    window.sessionStorage.removeItem(CLI_AUTH_STORAGE_KEY);
+  } catch (error) {
+    console.error("Failed to resume CLI auth", error);
+  }
+}
+
+function initCliAuthPage() {
+  const params = new URLSearchParams(window.location.search);
+  const callbackUrl = params.get("callback") || "";
+  const state = params.get("state") || "";
+  const providerHint = params.get("provider") || null;
+  const statusEl = document.getElementById("cliStatus");
+  const modalContainer = document.getElementById("authModalContainer");
+  if (!statusEl || !modalContainer) {
+    console.warn("CLI auth: required elements missing");
+    return;
+  }
+
+  function setStatus(message, isError = false) {
+    statusEl.textContent = message;
+    statusEl.classList.toggle("error", Boolean(isError));
+  }
+
+  const callbackValid =
+    Boolean(callbackUrl) && Boolean(state) && isLoopbackCallback(callbackUrl);
+  if (!callbackValid) {
+    setStatus(
+      "Invalid CLI callback parameters. Close this tab and re-run the CLI login command.",
+      true
+    );
+    return;
+  }
+
+  if (!initialiseSupabase()) {
+    console.error("CLI auth: Supabase initialisation failed");
+    return;
+  }
+
+  supabase.auth.getSession().then((existing) => {
+    if (existing?.data?.session) {
+      setStatus("Session already active. Completing CLI login…");
+      sendSessionToCli().catch((error) => {
+        console.error(error);
+        setStatus(
+          error.message ||
+            "Failed to deliver existing session to CLI. Please retry.",
+          true
+        );
+      });
+    }
+  });
+
+  try {
+    window.sessionStorage.setItem(
+      CLI_AUTH_STORAGE_KEY,
+      JSON.stringify({ callbackUrl, state })
+    );
+  } catch (error) {
+    console.warn("CLI auth: unable to persist state", error);
+  }
+
+  let sessionSent = false;
+
+  async function sendSessionToCli() {
+    if (sessionSent) {
+      setStatus("Session already delivered to CLI. You can close this tab.");
+      return;
+    }
+
+    if (!supabase) {
+      throw new Error("Supabase client is unavailable");
+    }
+
+    const {
+      data: { session },
+      error,
+    } = await supabase.auth.getSession();
+
+    if (error || !session) {
+      throw new Error(error?.message || "Unable to read Supabase session");
+    }
+
+    const response = await fetch(callbackUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ session, state }),
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(
+        `CLI callback failed (${response.status}): ${text || "Unknown error"}`
+      );
+    }
+    sessionSent = true;
+    try {
+      window.sessionStorage.removeItem(CLI_AUTH_STORAGE_KEY);
+    } catch (error) {
+      console.warn("CLI auth: unable to clear stored state", error);
+    }
+  }
+
+  function overrideHandleAuthSuccess() {
+    const baseHandler =
+      typeof window.handleAuthSuccess === "function"
+        ? window.handleAuthSuccess
+        : defaultHandleAuthSuccess;
+
+    window.handleAuthSuccess = async function (user) {
+      try {
+        setStatus("Auth successful. Finalising session…");
+        await baseHandler(user);
+        await sendSessionToCli();
+        setStatus("Session sent to CLI. You can close this tab.");
+        if (typeof window.closeAuthModal === "function") {
+          window.closeAuthModal();
+        }
+      } catch (error) {
+        console.error(error);
+        setStatus(
+          error.message || "Failed to deliver session to CLI. Please retry.",
+          true
+        );
+        sessionSent = false;
+      }
+    };
+  }
+
+  function overrideHandleSocialLogin() {
+    window.handleSocialLogin = async function (provider) {
+      if (typeof window.showAuthLoading === "function") {
+        window.showAuthLoading();
+      }
+      if (typeof window.clearAuthError === "function") {
+        window.clearAuthError();
+      }
+      try {
+        const { error } = await supabase.auth.signInWithOAuth({
+          provider,
+          options: {
+            redirectTo: window.location.href,
+          },
+        });
+
+        if (error) throw error;
+      } catch (error) {
+        console.error(error);
+        if (typeof window.showAuthError === "function") {
+          window.showAuthError(error.message || `${provider} login failed.`);
+        }
+        if (typeof window.hideAuthLoading === "function") {
+          window.hideAuthLoading();
+        }
+        setStatus(
+          error.message || `${provider} login failed – please retry.`,
+          true
+        );
+      }
+    };
+  }
+
+  const reopenButton = document.getElementById("reopenModalBtn");
+  if (reopenButton) {
+    reopenButton.addEventListener("click", () => {
+      if (typeof window.showAuthModal === "function") {
+        window.showAuthModal();
+        setStatus("Sign-in modal reopened. Continue authentication.");
+      }
+    });
+  }
+
+  (async () => {
+    try {
+      await loadAuthModal();
+      await waitForAuthScript();
+      if (typeof window.setupAuthHandlers === "function") {
+        window.setupAuthHandlers();
+      }
+      if (typeof window.showLoginForm === "function") {
+        window.showLoginForm();
+      }
+      if (typeof window.showAuthModal === "function") {
+        window.showAuthModal();
+      }
+      if (providerHint) {
+        // Sanitise provider hint to prevent CSS selector injection
+        const sanitised = providerHint.replace(/[^a-z0-9_-]/gi, "");
+        const button = document.querySelector(
+          `.bb-social-btn[data-provider="${sanitised}"]`
+        );
+        if (button) {
+          button.focus();
+        }
+      }
+      overrideHandleAuthSuccess();
+      overrideHandleSocialLogin();
+      setStatus("Sign-in modal ready. Continue authentication.");
+    } catch (error) {
+      console.error(error);
+      setStatus(
+        error.message ||
+          "Unable to load auth modal. Please try again or contact support.",
+        true
+      );
+    }
+  })();
+}
+
 // CAPTCHA success callback (global function)
 window.onTurnstileSuccess = function (token) {
   captchaToken = token;
@@ -1114,8 +1431,9 @@ window.onTurnstileSuccess = function (token) {
 if (typeof module !== "undefined" && module.exports) {
   // Node.js environment
   module.exports = {
-    initializeSupabase,
+    initialiseSupabase,
     loadAuthModal,
+    waitForAuthScript,
     handleAuthCallback,
     registerUserWithBackend,
     updateAuthState,
@@ -1138,12 +1456,16 @@ if (typeof module !== "undefined" && module.exports) {
     setupAuthModalHandlers,
     setupLoginPageHandlers,
     handleLogout,
+    defaultHandleAuthSuccess,
+    initCliAuthPage,
+    resumeCliAuthFromStorage,
   };
 } else {
   // Browser environment - make functions globally available
   window.BBAuth = {
-    initializeSupabase,
+    initialiseSupabase,
     loadAuthModal,
+    waitForAuthScript,
     handleAuthCallback,
     registerUserWithBackend,
     updateAuthState,
@@ -1166,11 +1488,14 @@ if (typeof module !== "undefined" && module.exports) {
     setupAuthModalHandlers,
     setupLoginPageHandlers,
     handleLogout,
+    initCliAuthPage,
+    resumeCliAuthFromStorage,
   };
 
   // Also make individual functions available globally for backward compatibility
-  window.initializeSupabase = initializeSupabase;
+  window.initialiseSupabase = initialiseSupabase;
   window.loadAuthModal = loadAuthModal;
+  window.waitForAuthScript = waitForAuthScript;
   window.handleAuthCallback = handleAuthCallback;
   window.registerUserWithBackend = registerUserWithBackend;
   window.updateAuthState = updateAuthState;
@@ -1193,6 +1518,9 @@ if (typeof module !== "undefined" && module.exports) {
   window.setupAuthModalHandlers = setupAuthModalHandlers;
   window.setupLoginPageHandlers = setupLoginPageHandlers;
   window.handleLogout = handleLogout;
+  window.handleAuthSuccess = defaultHandleAuthSuccess;
+  window.initCliAuthPage = initCliAuthPage;
+  window.resumeCliAuthFromStorage = resumeCliAuthFromStorage;
 
   // Convenience functions for common auth form actions
   window.showLoginForm = () => showAuthForm("login");

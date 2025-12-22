@@ -238,6 +238,14 @@ func (m *MockDBClient) UpdateSchedulerNextRun(ctx context.Context, schedulerID s
 	return args.Error(0)
 }
 
+func (m *MockDBClient) GetLastJobStartTimeForScheduler(ctx context.Context, schedulerID string) (*time.Time, error) {
+	args := m.Called(ctx, schedulerID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*time.Time), args.Error(1)
+}
+
 func (m *MockDBClient) GetDomainNameByID(ctx context.Context, domainID int) (string, error) {
 	args := m.Called(ctx, domainID)
 	return args.String(0), args.Error(1)

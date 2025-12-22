@@ -78,6 +78,34 @@ func startJobScheduler(ctx context.Context, wg *sync.WaitGroup, jobsManager *job
 					continue
 				}
 
+				// Check if a job started too recently (within half the schedule interval)
+				lastJobStart, err := pgDB.GetLastJobStartTimeForScheduler(ctx, scheduler.ID)
+				if err != nil {
+					log.Error().Err(err).Str("scheduler_id", scheduler.ID).Msg("Failed to get last job start time")
+					continue
+				}
+
+				if lastJobStart != nil {
+					minInterval := time.Duration(scheduler.ScheduleIntervalHours) * time.Hour / 2
+					timeSinceLastJob := time.Since(*lastJobStart)
+
+					if timeSinceLastJob < minInterval {
+						log.Info().
+							Str("scheduler_id", scheduler.ID).
+							Str("domain", domainName).
+							Dur("time_since_last_job", timeSinceLastJob).
+							Dur("minimum_interval", minInterval).
+							Msg("Skipping scheduled job - last job started too recently")
+
+						// Update next_run_at to the next valid time slot
+						nextRun := time.Now().UTC().Add(time.Duration(scheduler.ScheduleIntervalHours) * time.Hour)
+						if err := pgDB.UpdateSchedulerNextRun(ctx, scheduler.ID, nextRun); err != nil {
+							log.Error().Err(err).Str("scheduler_id", scheduler.ID).Msg("Failed to update scheduler next run")
+						}
+						continue
+					}
+				}
+
 				// Create JobOptions from scheduler
 				sourceType := "scheduler"
 				opts := &jobs.JobOptions{

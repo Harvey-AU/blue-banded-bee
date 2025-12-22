@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/pprof"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -21,6 +22,73 @@ import (
 
 // Version is the current API version (can be set via ldflags at build time)
 var Version = "0.4.1"
+
+func buildConfigSnippet() ([]byte, error) {
+	appEnv := os.Getenv("APP_ENV")
+	authURL := strings.TrimSuffix(os.Getenv("SUPABASE_AUTH_URL"), "/")
+	if authURL == "" {
+		legacyURL := strings.TrimSuffix(os.Getenv("SUPABASE_URL"), "/")
+		if legacyURL != "" {
+			log.Warn().Msg("SUPABASE_AUTH_URL missing; using legacy SUPABASE_URL fallback")
+			authURL = legacyURL
+		}
+	}
+	if authURL == "" {
+		return nil, fmt.Errorf("SUPABASE_AUTH_URL not set")
+	}
+	parsedURL, err := url.ParseRequestURI(authURL)
+	if err != nil {
+		return nil, fmt.Errorf("invalid SUPABASE_AUTH_URL: %w", err)
+	}
+	if appEnv == "production" && parsedURL.Scheme != "https" {
+		return nil, fmt.Errorf("SUPABASE_AUTH_URL must use https in production")
+	}
+	key := os.Getenv("SUPABASE_PUBLISHABLE_KEY")
+	if key == "" {
+		legacyKey := os.Getenv("SUPABASE_ANON_KEY")
+		if legacyKey != "" {
+			log.Warn().Msg("SUPABASE_PUBLISHABLE_KEY missing; using legacy SUPABASE_ANON_KEY fallback")
+			key = legacyKey
+		}
+	}
+	if key == "" {
+		return nil, fmt.Errorf("SUPABASE_PUBLISHABLE_KEY not set")
+	}
+	validKey := false
+	for _, prefix := range []string{"sb_", "sbp_", "eyJ", "public-"} {
+		if strings.HasPrefix(key, prefix) {
+			validKey = true
+			break
+		}
+	}
+	if !validKey {
+		log.Warn().Msg("SUPABASE_PUBLISHABLE_KEY has unexpected format; proceeding anyway")
+	}
+	config := map[string]interface{}{
+		"supabaseUrl":     authURL,
+		"supabaseAnonKey": key,
+	}
+	if appEnv != "" {
+		config["environment"] = appEnv
+	}
+	if raw := os.Getenv("BBB_ENABLE_TURNSTILE"); raw != "" {
+		if enabled, err := strconv.ParseBool(raw); err == nil {
+			config["enableTurnstile"] = enabled
+		} else {
+			log.Warn().
+				Str("value", raw).
+				Msg("invalid BBB_ENABLE_TURNSTILE value; falling back to default")
+		}
+	} else {
+		// Default: enable Turnstile only in production unless explicitly overridden
+		config["enableTurnstile"] = appEnv == "production"
+	}
+	bytes, err := json.Marshal(config)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal config: %w", err)
+	}
+	return []byte(fmt.Sprintf("window.BBB_CONFIG=%s;", bytes)), nil
+}
 
 // DBClient is an interface for database operations
 type DBClient interface {
@@ -47,6 +115,7 @@ type DBClient interface {
 	DeleteScheduler(ctx context.Context, schedulerID string) error
 	GetSchedulersReadyToRun(ctx context.Context, limit int) ([]*db.Scheduler, error)
 	UpdateSchedulerNextRun(ctx context.Context, schedulerID string, nextRun time.Time) error
+	GetLastJobStartTimeForScheduler(ctx context.Context, schedulerID string) (*time.Time, error)
 	GetDomainNameByID(ctx context.Context, domainID int) (string, error)
 	GetDomainNames(ctx context.Context, domainIDs []int) (map[int]string, error)
 }
@@ -138,6 +207,7 @@ func (h *Handler) SetupRoutes(mux *http.ServeMux) {
 
 	// Static files
 	mux.HandleFunc("/", h.ServeHomepage) // Marketing homepage
+	mux.HandleFunc("/config.js", h.ServeConfigJS)
 	mux.HandleFunc("/test-login.html", h.ServeTestLogin)
 	mux.HandleFunc("/test-components.html", h.ServeTestComponents)
 	mux.HandleFunc("/test-data-components.html", h.ServeTestDataComponents)
@@ -150,6 +220,7 @@ func (h *Handler) SetupRoutes(mux *http.ServeMux) {
 
 	// Web Components static files
 	mux.Handle("/js/", http.StripPrefix("/js/", http.FileServer(http.Dir("./web/static/js/"))))
+	mux.Handle("/styles/", http.StripPrefix("/styles/", http.FileServer(http.Dir("./web/static/styles/"))))
 	mux.Handle("/web/", http.StripPrefix("/web/", h.jsFileServer(http.Dir("./web/"))))
 }
 
@@ -270,6 +341,29 @@ func (h *Handler) ServeHomepage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.ServeFile(w, r, "homepage.html")
+}
+
+// ServeConfigJS exposes Supabase configuration to static pages
+func (h *Handler) ServeConfigJS(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		MethodNotAllowed(w, r)
+		return
+	}
+	w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+	snippet, err := buildConfigSnippet()
+	if err != nil {
+		log.Error().Err(err).Msg("supabase config missing")
+		message := "Supabase config unavailable"
+		if os.Getenv("APP_ENV") != "production" {
+			message = fmt.Sprintf("%s: %v", message, err)
+		}
+		http.Error(w, message, http.StatusInternalServerError)
+		return
+	}
+	if _, err := w.Write(snippet); err != nil {
+		log.Error().Err(err).Msg("failed to write config.js")
+	}
 }
 
 // DashboardStats handles dashboard statistics requests

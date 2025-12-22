@@ -68,6 +68,9 @@ class BBDataBinder {
 
       this.log("Auth initialized", {
         authenticated: this.authManager.isAuthenticated,
+        hasSession: !!session,
+        hasAccessToken: !!session?.access_token,
+        tokenPreview: session?.access_token?.substring(0, 20) + "...",
       });
     } catch (error) {
       this.log("Auth initialization failed", error);

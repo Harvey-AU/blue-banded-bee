@@ -178,3 +178,7 @@ func (m *MockDBWithRealDB) GetDomainNameByID(ctx context.Context, domainID int) 
 func (m *MockDBWithRealDB) GetDomainNames(ctx context.Context, domainIDs []int) (map[int]string, error) {
 	return nil, nil
 }
+
+func (m *MockDBWithRealDB) GetLastJobStartTimeForScheduler(ctx context.Context, schedulerID string) (*time.Time, error) {
+	return nil, nil
+}
