@@ -29,6 +29,24 @@ On merge, CI will:
 
 ## [Unreleased]
 
+### Fixed
+
+- **Job Details Page Task Filters**: Fixed non-functional filter buttons and
+  search input on job details page
+  - Added missing `cacheFilter` and `pathFilter` state properties
+  - Implemented path keyword search with 300ms debounce (min 3 characters)
+  - Fixed filter coordination so selecting status/cache filters clears path
+    search and vice versa
+  - Hit/Miss cache filter buttons now work correctly
+- **Console Log Noise**: Removed verbose dashboard refresh logging
+  - Eliminated "Refreshing dashboard data..." log message
+  - Removed "Dashboard data refreshed" log with stats object
+- **Password Strength Warning**: Silenced "Password strength checking not
+  available" console warning on pages without signup forms
+  - setupPasswordStrength() now exits silently when signup form elements aren't
+    present
+  - Password strength checking still works correctly on actual signup forms
+
 ## [0.18.1] – 2025-12-22
 
 ## [0.18.0] – 2025-12-22
