@@ -29,10 +29,8 @@ async function initializeAuthWithDataBinder(dataBinder, options = {}) {
   // Handle auth callback tokens
   const hasToken = await window.BBAuth.handleAuthCallback();
 
-  // Check if user exists in backend on page load
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
+  // Use the session already retrieved by dataBinder.init() instead of fetching again
+  const session = dataBinder.authManager?.session;
 
   if (session?.user) {
     await window.BBAuth.registerUserWithBackend(session.user);
@@ -44,7 +42,8 @@ async function initializeAuthWithDataBinder(dataBinder, options = {}) {
   // Set initial auth state
   window.BBAuth.updateAuthState(!!session?.user);
 
-  // Set up auth state change listener to update user info
+  // Set up auth state change listener for UI updates and backend registration
+  // Note: dataBinder.initAuth() already handles updating authManager.session
   if (window.supabase) {
     window.supabase.auth.onAuthStateChange(async (event, session) => {
       if (debug) {
@@ -61,9 +60,7 @@ async function initializeAuthWithDataBinder(dataBinder, options = {}) {
 
       // Update auth state in UI
       window.BBAuth.updateAuthState(!!session?.user);
-
-      // Wait a moment for the data binder to update its auth manager
-      setTimeout(() => window.BBAuth.updateUserInfo(), 100);
+      window.BBAuth.updateUserInfo();
 
       // Handle pending domain after successful auth
       if (session?.user) {
