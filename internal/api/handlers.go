@@ -115,6 +115,7 @@ type DBClient interface {
 	DeleteScheduler(ctx context.Context, schedulerID string) error
 	GetSchedulersReadyToRun(ctx context.Context, limit int) ([]*db.Scheduler, error)
 	UpdateSchedulerNextRun(ctx context.Context, schedulerID string, nextRun time.Time) error
+	GetLastJobStartTimeForScheduler(ctx context.Context, schedulerID string) (*time.Time, error)
 	GetDomainNameByID(ctx context.Context, domainID int) (string, error)
 	GetDomainNames(ctx context.Context, domainIDs []int) (map[int]string, error)
 }

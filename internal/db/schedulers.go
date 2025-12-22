@@ -291,6 +291,36 @@ func (db *DB) GetSchedulersReadyToRun(ctx context.Context, limit int) ([]*Schedu
 	return schedulers, rows.Err()
 }
 
+// GetLastJobStartTimeForScheduler retrieves the most recent started_at time for jobs created by a scheduler
+func (db *DB) GetLastJobStartTimeForScheduler(ctx context.Context, schedulerID string) (*time.Time, error) {
+	var startedAt sql.NullTime
+
+	query := `
+		SELECT started_at
+		FROM jobs
+		WHERE scheduler_id = $1
+		  AND started_at IS NOT NULL
+		ORDER BY started_at DESC
+		LIMIT 1
+	`
+
+	err := db.client.QueryRowContext(ctx, query, schedulerID).Scan(&startedAt)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			// No jobs found for this scheduler yet
+			return nil, nil
+		}
+		log.Error().Err(err).Str("scheduler_id", schedulerID).Msg("Failed to get last job start time")
+		return nil, fmt.Errorf("failed to get last job start time: %w", err)
+	}
+
+	if !startedAt.Valid {
+		return nil, nil
+	}
+
+	return &startedAt.Time, nil
+}
+
 // UpdateSchedulerNextRun updates only the next_run_at timestamp
 func (db *DB) UpdateSchedulerNextRun(ctx context.Context, schedulerID string, nextRun time.Time) error {
 	query := `
