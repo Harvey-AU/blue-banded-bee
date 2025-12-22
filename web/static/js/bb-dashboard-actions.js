@@ -261,7 +261,14 @@ async function loadSchedules() {
 
     const schedulesList = document.getElementById("schedulesList");
     const schedulesEmpty = document.getElementById("schedulesEmpty");
-    const template = schedulesList?.querySelector('[bbb-template="schedule"]');
+
+    if (!schedulesList) {
+      console.error("Schedules list element not found in DOM");
+      showDashboardError("Failed to load schedules: DOM element missing");
+      return;
+    }
+
+    const template = schedulesList.querySelector('[bbb-template="schedule"]');
 
     if (!template) {
       console.error("Schedule template not found in DOM");

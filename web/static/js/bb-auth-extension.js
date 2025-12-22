@@ -315,6 +315,19 @@ async function handleDashboardJobCreation(event) {
     if (scheduleInterval && scheduleInterval !== "") {
       const scheduleIntervalHours = parseInt(scheduleInterval);
 
+      // Validate schedule interval
+      if (
+        isNaN(scheduleIntervalHours) ||
+        ![6, 12, 24, 48].includes(scheduleIntervalHours)
+      ) {
+        if (window.showDashboardError) {
+          window.showDashboardError(
+            "Invalid schedule interval. Must be 6, 12, 24, or 48 hours."
+          );
+        }
+        return;
+      }
+
       // Create scheduler
       const schedulerResponse = await window.dataBinder.fetchData(
         "/v1/schedulers",
@@ -333,12 +346,15 @@ async function handleDashboardJobCreation(event) {
 
       console.log("Scheduler created:", schedulerResponse);
 
-      // Create job immediately (scheduler will handle future runs)
+      // Create job immediately linked to the scheduler
       try {
         const jobResponse = await window.dataBinder.fetchData("/v1/jobs", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(requestBody),
+          body: JSON.stringify({
+            ...requestBody,
+            scheduler_id: schedulerResponse.id,
+          }),
         });
 
         console.log("Scheduled job created:", jobResponse);
