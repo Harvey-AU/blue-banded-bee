@@ -46,25 +46,6 @@
 
     <script src="/js/core.js" defer></script>
 
-    <!-- Password strength library -->
-    <script src="https://cdn.jsdelivr.net/npm/zxcvbn@4.4.2/dist/zxcvbn.js"></script>
-
-    <!-- Cloudflare Turnstile CAPTCHA (only load in production) -->
-    <script>
-      (function loadTurnstile() {
-        const isProduction =
-          window.location.hostname === "app.bluebandedbee.co";
-        if (!isProduction) {
-          return;
-        }
-        const script = document.createElement("script");
-        script.src = "https://challenges.cloudflare.com/turnstile/v0/api.js";
-        script.async = true;
-        script.defer = true;
-        document.head.appendChild(script);
-      })();
-    </script>
-
     <style>
       body {
         font-family:
