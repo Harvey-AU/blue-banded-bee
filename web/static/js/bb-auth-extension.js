@@ -102,8 +102,6 @@ function setupDashboardRefresh(dataBinder) {
     }
 
     try {
-      console.log("Refreshing dashboard data...");
-
       // Show refresh indicator
       const statusIndicator = document.querySelector(".status-indicator");
       if (statusIndicator) {
@@ -186,11 +184,6 @@ function setupDashboardRefresh(dataBinder) {
           }
         }, 100); // Small delay to ensure DOM updates are complete
       }
-
-      console.log("Dashboard data refreshed", {
-        stats: data.stats,
-        jobs: processedJobs.length,
-      });
 
       // Load metrics metadata after successful data load (only once)
       if (window.metricsMetadata && !window.metricsMetadata.isLoaded()) {
