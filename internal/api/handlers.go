@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -38,6 +39,16 @@ type DBClient interface {
 	GetOrganisation(organisationID string) (*db.Organisation, error)
 	ListJobs(organisationID string, limit, offset int, status, dateRange, timezone string) ([]db.JobWithDomain, int, error)
 	ListJobsWithOffset(organisationID string, limit, offset int, status, dateRange string, tzOffsetMinutes int) ([]db.JobWithDomain, int, error)
+	// Scheduler methods
+	CreateScheduler(ctx context.Context, scheduler *db.Scheduler) error
+	GetScheduler(ctx context.Context, schedulerID string) (*db.Scheduler, error)
+	ListSchedulers(ctx context.Context, organisationID string) ([]*db.Scheduler, error)
+	UpdateScheduler(ctx context.Context, schedulerID string, updates *db.Scheduler) error
+	DeleteScheduler(ctx context.Context, schedulerID string) error
+	GetSchedulersReadyToRun(ctx context.Context, limit int) ([]*db.Scheduler, error)
+	UpdateSchedulerNextRun(ctx context.Context, schedulerID string, nextRun time.Time) error
+	GetDomainNameByID(ctx context.Context, domainID int) (string, error)
+	GetDomainNames(ctx context.Context, domainIDs []int) (map[int]string, error)
 }
 
 // Handler holds dependencies for API handlers
@@ -63,6 +74,8 @@ func (h *Handler) SetupRoutes(mux *http.ServeMux) {
 	// V1 API routes with authentication
 	mux.Handle("/v1/jobs", auth.AuthMiddleware(http.HandlerFunc(h.JobsHandler)))
 	mux.Handle("/v1/jobs/", auth.AuthMiddleware(http.HandlerFunc(h.JobHandler))) // For /v1/jobs/:id
+	mux.Handle("/v1/schedulers", auth.AuthMiddleware(http.HandlerFunc(h.SchedulersHandler)))
+	mux.Handle("/v1/schedulers/", auth.AuthMiddleware(http.HandlerFunc(h.SchedulerHandler))) // For /v1/schedulers/:id
 	// Shared job routes (public)
 	mux.HandleFunc("/v1/shared/jobs/", h.SharedJobHandler)
 	mux.HandleFunc("/shared/jobs/", h.ServeSharedJobPage)

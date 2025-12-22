@@ -39,12 +39,12 @@ func TestGetJobIntegration(t *testing.T) {
 				rows := sqlmock.NewRows([]string{
 					"total_tasks", "completed_tasks", "failed_tasks", "skipped_tasks",
 					"status", "domain", "created_at", "started_at", "completed_at",
-					"duration_seconds", "avg_time_per_task_seconds", "stats",
+					"duration_seconds", "avg_time_per_task_seconds", "stats", "scheduler_id",
 				}).AddRow(
 					100, 85, 10, 5, // task counts
 					"completed", "example.com", // status and domain
 					time.Now(), time.Now().Add(-time.Hour), time.Now(), // timestamps
-					3600, 42.35, nil, // duration_seconds, avg_time_per_task_seconds, stats (nil for now)
+					3600, 42.35, nil, nil, // duration_seconds, avg_time_per_task_seconds, stats, scheduler_id
 				)
 
 				mock.ExpectQuery(`SELECT j\.total_tasks, j\.completed_tasks, j\.failed_tasks, j\.skipped_tasks, j\.status`).

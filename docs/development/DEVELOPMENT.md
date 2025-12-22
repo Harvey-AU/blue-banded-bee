@@ -420,8 +420,9 @@ Use conventional commits:
 ### Pull Request Process
 
 1. **Update documentation** for any API or architectural changes
-2. **Add/update tests** for new functionality
-3. **Ensure all tests pass** and coverage remains high
+2. **Add/update tests** for critical functionality where regressions would be
+   costly
+3. **Ensure all tests pass**
 4. **Update CHANGELOG.md** if the change affects users
 5. **Reference relevant issues** in PR description
 
@@ -505,7 +506,8 @@ Blue Banded Bee follows focused, testable function design:
 
 - **Function Size**: Keep functions under 50 lines where possible
 - **Single Responsibility**: Each function should do one thing well
-- **Comprehensive Testing**: Aim for 80-90% coverage on refactored functions
+- **Testing**: Add tests where they prevent costly regressions or aid
+  refactoring
 - **Error Handling**: Use idiomatic Go patterns (simple error returns)
 
 ### Refactoring Large Functions
@@ -572,7 +574,7 @@ func TestDatabaseOperation(t *testing.T) {
 - `setupSchema`: 216 → 27 lines (87% reduction)
 - `WarmURL`: 377 → 68 lines (82% reduction)
 
-**Results**: 80% complexity reduction, 350+ new tests, 38.9% coverage
+**Results**: 80% complexity reduction, 350+ tests created during refactoring
 
 **Hot Reloading Not Working**:
 

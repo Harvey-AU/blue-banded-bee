@@ -22,6 +22,7 @@ extensions, and future interfaces.
 - `/health/db` - PostgreSQL health check
 - `/v1/jobs` - RESTful job management (GET/POST)
 - `/v1/jobs/:id` - Individual job operations (GET/PUT/DELETE)
+- `/v1/schedulers` - Recurring job scheduler management (GET/POST/PUT/DELETE)
 - `/v1/auth/register` - User registration
 - `/v1/auth/profile` - User profile (authenticated)
 - `/v1/auth/session` - Session validation
@@ -505,6 +506,227 @@ Authorization: Bearer <token>
 
 {
   "task_ids": ["task_789xyz", "task_101abc"]
+}
+```
+
+### Schedulers (Recurring Jobs)
+
+Schedulers enable automatic recurring job execution at specified intervals (6,
+12, 24, or 48 hours).
+
+#### Create Scheduler
+
+```http
+POST /v1/schedulers
+Authorization: Bearer <token>
+
+{
+  "domain": "example.com",
+  "schedule_interval_hours": 24,
+  "concurrency": 20,
+  "find_links": true,
+  "max_pages": 0,
+  "include_paths": "/blog/*,/products/*",
+  "exclude_paths": "/admin/*",
+  "required_workers": 1
+}
+```
+
+**Response (201):**
+
+```json
+{
+  "status": "success",
+  "data": {
+    "id": "sched_abc123",
+    "domain_id": 42,
+    "organisation_id": "org_456def",
+    "schedule_interval_hours": 24,
+    "next_run_at": "2025-12-23T14:30:00Z",
+    "is_enabled": true,
+    "concurrency": 20,
+    "find_links": true,
+    "max_pages": 0,
+    "include_paths": "/blog/*,/products/*",
+    "exclude_paths": "/admin/*",
+    "required_workers": 1,
+    "created_at": "2025-12-22T14:30:00Z",
+    "updated_at": "2025-12-22T14:30:00Z"
+  },
+  "meta": {
+    "timestamp": "2025-12-22T14:30:00Z",
+    "version": "1.0.0"
+  }
+}
+```
+
+#### List Schedulers
+
+```http
+GET /v1/schedulers
+Authorization: Bearer <token>
+```
+
+**Response (200):**
+
+```json
+{
+  "status": "success",
+  "data": {
+    "schedulers": [
+      {
+        "id": "sched_abc123",
+        "domain_name": "example.com",
+        "domain_id": 42,
+        "organisation_id": "org_456def",
+        "schedule_interval_hours": 24,
+        "next_run_at": "2025-12-23T14:30:00Z",
+        "is_enabled": true,
+        "concurrency": 20,
+        "find_links": true,
+        "max_pages": 0,
+        "created_at": "2025-12-22T14:30:00Z",
+        "updated_at": "2025-12-22T14:30:00Z"
+      }
+    ]
+  },
+  "meta": {
+    "timestamp": "2025-12-22T14:30:00Z",
+    "version": "1.0.0"
+  }
+}
+```
+
+#### Get Scheduler
+
+```http
+GET /v1/schedulers/{scheduler_id}
+Authorization: Bearer <token>
+```
+
+**Response (200):**
+
+```json
+{
+  "status": "success",
+  "data": {
+    "id": "sched_abc123",
+    "domain_name": "example.com",
+    "domain_id": 42,
+    "organisation_id": "org_456def",
+    "schedule_interval_hours": 24,
+    "next_run_at": "2025-12-23T14:30:00Z",
+    "is_enabled": true,
+    "concurrency": 20,
+    "find_links": true,
+    "max_pages": 0,
+    "include_paths": "/blog/*,/products/*",
+    "exclude_paths": "/admin/*",
+    "required_workers": 1,
+    "created_at": "2025-12-22T14:30:00Z",
+    "updated_at": "2025-12-22T14:30:00Z"
+  },
+  "meta": {
+    "timestamp": "2025-12-22T14:30:00Z",
+    "version": "1.0.0"
+  }
+}
+```
+
+#### Update Scheduler
+
+```http
+PUT /v1/schedulers/{scheduler_id}
+Authorization: Bearer <token>
+
+{
+  "schedule_interval_hours": 12,
+  "is_enabled": false
+}
+```
+
+**Notes:**
+
+- All fields are optional; only provided fields will be updated
+- Use `null` for optional fields like `include_paths` to clear them
+
+**Response (200):**
+
+```json
+{
+  "status": "success",
+  "data": {
+    "id": "sched_abc123",
+    "domain_name": "example.com",
+    "domain_id": 42,
+    "organisation_id": "org_456def",
+    "schedule_interval_hours": 12,
+    "next_run_at": "2025-12-23T02:30:00Z",
+    "is_enabled": false,
+    "concurrency": 20,
+    "find_links": true,
+    "max_pages": 0,
+    "created_at": "2025-12-22T14:30:00Z",
+    "updated_at": "2025-12-22T14:35:00Z"
+  },
+  "meta": {
+    "timestamp": "2025-12-22T14:35:00Z",
+    "version": "1.0.0"
+  }
+}
+```
+
+#### Delete Scheduler
+
+```http
+DELETE /v1/schedulers/{scheduler_id}
+Authorization: Bearer <token>
+```
+
+**Response (200):**
+
+```json
+{
+  "status": "success",
+  "data": {
+    "message": "Scheduler deleted successfully"
+  },
+  "meta": {
+    "timestamp": "2025-12-22T14:40:00Z",
+    "version": "1.0.0"
+  }
+}
+```
+
+#### List Jobs for Scheduler
+
+```http
+GET /v1/schedulers/{scheduler_id}/jobs
+Authorization: Bearer <token>
+```
+
+**Response (200):**
+
+```json
+{
+  "status": "success",
+  "data": {
+    "jobs": [
+      {
+        "id": "job_123abc",
+        "scheduler_id": "sched_abc123",
+        "domain": "example.com",
+        "status": "completed",
+        "source_type": "scheduler",
+        "created_at": "2025-12-22T14:30:00Z",
+        "completed_at": "2025-12-22T14:45:00Z"
+      }
+    ]
+  },
+  "meta": {
+    "timestamp": "2025-12-22T14:50:00Z",
+    "version": "1.0.0"
+  }
 }
 ```
 

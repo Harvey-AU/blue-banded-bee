@@ -45,8 +45,11 @@ func TestExtractedFunction(t *testing.T) {
 - Use sqlmock for direct SQL query testing
 - Use interface mocks for dependency injection testing
 
-## Coverage Targets
+## Coverage Approach
 
-- **New functions**: Aim for 80%+ coverage
-- **Existing functions**: Improve opportunistically during feature work
-- **Integration tests**: Focus on user workflows
+- **New functions**: Add tests where they provide value for preventing
+  regressions
+- **Existing functions**: Add tests opportunistically during refactoring or bug
+  fixes
+- **Integration tests**: Focus on critical user workflows and complex
+  interactions

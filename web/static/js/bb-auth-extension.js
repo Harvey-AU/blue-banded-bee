@@ -278,6 +278,7 @@ async function handleDashboardJobCreation(event) {
   const domain = formData.get("domain");
   const maxPages = parseInt(formData.get("max_pages"));
   const concurrencyValue = formData.get("concurrency");
+  const scheduleInterval = formData.get("schedule_interval_hours");
 
   // Basic validation
   if (!domain) {
@@ -310,37 +311,131 @@ async function handleDashboardJobCreation(event) {
   }
 
   try {
-    console.log("Creating job from dashboard form:", {
-      domain,
-      maxPages,
-      concurrency: requestBody.concurrency,
-    });
+    // If schedule is selected, create scheduler first, then create job
+    if (scheduleInterval && scheduleInterval !== "") {
+      const scheduleIntervalHours = parseInt(scheduleInterval);
 
-    const response = await window.dataBinder.fetchData("/v1/jobs", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(requestBody),
-    });
+      // Validate schedule interval
+      if (
+        isNaN(scheduleIntervalHours) ||
+        ![6, 12, 24, 48].includes(scheduleIntervalHours)
+      ) {
+        if (window.showDashboardError) {
+          window.showDashboardError(
+            "Invalid schedule interval. Must be 6, 12, 24, or 48 hours."
+          );
+        }
+        return;
+      }
 
-    console.log("Dashboard job created successfully:", response);
+      // Create scheduler
+      const schedulerResponse = await window.dataBinder.fetchData(
+        "/v1/schedulers",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            domain: domain,
+            schedule_interval_hours: scheduleIntervalHours,
+            max_pages: maxPages,
+            find_links: true,
+            concurrency: requestBody.concurrency || 20,
+          }),
+        }
+      );
 
-    // Clear the form
-    const domainField = document.getElementById("dashboardDomain");
-    const maxPagesField = document.getElementById("dashboardMaxPages");
-    if (domainField) domainField.value = "";
-    if (maxPagesField) maxPagesField.value = "0";
+      console.log("Scheduler created:", schedulerResponse);
 
-    // Refresh dashboard to show new job
-    if (window.dataBinder) {
-      await window.dataBinder.refresh();
-    }
+      // Create job immediately linked to the scheduler
+      try {
+        const jobResponse = await window.dataBinder.fetchData("/v1/jobs", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            ...requestBody,
+            scheduler_id: schedulerResponse.id,
+          }),
+        });
 
-    // Show success message
-    if (window.showSuccessMessage) {
-      window.showSuccessMessage(`Job created successfully for ${domain}`);
+        console.log("Scheduled job created:", jobResponse);
+      } catch (jobError) {
+        // If job creation fails, attempt to clean up the scheduler
+        console.error(
+          "Failed to create initial job, cleaning up scheduler:",
+          jobError
+        );
+        try {
+          await window.dataBinder.fetchData(
+            `/v1/schedulers/${encodeURIComponent(schedulerResponse.id)}`,
+            { method: "DELETE" }
+          );
+          console.log("Scheduler cleanup successful");
+        } catch (cleanupError) {
+          console.error("Failed to clean up scheduler:", cleanupError);
+        }
+        // Re-throw the original error
+        throw jobError;
+      }
+
+      // Refresh schedules and dashboard
+      if (window.loadSchedules) {
+        await window.loadSchedules();
+      }
+      if (window.dataBinder) {
+        await window.dataBinder.refresh();
+      }
+
+      // Close modal and show success
+      if (window.closeCreateJobModal) {
+        window.closeCreateJobModal();
+      }
+
+      if (window.showSuccessMessage) {
+        window.showSuccessMessage(
+          `Scheduled job created for ${domain} (runs every ${scheduleIntervalHours} hours)`
+        );
+      }
+    } else {
+      // Regular one-time job creation
+      console.log("Creating job from dashboard form:", {
+        domain,
+        maxPages,
+        concurrency: requestBody.concurrency,
+      });
+
+      const response = await window.dataBinder.fetchData("/v1/jobs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(requestBody),
+      });
+
+      console.log("Dashboard job created successfully:", response);
+
+      // Clear the form
+      const domainField = document.getElementById("jobDomain");
+      const maxPagesField = document.getElementById("maxPages");
+      const scheduleField = document.getElementById("scheduleInterval");
+      if (domainField) domainField.value = "";
+      if (maxPagesField) maxPagesField.value = "0";
+      if (scheduleField) scheduleField.value = "";
+
+      // Close modal
+      if (window.closeCreateJobModal) {
+        window.closeCreateJobModal();
+      }
+
+      // Refresh dashboard to show new job
+      if (window.dataBinder) {
+        await window.dataBinder.refresh();
+      }
+
+      // Show success message
+      if (window.showSuccessMessage) {
+        window.showSuccessMessage(`Job created successfully for ${domain}`);
+      }
     }
   } catch (error) {
-    console.error("Failed to create dashboard job:", error);
+    console.error("Failed to create job:", error);
     if (window.showDashboardError) {
       window.showDashboardError(
         error.message || "Failed to create job. Please try again."

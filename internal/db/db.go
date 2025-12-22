@@ -512,6 +512,51 @@ func (db *DB) GetDB() *sql.DB {
 	return db.client
 }
 
+// GetDomainNameByID retrieves a single domain name by ID
+func (db *DB) GetDomainNameByID(ctx context.Context, domainID int) (string, error) {
+	var domainName string
+	err := db.client.QueryRowContext(ctx, `SELECT name FROM domains WHERE id = $1`, domainID).Scan(&domainName)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return "", fmt.Errorf("domain not found")
+		}
+		return "", fmt.Errorf("failed to get domain name: %w", err)
+	}
+	return domainName, nil
+}
+
+// GetDomainNames retrieves domain names for multiple domain IDs in a single query
+// Returns a map of domainID -> domainName
+func (db *DB) GetDomainNames(ctx context.Context, domainIDs []int) (map[int]string, error) {
+	if len(domainIDs) == 0 {
+		return make(map[int]string), nil
+	}
+
+	query := `SELECT id, name FROM domains WHERE id = ANY($1)`
+	rows, err := db.client.QueryContext(ctx, query, domainIDs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query domain names: %w", err)
+	}
+	defer rows.Close()
+
+	domainNames := make(map[int]string)
+	for rows.Next() {
+		var domainID int
+		var domainName string
+		if err := rows.Scan(&domainID, &domainName); err != nil {
+			log.Warn().Err(err).Msg("Failed to scan domain row")
+			continue
+		}
+		domainNames[domainID] = domainName
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating domain rows: %w", err)
+	}
+
+	return domainNames, nil
+}
+
 // ResetDataOnly clears all data from tables but preserves the schema.
 // This is the safe option for clearing test data without triggering schema changes.
 func (db *DB) ResetDataOnly() error {
