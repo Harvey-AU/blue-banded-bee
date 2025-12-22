@@ -1336,7 +1336,7 @@
           id="dashboardJobForm"
           style="
             display: grid;
-            grid-template-columns: 1fr 120px 140px auto;
+            grid-template-columns: 1fr 120px 140px 140px auto;
             gap: 16px;
             align-items: end;
           "
@@ -1444,6 +1444,39 @@
               <option value="50">50</option>
               <option value="75">75</option>
               <option value="100">100</option>
+            </select>
+          </div>
+
+          <div>
+            <label
+              style="
+                display: block;
+                margin-bottom: 6px;
+                font-weight: 500;
+                color: #374151;
+                font-size: 14px;
+              "
+              >Schedule</label
+            >
+            <select
+              class="filter-select"
+              id="dashboardScheduleInterval"
+              name="schedule_interval_hours"
+              aria-label="Schedule frequency for recurring jobs"
+              style="
+                width: 100%;
+                padding: 12px;
+                border: 1px solid #d1d5db;
+                border-radius: 6px;
+                font-size: 14px;
+                background: white;
+              "
+            >
+              <option value="">Run once</option>
+              <option value="6">Every 6 hours</option>
+              <option value="12">Every 12 hours</option>
+              <option value="24">Every 24 hours</option>
+              <option value="48">Every 48 hours</option>
             </select>
           </div>
 
