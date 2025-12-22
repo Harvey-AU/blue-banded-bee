@@ -562,7 +562,13 @@ async function initializeDashboard(config = {}) {
     window.dataBinder = dataBinder;
   }
 
-  // Initialise data binder FIRST so auth is available
+  // Ensure Supabase is initialized BEFORE dataBinder.init() tries to use it
+  if (!window.BBAuth.initializeSupabase()) {
+    console.error("Supabase not available");
+    return;
+  }
+
+  // Initialise data binder (now Supabase is ready)
   await dataBinder.init();
 
   // Initialise auth with data binder integration (after auth manager is set up)
