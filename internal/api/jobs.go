@@ -745,15 +745,14 @@ func buildTaskQuery(jobID string, params TaskQueryParams) TaskQueryBuilder {
 	}
 
 	// Add cache filter if provided
-	if params.CacheFilter != "" {
-		if params.CacheFilter == "miss" {
-			// Miss includes MISS, EXPIRED, and NULL
-			baseQuery += ` AND (t.cache_status = 'MISS' OR t.cache_status = 'EXPIRED' OR t.cache_status IS NULL)`
-			countQuery += ` AND (t.cache_status = 'MISS' OR t.cache_status = 'EXPIRED' OR t.cache_status IS NULL)`
-		} else if params.CacheFilter == "hit" {
-			baseQuery += ` AND t.cache_status = 'HIT'`
-			countQuery += ` AND t.cache_status = 'HIT'`
-		}
+	switch params.CacheFilter {
+	case "miss":
+		// Miss includes MISS, EXPIRED, and NULL
+		baseQuery += ` AND (t.cache_status = 'MISS' OR t.cache_status = 'EXPIRED' OR t.cache_status IS NULL)`
+		countQuery += ` AND (t.cache_status = 'MISS' OR t.cache_status = 'EXPIRED' OR t.cache_status IS NULL)`
+	case "hit":
+		baseQuery += ` AND t.cache_status = 'HIT'`
+		countQuery += ` AND t.cache_status = 'HIT'`
 	}
 
 	// Add path filter if provided (case-insensitive partial match)
