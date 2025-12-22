@@ -599,6 +599,7 @@ type TaskQueryParams struct {
 	Offset      int
 	Status      string
 	CacheFilter string
+	PathFilter  string
 	OrderBy     string
 }
 
@@ -623,6 +624,7 @@ func parseTaskQueryParams(r *http.Request) TaskQueryParams {
 	// Parse status filter
 	status := r.URL.Query().Get("status")     // Optional status filter
 	cacheFilter := r.URL.Query().Get("cache") // Optional cache filter (hit/miss)
+	pathFilter := r.URL.Query().Get("path")   // Optional path keyword filter
 
 	// Parse sort parameter
 	sortParam := r.URL.Query().Get("sort") // Optional sort parameter
@@ -665,6 +667,7 @@ func parseTaskQueryParams(r *http.Request) TaskQueryParams {
 		Offset:      offset,
 		Status:      status,
 		CacheFilter: cacheFilter,
+		PathFilter:  pathFilter,
 		OrderBy:     orderBy,
 	}
 }
@@ -751,6 +754,13 @@ func buildTaskQuery(jobID string, params TaskQueryParams) TaskQueryBuilder {
 			baseQuery += ` AND t.cache_status = 'HIT'`
 			countQuery += ` AND t.cache_status = 'HIT'`
 		}
+	}
+
+	// Add path filter if provided (case-insensitive partial match)
+	if params.PathFilter != "" {
+		baseQuery += ` AND p.path ILIKE $` + strconv.Itoa(len(args)+1)
+		countQuery += ` AND p.path ILIKE $` + strconv.Itoa(len(args)+1)
+		args = append(args, "%"+params.PathFilter+"%")
 	}
 
 	// Add ordering, limit, and offset

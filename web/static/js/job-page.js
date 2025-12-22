@@ -1120,6 +1120,9 @@ async function loadTasks(state) {
   if (state.cacheFilter) {
     params.set("cache", state.cacheFilter);
   }
+  if (state.pathFilter) {
+    params.set("path", state.pathFilter);
+  }
 
   const loadingEl = document.getElementById("tasksLoading");
   if (loadingEl && state.page === 0 && state.totalTasks === 0) {
