@@ -68,8 +68,8 @@ func buildConfigSnippet() ([]byte, error) {
 		"supabaseUrl":     authURL,
 		"supabaseAnonKey": key,
 	}
-	if env := os.Getenv("APP_ENV"); env != "" {
-		config["environment"] = env
+	if appEnv != "" {
+		config["environment"] = appEnv
 	}
 	if raw := os.Getenv("BBB_ENABLE_TURNSTILE"); raw != "" {
 		if enabled, err := strconv.ParseBool(raw); err == nil {
@@ -81,7 +81,7 @@ func buildConfigSnippet() ([]byte, error) {
 		}
 	} else {
 		// Default: enable Turnstile only in production unless explicitly overridden
-		config["enableTurnstile"] = os.Getenv("APP_ENV") == "production"
+		config["enableTurnstile"] = appEnv == "production"
 	}
 	bytes, err := json.Marshal(config)
 	if err != nil {

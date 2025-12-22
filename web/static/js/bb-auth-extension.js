@@ -553,10 +553,10 @@ async function initializeDashboard(config = {}) {
     window.dataBinder = dataBinder;
   }
 
-  // Ensure Supabase is initialized BEFORE dataBinder.init() tries to use it
+  // Ensure Supabase is initialised BEFORE dataBinder.init() tries to use it
   if (!window.BBAuth.initializeSupabase()) {
     console.error("Supabase not available");
-    return;
+    throw new Error("Failed to initialise Supabase client");
   }
 
   // Initialise data binder (now Supabase is ready)

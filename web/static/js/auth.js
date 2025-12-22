@@ -1177,7 +1177,10 @@ async function resumeCliAuthFromStorage() {
 
   try {
     if (!supabase) {
-      await initializeSupabase();
+      if (!initializeSupabase()) {
+        console.warn("CLI auth resume: Supabase initialisation failed");
+        return;
+      }
     }
 
     const {
@@ -1236,7 +1239,10 @@ function initCliAuthPage() {
     return;
   }
 
-  initializeSupabase();
+  if (!initializeSupabase()) {
+    console.error("CLI auth: Supabase initialisation failed");
+    return;
+  }
 
   supabase.auth.getSession().then((existing) => {
     if (existing?.data?.session) {
@@ -1329,10 +1335,6 @@ function initCliAuthPage() {
   }
 
   function overrideHandleSocialLogin() {
-    if (typeof window.handleSocialLogin !== "function") {
-      return;
-    }
-
     window.handleSocialLogin = async function (provider) {
       if (typeof window.showAuthLoading === "function") {
         window.showAuthLoading();
