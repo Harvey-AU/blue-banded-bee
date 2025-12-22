@@ -12,11 +12,16 @@ function formatNextRunTime(timestamp) {
   const nextRun = new Date(timestamp);
   const now = new Date();
   const diffMs = nextRun - now;
-  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  const diffHours = Math.floor(
+    (diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)
+  );
   const diffMins = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
 
   if (diffMs < 0) {
     return "Overdue";
+  } else if (diffDays > 0) {
+    return `In ${diffDays}d ${diffHours}h`;
   } else if (diffHours > 0) {
     return `In ${diffHours}h ${diffMins}m`;
   } else {
@@ -342,6 +347,19 @@ async function loadSchedules() {
       const toggleBtn = clone.querySelector('[bbb-action="toggle-schedule"]');
       if (toggleBtn) {
         toggleBtn.textContent = schedule.is_enabled ? "Disable" : "Enable";
+        toggleBtn.setAttribute("bbb-id", schedule.id);
+      }
+
+      const deleteBtn = clone.querySelector('[bbb-action="delete-schedule"]');
+      if (deleteBtn) {
+        deleteBtn.setAttribute("bbb-id", schedule.id);
+      }
+
+      const viewJobsBtn = clone.querySelector(
+        '[bbb-action="view-schedule-jobs"]'
+      );
+      if (viewJobsBtn) {
+        viewJobsBtn.setAttribute("bbb-id", schedule.id);
       }
 
       schedulesList.appendChild(clone);
