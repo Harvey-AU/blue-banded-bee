@@ -477,9 +477,6 @@ func (h *Handler) fetchJobResponse(ctx context.Context, jobID string, organisati
 		completed := completedAt.Time.Format(time.RFC3339)
 		response.CompletedAt = &completed
 	}
-	if schedulerID.Valid {
-		response.SchedulerID = &schedulerID.String
-	}
 
 	return response, nil
 }
