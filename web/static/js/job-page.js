@@ -255,7 +255,7 @@ function formatJobForBinding(job, jobId) {
       : (job.avg_time_per_task_seconds ?? job.avgTimePerTaskSeconds);
 
   // Format config fields
-  const concurrency = Number(job.concurrency ?? 0);
+  const concurrency = Number(job.concurrency ?? job.Concurrency ?? 0);
   const maxPages = Number(job.max_pages ?? job.maxPages ?? 0);
   const sourceType = job.source_type ?? job.sourceType ?? null;
   const crawlDelay = job.crawl_delay_seconds ?? job.crawlDelaySeconds ?? null;
