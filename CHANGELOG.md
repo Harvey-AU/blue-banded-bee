@@ -29,6 +29,13 @@ On merge, CI will:
 
 ## [Unreleased]
 
+### Added
+
+- **Job Details Metadata**: Display additional job configuration in overview
+  grid
+  - Concurrency, max pages, and source type from jobs table
+  - Crawl delay and adaptive delay from domains table
+
 ### Fixed
 
 - **Job Details Page Task Filters**: Fixed non-functional filter buttons and
