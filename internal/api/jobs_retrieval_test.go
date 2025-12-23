@@ -40,11 +40,15 @@ func TestGetJobIntegration(t *testing.T) {
 					"total_tasks", "completed_tasks", "failed_tasks", "skipped_tasks",
 					"status", "domain", "created_at", "started_at", "completed_at",
 					"duration_seconds", "avg_time_per_task_seconds", "stats",
+					"concurrency", "max_pages", "source_type",
+					"crawl_delay_seconds", "adaptive_delay_seconds",
 				}).AddRow(
 					100, 85, 10, 5, // task counts
 					"completed", "example.com", // status and domain
 					time.Now(), time.Now().Add(-time.Hour), time.Now(), // timestamps
 					3600, 42.35, nil, // duration_seconds, avg_time_per_task_seconds, stats (nil for now)
+					5, 100, "sitemap", // concurrency, max_pages, source_type
+					2, 3, // crawl_delay_seconds, adaptive_delay_seconds
 				)
 
 				mock.ExpectQuery(`SELECT j\.total_tasks, j\.completed_tasks, j\.failed_tasks, j\.skipped_tasks, j\.status`).
@@ -78,6 +82,13 @@ func TestGetJobIntegration(t *testing.T) {
 				// Check new fields exist
 				assert.NotNil(t, data["duration_seconds"])
 				assert.NotNil(t, data["avg_time_per_task_seconds"])
+
+				// Check config fields
+				assert.Equal(t, float64(5), data["concurrency"])
+				assert.Equal(t, float64(100), data["max_pages"])
+				assert.Equal(t, "sitemap", data["source_type"])
+				assert.Equal(t, float64(2), data["crawl_delay_seconds"])
+				assert.Equal(t, float64(3), data["adaptive_delay_seconds"])
 			},
 		},
 		{
