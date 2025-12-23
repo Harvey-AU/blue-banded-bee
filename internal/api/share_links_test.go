@@ -347,10 +347,14 @@ func TestSharedJobHandlerReturnsJob(t *testing.T) {
 			"total_tasks", "completed_tasks", "failed_tasks", "skipped_tasks", "status",
 			"domain", "created_at", "started_at", "completed_at", "duration_seconds",
 			"avg_time_per_task_seconds", "stats", "scheduler_id",
+			"concurrency", "max_pages", "source_type",
+			"crawl_delay_seconds", "adaptive_delay_seconds",
 		}).AddRow(
 			10, 8, 1, 1, "completed",
 			"example.com", now, now, now,
 			int64(120), float64(12.5), []byte(`{}`), nil,
+			5, 50, "sitemap",
+			nil, 0,
 		))
 
 	req := httptest.NewRequest(http.MethodGet, "/v1/shared/jobs/token-123", nil)
