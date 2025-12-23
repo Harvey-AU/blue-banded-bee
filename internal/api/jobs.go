@@ -414,7 +414,18 @@ func (h *Handler) fetchJobResponse(ctx context.Context, jobID string, organisati
 	}
 
 	row := h.DB.GetDB().QueryRowContext(ctx, query, args...)
-	err := row.Scan(&total, &completed, &failed, &skipped, &status, &domain, &createdAt, &startedAt, &completedAt, &durationSeconds, &avgTimePerTaskSeconds, &statsJSON, &schedulerID, &concurrency, &maxPages, &sourceType, &crawlDelaySeconds, &adaptiveDelaySeconds)
+	err := row.Scan(
+		// Task counts
+		&total, &completed, &failed, &skipped,
+		// Job info
+		&status, &domain, &createdAt, &startedAt, &completedAt,
+		// Computed metrics
+		&durationSeconds, &avgTimePerTaskSeconds, &statsJSON, &schedulerID,
+		// Job config
+		&concurrency, &maxPages, &sourceType,
+		// Domain delays
+		&crawlDelaySeconds, &adaptiveDelaySeconds,
+	)
 	if err != nil {
 		return JobResponse{}, err
 	}

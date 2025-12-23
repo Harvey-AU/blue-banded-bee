@@ -373,6 +373,13 @@ func TestSharedJobHandlerReturnsJob(t *testing.T) {
 	assert.Equal(t, "example.com", data["domain"])
 	assert.Equal(t, float64(10), data["total_tasks"])
 
+	// Verify config fields are returned
+	assert.Equal(t, float64(5), data["concurrency"])
+	assert.Equal(t, float64(50), data["max_pages"])
+	assert.Equal(t, "sitemap", data["source_type"])
+	assert.Nil(t, data["crawl_delay_seconds"]) // nil in mock
+	assert.Equal(t, float64(0), data["adaptive_delay_seconds"])
+
 	assert.NoError(t, mock.ExpectationsWereMet())
 	mockDB.AssertExpectations(t)
 }
