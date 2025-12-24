@@ -30,11 +30,11 @@ type RobotsRules struct {
 //
 // The parser follows these rules in order of precedence:
 // 1. If there are specific rules for "BlueBandedBee", use those
-// 2. If there are rules for similar legitimate web crawlers (AhrefsBot, MJ12bot, etc.), use those
-// 3. Otherwise, fall back to wildcard (*) rules
+// 2. Otherwise, fall back to wildcard (*) rules
 //
-// This approach ensures we respect site owners' wishes for legitimate web crawlers
-// while avoiding being blocked by overly broad AI/LLM crawler restrictions.
+// We intentionally don't match SEO crawler rules (AhrefsBot, MJ12bot, etc.) as those
+// often have punitive 10s delays meant for aggressive crawlers. Most sites have no
+// crawl-delay for the default * user-agent.
 func ParseRobotsTxt(ctx context.Context, domain string, userAgent string) (*RobotsRules, error) {
 	// Support both domain-only and full URL formats
 	var robotsURL string
@@ -121,20 +121,6 @@ func parseRobotsTxtContent(r io.Reader, userAgent string) (*RobotsRules, error) 
 	// Extract bot name from user agent (e.g., "BlueBandedBee/1.0" -> "bluebandedbee")
 	botName := strings.ToLower(strings.Split(userAgent, "/")[0])
 
-	// List of similar crawler/SEO bots whose rules we should also respect
-	// These are legitimate web crawlers that BlueBandedBee is similar to
-	similarBots := []string{
-		"ahrefsbot",       // SEO crawler
-		"ahrefssiteaudit", // SEO site audit
-		"mj12bot",         // Majestic SEO crawler
-		"semrushbot",      // SEO crawler
-		"dotbot",          // Moz crawler
-		"rogerbot",        // Moz crawler (legacy)
-		"screaming frog",  // SEO spider
-		"sitebot",         // Generic site crawler
-		"webcrawler",      // Generic crawler
-	}
-
 	// Temporary storage for wildcard rules
 	wildcardRules := &RobotsRules{
 		Sitemaps:         []string{},
@@ -176,25 +162,6 @@ func parseRobotsTxtContent(r io.Reader, userAgent string) (*RobotsRules, error) 
 				log.Debug().
 					Str("user_agent_section", agent).
 					Msg("Found rules section for our bot")
-			} else if !foundSpecificSection {
-				// Check if this is a similar bot whose rules we should respect
-				for _, similarBot := range similarBots {
-					if strings.Contains(agentLower, similarBot) {
-						inOurSection = true
-						foundSpecificSection = true
-						// Clear any wildcard rules we've collected
-						rules = &RobotsRules{
-							Sitemaps:         []string{},
-							DisallowPatterns: []string{},
-							AllowPatterns:    []string{},
-						}
-						log.Debug().
-							Str("user_agent_section", agent).
-							Str("matched_similar_bot", similarBot).
-							Msg("Found rules section for similar bot - adopting these rules")
-						break
-					}
-				}
 			}
 			continue
 		}

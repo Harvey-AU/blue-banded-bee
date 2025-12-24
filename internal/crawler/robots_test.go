@@ -71,25 +71,24 @@ Disallow: /nobing
 			wantAllow:    []string{},
 		},
 		{
-			name: "Similar bot rules (AhrefsBot)",
+			name: "Uses wildcard rules, ignores SEO bot rules",
 			robotsTxt: `
 User-agent: *
 Crawl-delay: 1
 Disallow: /admin
+Sitemap: https://example.com/sitemap.xml
 
 User-agent: AhrefsBot
 Crawl-delay: 10
 Disallow: /checkout
 Disallow: /cart
 Allow: /cart/view
-
-Sitemap: https://example.com/sitemap.xml
 `,
 			userAgent:    "BlueBandedBee/1.0",
-			wantDelay:    10,
+			wantDelay:    1,
 			wantSitemaps: []string{"https://example.com/sitemap.xml"},
-			wantDisallow: []string{"/checkout", "/cart"},
-			wantAllow:    []string{"/cart/view"},
+			wantDisallow: []string{"/admin"},
+			wantAllow:    []string{},
 		},
 	}
 
