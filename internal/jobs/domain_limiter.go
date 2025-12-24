@@ -24,6 +24,7 @@ type DomainLimiterConfig struct {
 	CancelRateLimitJobs   bool
 	CancelStreakThreshold int
 	CancelDelayThreshold  time.Duration
+	RobotsDelayMultiplier float64 // Multiplier for robots.txt crawl-delay (0.5 = 50%)
 }
 
 func defaultDomainLimiterConfig() DomainLimiterConfig {
@@ -38,6 +39,7 @@ func defaultDomainLimiterConfig() DomainLimiterConfig {
 		CancelRateLimitJobs:   false,
 		CancelStreakThreshold: 20,
 		CancelDelayThreshold:  60 * time.Second,
+		RobotsDelayMultiplier: 0.5, // Default: use 50% of robots.txt crawl-delay
 	}
 
 	if v, ok := os.LookupEnv("BBB_RATE_LIMIT_BASE_DELAY_MS"); ok {
@@ -78,6 +80,11 @@ func defaultDomainLimiterConfig() DomainLimiterConfig {
 	if v, ok := os.LookupEnv("BBB_RATE_LIMIT_CANCEL_ENABLED"); ok {
 		cfg.CancelRateLimitJobs = v == "1" || v == "true" || v == "TRUE"
 	}
+	if v, ok := os.LookupEnv("BBB_ROBOTS_DELAY_MULTIPLIER"); ok {
+		if f, err := strconv.ParseFloat(v, 64); err == nil && f > 0 && f <= 1.0 {
+			cfg.RobotsDelayMultiplier = f
+		}
+	}
 
 	return cfg
 }
@@ -110,8 +117,12 @@ type DomainPermit struct {
 }
 
 func newDomainLimiter(dbQueue DbQueueInterface) *DomainLimiter {
+	cfg := defaultDomainLimiterConfig()
+	log.Info().
+		Float64("robots_delay_multiplier", cfg.RobotsDelayMultiplier).
+		Msg("Domain limiter initialised")
 	return &DomainLimiter{
-		cfg:     defaultDomainLimiterConfig(),
+		cfg:     cfg,
 		dbQueue: dbQueue,
 		domains: make(map[string]*domainState),
 		now:     time.Now,
@@ -329,6 +340,10 @@ func (ds *domainState) acquire(ctx context.Context, cfg DomainLimiterConfig, now
 		now := nowFn()
 		if req.RobotsDelay > 0 {
 			robots := req.RobotsDelay
+			// Apply multiplier to robots.txt delay (e.g., 0.5 = use 50% of specified delay)
+			if cfg.RobotsDelayMultiplier > 0 && cfg.RobotsDelayMultiplier < 1.0 {
+				robots = time.Duration(float64(robots) * cfg.RobotsDelayMultiplier)
+			}
 			if robots < cfg.BaseDelay {
 				robots = cfg.BaseDelay
 			}
