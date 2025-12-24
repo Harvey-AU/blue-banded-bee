@@ -203,7 +203,7 @@ DOMAINS=(
   # Additional dev frameworks & tooling (30) - focused documentation hubs
   "vitejs.dev" "nuxt.com" "remix.run" "solidjs.com" "qwik.dev"
   "parceljs.org" "rollupjs.org" "esbuild.github.io" "bun.sh" "deno.com"
-  "playwright.dev" "cypress.io" "vitest.dev" "pnpm.io" "turbo.build"
+  "cypress.io" "vitest.dev" "pnpm.io" "turbo.build"
   "nx.dev" "oclif.io" "temporal.io" "directus.io" "strapi.io"
   "sanity.io" "payloadcms.com" "pocketbase.io" "supabase.com" "plane.so"
   "appsmith.com" "tooljet.com" "budibase.com" "windmill.dev" "tauri.app"

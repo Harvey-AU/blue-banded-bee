@@ -2040,8 +2040,6 @@ Series of minor optimisations to improve throughput and resource usage.
 
 - **Production Testing**: Completed full 6-step development workflow
   - GitHub Actions deployment successful for user interface improvements
-  - Playwright MCP testing infrastructure verified (with noted session stability
-    issues)
   - Production deployment confirmed working via manual verification
 
 ## [0.5.5] – 2025-06-01
@@ -2055,8 +2053,6 @@ Series of minor optimisations to improve throughput and resource usage.
   - Implemented real-time password strength checking using zxcvbn library with
     visual feedback indicators
   - Added password confirmation validation with visual success/error states
-  - Comprehensive authentication modal testing via MCP Playwright browser
-    automation
   - Database verification of account creation process (account created but
     requires email confirmation)
 
