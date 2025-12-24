@@ -29,6 +29,8 @@ On merge, CI will:
 
 ## [Unreleased]
 
+## [0.18.2] – 2025-12-24
+
 ### Added
 
 - **Job Details Metadata**: Display additional job configuration in overview
