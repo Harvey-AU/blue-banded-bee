@@ -258,7 +258,9 @@ function formatJobForBinding(job, jobId) {
   const concurrency = Number(job.concurrency ?? job.Concurrency ?? 0);
   const maxPages = Number(job.max_pages ?? job.maxPages ?? 0);
   const sourceType = job.source_type ?? job.sourceType ?? null;
-  const crawlDelay = job.crawl_delay_seconds ?? job.crawlDelaySeconds ?? null;
+  const crawlDelay = Number(
+    job.crawl_delay_seconds ?? job.crawlDelaySeconds ?? 0
+  );
   const adaptiveDelay = Number(
     job.adaptive_delay_seconds ?? job.adaptiveDelaySeconds ?? 0
   );
@@ -275,11 +277,11 @@ function formatJobForBinding(job, jobId) {
     failed_tasks_display: formatCount(failedTasks),
     concurrency_display: concurrency > 0 ? String(concurrency) : "—",
     max_pages_display: maxPages > 0 ? formatCount(maxPages) : "Unlimited",
-    source_type_display: sourceType
-      ? sourceType.toUpperCase().replace(/_/g, " ")
-      : "—",
-    crawl_delay_display:
-      crawlDelay != null && crawlDelay > 0 ? `${crawlDelay}s` : "—",
+    source_type_display:
+      typeof sourceType === "string"
+        ? sourceType.toUpperCase().replace(/_/g, " ")
+        : "—",
+    crawl_delay_display: crawlDelay > 0 ? `${crawlDelay}s` : "—",
     adaptive_delay_display: adaptiveDelay > 0 ? `${adaptiveDelay}s` : "—",
     started_at_display: formatDateTime(job.started_at ?? job.startedAt),
     completed_at_display: formatDateTime(job.completed_at ?? job.completedAt),
