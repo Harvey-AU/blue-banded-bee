@@ -1883,13 +1883,16 @@ func (wp *WorkerPool) loadJobQueueState(ctx context.Context, jobID string) (*job
 
 func (wp *WorkerPool) markJobCompleted(ctx context.Context, jobID string) error {
 	return wp.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
+		// Only update if job is not already in a terminal state (cancelled, failed)
+		// This prevents race conditions where a job was cancelled but running tasks complete
 		_, err := tx.ExecContext(ctx, `
 			UPDATE jobs
 			SET status = $1,
 				completed_at = COALESCE(completed_at, $2),
 				progress = 100.0
 			WHERE id = $3
-		`, JobStatusCompleted, time.Now().UTC(), jobID)
+			  AND status NOT IN ($4, $5)
+		`, JobStatusCompleted, time.Now().UTC(), jobID, JobStatusCancelled, JobStatusFailed)
 		return err
 	})
 }
