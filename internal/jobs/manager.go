@@ -619,6 +619,7 @@ func (jm *JobManager) CancelJob(ctx context.Context, jobID string) error {
 		span.SetData("error.message", err.Error())
 		sentry.CaptureException(err)
 		log.Error().Err(err).Str("job_id", job.ID).Msg("Failed to cancel job")
+		return fmt.Errorf("failed to cancel job: %w", err)
 	}
 
 	// Remove job from worker pool

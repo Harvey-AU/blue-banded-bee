@@ -493,7 +493,7 @@ func TestCancelJob_Unit(t *testing.T) {
 
 				mock.ExpectRollback()
 			},
-			expectedError: "", // Error is logged but not returned in implementation
+			expectedError: "failed to cancel job",
 		},
 	}
 
