@@ -55,6 +55,11 @@ func defaultDomainLimiterConfig() DomainLimiterConfig {
 			cfg.SuccessProbeThreshold = n
 		}
 	}
+	if v, ok := os.LookupEnv("BBB_RATE_LIMIT_DELAY_STEP_MS"); ok {
+		if ms, err := strconv.Atoi(v); err == nil && ms > 0 {
+			cfg.DelayStep = time.Duration(ms) * time.Millisecond
+		}
+	}
 	if v, ok := os.LookupEnv("BBB_RATE_LIMIT_MAX_RETRIES"); ok {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
 			cfg.MaxBlockingRetries = n
