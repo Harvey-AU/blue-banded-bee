@@ -24,7 +24,7 @@ type DomainLimiterConfig struct {
 	CancelRateLimitJobs   bool
 	CancelStreakThreshold int
 	CancelDelayThreshold  time.Duration
-	RobotsDelayMultiplier float64 // Multiplier for robots.txt crawl-delay (0.5 = 50%)
+	RobotsDelayMultiplier float64
 }
 
 func defaultDomainLimiterConfig() DomainLimiterConfig {
@@ -39,7 +39,7 @@ func defaultDomainLimiterConfig() DomainLimiterConfig {
 		CancelRateLimitJobs:   false,
 		CancelStreakThreshold: 20,
 		CancelDelayThreshold:  60 * time.Second,
-		RobotsDelayMultiplier: 0.5, // Default: use 50% of robots.txt crawl-delay
+		RobotsDelayMultiplier: 0.5,
 	}
 
 	if v, ok := os.LookupEnv("BBB_RATE_LIMIT_BASE_DELAY_MS"); ok {
@@ -340,7 +340,7 @@ func (ds *domainState) acquire(ctx context.Context, cfg DomainLimiterConfig, now
 		now := nowFn()
 		if req.RobotsDelay > 0 {
 			robots := req.RobotsDelay
-			// Apply multiplier to robots.txt delay (e.g., 0.5 = use 50% of specified delay)
+
 			if cfg.RobotsDelayMultiplier > 0 && cfg.RobotsDelayMultiplier < 1.0 {
 				robots = time.Duration(float64(robots) * cfg.RobotsDelayMultiplier)
 			}
