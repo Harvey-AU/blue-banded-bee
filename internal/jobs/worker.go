@@ -933,6 +933,17 @@ func (wp *WorkerPool) AddJob(jobID string, options *JobOptions) {
 		Msg("Added job to worker pool")
 }
 
+// NotifyNewTasks wakes workers to check for new tasks immediately
+// instead of waiting for the next task monitor tick (30 seconds).
+func (wp *WorkerPool) NotifyNewTasks() {
+	select {
+	case wp.notifyCh <- struct{}{}:
+		log.Debug().Msg("Notified workers of new tasks")
+	default:
+		// Channel already has notification pending
+	}
+}
+
 // calculateConcurrencyTarget determines the desired worker count based on the
 // sum of per-job concurrency limits (after domain limiter adjustments) and the
 // configured per-worker concurrency. A small buffer is applied to keep the pool

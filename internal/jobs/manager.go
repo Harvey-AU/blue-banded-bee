@@ -353,6 +353,12 @@ func (jm *JobManager) setupJobURLDiscovery(ctx context.Context, job *Job, option
 		// Create page and task records for the root URL
 		if err := jm.createManualRootTask(backgroundCtx, job, domainID, rootPath); err != nil {
 			log.Error().Err(err).Str("job_id", job.ID).Msg("Failed to create manual root task")
+			return
+		}
+
+		// Notify workers immediately that new tasks are available
+		if jm.workerPool != nil {
+			jm.workerPool.NotifyNewTasks()
 		}
 	}()
 
@@ -1156,5 +1162,10 @@ func (jm *JobManager) processSitemap(ctx context.Context, jobID, domain string, 
 		if err := jm.enqueueFallbackURL(ctx, jobID, domain); err != nil {
 			return
 		}
+	}
+
+	// Notify workers immediately that new tasks are available
+	if jm.workerPool != nil {
+		jm.workerPool.NotifyNewTasks()
 	}
 }
