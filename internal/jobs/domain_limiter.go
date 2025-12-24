@@ -29,8 +29,8 @@ type DomainLimiterConfig struct {
 func defaultDomainLimiterConfig() DomainLimiterConfig {
 	cfg := DomainLimiterConfig{
 		BaseDelay:             500 * time.Millisecond,
-		DelayStep:             time.Second,
-		SuccessProbeThreshold: 20,
+		DelayStep:             500 * time.Millisecond,
+		SuccessProbeThreshold: 5,
 		MaxAdaptiveDelay:      60 * time.Second,
 		ConcurrencyStep:       5 * time.Second,
 		PersistInterval:       30 * time.Second,
@@ -186,6 +186,36 @@ func (dl *DomainLimiter) UpdateRobotsDelay(domain string, delaySeconds int) {
 	if state.adaptiveDelay < base {
 		state.adaptiveDelay = base
 	}
+}
+
+// EstimatedWait returns the estimated time until the domain is available for requests.
+// Returns 0 if the domain is available immediately or unknown.
+func (dl *DomainLimiter) EstimatedWait(domain string) time.Duration {
+	if domain == "" {
+		return 0
+	}
+
+	dl.mu.Lock()
+	state, exists := dl.domains[domain]
+	dl.mu.Unlock()
+
+	if !exists {
+		return 0
+	}
+
+	state.mu.Lock()
+	defer state.mu.Unlock()
+
+	now := dl.now()
+	waitUntil := state.nextAvailable
+	if state.backoffUntil.After(waitUntil) {
+		waitUntil = state.backoffUntil
+	}
+
+	if waitUntil.After(now) {
+		return waitUntil.Sub(now)
+	}
+	return 0
 }
 
 // Domain state ---------------------------------------------------------------------------------

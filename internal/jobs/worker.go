@@ -1378,6 +1378,19 @@ func (wp *WorkerPool) claimPendingTask(ctx context.Context) (*db.Task, error) {
 
 	// Try to get a task from each active job
 	for _, jobID := range activeJobs {
+		// Skip jobs whose domain isn't available yet
+		if wp.domainLimiter != nil {
+			wp.jobInfoMutex.RLock()
+			jobInfo, exists := wp.jobInfoCache[jobID]
+			wp.jobInfoMutex.RUnlock()
+
+			if exists && jobInfo.DomainName != "" {
+				if wp.domainLimiter.EstimatedWait(jobInfo.DomainName) > 0 {
+					continue // Domain not available yet, try other jobs
+				}
+			}
+		}
+
 		task, err := wp.dbQueue.GetNextTask(ctx, jobID)
 		if err == sql.ErrNoRows {
 			continue // Try next job
