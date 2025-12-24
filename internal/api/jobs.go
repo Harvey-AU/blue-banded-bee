@@ -551,9 +551,10 @@ func (h *Handler) updateJob(w http.ResponseWriter, r *http.Request, jobID string
 		return
 	}
 
+	resultJobID := jobID
 	switch req.Action {
 	case "start", "restart":
-		err = h.JobsManager.StartJob(r.Context(), jobID)
+		resultJobID, err = h.JobsManager.StartJob(r.Context(), jobID)
 	case "cancel":
 		err = h.JobsManager.CancelJob(r.Context(), jobID)
 	default:
@@ -567,10 +568,10 @@ func (h *Handler) updateJob(w http.ResponseWriter, r *http.Request, jobID string
 		return
 	}
 
-	// Get updated job status
-	job, err := h.JobsManager.GetJobStatus(r.Context(), jobID)
+	// Get updated job status (use new job ID for restart)
+	job, err := h.JobsManager.GetJobStatus(r.Context(), resultJobID)
 	if err != nil {
-		logger.Error().Err(err).Str("job_id", jobID).Msg("Failed to get job status after action")
+		logger.Error().Err(err).Str("job_id", resultJobID).Msg("Failed to get job status after action")
 		InternalError(w, r, err)
 		return
 	}
@@ -673,14 +674,15 @@ func (h *Handler) restartJob(w http.ResponseWriter, r *http.Request, jobID strin
 		return
 	}
 
-	err = h.JobsManager.StartJob(r.Context(), jobID)
+	newJobID, err := h.JobsManager.StartJob(r.Context(), jobID)
 	if err != nil {
 		logger.Error().Err(err).Str("job_id", jobID).Msg("Failed to restart job")
 		InternalError(w, r, err)
 		return
 	}
 
-	WriteSuccess(w, r, map[string]string{"id": jobID, "status": "running"}, "Job restarted successfully")
+	logger.Info().Str("old_job_id", jobID).Str("new_job_id", newJobID).Msg("Job restarted successfully")
+	WriteSuccess(w, r, map[string]string{"id": newJobID, "status": "running"}, "Job restarted successfully")
 }
 
 // TaskQueryParams holds parameters for task listing queries

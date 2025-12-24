@@ -817,9 +817,14 @@ func (h *Handler) WebflowWebhook(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Start the job immediately
-	if err := h.JobsManager.StartJob(r.Context(), job.ID); err != nil {
-		logger.Error().Err(err).Str("job_id", job.ID).Msg("Failed to start job from webhook")
-		// Don't return error - job was created successfully, just failed to start
+	// Note: StartJob is a restart function that creates a new job from an existing one.
+	// For webhooks, the job was just created (pending status), so StartJob will fail
+	// with "job cannot be restarted" - this is expected. The job gets processed via
+	// the normal worker pool flow from CreateJob.
+	if newJobID, err := h.JobsManager.StartJob(r.Context(), job.ID); err != nil {
+		logger.Debug().Err(err).Str("job_id", job.ID).Msg("StartJob not applicable for new webhook job")
+	} else if newJobID != "" {
+		logger.Info().Str("original_job_id", job.ID).Str("new_job_id", newJobID).Msg("Job restarted from webhook")
 	}
 
 	orgIDStr := ""

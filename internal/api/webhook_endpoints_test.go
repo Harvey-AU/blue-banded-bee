@@ -63,7 +63,7 @@ func TestWebflowWebhookIntegration(t *testing.T) {
 				})).Return(createdJob, nil)
 
 				// Mock StartJob call that webhook makes after creation
-				jm.On("StartJob", mock.Anything, "webhook-job-789").Return(nil)
+				jm.On("StartJob", mock.Anything, "webhook-job-789").Return("new-job-789", nil)
 			},
 			expectedStatus: http.StatusOK,
 			checkResponse: func(t *testing.T, rec *httptest.ResponseRecorder) {
