@@ -340,14 +340,17 @@ func (ds *domainState) acquire(ctx context.Context, cfg DomainLimiterConfig, now
 		now := nowFn()
 		if req.RobotsDelay > 0 {
 			robots := req.RobotsDelay
+			multiplierActive := cfg.RobotsDelayMultiplier > 0 && cfg.RobotsDelayMultiplier < 1.0
 
-			if cfg.RobotsDelayMultiplier > 0 && cfg.RobotsDelayMultiplier < 1.0 {
+			if multiplierActive {
 				robots = time.Duration(float64(robots) * cfg.RobotsDelayMultiplier)
 			}
 			if robots < cfg.BaseDelay {
 				robots = cfg.BaseDelay
 			}
-			if robots > ds.baseDelay {
+			if multiplierActive {
+				ds.baseDelay = robots
+			} else if robots > ds.baseDelay {
 				ds.baseDelay = robots
 			}
 		}
