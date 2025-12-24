@@ -36,6 +36,23 @@ On merge, CI will:
   - Concurrency, max pages, and source type from jobs table
   - Crawl delay and adaptive delay from domains table
 
+### Enhanced
+
+- **Adaptive Rate Limiting**: Faster delay recovery and smarter task claiming
+  - Reduced probe threshold from 20 to 5 consecutive successes before attempting
+    lower delay
+  - Reduced delay step from 1s to 500ms for finer-grained adjustments
+  - Recovery from 21s → 10s adaptive delay now takes ~5.5 minutes instead of ~59
+    minutes
+  - Added `BBB_RATE_LIMIT_DELAY_STEP_MS` environment variable for operational
+    tuning
+- **Worker Task Claiming**: Workers now skip domains that aren't available yet
+  - Added `EstimatedWait()` method to DomainLimiter for checking domain
+    availability
+  - Workers check domain availability before claiming tasks, allowing them to
+    work on other jobs instead of blocking
+  - Optimised lock contention by snapshotting job info cache before iteration
+
 ### Fixed
 
 - **Job Details Page Task Filters**: Fixed non-functional filter buttons and
