@@ -347,10 +347,14 @@ func TestSharedJobHandlerReturnsJob(t *testing.T) {
 			"total_tasks", "completed_tasks", "failed_tasks", "skipped_tasks", "status",
 			"domain", "created_at", "started_at", "completed_at", "duration_seconds",
 			"avg_time_per_task_seconds", "stats", "scheduler_id",
+			"concurrency", "max_pages", "source_type",
+			"crawl_delay_seconds", "adaptive_delay_seconds",
 		}).AddRow(
 			10, 8, 1, 1, "completed",
 			"example.com", now, now, now,
 			int64(120), float64(12.5), []byte(`{}`), nil,
+			5, 50, "sitemap",
+			nil, 0,
 		))
 
 	req := httptest.NewRequest(http.MethodGet, "/v1/shared/jobs/token-123", nil)
@@ -368,6 +372,13 @@ func TestSharedJobHandlerReturnsJob(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, "example.com", data["domain"])
 	assert.Equal(t, float64(10), data["total_tasks"])
+
+	// Verify config fields are returned
+	assert.Equal(t, float64(5), data["concurrency"])
+	assert.Equal(t, float64(50), data["max_pages"])
+	assert.Equal(t, "sitemap", data["source_type"])
+	assert.Nil(t, data["crawl_delay_seconds"]) // nil in mock
+	assert.Equal(t, float64(0), data["adaptive_delay_seconds"])
 
 	assert.NoError(t, mock.ExpectationsWereMet())
 	mockDB.AssertExpectations(t)

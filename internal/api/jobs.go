@@ -125,6 +125,12 @@ type JobResponse struct {
 	AvgTimePerTaskSeconds *float64               `json:"avg_time_per_task_seconds,omitempty"`
 	Stats                 map[string]interface{} `json:"stats,omitempty"`
 	SchedulerID           *string                `json:"scheduler_id,omitempty"`
+	// Job configuration fields
+	Concurrency          int     `json:"concurrency"`
+	MaxPages             int     `json:"max_pages"`
+	SourceType           *string `json:"source_type,omitempty"`
+	CrawlDelaySeconds    *int    `json:"crawl_delay_seconds,omitempty"`
+	AdaptiveDelaySeconds int     `json:"adaptive_delay_seconds"`
 }
 
 // listJobs handles GET /v1/jobs
@@ -383,6 +389,9 @@ func (h *Handler) fetchJobResponse(ctx context.Context, jobID string, organisati
 	var avgTimePerTaskSeconds sql.NullFloat64
 	var statsJSON []byte
 	var schedulerID sql.NullString
+	var concurrency, maxPages, adaptiveDelaySeconds int
+	var sourceType sql.NullString
+	var crawlDelaySeconds sql.NullInt64
 
 	query := `
 		SELECT j.total_tasks, j.completed_tasks, j.failed_tasks, j.skipped_tasks, j.status,
@@ -391,7 +400,9 @@ func (h *Handler) fetchJobResponse(ctx context.Context, jobID string, organisati
 		       CASE WHEN j.completed_tasks > 0 THEN
 		           EXTRACT(EPOCH FROM (j.completed_at - j.started_at)) / j.completed_tasks
 		       END as avg_time_per_task_seconds,
-		       j.stats, j.scheduler_id
+		       j.stats, j.scheduler_id,
+		       j.concurrency, j.max_pages, j.source_type,
+		       d.crawl_delay_seconds, d.adaptive_delay_seconds
 		FROM jobs j
 		JOIN domains d ON j.domain_id = d.id
 		WHERE j.id = $1`
@@ -403,7 +414,18 @@ func (h *Handler) fetchJobResponse(ctx context.Context, jobID string, organisati
 	}
 
 	row := h.DB.GetDB().QueryRowContext(ctx, query, args...)
-	err := row.Scan(&total, &completed, &failed, &skipped, &status, &domain, &createdAt, &startedAt, &completedAt, &durationSeconds, &avgTimePerTaskSeconds, &statsJSON, &schedulerID)
+	err := row.Scan(
+		// Task counts
+		&total, &completed, &failed, &skipped,
+		// Job info
+		&status, &domain, &createdAt, &startedAt, &completedAt,
+		// Computed metrics
+		&durationSeconds, &avgTimePerTaskSeconds, &statsJSON, &schedulerID,
+		// Job config
+		&concurrency, &maxPages, &sourceType,
+		// Domain delays
+		&crawlDelaySeconds, &adaptiveDelaySeconds,
+	)
 	if err != nil {
 		return JobResponse{}, err
 	}
@@ -414,14 +436,27 @@ func (h *Handler) fetchJobResponse(ctx context.Context, jobID string, organisati
 	}
 
 	response := JobResponse{
-		ID:             jobID,
-		Domain:         domain,
-		Status:         status,
-		TotalTasks:     total,
-		CompletedTasks: completed,
-		FailedTasks:    failed,
-		SkippedTasks:   skipped,
-		Progress:       progress,
+		ID:                   jobID,
+		Domain:               domain,
+		Status:               status,
+		TotalTasks:           total,
+		CompletedTasks:       completed,
+		FailedTasks:          failed,
+		SkippedTasks:         skipped,
+		Progress:             progress,
+		Concurrency:          concurrency,
+		MaxPages:             maxPages,
+		AdaptiveDelaySeconds: adaptiveDelaySeconds,
+	}
+	if sourceType.Valid {
+		response.SourceType = &sourceType.String
+	}
+	if crawlDelaySeconds.Valid {
+		delay := int(crawlDelaySeconds.Int64)
+		response.CrawlDelaySeconds = &delay
+	}
+	if schedulerID.Valid {
+		response.SchedulerID = &schedulerID.String
 	}
 
 	if durationSeconds.Valid {
@@ -452,9 +487,6 @@ func (h *Handler) fetchJobResponse(ctx context.Context, jobID string, organisati
 	if completedAt.Valid {
 		completed := completedAt.Time.Format(time.RFC3339)
 		response.CompletedAt = &completed
-	}
-	if schedulerID.Valid {
-		response.SchedulerID = &schedulerID.String
 	}
 
 	return response, nil

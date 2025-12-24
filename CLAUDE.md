@@ -106,8 +106,6 @@ after several rounds of iterating on a task, and before deploying.
 
 - Test locally first (`go test ./...`, targeted unit or integration suites,
   `docker build`), then rely on GitHub Actions.
-- Use Playwright only against `app.bluebandedbee.co` for production checks—never
-  the root domain.
 - Confirm finished features meet the requirements before handing off.
 
 ## Development Persona
