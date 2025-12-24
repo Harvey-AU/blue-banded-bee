@@ -644,6 +644,7 @@ func (q *DbQueue) shouldRetry(err error) bool {
 		"connection refused",
 		"timeout",
 		"connection pool saturated",
+		"deadlock detected",
 	}
 	for _, snippet := range retrySnippets {
 		if strings.Contains(errStr, snippet) {
