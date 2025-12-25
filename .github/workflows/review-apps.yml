@@ -59,14 +59,13 @@ jobs:
           echo ""
           echo "🔍 Looking for branch: $BRANCH_NAME"
 
-          # Get branch details
-          BRANCH_INFO=$(supabase branches get "$BRANCH_NAME" --project-ref "$SUPABASE_PROJECT_REF" 2>&1) || true
-          echo "Branch info:"
-          echo "$BRANCH_INFO"
+          # Get branch details as JSON for robust parsing
+          BRANCH_JSON=$(supabase branches get "$BRANCH_NAME" --project-ref "$SUPABASE_PROJECT_REF" --output json 2>/dev/null) || true
 
-          # Extract database host if branch exists
-          if echo "$BRANCH_INFO" | grep -q "database_host"; then
-            DB_HOST=$(echo "$BRANCH_INFO" | grep "database_host" | awk '{print $2}')
+          # Extract database host using jq
+          DB_HOST=$(echo "$BRANCH_JSON" | jq -r '.db_host // empty' 2>/dev/null)
+
+          if [ -n "$DB_HOST" ]; then
             echo "✅ Found Supabase preview branch!"
             echo "Database host: $DB_HOST"
             echo "db_host=$DB_HOST" >> $GITHUB_OUTPUT
