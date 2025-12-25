@@ -60,10 +60,18 @@ jobs:
           echo "🔍 Looking for branch: $BRANCH_NAME"
 
           # Get branch details as JSON for robust parsing
-          BRANCH_JSON=$(supabase branches get "$BRANCH_NAME" --project-ref "$SUPABASE_PROJECT_REF" --output json 2>/dev/null) || true
+          echo "🔍 Running: supabase branches get $BRANCH_NAME --output json"
+          BRANCH_JSON=$(supabase branches get "$BRANCH_NAME" --project-ref "$SUPABASE_PROJECT_REF" --output json 2>&1) || true
 
-          # Extract database host using jq
-          DB_HOST=$(echo "$BRANCH_JSON" | jq -r '.db_host // empty' 2>/dev/null)
+          echo "📋 Raw JSON response:"
+          echo "$BRANCH_JSON"
+
+          echo "📋 Available JSON keys:"
+          echo "$BRANCH_JSON" | jq -r 'keys[]' 2>/dev/null || echo "Failed to parse JSON keys"
+
+          # Extract database host using jq - try multiple possible field names
+          DB_HOST=$(echo "$BRANCH_JSON" | jq -r '.db_host // .database_host // .host // empty' 2>/dev/null)
+          echo "📋 Extracted DB_HOST: '$DB_HOST'"
 
           if [ -n "$DB_HOST" ]; then
             echo "✅ Found Supabase preview branch!"
