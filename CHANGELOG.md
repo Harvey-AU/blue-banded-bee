@@ -29,6 +29,8 @@ On merge, CI will:
 
 ## [Unreleased]
 
+## [0.18.6] – 2025-12-25
+
 ### Added
 
 - **API Endpoints**: Added `/restart` and `/cancel` endpoints for job management
