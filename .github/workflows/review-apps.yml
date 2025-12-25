@@ -29,6 +29,10 @@ jobs:
     permissions:
       pull-requests: write
 
+    concurrency:
+      group: preview-${{ github.event.number }}
+      cancel-in-progress: true
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -41,14 +45,74 @@ jobs:
       - name: Setup Fly.io CLI
         uses: superfly/flyctl-actions/setup-flyctl@master
 
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Get Supabase Preview Branch URL
+        id: supabase
+        run: |
+          echo "🔍 Listing all Supabase branches..."
+          supabase branches list --project-ref ${{ secrets.SUPABASE_PROJECT_REF }} || echo "Failed to list branches"
+
+          echo ""
+          echo "🔍 Looking for branch matching PR #${{ github.event.number }} or branch: ${{ github.head_ref }}"
+
+          # Try to get branch by git branch name (how Supabase names them)
+          BRANCH_NAME="${{ github.head_ref }}"
+          echo "Git branch name: $BRANCH_NAME"
+
+          # Get branch details - Supabase uses git branch name
+          BRANCH_INFO=$(supabase branches get "$BRANCH_NAME" --project-ref ${{ secrets.SUPABASE_PROJECT_REF }} 2>&1) || true
+          echo "Branch info result:"
+          echo "$BRANCH_INFO"
+
+          # Extract database host if branch exists
+          if echo "$BRANCH_INFO" | grep -q "database_host"; then
+            DB_HOST=$(echo "$BRANCH_INFO" | grep "database_host" | awk '{print $2}')
+            echo "✅ Found Supabase preview branch!"
+            echo "Database host: $DB_HOST"
+            echo "db_host=$DB_HOST" >> $GITHUB_OUTPUT
+            echo "branch_exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "⚠️ No Supabase preview branch found for this PR"
+            echo "branch_exists=false" >> $GITHUB_OUTPUT
+          fi
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+
+      - name: Log Supabase Branch Status
+        run: |
+          echo "========================================"
+          echo "SUPABASE PREVIEW BRANCH TEST RESULTS"
+          echo "========================================"
+          echo "Branch exists: ${{ steps.supabase.outputs.branch_exists }}"
+          echo "Database host: ${{ steps.supabase.outputs.db_host }}"
+          if [ "${{ steps.supabase.outputs.branch_exists }}" == "true" ]; then
+            echo "✅ SUCCESS: Would use preview DB at ${{ steps.supabase.outputs.db_host }}"
+          else
+            echo "⚠️ FALLBACK: Would use shared test database"
+          fi
+          echo "========================================"
+
       - name: Build Docker image locally
         run: docker build -t blue-banded-bee:pr-${{ github.event.number }} .
 
       - name: Deploy Review App
         run: |
-          DB_URL="${{ secrets.TEST_DATABASE_URL }}"
-          if [ -z "$DB_URL" ]; then
-            DB_URL="${{ secrets.DATABASE_URL }}"
+          # Use Supabase preview branch if available, otherwise fallback
+          if [ "${{ steps.supabase.outputs.branch_exists }}" == "true" ]; then
+            DB_HOST="${{ steps.supabase.outputs.db_host }}"
+            # Construct DATABASE_URL with preview branch host (same password as production)
+            DB_URL="postgresql://postgres.${{ secrets.SUPABASE_PROJECT_REF }}:${{ secrets.SUPABASE_DB_PASSWORD }}@${DB_HOST}:5432/postgres"
+            echo "🔀 Using Supabase PREVIEW database"
+          else
+            DB_URL="${{ secrets.TEST_DATABASE_URL }}"
+            if [ -z "$DB_URL" ]; then
+              DB_URL="${{ secrets.DATABASE_URL }}"
+            fi
+            echo "🔀 Using SHARED test database (no preview branch)"
           fi
           if [ -z "$DB_URL" ]; then
             echo "DATABASE_URL secret is missing. Set TEST_DATABASE_URL or DATABASE_URL." >&2
