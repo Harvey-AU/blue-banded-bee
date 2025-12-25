@@ -140,10 +140,21 @@ function handleDashboardAction(action, element) {
 
 async function restartJob(jobId) {
   try {
-    await window.dataBinder.fetchData(`/v1/jobs/${jobId}/restart`, {
+    // Fetch job config first
+    const job = await window.dataBinder.fetchData(`/v1/jobs/${jobId}`);
+    if (!job) {
+      throw new Error("Failed to load job");
+    }
+
+    // Create new job with same config
+    const payload = window.BB_APP.buildRestartJobPayload(job);
+    await window.dataBinder.fetchData("/v1/jobs", {
       method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
     });
-    showDashboardError("Job restart requested.");
+
+    showDashboardSuccess("Job restarted successfully.");
     if (window.dataBinder) {
       window.dataBinder.refresh();
     }

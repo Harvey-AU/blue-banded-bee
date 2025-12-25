@@ -29,6 +29,10 @@ jobs:
     permissions:
       pull-requests: write
 
+    concurrency:
+      group: preview-${{ github.event.number }}
+      cancel-in-progress: true
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -41,17 +45,69 @@ jobs:
       - name: Setup Fly.io CLI
         uses: superfly/flyctl-actions/setup-flyctl@master
 
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: "2.65.5"
+
+      - name: Get Supabase Preview Branch URL
+        id: supabase
+        run: |
+          echo "🔍 Listing all Supabase branches..."
+          supabase branches list --project-ref "$SUPABASE_PROJECT_REF" || echo "Failed to list branches"
+
+          echo ""
+          echo "🔍 Looking for branch: $BRANCH_NAME"
+
+          # Get branch details as JSON for robust parsing
+          BRANCH_JSON=$(supabase branches get "$BRANCH_NAME" --project-ref "$SUPABASE_PROJECT_REF" --output json 2>/dev/null) || true
+
+          # Extract database URL directly from JSON (pooled for better performance)
+          PREVIEW_DB_URL=$(echo "$BRANCH_JSON" | jq -r '.POSTGRES_URL // empty' 2>/dev/null)
+
+          if [ -n "$PREVIEW_DB_URL" ]; then
+            echo "✅ Found Supabase preview branch!"
+            echo "preview_db_url=$PREVIEW_DB_URL" >> $GITHUB_OUTPUT
+            echo "branch_exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "⚠️ No Supabase preview branch found"
+            echo "branch_exists=false" >> $GITHUB_OUTPUT
+          fi
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+          BRANCH_NAME: ${{ github.head_ref }}
+
+      - name: Log Supabase Branch Status
+        run: |
+          echo "========================================"
+          echo "SUPABASE PREVIEW BRANCH STATUS"
+          echo "========================================"
+          echo "Branch exists: ${{ steps.supabase.outputs.branch_exists }}"
+          echo "Preview DB available: ${{ steps.supabase.outputs.preview_db_url != '' }}"
+          echo "========================================"
+
       - name: Build Docker image locally
         run: docker build -t blue-banded-bee:pr-${{ github.event.number }} .
 
       - name: Deploy Review App
+        id: deploy
         run: |
-          DB_URL="${{ secrets.TEST_DATABASE_URL }}"
-          if [ -z "$DB_URL" ]; then
-            DB_URL="${{ secrets.DATABASE_URL }}"
+          # Use Supabase preview branch if available
+          if [ "${{ steps.supabase.outputs.branch_exists }}" == "true" ]; then
+            DB_URL="${{ steps.supabase.outputs.preview_db_url }}"
+            echo "🔀 Using Supabase PREVIEW database"
+            echo "db_type=preview" >> $GITHUB_OUTPUT
+          else
+            DB_URL="${{ secrets.TEST_DATABASE_URL }}"
+            if [ -z "$DB_URL" ]; then
+              DB_URL="${{ secrets.DATABASE_URL }}"
+            fi
+            echo "🔀 Using SHARED database (no preview branch)"
+            echo "db_type=shared" >> $GITHUB_OUTPUT
           fi
           if [ -z "$DB_URL" ]; then
-            echo "DATABASE_URL secret is missing. Set TEST_DATABASE_URL or DATABASE_URL." >&2
+            echo "❌ Database configuration missing. Set either TEST_DATABASE_URL or DATABASE_URL secret." >&2
             exit 1
           fi
 
@@ -88,22 +144,24 @@ jobs:
           script: |
             const appName = `blue-banded-bee-pr-${{ github.event.number }}`;
             const appUrl = `https://${appName}.fly.dev`;
+            const dbType = `${{ steps.deploy.outputs.db_type }}`;
+            const dbLabel = dbType === 'preview' ? 'Supabase preview branch' : 'Shared test database';
 
             github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
               body: `🐝 **Review App Deployed!**
-              
+
               <a href="${appUrl}" target="_blank">Homepage: ${appUrl}</a>
-              
+
               📋 **Test Features:**
               1. <a href="${appUrl}/dashboard" target="_blank">Visit dashboard: ${appUrl}/dashboard</a>
               2. Test authentication and job creation flow
               3. Check dashboard functionality
               4. Verify database operations work correctly
-              
-              🗄️ **Database**: Shared test database
+
+              🗄️ **Database**: ${dbLabel}
               ⚠️ *Preview environment - app and database cleaned up when PR closes*`
             });
 

@@ -1227,17 +1227,31 @@ async function authorisedFetch(state, path, options = {}) {
 }
 
 async function restartJobFromPage(state) {
-  const response = await authorisedFetch(
-    state,
-    `/v1/jobs/${state.jobId}/restart`,
-    { method: "POST" }
-  );
-  if (!response.ok) {
-    throw new Error(`Failed to restart job (${response.status})`);
+  // Fetch current job config
+  const job = await state.binder.fetchData(`/v1/jobs/${state.jobId}`);
+  if (!job) {
+    throw new Error("Failed to load job for restart");
   }
-  showToast("Restart requested. Refreshing…");
-  await loadJob(state);
-  await loadTasks(state);
+
+  // Create new job with same config
+  const payload = window.BB_APP.buildRestartJobPayload(job);
+  const response = await authorisedFetch(state, "/v1/jobs", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to create job (${response.status})`);
+  }
+
+  const result = await response.json();
+  const newJobId = result.data?.id ?? result.id;
+  if (newJobId) {
+    showToast("Job restarted. Redirecting…");
+    window.location.href = `/jobs/${newJobId}`;
+  } else {
+    throw new Error("No job ID in response");
+  }
 }
 
 async function cancelJobFromPage(state) {

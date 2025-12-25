@@ -168,6 +168,21 @@
   window.BB_APP = window.BB_APP || {};
   window.BB_APP.coreReady = coreReady;
 
+  /**
+   * Builds the payload for restarting a job with the same configuration.
+   * @param {Object} job - The job object to extract config from
+   * @returns {Object} Payload for POST /v1/jobs
+   */
+  window.BB_APP.buildRestartJobPayload = function (job) {
+    return {
+      domain: job.domain ?? job.domains?.name ?? job.domain_name,
+      use_sitemap: true,
+      find_links: job.find_links ?? true,
+      concurrency: job.concurrency ?? 20,
+      max_pages: job.max_pages ?? 0,
+    };
+  };
+
   coreReady.catch((err) => {
     if (typeof window !== "undefined" && window.console) {
       window.console.debug("coreReady rejected", err);

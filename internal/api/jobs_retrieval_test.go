@@ -227,52 +227,6 @@ func TestUpdateJobIntegration(t *testing.T) {
 		checkResponse  func(*testing.T, *httptest.ResponseRecorder)
 	}{
 		{
-			name:   "successful_job_start",
-			jobID:  "job-123",
-			userID: "user-456",
-			orgID:  "org-789",
-			action: "start",
-			setupSQL: func(mock sqlmock.Sqlmock) {
-				// Mock job access validation query
-				rows := sqlmock.NewRows([]string{"organisation_id"}).AddRow("org-789")
-				mock.ExpectQuery(`SELECT organisation_id FROM jobs WHERE id = \$1`).
-					WithArgs("job-123").
-					WillReturnRows(rows)
-			},
-			setupMocks: func(jm *MockJobManager) {
-				// Mock successful start
-				jm.On("StartJob", mock.AnythingOfType("*context.valueCtx"), "job-123").Return("new-job-123", nil)
-
-				// Mock GetJobStatus for response - uses new job ID from restart
-				job := &jobs.Job{
-					ID:             "new-job-123",
-					Domain:         "example.com",
-					Status:         jobs.JobStatusRunning,
-					TotalTasks:     10,
-					CompletedTasks: 0,
-					FailedTasks:    0,
-					SkippedTasks:   0,
-					Progress:       0.0,
-					CreatedAt:      time.Now(),
-				}
-				jm.On("GetJobStatus", mock.AnythingOfType("*context.valueCtx"), "new-job-123").Return(job, nil)
-			},
-			expectedStatus: http.StatusOK,
-			checkResponse: func(t *testing.T, rec *httptest.ResponseRecorder) {
-				var response map[string]interface{}
-				err := json.Unmarshal(rec.Body.Bytes(), &response)
-				require.NoError(t, err)
-
-				assert.Equal(t, "success", response["status"])
-				assert.Contains(t, response["message"].(string), "started successfully")
-
-				data := response["data"].(map[string]interface{})
-				assert.Equal(t, "new-job-123", data["id"]) // Restart creates a new job with new ID
-				assert.Equal(t, "example.com", data["domain"])
-				assert.Equal(t, "running", data["status"])
-			},
-		},
-		{
 			name:   "successful_job_cancel",
 			jobID:  "job-456",
 			userID: "user-789",
@@ -311,7 +265,7 @@ func TestUpdateJobIntegration(t *testing.T) {
 				require.NoError(t, err)
 
 				assert.Equal(t, "success", response["status"])
-				assert.Contains(t, response["message"].(string), "canceled successfully")
+				assert.Contains(t, response["message"].(string), "cancelled successfully")
 
 				data := response["data"].(map[string]interface{})
 				assert.Equal(t, "job-456", data["id"])
@@ -323,7 +277,7 @@ func TestUpdateJobIntegration(t *testing.T) {
 			jobID:  "job-123",
 			userID: "user-456",
 			orgID:  "user-org-789", // User's org
-			action: "start",
+			action: "cancel",
 			setupSQL: func(mock sqlmock.Sqlmock) {
 				// Mock job access validation returning different org
 				rows := sqlmock.NewRows([]string{"organisation_id"}).AddRow("job-org-different")
@@ -350,7 +304,7 @@ func TestUpdateJobIntegration(t *testing.T) {
 			jobID:  "nonexistent-job",
 			userID: "user-456",
 			orgID:  "org-789",
-			action: "start",
+			action: "cancel",
 			setupSQL: func(mock sqlmock.Sqlmock) {
 				// Mock job access validation returning no rows
 				mock.ExpectQuery(`SELECT organisation_id FROM jobs WHERE id = \$1`).
@@ -419,61 +373,6 @@ func TestUpdateJobIntegration(t *testing.T) {
 				assert.Equal(t, float64(400), response["status"])
 				assert.Equal(t, "BAD_REQUEST", response["code"])
 				assert.Equal(t, "Invalid JSON request body", response["message"])
-			},
-		},
-		{
-			name:   "start_job_manager_failure",
-			jobID:  "job-123",
-			userID: "user-456",
-			orgID:  "org-789",
-			action: "start",
-			setupSQL: func(mock sqlmock.Sqlmock) {
-				// Mock job access validation (should pass)
-				rows := sqlmock.NewRows([]string{"organisation_id"}).AddRow("org-789")
-				mock.ExpectQuery(`SELECT organisation_id FROM jobs WHERE id = \$1`).
-					WithArgs("job-123").
-					WillReturnRows(rows)
-			},
-			setupMocks: func(jm *MockJobManager) {
-				// Mock StartJob failure
-				jm.On("StartJob", mock.AnythingOfType("*context.valueCtx"), "job-123").Return("", assert.AnError)
-			},
-			expectedStatus: http.StatusInternalServerError,
-			checkResponse: func(t *testing.T, rec *httptest.ResponseRecorder) {
-				var response map[string]interface{}
-				err := json.Unmarshal(rec.Body.Bytes(), &response)
-				require.NoError(t, err)
-
-				assert.Equal(t, float64(500), response["status"])
-				assert.Equal(t, "INTERNAL_ERROR", response["code"])
-			},
-		},
-		{
-			name:   "get_status_failure_after_success",
-			jobID:  "job-123",
-			userID: "user-456",
-			orgID:  "org-789",
-			action: "start",
-			setupSQL: func(mock sqlmock.Sqlmock) {
-				// Mock job access validation (should pass)
-				rows := sqlmock.NewRows([]string{"organisation_id"}).AddRow("org-789")
-				mock.ExpectQuery(`SELECT organisation_id FROM jobs WHERE id = \$1`).
-					WithArgs("job-123").
-					WillReturnRows(rows)
-			},
-			setupMocks: func(jm *MockJobManager) {
-				// Mock successful start but failed status retrieval - uses new job ID
-				jm.On("StartJob", mock.AnythingOfType("*context.valueCtx"), "job-123").Return("new-job-123", nil)
-				jm.On("GetJobStatus", mock.AnythingOfType("*context.valueCtx"), "new-job-123").Return(nil, assert.AnError)
-			},
-			expectedStatus: http.StatusInternalServerError,
-			checkResponse: func(t *testing.T, rec *httptest.ResponseRecorder) {
-				var response map[string]interface{}
-				err := json.Unmarshal(rec.Body.Bytes(), &response)
-				require.NoError(t, err)
-
-				assert.Equal(t, float64(500), response["status"])
-				assert.Equal(t, "INTERNAL_ERROR", response["code"])
 			},
 		},
 	}

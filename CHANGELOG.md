@@ -29,6 +29,24 @@ On merge, CI will:
 
 ## [Unreleased]
 
+## [0.18.7] – 2025-12-25
+
+### Changed
+
+- **Restart Job Simplification**: Frontend now handles job restart via standard
+  creation endpoint
+  - Restart button fetches existing job config and POSTs to `/v1/jobs`
+  - Preserves: domain, find_links, concurrency, max_pages (with sensible
+    defaults if missing); resets: use_sitemap=true
+  - Removed backend `StartJob` and `restartJob` functions (~700 lines deleted)
+  - Eliminates duplicate job creation logic and missing field bugs
+  - **Breaking**: Restart endpoint removed and PUT actions restricted:
+    - `/v1/jobs/:id/restart` endpoint no longer exists
+    - `PUT /v1/jobs/:id` now only accepts `action="cancel"` (start/restart
+      actions removed)
+    - To restart a job: fetch config via `GET /v1/jobs/:id`, then
+      `POST /v1/jobs` with the retrieved settings
+
 ## [0.18.6] – 2025-12-25
 
 ### Added
