@@ -27,9 +27,9 @@ func (m *MockJobManager) CreateJob(ctx context.Context, options *jobs.JobOptions
 	return args.Get(0).(*jobs.Job), args.Error(1)
 }
 
-func (m *MockJobManager) StartJob(ctx context.Context, jobID string) error {
+func (m *MockJobManager) StartJob(ctx context.Context, jobID string) (string, error) {
 	args := m.Called(ctx, jobID)
-	return args.Error(0)
+	return args.String(0), args.Error(1)
 }
 
 func (m *MockJobManager) CancelJob(ctx context.Context, jobID string) error {

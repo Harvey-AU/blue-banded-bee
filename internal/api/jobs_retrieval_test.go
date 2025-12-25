@@ -241,11 +241,11 @@ func TestUpdateJobIntegration(t *testing.T) {
 			},
 			setupMocks: func(jm *MockJobManager) {
 				// Mock successful start
-				jm.On("StartJob", mock.AnythingOfType("*context.valueCtx"), "job-123").Return(nil)
+				jm.On("StartJob", mock.AnythingOfType("*context.valueCtx"), "job-123").Return("new-job-123", nil)
 
-				// Mock GetJobStatus for response
+				// Mock GetJobStatus for response - uses new job ID from restart
 				job := &jobs.Job{
-					ID:             "job-123",
+					ID:             "new-job-123",
 					Domain:         "example.com",
 					Status:         jobs.JobStatusRunning,
 					TotalTasks:     10,
@@ -255,7 +255,7 @@ func TestUpdateJobIntegration(t *testing.T) {
 					Progress:       0.0,
 					CreatedAt:      time.Now(),
 				}
-				jm.On("GetJobStatus", mock.AnythingOfType("*context.valueCtx"), "job-123").Return(job, nil)
+				jm.On("GetJobStatus", mock.AnythingOfType("*context.valueCtx"), "new-job-123").Return(job, nil)
 			},
 			expectedStatus: http.StatusOK,
 			checkResponse: func(t *testing.T, rec *httptest.ResponseRecorder) {
@@ -267,7 +267,7 @@ func TestUpdateJobIntegration(t *testing.T) {
 				assert.Contains(t, response["message"].(string), "started successfully")
 
 				data := response["data"].(map[string]interface{})
-				assert.Equal(t, "job-123", data["id"])
+				assert.Equal(t, "new-job-123", data["id"]) // Restart creates a new job with new ID
 				assert.Equal(t, "example.com", data["domain"])
 				assert.Equal(t, "running", data["status"])
 			},
@@ -436,7 +436,7 @@ func TestUpdateJobIntegration(t *testing.T) {
 			},
 			setupMocks: func(jm *MockJobManager) {
 				// Mock StartJob failure
-				jm.On("StartJob", mock.AnythingOfType("*context.valueCtx"), "job-123").Return(assert.AnError)
+				jm.On("StartJob", mock.AnythingOfType("*context.valueCtx"), "job-123").Return("", assert.AnError)
 			},
 			expectedStatus: http.StatusInternalServerError,
 			checkResponse: func(t *testing.T, rec *httptest.ResponseRecorder) {
@@ -462,9 +462,9 @@ func TestUpdateJobIntegration(t *testing.T) {
 					WillReturnRows(rows)
 			},
 			setupMocks: func(jm *MockJobManager) {
-				// Mock successful start but failed status retrieval
-				jm.On("StartJob", mock.AnythingOfType("*context.valueCtx"), "job-123").Return(nil)
-				jm.On("GetJobStatus", mock.AnythingOfType("*context.valueCtx"), "job-123").Return(nil, assert.AnError)
+				// Mock successful start but failed status retrieval - uses new job ID
+				jm.On("StartJob", mock.AnythingOfType("*context.valueCtx"), "job-123").Return("new-job-123", nil)
+				jm.On("GetJobStatus", mock.AnythingOfType("*context.valueCtx"), "new-job-123").Return(nil, assert.AnError)
 			},
 			expectedStatus: http.StatusInternalServerError,
 			checkResponse: func(t *testing.T, rec *httptest.ResponseRecorder) {

@@ -61,9 +61,7 @@ func TestWebflowWebhookIntegration(t *testing.T) {
 						opts.UserID != nil && *opts.UserID == "webhook-user-123" &&
 						opts.SourceType != nil && *opts.SourceType == "webflow_webhook"
 				})).Return(createdJob, nil)
-
-				// Mock StartJob call that webhook makes after creation
-				jm.On("StartJob", mock.Anything, "webhook-job-789").Return(nil)
+				// Job processing starts automatically via worker pool - no StartJob call needed
 			},
 			expectedStatus: http.StatusOK,
 			checkResponse: func(t *testing.T, rec *httptest.ResponseRecorder) {

@@ -29,6 +29,30 @@ On merge, CI will:
 
 ## [Unreleased]
 
+## [0.18.6] – 2025-12-25
+
+### Added
+
+- **API Endpoints**: Added `/restart` and `/cancel` endpoints for job management
+
+### Enhanced
+
+- **Worker Notification**: Workers are now notified immediately after task
+  creation for faster job processing
+- **Robots.txt Handling**: Use default `*` rules and ignore SEO bot-specific
+  rules for improved crawling
+- **Robots.txt Delay**: Apply 50% multiplier to robots.txt crawl-delay values
+  for more conservative rate limiting
+
+### Fixed
+
+- **Job Cancellation**: Fixed race condition in job cancellation logic
+- **CancelJob Endpoint**: Now returns database errors properly
+- **Crawl Delay**: Fixed multiplier logic to correctly override stored delay
+  values
+- **Deadlock Retry**: PostgreSQL deadlock errors (40P01) now correctly trigger
+  transaction retry
+
 ## [0.18.5] – 2025-12-24
 
 ## [0.18.4] – 2025-12-24

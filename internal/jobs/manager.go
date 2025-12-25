@@ -29,7 +29,7 @@ type DbQueueProvider interface {
 type JobManagerInterface interface {
 	// Core job operations used by API layer
 	CreateJob(ctx context.Context, options *JobOptions) (*Job, error)
-	StartJob(ctx context.Context, jobID string) error
+	StartJob(ctx context.Context, jobID string) (string, error)
 	CancelJob(ctx context.Context, jobID string) error
 	GetJobStatus(ctx context.Context, jobID string) (*Job, error)
 
@@ -421,8 +421,8 @@ func (jm *JobManager) CreateJob(ctx context.Context, options *JobOptions) (*Job,
 	return job, nil
 }
 
-// StartJob starts a pending job
-func (jm *JobManager) StartJob(ctx context.Context, jobID string) error {
+// StartJob starts a pending job and returns the new job ID
+func (jm *JobManager) StartJob(ctx context.Context, jobID string) (string, error) {
 	span := sentry.StartSpan(ctx, "manager.restart_job")
 	defer span.Finish()
 
@@ -434,12 +434,12 @@ func (jm *JobManager) StartJob(ctx context.Context, jobID string) error {
 		span.SetTag("error", "true")
 		span.SetData("error.message", err.Error())
 		sentry.CaptureException(err)
-		return fmt.Errorf("failed to get original job: %w", err)
+		return "", fmt.Errorf("failed to get original job: %w", err)
 	}
 
 	// Only allow restarting completed, failed, or cancelled jobs
 	if originalJob.Status != JobStatusCompleted && originalJob.Status != JobStatusFailed && originalJob.Status != JobStatusCancelled {
-		return fmt.Errorf("job cannot be restarted: %s (only completed, failed, or cancelled jobs can be restarted)", originalJob.Status)
+		return "", fmt.Errorf("job cannot be restarted: %s (only completed, failed, or cancelled jobs can be restarted)", originalJob.Status)
 	}
 
 	// Create new job with same configuration
@@ -462,7 +462,7 @@ func (jm *JobManager) StartJob(ctx context.Context, jobID string) error {
 		span.SetTag("error", "true")
 		span.SetData("error.message", err.Error())
 		sentry.CaptureException(err)
-		return fmt.Errorf("failed to create new job: %w", err)
+		return "", fmt.Errorf("failed to create new job: %w", err)
 	}
 
 	span.SetTag("new_job_id", newJob.ID)
@@ -479,7 +479,7 @@ func (jm *JobManager) StartJob(ctx context.Context, jobID string) error {
 		Str("domain", newJob.Domain).
 		Msg("Restarted job with new job ID")
 
-	return nil
+	return newJob.ID, nil
 }
 
 // Helper method to check if a page has been processed for a job

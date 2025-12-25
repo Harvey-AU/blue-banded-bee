@@ -475,14 +475,16 @@ func TestStartJob_Unit(t *testing.T) {
 
 			// Execute
 			ctx := context.Background()
-			err = jm.StartJob(ctx, tt.jobID)
+			newJobID, err := jm.StartJob(ctx, tt.jobID)
 
 			// Assert
 			if tt.expectedError != "" {
 				assert.Error(t, err)
 				assert.Contains(t, err.Error(), tt.expectedError)
+				assert.Empty(t, newJobID)
 			} else {
 				assert.NoError(t, err)
+				assert.NotEmpty(t, newJobID)
 			}
 
 			// Verify all expectations were met

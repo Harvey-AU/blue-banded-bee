@@ -816,11 +816,7 @@ func (h *Handler) WebflowWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Start the job immediately
-	if err := h.JobsManager.StartJob(r.Context(), job.ID); err != nil {
-		logger.Error().Err(err).Str("job_id", job.ID).Msg("Failed to start job from webhook")
-		// Don't return error - job was created successfully, just failed to start
-	}
+	// Job processing starts automatically via worker pool when CreateJob adds it
 
 	orgIDStr := ""
 	if user.OrganisationID != nil {
