@@ -62,8 +62,8 @@ jobs:
           # Get branch details as JSON for robust parsing
           BRANCH_JSON=$(supabase branches get "$BRANCH_NAME" --project-ref "$SUPABASE_PROJECT_REF" --output json 2>/dev/null) || true
 
-          # Extract database URL directly from JSON (non-pooling for direct connection)
-          PREVIEW_DB_URL=$(echo "$BRANCH_JSON" | jq -r '.POSTGRES_URL_NON_POOLING // empty' 2>/dev/null)
+          # Extract database URL directly from JSON (pooled for better performance)
+          PREVIEW_DB_URL=$(echo "$BRANCH_JSON" | jq -r '.POSTGRES_URL // empty' 2>/dev/null)
 
           if [ -n "$PREVIEW_DB_URL" ]; then
             echo "✅ Found Supabase preview branch!"
