@@ -38,6 +38,8 @@ On merge, CI will:
     find_links=true
   - Removed backend `StartJob` and `restartJob` functions (~700 lines deleted)
   - Eliminates duplicate job creation logic and missing field bugs
+  - **Breaking**: `/v1/jobs/:id/restart` endpoint removed; use `POST /v1/jobs`
+    with fetched config instead
 
 ## [0.18.6] – 2025-12-25
 

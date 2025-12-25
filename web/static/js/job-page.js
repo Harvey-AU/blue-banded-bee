@@ -1234,7 +1234,7 @@ async function restartJobFromPage(state) {
   }
 
   // Create new job with same config
-  const domain = job.domain ?? job.domains?.name;
+  const domain = job.domain ?? job.domains?.name ?? job.domain_name;
   const response = await authorisedFetch(state, "/v1/jobs", {
     method: "POST",
     body: JSON.stringify({

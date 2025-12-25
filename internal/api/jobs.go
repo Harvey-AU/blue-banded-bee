@@ -559,7 +559,7 @@ func (h *Handler) updateJob(w http.ResponseWriter, r *http.Request, jobID string
 		return
 	}
 
-	// Get updated job status (use new job ID for restart)
+	// Get updated job status
 	job, err := h.JobsManager.GetJobStatus(r.Context(), resultJobID)
 	if err != nil {
 		logger.Error().Err(err).Str("job_id", resultJobID).Msg("Failed to get job status after action")
@@ -584,7 +584,7 @@ func (h *Handler) updateJob(w http.ResponseWriter, r *http.Request, jobID string
 		response.CompletedAt = &completedAt
 	}
 
-	WriteSuccess(w, r, response, fmt.Sprintf("Job %s %sed successfully", jobID, req.Action))
+	WriteSuccess(w, r, response, "Job cancelled successfully")
 }
 
 // cancelJob handles DELETE /v1/jobs/:id

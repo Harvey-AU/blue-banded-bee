@@ -265,7 +265,7 @@ func TestUpdateJobIntegration(t *testing.T) {
 				require.NoError(t, err)
 
 				assert.Equal(t, "success", response["status"])
-				assert.Contains(t, response["message"].(string), "canceled successfully")
+				assert.Contains(t, response["message"].(string), "cancelled successfully")
 
 				data := response["data"].(map[string]interface{})
 				assert.Equal(t, "job-456", data["id"])

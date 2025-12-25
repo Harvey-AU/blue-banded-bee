@@ -147,9 +147,10 @@ async function restartJob(jobId) {
     }
 
     // Create new job with same config
-    const domain = job.domain ?? job.domains?.name;
+    const domain = job.domain ?? job.domains?.name ?? job.domain_name;
     await window.dataBinder.fetchData("/v1/jobs", {
       method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         domain: domain,
         use_sitemap: true,
