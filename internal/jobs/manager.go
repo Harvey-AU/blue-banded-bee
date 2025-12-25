@@ -29,7 +29,6 @@ type DbQueueProvider interface {
 type JobManagerInterface interface {
 	// Core job operations used by API layer
 	CreateJob(ctx context.Context, options *JobOptions) (*Job, error)
-	StartJob(ctx context.Context, jobID string) (string, error)
 	CancelJob(ctx context.Context, jobID string) error
 	GetJobStatus(ctx context.Context, jobID string) (*Job, error)
 
@@ -419,67 +418,6 @@ func (jm *JobManager) CreateJob(ctx context.Context, options *JobOptions) (*Job,
 	}
 
 	return job, nil
-}
-
-// StartJob starts a pending job and returns the new job ID
-func (jm *JobManager) StartJob(ctx context.Context, jobID string) (string, error) {
-	span := sentry.StartSpan(ctx, "manager.restart_job")
-	defer span.Finish()
-
-	span.SetTag("original_job_id", jobID)
-
-	// Get the original job to copy its configuration
-	originalJob, err := jm.GetJob(ctx, jobID)
-	if err != nil {
-		span.SetTag("error", "true")
-		span.SetData("error.message", err.Error())
-		sentry.CaptureException(err)
-		return "", fmt.Errorf("failed to get original job: %w", err)
-	}
-
-	// Only allow restarting completed, failed, or cancelled jobs
-	if originalJob.Status != JobStatusCompleted && originalJob.Status != JobStatusFailed && originalJob.Status != JobStatusCancelled {
-		return "", fmt.Errorf("job cannot be restarted: %s (only completed, failed, or cancelled jobs can be restarted)", originalJob.Status)
-	}
-
-	// Create new job with same configuration
-	newJobOptions := &JobOptions{
-		Domain:          originalJob.Domain,
-		UserID:          originalJob.UserID,
-		OrganisationID:  originalJob.OrganisationID,
-		UseSitemap:      true, // Default to true
-		Concurrency:     originalJob.Concurrency,
-		FindLinks:       originalJob.FindLinks,
-		MaxPages:        originalJob.MaxPages,
-		IncludePaths:    originalJob.IncludePaths,
-		ExcludePaths:    originalJob.ExcludePaths,
-		RequiredWorkers: originalJob.RequiredWorkers,
-	}
-
-	// Create the new job
-	newJob, err := jm.CreateJob(ctx, newJobOptions)
-	if err != nil {
-		span.SetTag("error", "true")
-		span.SetData("error.message", err.Error())
-		sentry.CaptureException(err)
-		return "", fmt.Errorf("failed to create new job: %w", err)
-	}
-
-	span.SetTag("new_job_id", newJob.ID)
-	log.Info().Str("original_job_id", jobID).Str("new_job_id", newJob.ID).Msg("Created new job as restart")
-
-	// Add new job to worker pool for processing
-	if jm.workerPool != nil {
-		jm.workerPool.AddJob(newJob.ID, newJobOptions)
-	}
-
-	log.Debug().
-		Str("original_job_id", jobID).
-		Str("new_job_id", newJob.ID).
-		Str("domain", newJob.Domain).
-		Msg("Restarted job with new job ID")
-
-	return newJob.ID, nil
 }
 
 // Helper method to check if a page has been processed for a job

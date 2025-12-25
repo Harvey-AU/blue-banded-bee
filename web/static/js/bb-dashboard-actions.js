@@ -140,10 +140,26 @@ function handleDashboardAction(action, element) {
 
 async function restartJob(jobId) {
   try {
-    await window.dataBinder.fetchData(`/v1/jobs/${jobId}/restart`, {
+    // Fetch job config first
+    const job = await window.dataBinder.fetchData(`/v1/jobs/${jobId}`);
+    if (!job) {
+      throw new Error("Failed to load job");
+    }
+
+    // Create new job with same config
+    const domain = job.domain ?? job.domains?.name;
+    await window.dataBinder.fetchData("/v1/jobs", {
       method: "POST",
+      body: JSON.stringify({
+        domain: domain,
+        use_sitemap: true,
+        find_links: job.find_links ?? true,
+        concurrency: job.concurrency ?? 20,
+        max_pages: job.max_pages ?? 0,
+      }),
     });
-    showDashboardError("Job restart requested.");
+
+    showDashboardSuccess("Job restarted successfully.");
     if (window.dataBinder) {
       window.dataBinder.refresh();
     }

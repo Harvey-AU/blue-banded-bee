@@ -51,13 +51,6 @@ func (h *Handler) JobHandler(w http.ResponseWriter, r *http.Request) {
 		case "export":
 			h.exportJobTasks(w, r, jobID)
 			return
-		case "restart":
-			if r.Method == http.MethodPost {
-				h.restartJob(w, r, jobID)
-				return
-			}
-			MethodNotAllowed(w, r)
-			return
 		case "cancel":
 			if r.Method == http.MethodPost {
 				h.cancelJob(w, r, jobID)
@@ -553,12 +546,10 @@ func (h *Handler) updateJob(w http.ResponseWriter, r *http.Request, jobID string
 
 	resultJobID := jobID
 	switch req.Action {
-	case "start", "restart":
-		resultJobID, err = h.JobsManager.StartJob(r.Context(), jobID)
 	case "cancel":
 		err = h.JobsManager.CancelJob(r.Context(), jobID)
 	default:
-		BadRequest(w, r, "Invalid action. Supported actions: start, restart, cancel")
+		BadRequest(w, r, "Invalid action. Supported actions: cancel")
 		return
 	}
 
@@ -638,51 +629,6 @@ func (h *Handler) cancelJob(w http.ResponseWriter, r *http.Request, jobID string
 	}
 
 	WriteSuccess(w, r, map[string]string{"id": jobID, "status": "cancelled"}, "Job cancelled successfully")
-}
-
-// restartJob handles POST /v1/jobs/:id/restart
-func (h *Handler) restartJob(w http.ResponseWriter, r *http.Request, jobID string) {
-	logger := loggerWithRequest(r)
-
-	userClaims, ok := auth.GetUserFromContext(r.Context())
-	if !ok {
-		Unauthorised(w, r, "User information not found")
-		return
-	}
-
-	// Auto-create user if they don't exist (handles new signups)
-	user, err := h.DB.GetOrCreateUser(userClaims.UserID, userClaims.Email, nil)
-	if err != nil {
-		logger.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get or create user")
-		InternalError(w, r, err)
-		return
-	}
-
-	// Verify job belongs to user's organisation
-	var orgID string
-	err = h.DB.GetDB().QueryRowContext(r.Context(), `
-		SELECT organisation_id FROM jobs WHERE id = $1
-	`, jobID).Scan(&orgID)
-
-	if err != nil {
-		NotFound(w, r, "Job not found")
-		return
-	}
-
-	if user.OrganisationID == nil || *user.OrganisationID != orgID {
-		Unauthorised(w, r, "Job access denied")
-		return
-	}
-
-	newJobID, err := h.JobsManager.StartJob(r.Context(), jobID)
-	if err != nil {
-		logger.Error().Err(err).Str("job_id", jobID).Msg("Failed to restart job")
-		InternalError(w, r, err)
-		return
-	}
-
-	logger.Info().Str("old_job_id", jobID).Str("new_job_id", newJobID).Msg("Job restarted successfully")
-	WriteSuccess(w, r, map[string]string{"id": newJobID, "status": "running"}, "Job restarted successfully")
 }
 
 // TaskQueryParams holds parameters for task listing queries

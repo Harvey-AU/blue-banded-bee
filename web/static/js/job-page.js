@@ -1227,17 +1227,37 @@ async function authorisedFetch(state, path, options = {}) {
 }
 
 async function restartJobFromPage(state) {
-  const response = await authorisedFetch(
-    state,
-    `/v1/jobs/${state.jobId}/restart`,
-    { method: "POST" }
-  );
-  if (!response.ok) {
-    throw new Error(`Failed to restart job (${response.status})`);
+  // Fetch current job config
+  const job = await state.binder.fetchData(`/v1/jobs/${state.jobId}`);
+  if (!job) {
+    throw new Error("Failed to load job for restart");
   }
-  showToast("Restart requested. Refreshing…");
-  await loadJob(state);
-  await loadTasks(state);
+
+  // Create new job with same config
+  const domain = job.domain ?? job.domains?.name;
+  const response = await authorisedFetch(state, "/v1/jobs", {
+    method: "POST",
+    body: JSON.stringify({
+      domain: domain,
+      use_sitemap: true,
+      find_links: job.find_links ?? true,
+      concurrency: job.concurrency ?? 20,
+      max_pages: job.max_pages ?? 0,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to create job (${response.status})`);
+  }
+
+  const result = await response.json();
+  const newJobId = result.data?.id ?? result.id;
+  if (newJobId) {
+    showToast("Job restarted. Redirecting…");
+    window.location.href = `/jobs/${newJobId}`;
+  } else {
+    throw new Error("No job ID in response");
+  }
 }
 
 async function cancelJobFromPage(state) {
