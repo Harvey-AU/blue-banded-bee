@@ -1234,16 +1234,10 @@ async function restartJobFromPage(state) {
   }
 
   // Create new job with same config
-  const domain = job.domain ?? job.domains?.name ?? job.domain_name;
+  const payload = window.BB_APP.buildRestartJobPayload(job);
   const response = await authorisedFetch(state, "/v1/jobs", {
     method: "POST",
-    body: JSON.stringify({
-      domain: domain,
-      use_sitemap: true,
-      find_links: job.find_links ?? true,
-      concurrency: job.concurrency ?? 20,
-      max_pages: job.max_pages ?? 0,
-    }),
+    body: JSON.stringify(payload),
   });
 
   if (!response.ok) {

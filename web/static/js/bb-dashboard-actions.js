@@ -147,17 +147,11 @@ async function restartJob(jobId) {
     }
 
     // Create new job with same config
-    const domain = job.domain ?? job.domains?.name ?? job.domain_name;
+    const payload = window.BB_APP.buildRestartJobPayload(job);
     await window.dataBinder.fetchData("/v1/jobs", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        domain: domain,
-        use_sitemap: true,
-        find_links: job.find_links ?? true,
-        concurrency: job.concurrency ?? 20,
-        max_pages: job.max_pages ?? 0,
-      }),
+      body: JSON.stringify(payload),
     });
 
     showDashboardSuccess("Job restarted successfully.");
