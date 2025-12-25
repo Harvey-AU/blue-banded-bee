@@ -34,6 +34,8 @@ On merge, CI will:
 - **Restart Job Simplification**: Frontend now handles job restart via standard
   creation endpoint
   - Restart button fetches existing job config and POSTs to `/v1/jobs`
+  - Preserves: domain, concurrency, max_pages; resets: use_sitemap=true,
+    find_links=true
   - Removed backend `StartJob` and `restartJob` functions (~700 lines deleted)
   - Eliminates duplicate job creation logic and missing field bugs
 
