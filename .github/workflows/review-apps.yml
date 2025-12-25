@@ -60,23 +60,14 @@ jobs:
           echo "🔍 Looking for branch: $BRANCH_NAME"
 
           # Get branch details as JSON for robust parsing
-          echo "🔍 Running: supabase branches get $BRANCH_NAME --output json"
-          BRANCH_JSON=$(supabase branches get "$BRANCH_NAME" --project-ref "$SUPABASE_PROJECT_REF" --output json 2>&1) || true
+          BRANCH_JSON=$(supabase branches get "$BRANCH_NAME" --project-ref "$SUPABASE_PROJECT_REF" --output json 2>/dev/null) || true
 
-          echo "📋 Raw JSON response:"
-          echo "$BRANCH_JSON"
+          # Extract database URL directly from JSON (non-pooling for direct connection)
+          PREVIEW_DB_URL=$(echo "$BRANCH_JSON" | jq -r '.POSTGRES_URL_NON_POOLING // empty' 2>/dev/null)
 
-          echo "📋 Available JSON keys:"
-          echo "$BRANCH_JSON" | jq -r 'keys[]' 2>/dev/null || echo "Failed to parse JSON keys"
-
-          # Extract database host using jq - try multiple possible field names
-          DB_HOST=$(echo "$BRANCH_JSON" | jq -r '.db_host // .database_host // .host // empty' 2>/dev/null)
-          echo "📋 Extracted DB_HOST: '$DB_HOST'"
-
-          if [ -n "$DB_HOST" ]; then
+          if [ -n "$PREVIEW_DB_URL" ]; then
             echo "✅ Found Supabase preview branch!"
-            echo "Database host: $DB_HOST"
-            echo "db_host=$DB_HOST" >> $GITHUB_OUTPUT
+            echo "preview_db_url=$PREVIEW_DB_URL" >> $GITHUB_OUTPUT
             echo "branch_exists=true" >> $GITHUB_OUTPUT
           else
             echo "⚠️ No Supabase preview branch found"
@@ -93,7 +84,7 @@ jobs:
           echo "SUPABASE PREVIEW BRANCH STATUS"
           echo "========================================"
           echo "Branch exists: ${{ steps.supabase.outputs.branch_exists }}"
-          echo "Database host: ${{ steps.supabase.outputs.db_host }}"
+          echo "Preview DB available: ${{ steps.supabase.outputs.preview_db_url != '' }}"
           echo "========================================"
 
       - name: Build Docker image locally
@@ -104,15 +95,7 @@ jobs:
         run: |
           # Use Supabase preview branch if available
           if [ "${{ steps.supabase.outputs.branch_exists }}" == "true" ]; then
-            DB_HOST="${{ steps.supabase.outputs.db_host }}"
-            # Extract password from existing DATABASE_URL (format: postgresql://user:pass@host:port/db)
-            PROD_URL="${{ secrets.DATABASE_URL }}"
-            DB_PASS=$(echo "$PROD_URL" | sed -n 's|.*://[^:]*:\([^@]*\)@.*|\1|p')
-            if [ -z "$DB_PASS" ]; then
-              echo "❌ Failed to extract password from DATABASE_URL" >&2
-              exit 1
-            fi
-            DB_URL="postgresql://postgres.${{ secrets.SUPABASE_PROJECT_REF }}:${DB_PASS}@${DB_HOST}:5432/postgres"
+            DB_URL="${{ steps.supabase.outputs.preview_db_url }}"
             echo "🔀 Using Supabase PREVIEW database"
             echo "db_type=preview" >> $GITHUB_OUTPUT
           else
