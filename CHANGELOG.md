@@ -29,6 +29,8 @@ On merge, CI will:
 
 ## [Unreleased]
 
+## [0.18.8] – 2025-12-27
+
 ## [0.18.7] – 2025-12-25
 
 ### Changed

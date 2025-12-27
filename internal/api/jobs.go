@@ -785,12 +785,13 @@ func buildTaskQuery(jobID string, params TaskQueryParams) TaskQueryBuilder {
 	// Add cache filter if provided
 	switch params.CacheFilter {
 	case "miss":
-		// Miss includes MISS, EXPIRED, and NULL
-		baseQuery += ` AND (t.cache_status = 'MISS' OR t.cache_status = 'EXPIRED' OR t.cache_status IS NULL)`
-		countQuery += ` AND (t.cache_status = 'MISS' OR t.cache_status = 'EXPIRED' OR t.cache_status IS NULL)`
+		// MISS or EXPIRED: pages that could benefit from cache warming
+		baseQuery += ` AND (t.cache_status = 'MISS' OR t.cache_status = 'EXPIRED')`
+		countQuery += ` AND (t.cache_status = 'MISS' OR t.cache_status = 'EXPIRED')`
 	case "hit":
-		baseQuery += ` AND t.cache_status = 'HIT'`
-		countQuery += ` AND t.cache_status = 'HIT'`
+		// HIT or DYNAMIC: cache performing optimally (cached, or inherently uncacheable)
+		baseQuery += ` AND (t.cache_status = 'HIT' OR t.cache_status = 'DYNAMIC')`
+		countQuery += ` AND (t.cache_status = 'HIT' OR t.cache_status = 'DYNAMIC')`
 	}
 
 	// Add path filter if provided (case-insensitive partial match)
