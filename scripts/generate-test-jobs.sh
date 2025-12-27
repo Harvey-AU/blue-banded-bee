@@ -194,7 +194,7 @@ DOMAINS=(
 
   # Small business / agency sites (10) - small Aussie agencies
   "studiothink.com.au" "zeroseven.com.au" "humaan.com.au" "noice.com.au" "willandco.com.au"
-  "thecontentlab.com.au" "makebold.com.au" "thisisgold.com.au" "wethecollective.com.au" "tworedshoes.com.au"
+  "thecontentlab.com.au" "thisisgold.com.au" "wethecollective.com.au" "tworedshoes.com.au"
 
   # Developer docs & tools (8) - compact doc sites
   "fly.io" "railway.app" "render.com" "tailwindcss.com"
