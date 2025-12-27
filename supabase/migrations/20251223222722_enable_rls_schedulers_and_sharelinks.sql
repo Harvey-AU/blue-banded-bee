@@ -19,6 +19,12 @@ $$ LANGUAGE sql STABLE SECURITY DEFINER;
 -- Enable RLS
 ALTER TABLE schedulers ENABLE ROW LEVEL SECURITY;
 
+-- Drop existing policies if they exist (for idempotency)
+DROP POLICY IF EXISTS "Users can view own org schedulers" ON schedulers;
+DROP POLICY IF EXISTS "Users can create own org schedulers" ON schedulers;
+DROP POLICY IF EXISTS "Users can update own org schedulers" ON schedulers;
+DROP POLICY IF EXISTS "Users can delete own org schedulers" ON schedulers;
+
 -- Users can view schedulers for their organisation
 CREATE POLICY "Users can view own org schedulers"
 ON schedulers FOR SELECT
@@ -45,6 +51,12 @@ USING (organisation_id = public.user_organisation_id());
 
 -- Enable RLS
 ALTER TABLE job_share_links ENABLE ROW LEVEL SECURITY;
+
+-- Drop existing policies if they exist (for idempotency)
+DROP POLICY IF EXISTS "Users can view own org share links" ON job_share_links;
+DROP POLICY IF EXISTS "Users can create share links for own org jobs" ON job_share_links;
+DROP POLICY IF EXISTS "Users can update own org share links" ON job_share_links;
+DROP POLICY IF EXISTS "Users can delete own org share links" ON job_share_links;
 
 -- Authenticated users can view share links for jobs in their organisation
 CREATE POLICY "Users can view own org share links"
