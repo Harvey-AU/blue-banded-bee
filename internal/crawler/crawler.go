@@ -294,7 +294,7 @@ func (c *Crawler) setupResponseHandlers(collyClone *colly.Collector, result *Cra
 
 // performCacheValidation handles cache warming logic if cache miss is detected
 func (c *Crawler) performCacheValidation(ctx context.Context, targetURL string, res *CrawlResult) error {
-	// Only perform cache warming if we got a MISS or BYPASS
+	// Only perform cache warming if we got a MISS or EXPIRED
 	if !shouldMakeSecondRequest(res.CacheStatus) {
 		log.Debug().
 			Str("url", targetURL).
