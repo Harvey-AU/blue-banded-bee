@@ -38,7 +38,8 @@ WITH CHECK (organisation_id = public.user_organisation_id());
 -- Users can update schedulers for their organisation
 CREATE POLICY "Users can update own org schedulers"
 ON schedulers FOR UPDATE
-USING (organisation_id = public.user_organisation_id());
+USING (organisation_id = public.user_organisation_id())
+WITH CHECK (organisation_id = public.user_organisation_id());
 
 -- Users can delete schedulers for their organisation
 CREATE POLICY "Users can delete own org schedulers"
@@ -62,8 +63,10 @@ DROP POLICY IF EXISTS "Users can delete own org share links" ON job_share_links;
 CREATE POLICY "Users can view own org share links"
 ON job_share_links FOR SELECT
 USING (
-    job_id IN (
-        SELECT id FROM jobs WHERE organisation_id = public.user_organisation_id()
+    EXISTS (
+        SELECT 1 FROM jobs
+        WHERE jobs.id = job_share_links.job_id
+        AND jobs.organisation_id = public.user_organisation_id()
     )
 );
 
@@ -71,8 +74,10 @@ USING (
 CREATE POLICY "Users can create share links for own org jobs"
 ON job_share_links FOR INSERT
 WITH CHECK (
-    job_id IN (
-        SELECT id FROM jobs WHERE organisation_id = public.user_organisation_id()
+    EXISTS (
+        SELECT 1 FROM jobs
+        WHERE jobs.id = job_share_links.job_id
+        AND jobs.organisation_id = public.user_organisation_id()
     )
 );
 
@@ -80,8 +85,17 @@ WITH CHECK (
 CREATE POLICY "Users can update own org share links"
 ON job_share_links FOR UPDATE
 USING (
-    job_id IN (
-        SELECT id FROM jobs WHERE organisation_id = public.user_organisation_id()
+    EXISTS (
+        SELECT 1 FROM jobs
+        WHERE jobs.id = job_share_links.job_id
+        AND jobs.organisation_id = public.user_organisation_id()
+    )
+)
+WITH CHECK (
+    EXISTS (
+        SELECT 1 FROM jobs
+        WHERE jobs.id = job_share_links.job_id
+        AND jobs.organisation_id = public.user_organisation_id()
     )
 );
 
@@ -89,8 +103,10 @@ USING (
 CREATE POLICY "Users can delete own org share links"
 ON job_share_links FOR DELETE
 USING (
-    job_id IN (
-        SELECT id FROM jobs WHERE organisation_id = public.user_organisation_id()
+    EXISTS (
+        SELECT 1 FROM jobs
+        WHERE jobs.id = job_share_links.job_id
+        AND jobs.organisation_id = public.user_organisation_id()
     )
 );
 
