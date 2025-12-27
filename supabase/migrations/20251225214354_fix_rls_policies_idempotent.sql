@@ -1,5 +1,7 @@
 -- Migration: Recreate RLS policies idempotently
 -- Fixes reset db failure where policies already exist
+-- Adds WITH CHECK to UPDATE policies for security
+-- Uses EXISTS for better performance on job_share_links
 
 -- =============================================================================
 -- SCHEDULERS TABLE
@@ -22,7 +24,8 @@ WITH CHECK (organisation_id = public.user_organisation_id());
 
 CREATE POLICY "Users can update own org schedulers"
 ON schedulers FOR UPDATE
-USING (organisation_id = public.user_organisation_id());
+USING (organisation_id = public.user_organisation_id())
+WITH CHECK (organisation_id = public.user_organisation_id());
 
 CREATE POLICY "Users can delete own org schedulers"
 ON schedulers FOR DELETE
@@ -38,35 +41,50 @@ DROP POLICY IF EXISTS "Users can create share links for own org jobs" ON job_sha
 DROP POLICY IF EXISTS "Users can update own org share links" ON job_share_links;
 DROP POLICY IF EXISTS "Users can delete own org share links" ON job_share_links;
 
--- Recreate policies
+-- Recreate policies using EXISTS for better performance
 CREATE POLICY "Users can view own org share links"
 ON job_share_links FOR SELECT
 USING (
-    job_id IN (
-        SELECT id FROM jobs WHERE organisation_id = public.user_organisation_id()
+    EXISTS (
+        SELECT 1 FROM jobs
+        WHERE jobs.id = job_share_links.job_id
+        AND jobs.organisation_id = public.user_organisation_id()
     )
 );
 
 CREATE POLICY "Users can create share links for own org jobs"
 ON job_share_links FOR INSERT
 WITH CHECK (
-    job_id IN (
-        SELECT id FROM jobs WHERE organisation_id = public.user_organisation_id()
+    EXISTS (
+        SELECT 1 FROM jobs
+        WHERE jobs.id = job_share_links.job_id
+        AND jobs.organisation_id = public.user_organisation_id()
     )
 );
 
 CREATE POLICY "Users can update own org share links"
 ON job_share_links FOR UPDATE
 USING (
-    job_id IN (
-        SELECT id FROM jobs WHERE organisation_id = public.user_organisation_id()
+    EXISTS (
+        SELECT 1 FROM jobs
+        WHERE jobs.id = job_share_links.job_id
+        AND jobs.organisation_id = public.user_organisation_id()
+    )
+)
+WITH CHECK (
+    EXISTS (
+        SELECT 1 FROM jobs
+        WHERE jobs.id = job_share_links.job_id
+        AND jobs.organisation_id = public.user_organisation_id()
     )
 );
 
 CREATE POLICY "Users can delete own org share links"
 ON job_share_links FOR DELETE
 USING (
-    job_id IN (
-        SELECT id FROM jobs WHERE organisation_id = public.user_organisation_id()
+    EXISTS (
+        SELECT 1 FROM jobs
+        WHERE jobs.id = job_share_links.job_id
+        AND jobs.organisation_id = public.user_organisation_id()
     )
 );
