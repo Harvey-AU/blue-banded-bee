@@ -246,8 +246,9 @@ function setupDashboardRefresh(dataBinder) {
  */
 function setupDashboardFormHandler() {
   const dashboardForm = document.getElementById("dashboardJobForm");
-  if (dashboardForm) {
+  if (dashboardForm && !dashboardForm._jobHandlerAttached) {
     dashboardForm.addEventListener("submit", handleDashboardJobCreation);
+    dashboardForm._jobHandlerAttached = true;
   }
 }
 
