@@ -1,4 +1,5 @@
 --
+SET session_replication_role = replica;  -- Disable triggers for fast bulk load
 -- PostgreSQL database dump
 --
 
@@ -17,14 +18,13 @@ SET check_function_bodies = false;
 SET xmloption = content;
 SET client_min_messages = warning;
 SET row_security = off;
-SET session_replication_role = replica;  -- Disable triggers for fast bulk load
 
 --
 -- Data for Name: users; Type: TABLE DATA; Schema: auth; Owner: -
 --
 
 INSERT INTO auth.users VALUES
-	('00000000-0000-0000-0000-000000000000', '64d361fa-23fc-4deb-8a1b-3016a6c2e339', 'authenticated', 'authenticated', 'simon@teamharvey.co', NULL, '2025-08-06 20:21:07.694503+10', NULL, '', NULL, '', NULL, '', '', NULL, '2025-12-27 21:56:19.513689+11', '{"provider": "google", "providers": ["google"], "system_role": "system_admin"}', '{"iss": "https://accounts.google.com", "sub": "115865462408113540093", "name": "Simon Smallchua", "email": "simon@teamharvey.co", "picture": "https://lh3.googleusercontent.com/a/ACg8ocIiHA2rNRKbUhEc6gSMpfXqyCt5j1S1_3ENKC6UUsdypqIXgp2v=s96-c", "full_name": "Simon Smallchua", "avatar_url": "https://lh3.googleusercontent.com/a/ACg8ocIiHA2rNRKbUhEc6gSMpfXqyCt5j1S1_3ENKC6UUsdypqIXgp2v=s96-c", "provider_id": "115865462408113540093", "custom_claims": {"hd": "teamharvey.co"}, "email_verified": true, "phone_verified": false}', NULL, '2025-08-06 20:21:07.676382+10', '2025-12-28 21:48:33.200235+11', NULL, NULL, '', '', NULL, DEFAULT, '', 0, NULL, '', NULL, false, NULL, false),
+	('00000000-0000-0000-0000-000000000000', '64d361fa-23fc-4deb-8a1b-3016a6c2e339', 'authenticated', 'authenticated', 'simon@teamharvey.co', NULL, '2025-08-06 20:21:07.694503+10', NULL, '', NULL, '', NULL, '', '', NULL, '2025-12-28 23:13:06.423926+11', '{"provider": "google", "providers": ["google"], "system_role": "system_admin"}', '{"iss": "https://accounts.google.com", "sub": "115865462408113540093", "name": "Simon Smallchua", "email": "simon@teamharvey.co", "picture": "https://lh3.googleusercontent.com/a/ACg8ocIiHA2rNRKbUhEc6gSMpfXqyCt5j1S1_3ENKC6UUsdypqIXgp2v=s96-c", "full_name": "Simon Smallchua", "avatar_url": "https://lh3.googleusercontent.com/a/ACg8ocIiHA2rNRKbUhEc6gSMpfXqyCt5j1S1_3ENKC6UUsdypqIXgp2v=s96-c", "provider_id": "115865462408113540093", "custom_claims": {"hd": "teamharvey.co"}, "email_verified": true, "phone_verified": false}', NULL, '2025-08-06 20:21:07.676382+10', '2025-12-28 23:13:56.329528+11', NULL, NULL, '', '', NULL, DEFAULT, '', 0, NULL, '', NULL, false, NULL, false),
 	('00000000-0000-0000-0000-000000000000', 'd736c69b-6597-48d1-adbb-bcfb57be550e', 'authenticated', 'authenticated', 'simon.smallchua@gmail.com', NULL, '2025-10-09 19:11:06.799448+11', NULL, '', NULL, '', NULL, '', '', NULL, '2025-10-09 19:11:06.805582+11', '{"provider": "google", "providers": ["google"]}', '{"iss": "https://accounts.google.com", "sub": "116532901977231133800", "name": "Simon Smallchua", "email": "simon.smallchua@gmail.com", "picture": "https://lh3.googleusercontent.com/a/ACg8ocLcKp5gWQczA2vP6J9DG6gsB6C6ir5ON_KXI8Qs3HBu-6CDPErp=s96-c", "full_name": "Simon Smallchua", "avatar_url": "https://lh3.googleusercontent.com/a/ACg8ocLcKp5gWQczA2vP6J9DG6gsB6C6ir5ON_KXI8Qs3HBu-6CDPErp=s96-c", "provider_id": "116532901977231133800", "email_verified": true, "phone_verified": false}', NULL, '2025-10-09 19:11:06.76954+11', '2025-10-09 20:52:04.166523+11', NULL, NULL, '', '', NULL, DEFAULT, '', 0, NULL, '', NULL, false, NULL, false);
 
 
@@ -34,7 +34,7 @@ INSERT INTO auth.users VALUES
 
 INSERT INTO auth.identities VALUES
 	('116532901977231133800', 'd736c69b-6597-48d1-adbb-bcfb57be550e', '{"iss": "https://accounts.google.com", "sub": "116532901977231133800", "name": "Simon Smallchua", "email": "simon.smallchua@gmail.com", "picture": "https://lh3.googleusercontent.com/a/ACg8ocLcKp5gWQczA2vP6J9DG6gsB6C6ir5ON_KXI8Qs3HBu-6CDPErp=s96-c", "full_name": "Simon Smallchua", "avatar_url": "https://lh3.googleusercontent.com/a/ACg8ocLcKp5gWQczA2vP6J9DG6gsB6C6ir5ON_KXI8Qs3HBu-6CDPErp=s96-c", "provider_id": "116532901977231133800", "email_verified": true, "phone_verified": false}', 'google', '2025-10-09 19:11:06.788968+11', '2025-10-09 19:11:06.789025+11', '2025-10-09 19:11:06.789025+11', DEFAULT, 'eb4a6be9-7f6a-4239-97c6-67c32006166f'),
-	('115865462408113540093', '64d361fa-23fc-4deb-8a1b-3016a6c2e339', '{"iss": "https://accounts.google.com", "sub": "115865462408113540093", "name": "Simon Smallchua", "email": "simon@teamharvey.co", "picture": "https://lh3.googleusercontent.com/a/ACg8ocIiHA2rNRKbUhEc6gSMpfXqyCt5j1S1_3ENKC6UUsdypqIXgp2v=s96-c", "full_name": "Simon Smallchua", "avatar_url": "https://lh3.googleusercontent.com/a/ACg8ocIiHA2rNRKbUhEc6gSMpfXqyCt5j1S1_3ENKC6UUsdypqIXgp2v=s96-c", "provider_id": "115865462408113540093", "custom_claims": {"hd": "teamharvey.co"}, "email_verified": true, "phone_verified": false}', 'google', '2025-08-06 20:21:07.690062+10', '2025-08-06 20:21:07.69012+10', '2025-12-27 21:56:19.511+11', DEFAULT, 'd3f737a6-359e-4375-9b94-67117c8dc963');
+	('115865462408113540093', '64d361fa-23fc-4deb-8a1b-3016a6c2e339', '{"iss": "https://accounts.google.com", "sub": "115865462408113540093", "name": "Simon Smallchua", "email": "simon@teamharvey.co", "picture": "https://lh3.googleusercontent.com/a/ACg8ocIiHA2rNRKbUhEc6gSMpfXqyCt5j1S1_3ENKC6UUsdypqIXgp2v=s96-c", "full_name": "Simon Smallchua", "avatar_url": "https://lh3.googleusercontent.com/a/ACg8ocIiHA2rNRKbUhEc6gSMpfXqyCt5j1S1_3ENKC6UUsdypqIXgp2v=s96-c", "provider_id": "115865462408113540093", "custom_claims": {"hd": "teamharvey.co"}, "email_verified": true, "phone_verified": false}', 'google', '2025-08-06 20:21:07.690062+10', '2025-08-06 20:21:07.69012+10', '2025-12-28 23:13:06.418241+11', DEFAULT, 'd3f737a6-359e-4375-9b94-67117c8dc963');
 
 
 --
@@ -52,6 +52,24 @@ INSERT INTO public.domains VALUES
 
 INSERT INTO public.organisations VALUES
 	('96f7546c-47ea-41f8-a3a3-46b4deb84105', 'Personal Organisation', '2025-11-02 10:11:21.520651+11', '2025-11-02 10:11:21.520651+11');
+
+
+--
+-- Data for Name: schedulers; Type: TABLE DATA; Schema: public; Owner: -
+--
+
+INSERT INTO public.schedulers VALUES
+	('c637ee3d-97b7-488b-acf6-0944132c12c4', 179, '96f7546c-47ea-41f8-a3a3-46b4deb84105', 12, '2025-12-26 09:29:18.362374+11', true, 20, true, 0, 'null', 'null', 1, '2025-12-22 21:28:48.455307+11', '2025-12-25 21:29:18.362374+11'),
+	('2ab8a0ce-0942-4e7d-ba65-9b2735edf5d2', 181, '96f7546c-47ea-41f8-a3a3-46b4deb84105', 12, '2025-12-26 09:51:48.390228+11', true, 20, true, 0, 'null', 'null', 1, '2025-12-22 21:50:55.378303+11', '2025-12-25 21:51:48.390229+11'),
+	('a21fc45b-867c-4dea-8499-aef98ce188ec', 390, '96f7546c-47ea-41f8-a3a3-46b4deb84105', 12, '2025-12-26 16:48:27.570569+11', true, 20, true, 0, 'null', 'null', 1, '2025-12-22 16:47:09.190827+11', '2025-12-26 04:48:27.57057+11'),
+	('27f78ad4-58f8-4a77-ad09-fe8f5064c442', 2, '96f7546c-47ea-41f8-a3a3-46b4deb84105', 12, '2025-12-28 21:54:40.912991+11', true, 20, true, 0, 'null', 'null', 1, '2025-12-27 21:54:38.044724+11', '2025-12-28 09:54:40.912991+11'),
+	('c5a2cbda-c574-4067-9cc4-779b05d290c3', 4, '96f7546c-47ea-41f8-a3a3-46b4deb84105', 12, '2025-12-29 08:43:58.102394+11', true, 20, true, 0, 'null', 'null', 1, '2025-12-28 20:43:58.102394+11', '2025-12-28 20:43:58.102394+11'),
+	('efa4bd10-914d-49c7-b7c3-4f1cbf74f44e', 10, '96f7546c-47ea-41f8-a3a3-46b4deb84105', 12, '2025-12-29 08:56:16.383251+11', true, 20, true, 0, 'null', 'null', 1, '2025-12-28 20:56:16.383251+11', '2025-12-28 20:56:16.383251+11'),
+	('a7c4b840-c6c1-48aa-8c62-45a4b70e29d7', 6, '96f7546c-47ea-41f8-a3a3-46b4deb84105', 12, '2025-12-29 09:06:21.372688+11', true, 20, true, 0, 'null', 'null', 1, '2025-12-28 21:06:21.372688+11', '2025-12-28 21:06:21.372688+11'),
+	('2a63339a-4252-4f62-8c52-ecdfa7c3c5a5', 14, '96f7546c-47ea-41f8-a3a3-46b4deb84105', 12, '2025-12-29 09:06:55.995383+11', true, 20, true, 0, 'null', 'null', 1, '2025-12-28 21:06:55.995383+11', '2025-12-28 21:06:55.995383+11'),
+	('c76ab0b4-f974-458e-a6f3-d74b0f52219c', 16, '96f7546c-47ea-41f8-a3a3-46b4deb84105', 12, '2025-12-29 09:07:54.312993+11', true, 20, true, 0, 'null', 'null', 1, '2025-12-28 21:07:54.312993+11', '2025-12-28 21:07:54.312993+11'),
+	('14dd9d7a-2696-4479-831c-e43163795e36', 1, '96f7546c-47ea-41f8-a3a3-46b4deb84105', 12, '2025-12-29 09:36:59.503986+11', true, 20, true, 0, 'null', 'null', 1, '2025-12-22 21:51:16.925013+11', '2025-12-28 21:36:59.503986+11'),
+	('4db618ce-5b05-409f-8a06-fdf4a4a9745c', 5, '96f7546c-47ea-41f8-a3a3-46b4deb84105', 12, '2025-12-29 09:58:38.841613+11', true, 20, true, 0, 'null', 'null', 1, '2025-12-28 21:58:38.841613+11', '2025-12-28 21:58:38.841613+11');
 
 
 --
@@ -1570,6 +1588,4 @@ SELECT pg_catalog.setval('public.pages_id_seq', 7049, true);
 --
 
 
-
--- Re-enable triggers
 SET session_replication_role = DEFAULT;
