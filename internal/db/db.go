@@ -566,7 +566,7 @@ func (db *DB) ResetDataOnly() error {
 
 	// Use TRUNCATE instead of DELETE - it's atomic, faster, and handles concurrent access better
 	// TRUNCATE automatically handles foreign key constraints with CASCADE
-	tables := []string{"tasks", "jobs", "job_share_links", "pages", "domains"}
+	tables := []string{"tasks", "jobs", "job_share_links", "schedulers", "pages", "domains"}
 	totalRowsDeleted := int64(0)
 
 	log.Info().Msg("Step 1/2: Truncating all data from tables")
