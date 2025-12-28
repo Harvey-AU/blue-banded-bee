@@ -106,7 +106,7 @@ function setupDashboardRefresh(dataBinder) {
       const statusIndicator = document.querySelector(".status-indicator");
       if (statusIndicator) {
         statusIndicator.innerHTML =
-          '<span class="status-dot"></span><span>Refreshing...</span>';
+          '<span class="status-dot"></span><span>Live</span>';
       }
 
       // Get user's timezone offset in minutes (e.g., -660 for AEDT/UTC+11)
