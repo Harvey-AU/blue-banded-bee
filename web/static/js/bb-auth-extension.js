@@ -241,14 +241,17 @@ function setupDashboardRefresh(dataBinder) {
   };
 }
 
+// Track forms that have handlers attached (WeakSet for automatic cleanup)
+const formsWithHandlers = new WeakSet();
+
 /**
  * Setup dashboard form handler for job creation
  */
 function setupDashboardFormHandler() {
   const dashboardForm = document.getElementById("dashboardJobForm");
-  if (dashboardForm && !dashboardForm._jobHandlerAttached) {
+  if (dashboardForm && !formsWithHandlers.has(dashboardForm)) {
     dashboardForm.addEventListener("submit", handleDashboardJobCreation);
-    dashboardForm._jobHandlerAttached = true;
+    formsWithHandlers.add(dashboardForm);
   }
 }
 
