@@ -7,7 +7,18 @@
 CREATE EXTENSION IF NOT EXISTS supabase_vault WITH SCHEMA vault;
 
 -- ============================================================================
--- 2. Add slack_user_id to users table
+-- 2. Create utility function for updated_at triggers
+-- ============================================================================
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- ============================================================================
+-- 3. Add slack_user_id to users table
 -- ============================================================================
 ALTER TABLE users ADD COLUMN IF NOT EXISTS slack_user_id TEXT;
 CREATE INDEX IF NOT EXISTS idx_users_slack_user_id ON users(slack_user_id) WHERE slack_user_id IS NOT NULL;
@@ -33,7 +44,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 --   EXECUTE FUNCTION sync_slack_user_id();
 
 -- ============================================================================
--- 3. Create slack_connections table (with Vault integration from start)
+-- 4. Create slack_connections table (with Vault integration from start)
 -- ============================================================================
 CREATE TABLE slack_connections (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -81,7 +92,7 @@ CREATE TRIGGER update_slack_connections_updated_at
   EXECUTE FUNCTION update_updated_at_column();
 
 -- ============================================================================
--- 4. Create slack_user_links table
+-- 5. Create slack_user_links table
 -- ============================================================================
 CREATE TABLE slack_user_links (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -113,7 +124,7 @@ CREATE POLICY "slack_user_links_delete_own" ON slack_user_links
   FOR DELETE USING (user_id = auth.uid());
 
 -- ============================================================================
--- 5. Create notifications table
+-- 6. Create notifications table
 -- ============================================================================
 CREATE TABLE notifications (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -151,7 +162,7 @@ CREATE POLICY "notifications_update_own" ON notifications
   );
 
 -- ============================================================================
--- 6. Vault helper functions for Slack tokens
+-- 7. Vault helper functions for Slack tokens
 -- ============================================================================
 
 -- Store a Slack token in Vault
@@ -226,7 +237,7 @@ CREATE TRIGGER on_slack_connection_delete
   EXECUTE FUNCTION cleanup_slack_vault_secret();
 
 -- ============================================================================
--- 7. Auto-linking triggers
+-- 8. Auto-linking triggers
 -- ============================================================================
 
 -- Auto-link users to Slack when they sign in with Slack OIDC
