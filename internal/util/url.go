@@ -99,3 +99,76 @@ func ConstructURL(domain, path string) string {
 	// Construct the full URL
 	return "https://" + normalisedDomain + path
 }
+
+// normaliseHostPort removes default ports (80 for HTTP, 443 for HTTPS) from host.
+func normaliseHostPort(host, scheme string) string {
+	if scheme == "http" && strings.HasSuffix(host, ":80") {
+		return strings.TrimSuffix(host, ":80")
+	}
+	if scheme == "https" && strings.HasSuffix(host, ":443") {
+		return strings.TrimSuffix(host, ":443")
+	}
+	return host
+}
+
+// IsSignificantRedirect checks if a redirect URL is meaningfully different from the original.
+// Only the host and path are compared; query parameters and fragments are ignored.
+// Returns false for trivial redirects like:
+//   - HTTP to HTTPS on same domain/path
+//   - www to non-www (or vice versa) on same path
+//   - Trailing slash differences
+//   - Default port differences (e.g., :443 for HTTPS, :80 for HTTP)
+//
+// Returns true for redirects to different domains or different paths.
+func IsSignificantRedirect(originalURL, redirectURL string) bool {
+	if redirectURL == "" {
+		return false
+	}
+
+	// Parse both URLs
+	origParsed, origErr := url.Parse(originalURL)
+	redirParsed, redirErr := url.Parse(redirectURL)
+
+	if origErr != nil || redirErr != nil {
+		// If we can't parse, assume it's significant
+		return true
+	}
+
+	// Normalise hosts (remove www prefix, lowercase, strip default ports)
+	origHost := normaliseHostPort(origParsed.Host, origParsed.Scheme)
+	origHost = strings.ToLower(strings.TrimPrefix(origHost, "www."))
+	redirHost := normaliseHostPort(redirParsed.Host, redirParsed.Scheme)
+	redirHost = strings.ToLower(strings.TrimPrefix(redirHost, "www."))
+
+	// Different domain = significant
+	if origHost != redirHost {
+		return true
+	}
+
+	// Normalise paths (ensure leading slash, remove trailing slash for comparison)
+	origPath := origParsed.Path
+	redirPath := redirParsed.Path
+
+	if origPath == "" {
+		origPath = "/"
+	}
+	if redirPath == "" {
+		redirPath = "/"
+	}
+
+	// Remove trailing slashes for comparison (but "/" stays as "/")
+	if len(origPath) > 1 {
+		origPath = strings.TrimSuffix(origPath, "/")
+	}
+	if len(redirPath) > 1 {
+		redirPath = strings.TrimSuffix(redirPath, "/")
+	}
+
+	// Different path = significant
+	if origPath != redirPath {
+		return true
+	}
+
+	// Same domain and path - not significant (likely HTTP→HTTPS or www→non-www)
+	return false
+}

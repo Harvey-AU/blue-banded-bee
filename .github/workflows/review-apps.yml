@@ -22,10 +22,8 @@ jobs:
     if: |
       github.event.pull_request.draft == false &&
       github.event.action != 'closed' &&
-      (
-        contains(github.event.pull_request.title, '[preview app]') ||
-        contains(github.event.pull_request.body || '', '[preview app]')
-      )
+      !contains(github.event.pull_request.title, '[preview skip]') &&
+      !contains(github.event.pull_request.body || '', '[preview skip]')
     permissions:
       pull-requests: write
 
@@ -130,7 +128,8 @@ jobs:
             --app $APP_NAME --stage
 
           # Deploy to review app with local image (this will apply staged secrets)
-          FLY_REGION=syd flyctl deploy \
+          # Region is set via primary_region in .fly/review_apps.toml (syd)
+          flyctl deploy \
             --app $APP_NAME \
             --config .fly/review_apps.toml \
             --local-only \

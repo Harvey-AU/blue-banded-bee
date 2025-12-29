@@ -1270,7 +1270,12 @@ func (q *DbQueue) EnqueueURLs(ctx context.Context, jobID string, pages []Page, s
 			createdAts = append(createdAts, now)
 			retryCounts = append(retryCounts, 0)
 			sourceTypes = append(sourceTypes, sourceType)
-			sourceURLs = append(sourceURLs, sourceURL)
+			// Only store source_url for 'link' source type (pages discovered from other pages)
+			if sourceType == "link" {
+				sourceURLs = append(sourceURLs, sourceURL)
+			} else {
+				sourceURLs = append(sourceURLs, "")
+			}
 			priorities = append(priorities, page.Priority)
 		}
 

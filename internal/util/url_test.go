@@ -339,3 +339,148 @@ func BenchmarkConstructURL(b *testing.B) {
 		_ = ConstructURL("https://www.example.com", "/path/to/page")
 	}
 }
+
+func TestIsSignificantRedirect(t *testing.T) {
+	tests := []struct {
+		name        string
+		originalURL string
+		redirectURL string
+		expected    bool
+	}{
+		// Not significant - same domain/path variations
+		{
+			name:        "empty_redirect",
+			originalURL: "https://example.com/page",
+			redirectURL: "",
+			expected:    false,
+		},
+		{
+			name:        "http_to_https_same_path",
+			originalURL: "http://example.com/page",
+			redirectURL: "https://example.com/page",
+			expected:    false,
+		},
+		{
+			name:        "www_to_non_www",
+			originalURL: "https://www.example.com/page",
+			redirectURL: "https://example.com/page",
+			expected:    false,
+		},
+		{
+			name:        "non_www_to_www",
+			originalURL: "https://example.com/page",
+			redirectURL: "https://www.example.com/page",
+			expected:    false,
+		},
+		{
+			name:        "trailing_slash_added",
+			originalURL: "https://example.com/page",
+			redirectURL: "https://example.com/page/",
+			expected:    false,
+		},
+		{
+			name:        "trailing_slash_removed",
+			originalURL: "https://example.com/page/",
+			redirectURL: "https://example.com/page",
+			expected:    false,
+		},
+		{
+			name:        "root_path_variations",
+			originalURL: "https://example.com",
+			redirectURL: "https://example.com/",
+			expected:    false,
+		},
+		{
+			name:        "case_insensitive_domain",
+			originalURL: "https://EXAMPLE.COM/page",
+			redirectURL: "https://example.com/page",
+			expected:    false,
+		},
+		// Significant - different domain
+		{
+			name:        "different_domain",
+			originalURL: "https://example.com/page",
+			redirectURL: "https://other.com/page",
+			expected:    true,
+		},
+		{
+			name:        "subdomain_change",
+			originalURL: "https://example.com/page",
+			redirectURL: "https://blog.example.com/page",
+			expected:    true,
+		},
+		{
+			name:        "external_redirect",
+			originalURL: "https://example.com/page",
+			redirectURL: "https://google.com/",
+			expected:    true,
+		},
+		// Significant - different path
+		{
+			name:        "different_path",
+			originalURL: "https://example.com/old-page",
+			redirectURL: "https://example.com/new-page",
+			expected:    true,
+		},
+		{
+			name:        "path_added",
+			originalURL: "https://example.com/",
+			redirectURL: "https://example.com/home",
+			expected:    true,
+		},
+		{
+			name:        "deeper_path",
+			originalURL: "https://example.com/blog",
+			redirectURL: "https://example.com/blog/post",
+			expected:    true,
+		},
+		// Not significant - default port handling
+		{
+			name:        "https_default_port_to_no_port",
+			originalURL: "https://example.com:443/page",
+			redirectURL: "https://example.com/page",
+			expected:    false,
+		},
+		{
+			name:        "http_default_port_to_no_port",
+			originalURL: "http://example.com:80/page",
+			redirectURL: "http://example.com/page",
+			expected:    false,
+		},
+		// Significant - non-default port
+		{
+			name:        "different_non_default_port",
+			originalURL: "https://example.com:8080/page",
+			redirectURL: "https://example.com/page",
+			expected:    true,
+		},
+		// Not significant - query parameter changes (ignored)
+		{
+			name:        "query_parameter_change",
+			originalURL: "https://example.com/page?a=1",
+			redirectURL: "https://example.com/page?b=2",
+			expected:    false,
+		},
+		// Not significant - fragment changes (ignored)
+		{
+			name:        "fragment_change",
+			originalURL: "https://example.com/page#section1",
+			redirectURL: "https://example.com/page#section2",
+			expected:    false,
+		},
+		// Significant - malformed URL handling
+		{
+			name:        "malformed_original_url",
+			originalURL: "://invalid",
+			redirectURL: "https://example.com/page",
+			expected:    true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := IsSignificantRedirect(tt.originalURL, tt.redirectURL)
+			assert.Equal(t, tt.expected, result, "originalURL: %s, redirectURL: %s", tt.originalURL, tt.redirectURL)
+		})
+	}
+}

@@ -1,6 +1,8 @@
 package crawler
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/xml"
 	"fmt"
@@ -12,6 +14,34 @@ import (
 	"github.com/Harvey-AU/blue-banded-bee/internal/util"
 	"github.com/rs/zerolog/log"
 )
+
+// decompressGzip decompresses gzip-encoded data
+func decompressGzip(data []byte) ([]byte, error) {
+	reader, err := gzip.NewReader(bytes.NewReader(data))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create gzip reader: %w", err)
+	}
+	defer reader.Close()
+
+	decompressed, err := io.ReadAll(reader)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decompress gzip data: %w", err)
+	}
+
+	return decompressed, nil
+}
+
+// isGzipContent checks if the response is gzip-encoded based on headers or URL
+func isGzipContent(contentEncoding, url string) bool {
+	// Check Content-Encoding header
+	if strings.EqualFold(contentEncoding, "gzip") {
+		return true
+	}
+
+	// Check URL suffix for .gz or .xml.gz
+	lowerURL := strings.ToLower(url)
+	return strings.HasSuffix(lowerURL, ".gz")
+}
 
 // SitemapDiscoveryResult contains both sitemaps and robots.txt rules
 type SitemapDiscoveryResult struct {
@@ -167,6 +197,9 @@ func (c *Crawler) ParseSitemap(ctx context.Context, sitemapURL string) ([]string
 		return nil, err
 	}
 
+	// Request gzip encoding if server supports it
+	req.Header.Set("Accept-Encoding", "gzip")
+
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
@@ -181,6 +214,26 @@ func (c *Crawler) ParseSitemap(ctx context.Context, sitemapURL string) ([]string
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
+	}
+
+	// Decompress if gzip-encoded (via header or .gz URL suffix)
+	contentEncoding := resp.Header.Get("Content-Encoding")
+	if isGzipContent(contentEncoding, sitemapURL) {
+		log.Debug().
+			Str("url", sitemapURL).
+			Str("content_encoding", contentEncoding).
+			Int("compressed_size", len(body)).
+			Msg("Decompressing gzip sitemap")
+
+		body, err = decompressGzip(body)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decompress sitemap %s: %w", sitemapURL, err)
+		}
+
+		log.Debug().
+			Str("url", sitemapURL).
+			Int("decompressed_size", len(body)).
+			Msg("Sitemap decompressed successfully")
 	}
 
 	content := string(body)
