@@ -20,6 +20,7 @@ import (
 	"github.com/Harvey-AU/blue-banded-bee/internal/crawler"
 	"github.com/Harvey-AU/blue-banded-bee/internal/db"
 	"github.com/Harvey-AU/blue-banded-bee/internal/jobs"
+	"github.com/Harvey-AU/blue-banded-bee/internal/notifications"
 	"github.com/Harvey-AU/blue-banded-bee/internal/observability"
 	"github.com/getsentry/sentry-go"
 	"github.com/joho/godotenv"
@@ -599,6 +600,17 @@ func main() {
 	// Set the job manager in the worker pool for duplicate checking
 	workerPool.SetJobManager(jobsManager)
 
+	// Create notification service with Slack channel
+	notificationService := notifications.NewService(pgDB)
+	slackChannel, err := notifications.NewSlackChannel(pgDB)
+	if err != nil {
+		log.Warn().Err(err).Msg("Failed to create Slack channel - notifications disabled")
+	} else {
+		notificationService.AddChannel(slackChannel)
+		log.Info().Msg("Slack notification channel enabled")
+	}
+	workerPool.SetNotifier(notificationService)
+
 	// Create context for background goroutines that need graceful shutdown
 	appCtx, appCancel := context.WithCancel(context.Background())
 	defer appCancel() // Ensure context is cancelled on exit
@@ -702,6 +714,10 @@ func main() {
 	// Start scheduler service
 	backgroundWG.Add(1)
 	go startJobScheduler(appCtx, &backgroundWG, jobsManager, pgDB)
+
+	// Start notification processor
+	backgroundWG.Add(1)
+	go startNotificationProcessor(appCtx, &backgroundWG, notificationService)
 
 	// Wait for either the server to exit or shutdown signal completion
 	var serverErr error
@@ -862,4 +878,27 @@ func getClientIP(r *http.Request) string {
 	// If no X-Forwarded-For, use RemoteAddr
 	ip, _, _ = net.SplitHostPort(r.RemoteAddr)
 	return ip
+}
+
+// startNotificationProcessor processes pending notifications for delivery
+// It respects context cancellation for graceful shutdown
+func startNotificationProcessor(ctx context.Context, wg *sync.WaitGroup, notificationService *notifications.Service) {
+	defer wg.Done()
+
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
+
+	log.Info().Msg("Notification processor started")
+
+	for {
+		select {
+		case <-ctx.Done():
+			log.Info().Msg("Notification processor stopped")
+			return
+		case <-ticker.C:
+			if err := notificationService.ProcessPendingNotifications(ctx, 50); err != nil {
+				log.Warn().Err(err).Msg("Failed to process pending notifications")
+			}
+		}
+	}
 }
