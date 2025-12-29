@@ -157,8 +157,7 @@ CREATE POLICY "notifications_select_own_org" ON notifications
 
 CREATE POLICY "notifications_update_own" ON notifications
   FOR UPDATE USING (
-    user_id = auth.uid() OR
-    organisation_id IN (SELECT organisation_id FROM users WHERE id = auth.uid())
+    user_id = auth.uid()
   );
 
 -- ============================================================================

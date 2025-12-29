@@ -238,7 +238,11 @@ async function updateUserLinkStatus(connectionEl, connectionId) {
         statusEl.className = "slack-link-status not-linked";
       }
     }
-  } catch {
+  } catch (error) {
+    // Only treat 404 as "not linked"; log other errors
+    if (error.status && error.status !== 404) {
+      console.warn("Failed to fetch user link status:", error);
+    }
     // User not linked - show link button
     const linkBtn = connectionEl.querySelector(
       '[bbb-action="slack-link-user"]'
@@ -418,14 +422,16 @@ function showSlackError(message) {
  */
 function handleSlackOAuthCallback() {
   const params = new URLSearchParams(window.location.search);
-  const slackSuccess = params.get("slack");
+  const slackConnected = params.get("slack_connected");
   const slackError = params.get("slack_error");
 
-  if (slackSuccess === "connected") {
-    showSlackSuccess("Slack workspace connected successfully!");
+  if (slackConnected) {
+    showSlackSuccess(
+      `Slack workspace "${slackConnected}" connected successfully!`
+    );
     // Clean up URL
     const url = new URL(window.location.href);
-    url.searchParams.delete("slack");
+    url.searchParams.delete("slack_connected");
     window.history.replaceState({}, "", url.toString());
   } else if (slackError) {
     showSlackError(`Failed to connect Slack: ${slackError}`);

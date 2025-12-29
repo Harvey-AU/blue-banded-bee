@@ -161,7 +161,8 @@ func (s *Service) deliverToChannel(ctx context.Context, ch DeliveryChannel, limi
 	case "slack":
 		notifications, err = s.db.GetPendingSlackNotifications(ctx, limit)
 	default:
-		return nil // Unknown channel, skip
+		log.Debug().Str("channel", ch.Name()).Msg("Unknown delivery channel, skipping")
+		return nil
 	}
 
 	if err != nil {
@@ -289,6 +290,7 @@ func (c *SlackChannel) deliverToConnection(ctx context.Context, conn *db.SlackCo
 func (c *SlackChannel) buildMessageBlocks(n *db.Notification) []slack.Block {
 	appURL := os.Getenv("APP_URL")
 	if appURL == "" {
+		log.Warn().Msg("APP_URL not set, using default https://app.bluebandedbee.co")
 		appURL = "https://app.bluebandedbee.co"
 	}
 
