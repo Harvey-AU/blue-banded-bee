@@ -2177,18 +2177,21 @@
           currentOrgName.textContent = activeOrg.name;
           window.BB_ACTIVE_ORG = activeOrg;
 
-          // Populate dropdown
-          orgList.innerHTML = orgs
-            .map(
-              (org) => `
-            <button class="bb-org-item ${org.id === activeOrg.id ? "active" : ""}"
-                    data-org-id="${org.id}"
-                    data-org-name="${org.name}">
-              <span class="bb-org-item-name">${org.name}</span>
-            </button>
-          `
-            )
-            .join("");
+          // Populate dropdown (using DOM methods to prevent XSS)
+          orgList.innerHTML = "";
+          orgs.forEach((org) => {
+            const button = document.createElement("button");
+            button.className = `bb-org-item ${org.id === activeOrg.id ? "active" : ""}`;
+            button.dataset.orgId = org.id;
+            button.dataset.orgName = org.name;
+
+            const span = document.createElement("span");
+            span.className = "bb-org-item-name";
+            span.textContent = org.name; // Safe - uses textContent
+
+            button.appendChild(span);
+            orgList.appendChild(button);
+          });
 
           // Toggle dropdown
           btn.addEventListener("click", (e) => {
