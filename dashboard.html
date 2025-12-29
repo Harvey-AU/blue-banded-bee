@@ -2263,7 +2263,8 @@
               } else {
                 const err = await switchRes.json();
                 console.error("Failed to switch org:", err);
-                currentOrgName.textContent = activeOrg.name;
+                currentOrgName.textContent =
+                  window.BB_ACTIVE_ORG?.name || activeOrg.name;
                 if (window.showNotification) {
                   window.showNotification(
                     "Failed to switch organisation",
@@ -2273,7 +2274,8 @@
               }
             } catch (err) {
               console.error("Error switching org:", err);
-              currentOrgName.textContent = activeOrg.name;
+              currentOrgName.textContent =
+                window.BB_ACTIVE_ORG?.name || activeOrg.name;
               if (window.showNotification) {
                 window.showNotification(
                   "Failed to switch organisation",
