@@ -530,14 +530,15 @@ func NewWorkerPool(sqlDB *sql.DB, dbQueue DbQueueInterface, crawler CrawlerInter
 		log.Info().Msg("Technology detector initialised")
 	}
 
-	// Initialise storage client for HTML sample uploads (non-fatal if not configured)
-	supabaseURL := os.Getenv("SUPABASE_URL")
+	// Initialise storage client for HTML uploads (non-fatal if not configured)
+	// Uses existing SUPABASE_URL from project config
+	supabaseURL := strings.TrimSuffix(os.Getenv("SUPABASE_URL"), "/")
 	supabaseServiceKey := os.Getenv("SUPABASE_SERVICE_ROLE_KEY")
 	if supabaseURL != "" && supabaseServiceKey != "" {
 		wp.storageClient = storage.New(supabaseURL, supabaseServiceKey)
-		log.Info().Msg("Storage client initialised for tech detection samples")
+		log.Info().Msg("Storage client initialised for page crawl uploads")
 	} else {
-		log.Debug().Msg("Storage client not configured - HTML samples will not be stored (set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY)")
+		log.Debug().Msg("Storage client not configured - page HTML will not be stored (set SUPABASE_SERVICE_ROLE_KEY)")
 	}
 
 	// Start the notification listener when we have connection details available.
@@ -3512,7 +3513,7 @@ func (wp *WorkerPool) detectTechnologies(ctx context.Context, task *db.Task, res
 	if wp.storageClient != nil && len(result.Body) > 0 {
 		// Create a unique path: domains/{domain_id}/{timestamp}.html
 		storagePath := fmt.Sprintf("domains/%d/%d.html", domainID, time.Now().Unix())
-		path, uploadErr := wp.storageClient.Upload(ctx, "tech-samples", storagePath, result.Body, "text/html")
+		path, uploadErr := wp.storageClient.Upload(ctx, "page-crawls", storagePath, result.Body, "text/html")
 		if uploadErr != nil {
 			log.Warn().Err(uploadErr).Int("domain_id", domainID).Msg("Failed to upload HTML to storage - continuing without")
 		} else {

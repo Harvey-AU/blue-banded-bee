@@ -1,22 +1,22 @@
--- Create storage bucket for technology detection HTML samples
+-- Create storage bucket for crawled page HTML
 INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 VALUES (
-    'tech-samples',
-    'tech-samples',
+    'page-crawls',
+    'page-crawls',
     false,  -- Private bucket - accessed via service role
     5242880,  -- 5MB max file size
     ARRAY['text/html', 'application/octet-stream']::text[]
 )
 ON CONFLICT (id) DO NOTHING;
 
--- Allow service role full access to tech-samples bucket
+-- Allow service role full access to page-crawls bucket
 -- Note: RLS is disabled by default for storage, service role bypasses anyway
-CREATE POLICY "Service role can manage tech samples"
+CREATE POLICY "Service role can manage page crawls"
 ON storage.objects
 FOR ALL
 TO service_role
-USING (bucket_id = 'tech-samples')
-WITH CHECK (bucket_id = 'tech-samples');
+USING (bucket_id = 'page-crawls')
+WITH CHECK (bucket_id = 'page-crawls');
 
 -- Update domains table: change tech_html_sample to store path instead of content
 ALTER TABLE domains
