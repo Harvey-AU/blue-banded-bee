@@ -2126,7 +2126,7 @@
         const currentOrgName = document.getElementById("currentOrgName");
         const divider = document.querySelector(".bb-org-divider");
 
-        if (!switcher || !btn) return;
+        if (!switcher || !btn || !divider) return;
 
         try {
           const {
@@ -2265,14 +2265,23 @@
             } catch (err) {
               console.error("Error switching org:", err);
               currentOrgName.textContent = activeOrg.name;
+              if (window.showNotification) {
+                window.showNotification(
+                  "Failed to switch organisation",
+                  "error"
+                );
+              }
             }
           });
 
-          // Close dropdown on outside click
-          document.addEventListener("click", () => {
+          // Close dropdown on outside click (use named function to prevent duplicates)
+          const closeOrgDropdown = () => {
             switcher.classList.remove("open");
             btn.setAttribute("aria-expanded", "false");
-          });
+          };
+          document.removeEventListener("click", window._closeOrgDropdown);
+          window._closeOrgDropdown = closeOrgDropdown;
+          document.addEventListener("click", closeOrgDropdown);
         } catch (err) {
           console.error("Error initialising org switcher:", err);
           switcher.style.display = "none";
