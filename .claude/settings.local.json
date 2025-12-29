@@ -95,7 +95,11 @@
       "Bash(flyctl status:*)",
       "Bash(for i in 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30)",
       "Bash(do echo -n \"Check $i: \")",
-      "Bash(done)"
+      "Bash(done)",
+      "mcp__plugin_serena_serena__initial_instructions",
+      "mcp__plugin_serena_serena__list_dir",
+      "mcp__plugin_serena_serena__get_symbols_overview",
+      "mcp__plugin_serena_serena__activate_project"
     ],
     "deny": []
   },

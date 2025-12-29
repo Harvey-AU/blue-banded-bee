@@ -9,7 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Harvey-AU/blue-banded-bee/internal/auth"
 	"github.com/Harvey-AU/blue-banded-bee/internal/db"
 	"github.com/Harvey-AU/blue-banded-bee/internal/util"
 	"github.com/google/uuid"
@@ -97,23 +96,13 @@ func (h *Handler) SchedulerHandler(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) createScheduler(w http.ResponseWriter, r *http.Request) {
 	logger := loggerWithRequest(r)
 
-	userClaims, ok := auth.GetUserFromContext(r.Context())
-	if !ok {
-		Unauthorised(w, r, "User information not found")
-		return
+	// Get active organisation (validates auth and membership)
+	orgID := h.GetActiveOrganisation(w, r)
+	if orgID == "" {
+		return // Error already written
 	}
 
-	user, err := h.DB.GetOrCreateUser(userClaims.UserID, userClaims.Email, nil)
-	if err != nil {
-		logger.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get or create user")
-		InternalError(w, r, err)
-		return
-	}
-
-	if user.OrganisationID == nil {
-		BadRequest(w, r, "User must belong to an organisation")
-		return
-	}
+	_ = logger // logger available for future use
 
 	var req SchedulerRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -140,7 +129,7 @@ func (h *Handler) createScheduler(w http.ResponseWriter, r *http.Request) {
 
 	// Get or create domain
 	var domainID int
-	err = h.DB.GetDB().QueryRowContext(r.Context(), `
+	err := h.DB.GetDB().QueryRowContext(r.Context(), `
 		INSERT INTO domains(name) VALUES($1)
 		ON CONFLICT (name) DO UPDATE SET name=EXCLUDED.name
 		RETURNING id
@@ -156,7 +145,7 @@ func (h *Handler) createScheduler(w http.ResponseWriter, r *http.Request) {
 	err = h.DB.GetDB().QueryRowContext(r.Context(), `
 		SELECT id FROM schedulers
 		WHERE domain_id = $1 AND organisation_id = $2
-	`, domainID, *user.OrganisationID).Scan(&existingID)
+	`, domainID, orgID).Scan(&existingID)
 	if err == nil {
 		BadRequest(w, r, "Scheduler already exists for this domain")
 		return
@@ -198,7 +187,7 @@ func (h *Handler) createScheduler(w http.ResponseWriter, r *http.Request) {
 	scheduler := &db.Scheduler{
 		ID:                    uuid.New().String(),
 		DomainID:              domainID,
-		OrganisationID:        *user.OrganisationID,
+		OrganisationID:        orgID,
 		ScheduleIntervalHours: *req.ScheduleIntervalHours,
 		NextRunAt:             now.Add(time.Duration(*req.ScheduleIntervalHours) * time.Hour),
 		IsEnabled:             isEnabled,
@@ -226,27 +215,15 @@ func (h *Handler) createScheduler(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) listSchedulers(w http.ResponseWriter, r *http.Request) {
 	logger := loggerWithRequest(r)
 
-	userClaims, ok := auth.GetUserFromContext(r.Context())
-	if !ok {
-		Unauthorised(w, r, "User information not found")
-		return
+	// Get active organisation (validates auth and membership)
+	orgID := h.GetActiveOrganisation(w, r)
+	if orgID == "" {
+		return // Error already written
 	}
 
-	user, err := h.DB.GetOrCreateUser(userClaims.UserID, userClaims.Email, nil)
+	schedulers, err := h.DB.ListSchedulers(r.Context(), orgID)
 	if err != nil {
-		logger.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get or create user")
-		InternalError(w, r, err)
-		return
-	}
-
-	if user.OrganisationID == nil {
-		WriteSuccess(w, r, []SchedulerResponse{}, "No schedulers found")
-		return
-	}
-
-	schedulers, err := h.DB.ListSchedulers(r.Context(), *user.OrganisationID)
-	if err != nil {
-		logger.Error().Err(err).Str("organisation_id", *user.OrganisationID).Msg("Failed to list schedulers")
+		logger.Error().Err(err).Str("organisation_id", orgID).Msg("Failed to list schedulers")
 		InternalError(w, r, err)
 		return
 	}
@@ -289,17 +266,10 @@ func (h *Handler) listSchedulers(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) getScheduler(w http.ResponseWriter, r *http.Request, schedulerID string) {
 	logger := loggerWithRequest(r)
 
-	userClaims, ok := auth.GetUserFromContext(r.Context())
-	if !ok {
-		Unauthorised(w, r, "User information not found")
-		return
-	}
-
-	user, err := h.DB.GetOrCreateUser(userClaims.UserID, userClaims.Email, nil)
-	if err != nil {
-		logger.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get or create user")
-		InternalError(w, r, err)
-		return
+	// Get active organisation (validates auth and membership)
+	orgID := h.GetActiveOrganisation(w, r)
+	if orgID == "" {
+		return // Error already written
 	}
 
 	scheduler, err := h.DB.GetScheduler(r.Context(), schedulerID)
@@ -313,7 +283,7 @@ func (h *Handler) getScheduler(w http.ResponseWriter, r *http.Request, scheduler
 		return
 	}
 
-	if user.OrganisationID == nil || *user.OrganisationID != scheduler.OrganisationID {
+	if orgID != scheduler.OrganisationID {
 		Unauthorised(w, r, "Scheduler access denied")
 		return
 	}
@@ -335,17 +305,10 @@ func (h *Handler) getScheduler(w http.ResponseWriter, r *http.Request, scheduler
 func (h *Handler) updateScheduler(w http.ResponseWriter, r *http.Request, schedulerID string) {
 	logger := loggerWithRequest(r)
 
-	userClaims, ok := auth.GetUserFromContext(r.Context())
-	if !ok {
-		Unauthorised(w, r, "User information not found")
-		return
-	}
-
-	user, err := h.DB.GetOrCreateUser(userClaims.UserID, userClaims.Email, nil)
-	if err != nil {
-		logger.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get or create user")
-		InternalError(w, r, err)
-		return
+	// Get active organisation (validates auth and membership)
+	orgID := h.GetActiveOrganisation(w, r)
+	if orgID == "" {
+		return // Error already written
 	}
 
 	scheduler, err := h.DB.GetScheduler(r.Context(), schedulerID)
@@ -359,7 +322,7 @@ func (h *Handler) updateScheduler(w http.ResponseWriter, r *http.Request, schedu
 		return
 	}
 
-	if user.OrganisationID == nil || *user.OrganisationID != scheduler.OrganisationID {
+	if orgID != scheduler.OrganisationID {
 		Unauthorised(w, r, "Scheduler access denied")
 		return
 	}
@@ -442,17 +405,10 @@ func (h *Handler) updateScheduler(w http.ResponseWriter, r *http.Request, schedu
 func (h *Handler) deleteScheduler(w http.ResponseWriter, r *http.Request, schedulerID string) {
 	logger := loggerWithRequest(r)
 
-	userClaims, ok := auth.GetUserFromContext(r.Context())
-	if !ok {
-		Unauthorised(w, r, "User information not found")
-		return
-	}
-
-	user, err := h.DB.GetOrCreateUser(userClaims.UserID, userClaims.Email, nil)
-	if err != nil {
-		logger.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get or create user")
-		InternalError(w, r, err)
-		return
+	// Get active organisation (validates auth and membership)
+	orgID := h.GetActiveOrganisation(w, r)
+	if orgID == "" {
+		return // Error already written
 	}
 
 	scheduler, err := h.DB.GetScheduler(r.Context(), schedulerID)
@@ -466,7 +422,7 @@ func (h *Handler) deleteScheduler(w http.ResponseWriter, r *http.Request, schedu
 		return
 	}
 
-	if user.OrganisationID == nil || *user.OrganisationID != scheduler.OrganisationID {
+	if orgID != scheduler.OrganisationID {
 		Unauthorised(w, r, "Scheduler access denied")
 		return
 	}
@@ -488,17 +444,10 @@ func (h *Handler) deleteScheduler(w http.ResponseWriter, r *http.Request, schedu
 func (h *Handler) getSchedulerJobs(w http.ResponseWriter, r *http.Request, schedulerID string) {
 	logger := loggerWithRequest(r)
 
-	userClaims, ok := auth.GetUserFromContext(r.Context())
-	if !ok {
-		Unauthorised(w, r, "User information not found")
-		return
-	}
-
-	user, err := h.DB.GetOrCreateUser(userClaims.UserID, userClaims.Email, nil)
-	if err != nil {
-		logger.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get or create user")
-		InternalError(w, r, err)
-		return
+	// Get active organisation (validates auth and membership)
+	orgID := h.GetActiveOrganisation(w, r)
+	if orgID == "" {
+		return // Error already written
 	}
 
 	scheduler, err := h.DB.GetScheduler(r.Context(), schedulerID)
@@ -512,7 +461,7 @@ func (h *Handler) getSchedulerJobs(w http.ResponseWriter, r *http.Request, sched
 		return
 	}
 
-	if user.OrganisationID == nil || *user.OrganisationID != scheduler.OrganisationID {
+	if orgID != scheduler.OrganisationID {
 		Unauthorised(w, r, "Scheduler access denied")
 		return
 	}
@@ -532,19 +481,19 @@ func (h *Handler) getSchedulerJobs(w http.ResponseWriter, r *http.Request, sched
 		}
 	}
 
-	// Query jobs for this scheduler
+	// Query jobs for this scheduler - SECURITY FIX: Added organisation_id filter
 	query := `
 		SELECT j.id, d.name as domain, j.status, j.total_tasks, j.completed_tasks,
 		       j.failed_tasks, j.skipped_tasks, j.progress, j.created_at,
 		       j.started_at, j.completed_at
 		FROM jobs j
 		JOIN domains d ON j.domain_id = d.id
-		WHERE j.scheduler_id = $1
+		WHERE j.scheduler_id = $1 AND j.organisation_id = $2
 		ORDER BY j.created_at DESC
-		LIMIT $2 OFFSET $3
+		LIMIT $3 OFFSET $4
 	`
 
-	rows, err := h.DB.GetDB().QueryContext(r.Context(), query, schedulerID, limit, offset)
+	rows, err := h.DB.GetDB().QueryContext(r.Context(), query, schedulerID, orgID, limit, offset)
 	if err != nil {
 		logger.Error().Err(err).Str("scheduler_id", schedulerID).Msg("Failed to query scheduler jobs")
 		InternalError(w, r, err)
@@ -580,11 +529,11 @@ func (h *Handler) getSchedulerJobs(w http.ResponseWriter, r *http.Request, sched
 		jobs = append(jobs, job)
 	}
 
-	// Get total count
+	// Get total count - SECURITY FIX: Added organisation_id filter
 	var total int
 	err = h.DB.GetDB().QueryRowContext(r.Context(), `
-		SELECT COUNT(*) FROM jobs WHERE scheduler_id = $1
-	`, schedulerID).Scan(&total)
+		SELECT COUNT(*) FROM jobs WHERE scheduler_id = $1 AND organisation_id = $2
+	`, schedulerID, orgID).Scan(&total)
 	if err != nil {
 		logger.Error().Err(err).Str("scheduler_id", schedulerID).Msg("Failed to count scheduler jobs")
 		InternalError(w, r, err)

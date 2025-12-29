@@ -12,7 +12,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Harvey-AU/blue-banded-bee/internal/auth"
 	"github.com/Harvey-AU/blue-banded-bee/internal/db"
 	"github.com/Harvey-AU/blue-banded-bee/internal/jobs"
 )
@@ -144,21 +143,10 @@ type JobResponse struct {
 func (h *Handler) listJobs(w http.ResponseWriter, r *http.Request) {
 	logger := loggerWithRequest(r)
 
-	userClaims, ok := auth.GetUserFromContext(r.Context())
-	if !ok {
-		Unauthorised(w, r, "User information not found")
-		return
-	}
-
-	// Auto-create user if they don't exist (handles new signups)
-	user, err := h.DB.GetOrCreateUser(userClaims.UserID, userClaims.Email, nil)
-	if err != nil {
-		if HandlePoolSaturation(w, r, err) {
-			return
-		}
-		logger.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get or create user")
-		InternalError(w, r, err)
-		return
+	// Get active organisation (validates auth and membership)
+	orgID := h.GetActiveOrganisation(w, r)
+	if orgID == "" {
+		return // Error already written
 	}
 
 	// Parse query parameters
@@ -190,10 +178,6 @@ func (h *Handler) listJobs(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get jobs from database
-	orgID := ""
-	if user.OrganisationID != nil {
-		orgID = *user.OrganisationID
-	}
 	jobs, total, err := h.DB.ListJobsWithOffset(orgID, limit, offset, status, dateRange, tzOffset)
 	if err != nil {
 		if HandlePoolSaturation(w, r, err) {
@@ -254,10 +238,17 @@ func (h *Handler) createJobFromRequest(ctx context.Context, user *db.User, req C
 		maxPages = *req.MaxPages
 	}
 
+	// Use effective organisation (active org takes precedence over legacy org)
+	effectiveOrgID := h.DB.GetEffectiveOrganisationID(user)
+	var orgIDPtr *string
+	if effectiveOrgID != "" {
+		orgIDPtr = &effectiveOrgID
+	}
+
 	opts := &jobs.JobOptions{
 		Domain:         req.Domain,
 		UserID:         &user.ID,
-		OrganisationID: user.OrganisationID,
+		OrganisationID: orgIDPtr,
 		UseSitemap:     useSitemap,
 		Concurrency:    concurrency,
 		FindLinks:      findLinks,
@@ -274,22 +265,16 @@ func (h *Handler) createJobFromRequest(ctx context.Context, user *db.User, req C
 func (h *Handler) createJob(w http.ResponseWriter, r *http.Request) {
 	logger := loggerWithRequest(r)
 
-	userClaims, ok := auth.GetUserFromContext(r.Context())
+	// Get user and active organisation (validates auth and membership)
+	user, orgID, ok := h.GetActiveOrganisationWithUser(w, r)
 	if !ok {
-		Unauthorised(w, r, "User information not found")
-		return
+		return // Error already written
 	}
 
-	// Auto-create user if they don't exist (handles new signups)
-	user, err := h.DB.GetOrCreateUser(userClaims.UserID, userClaims.Email, nil)
-	if err != nil {
-		if HandlePoolSaturation(w, r, err) {
-			return
-		}
-		logger.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get or create user")
-		InternalError(w, r, err)
-		return
-	}
+	// Set the active org on user for job creation
+	user.ActiveOrganisationID = &orgID
+
+	_ = logger // logger available for future use
 
 	var req CreateJobRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -353,24 +338,15 @@ func (h *Handler) createJob(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) getJob(w http.ResponseWriter, r *http.Request, jobID string) {
 	logger := loggerWithRequest(r)
 
-	userClaims, ok := auth.GetUserFromContext(r.Context())
-	if !ok {
-		Unauthorised(w, r, "User information not found")
-		return
+	// Get active organisation (validates auth and membership)
+	orgID := h.GetActiveOrganisation(w, r)
+	if orgID == "" {
+		return // Error already written
 	}
 
-	// Auto-create user if they don't exist (handles new signups)
-	user, err := h.DB.GetOrCreateUser(userClaims.UserID, userClaims.Email, nil)
-	if err != nil {
-		if HandlePoolSaturation(w, r, err) {
-			return
-		}
-		logger.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get or create user")
-		InternalError(w, r, err)
-		return
-	}
+	_ = logger // logger available for future use
 
-	response, err := h.fetchJobResponse(r.Context(), jobID, user.OrganisationID)
+	response, err := h.fetchJobResponse(r.Context(), jobID, &orgID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			NotFound(w, r, "Job not found")
@@ -508,18 +484,10 @@ type JobActionRequest struct {
 func (h *Handler) updateJob(w http.ResponseWriter, r *http.Request, jobID string) {
 	logger := loggerWithRequest(r)
 
-	userClaims, ok := auth.GetUserFromContext(r.Context())
-	if !ok {
-		Unauthorised(w, r, "User information not found")
-		return
-	}
-
-	// Auto-create user if they don't exist (handles new signups)
-	user, err := h.DB.GetOrCreateUser(userClaims.UserID, userClaims.Email, nil)
-	if err != nil {
-		logger.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get or create user")
-		InternalError(w, r, err)
-		return
+	// Get active organisation (validates auth and membership)
+	activeOrgID := h.GetActiveOrganisation(w, r)
+	if activeOrgID == "" {
+		return // Error already written
 	}
 
 	var req JobActionRequest
@@ -528,21 +496,23 @@ func (h *Handler) updateJob(w http.ResponseWriter, r *http.Request, jobID string
 		return
 	}
 
-	// Verify job belongs to user's organisation
-	var orgID string
-	err = h.DB.GetDB().QueryRowContext(r.Context(), `
+	// Verify job belongs to user's active organisation
+	var jobOrgID string
+	err := h.DB.GetDB().QueryRowContext(r.Context(), `
 		SELECT organisation_id FROM jobs WHERE id = $1
-	`, jobID).Scan(&orgID)
+	`, jobID).Scan(&jobOrgID)
 
 	if err != nil {
 		NotFound(w, r, "Job not found")
 		return
 	}
 
-	if user.OrganisationID == nil || *user.OrganisationID != orgID {
+	if activeOrgID != jobOrgID {
 		Unauthorised(w, r, "Job access denied")
 		return
 	}
+
+	_ = logger // logger available for future use
 
 	resultJobID := jobID
 	switch req.Action {
@@ -591,35 +561,29 @@ func (h *Handler) updateJob(w http.ResponseWriter, r *http.Request, jobID string
 func (h *Handler) cancelJob(w http.ResponseWriter, r *http.Request, jobID string) {
 	logger := loggerWithRequest(r)
 
-	userClaims, ok := auth.GetUserFromContext(r.Context())
-	if !ok {
-		Unauthorised(w, r, "User information not found")
-		return
+	// Get active organisation (validates auth and membership)
+	activeOrgID := h.GetActiveOrganisation(w, r)
+	if activeOrgID == "" {
+		return // Error already written
 	}
 
-	// Auto-create user if they don't exist (handles new signups)
-	user, err := h.DB.GetOrCreateUser(userClaims.UserID, userClaims.Email, nil)
-	if err != nil {
-		logger.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get or create user")
-		InternalError(w, r, err)
-		return
-	}
-
-	// Verify job belongs to user's organisation
-	var orgID string
-	err = h.DB.GetDB().QueryRowContext(r.Context(), `
+	// Verify job belongs to user's active organisation
+	var jobOrgID string
+	err := h.DB.GetDB().QueryRowContext(r.Context(), `
 		SELECT organisation_id FROM jobs WHERE id = $1
-	`, jobID).Scan(&orgID)
+	`, jobID).Scan(&jobOrgID)
 
 	if err != nil {
 		NotFound(w, r, "Job not found")
 		return
 	}
 
-	if user.OrganisationID == nil || *user.OrganisationID != orgID {
+	if activeOrgID != jobOrgID {
 		Unauthorised(w, r, "Job access denied")
 		return
 	}
+
+	_ = logger // logger available for future use
 
 	err = h.JobsManager.CancelJob(r.Context(), jobID)
 	if err != nil {
@@ -713,35 +677,24 @@ func parseTaskQueryParams(r *http.Request) TaskQueryParams {
 // validateJobAccess validates user authentication and job access permissions
 // Returns the user if validation succeeds, or writes HTTP error and returns nil
 func (h *Handler) validateJobAccess(w http.ResponseWriter, r *http.Request, jobID string) *db.User {
-	logger := loggerWithRequest(r)
-
-	// Extract user claims from context
-	userClaims, ok := auth.GetUserFromContext(r.Context())
+	// Get user and active organisation (validates auth and membership)
+	user, activeOrgID, ok := h.GetActiveOrganisationWithUser(w, r)
 	if !ok {
-		Unauthorised(w, r, "User information not found")
-		return nil
+		return nil // Error already written
 	}
 
-	// Auto-create user if they don't exist (handles new signups)
-	user, err := h.DB.GetOrCreateUser(userClaims.UserID, userClaims.Email, nil)
-	if err != nil {
-		logger.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get or create user")
-		InternalError(w, r, err)
-		return nil
-	}
-
-	// Verify job belongs to user's organisation
-	var orgID string
-	err = h.DB.GetDB().QueryRowContext(r.Context(), `
+	// Verify job belongs to user's active organisation
+	var jobOrgID string
+	err := h.DB.GetDB().QueryRowContext(r.Context(), `
 		SELECT organisation_id FROM jobs WHERE id = $1
-	`, jobID).Scan(&orgID)
+	`, jobID).Scan(&jobOrgID)
 
 	if err != nil {
 		NotFound(w, r, "Job not found")
 		return nil
 	}
 
-	if user.OrganisationID == nil || *user.OrganisationID != orgID {
+	if activeOrgID != jobOrgID {
 		Unauthorised(w, r, "Job access denied")
 		return nil
 	}

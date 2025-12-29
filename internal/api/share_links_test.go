@@ -13,6 +13,7 @@ import (
 	"github.com/Harvey-AU/blue-banded-bee/internal/auth"
 	"github.com/Harvey-AU/blue-banded-bee/internal/db"
 	"github.com/stretchr/testify/assert"
+	testifymock "github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
 
@@ -61,6 +62,7 @@ func TestCreateJobShareLinkCreatesNewToken(t *testing.T) {
 	}
 
 	mockDB.On("GetOrCreateUser", user.ID, user.Email, (*string)(nil)).Return(user, nil)
+	mockDB.On("GetEffectiveOrganisationID", testifymock.AnythingOfType("*db.User")).Return(orgID)
 	mockDB.On("GetDB").Return(sqlDB)
 	mock.ExpectQuery(`SELECT organisation_id FROM jobs WHERE id = \$1`).
 		WithArgs("job-123").
@@ -114,6 +116,7 @@ func TestCreateJobShareLinkReturnsExistingToken(t *testing.T) {
 	}
 
 	mockDB.On("GetOrCreateUser", user.ID, user.Email, (*string)(nil)).Return(user, nil)
+	mockDB.On("GetEffectiveOrganisationID", testifymock.AnythingOfType("*db.User")).Return(orgID)
 	mockDB.On("GetDB").Return(sqlDB)
 	mock.ExpectQuery(`SELECT organisation_id FROM jobs WHERE id = \$1`).
 		WithArgs("job-456").
@@ -162,6 +165,7 @@ func TestGetJobShareLinkSuccess(t *testing.T) {
 	}
 
 	mockDB.On("GetOrCreateUser", user.ID, user.Email, (*string)(nil)).Return(user, nil)
+	mockDB.On("GetEffectiveOrganisationID", testifymock.AnythingOfType("*db.User")).Return(orgID)
 	mockDB.On("GetDB").Return(sqlDB)
 	mock.ExpectQuery(`SELECT organisation_id FROM jobs WHERE id = \$1`).
 		WithArgs("job-222").
@@ -211,6 +215,7 @@ func TestGetJobShareLinkNotFound(t *testing.T) {
 	}
 
 	mockDB.On("GetOrCreateUser", user.ID, user.Email, (*string)(nil)).Return(user, nil)
+	mockDB.On("GetEffectiveOrganisationID", testifymock.AnythingOfType("*db.User")).Return(orgID)
 	mockDB.On("GetDB").Return(sqlDB)
 	mock.ExpectQuery(`SELECT organisation_id FROM jobs WHERE id = \$1`).
 		WithArgs("job-333").
@@ -254,6 +259,7 @@ func TestRevokeJobShareLinkSuccess(t *testing.T) {
 	}
 
 	mockDB.On("GetOrCreateUser", user.ID, user.Email, (*string)(nil)).Return(user, nil)
+	mockDB.On("GetEffectiveOrganisationID", testifymock.AnythingOfType("*db.User")).Return(orgID)
 	mockDB.On("GetDB").Return(sqlDB)
 	mock.ExpectQuery(`SELECT organisation_id FROM jobs WHERE id = \$1`).
 		WithArgs("job-001").
@@ -300,6 +306,7 @@ func TestRevokeJobShareLinkNotFound(t *testing.T) {
 	}
 
 	mockDB.On("GetOrCreateUser", user.ID, user.Email, (*string)(nil)).Return(user, nil)
+	mockDB.On("GetEffectiveOrganisationID", testifymock.AnythingOfType("*db.User")).Return(orgID)
 	mockDB.On("GetDB").Return(sqlDB)
 	mock.ExpectQuery(`SELECT organisation_id FROM jobs WHERE id = \$1`).
 		WithArgs("job-404").
