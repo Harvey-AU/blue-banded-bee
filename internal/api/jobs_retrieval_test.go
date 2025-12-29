@@ -14,7 +14,7 @@ import (
 	"github.com/Harvey-AU/blue-banded-bee/internal/db"
 	"github.com/Harvey-AU/blue-banded-bee/internal/jobs"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
+	testifymock "github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
 
@@ -177,6 +177,7 @@ func TestGetJobIntegration(t *testing.T) {
 				OrganisationID: &tt.orgID,
 			}
 			mockDB.On("GetOrCreateUser", tt.userID, "test@example.com", (*string)(nil)).Return(user, nil)
+			mockDB.On("GetEffectiveOrganisationID", testifymock.AnythingOfType("*db.User")).Return(tt.orgID)
 
 			// Mock GetDB to return our sqlmock instance
 			mockDB.On("GetDB").Return(mockSQL)
@@ -241,7 +242,7 @@ func TestUpdateJobIntegration(t *testing.T) {
 			},
 			setupMocks: func(jm *MockJobManager) {
 				// Mock successful cancel
-				jm.On("CancelJob", mock.AnythingOfType("*context.valueCtx"), "job-456").Return(nil)
+				jm.On("CancelJob", testifymock.AnythingOfType("*context.valueCtx"), "job-456").Return(nil)
 
 				// Mock GetJobStatus for response
 				job := &jobs.Job{
@@ -256,7 +257,7 @@ func TestUpdateJobIntegration(t *testing.T) {
 					CreatedAt:      time.Now().UTC(),
 					CompletedAt:    time.Now().UTC(),
 				}
-				jm.On("GetJobStatus", mock.AnythingOfType("*context.valueCtx"), "job-456").Return(job, nil)
+				jm.On("GetJobStatus", testifymock.AnythingOfType("*context.valueCtx"), "job-456").Return(job, nil)
 			},
 			expectedStatus: http.StatusOK,
 			checkResponse: func(t *testing.T, rec *httptest.ResponseRecorder) {
@@ -401,6 +402,7 @@ func TestUpdateJobIntegration(t *testing.T) {
 				OrganisationID: &tt.orgID,
 			}
 			mockDB.On("GetOrCreateUser", tt.userID, "test@example.com", (*string)(nil)).Return(user, nil)
+			mockDB.On("GetEffectiveOrganisationID", testifymock.AnythingOfType("*db.User")).Return(tt.orgID)
 
 			// Mock GetDB only for tests that reach SQL queries
 			if tt.name != "invalid_json_payload" {
@@ -478,7 +480,7 @@ func TestCancelJobIntegration(t *testing.T) {
 			},
 			setupMocks: func(jm *MockJobManager) {
 				// Mock successful cancellation
-				jm.On("CancelJob", mock.AnythingOfType("*context.valueCtx"), "job-123").Return(nil)
+				jm.On("CancelJob", testifymock.AnythingOfType("*context.valueCtx"), "job-123").Return(nil)
 			},
 			expectedStatus: http.StatusOK,
 			checkResponse: func(t *testing.T, rec *httptest.ResponseRecorder) {
@@ -529,7 +531,7 @@ func TestCancelJobIntegration(t *testing.T) {
 			},
 			setupMocks: func(jm *MockJobManager) {
 				// Mock CancelJob failure
-				jm.On("CancelJob", mock.AnythingOfType("*context.valueCtx"), "job-123").Return(assert.AnError)
+				jm.On("CancelJob", testifymock.AnythingOfType("*context.valueCtx"), "job-123").Return(assert.AnError)
 			},
 			expectedStatus: http.StatusInternalServerError,
 			checkResponse: func(t *testing.T, rec *httptest.ResponseRecorder) {
@@ -570,6 +572,7 @@ func TestCancelJobIntegration(t *testing.T) {
 					OrganisationID: &tt.orgID,
 				}
 				mockDB.On("GetOrCreateUser", tt.userID, "test@example.com", (*string)(nil)).Return(user, nil)
+				mockDB.On("GetEffectiveOrganisationID", testifymock.AnythingOfType("*db.User")).Return(tt.orgID)
 				mockDB.On("GetDB").Return(mockSQL)
 			}
 
@@ -759,6 +762,7 @@ func TestGetJobTasksIntegration(t *testing.T) {
 				OrganisationID: &tt.orgID,
 			}
 			mockDB.On("GetOrCreateUser", tt.userID, "test@example.com", (*string)(nil)).Return(user, nil)
+			mockDB.On("GetEffectiveOrganisationID", testifymock.AnythingOfType("*db.User")).Return(tt.orgID)
 
 			// Mock GetDB to return our sqlmock instance
 			mockDB.On("GetDB").Return(mockSQL)

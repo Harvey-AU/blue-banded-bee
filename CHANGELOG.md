@@ -46,6 +46,35 @@ On merge, CI will:
     CDNs
   - Covers top 10 CDNs representing ~90% of web traffic (verified Dec 2025)
 
+## [0.19.0] – 2025-12-29
+
+### Added
+
+- **Multi-Organisation Support**: Users can now belong to multiple organisations
+  and switch between them
+  - New `organisation_members` table for many-to-many user-org relationships
+  - New `active_organisation_id` column on users for session persistence
+  - New `platform_org_mappings` table for Webflow/Shopify integration
+  - New endpoints: `GET /v1/organisations` (list user's orgs) and
+    `POST /v1/organisations/switch` (switch active org)
+  - Helper functions `GetActiveOrganisation()` and
+    `GetActiveOrganisationWithUser()` for consistent org context across handlers
+  - `GetEffectiveOrganisationID()` provides backward compatibility (returns
+    active org if set, otherwise legacy `organisation_id`)
+
+### Security
+
+- **Scheduler Jobs Query**: Fixed missing `organisation_id` filter in
+  `getSchedulerJobs` query that could potentially expose jobs across
+  organisations
+
+### Changed
+
+- **Organisation Scoping**: All 19 API endpoints now filter data by user's
+  active organisation (4 dashboard, 8 jobs, 5 schedulers, 2 new org endpoints)
+- **Stricter Validation**: Users without an organisation now receive HTTP 400
+  "User must belong to an organisation" instead of empty results
+
 ## [0.18.10] – 2025-12-29
 
 ### Added
