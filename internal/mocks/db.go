@@ -243,3 +243,30 @@ func (m *MockDB) GetLastJobStartTimeForScheduler(ctx context.Context, schedulerI
 	}
 	return args.Get(0).(*time.Time), args.Error(1)
 }
+
+// ListUserOrganisations mocks the ListUserOrganisations method
+func (m *MockDB) ListUserOrganisations(userID string) ([]db.UserOrganisation, error) {
+	args := m.Called(userID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]db.UserOrganisation), args.Error(1)
+}
+
+// ValidateOrganisationMembership mocks the ValidateOrganisationMembership method
+func (m *MockDB) ValidateOrganisationMembership(userID, organisationID string) (bool, error) {
+	args := m.Called(userID, organisationID)
+	return args.Bool(0), args.Error(1)
+}
+
+// SetActiveOrganisation mocks the SetActiveOrganisation method
+func (m *MockDB) SetActiveOrganisation(userID, organisationID string) error {
+	args := m.Called(userID, organisationID)
+	return args.Error(0)
+}
+
+// GetEffectiveOrganisationID mocks the GetEffectiveOrganisationID method
+func (m *MockDB) GetEffectiveOrganisationID(user *db.User) string {
+	args := m.Called(user)
+	return args.String(0)
+}

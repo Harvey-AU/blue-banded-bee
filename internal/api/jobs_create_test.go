@@ -36,6 +36,7 @@ func TestCreateJobIntegration(t *testing.T) {
 					OrganisationID: &orgID,
 				}
 				mockDB.On("GetOrCreateUser", "test-user-123", "test@example.com", (*string)(nil)).Return(user, nil)
+				mockDB.On("GetEffectiveOrganisationID", mock.AnythingOfType("*db.User")).Return(orgID)
 
 				createdJob := &jobs.Job{
 					ID:             "job-456",
@@ -93,6 +94,7 @@ func TestCreateJobIntegration(t *testing.T) {
 					OrganisationID: &orgID,
 				}
 				mockDB.On("GetOrCreateUser", "test-user-123", "test@example.com", (*string)(nil)).Return(user, nil)
+				mockDB.On("GetEffectiveOrganisationID", mock.AnythingOfType("*db.User")).Return(orgID)
 
 				createdJob := &jobs.Job{
 					ID:             "job-789",
@@ -138,6 +140,7 @@ func TestCreateJobIntegration(t *testing.T) {
 					OrganisationID: &orgID,
 				}
 				mockDB.On("GetOrCreateUser", "test-user-123", "test@example.com", (*string)(nil)).Return(user, nil)
+				mockDB.On("GetEffectiveOrganisationID", mock.AnythingOfType("*db.User")).Return(orgID)
 				// JobManager should not be called
 			},
 			expectedStatus: http.StatusBadRequest,
@@ -184,6 +187,7 @@ func TestCreateJobIntegration(t *testing.T) {
 					OrganisationID: &orgID,
 				}
 				mockDB.On("GetOrCreateUser", "test-user-123", "test@example.com", (*string)(nil)).Return(user, nil)
+				mockDB.On("GetEffectiveOrganisationID", mock.AnythingOfType("*db.User")).Return(orgID)
 				jm.On("CreateJob", mock.AnythingOfType("*context.valueCtx"), mock.AnythingOfType("*jobs.JobOptions")).Return(nil, assert.AnError)
 			},
 			expectedStatus: http.StatusInternalServerError,

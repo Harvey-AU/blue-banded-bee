@@ -44,6 +44,7 @@ func TestWebflowWebhookIntegration(t *testing.T) {
 					OrganisationID: stringPtr("webhook-org-456"),
 				}
 				mockDB.On("GetUserByWebhookToken", "test-webhook-token-123").Return(user, nil)
+				mockDB.On("GetEffectiveOrganisationID", mock.AnythingOfType("*db.User")).Return("webhook-org-456")
 
 				// Mock successful job creation
 				createdJob := &jobs.Job{
@@ -237,6 +238,7 @@ func TestWebflowWebhookEdgeCases(t *testing.T) {
 					OrganisationID: stringPtr("webhook-org-456"),
 				}
 				mockDB.On("GetUserByWebhookToken", "test-token").Return(user, nil)
+				mockDB.On("GetEffectiveOrganisationID", mock.AnythingOfType("*db.User")).Return("webhook-org-456")
 
 				// Mock job creation failure
 				jm.On("CreateJob", mock.Anything, mock.AnythingOfType("*jobs.JobOptions")).Return(nil, assert.AnError)

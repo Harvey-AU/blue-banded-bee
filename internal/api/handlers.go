@@ -118,6 +118,11 @@ type DBClient interface {
 	GetLastJobStartTimeForScheduler(ctx context.Context, schedulerID string) (*time.Time, error)
 	GetDomainNameByID(ctx context.Context, domainID int) (string, error)
 	GetDomainNames(ctx context.Context, domainIDs []int) (map[int]string, error)
+	// Organisation membership methods
+	ListUserOrganisations(userID string) ([]db.UserOrganisation, error)
+	ValidateOrganisationMembership(userID, organisationID string) (bool, error)
+	SetActiveOrganisation(userID, organisationID string) error
+	GetEffectiveOrganisationID(user *db.User) string
 }
 
 // Handler holds dependencies for API handlers
@@ -132,6 +137,55 @@ func NewHandler(pgDB DBClient, jobsManager jobs.JobManagerInterface) *Handler {
 		DB:          pgDB,
 		JobsManager: jobsManager,
 	}
+}
+
+// GetActiveOrganisation validates and returns the active organisation ID for the current user.
+// It writes an error response and returns an empty string if authentication fails or the user
+// doesn't belong to an organisation.
+func (h *Handler) GetActiveOrganisation(w http.ResponseWriter, r *http.Request) string {
+	userClaims, ok := auth.GetUserFromContext(r.Context())
+	if !ok {
+		Unauthorised(w, r, "User information not found")
+		return ""
+	}
+
+	user, err := h.DB.GetOrCreateUser(userClaims.UserID, userClaims.Email, nil)
+	if err != nil {
+		InternalError(w, r, err)
+		return ""
+	}
+
+	orgID := h.DB.GetEffectiveOrganisationID(user)
+	if orgID == "" {
+		BadRequest(w, r, "User must belong to an organisation")
+		return ""
+	}
+
+	return orgID
+}
+
+// GetActiveOrganisationWithUser validates and returns both the user and active organisation ID.
+// It writes an error response and returns nil, "", false if authentication fails.
+func (h *Handler) GetActiveOrganisationWithUser(w http.ResponseWriter, r *http.Request) (*db.User, string, bool) {
+	userClaims, ok := auth.GetUserFromContext(r.Context())
+	if !ok {
+		Unauthorised(w, r, "User information not found")
+		return nil, "", false
+	}
+
+	user, err := h.DB.GetOrCreateUser(userClaims.UserID, userClaims.Email, nil)
+	if err != nil {
+		InternalError(w, r, err)
+		return nil, "", false
+	}
+
+	orgID := h.DB.GetEffectiveOrganisationID(user)
+	if orgID == "" {
+		BadRequest(w, r, "User must belong to an organisation")
+		return nil, "", false
+	}
+
+	return user, orgID, true
 }
 
 // SetupRoutes configures all API routes with proper middleware
@@ -164,6 +218,10 @@ func (h *Handler) SetupRoutes(mux *http.ServeMux) {
 
 	// Profile route (requires auth)
 	mux.Handle("/v1/auth/profile", auth.AuthMiddleware(http.HandlerFunc(h.AuthProfile)))
+
+	// Organisation routes (require auth)
+	mux.Handle("/v1/organisations", auth.AuthMiddleware(http.HandlerFunc(h.OrganisationsHandler)))
+	mux.Handle("/v1/organisations/switch", auth.AuthMiddleware(http.HandlerFunc(h.SwitchOrganisationHandler)))
 
 	// Webhook endpoints (no auth required)
 	mux.HandleFunc("/v1/webhooks/webflow/", h.WebflowWebhook) // Note: trailing slash for path params
@@ -368,29 +426,15 @@ func (h *Handler) ServeConfigJS(w http.ResponseWriter, r *http.Request) {
 
 // DashboardStats handles dashboard statistics requests
 func (h *Handler) DashboardStats(w http.ResponseWriter, r *http.Request) {
-	logger := loggerWithRequest(r)
-
 	if r.Method != http.MethodGet {
 		MethodNotAllowed(w, r)
 		return
 	}
 
-	// Get user claims from context
-	userClaims, ok := auth.GetUserFromContext(r.Context())
-	if !ok || userClaims == nil {
-		Unauthorised(w, r, "Authentication required")
-		return
-	}
-
-	// Get full user object from database (auto-create if needed)
-	user, err := h.DB.GetOrCreateUser(userClaims.UserID, userClaims.Email, nil)
-	if err != nil {
-		if HandlePoolSaturation(w, r, err) {
-			return
-		}
-		logger.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get or create user")
-		InternalError(w, r, err)
-		return
+	// Get active organisation ID (handles auth and validation)
+	orgID := h.GetActiveOrganisation(w, r)
+	if orgID == "" {
+		return // Error already written
 	}
 
 	// Get query parameters
@@ -407,10 +451,6 @@ func (h *Handler) DashboardStats(w http.ResponseWriter, r *http.Request) {
 	startDate, endDate := calculateDateRange(dateRange, timezone)
 
 	// Get job statistics
-	orgID := ""
-	if user.OrganisationID != nil {
-		orgID = *user.OrganisationID
-	}
 	stats, err := h.DB.GetJobStats(orgID, startDate, endDate)
 	if err != nil {
 		if HandlePoolSaturation(w, r, err) {
@@ -435,26 +475,15 @@ func (h *Handler) DashboardStats(w http.ResponseWriter, r *http.Request) {
 
 // DashboardActivity handles dashboard activity chart requests
 func (h *Handler) DashboardActivity(w http.ResponseWriter, r *http.Request) {
-	logger := loggerWithRequest(r)
-
 	if r.Method != http.MethodGet {
 		MethodNotAllowed(w, r)
 		return
 	}
 
-	// Get user claims from context
-	userClaims, ok := auth.GetUserFromContext(r.Context())
-	if !ok || userClaims == nil {
-		Unauthorised(w, r, "Authentication required")
-		return
-	}
-
-	// Get full user object from database (auto-create if needed)
-	user, err := h.DB.GetOrCreateUser(userClaims.UserID, userClaims.Email, nil)
-	if err != nil {
-		logger.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get or create user")
-		InternalError(w, r, err)
-		return
+	// Get active organisation ID (handles auth and validation)
+	orgID := h.GetActiveOrganisation(w, r)
+	if orgID == "" {
+		return // Error already written
 	}
 
 	// Get query parameters
@@ -471,10 +500,6 @@ func (h *Handler) DashboardActivity(w http.ResponseWriter, r *http.Request) {
 	startDate, endDate := calculateDateRange(dateRange, timezone)
 
 	// Get activity data
-	orgID := ""
-	if user.OrganisationID != nil {
-		orgID = *user.OrganisationID
-	}
 	activity, err := h.DB.GetJobActivity(orgID, startDate, endDate)
 	if err != nil {
 		DatabaseError(w, r, err)
@@ -585,26 +610,15 @@ func (h *Handler) jsFileServer(root http.FileSystem) http.Handler {
 
 // DashboardSlowPages handles requests for slow-loading pages analysis
 func (h *Handler) DashboardSlowPages(w http.ResponseWriter, r *http.Request) {
-	logger := loggerWithRequest(r)
-
 	if r.Method != http.MethodGet {
 		MethodNotAllowed(w, r)
 		return
 	}
 
-	// Get user claims from context
-	userClaims, ok := auth.GetUserFromContext(r.Context())
-	if !ok || userClaims == nil {
-		Unauthorised(w, r, "Authentication required")
-		return
-	}
-
-	// Get full user object from database (auto-create if needed)
-	user, err := h.DB.GetOrCreateUser(userClaims.UserID, userClaims.Email, nil)
-	if err != nil {
-		logger.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get or create user")
-		InternalError(w, r, err)
-		return
+	// Get active organisation (validates auth and membership)
+	orgID := h.GetActiveOrganisation(w, r)
+	if orgID == "" {
+		return // Error already written
 	}
 
 	// Get query parameters
@@ -621,10 +635,6 @@ func (h *Handler) DashboardSlowPages(w http.ResponseWriter, r *http.Request) {
 	startDate, endDate := calculateDateRange(dateRange, timezone)
 
 	// Get slow pages data
-	orgID := ""
-	if user.OrganisationID != nil {
-		orgID = *user.OrganisationID
-	}
 	slowPages, err := h.DB.GetSlowPages(orgID, startDate, endDate)
 	if err != nil {
 		DatabaseError(w, r, err)
@@ -642,26 +652,15 @@ func (h *Handler) DashboardSlowPages(w http.ResponseWriter, r *http.Request) {
 
 // DashboardExternalRedirects handles requests for external redirect analysis
 func (h *Handler) DashboardExternalRedirects(w http.ResponseWriter, r *http.Request) {
-	logger := loggerWithRequest(r)
-
 	if r.Method != http.MethodGet {
 		MethodNotAllowed(w, r)
 		return
 	}
 
-	// Get user claims from context
-	userClaims, ok := auth.GetUserFromContext(r.Context())
-	if !ok || userClaims == nil {
-		Unauthorised(w, r, "Authentication required")
-		return
-	}
-
-	// Get full user object from database (auto-create if needed)
-	user, err := h.DB.GetOrCreateUser(userClaims.UserID, userClaims.Email, nil)
-	if err != nil {
-		logger.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get or create user")
-		InternalError(w, r, err)
-		return
+	// Get active organisation (validates auth and membership)
+	orgID := h.GetActiveOrganisation(w, r)
+	if orgID == "" {
+		return // Error already written
 	}
 
 	// Get query parameters
@@ -678,10 +677,6 @@ func (h *Handler) DashboardExternalRedirects(w http.ResponseWriter, r *http.Requ
 	startDate, endDate := calculateDateRange(dateRange, timezone)
 
 	// Get external redirects data
-	orgID := ""
-	if user.OrganisationID != nil {
-		orgID = *user.OrganisationID
-	}
 	redirects, err := h.DB.GetExternalRedirects(orgID, startDate, endDate)
 	if err != nil {
 		DatabaseError(w, r, err)
