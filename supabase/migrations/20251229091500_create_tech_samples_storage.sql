@@ -25,4 +25,4 @@ ALTER TABLE domains
 ALTER TABLE domains
     ADD COLUMN IF NOT EXISTS tech_html_path TEXT DEFAULT NULL;
 
-COMMENT ON COLUMN domains.tech_html_path IS 'Path to HTML sample in tech-samples storage bucket';
+COMMENT ON COLUMN domains.tech_html_path IS 'Path to HTML sample in page-crawls storage bucket';

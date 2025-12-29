@@ -4,6 +4,7 @@ package storage
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -85,15 +86,16 @@ func (c *Client) GetSignedURL(ctx context.Context, bucket, path string, expiresI
 		return "", fmt.Errorf("get signed URL failed with status %d: %s", resp.StatusCode, string(respBody))
 	}
 
-	// Response is {"signedURL": "..."}
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("failed to read response: %w", err)
+	// Parse the signed URL from response
+	var result struct {
+		SignedURL string `json:"signedURL"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", fmt.Errorf("failed to parse signed URL response: %w", err)
 	}
 
-	// Simple extraction - could use json.Unmarshal for robustness
-	// Format: {"signedURL":"/storage/v1/object/sign/bucket/path?token=..."}
-	return string(respBody), nil
+	// SignedURL is relative path, prepend base URL
+	return c.baseURL + result.SignedURL, nil
 }
 
 // Delete removes a file from storage
