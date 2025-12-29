@@ -27,7 +27,33 @@ On merge, CI will:
 4. Create a git tag and GitHub release
 5. Commit the updated changelog
 
-## [Unreleased]
+## [Unreleased:minor]
+
+### Added
+
+- **Slack Integration**: Job completion notifications via Slack DMs
+  - OAuth flow for installing BBB Slack app to workspaces
+  - Bot tokens stored securely in Supabase Vault (replaces custom AES-256-GCM)
+  - Supabase Slack OIDC support for user authentication
+  - Auto-linking users to Slack workspaces via database triggers
+  - Notification service for sending DMs when jobs complete or fail
+  - API endpoints for workspace management and user preferences
+- **Notification System**: Database-backed notification queue with delivery
+  tracking
+  - `notifications` table for storing pending notifications
+  - `slack_connections` table for workspace connections
+  - `slack_user_links` table for user-to-workspace preferences
+  - `slack_user_id` column on users table (synced from Supabase Auth)
+- **Vault Integration**: Secure token storage using Supabase Vault
+  - `store_slack_token()` and `get_slack_token()` SQL functions
+  - Tokens encrypted at rest using Supabase's built-in encryption
+
+### Changed
+
+- **Token Storage**: Migrated from custom crypto to Supabase Vault
+  - Removed `internal/util/crypto.go` (AES-256-GCM implementation)
+  - Removed `SLACK_TOKEN_ENCRYPTION_KEY` environment variable
+  - Bot tokens now stored via Vault SQL functions
 
 ## [0.18.10] – 2025-12-29
 

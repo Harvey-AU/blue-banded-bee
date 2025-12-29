@@ -32,6 +32,12 @@ import (
 	"golang.org/x/sync/singleflight"
 )
 
+// JobNotifier is the interface for job completion notifications
+type JobNotifier interface {
+	NotifyJobComplete(ctx context.Context, job *Job)
+	NotifyJobFailed(ctx context.Context, job *Job)
+}
+
 const (
 	taskProcessingTimeout      = 2 * time.Minute
 	poolSaturationBackoff      = 2 * time.Second
@@ -99,6 +105,7 @@ type WorkerPool struct {
 	cleanupInterval  time.Duration
 	notifyCh         chan struct{}
 	jobManager       *JobManager // Reference to JobManager for duplicate checking
+	notifier         JobNotifier // Optional notification service for job events
 
 	// Per-worker task concurrency
 	workerConcurrency int               // How many tasks each worker can process concurrently
@@ -523,6 +530,11 @@ func NewWorkerPool(sqlDB *sql.DB, dbQueue DbQueueInterface, crawler CrawlerInter
 	}
 
 	return wp
+}
+
+// SetNotifier sets the notification service for job events
+func (wp *WorkerPool) SetNotifier(n JobNotifier) {
+	wp.notifier = n
 }
 
 func (wp *WorkerPool) Start(ctx context.Context) {
@@ -1197,6 +1209,11 @@ func (wp *WorkerPool) markJobFailedDueToConsecutiveFailures(ctx context.Context,
 	}
 
 	wp.RemoveJob(jobID)
+
+	// Send failure notification asynchronously
+	if updateErr == nil && wp.notifier != nil && wp.jobManager != nil {
+		go wp.notifyJobFailed(context.Background(), jobID)
+	}
 }
 
 // processTaskResult handles the result from a task execution and updates backoff state
@@ -1882,7 +1899,7 @@ func (wp *WorkerPool) loadJobQueueState(ctx context.Context, jobID string) (*job
 }
 
 func (wp *WorkerPool) markJobCompleted(ctx context.Context, jobID string) error {
-	return wp.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
+	err := wp.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
 		// Only update if job is not already in a terminal state (cancelled, failed)
 		// This prevents race conditions where a job was cancelled but running tasks complete
 		_, err := tx.ExecContext(ctx, `
@@ -1895,6 +1912,45 @@ func (wp *WorkerPool) markJobCompleted(ctx context.Context, jobID string) error 
 		`, JobStatusCompleted, time.Now().UTC(), jobID, JobStatusCancelled, JobStatusFailed)
 		return err
 	})
+
+	// Send notifications asynchronously (fire and forget)
+	if err == nil && wp.notifier != nil {
+		if wp.jobManager == nil {
+			log.Warn().
+				Str("job_id", jobID).
+				Msg("Job notifier configured but JobManager is nil; skipping completion notification")
+		} else {
+			go wp.notifyJobCompleted(context.Background(), jobID)
+		}
+	}
+
+	return err
+}
+
+func (wp *WorkerPool) notifyJobCompleted(ctx context.Context, jobID string) {
+	if wp.notifier == nil || wp.jobManager == nil {
+		return
+	}
+	// Fetch job details for notification
+	job, err := wp.jobManager.GetJob(ctx, jobID)
+	if err != nil {
+		log.Warn().Err(err).Str("job_id", jobID).Msg("Failed to fetch job for notification")
+		return
+	}
+	wp.notifier.NotifyJobComplete(ctx, job)
+}
+
+func (wp *WorkerPool) notifyJobFailed(ctx context.Context, jobID string) {
+	if wp.notifier == nil || wp.jobManager == nil {
+		return
+	}
+	// Fetch job details for notification
+	job, err := wp.jobManager.GetJob(ctx, jobID)
+	if err != nil {
+		log.Warn().Err(err).Str("job_id", jobID).Msg("Failed to fetch job for failure notification")
+		return
+	}
+	wp.notifier.NotifyJobFailed(ctx, job)
 }
 
 func (wp *WorkerPool) promoteWaitingTasks(ctx context.Context, jobID string, limit int) (int64, error) {
