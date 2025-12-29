@@ -1,6 +1,8 @@
 package crawler
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
 	"net/http"
 	"net/http/httptest"
@@ -272,5 +274,189 @@ func BenchmarkFilterURLs(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_ = c.FilterURLs(urls, []string{}, []string{})
+	}
+}
+
+func TestIsGzipContent(t *testing.T) {
+	tests := []struct {
+		name            string
+		contentEncoding string
+		url             string
+		expected        bool
+	}{
+		{
+			name:            "gzip_header",
+			contentEncoding: "gzip",
+			url:             "https://example.com/sitemap.xml",
+			expected:        true,
+		},
+		{
+			name:            "gzip_header_uppercase",
+			contentEncoding: "GZIP",
+			url:             "https://example.com/sitemap.xml",
+			expected:        true,
+		},
+		{
+			name:            "xml_gz_suffix",
+			contentEncoding: "",
+			url:             "https://example.com/sitemap.xml.gz",
+			expected:        true,
+		},
+		{
+			name:            "gz_suffix_only",
+			contentEncoding: "",
+			url:             "https://example.com/sitemap.gz",
+			expected:        true,
+		},
+		{
+			name:            "xml_gz_suffix_uppercase",
+			contentEncoding: "",
+			url:             "https://example.com/SITEMAP.XML.GZ",
+			expected:        true,
+		},
+		{
+			name:            "no_compression",
+			contentEncoding: "",
+			url:             "https://example.com/sitemap.xml",
+			expected:        false,
+		},
+		{
+			name:            "deflate_encoding",
+			contentEncoding: "deflate",
+			url:             "https://example.com/sitemap.xml",
+			expected:        false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := isGzipContent(tt.contentEncoding, tt.url)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestDecompressGzip(t *testing.T) {
+	t.Run("valid_gzip_data", func(t *testing.T) {
+		original := []byte("<?xml version=\"1.0\"?><urlset><url><loc>https://example.com/</loc></url></urlset>")
+
+		// Compress the data
+		var buf bytes.Buffer
+		gzWriter := gzip.NewWriter(&buf)
+		_, err := gzWriter.Write(original)
+		require.NoError(t, err)
+		err = gzWriter.Close()
+		require.NoError(t, err)
+
+		// Decompress and verify
+		decompressed, err := decompressGzip(buf.Bytes())
+		require.NoError(t, err)
+		assert.Equal(t, original, decompressed)
+	})
+
+	t.Run("invalid_gzip_data", func(t *testing.T) {
+		invalidData := []byte("not gzip data")
+		_, err := decompressGzip(invalidData)
+		assert.Error(t, err)
+	})
+
+	t.Run("empty_gzip_data", func(t *testing.T) {
+		// Create empty gzip
+		var buf bytes.Buffer
+		gzWriter := gzip.NewWriter(&buf)
+		err := gzWriter.Close()
+		require.NoError(t, err)
+
+		decompressed, err := decompressGzip(buf.Bytes())
+		require.NoError(t, err)
+		assert.Empty(t, decompressed)
+	})
+}
+
+func TestParseSitemapGzip(t *testing.T) {
+	// Helper to gzip content
+	gzipContent := func(content []byte) []byte {
+		var buf bytes.Buffer
+		gzWriter := gzip.NewWriter(&buf)
+		gzWriter.Write(content)
+		gzWriter.Close()
+		return buf.Bytes()
+	}
+
+	sitemapXML := []byte(`<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+	<url><loc>https://example.com/page1</loc></url>
+	<url><loc>https://example.com/page2</loc></url>
+</urlset>`)
+
+	// Test server that serves gzipped sitemap
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/sitemap.xml.gz":
+			// Serve gzipped content without Content-Encoding header (file-based compression)
+			w.Header().Set("Content-Type", "application/gzip")
+			w.WriteHeader(http.StatusOK)
+			w.Write(gzipContent(sitemapXML))
+		case "/sitemap-encoded.xml":
+			// Serve with Content-Encoding: gzip header (transfer encoding)
+			w.Header().Set("Content-Type", "application/xml")
+			w.Header().Set("Content-Encoding", "gzip")
+			w.WriteHeader(http.StatusOK)
+			w.Write(gzipContent(sitemapXML))
+		case "/sitemap.xml":
+			// Normal uncompressed sitemap
+			w.Header().Set("Content-Type", "application/xml")
+			w.WriteHeader(http.StatusOK)
+			w.Write(sitemapXML)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+
+	c := &Crawler{
+		config: &Config{
+			UserAgent: "TestBot/1.0",
+		},
+	}
+
+	tests := []struct {
+		name        string
+		path        string
+		expectedLen int
+		expectError bool
+	}{
+		{
+			name:        "gzip_file_extension",
+			path:        "/sitemap.xml.gz",
+			expectedLen: 2,
+			expectError: false,
+		},
+		{
+			name:        "gzip_content_encoding",
+			path:        "/sitemap-encoded.xml",
+			expectedLen: 2,
+			expectError: false,
+		},
+		{
+			name:        "uncompressed_sitemap",
+			path:        "/sitemap.xml",
+			expectedLen: 2,
+			expectError: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+			urls, err := c.ParseSitemap(ctx, server.URL+tt.path)
+
+			if tt.expectError {
+				assert.Error(t, err)
+			} else {
+				require.NoError(t, err)
+				assert.Len(t, urls, tt.expectedLen)
+			}
+		})
 	}
 }
