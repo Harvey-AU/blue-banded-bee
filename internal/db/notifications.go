@@ -22,17 +22,17 @@ const (
 
 // Notification represents a notification record
 type Notification struct {
-	ID             string
-	OrganisationID string
-	UserID         *string // nil for org-wide notifications
-	Type           NotificationType
-	Title          string
-	Message        string
-	Data           map[string]interface{}
-	IsRead         bool
-	DeliveredSlack bool
-	DeliveredEmail bool
-	CreatedAt      time.Time
+	ID               string
+	OrganisationID   string
+	UserID           *string // nil for org-wide notifications
+	Type             NotificationType
+	Title            string
+	Message          string
+	Data             map[string]interface{}
+	ReadAt           *time.Time
+	SlackDeliveredAt *time.Time
+	EmailDeliveredAt *time.Time
+	CreatedAt        time.Time
 }
 
 // NotificationData is the structured payload for different notification types
@@ -76,17 +76,18 @@ func (db *DB) GetNotification(ctx context.Context, notificationID string) (*Noti
 	var userID sql.NullString
 	var message sql.NullString
 	var dataJSON []byte
+	var readAt, slackDeliveredAt, emailDeliveredAt sql.NullTime
 
 	query := `
 		SELECT id, organisation_id, user_id, type, title, message, data,
-		       is_read, delivered_slack, delivered_email, created_at
+		       read_at, slack_delivered_at, email_delivered_at, created_at
 		FROM notifications
 		WHERE id = $1
 	`
 
 	err := db.client.QueryRowContext(ctx, query, notificationID).Scan(
 		&n.ID, &n.OrganisationID, &userID, &n.Type, &n.Title, &message, &dataJSON,
-		&n.IsRead, &n.DeliveredSlack, &n.DeliveredEmail, &n.CreatedAt,
+		&readAt, &slackDeliveredAt, &emailDeliveredAt, &n.CreatedAt,
 	)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -100,6 +101,15 @@ func (db *DB) GetNotification(ctx context.Context, notificationID string) (*Noti
 	}
 	if message.Valid {
 		n.Message = message.String
+	}
+	if readAt.Valid {
+		n.ReadAt = &readAt.Time
+	}
+	if slackDeliveredAt.Valid {
+		n.SlackDeliveredAt = &slackDeliveredAt.Time
+	}
+	if emailDeliveredAt.Valid {
+		n.EmailDeliveredAt = &emailDeliveredAt.Time
 	}
 	if dataJSON != nil {
 		if err := json.Unmarshal(dataJSON, &n.Data); err != nil {
@@ -117,7 +127,7 @@ func (db *DB) ListNotifications(ctx context.Context, organisationID string, limi
 	argIndex := 2
 
 	if unreadOnly {
-		whereClause = "WHERE organisation_id = $1 AND is_read = false"
+		whereClause = "WHERE organisation_id = $1 AND read_at IS NULL"
 	} else {
 		whereClause = "WHERE organisation_id = $1"
 	}
@@ -132,7 +142,7 @@ func (db *DB) ListNotifications(ctx context.Context, organisationID string, limi
 	// Fetch notifications
 	query := fmt.Sprintf(`
 		SELECT id, organisation_id, user_id, type, title, message, data,
-		       is_read, delivered_slack, delivered_email, created_at
+		       read_at, slack_delivered_at, email_delivered_at, created_at
 		FROM notifications
 		%s
 		ORDER BY created_at DESC
@@ -152,10 +162,11 @@ func (db *DB) ListNotifications(ctx context.Context, organisationID string, limi
 		var userID sql.NullString
 		var message sql.NullString
 		var dataJSON []byte
+		var readAt, slackDeliveredAt, emailDeliveredAt sql.NullTime
 
 		err := rows.Scan(
 			&n.ID, &n.OrganisationID, &userID, &n.Type, &n.Title, &message, &dataJSON,
-			&n.IsRead, &n.DeliveredSlack, &n.DeliveredEmail, &n.CreatedAt,
+			&readAt, &slackDeliveredAt, &emailDeliveredAt, &n.CreatedAt,
 		)
 		if err != nil {
 			return nil, 0, fmt.Errorf("failed to scan notification: %w", err)
@@ -166,6 +177,15 @@ func (db *DB) ListNotifications(ctx context.Context, organisationID string, limi
 		}
 		if message.Valid {
 			n.Message = message.String
+		}
+		if readAt.Valid {
+			n.ReadAt = &readAt.Time
+		}
+		if slackDeliveredAt.Valid {
+			n.SlackDeliveredAt = &slackDeliveredAt.Time
+		}
+		if emailDeliveredAt.Valid {
+			n.EmailDeliveredAt = &emailDeliveredAt.Time
 		}
 		if dataJSON != nil {
 			n.Data = make(map[string]interface{})
@@ -184,7 +204,7 @@ func (db *DB) ListNotifications(ctx context.Context, organisationID string, limi
 func (db *DB) MarkNotificationRead(ctx context.Context, notificationID, organisationID string) error {
 	query := `
 		UPDATE notifications
-		SET is_read = true
+		SET read_at = NOW()
 		WHERE id = $1 AND organisation_id = $2
 	`
 
@@ -205,8 +225,8 @@ func (db *DB) MarkNotificationRead(ctx context.Context, notificationID, organisa
 func (db *DB) MarkAllNotificationsRead(ctx context.Context, organisationID string) error {
 	query := `
 		UPDATE notifications
-		SET is_read = true
-		WHERE organisation_id = $1 AND is_read = false
+		SET read_at = NOW()
+		WHERE organisation_id = $1 AND read_at IS NULL
 	`
 
 	_, err := db.client.ExecContext(ctx, query, organisationID)
@@ -221,9 +241,9 @@ func (db *DB) MarkAllNotificationsRead(ctx context.Context, organisationID strin
 func (db *DB) GetPendingSlackNotifications(ctx context.Context, limit int) ([]*Notification, error) {
 	query := `
 		SELECT n.id, n.organisation_id, n.user_id, n.type, n.title, n.message, n.data,
-		       n.is_read, n.delivered_slack, n.delivered_email, n.created_at
+		       n.read_at, n.slack_delivered_at, n.email_delivered_at, n.created_at
 		FROM notifications n
-		WHERE n.delivered_slack = false
+		WHERE n.slack_delivered_at IS NULL
 		  AND EXISTS (SELECT 1 FROM slack_connections sc WHERE sc.organisation_id = n.organisation_id)
 		ORDER BY n.created_at ASC
 		LIMIT $1
@@ -241,10 +261,11 @@ func (db *DB) GetPendingSlackNotifications(ctx context.Context, limit int) ([]*N
 		var userID sql.NullString
 		var message sql.NullString
 		var dataJSON []byte
+		var readAt, slackDeliveredAt, emailDeliveredAt sql.NullTime
 
 		err := rows.Scan(
 			&n.ID, &n.OrganisationID, &userID, &n.Type, &n.Title, &message, &dataJSON,
-			&n.IsRead, &n.DeliveredSlack, &n.DeliveredEmail, &n.CreatedAt,
+			&readAt, &slackDeliveredAt, &emailDeliveredAt, &n.CreatedAt,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan notification: %w", err)
@@ -255,6 +276,15 @@ func (db *DB) GetPendingSlackNotifications(ctx context.Context, limit int) ([]*N
 		}
 		if message.Valid {
 			n.Message = message.String
+		}
+		if readAt.Valid {
+			n.ReadAt = &readAt.Time
+		}
+		if slackDeliveredAt.Valid {
+			n.SlackDeliveredAt = &slackDeliveredAt.Time
+		}
+		if emailDeliveredAt.Valid {
+			n.EmailDeliveredAt = &emailDeliveredAt.Time
 		}
 		if dataJSON != nil {
 			n.Data = make(map[string]interface{})
@@ -274,16 +304,16 @@ func (db *DB) MarkNotificationDelivered(ctx context.Context, notificationID, cha
 	var column string
 	switch channel {
 	case "slack":
-		column = "delivered_slack"
+		column = "slack_delivered_at"
 	case "email":
-		column = "delivered_email"
+		column = "email_delivered_at"
 	default:
 		return fmt.Errorf("unknown channel: %s", channel)
 	}
 
 	query := fmt.Sprintf(`
 		UPDATE notifications
-		SET %s = true
+		SET %s = NOW()
 		WHERE id = $1
 	`, column)
 
@@ -297,7 +327,7 @@ func (db *DB) MarkNotificationDelivered(ctx context.Context, notificationID, cha
 
 // GetUnreadCount returns the count of unread notifications for an organisation
 func (db *DB) GetUnreadNotificationCount(ctx context.Context, organisationID string) (int, error) {
-	query := `SELECT COUNT(*) FROM notifications WHERE organisation_id = $1 AND is_read = false`
+	query := `SELECT COUNT(*) FROM notifications WHERE organisation_id = $1 AND read_at IS NULL`
 
 	var count int
 	err := db.client.QueryRowContext(ctx, query, organisationID).Scan(&count)
