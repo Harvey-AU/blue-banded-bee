@@ -29,6 +29,23 @@ On merge, CI will:
 
 ## [Unreleased]
 
+### Fixed
+
+- **CDN Cache Status Normalisation**: Cache status headers now correctly
+  normalised across all major CDNs
+  - CloudFront: `"Miss from cloudfront"` → `MISS`, `"Hit from cloudfront"` →
+    `HIT`
+  - Akamai: `TCP_HIT`, `TCP_MISS`, `TCP_MEM_HIT`, `TCP_DENIED` → standard
+    `HIT`/`MISS`/`BYPASS`
+  - Azure CDN: `TCP_REMOTE_HIT`, `UNCACHEABLE` → standard format
+  - Fastly shielding: `"HIT, MISS"` → takes last value (edge POP result)
+  - Netlify/RFC 9211: `"Netlify Edge"; hit` → `HIT`
+  - Cloudflare: `NONE`, `UNKNOWN` → `BYPASS`
+  - Fixes dashboard showing raw CDN strings instead of normalised HIT/MISS
+  - Fixes `shouldMakeSecondRequest()` cache warming logic for non-Cloudflare
+    CDNs
+  - Covers top 10 CDNs representing ~90% of web traffic (verified Dec 2025)
+
 ## [0.18.10] – 2025-12-29
 
 ### Added
