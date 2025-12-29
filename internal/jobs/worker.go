@@ -1910,13 +1910,22 @@ func (wp *WorkerPool) markJobCompleted(ctx context.Context, jobID string) error 
 
 	// Send notifications asynchronously (fire and forget)
 	if err == nil && wp.notifier != nil {
-		go wp.notifyJobCompleted(context.Background(), jobID)
+		if wp.jobManager == nil {
+			log.Warn().
+				Str("job_id", jobID).
+				Msg("Job notifier configured but JobManager is nil; skipping completion notification")
+		} else {
+			go wp.notifyJobCompleted(context.Background(), jobID)
+		}
 	}
 
 	return err
 }
 
 func (wp *WorkerPool) notifyJobCompleted(ctx context.Context, jobID string) {
+	if wp.notifier == nil || wp.jobManager == nil {
+		return
+	}
 	// Fetch job details for notification
 	job, err := wp.jobManager.GetJob(ctx, jobID)
 	if err != nil {

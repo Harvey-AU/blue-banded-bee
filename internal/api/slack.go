@@ -256,8 +256,9 @@ func (h *Handler) handleSlackOAuthCallback(w http.ResponseWriter, r *http.Reques
 		redirectURI = "https://app.bluebandedbee.co/v1/integrations/slack/callback"
 	}
 
+	httpClient := &http.Client{Timeout: 30 * time.Second}
 	resp, err := slack.GetOAuthV2Response(
-		http.DefaultClient,
+		httpClient,
 		slackClientID,
 		slackClientSecret,
 		code,

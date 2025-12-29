@@ -897,6 +897,10 @@ func startNotificationProcessor(ctx context.Context, wg *sync.WaitGroup, notific
 			return
 		case <-ticker.C:
 			if err := notificationService.ProcessPendingNotifications(ctx, 50); err != nil {
+				// Skip logging for normal shutdown cancellation
+				if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+					return
+				}
 				log.Warn().Err(err).Msg("Failed to process pending notifications")
 			}
 		}
