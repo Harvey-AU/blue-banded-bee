@@ -100,11 +100,24 @@ func ConstructURL(domain, path string) string {
 	return "https://" + normalisedDomain + path
 }
 
+// normaliseHostPort removes default ports (80 for HTTP, 443 for HTTPS) from host.
+func normaliseHostPort(host, scheme string) string {
+	if scheme == "http" && strings.HasSuffix(host, ":80") {
+		return strings.TrimSuffix(host, ":80")
+	}
+	if scheme == "https" && strings.HasSuffix(host, ":443") {
+		return strings.TrimSuffix(host, ":443")
+	}
+	return host
+}
+
 // IsSignificantRedirect checks if a redirect URL is meaningfully different from the original.
+// Only the host and path are compared; query parameters and fragments are ignored.
 // Returns false for trivial redirects like:
 //   - HTTP to HTTPS on same domain/path
 //   - www to non-www (or vice versa) on same path
 //   - Trailing slash differences
+//   - Default port differences (e.g., :443 for HTTPS, :80 for HTTP)
 //
 // Returns true for redirects to different domains or different paths.
 func IsSignificantRedirect(originalURL, redirectURL string) bool {
@@ -121,9 +134,11 @@ func IsSignificantRedirect(originalURL, redirectURL string) bool {
 		return true
 	}
 
-	// Normalise hosts (remove www prefix, lowercase)
-	origHost := strings.ToLower(strings.TrimPrefix(origParsed.Host, "www."))
-	redirHost := strings.ToLower(strings.TrimPrefix(redirParsed.Host, "www."))
+	// Normalise hosts (remove www prefix, lowercase, strip default ports)
+	origHost := normaliseHostPort(origParsed.Host, origParsed.Scheme)
+	origHost = strings.ToLower(strings.TrimPrefix(origHost, "www."))
+	redirHost := normaliseHostPort(redirParsed.Host, redirParsed.Scheme)
+	redirHost = strings.ToLower(strings.TrimPrefix(redirHost, "www."))
 
 	// Different domain = significant
 	if origHost != redirHost {

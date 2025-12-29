@@ -434,6 +434,47 @@ func TestIsSignificantRedirect(t *testing.T) {
 			redirectURL: "https://example.com/blog/post",
 			expected:    true,
 		},
+		// Not significant - default port handling
+		{
+			name:        "https_default_port_to_no_port",
+			originalURL: "https://example.com:443/page",
+			redirectURL: "https://example.com/page",
+			expected:    false,
+		},
+		{
+			name:        "http_default_port_to_no_port",
+			originalURL: "http://example.com:80/page",
+			redirectURL: "http://example.com/page",
+			expected:    false,
+		},
+		// Significant - non-default port
+		{
+			name:        "different_non_default_port",
+			originalURL: "https://example.com:8080/page",
+			redirectURL: "https://example.com/page",
+			expected:    true,
+		},
+		// Not significant - query parameter changes (ignored)
+		{
+			name:        "query_parameter_change",
+			originalURL: "https://example.com/page?a=1",
+			redirectURL: "https://example.com/page?b=2",
+			expected:    false,
+		},
+		// Not significant - fragment changes (ignored)
+		{
+			name:        "fragment_change",
+			originalURL: "https://example.com/page#section1",
+			redirectURL: "https://example.com/page#section2",
+			expected:    false,
+		},
+		// Significant - malformed URL handling
+		{
+			name:        "malformed_original_url",
+			originalURL: "://invalid",
+			redirectURL: "https://example.com/page",
+			expected:    true,
+		},
 	}
 
 	for _, tt := range tests {
