@@ -127,6 +127,7 @@ jobs:
             SENTRY_DSN="${{ secrets.SENTRY_DSN }}" \
             SLACK_CLIENT_ID="${{ secrets.SLACK_CLIENT_ID }}" \
             SLACK_CLIENT_SECRET="${{ secrets.SLACK_CLIENT_SECRET }}" \
+            APP_URL="https://$APP_NAME.fly.dev" \
             --app $APP_NAME --stage
 
           # Deploy to review app with local image (this will apply staged secrets)

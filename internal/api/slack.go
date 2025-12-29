@@ -206,10 +206,14 @@ func (h *Handler) initiateSlackOAuth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Build Slack OAuth URL
+	// Build Slack OAuth URL - use APP_URL if set, otherwise default to production
 	redirectURI := os.Getenv("SLACK_REDIRECT_URI")
 	if redirectURI == "" {
-		redirectURI = "https://app.bluebandedbee.co/v1/integrations/slack/callback"
+		appURL := os.Getenv("APP_URL")
+		if appURL == "" {
+			appURL = "https://app.bluebandedbee.co"
+		}
+		redirectURI = appURL + "/v1/integrations/slack/callback"
 	}
 
 	authURL := fmt.Sprintf(
@@ -253,7 +257,11 @@ func (h *Handler) handleSlackOAuthCallback(w http.ResponseWriter, r *http.Reques
 	// Exchange code for access token
 	redirectURI := os.Getenv("SLACK_REDIRECT_URI")
 	if redirectURI == "" {
-		redirectURI = "https://app.bluebandedbee.co/v1/integrations/slack/callback"
+		appURL := os.Getenv("APP_URL")
+		if appURL == "" {
+			appURL = "https://app.bluebandedbee.co"
+		}
+		redirectURI = appURL + "/v1/integrations/slack/callback"
 	}
 
 	httpClient := &http.Client{Timeout: 30 * time.Second}
