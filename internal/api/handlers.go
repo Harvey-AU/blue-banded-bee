@@ -118,6 +118,17 @@ type DBClient interface {
 	GetLastJobStartTimeForScheduler(ctx context.Context, schedulerID string) (*time.Time, error)
 	GetDomainNameByID(ctx context.Context, domainID int) (string, error)
 	GetDomainNames(ctx context.Context, domainIDs []int) (map[int]string, error)
+	// Slack integration methods
+	CreateSlackConnection(ctx context.Context, conn *db.SlackConnection) error
+	GetSlackConnection(ctx context.Context, connectionID string) (*db.SlackConnection, error)
+	ListSlackConnections(ctx context.Context, organisationID string) ([]*db.SlackConnection, error)
+	DeleteSlackConnection(ctx context.Context, connectionID, organisationID string) error
+	CreateSlackUserLink(ctx context.Context, link *db.SlackUserLink) error
+	GetSlackUserLink(ctx context.Context, userID, connectionID string) (*db.SlackUserLink, error)
+	UpdateSlackUserLinkNotifications(ctx context.Context, userID, connectionID string, dmNotifications bool) error
+	DeleteSlackUserLink(ctx context.Context, userID, connectionID string) error
+	StoreSlackToken(ctx context.Context, connectionID, token string) error
+	GetSlackToken(ctx context.Context, connectionID string) (string, error)
 }
 
 // Handler holds dependencies for API handlers
@@ -167,6 +178,11 @@ func (h *Handler) SetupRoutes(mux *http.ServeMux) {
 
 	// Webhook endpoints (no auth required)
 	mux.HandleFunc("/v1/webhooks/webflow/", h.WebflowWebhook) // Note: trailing slash for path params
+
+	// Slack integration endpoints
+	mux.Handle("/v1/integrations/slack", auth.AuthMiddleware(http.HandlerFunc(h.SlackConnectionsHandler)))
+	mux.Handle("/v1/integrations/slack/", auth.AuthMiddleware(http.HandlerFunc(h.SlackConnectionHandler)))
+	mux.HandleFunc("/v1/integrations/slack/callback", h.SlackOAuthCallback) // No auth - state validation
 
 	// Admin endpoints (require authentication and admin role)
 	mux.Handle("/v1/admin/reset-db", auth.AuthMiddleware(http.HandlerFunc(h.AdminResetDatabase)))

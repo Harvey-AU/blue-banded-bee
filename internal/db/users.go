@@ -16,6 +16,7 @@ type User struct {
 	Email          string    `json:"email"`
 	FullName       *string   `json:"full_name,omitempty"`
 	OrganisationID *string   `json:"organisation_id,omitempty"`
+	SlackUserID    *string   `json:"slack_user_id,omitempty"`
 	CreatedAt      time.Time `json:"created_at"`
 	UpdatedAt      time.Time `json:"updated_at"`
 }
@@ -33,14 +34,14 @@ func (db *DB) GetUser(userID string) (*User, error) {
 	user := &User{}
 
 	query := `
-		SELECT id, email, full_name, organisation_id, created_at, updated_at
+		SELECT id, email, full_name, organisation_id, slack_user_id, created_at, updated_at
 		FROM users
 		WHERE id = $1
 	`
 
 	err := db.client.QueryRow(query, userID).Scan(
 		&user.ID, &user.Email, &user.FullName, &user.OrganisationID,
-		&user.CreatedAt, &user.UpdatedAt,
+		&user.SlackUserID, &user.CreatedAt, &user.UpdatedAt,
 	)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -57,14 +58,14 @@ func (db *DB) GetUserByWebhookToken(webhookToken string) (*User, error) {
 	user := &User{}
 
 	query := `
-		SELECT id, email, full_name, organisation_id, created_at, updated_at
+		SELECT id, email, full_name, organisation_id, slack_user_id, created_at, updated_at
 		FROM users
 		WHERE webhook_token = $1
 	`
 
 	err := db.client.QueryRow(query, webhookToken).Scan(
 		&user.ID, &user.Email, &user.FullName, &user.OrganisationID,
-		&user.CreatedAt, &user.UpdatedAt,
+		&user.SlackUserID, &user.CreatedAt, &user.UpdatedAt,
 	)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -303,7 +304,7 @@ func (db *DB) GetOrganisation(organisationID string) (*Organisation, error) {
 
 func (db *DB) GetOrganisationMembers(organisationID string) ([]*User, error) {
 	query := `
-		SELECT id, email, full_name, organisation_id, created_at, updated_at
+		SELECT id, email, full_name, organisation_id, slack_user_id, created_at, updated_at
 		FROM users
 		WHERE organisation_id = $1
 		ORDER BY created_at ASC
@@ -320,7 +321,7 @@ func (db *DB) GetOrganisationMembers(organisationID string) ([]*User, error) {
 		user := &User{}
 		err := rows.Scan(
 			&user.ID, &user.Email, &user.FullName, &user.OrganisationID,
-			&user.CreatedAt, &user.UpdatedAt,
+			&user.SlackUserID, &user.CreatedAt, &user.UpdatedAt,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan user: %w", err)

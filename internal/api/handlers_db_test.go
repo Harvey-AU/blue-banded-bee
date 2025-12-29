@@ -182,3 +182,45 @@ func (m *MockDBWithRealDB) GetDomainNames(ctx context.Context, domainIDs []int) 
 func (m *MockDBWithRealDB) GetLastJobStartTimeForScheduler(ctx context.Context, schedulerID string) (*time.Time, error) {
 	return nil, nil
 }
+
+// Slack integration methods
+
+func (m *MockDBWithRealDB) CreateSlackConnection(ctx context.Context, conn *db.SlackConnection) error {
+	return nil
+}
+
+func (m *MockDBWithRealDB) GetSlackConnection(ctx context.Context, connectionID string) (*db.SlackConnection, error) {
+	return nil, nil
+}
+
+func (m *MockDBWithRealDB) ListSlackConnections(ctx context.Context, organisationID string) ([]*db.SlackConnection, error) {
+	return nil, nil
+}
+
+func (m *MockDBWithRealDB) DeleteSlackConnection(ctx context.Context, connectionID, organisationID string) error {
+	return nil
+}
+
+func (m *MockDBWithRealDB) CreateSlackUserLink(ctx context.Context, link *db.SlackUserLink) error {
+	return nil
+}
+
+func (m *MockDBWithRealDB) GetSlackUserLink(ctx context.Context, userID, connectionID string) (*db.SlackUserLink, error) {
+	return nil, nil
+}
+
+func (m *MockDBWithRealDB) UpdateSlackUserLinkNotifications(ctx context.Context, userID, connectionID string, dmNotifications bool) error {
+	return nil
+}
+
+func (m *MockDBWithRealDB) DeleteSlackUserLink(ctx context.Context, userID, connectionID string) error {
+	return nil
+}
+
+func (m *MockDBWithRealDB) StoreSlackToken(ctx context.Context, connectionID, token string) error {
+	return nil
+}
+
+func (m *MockDBWithRealDB) GetSlackToken(ctx context.Context, connectionID string) (string, error) {
+	return "", nil
+}
