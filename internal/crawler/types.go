@@ -45,6 +45,7 @@ type CrawlResult struct {
 	SecondPerformance   *PerformanceMetrics `json:"second_performance,omitempty"`
 	CacheCheckAttempts  []CacheCheckAttempt `json:"cache_check_attempts,omitempty"`
 	BodySample          []byte              `json:"-"` // Truncated body for tech detection (not serialised)
+	Body                []byte              `json:"-"` // Full body for storage upload (not serialised)
 }
 
 // CrawlOptions defines configuration options for a crawl operation

@@ -237,7 +237,7 @@ func (m *TaskPrepMock) DecrementRunningTasksBy(ctx context.Context, jobID string
 
 func (m *TaskPrepMock) SetConcurrencyOverride(fn db.ConcurrencyOverrideFunc) {}
 
-func (m *TaskPrepMock) UpdateDomainTechnologies(ctx context.Context, domainID int, technologies, headers []byte, htmlSample string) error {
+func (m *TaskPrepMock) UpdateDomainTechnologies(ctx context.Context, domainID int, technologies, headers []byte, htmlPath string) error {
 	return nil
 }
 

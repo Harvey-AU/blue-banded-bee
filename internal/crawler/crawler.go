@@ -317,7 +317,9 @@ func (c *Crawler) setupResponseHandlers(collyClone *colly.Collector, result *Cra
 		result.Headers = r.Headers.Clone()
 		result.RedirectURL = r.Request.URL.String()
 
-		// Store truncated body sample for technology detection
+		// Store body for tech detection and storage upload
+		// BodySample is truncated for wappalyzer detection, Body is the full content
+		result.Body = r.Body
 		if len(r.Body) > MaxBodySampleSize {
 			result.BodySample = r.Body[:MaxBodySampleSize]
 		} else {

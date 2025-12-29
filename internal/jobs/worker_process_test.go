@@ -152,7 +152,7 @@ func (m *MockDbQueue) SetConcurrencyOverride(fn db.ConcurrencyOverrideFunc) {
 	// No-op for mock
 }
 
-func (m *MockDbQueue) UpdateDomainTechnologies(ctx context.Context, domainID int, technologies, headers []byte, htmlSample string) error {
+func (m *MockDbQueue) UpdateDomainTechnologies(ctx context.Context, domainID int, technologies, headers []byte, htmlPath string) error {
 	return nil
 }
 

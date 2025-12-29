@@ -188,7 +188,7 @@ func (m *ClaimTaskMock) ExecuteMaintenance(ctx context.Context, fn func(*sql.Tx)
 
 func (m *ClaimTaskMock) SetConcurrencyOverride(fn db.ConcurrencyOverrideFunc) {}
 
-func (m *ClaimTaskMock) UpdateDomainTechnologies(ctx context.Context, domainID int, technologies, headers []byte, htmlSample string) error {
+func (m *ClaimTaskMock) UpdateDomainTechnologies(ctx context.Context, domainID int, technologies, headers []byte, htmlPath string) error {
 	return nil
 }
 

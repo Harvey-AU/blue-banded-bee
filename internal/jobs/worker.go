@@ -22,6 +22,7 @@ import (
 	"github.com/Harvey-AU/blue-banded-bee/internal/crawler"
 	"github.com/Harvey-AU/blue-banded-bee/internal/db"
 	"github.com/Harvey-AU/blue-banded-bee/internal/observability"
+	"github.com/Harvey-AU/blue-banded-bee/internal/storage"
 	"github.com/Harvey-AU/blue-banded-bee/internal/techdetect"
 	"github.com/Harvey-AU/blue-banded-bee/internal/util"
 	"github.com/getsentry/sentry-go"
@@ -145,6 +146,7 @@ type WorkerPool struct {
 	techDetector        *techdetect.Detector
 	techDetectedDomains map[int]bool // Domains already detected in this session
 	techDetectedMutex   sync.RWMutex
+	storageClient       *storage.Client // For uploading HTML samples
 }
 
 func (wp *WorkerPool) ensureDomainLimiter() *DomainLimiter {
@@ -526,6 +528,16 @@ func NewWorkerPool(sqlDB *sql.DB, dbQueue DbQueueInterface, crawler CrawlerInter
 	} else {
 		wp.techDetector = detector
 		log.Info().Msg("Technology detector initialised")
+	}
+
+	// Initialise storage client for HTML sample uploads (non-fatal if not configured)
+	supabaseURL := os.Getenv("SUPABASE_URL")
+	supabaseServiceKey := os.Getenv("SUPABASE_SERVICE_ROLE_KEY")
+	if supabaseURL != "" && supabaseServiceKey != "" {
+		wp.storageClient = storage.New(supabaseURL, supabaseServiceKey)
+		log.Info().Msg("Storage client initialised for tech detection samples")
+	} else {
+		log.Debug().Msg("Storage client not configured - HTML samples will not be stored (set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY)")
 	}
 
 	// Start the notification listener when we have connection details available.
@@ -3441,6 +3453,7 @@ func (wp *WorkerPool) handleTaskSuccess(ctx context.Context, task *db.Task, resu
 
 // detectTechnologies runs wappalyzer detection on the crawl result and updates the domain.
 // Only runs once per domain per worker pool session to avoid redundant detection.
+// If storage is configured, uploads the full HTML body to Supabase Storage.
 func (wp *WorkerPool) detectTechnologies(ctx context.Context, task *db.Task, result *crawler.CrawlResult) {
 	if wp.techDetector == nil {
 		return
@@ -3478,7 +3491,7 @@ func (wp *WorkerPool) detectTechnologies(ctx context.Context, task *db.Task, res
 	wp.techDetectedDomains[domainID] = true
 	wp.techDetectedMutex.Unlock()
 
-	// Run detection
+	// Run detection using truncated body sample
 	detectResult := wp.techDetector.Detect(result.Headers, result.BodySample)
 
 	// Marshal technologies and headers for storage
@@ -3494,8 +3507,22 @@ func (wp *WorkerPool) detectTechnologies(ctx context.Context, task *db.Task, res
 		return
 	}
 
+	// Upload full HTML body to storage if configured
+	var htmlPath string
+	if wp.storageClient != nil && len(result.Body) > 0 {
+		// Create a unique path: domains/{domain_id}/{timestamp}.html
+		storagePath := fmt.Sprintf("domains/%d/%d.html", domainID, time.Now().Unix())
+		path, uploadErr := wp.storageClient.Upload(ctx, "tech-samples", storagePath, result.Body, "text/html")
+		if uploadErr != nil {
+			log.Warn().Err(uploadErr).Int("domain_id", domainID).Msg("Failed to upload HTML to storage - continuing without")
+		} else {
+			htmlPath = path
+			log.Debug().Str("path", path).Int("size", len(result.Body)).Msg("Uploaded HTML sample to storage")
+		}
+	}
+
 	// Update domain with detection results
-	if err := wp.dbQueue.UpdateDomainTechnologies(ctx, domainID, techJSON, headersJSON, detectResult.HTMLSample); err != nil {
+	if err := wp.dbQueue.UpdateDomainTechnologies(ctx, domainID, techJSON, headersJSON, htmlPath); err != nil {
 		log.Error().Err(err).Int("domain_id", domainID).Msg("Failed to update domain technologies")
 		return
 	}
@@ -3504,6 +3531,7 @@ func (wp *WorkerPool) detectTechnologies(ctx context.Context, task *db.Task, res
 		Int("domain_id", domainID).
 		Str("domain", domainName).
 		Int("tech_count", len(detectResult.Technologies)).
+		Str("html_path", htmlPath).
 		Interface("technologies", detectResult.Technologies).
 		Msg("Technology detection completed")
 }
