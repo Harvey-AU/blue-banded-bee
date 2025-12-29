@@ -2240,7 +2240,10 @@
                 orgList.querySelectorAll(".bb-org-item").forEach((el) => {
                   el.classList.toggle("active", el.dataset.orgId === orgId);
                 });
-                window.BB_ACTIVE_ORG = { id: orgId, name: orgName };
+                window.BB_ACTIVE_ORG = orgs.find((o) => o.id === orgId) || {
+                  id: orgId,
+                  name: orgName,
+                };
 
                 // Refresh dashboard data
                 if (window.refreshDashboard) {
