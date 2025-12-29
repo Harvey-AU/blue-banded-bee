@@ -2290,19 +2290,22 @@
       }
 
       // Initialise org switcher after auth is ready
-      document.addEventListener("DOMContentLoaded", () => {
-        // Wait for auth to be ready, then init org switcher
-        const checkAuth = setInterval(async () => {
+      document.addEventListener("DOMContentLoaded", async () => {
+        try {
+          // Wait for core app to be ready (includes auth)
+          if (window.BB_APP?.coreReady) {
+            await window.BB_APP.coreReady;
+          }
+          // Check if user is authenticated before initialising
           const {
             data: { session },
-          } = (await window.supabase?.auth?.getSession?.()) || {};
+          } = (await window.supabase?.auth?.getSession()) || {};
           if (session) {
-            clearInterval(checkAuth);
             initOrgSwitcher();
           }
-        }, 100);
-        // Stop checking after 10 seconds
-        setTimeout(() => clearInterval(checkAuth), 10000);
+        } catch (err) {
+          console.error("Error initialising org switcher on load:", err);
+        }
       });
 
       // Admin: Reset Database Button Handler
