@@ -29,6 +29,22 @@ On merge, CI will:
 
 ## [Unreleased]
 
+### Added
+
+- **Compressed Sitemap Support**: ParseSitemap now handles gzip-compressed
+  sitemaps (.xml.gz files and Content-Encoding: gzip responses)
+  - Automatic detection via URL suffix or response header
+  - Requests gzip encoding from servers for bandwidth savings
+
+### Changed
+
+- **Storage Optimisation**: Reduced unnecessary data storage in tasks table
+  - `source_url` now only stored for 'link' source type (pages discovered from
+    other pages); empty for 'sitemap' and 'manual' sources
+  - `redirect_url` now only stored for significant redirects (different domain
+    or path); trivial redirects (HTTP→HTTPS, www→non-www, trailing slash) no
+    longer stored
+
 ## [0.18.9] – 2025-12-29
 
 ## [0.18.8] – 2025-12-27

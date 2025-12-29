@@ -307,13 +307,13 @@ Organisation model implemented:
   - [x] Fail manual URL creation if robots.txt cannot be checked
   - [x] Filter dynamically discovered links against robots rules
 
-- [ ] **URL Processing Enhancements**
+- [x] **URL Processing Enhancements**
   - [x] Filter out links that are hidden via inline `style` attributes.
   - [x] Remove anchor links from link discovery
-  - [ ] Support compressed sitemaps (.xml.gz and other formats)
+  - [x] Support compressed sitemaps (.xml.gz and other formats)
   - [x] If sitemap can't be found, setup job with / page and start as normal
         finding links through pages
-  - [ ] Only store source_url if page was found ON a page and redirect_url if
+  - [x] Only store source_url if page was found ON a page and redirect_url if
         it's a redirect AND it doesn't match the domain/path of the task
 
 - [x] Considering impact of and plan updates
