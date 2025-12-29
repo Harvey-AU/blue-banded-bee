@@ -2080,6 +2080,12 @@
           if (session?.user && window.loadSchedules) {
             window.loadSchedules();
           }
+
+          // Initialise organisation switcher
+          if (session?.user) {
+            await initOrgSwitcher();
+          }
+
           if (session?.user) {
             const isSystemAdmin =
               session.user.app_metadata?.system_role === "system_admin" ||
@@ -2291,25 +2297,6 @@
           divider.style.display = "none";
         }
       }
-
-      // Initialise org switcher after auth is ready
-      document.addEventListener("DOMContentLoaded", async () => {
-        try {
-          // Wait for core app to be ready (includes auth)
-          if (window.BB_APP?.coreReady) {
-            await window.BB_APP.coreReady;
-          }
-          // Check if user is authenticated before initialising
-          const {
-            data: { session },
-          } = (await window.supabase?.auth?.getSession()) || {};
-          if (session) {
-            initOrgSwitcher();
-          }
-        } catch (err) {
-          console.error("Error initialising org switcher on load:", err);
-        }
-      });
 
       // Admin: Reset Database Button Handler
       // Button visibility is controlled by system-admin role check in dashboard initialization
