@@ -270,6 +270,22 @@ func TestNormaliseCacheStatus(t *testing.T) {
 
 		// Preserve unknown formats
 		{"unknown format", "SOME_CUSTOM_VALUE", "SOME_CUSTOM_VALUE"},
+
+		// Mixed case standard formats - normalise to uppercase
+		{"mixed case hit", "Hit", "HIT"},
+		{"lowercase miss", "miss", "MISS"},
+		{"mixed case dynamic", "Dynamic", "DYNAMIC"},
+		{"lowercase stale", "stale", "STALE"},
+
+		// Whitespace handling
+		{"leading spaces", "  HIT", "HIT"},
+		{"trailing spaces", "MISS  ", "MISS"},
+		{"both spaces", "  DYNAMIC  ", "DYNAMIC"},
+		{"spaces only", "   ", ""},
+
+		// TCP_ edge cases without HIT/MISS
+		{"tcp client refresh", "TCP_CLIENT_REFRESH", "BYPASS"},
+		{"tcp swapfail", "TCP_SWAPFAIL", "BYPASS"},
 	}
 
 	for _, tt := range tests {

@@ -36,19 +36,19 @@ import (
 //   - https://techdocs.akamai.com/property-mgr/docs/return-cache-status
 //   - https://vercel.com/docs/headers/response-headers
 func normaliseCacheStatus(status string) string {
+	// Trim whitespace from input
+	status = strings.TrimSpace(status)
 	if status == "" {
 		return ""
 	}
 
 	upper := strings.ToUpper(status)
-	normalised := status // Track normalised value for passthrough cases
 
 	// Fastly shielding: "HIT, MISS" or "MISS, HIT" - take the last value (edge POP result)
 	if strings.Contains(upper, ", ") {
 		parts := strings.Split(upper, ", ")
 		if len(parts) > 0 {
 			upper = strings.TrimSpace(parts[len(parts)-1])
-			normalised = upper // Update normalised for standard format passthrough
 		}
 	}
 
@@ -104,8 +104,15 @@ func normaliseCacheStatus(status string) string {
 		}
 	}
 
-	// Already normalised (Cloudflare, Fastly, Vercel, KeyCDN, etc.)
-	return normalised
+	// Standard formats - normalise to uppercase for consistency
+	// Covers: HIT, MISS, DYNAMIC, BYPASS, EXPIRED, STALE, REVALIDATED, UPDATING, PRERENDER, PASS
+	switch upper {
+	case "HIT", "MISS", "DYNAMIC", "BYPASS", "EXPIRED", "STALE", "REVALIDATED", "UPDATING", "PRERENDER", "PASS":
+		return upper
+	}
+
+	// Unknown formats - preserve original (already trimmed)
+	return status
 }
 
 // Crawler represents a URL crawler with configuration and metrics
