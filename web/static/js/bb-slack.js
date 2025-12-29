@@ -270,9 +270,9 @@ async function connectSlackWorkspace() {
       { method: "POST" }
     );
 
-    if (response && response.oauth_url) {
+    if (response && response.auth_url) {
       // Redirect to Slack OAuth
-      window.location.href = response.oauth_url;
+      window.location.href = response.auth_url;
     } else {
       throw new Error("No OAuth URL returned");
     }
