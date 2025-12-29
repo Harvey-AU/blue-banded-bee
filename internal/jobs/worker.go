@@ -1899,10 +1899,11 @@ func (wp *WorkerPool) loadJobQueueState(ctx context.Context, jobID string) (*job
 }
 
 func (wp *WorkerPool) markJobCompleted(ctx context.Context, jobID string) error {
+	var rowsAffected int64
 	err := wp.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
 		// Only update if job is not already in a terminal state (cancelled, failed)
 		// This prevents race conditions where a job was cancelled but running tasks complete
-		_, err := tx.ExecContext(ctx, `
+		result, err := tx.ExecContext(ctx, `
 			UPDATE jobs
 			SET status = $1,
 				completed_at = COALESCE(completed_at, $2),
@@ -1910,11 +1911,15 @@ func (wp *WorkerPool) markJobCompleted(ctx context.Context, jobID string) error 
 			WHERE id = $3
 			  AND status NOT IN ($4, $5)
 		`, JobStatusCompleted, time.Now().UTC(), jobID, JobStatusCancelled, JobStatusFailed)
-		return err
+		if err != nil {
+			return err
+		}
+		rowsAffected, _ = result.RowsAffected()
+		return nil
 	})
 
-	// Send notifications asynchronously (fire and forget)
-	if err == nil && wp.notifier != nil {
+	// Only send notification if job was actually updated (not already in terminal state)
+	if err == nil && rowsAffected > 0 && wp.notifier != nil {
 		if wp.jobManager == nil {
 			log.Warn().
 				Str("job_id", jobID).
@@ -1928,6 +1933,12 @@ func (wp *WorkerPool) markJobCompleted(ctx context.Context, jobID string) error 
 }
 
 func (wp *WorkerPool) notifyJobCompleted(ctx context.Context, jobID string) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Error().Interface("panic", r).Str("job_id", jobID).Msg("Panic in job completion notification")
+		}
+	}()
+
 	if wp.notifier == nil || wp.jobManager == nil {
 		return
 	}
@@ -1941,6 +1952,12 @@ func (wp *WorkerPool) notifyJobCompleted(ctx context.Context, jobID string) {
 }
 
 func (wp *WorkerPool) notifyJobFailed(ctx context.Context, jobID string) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Error().Interface("panic", r).Str("job_id", jobID).Msg("Panic in job failure notification")
+		}
+	}()
+
 	if wp.notifier == nil || wp.jobManager == nil {
 		return
 	}

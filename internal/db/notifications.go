@@ -169,7 +169,9 @@ func (db *DB) ListNotifications(ctx context.Context, organisationID string, limi
 		}
 		if dataJSON != nil {
 			n.Data = make(map[string]interface{})
-			_ = json.Unmarshal(dataJSON, &n.Data) // Error ignored: best-effort JSON parsing
+			if err := json.Unmarshal(dataJSON, &n.Data); err != nil {
+				log.Warn().Err(err).Str("notification_id", n.ID).Msg("Failed to unmarshal notification data")
+			}
 		}
 
 		notifications = append(notifications, n)
@@ -256,7 +258,9 @@ func (db *DB) GetPendingSlackNotifications(ctx context.Context, limit int) ([]*N
 		}
 		if dataJSON != nil {
 			n.Data = make(map[string]interface{})
-			_ = json.Unmarshal(dataJSON, &n.Data) // Error ignored: best-effort JSON parsing
+			if err := json.Unmarshal(dataJSON, &n.Data); err != nil {
+				log.Warn().Err(err).Str("notification_id", n.ID).Msg("Failed to unmarshal notification data")
+			}
 		}
 
 		notifications = append(notifications, n)

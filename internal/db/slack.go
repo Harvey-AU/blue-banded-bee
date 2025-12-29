@@ -71,9 +71,8 @@ func (db *DB) CreateSlackConnection(ctx context.Context, conn *SlackConnection) 
 func (db *DB) StoreSlackToken(ctx context.Context, connectionID, token string) error {
 	query := `SELECT store_slack_token($1::uuid, $2)`
 
-	var secretName string
-	err := db.client.QueryRowContext(ctx, query, connectionID, token).Scan(&secretName)
-	if err != nil {
+	// Function returns secret name but we don't need it - just scan to consume the result
+	if err := db.client.QueryRowContext(ctx, query, connectionID, token).Scan(new(string)); err != nil {
 		log.Error().Err(err).Str("connection_id", connectionID).Msg("Failed to store slack token in vault")
 		return fmt.Errorf("failed to store slack token: %w", err)
 	}
@@ -362,7 +361,7 @@ func (db *DB) DeleteSlackUserLink(ctx context.Context, userID, connectionID stri
 	return nil
 }
 
-// GetSlackConnectionsForOrg returns connections for an organisation that have user links with DM notifications enabled
+// GetSlackConnectionsForOrg returns all Slack connections for an organisation
 func (db *DB) GetSlackConnectionsForOrg(ctx context.Context, organisationID string) ([]*SlackConnection, error) {
 	return db.ListSlackConnections(ctx, organisationID)
 }

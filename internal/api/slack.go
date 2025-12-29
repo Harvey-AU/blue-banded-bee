@@ -756,7 +756,7 @@ func (h *Handler) redirectToDashboardWithError(w http.ResponseWriter, r *http.Re
 	if dashboardURL == "" {
 		dashboardURL = "https://app.bluebandedbee.co/dashboard"
 	}
-	http.Redirect(w, r, dashboardURL+"?slack_error="+url.QueryEscape(errMsg), http.StatusTemporaryRedirect)
+	http.Redirect(w, r, dashboardURL+"?slack_error="+url.QueryEscape(errMsg), http.StatusSeeOther)
 }
 
 func (h *Handler) redirectToDashboardWithSuccess(w http.ResponseWriter, r *http.Request, workspaceName string) {
@@ -764,5 +764,5 @@ func (h *Handler) redirectToDashboardWithSuccess(w http.ResponseWriter, r *http.
 	if dashboardURL == "" {
 		dashboardURL = "https://app.bluebandedbee.co/dashboard"
 	}
-	http.Redirect(w, r, dashboardURL+"?slack_connected="+url.QueryEscape(workspaceName), http.StatusTemporaryRedirect)
+	http.Redirect(w, r, dashboardURL+"?slack_connected="+url.QueryEscape(workspaceName), http.StatusSeeOther)
 }

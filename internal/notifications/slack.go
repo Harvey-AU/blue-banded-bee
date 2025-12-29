@@ -97,6 +97,7 @@ func (s *Service) CreateJobCompleteNotification(ctx context.Context, job *jobs.J
 // CreateJobFailedNotification creates a notification for a failed job
 func (s *Service) CreateJobFailedNotification(ctx context.Context, job *jobs.Job) error {
 	if job.OrganisationID == nil {
+		log.Debug().Str("job_id", job.ID).Msg("Job has no organisation, skipping failure notification")
 		return nil
 	}
 
@@ -202,6 +203,9 @@ type SlackDB interface {
 
 // NewSlackChannel creates a new Slack delivery channel
 func NewSlackChannel(database SlackDB) (*SlackChannel, error) {
+	if database == nil {
+		return nil, fmt.Errorf("database cannot be nil")
+	}
 	return &SlackChannel{db: database}, nil
 }
 
