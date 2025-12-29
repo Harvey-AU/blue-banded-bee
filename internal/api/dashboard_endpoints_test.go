@@ -31,6 +31,7 @@ func TestDashboardStatsIntegration(t *testing.T) {
 					OrganisationID: &orgID,
 				}
 				mockDB.On("GetOrCreateUser", "test-user-123", "test@example.com", (*string)(nil)).Return(user, nil)
+				mockDB.On("GetEffectiveOrganisationID", mock.AnythingOfType("*db.User")).Return(orgID)
 
 				// Mock successful job stats
 				stats := &db.JobStats{
@@ -72,6 +73,7 @@ func TestDashboardStatsIntegration(t *testing.T) {
 					OrganisationID: &orgID,
 				}
 				mockDB.On("GetOrCreateUser", "test-user-123", "test@example.com", (*string)(nil)).Return(user, nil)
+				mockDB.On("GetEffectiveOrganisationID", mock.AnythingOfType("*db.User")).Return(orgID)
 
 				stats := &db.JobStats{
 					TotalJobs:         25,
@@ -106,6 +108,7 @@ func TestDashboardStatsIntegration(t *testing.T) {
 					OrganisationID: &orgID,
 				}
 				mockDB.On("GetOrCreateUser", "test-user-123", "test@example.com", (*string)(nil)).Return(user, nil)
+				mockDB.On("GetEffectiveOrganisationID", mock.AnythingOfType("*db.User")).Return(orgID)
 				mockDB.On("GetJobStats", "org-123", mock.AnythingOfType("*time.Time"), mock.AnythingOfType("*time.Time")).Return(nil, assert.AnError)
 			},
 			expectedStatus: http.StatusInternalServerError,
@@ -182,6 +185,7 @@ func TestDashboardActivityIntegration(t *testing.T) {
 					OrganisationID: &orgID,
 				}
 				mockDB.On("GetOrCreateUser", "test-user-123", "test@example.com", (*string)(nil)).Return(user, nil)
+				mockDB.On("GetEffectiveOrganisationID", mock.AnythingOfType("*db.User")).Return(orgID)
 
 				// Mock successful activity data
 				activity := []db.ActivityPoint{
@@ -229,6 +233,7 @@ func TestDashboardActivityIntegration(t *testing.T) {
 					OrganisationID: &orgID,
 				}
 				mockDB.On("GetOrCreateUser", "test-user-123", "test@example.com", (*string)(nil)).Return(user, nil)
+				mockDB.On("GetEffectiveOrganisationID", mock.AnythingOfType("*db.User")).Return(orgID)
 				mockDB.On("GetJobActivity", "org-123", mock.AnythingOfType("*time.Time"), mock.AnythingOfType("*time.Time")).Return(nil, assert.AnError)
 			},
 			expectedStatus: http.StatusInternalServerError,
@@ -255,7 +260,7 @@ func TestDashboardActivityIntegration(t *testing.T) {
 
 				assert.Equal(t, float64(401), response["status"])
 				assert.Equal(t, "UNAUTHORISED", response["code"])
-				assert.Equal(t, "Authentication required", response["message"])
+				assert.Equal(t, "User information not found", response["message"])
 			},
 		},
 	}

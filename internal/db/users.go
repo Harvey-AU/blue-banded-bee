@@ -12,13 +12,14 @@ import (
 
 // User represents a user in the system
 type User struct {
-	ID             string    `json:"id"`
-	Email          string    `json:"email"`
-	FullName       *string   `json:"full_name,omitempty"`
-	OrganisationID *string   `json:"organisation_id,omitempty"`
-	SlackUserID    *string   `json:"slack_user_id,omitempty"`
-	CreatedAt      time.Time `json:"created_at"`
-	UpdatedAt      time.Time `json:"updated_at"`
+	ID                   string    `json:"id"`
+	Email                string    `json:"email"`
+	FullName             *string   `json:"full_name,omitempty"`
+	OrganisationID       *string   `json:"organisation_id,omitempty"`
+	ActiveOrganisationID *string   `json:"active_organisation_id,omitempty"`
+	SlackUserID          *string   `json:"slack_user_id,omitempty"`
+	CreatedAt            time.Time `json:"created_at"`
+	UpdatedAt            time.Time `json:"updated_at"`
 }
 
 // Organisation represents an organisation in the system
@@ -34,14 +35,14 @@ func (db *DB) GetUser(userID string) (*User, error) {
 	user := &User{}
 
 	query := `
-		SELECT id, email, full_name, organisation_id, slack_user_id, created_at, updated_at
+		SELECT id, email, full_name, organisation_id, active_organisation_id, slack_user_id, created_at, updated_at
 		FROM users
 		WHERE id = $1
 	`
 
 	err := db.client.QueryRow(query, userID).Scan(
 		&user.ID, &user.Email, &user.FullName, &user.OrganisationID,
-		&user.SlackUserID, &user.CreatedAt, &user.UpdatedAt,
+		&user.ActiveOrganisationID, &user.SlackUserID, &user.CreatedAt, &user.UpdatedAt,
 	)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -58,14 +59,14 @@ func (db *DB) GetUserByWebhookToken(webhookToken string) (*User, error) {
 	user := &User{}
 
 	query := `
-		SELECT id, email, full_name, organisation_id, slack_user_id, created_at, updated_at
+		SELECT id, email, full_name, organisation_id, active_organisation_id, slack_user_id, created_at, updated_at
 		FROM users
 		WHERE webhook_token = $1
 	`
 
 	err := db.client.QueryRow(query, webhookToken).Scan(
 		&user.ID, &user.Email, &user.FullName, &user.OrganisationID,
-		&user.SlackUserID, &user.CreatedAt, &user.UpdatedAt,
+		&user.ActiveOrganisationID, &user.SlackUserID, &user.CreatedAt, &user.UpdatedAt,
 	)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -304,7 +305,7 @@ func (db *DB) GetOrganisation(organisationID string) (*Organisation, error) {
 
 func (db *DB) GetOrganisationMembers(organisationID string) ([]*User, error) {
 	query := `
-		SELECT id, email, full_name, organisation_id, slack_user_id, created_at, updated_at
+		SELECT id, email, full_name, organisation_id, active_organisation_id, slack_user_id, created_at, updated_at
 		FROM users
 		WHERE organisation_id = $1
 		ORDER BY created_at ASC
@@ -321,7 +322,7 @@ func (db *DB) GetOrganisationMembers(organisationID string) ([]*User, error) {
 		user := &User{}
 		err := rows.Scan(
 			&user.ID, &user.Email, &user.FullName, &user.OrganisationID,
-			&user.SlackUserID, &user.CreatedAt, &user.UpdatedAt,
+			&user.ActiveOrganisationID, &user.SlackUserID, &user.CreatedAt, &user.UpdatedAt,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan user: %w", err)
@@ -407,17 +408,18 @@ func (db *DB) CreateUser(userID, email string, fullName *string, orgName string)
 		}
 	}
 
-	// Create user with organisation reference
+	// Create user with organisation reference and active organisation
 	user := &User{
-		ID:             userID,
-		Email:          email,
-		FullName:       fullName,
-		OrganisationID: &org.ID,
+		ID:                   userID,
+		Email:                email,
+		FullName:             fullName,
+		OrganisationID:       &org.ID,
+		ActiveOrganisationID: &org.ID,
 	}
 
 	userQuery := `
-		INSERT INTO users (id, email, full_name, organisation_id, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, NOW(), NOW())
+		INSERT INTO users (id, email, full_name, organisation_id, active_organisation_id, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $4, NOW(), NOW())
 		RETURNING created_at, updated_at
 	`
 
@@ -426,6 +428,18 @@ func (db *DB) CreateUser(userID, email string, fullName *string, orgName string)
 	)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create user: %w", err)
+	}
+
+	// Add user to organisation_members table
+	memberQuery := `
+		INSERT INTO organisation_members (user_id, organisation_id, created_at)
+		VALUES ($1, $2, NOW())
+		ON CONFLICT (user_id, organisation_id) DO NOTHING
+	`
+
+	_, err = tx.Exec(memberQuery, user.ID, org.ID)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to add organisation membership: %w", err)
 	}
 
 	// Commit transaction
@@ -440,4 +454,132 @@ func (db *DB) CreateUser(userID, email string, fullName *string, orgName string)
 		Msg("Created new user with organisation")
 
 	return user, org, nil
+}
+
+// UserOrganisation represents an organisation a user belongs to
+type UserOrganisation struct {
+	ID        string    `json:"id"`
+	Name      string    `json:"name"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+// ListUserOrganisations returns all organisations a user is a member of
+func (db *DB) ListUserOrganisations(userID string) ([]UserOrganisation, error) {
+	query := `
+		SELECT o.id, o.name, o.created_at
+		FROM organisations o
+		INNER JOIN organisation_members om ON o.id = om.organisation_id
+		WHERE om.user_id = $1
+		ORDER BY o.name
+	`
+
+	rows, err := db.client.Query(query, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list user organisations: %w", err)
+	}
+	defer rows.Close()
+
+	var orgs []UserOrganisation
+	for rows.Next() {
+		var org UserOrganisation
+		if err := rows.Scan(&org.ID, &org.Name, &org.CreatedAt); err != nil {
+			return nil, fmt.Errorf("failed to scan organisation: %w", err)
+		}
+		orgs = append(orgs, org)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to iterate organisation rows: %w", err)
+	}
+
+	return orgs, nil
+}
+
+// ValidateOrganisationMembership checks if a user is a member of an organisation
+func (db *DB) ValidateOrganisationMembership(userID, organisationID string) (bool, error) {
+	query := `
+		SELECT EXISTS(
+			SELECT 1 FROM organisation_members
+			WHERE user_id = $1 AND organisation_id = $2
+		)
+	`
+
+	var exists bool
+	err := db.client.QueryRow(query, userID, organisationID).Scan(&exists)
+	if err != nil {
+		return false, fmt.Errorf("failed to validate organisation membership: %w", err)
+	}
+
+	return exists, nil
+}
+
+// SetActiveOrganisation sets the user's active organisation
+func (db *DB) SetActiveOrganisation(userID, organisationID string) error {
+	// First validate membership
+	isMember, err := db.ValidateOrganisationMembership(userID, organisationID)
+	if err != nil {
+		return err
+	}
+	if !isMember {
+		return fmt.Errorf("user is not a member of organisation")
+	}
+
+	query := `
+		UPDATE users
+		SET active_organisation_id = $2, updated_at = NOW()
+		WHERE id = $1
+	`
+
+	result, err := db.client.Exec(query, userID, organisationID)
+	if err != nil {
+		return fmt.Errorf("failed to set active organisation: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+	if rowsAffected == 0 {
+		return fmt.Errorf("user not found")
+	}
+
+	log.Info().
+		Str("user_id", userID).
+		Str("organisation_id", organisationID).
+		Msg("Set active organisation")
+
+	return nil
+}
+
+// AddOrganisationMember adds a user as a member of an organisation
+func (db *DB) AddOrganisationMember(userID, organisationID string) error {
+	query := `
+		INSERT INTO organisation_members (user_id, organisation_id, created_at)
+		VALUES ($1, $2, NOW())
+		ON CONFLICT (user_id, organisation_id) DO NOTHING
+	`
+
+	_, err := db.client.Exec(query, userID, organisationID)
+	if err != nil {
+		return fmt.Errorf("failed to add organisation member: %w", err)
+	}
+
+	log.Info().
+		Str("user_id", userID).
+		Str("organisation_id", organisationID).
+		Msg("Added organisation member")
+
+	return nil
+}
+
+// GetEffectiveOrganisationID returns the user's effective organisation ID
+// (active_organisation_id if set, otherwise organisation_id for backward compatibility)
+func (db *DB) GetEffectiveOrganisationID(user *User) string {
+	if user.ActiveOrganisationID != nil && *user.ActiveOrganisationID != "" {
+		return *user.ActiveOrganisationID
+	}
+	if user.OrganisationID != nil {
+		return *user.OrganisationID
+	}
+	return ""
 }

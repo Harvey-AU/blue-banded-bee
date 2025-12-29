@@ -29,6 +29,7 @@ func TestDashboardSlowPagesIntegration(t *testing.T) {
 					Email:          "test@example.com",
 					OrganisationID: stringPtr("org-123"),
 				}, nil)
+				mockDB.On("GetEffectiveOrganisationID", mock.AnythingOfType("*db.User")).Return("org-123")
 
 				slowPages := []db.SlowPage{
 					{
@@ -70,6 +71,7 @@ func TestDashboardSlowPagesIntegration(t *testing.T) {
 					Email:          "test@example.com",
 					OrganisationID: stringPtr("org-123"),
 				}, nil)
+				mockDB.On("GetEffectiveOrganisationID", mock.AnythingOfType("*db.User")).Return("org-123")
 
 				mockDB.On("GetSlowPages", "org-123", mock.AnythingOfType("*time.Time"), mock.AnythingOfType("*time.Time")).Return(nil, assert.AnError)
 			},
@@ -92,6 +94,7 @@ func TestDashboardSlowPagesIntegration(t *testing.T) {
 					Email:          "test@example.com",
 					OrganisationID: stringPtr("org-123"),
 				}, nil)
+				mockDB.On("GetEffectiveOrganisationID", mock.AnythingOfType("*db.User")).Return("org-123")
 
 				mockDB.On("GetSlowPages", "org-123", mock.AnythingOfType("*time.Time"), mock.AnythingOfType("*time.Time")).Return([]db.SlowPage{}, nil)
 			},
@@ -168,6 +171,7 @@ func TestDashboardExternalRedirectsIntegration(t *testing.T) {
 					Email:          "test@example.com",
 					OrganisationID: stringPtr("org-123"),
 				}, nil)
+				mockDB.On("GetEffectiveOrganisationID", mock.AnythingOfType("*db.User")).Return("org-123")
 
 				redirects := []db.ExternalRedirect{
 					{
@@ -209,6 +213,7 @@ func TestDashboardExternalRedirectsIntegration(t *testing.T) {
 					Email:          "test@example.com",
 					OrganisationID: stringPtr("org-123"),
 				}, nil)
+				mockDB.On("GetEffectiveOrganisationID", mock.AnythingOfType("*db.User")).Return("org-123")
 
 				mockDB.On("GetExternalRedirects", "org-123", mock.AnythingOfType("*time.Time"), mock.AnythingOfType("*time.Time")).Return(nil, assert.AnError)
 			},
@@ -231,6 +236,7 @@ func TestDashboardExternalRedirectsIntegration(t *testing.T) {
 					Email:          "test@example.com",
 					OrganisationID: stringPtr("org-123"),
 				}, nil)
+				mockDB.On("GetEffectiveOrganisationID", mock.AnythingOfType("*db.User")).Return("org-123")
 
 				mockDB.On("GetExternalRedirects", "org-123", mock.AnythingOfType("*time.Time"), mock.AnythingOfType("*time.Time")).Return([]db.ExternalRedirect{}, nil)
 			},
@@ -263,18 +269,18 @@ func TestDashboardExternalRedirectsIntegration(t *testing.T) {
 					Email:          "test@example.com",
 					OrganisationID: nil, // No organisation
 				}, nil)
-
-				mockDB.On("GetExternalRedirects", "", mock.AnythingOfType("*time.Time"), mock.AnythingOfType("*time.Time")).Return([]db.ExternalRedirect{}, nil)
+				mockDB.On("GetEffectiveOrganisationID", mock.AnythingOfType("*db.User")).Return("")
+				// No GetExternalRedirects mock - request should fail before reaching DB
 			},
-			expectedStatus: http.StatusOK,
+			expectedStatus: http.StatusBadRequest, // Users without organisation now get an error
 			checkResponse: func(t *testing.T, rec *httptest.ResponseRecorder) {
 				var response map[string]interface{}
 				err := json.Unmarshal(rec.Body.Bytes(), &response)
 				require.NoError(t, err)
 
-				assert.Equal(t, "success", response["status"])
-				data := response["data"].(map[string]interface{})
-				assert.Equal(t, float64(0), data["count"])
+				assert.Equal(t, float64(400), response["status"])
+				assert.Equal(t, "BAD_REQUEST", response["code"])
+				assert.Equal(t, "User must belong to an organisation", response["message"])
 			},
 		},
 	}
