@@ -1,6 +1,9 @@
 # Fly Review Apps Configuration
 # See: https://fly.io/docs/reference/fly-review-apps/
 
+# Deploy to Sydney to co-locate with Supabase database
+primary_region = "syd"
+
 [review_apps]
 # Enable automatic deployment for PRs targeting test-branch
 auto_deploy = true
