@@ -29,6 +29,20 @@ On merge, CI will:
 
 ## [Unreleased]
 
+### Added
+
+- **Technology Detection**: Automatic detection of technologies used by crawled
+  domains using wappalyzergo
+  - Detects CMS platforms (WordPress, Webflow, Shopify), CDNs, frameworks,
+    analytics tools, and more
+  - Stores full HTML body sample in Supabase Storage (`page-crawls` bucket) for
+    future re-analysis
+  - New domains table columns: `technologies` (JSONB), `tech_headers` (JSONB),
+    `tech_html_path` (storage reference), `tech_detected_at` (timestamp)
+  - Detection runs asynchronously once per domain per worker session to avoid
+    impacting crawl performance
+  - Headers captured for fingerprinting: Server, X-Powered-By, X-Generator, etc.
+
 ### Fixed
 
 - **CDN Cache Status Normalisation**: Cache status headers now correctly
