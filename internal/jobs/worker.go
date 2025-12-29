@@ -3329,7 +3329,10 @@ func (wp *WorkerPool) handleTaskSuccess(ctx context.Context, task *db.Task, resu
 	task.CacheStatus = result.CacheStatus
 	task.ContentType = result.ContentType
 	task.ContentLength = result.ContentLength
-	task.RedirectURL = result.RedirectURL
+	// Only store redirect_url if it's a significant redirect (different domain or path)
+	if util.IsSignificantRedirect(result.URL, result.RedirectURL) {
+		task.RedirectURL = result.RedirectURL
+	}
 
 	// Performance metrics
 	task.DNSLookupTime = result.Performance.DNSLookupTime

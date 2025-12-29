@@ -99,3 +99,61 @@ func ConstructURL(domain, path string) string {
 	// Construct the full URL
 	return "https://" + normalisedDomain + path
 }
+
+// IsSignificantRedirect checks if a redirect URL is meaningfully different from the original.
+// Returns false for trivial redirects like:
+//   - HTTP to HTTPS on same domain/path
+//   - www to non-www (or vice versa) on same path
+//   - Trailing slash differences
+//
+// Returns true for redirects to different domains or different paths.
+func IsSignificantRedirect(originalURL, redirectURL string) bool {
+	if redirectURL == "" {
+		return false
+	}
+
+	// Parse both URLs
+	origParsed, origErr := url.Parse(originalURL)
+	redirParsed, redirErr := url.Parse(redirectURL)
+
+	if origErr != nil || redirErr != nil {
+		// If we can't parse, assume it's significant
+		return true
+	}
+
+	// Normalise hosts (remove www prefix, lowercase)
+	origHost := strings.ToLower(strings.TrimPrefix(origParsed.Host, "www."))
+	redirHost := strings.ToLower(strings.TrimPrefix(redirParsed.Host, "www."))
+
+	// Different domain = significant
+	if origHost != redirHost {
+		return true
+	}
+
+	// Normalise paths (ensure leading slash, remove trailing slash for comparison)
+	origPath := origParsed.Path
+	redirPath := redirParsed.Path
+
+	if origPath == "" {
+		origPath = "/"
+	}
+	if redirPath == "" {
+		redirPath = "/"
+	}
+
+	// Remove trailing slashes for comparison (but "/" stays as "/")
+	if len(origPath) > 1 {
+		origPath = strings.TrimSuffix(origPath, "/")
+	}
+	if len(redirPath) > 1 {
+		redirPath = strings.TrimSuffix(redirPath, "/")
+	}
+
+	// Different path = significant
+	if origPath != redirPath {
+		return true
+	}
+
+	// Same domain and path - not significant (likely HTTP→HTTPS or www→non-www)
+	return false
+}
