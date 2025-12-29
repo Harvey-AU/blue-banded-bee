@@ -182,3 +182,25 @@ func (m *MockDBWithRealDB) GetDomainNames(ctx context.Context, domainIDs []int) 
 func (m *MockDBWithRealDB) GetLastJobStartTimeForScheduler(ctx context.Context, schedulerID string) (*time.Time, error) {
 	return nil, nil
 }
+
+func (m *MockDBWithRealDB) ListUserOrganisations(userID string) ([]db.UserOrganisation, error) {
+	return nil, nil
+}
+
+func (m *MockDBWithRealDB) ValidateOrganisationMembership(userID, organisationID string) (bool, error) {
+	return false, nil
+}
+
+func (m *MockDBWithRealDB) SetActiveOrganisation(userID, organisationID string) error {
+	return nil
+}
+
+func (m *MockDBWithRealDB) GetEffectiveOrganisationID(user *db.User) string {
+	if user.ActiveOrganisationID != nil && *user.ActiveOrganisationID != "" {
+		return *user.ActiveOrganisationID
+	}
+	if user.OrganisationID != nil {
+		return *user.OrganisationID
+	}
+	return ""
+}

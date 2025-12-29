@@ -254,6 +254,29 @@ func (m *MockDBClient) GetDomainNames(ctx context.Context, domainIDs []int) (map
 	return args.Get(0).(map[int]string), args.Error(1)
 }
 
+func (m *MockDBClient) ListUserOrganisations(userID string) ([]db.UserOrganisation, error) {
+	args := m.Called(userID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]db.UserOrganisation), args.Error(1)
+}
+
+func (m *MockDBClient) ValidateOrganisationMembership(userID, organisationID string) (bool, error) {
+	args := m.Called(userID, organisationID)
+	return args.Bool(0), args.Error(1)
+}
+
+func (m *MockDBClient) SetActiveOrganisation(userID, organisationID string) error {
+	args := m.Called(userID, organisationID)
+	return args.Error(0)
+}
+
+func (m *MockDBClient) GetEffectiveOrganisationID(user *db.User) string {
+	args := m.Called(user)
+	return args.String(0)
+}
+
 // Test helpers
 func createTestHandler() (*Handler, *MockDBClient, *MockJobManager) {
 	mockDB := new(MockDBClient)
