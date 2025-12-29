@@ -128,11 +128,10 @@ jobs:
             --app $APP_NAME --stage
 
           # Deploy to review app with local image (this will apply staged secrets)
-          # Use --region syd to co-locate with Sydney Supabase database
+          # Region is set via primary_region in .fly/review_apps.toml (syd)
           flyctl deploy \
             --app $APP_NAME \
             --config .fly/review_apps.toml \
-            --region syd \
             --local-only \
             --image blue-banded-bee:pr-${{ github.event.number }}
         env:
