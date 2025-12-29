@@ -1282,6 +1282,16 @@
           <div bbb-auth="required" class="user-info">
             <span id="userEmail">Loading...</span>
             <div class="user-avatar" id="userAvatar">?</div>
+            <!-- Notifications/Settings Button -->
+            <button
+              id="notificationsBtn"
+              class="bb-button bb-button-outline"
+              style="margin-right: 8px"
+              aria-label="Notification settings"
+              bbb-action="open-notifications-modal"
+            >
+              🔔 Notifications
+            </button>
             <!-- Admin: Reset Database Button (only show for system admins) -->
             <button
               id="resetDbBtn"
@@ -1891,11 +1901,210 @@
       </div>
     </div>
 
+    <!-- Notifications/Slack Settings Modal -->
+    <div id="notificationsModal" class="bb-modal">
+      <div class="bb-modal-content" style="max-width: 600px">
+        <div class="bb-modal-header">
+          <h2 class="bb-modal-title">🔔 Notification Settings</h2>
+          <button
+            class="bb-modal-close"
+            bbb-action="close-notifications-modal"
+            aria-label="Close notifications modal"
+          >
+            &times;
+          </button>
+        </div>
+
+        <!-- Slack Integration Section -->
+        <div class="bb-modal-section">
+          <h3
+            class="bb-modal-section-title"
+            style="display: flex; align-items: center; gap: 8px"
+          >
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.528 2.528 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52v2.52zM6.313 15.165a2.527 2.527 0 0 1 2.521-2.52 2.527 2.527 0 0 1 2.521 2.52v6.313A2.528 2.528 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522v-6.313zM8.834 5.042a2.528 2.528 0 0 1-2.521-2.52A2.528 2.528 0 0 1 8.834 0a2.528 2.528 0 0 1 2.521 2.522v2.52H8.834zM8.834 6.313a2.528 2.528 0 0 1 2.521 2.521 2.528 2.528 0 0 1-2.521 2.521H2.522A2.528 2.528 0 0 1 0 8.834a2.528 2.528 0 0 1 2.522-2.521h6.312zM18.956 8.834a2.528 2.528 0 0 1 2.522-2.521A2.528 2.528 0 0 1 24 8.834a2.528 2.528 0 0 1-2.522 2.521h-2.522V8.834zM17.688 8.834a2.528 2.528 0 0 1-2.523 2.521 2.527 2.527 0 0 1-2.52-2.521V2.522A2.527 2.527 0 0 1 15.165 0a2.528 2.528 0 0 1 2.523 2.522v6.312zM15.165 18.956a2.528 2.528 0 0 1 2.523 2.522A2.528 2.528 0 0 1 15.165 24a2.527 2.527 0 0 1-2.52-2.522v-2.522h2.52zM15.165 17.688a2.527 2.527 0 0 1-2.52-2.523 2.526 2.526 0 0 1 2.52-2.52h6.313A2.527 2.527 0 0 1 24 15.165a2.528 2.528 0 0 1-2.522 2.523h-6.313z"
+                fill="#E01E5A"
+              />
+            </svg>
+            Slack Integration
+          </h3>
+          <p style="color: #6b7280; font-size: 14px; margin-bottom: 16px">
+            Connect your Slack workspace to receive notifications when jobs
+            complete or fail.
+          </p>
+
+          <!-- Slack Connections List -->
+          <div
+            id="slackConnectionsList"
+            bbb-list="slack-connections"
+            style="margin-bottom: 16px"
+          >
+            <!-- Template for each connection -->
+            <div
+              class="bb-job-card"
+              bbb-template="slack-connection"
+              style="
+                display: none;
+                background: #f8f9fa;
+                border: 1px solid #e9ecef;
+                border-radius: 8px;
+                padding: 16px;
+                margin-bottom: 12px;
+              "
+            >
+              <div
+                style="
+                  display: flex;
+                  justify-content: space-between;
+                  align-items: center;
+                  margin-bottom: 12px;
+                "
+              >
+                <div>
+                  <strong bbb-field="workspace_name" style="font-size: 16px"
+                    >Workspace</strong
+                  >
+                  <span
+                    style="color: #6b7280; font-size: 14px; margin-left: 8px"
+                  >
+                    #<span bbb-field="channel_name">general</span>
+                  </span>
+                </div>
+                <span
+                  class="slack-link-status"
+                  style="
+                    font-size: 12px;
+                    padding: 4px 8px;
+                    border-radius: 4px;
+                    background: #e5e7eb;
+                  "
+                >
+                  Checking...
+                </span>
+              </div>
+              <div style="display: flex; gap: 8px; flex-wrap: wrap">
+                <button
+                  class="bb-button bb-button-outline"
+                  bbb-action="slack-link-user"
+                  bbb-id=""
+                  style="font-size: 13px; padding: 6px 12px"
+                >
+                  Link My Account
+                </button>
+                <button
+                  class="bb-button bb-button-outline"
+                  bbb-action="slack-unlink-user"
+                  bbb-id=""
+                  style="font-size: 13px; padding: 6px 12px; display: none"
+                >
+                  Unlink
+                </button>
+                <button
+                  class="bb-button bb-button-outline"
+                  bbb-action="slack-toggle-notifications"
+                  bbb-id=""
+                  style="font-size: 13px; padding: 6px 12px; display: none"
+                >
+                  Enable DM Notifications
+                </button>
+                <button
+                  class="bb-button bb-button-outline"
+                  bbb-action="slack-disconnect"
+                  bbb-id=""
+                  style="
+                    font-size: 13px;
+                    padding: 6px 12px;
+                    color: #dc2626;
+                    border-color: #dc2626;
+                  "
+                >
+                  Disconnect
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Empty state / Connect button -->
+          <div
+            id="slackEmptyState"
+            style="
+              text-align: center;
+              padding: 24px;
+              background: #f9fafb;
+              border-radius: 8px;
+              border: 2px dashed #e5e7eb;
+            "
+          >
+            <p style="color: #6b7280; margin-bottom: 16px">
+              No Slack workspace connected yet.
+            </p>
+            <button
+              class="bb-button bb-button-primary"
+              bbb-action="slack-connect"
+              style="display: inline-flex; align-items: center; gap: 8px"
+            >
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+              >
+                <path
+                  d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.528 2.528 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52v2.52zM6.313 15.165a2.527 2.527 0 0 1 2.521-2.52 2.527 2.527 0 0 1 2.521 2.52v6.313A2.528 2.528 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522v-6.313z"
+                />
+              </svg>
+              Connect Slack Workspace
+            </button>
+          </div>
+
+          <!-- Success/Error Messages -->
+          <div
+            id="slackSuccessMessage"
+            class="bb-notification-success"
+            style="
+              display: none;
+              margin-top: 16px;
+              padding: 12px 16px;
+              border-radius: 8px;
+              background: #dcfce7;
+              color: #16a34a;
+              border: 1px solid #bbf7d0;
+            "
+          >
+            <span id="slackSuccessText"></span>
+          </div>
+          <div
+            id="slackErrorMessage"
+            class="bb-notification-error"
+            style="
+              display: none;
+              margin-top: 16px;
+              padding: 12px 16px;
+              border-radius: 8px;
+              background: #fee2e2;
+              color: #dc2626;
+              border: 1px solid #fecaca;
+            "
+          >
+            <span id="slackErrorText"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Include the data binding and dashboard logic -->
     <script src="/js/bb-data-binder.js?v=20251222" defer></script>
     <script src="/js/bb-auth-extension.js?v=20251222" defer></script>
     <script src="/js/bb-metadata.js?v=20251222" defer></script>
     <script src="/js/bb-dashboard-actions.js?v=20251222" defer></script>
+    <script src="/js/bb-slack.js?v=20251229" defer></script>
 
     <script>
       // Initialize dashboard with unified authentication system
@@ -1947,6 +2156,17 @@
               }
             }
           }
+
+          // Initialize Slack integration
+          if (window.setupSlackIntegration) {
+            window.setupSlackIntegration();
+          }
+          if (window.handleSlackOAuthCallback) {
+            window.handleSlackOAuthCallback();
+          }
+
+          // Setup notifications modal handlers
+          setupNotificationsModal();
 
           console.log(
             "Dashboard initialized successfully with unified auth system"
@@ -2050,6 +2270,86 @@
             document.getElementById("resetDbBtn").textContent = "Reset DB";
           }
         });
+
+      // Notifications Modal Setup
+      function setupNotificationsModal() {
+        const modal = document.getElementById("notificationsModal");
+        const openBtn = document.getElementById("notificationsBtn");
+
+        // Open modal
+        if (openBtn) {
+          openBtn.addEventListener("click", async () => {
+            modal.classList.add("show");
+            // Load Slack connections when modal opens
+            if (window.loadSlackConnections) {
+              await window.loadSlackConnections();
+              updateSlackEmptyState();
+            }
+          });
+        }
+
+        // Close modal handlers
+        document
+          .querySelectorAll('[bbb-action="close-notifications-modal"]')
+          .forEach((btn) => {
+            btn.addEventListener("click", () => {
+              modal.classList.remove("show");
+            });
+          });
+
+        // Close on backdrop click
+        modal.addEventListener("click", (e) => {
+          if (e.target === modal) {
+            modal.classList.remove("show");
+          }
+        });
+
+        // Close on Escape key
+        document.addEventListener("keydown", (e) => {
+          if (e.key === "Escape" && modal.classList.contains("show")) {
+            modal.classList.remove("show");
+          }
+        });
+      }
+
+      // Update empty state visibility based on connections
+      function updateSlackEmptyState() {
+        const list = document.getElementById("slackConnectionsList");
+        const emptyState = document.getElementById("slackEmptyState");
+        const connections = list?.querySelectorAll(
+          '[bbb-template="slack-connection"]:not([style*="display: none"])'
+        );
+
+        if (emptyState) {
+          emptyState.style.display =
+            connections && connections.length > 0 ? "none" : "block";
+        }
+      }
+
+      // Expose functions for bb-slack.js to use
+      window.showSlackSuccess = function (message) {
+        const el = document.getElementById("slackSuccessMessage");
+        const text = document.getElementById("slackSuccessText");
+        if (el && text) {
+          text.textContent = message;
+          el.style.display = "block";
+          setTimeout(() => {
+            el.style.display = "none";
+          }, 5000);
+        }
+      };
+
+      window.showSlackError = function (message) {
+        const el = document.getElementById("slackErrorMessage");
+        const text = document.getElementById("slackErrorText");
+        if (el && text) {
+          text.textContent = message;
+          el.style.display = "block";
+          setTimeout(() => {
+            el.style.display = "none";
+          }, 5000);
+        }
+      };
     </script>
   </body>
 </html>
