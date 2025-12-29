@@ -29,6 +29,39 @@ On merge, CI will:
 
 ## [Unreleased]
 
+## [0.19.1] – 2025-12-29
+
+### Added
+
+- **Technology Detection**: Automatic detection of technologies used by crawled
+  domains using wappalyzergo
+  - Detects CMS platforms (WordPress, Webflow, Shopify), CDNs, frameworks,
+    analytics tools, and more
+  - Stores full HTML body sample in Supabase Storage (`page-crawls` bucket) for
+    future re-analysis
+  - New domains table columns: `technologies` (JSONB), `tech_headers` (JSONB),
+    `tech_html_path` (storage reference), `tech_detected_at` (timestamp)
+  - Detection runs asynchronously once per domain per worker session to avoid
+    impacting crawl performance
+  - Headers captured for fingerprinting: Server, X-Powered-By, X-Generator, etc.
+
+### Fixed
+
+- **CDN Cache Status Normalisation**: Cache status headers now correctly
+  normalised across all major CDNs
+  - CloudFront: `"Miss from cloudfront"` → `MISS`, `"Hit from cloudfront"` →
+    `HIT`
+  - Akamai: `TCP_HIT`, `TCP_MISS`, `TCP_MEM_HIT`, `TCP_DENIED` → standard
+    `HIT`/`MISS`/`BYPASS`
+  - Azure CDN: `TCP_REMOTE_HIT`, `UNCACHEABLE` → standard format
+  - Fastly shielding: `"HIT, MISS"` → takes last value (edge POP result)
+  - Netlify/RFC 9211: `"Netlify Edge"; hit` → `HIT`
+  - Cloudflare: `NONE`, `UNKNOWN` → `BYPASS`
+  - Fixes dashboard showing raw CDN strings instead of normalised HIT/MISS
+  - Fixes `shouldMakeSecondRequest()` cache warming logic for non-Cloudflare
+    CDNs
+  - Covers top 10 CDNs representing ~90% of web traffic (verified Dec 2025)
+
 ## [0.19.0] – 2025-12-29
 
 ### Added
