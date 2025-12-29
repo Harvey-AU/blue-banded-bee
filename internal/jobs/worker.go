@@ -1209,6 +1209,11 @@ func (wp *WorkerPool) markJobFailedDueToConsecutiveFailures(ctx context.Context,
 	}
 
 	wp.RemoveJob(jobID)
+
+	// Send failure notification asynchronously
+	if updateErr == nil && wp.notifier != nil && wp.jobManager != nil {
+		go wp.notifyJobFailed(context.Background(), jobID)
+	}
 }
 
 // processTaskResult handles the result from a task execution and updates backoff state
@@ -1933,6 +1938,19 @@ func (wp *WorkerPool) notifyJobCompleted(ctx context.Context, jobID string) {
 		return
 	}
 	wp.notifier.NotifyJobComplete(ctx, job)
+}
+
+func (wp *WorkerPool) notifyJobFailed(ctx context.Context, jobID string) {
+	if wp.notifier == nil || wp.jobManager == nil {
+		return
+	}
+	// Fetch job details for notification
+	job, err := wp.jobManager.GetJob(ctx, jobID)
+	if err != nil {
+		log.Warn().Err(err).Str("job_id", jobID).Msg("Failed to fetch job for failure notification")
+		return
+	}
+	wp.notifier.NotifyJobFailed(ctx, job)
 }
 
 func (wp *WorkerPool) promoteWaitingTasks(ctx context.Context, jobID string, limit int) (int64, error) {

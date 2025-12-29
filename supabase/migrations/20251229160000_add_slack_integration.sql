@@ -159,14 +159,20 @@ CREATE OR REPLACE FUNCTION store_slack_token(connection_id UUID, token TEXT)
 RETURNS TEXT AS $$
 DECLARE
   secret_name TEXT;
+  existing_secret_id UUID;
 BEGIN
   secret_name := 'slack_token_' || connection_id::TEXT;
 
-  -- Delete existing secret if any
-  DELETE FROM vault.secrets WHERE name = secret_name;
+  -- Check if secret already exists
+  SELECT id INTO existing_secret_id FROM vault.secrets WHERE name = secret_name;
 
-  -- Create new secret
-  PERFORM vault.create_secret(token, secret_name);
+  IF existing_secret_id IS NOT NULL THEN
+    -- Update existing secret atomically
+    UPDATE vault.secrets SET secret = token WHERE id = existing_secret_id;
+  ELSE
+    -- Create new secret
+    PERFORM vault.create_secret(token, secret_name);
+  END IF;
 
   -- Update connection with secret name
   UPDATE slack_connections
