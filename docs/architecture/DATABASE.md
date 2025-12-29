@@ -683,6 +683,59 @@ All migrations are in `supabase/migrations/`:
 - `20250727212804_add_job_duration_fields.sql` - Calculated duration fields
 - New migrations get timestamped names automatically
 
+### Seed Data for Preview Branches
+
+The `supabase/seed.sql` file provides test data for Supabase preview branches
+created via the GitHub integration. This enables testing with realistic data
+without manually creating accounts and jobs.
+
+**When seed runs:**
+
+- **Only on branch creation** - when a PR is first opened
+- Does NOT re-run on subsequent pushes to the same PR
+- To re-seed: close the PR and reopen, or reset the branch via Supabase
+  dashboard/API
+
+**What's seeded:**
+
+- `auth.users` and `auth.identities` - test user accounts (Google OAuth)
+- `organisations`, `users`, `domains`, `pages` - core entities
+- `jobs`, `tasks` - job history for dashboard testing
+- `schedulers` - scheduled jobs (must reference valid domain_ids)
+
+**Updating the seed:**
+
+When making schema changes that affect seeded tables:
+
+1. Update `supabase/seed.sql` to match new schema
+2. Ensure foreign key references are valid (e.g., schedulers → domains)
+3. Test by resetting an existing preview branch or creating a new PR
+
+**Regenerating seed from production:**
+
+```bash
+pg_dump "postgres://..." \
+  --data-only \
+  --rows-per-insert=100 \
+  -t 'auth.users' -t 'auth.identities' \
+  -t 'organisations' -t 'users' -t 'domains' -t 'pages' \
+  -t 'jobs' -t 'tasks' -t 'schedulers' \
+  > supabase/seed.sql
+```
+
+Then manually add the header:
+
+```sql
+SET search_path = public, auth;
+SET session_replication_role = replica;  -- Disable triggers for bulk load
+```
+
+And footer:
+
+```sql
+SET session_replication_role = DEFAULT;
+```
+
 ## Backup & Recovery
 
 ### Backup Strategy
