@@ -1411,6 +1411,7 @@
                 id="orgSwitcherBtn"
                 aria-label="Switch organisation"
                 aria-expanded="false"
+                aria-haspopup="true"
               >
                 <span class="bb-org-name" id="currentOrgName">Loading...</span>
                 <span class="bb-org-chevron">▼</span>
@@ -2166,12 +2167,17 @@
 
           // Multiple orgs - enable switcher
           // Get active org from user data or use first org
-          const userRes = await window.supabase
+          const { data: userData, error: userError } = await window.supabase
             .from("users")
             .select("active_organisation_id")
+            .eq("id", session.user.id)
             .single();
-          const activeOrgId =
-            userRes.data?.active_organisation_id || orgs[0].id;
+
+          if (userError) {
+            console.warn("Failed to fetch user active org:", userError);
+          }
+
+          const activeOrgId = userData?.active_organisation_id || orgs[0].id;
           const activeOrg = orgs.find((o) => o.id === activeOrgId) || orgs[0];
 
           currentOrgName.textContent = activeOrg.name;
