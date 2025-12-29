@@ -27,4 +27,5 @@ type DbQueueInterface interface {
 	ExecuteWithContext(ctx context.Context, fn func(context.Context, *sql.Tx) error) error
 	ExecuteMaintenance(ctx context.Context, fn func(*sql.Tx) error) error
 	SetConcurrencyOverride(fn db.ConcurrencyOverrideFunc)
+	UpdateDomainTechnologies(ctx context.Context, domainID int, technologies, headers []byte, htmlSample string) error
 }

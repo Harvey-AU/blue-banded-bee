@@ -317,6 +317,13 @@ func (c *Crawler) setupResponseHandlers(collyClone *colly.Collector, result *Cra
 		result.Headers = r.Headers.Clone()
 		result.RedirectURL = r.Request.URL.String()
 
+		// Store truncated body sample for technology detection
+		if len(r.Body) > MaxBodySampleSize {
+			result.BodySample = r.Body[:MaxBodySampleSize]
+		} else {
+			result.BodySample = r.Body
+		}
+
 		// Log comprehensive Cloudflare headers for analysis
 		cfCacheStatus := r.Headers.Get("CF-Cache-Status")
 		cfRay := r.Headers.Get("CF-Ray")

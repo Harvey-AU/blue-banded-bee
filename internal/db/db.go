@@ -557,6 +557,25 @@ func (db *DB) GetDomainNames(ctx context.Context, domainIDs []int) (map[int]stri
 	return domainNames, nil
 }
 
+// UpdateDomainTechnologies updates the detected technologies for a domain.
+// Called after first successful task crawl in a job to store tech detection results.
+func (db *DB) UpdateDomainTechnologies(ctx context.Context, domainID int, technologies, headers []byte, htmlSample string) error {
+	query := `
+		UPDATE domains
+		SET technologies = $2,
+			tech_headers = $3,
+			tech_html_sample = $4,
+			tech_detected_at = NOW()
+		WHERE id = $1`
+
+	_, err := db.client.ExecContext(ctx, query, domainID, technologies, headers, htmlSample)
+	if err != nil {
+		return fmt.Errorf("failed to update domain technologies: %w", err)
+	}
+
+	return nil
+}
+
 // ResetDataOnly clears all data from tables but preserves the schema.
 // This is the safe option for clearing test data without triggering schema changes.
 func (db *DB) ResetDataOnly() error {
