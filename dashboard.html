@@ -1007,6 +1007,130 @@
         opacity: 1;
       }
 
+      /* Organisation Switcher Styles */
+      .bb-org-switcher {
+        position: relative;
+        display: inline-block;
+      }
+
+      .bb-org-switcher-btn {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 12px;
+        background: #f3f4f6;
+        border: 1px solid #e5e7eb;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 13px;
+        color: #374151;
+        transition: all 0.2s ease;
+      }
+
+      .bb-org-switcher-btn:hover {
+        background: #e5e7eb;
+        border-color: #d1d5db;
+      }
+
+      .bb-org-name {
+        max-width: 150px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-weight: 500;
+      }
+
+      .bb-org-chevron {
+        font-size: 10px;
+        color: #6b7280;
+        transition: transform 0.2s ease;
+      }
+
+      .bb-org-switcher.open .bb-org-chevron {
+        transform: rotate(180deg);
+      }
+
+      .bb-org-dropdown {
+        position: absolute;
+        top: 100%;
+        right: 0;
+        margin-top: 4px;
+        background: white;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        min-width: 220px;
+        z-index: 1000;
+        display: none;
+      }
+
+      .bb-org-switcher.open .bb-org-dropdown {
+        display: block;
+      }
+
+      .bb-org-dropdown-header {
+        padding: 12px 16px;
+        font-size: 12px;
+        font-weight: 600;
+        color: #6b7280;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        border-bottom: 1px solid #e5e7eb;
+      }
+
+      .bb-org-list {
+        max-height: 240px;
+        overflow-y: auto;
+      }
+
+      .bb-org-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 12px 16px;
+        cursor: pointer;
+        transition: background 0.2s ease;
+        border: none;
+        background: none;
+        width: 100%;
+        text-align: left;
+        font-size: 14px;
+        color: #374151;
+      }
+
+      .bb-org-item:hover {
+        background: #f3f4f6;
+      }
+
+      .bb-org-item.active {
+        background: #eff6ff;
+        color: #1d4ed8;
+      }
+
+      .bb-org-item.active::after {
+        content: "✓";
+        color: #1d4ed8;
+        font-weight: bold;
+      }
+
+      .bb-org-item-name {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .bb-org-divider {
+        color: #d1d5db;
+        margin: 0 4px;
+      }
+
+      .bb-org-single {
+        padding: 6px 12px;
+        font-size: 13px;
+        color: #374151;
+        font-weight: 500;
+      }
+
       /* Dropdown menu styles */
       .bb-dropdown {
         position: relative;
@@ -1280,6 +1404,26 @@
 
           <!-- Show when logged in -->
           <div bbb-auth="required" class="user-info">
+            <!-- Organisation Switcher -->
+            <div class="bb-org-switcher" id="orgSwitcher">
+              <button
+                class="bb-org-switcher-btn"
+                id="orgSwitcherBtn"
+                aria-label="Switch organisation"
+                aria-expanded="false"
+                aria-haspopup="true"
+              >
+                <span class="bb-org-name" id="currentOrgName">Loading...</span>
+                <span class="bb-org-chevron">▼</span>
+              </button>
+              <div class="bb-org-dropdown" id="orgDropdown">
+                <div class="bb-org-dropdown-header">Switch Organisation</div>
+                <div class="bb-org-list" id="orgList">
+                  <!-- Populated dynamically -->
+                </div>
+              </div>
+            </div>
+            <span class="bb-org-divider">|</span>
             <span id="userEmail">Loading...</span>
             <div class="user-avatar" id="userAvatar">?</div>
             <!-- Admin: Reset Database Button (only show for system admins) -->
@@ -1936,6 +2080,12 @@
           if (session?.user && window.loadSchedules) {
             window.loadSchedules();
           }
+
+          // Initialise organisation switcher
+          if (session?.user) {
+            await initOrgSwitcher();
+          }
+
           if (session?.user) {
             const isSystemAdmin =
               session.user.app_metadata?.system_role === "system_admin" ||
@@ -1972,6 +2122,183 @@
           document.body.appendChild(errorNotification);
         }
       });
+
+      // Organisation Switcher Logic
+      async function initOrgSwitcher() {
+        const switcher = document.getElementById("orgSwitcher");
+        const btn = document.getElementById("orgSwitcherBtn");
+        const dropdown = document.getElementById("orgDropdown");
+        const orgList = document.getElementById("orgList");
+        const currentOrgName = document.getElementById("currentOrgName");
+        const divider = document.querySelector(".bb-org-divider");
+
+        if (!switcher || !btn || !divider) return;
+
+        try {
+          const {
+            data: { session },
+          } = await window.supabase.auth.getSession();
+          if (!session) return;
+
+          // Fetch organisations
+          const response = await fetch("/v1/organisations", {
+            headers: { Authorization: `Bearer ${session.access_token}` },
+          });
+
+          if (!response.ok) {
+            console.error("Failed to fetch organisations");
+            switcher.style.display = "none";
+            divider.style.display = "none";
+            return;
+          }
+
+          const data = await response.json();
+          const orgs = data.data?.organisations || [];
+
+          if (orgs.length === 0) {
+            // No orgs - hide switcher
+            switcher.style.display = "none";
+            divider.style.display = "none";
+            return;
+          }
+
+          if (orgs.length === 1) {
+            // Single org - show name only, no dropdown
+            currentOrgName.textContent = orgs[0].name;
+            btn.querySelector(".bb-org-chevron").style.display = "none";
+            btn.style.cursor = "default";
+            btn.disabled = true;
+            return;
+          }
+
+          // Multiple orgs - enable switcher
+          // Get active org from user data or use first org
+          const { data: userData, error: userError } = await window.supabase
+            .from("users")
+            .select("active_organisation_id")
+            .eq("id", session.user.id)
+            .single();
+
+          if (userError) {
+            console.warn("Failed to fetch user active org:", userError);
+          }
+
+          const activeOrgId = userData?.active_organisation_id || orgs[0].id;
+          const activeOrg = orgs.find((o) => o.id === activeOrgId) || orgs[0];
+
+          currentOrgName.textContent = activeOrg.name;
+          window.BB_ACTIVE_ORG = activeOrg;
+
+          // Populate dropdown (using DOM methods to prevent XSS)
+          orgList.innerHTML = "";
+          orgs.forEach((org) => {
+            const button = document.createElement("button");
+            button.className = `bb-org-item ${org.id === activeOrg.id ? "active" : ""}`;
+            button.dataset.orgId = org.id;
+            button.dataset.orgName = org.name;
+
+            const span = document.createElement("span");
+            span.className = "bb-org-item-name";
+            span.textContent = org.name; // Safe - uses textContent
+
+            button.appendChild(span);
+            orgList.appendChild(button);
+          });
+
+          // Toggle dropdown
+          btn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            switcher.classList.toggle("open");
+            btn.setAttribute(
+              "aria-expanded",
+              switcher.classList.contains("open")
+            );
+          });
+
+          // Handle org selection
+          orgList.addEventListener("click", async (e) => {
+            const item = e.target.closest(".bb-org-item");
+            if (!item || item.classList.contains("active")) {
+              switcher.classList.remove("open");
+              return;
+            }
+
+            const orgId = item.dataset.orgId;
+            const orgName = item.dataset.orgName;
+
+            // Show loading state
+            currentOrgName.textContent = "Switching...";
+            switcher.classList.remove("open");
+
+            try {
+              const switchRes = await fetch("/v1/organisations/switch", {
+                method: "POST",
+                headers: {
+                  Authorization: `Bearer ${session.access_token}`,
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({ organisation_id: orgId }),
+              });
+
+              if (switchRes.ok) {
+                // Update UI
+                currentOrgName.textContent = orgName;
+                orgList.querySelectorAll(".bb-org-item").forEach((el) => {
+                  el.classList.toggle("active", el.dataset.orgId === orgId);
+                });
+                window.BB_ACTIVE_ORG = orgs.find((o) => o.id === orgId) || {
+                  id: orgId,
+                  name: orgName,
+                };
+
+                // Refresh dashboard data
+                if (window.refreshDashboard) {
+                  window.refreshDashboard();
+                }
+
+                // Show success notification
+                if (window.showNotification) {
+                  window.showNotification(`Switched to ${orgName}`, "success");
+                }
+              } else {
+                const err = await switchRes.json();
+                console.error("Failed to switch org:", err);
+                currentOrgName.textContent =
+                  window.BB_ACTIVE_ORG?.name || activeOrg.name;
+                if (window.showNotification) {
+                  window.showNotification(
+                    "Failed to switch organisation",
+                    "error"
+                  );
+                }
+              }
+            } catch (err) {
+              console.error("Error switching org:", err);
+              currentOrgName.textContent =
+                window.BB_ACTIVE_ORG?.name || activeOrg.name;
+              if (window.showNotification) {
+                window.showNotification(
+                  "Failed to switch organisation",
+                  "error"
+                );
+              }
+            }
+          });
+
+          // Close dropdown on outside click (use named function to prevent duplicates)
+          const closeOrgDropdown = () => {
+            switcher.classList.remove("open");
+            btn.setAttribute("aria-expanded", "false");
+          };
+          document.removeEventListener("click", window._closeOrgDropdown);
+          window._closeOrgDropdown = closeOrgDropdown;
+          document.addEventListener("click", closeOrgDropdown);
+        } catch (err) {
+          console.error("Error initialising org switcher:", err);
+          switcher.style.display = "none";
+          divider.style.display = "none";
+        }
+      }
 
       // Admin: Reset Database Button Handler
       // Button visibility is controlled by system-admin role check in dashboard initialization
