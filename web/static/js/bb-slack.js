@@ -192,7 +192,8 @@ async function disconnectSlackWorkspace(connectionId) {
 
   try {
     // Use raw fetch for DELETE since it returns no body
-    const token = await window.dataBinder.getAccessToken();
+    const session = await window.supabase.auth.getSession();
+    const token = session?.data?.session?.access_token;
     const response = await fetch(
       `/v1/integrations/slack/${encodeURIComponent(connectionId)}`,
       {
@@ -259,7 +260,8 @@ async function handleSlackOAuthCallback() {
     // Auto-link user to the new connection with notifications enabled
     if (slackConnectionId) {
       try {
-        const token = await window.dataBinder.getAccessToken();
+        const session = await window.supabase.auth.getSession();
+        const token = session?.data?.session?.access_token;
         const response = await fetch(
           `/v1/integrations/slack/${encodeURIComponent(slackConnectionId)}/link-user`,
           {
