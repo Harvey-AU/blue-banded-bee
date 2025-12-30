@@ -73,11 +73,20 @@ jobs:
           if [ -z "$DIRECT_DB_URL" ] && [ -n "$PREVIEW_DB_URL" ]; then
             # Extract project ref from username (postgres.[ref])
             PROJECT_REF=$(echo "$PREVIEW_DB_URL" | sed -n 's|.*postgres\.\([^:]*\):.*|\1|p')
-            # Extract password
-            PASSWORD=$(echo "$PREVIEW_DB_URL" | sed -n 's|.*:\([^@]*\)@.*|\1|p')
+            # Extract password - get everything between first : after postgres.[ref] and @
+            # Use parameter expansion to handle special chars in password
+            USERINFO="${PREVIEW_DB_URL#*://}"  # Remove scheme
+            USERINFO="${USERINFO%%@*}"          # Remove everything after @
+            PASSWORD="${USERINFO#*:}"           # Remove username: prefix
             if [ -n "$PROJECT_REF" ] && [ -n "$PASSWORD" ]; then
               DIRECT_DB_URL="postgres://postgres.${PROJECT_REF}:${PASSWORD}@db.${PROJECT_REF}.supabase.co:5432/postgres"
-              echo "📡 Derived direct URL from pooler URL"
+              # Validate the constructed URL has expected format
+              if echo "$DIRECT_DB_URL" | grep -qE '^postgres://[^:]+:[^@]+@[^:]+:[0-9]+/'; then
+                echo "📡 Derived direct URL from pooler URL"
+              else
+                echo "⚠️ Derived direct URL appears invalid, skipping"
+                DIRECT_DB_URL=""
+              fi
             fi
           fi
 
@@ -141,25 +150,31 @@ jobs:
             echo "Review app already exists: $APP_NAME"
           fi
 
-          # Build secrets command
-          SECRETS_CMD="flyctl secrets set DATABASE_URL=\"$DB_URL\""
-
-          # Add direct URL for real-time notifications if available
-          if [ -n "$DIRECT_URL" ]; then
-            echo "📡 Setting DATABASE_DIRECT_URL for real-time notifications"
-            SECRETS_CMD="$SECRETS_CMD DATABASE_DIRECT_URL=\"$DIRECT_URL\""
-          fi
-
           # Set secrets for Review App WITHOUT triggering deployment
           echo "Setting test database connection and auth secrets for review app..."
-          eval $SECRETS_CMD \
-            SUPABASE_JWT_SECRET="${{ secrets.SUPABASE_JWT_SECRET }}" \
-            SUPABASE_SERVICE_ROLE_KEY="${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
-            SENTRY_DSN="${{ secrets.SENTRY_DSN }}" \
-            SLACK_CLIENT_ID="${{ secrets.SLACK_CLIENT_ID }}" \
-            SLACK_CLIENT_SECRET="${{ secrets.SLACK_CLIENT_SECRET }}" \
-            APP_URL="https://$APP_NAME.fly.dev" \
-            --app $APP_NAME --stage
+          if [ -n "$DIRECT_URL" ]; then
+            echo "📡 Setting DATABASE_DIRECT_URL for real-time notifications"
+            flyctl secrets set \
+              DATABASE_URL="$DB_URL" \
+              DATABASE_DIRECT_URL="$DIRECT_URL" \
+              SUPABASE_JWT_SECRET="${{ secrets.SUPABASE_JWT_SECRET }}" \
+              SUPABASE_SERVICE_ROLE_KEY="${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+              SENTRY_DSN="${{ secrets.SENTRY_DSN }}" \
+              SLACK_CLIENT_ID="${{ secrets.SLACK_CLIENT_ID }}" \
+              SLACK_CLIENT_SECRET="${{ secrets.SLACK_CLIENT_SECRET }}" \
+              APP_URL="https://$APP_NAME.fly.dev" \
+              --app $APP_NAME --stage
+          else
+            flyctl secrets set \
+              DATABASE_URL="$DB_URL" \
+              SUPABASE_JWT_SECRET="${{ secrets.SUPABASE_JWT_SECRET }}" \
+              SUPABASE_SERVICE_ROLE_KEY="${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+              SENTRY_DSN="${{ secrets.SENTRY_DSN }}" \
+              SLACK_CLIENT_ID="${{ secrets.SLACK_CLIENT_ID }}" \
+              SLACK_CLIENT_SECRET="${{ secrets.SLACK_CLIENT_SECRET }}" \
+              APP_URL="https://$APP_NAME.fly.dev" \
+              --app $APP_NAME --stage
+          fi
 
           # Deploy to review app with local image (this will apply staged secrets)
           # Region is set via primary_region in .fly/review_apps.toml (syd)
