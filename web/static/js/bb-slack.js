@@ -1,6 +1,7 @@
 /**
  * Slack Integration Handler
- * Handles Slack workspace connections and user linking for notifications.
+ * Handles Slack workspace connections for notifications.
+ * Flow: Connect workspace → auto-links user with notifications enabled → Disconnect
  */
 
 /**
@@ -15,9 +16,9 @@ function formatSlackDate(timestamp) {
   const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
   if (diffDays === 0) {
-    return "Today";
+    return "today";
   } else if (diffDays === 1) {
-    return "Yesterday";
+    return "yesterday";
   } else if (diffDays < 7) {
     return `${diffDays} days ago`;
   } else {
@@ -72,36 +73,6 @@ function handleSlackAction(action, element) {
       break;
     }
 
-    case "slack-link-user": {
-      const connectionId = element.getAttribute("bbb-id");
-      if (connectionId) {
-        linkSlackUser(connectionId);
-      } else {
-        console.warn("slack-link-user: missing bbb-id attribute");
-      }
-      break;
-    }
-
-    case "slack-unlink-user": {
-      const connectionId = element.getAttribute("bbb-id");
-      if (connectionId) {
-        unlinkSlackUser(connectionId);
-      } else {
-        console.warn("slack-unlink-user: missing bbb-id attribute");
-      }
-      break;
-    }
-
-    case "slack-toggle-notifications": {
-      const connectionId = element.getAttribute("bbb-id");
-      if (connectionId) {
-        toggleSlackNotifications(connectionId, element);
-      } else {
-        console.warn("slack-toggle-notifications: missing bbb-id attribute");
-      }
-      break;
-    }
-
     case "slack-refresh":
       loadSlackConnections();
       break;
@@ -138,9 +109,8 @@ async function loadSlackConnections() {
     }
 
     // Clear existing connections (except template)
-    const existingConnections = connectionsList.querySelectorAll(
-      '.slack-connection:not([bbb-template="slack-connection"])'
-    );
+    const existingConnections =
+      connectionsList.querySelectorAll(".slack-connection");
     existingConnections.forEach((el) => el.remove());
 
     if (!connections || connections.length === 0) {
@@ -150,8 +120,7 @@ async function loadSlackConnections() {
 
     if (emptyState) emptyState.style.display = "none";
 
-    // Build all connection elements first
-    const clones = [];
+    // Build connection elements
     for (const conn of connections) {
       const clone = template.cloneNode(true);
       clone.style.display = "block";
@@ -160,115 +129,29 @@ async function loadSlackConnections() {
 
       // Set workspace name
       const nameEl = clone.querySelector(".slack-workspace-name");
-      if (nameEl)
+      if (nameEl) {
         nameEl.textContent = conn.workspace_name || "Unknown Workspace";
+      }
 
       // Set connected date
       const dateEl = clone.querySelector(".slack-connected-date");
-      if (dateEl)
+      if (dateEl) {
         dateEl.textContent = `Connected ${formatSlackDate(conn.created_at)}`;
+      }
 
-      // Set connection ID on action buttons
+      // Set connection ID on disconnect button
       const disconnectBtn = clone.querySelector(
         '[bbb-action="slack-disconnect"]'
       );
-      if (disconnectBtn) disconnectBtn.setAttribute("bbb-id", conn.id);
+      if (disconnectBtn) {
+        disconnectBtn.setAttribute("bbb-id", conn.id);
+      }
 
-      const linkBtn = clone.querySelector('[bbb-action="slack-link-user"]');
-      if (linkBtn) linkBtn.setAttribute("bbb-id", conn.id);
-
-      const unlinkBtn = clone.querySelector('[bbb-action="slack-unlink-user"]');
-      if (unlinkBtn) unlinkBtn.setAttribute("bbb-id", conn.id);
-
-      const toggleBtn = clone.querySelector(
-        '[bbb-action="slack-toggle-notifications"]'
-      );
-      if (toggleBtn) toggleBtn.setAttribute("bbb-id", conn.id);
-
-      clones.push({ clone, connectionId: conn.id });
       connectionsList.appendChild(clone);
     }
-
-    // Update user link status in parallel for better performance
-    await Promise.all(
-      clones.map(({ clone, connectionId }) =>
-        updateUserLinkStatus(clone, connectionId)
-      )
-    );
   } catch (error) {
     console.error("Failed to load Slack connections:", error);
     showSlackError("Failed to load Slack connections");
-  }
-}
-
-/**
- * Update UI to show current user's link status for a connection
- * @param {HTMLElement} connectionEl - The connection element
- * @param {string} connectionId - The connection ID
- */
-async function updateUserLinkStatus(connectionEl, connectionId) {
-  try {
-    const link = await window.dataBinder.fetchData(
-      `/v1/integrations/slack/${connectionId}/user-link`
-    );
-
-    const linkBtn = connectionEl.querySelector(
-      '[bbb-action="slack-link-user"]'
-    );
-    const unlinkBtn = connectionEl.querySelector(
-      '[bbb-action="slack-unlink-user"]'
-    );
-    const toggleBtn = connectionEl.querySelector(
-      '[bbb-action="slack-toggle-notifications"]'
-    );
-    const statusEl = connectionEl.querySelector(".slack-link-status");
-
-    if (link && link.id) {
-      // User is linked
-      if (linkBtn) linkBtn.style.display = "none";
-      if (unlinkBtn) unlinkBtn.style.display = "inline-block";
-      if (toggleBtn) {
-        toggleBtn.style.display = "inline-block";
-        toggleBtn.textContent = link.dm_notifications
-          ? "Disable notifications"
-          : "Enable notifications";
-        toggleBtn.classList.toggle("active", link.dm_notifications);
-      }
-      if (statusEl) {
-        statusEl.textContent = link.dm_notifications
-          ? "Notifications enabled"
-          : "Notifications disabled";
-        statusEl.className = `slack-link-status ${link.dm_notifications ? "enabled" : "disabled"}`;
-      }
-    } else {
-      // User is not linked
-      if (linkBtn) linkBtn.style.display = "inline-block";
-      if (unlinkBtn) unlinkBtn.style.display = "none";
-      if (toggleBtn) toggleBtn.style.display = "none";
-      if (statusEl) {
-        statusEl.textContent = "Not linked";
-        statusEl.className = "slack-link-status not-linked";
-      }
-    }
-  } catch (error) {
-    // Only treat 404 as "not linked"; log other errors
-    if (error.status && error.status !== 404) {
-      console.warn("Failed to fetch user link status:", error);
-    }
-    // User not linked - show link button
-    const linkBtn = connectionEl.querySelector(
-      '[bbb-action="slack-link-user"]'
-    );
-    const unlinkBtn = connectionEl.querySelector(
-      '[bbb-action="slack-unlink-user"]'
-    );
-    const toggleBtn = connectionEl.querySelector(
-      '[bbb-action="slack-toggle-notifications"]'
-    );
-
-    if (linkBtn) linkBtn.style.display = "inline-block";
-    if (unlinkBtn) unlinkBtn.style.display = "none";
-    if (toggleBtn) toggleBtn.style.display = "none";
   }
 }
 
@@ -301,14 +184,14 @@ async function connectSlackWorkspace() {
 async function disconnectSlackWorkspace(connectionId) {
   if (
     !confirm(
-      "Are you sure you want to disconnect this Slack workspace? All user links will be removed."
+      "Are you sure you want to disconnect this Slack workspace? You will no longer receive notifications."
     )
   ) {
     return;
   }
 
   try {
-    // Use raw fetch for DELETE since it may return no body
+    // Use raw fetch for DELETE since it returns no body
     const token = await window.dataBinder.getAccessToken();
     const response = await fetch(
       `/v1/integrations/slack/${encodeURIComponent(connectionId)}`,
@@ -321,7 +204,8 @@ async function disconnectSlackWorkspace(connectionId) {
     );
 
     if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
+      const text = await response.text();
+      throw new Error(text || `HTTP ${response.status}`);
     }
 
     showSlackSuccess("Slack workspace disconnected");
@@ -329,94 +213,6 @@ async function disconnectSlackWorkspace(connectionId) {
   } catch (error) {
     console.error("Failed to disconnect Slack workspace:", error);
     showSlackError("Failed to disconnect Slack workspace");
-  }
-}
-
-/**
- * Link current user to Slack for a connection
- * @param {string} connectionId - The connection ID
- */
-async function linkSlackUser(connectionId) {
-  try {
-    await window.dataBinder.fetchData(
-      `/v1/integrations/slack/${encodeURIComponent(connectionId)}/link-user`,
-      { method: "POST" }
-    );
-
-    showSlackSuccess(
-      "Your account has been linked to Slack. You will now receive job notifications."
-    );
-    loadSlackConnections();
-  } catch (error) {
-    console.error("Failed to link Slack user:", error);
-    // Check for 404 or "not found" message to give specific feedback
-    if (
-      error.status === 404 ||
-      (error.message && error.message.toLowerCase().includes("not found"))
-    ) {
-      showSlackError(
-        "Could not find your Slack user. Make sure your email matches your Slack account."
-      );
-    } else {
-      showSlackError("Failed to link your account to Slack");
-    }
-  }
-}
-
-/**
- * Unlink current user from Slack for a connection
- * @param {string} connectionId - The connection ID
- */
-async function unlinkSlackUser(connectionId) {
-  if (
-    !confirm(
-      "Are you sure you want to unlink your Slack account? You will no longer receive job notifications."
-    )
-  ) {
-    return;
-  }
-
-  try {
-    await window.dataBinder.fetchData(
-      `/v1/integrations/slack/${encodeURIComponent(connectionId)}/link-user`,
-      { method: "DELETE" }
-    );
-
-    showSlackSuccess("Your account has been unlinked from Slack");
-    loadSlackConnections();
-  } catch (error) {
-    console.error("Failed to unlink Slack user:", error);
-    showSlackError("Failed to unlink your account from Slack");
-  }
-}
-
-/**
- * Toggle DM notifications for current user
- * @param {string} connectionId - The connection ID
- * @param {HTMLElement} element - The toggle button element
- */
-async function toggleSlackNotifications(connectionId, element) {
-  try {
-    // Get current state from button class
-    const currentlyEnabled = element.classList.contains("active");
-    const newState = !currentlyEnabled;
-
-    await window.dataBinder.fetchData(
-      `/v1/integrations/slack/${encodeURIComponent(connectionId)}/link-user`,
-      {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ dm_notifications: newState }),
-      }
-    );
-
-    showSlackSuccess(
-      newState ? "Notifications enabled" : "Notifications disabled"
-    );
-    loadSlackConnections();
-  } catch (error) {
-    console.error("Failed to toggle notifications:", error);
-    showSlackError("Failed to update notification settings");
   }
 }
 
@@ -460,27 +256,35 @@ async function handleSlackOAuthCallback() {
     url.searchParams.delete("slack_connection_id");
     window.history.replaceState({}, "", url.toString());
 
-    // Auto-link user to the new connection
+    // Auto-link user to the new connection with notifications enabled
     if (slackConnectionId) {
       try {
-        await window.dataBinder.fetchData(
+        const token = await window.dataBinder.getAccessToken();
+        const response = await fetch(
           `/v1/integrations/slack/${encodeURIComponent(slackConnectionId)}/link-user`,
-          { method: "POST" }
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
         );
-        showSlackSuccess(
-          `Slack workspace "${slackConnected}" connected and linked! You'll receive job notifications.`
-        );
+
+        if (response.ok) {
+          showSlackSuccess(
+            `Slack workspace "${slackConnected}" connected! You'll receive job notifications.`
+          );
+        } else {
+          // Link failed but connection succeeded
+          console.warn("Auto-link failed after OAuth");
+          showSlackSuccess(`Slack workspace "${slackConnected}" connected!`);
+        }
       } catch (linkError) {
-        // Link failed, but connection succeeded - show partial success
         console.warn("Auto-link failed after OAuth:", linkError);
-        showSlackSuccess(
-          `Slack workspace "${slackConnected}" connected. Click "Link My Account" to enable notifications.`
-        );
+        showSlackSuccess(`Slack workspace "${slackConnected}" connected!`);
       }
     } else {
-      showSlackSuccess(
-        `Slack workspace "${slackConnected}" connected successfully!`
-      );
+      showSlackSuccess(`Slack workspace "${slackConnected}" connected!`);
     }
   } else if (slackError) {
     showSlackError(`Failed to connect Slack: ${slackError}`);
