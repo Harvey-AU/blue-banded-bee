@@ -2248,16 +2248,6 @@
             return;
           }
 
-          if (orgs.length === 1) {
-            // Single org - show name only, no dropdown
-            currentOrgName.textContent = orgs[0].name;
-            btn.querySelector(".bb-org-chevron").style.display = "none";
-            btn.style.cursor = "default";
-            btn.disabled = true;
-            return;
-          }
-
-          // Multiple orgs - enable switcher
           // Get active org from user data or use first org
           const { data: userData, error: userError } = await window.supabase
             .from("users")
@@ -2485,7 +2475,7 @@
               }
             } else {
               errorDiv.textContent =
-                data.error || "Failed to create organisation";
+                data.message || "Failed to create organisation";
               errorDiv.style.display = "block";
             }
           } catch (err) {

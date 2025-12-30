@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/Harvey-AU/blue-banded-bee/internal/auth"
@@ -82,7 +83,7 @@ func (h *Handler) createOrganisation(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate name
-	name := req.Name
+	name := strings.TrimSpace(req.Name)
 	if name == "" {
 		BadRequest(w, r, "name is required")
 		return
