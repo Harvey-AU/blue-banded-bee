@@ -2788,7 +2788,7 @@ func (wp *WorkerPool) CleanupStuckJobs(ctx context.Context) error {
 				progress = 100.0
 			WHERE (status = $3 OR status = $4)
 			AND total_tasks > 0
-			AND total_tasks = completed_tasks + failed_tasks
+			AND total_tasks = completed_tasks + failed_tasks + skipped_tasks
 		`, JobStatusCompleted, time.Now().UTC(), JobStatusPending, JobStatusRunning)
 
 		if err != nil {
