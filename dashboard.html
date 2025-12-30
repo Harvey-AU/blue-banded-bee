@@ -2803,10 +2803,19 @@
         if (openBtn) {
           openBtn.addEventListener("click", async () => {
             modal.classList.add("show");
-            // Load Slack connections when modal opens
-            if (window.loadSlackConnections) {
-              await window.loadSlackConnections();
-              updateSlackEmptyState();
+            try {
+              // Load Slack connections when modal opens
+              if (window.loadSlackConnections) {
+                await window.loadSlackConnections();
+                updateSlackEmptyState();
+              }
+            } catch (err) {
+              console.error("Failed to load Slack connections:", err);
+              if (window.showSlackError) {
+                window.showSlackError(
+                  "Failed to load connections. Please try again."
+                );
+              }
             }
           });
         }
@@ -2839,9 +2848,8 @@
       function updateSlackEmptyState() {
         const list = document.getElementById("slackConnectionsList");
         const emptyState = document.getElementById("slackEmptyState");
-        const connections = list?.querySelectorAll(
-          '[bbb-template="slack-connection"]:not([style*="display: none"])'
-        );
+        // Count rendered connections (have .slack-connection class, not the template)
+        const connections = list?.querySelectorAll(".slack-connection");
 
         if (emptyState) {
           emptyState.style.display =
