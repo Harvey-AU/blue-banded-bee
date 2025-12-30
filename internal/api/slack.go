@@ -771,12 +771,12 @@ func (h *Handler) validateOAuthState(stateParam string) (*OAuthState, error) {
 		return nil, fmt.Errorf("invalid state encoding: %w", err)
 	}
 
-	if len(payload) < 32 {
+	if len(payload) < sha256.Size {
 		return nil, fmt.Errorf("state too short")
 	}
 
-	data := payload[:len(payload)-32]
-	sig := payload[len(payload)-32:]
+	data := payload[:len(payload)-sha256.Size]
+	sig := payload[len(payload)-sha256.Size:]
 
 	// Verify HMAC
 	mac := hmac.New(sha256.New, []byte(getSlackStateSecret()))
