@@ -121,8 +121,7 @@ async function loadSlackConnections() {
     );
 
     const connectionsList = document.getElementById("slackConnectionsList");
-    const emptyState = document.getElementById("slackEmpty");
-    const connectButton = document.getElementById("slackConnectButton");
+    const emptyState = document.getElementById("slackEmptyState");
 
     if (!connectionsList) {
       console.error("Slack connections list element not found");
@@ -146,13 +145,10 @@ async function loadSlackConnections() {
 
     if (!connections || connections.length === 0) {
       if (emptyState) emptyState.style.display = "block";
-      if (connectButton) connectButton.style.display = "inline-block";
       return;
     }
 
     if (emptyState) emptyState.style.display = "none";
-    // Still show connect button for additional workspaces
-    if (connectButton) connectButton.style.display = "inline-block";
 
     // Build all connection elements first
     const clones = [];
