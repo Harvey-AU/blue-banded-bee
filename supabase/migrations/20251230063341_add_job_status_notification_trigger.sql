@@ -14,7 +14,7 @@ RETURNS TRIGGER AS $$
 DECLARE
     job_domain_name TEXT;
     duration_secs INTEGER;
-    notification_id TEXT;
+    notification_id UUID;
 BEGIN
     -- Only process if status actually changed to a terminal state
     IF OLD.status = NEW.status THEN
@@ -35,7 +35,7 @@ BEGIN
 
     -- Create notification when job transitions to completed
     IF OLD.status != 'completed' AND NEW.status = 'completed' THEN
-        notification_id := gen_random_uuid()::text;
+        notification_id := gen_random_uuid();
         INSERT INTO notifications (id, organisation_id, user_id, type, title, message, data, created_at)
         VALUES (
             notification_id,
@@ -54,12 +54,12 @@ BEGIN
             NOW()
         );
         -- Signal Go service for real-time delivery
-        PERFORM pg_notify('new_notification', notification_id);
+        PERFORM pg_notify('new_notification', notification_id::text);
     END IF;
 
     -- Create notification when job transitions to failed
     IF OLD.status NOT IN ('failed', 'cancelled') AND NEW.status = 'failed' THEN
-        notification_id := gen_random_uuid()::text;
+        notification_id := gen_random_uuid();
         INSERT INTO notifications (id, organisation_id, user_id, type, title, message, data, created_at)
         VALUES (
             notification_id,
@@ -78,7 +78,7 @@ BEGIN
             NOW()
         );
         -- Signal Go service for real-time delivery
-        PERFORM pg_notify('new_notification', notification_id);
+        PERFORM pg_notify('new_notification', notification_id::text);
     END IF;
 
     RETURN NEW;
