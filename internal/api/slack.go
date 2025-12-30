@@ -219,7 +219,7 @@ func (h *Handler) initiateSlackOAuth(w http.ResponseWriter, r *http.Request) {
 	authURL := fmt.Sprintf(
 		"https://slack.com/oauth/v2/authorize?client_id=%s&scope=%s&redirect_uri=%s&state=%s",
 		url.QueryEscape(slackClientID),
-		url.QueryEscape("chat:write,users:read,users:read.email"),
+		url.QueryEscape("chat:write,im:write,users:read,users:read.email"),
 		url.QueryEscape(redirectURI),
 		url.QueryEscape(state),
 	)
