@@ -663,14 +663,24 @@ func (h *Handler) listSlackWorkspaceUsers(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// List users from Slack
+	// List users from Slack with pagination for large workspaces
 	httpClient := &http.Client{Timeout: slackAPITimeout}
 	client := slack.New(token, slack.OptionHTTPClient(httpClient))
-	users, err := client.GetUsers()
-	if err != nil {
-		logger.Error().Err(err).Msg("Failed to fetch Slack users")
-		InternalError(w, r, fmt.Errorf("failed to fetch Slack users: %w", err))
-		return
+
+	var users []slack.User
+	pager := client.GetUsersPaginated(slack.GetUsersOptionLimit(200))
+	for {
+		page, err := pager.Next(r.Context())
+		if pager.Done(err) {
+			break
+		}
+		if err != nil {
+			logger.Error().Err(err).Msg("Failed to fetch Slack users")
+			InternalError(w, r, fmt.Errorf("failed to fetch Slack users: %w", err))
+			return
+		}
+		users = append(users, page.Users...)
+		pager = page
 	}
 
 	// Filter to real users (not bots, not deleted)
