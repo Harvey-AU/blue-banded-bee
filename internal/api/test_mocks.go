@@ -350,6 +350,29 @@ func (m *MockDBClient) GetSlackToken(ctx context.Context, connectionID string) (
 	return args.String(0), args.Error(1)
 }
 
+func (m *MockDBClient) ListNotifications(ctx context.Context, organisationID string, limit, offset int, unreadOnly bool) ([]*db.Notification, int, error) {
+	args := m.Called(ctx, organisationID, limit, offset, unreadOnly)
+	if args.Get(0) == nil {
+		return nil, args.Int(1), args.Error(2)
+	}
+	return args.Get(0).([]*db.Notification), args.Int(1), args.Error(2)
+}
+
+func (m *MockDBClient) GetUnreadNotificationCount(ctx context.Context, organisationID string) (int, error) {
+	args := m.Called(ctx, organisationID)
+	return args.Int(0), args.Error(1)
+}
+
+func (m *MockDBClient) MarkNotificationRead(ctx context.Context, notificationID, organisationID string) error {
+	args := m.Called(ctx, notificationID, organisationID)
+	return args.Error(0)
+}
+
+func (m *MockDBClient) MarkAllNotificationsRead(ctx context.Context, organisationID string) error {
+	args := m.Called(ctx, organisationID)
+	return args.Error(0)
+}
+
 // Test helpers
 func createTestHandler() (*Handler, *MockDBClient, *MockJobManager) {
 	mockDB := new(MockDBClient)

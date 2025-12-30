@@ -46,7 +46,7 @@ jobs:
       - name: Setup Supabase CLI
         uses: supabase/setup-cli@v1
         with:
-          version: "2.65.5"
+          version: "2.67.1"
 
       - name: Get Supabase Preview Branch URL
         id: supabase

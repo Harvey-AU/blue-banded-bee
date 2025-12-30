@@ -254,3 +254,19 @@ func (m *MockDBWithRealDB) StoreSlackToken(ctx context.Context, connectionID, to
 func (m *MockDBWithRealDB) GetSlackToken(ctx context.Context, connectionID string) (string, error) {
 	return "", nil
 }
+
+func (m *MockDBWithRealDB) ListNotifications(ctx context.Context, organisationID string, limit, offset int, unreadOnly bool) ([]*db.Notification, int, error) {
+	return nil, 0, nil
+}
+
+func (m *MockDBWithRealDB) GetUnreadNotificationCount(ctx context.Context, organisationID string) (int, error) {
+	return 0, nil
+}
+
+func (m *MockDBWithRealDB) MarkNotificationRead(ctx context.Context, notificationID, organisationID string) error {
+	return nil
+}
+
+func (m *MockDBWithRealDB) MarkAllNotificationsRead(ctx context.Context, organisationID string) error {
+	return nil
+}

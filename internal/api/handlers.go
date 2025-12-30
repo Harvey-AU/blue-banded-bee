@@ -137,6 +137,11 @@ type DBClient interface {
 	DeleteSlackUserLink(ctx context.Context, userID, connectionID string) error
 	StoreSlackToken(ctx context.Context, connectionID, token string) error
 	GetSlackToken(ctx context.Context, connectionID string) (string, error)
+	// Notification methods
+	ListNotifications(ctx context.Context, organisationID string, limit, offset int, unreadOnly bool) ([]*db.Notification, int, error)
+	GetUnreadNotificationCount(ctx context.Context, organisationID string) (int, error)
+	MarkNotificationRead(ctx context.Context, notificationID, organisationID string) error
+	MarkAllNotificationsRead(ctx context.Context, organisationID string) error
 }
 
 // Handler holds dependencies for API handlers
@@ -244,6 +249,11 @@ func (h *Handler) SetupRoutes(mux *http.ServeMux) {
 	mux.Handle("/v1/integrations/slack", auth.AuthMiddleware(http.HandlerFunc(h.SlackConnectionsHandler)))
 	mux.Handle("/v1/integrations/slack/", auth.AuthMiddleware(http.HandlerFunc(h.SlackConnectionHandler)))
 	mux.HandleFunc("/v1/integrations/slack/callback", h.SlackOAuthCallback) // No auth - state validation
+
+	// Notification endpoints
+	mux.Handle("/v1/notifications", auth.AuthMiddleware(http.HandlerFunc(h.NotificationsHandler)))
+	mux.Handle("/v1/notifications/read-all", auth.AuthMiddleware(http.HandlerFunc(h.NotificationsReadAllHandler)))
+	mux.Handle("/v1/notifications/", auth.AuthMiddleware(http.HandlerFunc(h.NotificationHandler)))
 
 	// Admin endpoints (require authentication and admin role)
 	mux.Handle("/v1/admin/reset-db", auth.AuthMiddleware(http.HandlerFunc(h.AdminResetDatabase)))

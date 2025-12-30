@@ -1007,6 +1007,184 @@
         opacity: 1;
       }
 
+      /* Notifications Dropdown Styles */
+      .bb-notifications-container {
+        position: relative;
+        display: inline-block;
+      }
+
+      .bb-notifications-btn {
+        position: relative;
+      }
+
+      .bb-notifications-badge {
+        position: absolute;
+        top: -4px;
+        right: -4px;
+        background: #ef4444;
+        color: white;
+        font-size: 10px;
+        font-weight: 600;
+        min-width: 16px;
+        height: 16px;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0 4px;
+      }
+
+      .bb-notifications-badge:empty,
+      .bb-notifications-badge[data-count="0"] {
+        display: none;
+      }
+
+      .bb-notifications-dropdown {
+        position: absolute;
+        top: 100%;
+        right: 0;
+        margin-top: 4px;
+        background: white;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        width: 360px;
+        max-height: 480px;
+        z-index: 1000;
+        display: none;
+        overflow: hidden;
+      }
+
+      .bb-notifications-container.open .bb-notifications-dropdown {
+        display: block;
+      }
+
+      .bb-notifications-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 12px 16px;
+        border-bottom: 1px solid #e5e7eb;
+      }
+
+      .bb-notifications-title {
+        font-weight: 600;
+        color: #111827;
+        font-size: 14px;
+      }
+
+      .bb-notifications-mark-read {
+        font-size: 12px;
+        color: #3b82f6;
+        background: none;
+        border: none;
+        cursor: pointer;
+        padding: 4px 8px;
+        border-radius: 4px;
+      }
+
+      .bb-notifications-mark-read:hover {
+        background: #eff6ff;
+      }
+
+      .bb-notifications-list {
+        max-height: 320px;
+        overflow-y: auto;
+      }
+
+      .bb-notifications-empty {
+        padding: 32px 16px;
+        text-align: center;
+        color: #6b7280;
+      }
+
+      .bb-notifications-empty-icon {
+        font-size: 32px;
+        margin-bottom: 8px;
+      }
+
+      .bb-notification-item {
+        display: flex;
+        gap: 12px;
+        padding: 12px 16px;
+        border-bottom: 1px solid #f3f4f6;
+        cursor: pointer;
+        transition: background 0.15s ease;
+      }
+
+      .bb-notification-item:hover {
+        background: #f9fafb;
+      }
+
+      .bb-notification-item.unread {
+        background: #eff6ff;
+      }
+
+      .bb-notification-item.unread:hover {
+        background: #dbeafe;
+      }
+
+      .bb-notification-item-icon {
+        font-size: 20px;
+        flex-shrink: 0;
+      }
+
+      .bb-notification-item-content {
+        flex: 1;
+        min-width: 0;
+      }
+
+      .bb-notification-item-subject {
+        font-weight: 500;
+        color: #111827;
+        font-size: 13px;
+        margin-bottom: 2px;
+      }
+
+      .bb-notification-item-preview {
+        color: #6b7280;
+        font-size: 12px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .bb-notification-item-time {
+        font-size: 11px;
+        color: #9ca3af;
+        margin-top: 4px;
+      }
+
+      .bb-notifications-footer {
+        border-top: 1px solid #e5e7eb;
+        padding: 8px;
+        display: flex;
+        gap: 8px;
+      }
+
+      .bb-notifications-footer-btn {
+        flex: 1;
+        padding: 8px;
+        font-size: 12px;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        transition: background 0.15s ease;
+      }
+
+      .bb-notifications-settings-btn {
+        background: #f3f4f6;
+        color: #374151;
+      }
+
+      .bb-notifications-settings-btn:hover {
+        background: #e5e7eb;
+      }
+
       /* Organisation Switcher Styles */
       .bb-org-switcher {
         position: relative;
@@ -1458,15 +1636,46 @@
             <span class="bb-org-divider">|</span>
             <span id="userEmail">Loading...</span>
             <div class="user-avatar" id="userAvatar">?</div>
-            <!-- Notifications/Settings Button -->
-            <button
-              id="notificationsBtn"
-              class="bb-button bb-button-outline"
-              style="margin-right: 8px"
-              aria-label="Notification settings"
-            >
-              🔔 Notifications
-            </button>
+            <!-- Notifications Dropdown -->
+            <div class="bb-notifications-container" id="notificationsContainer">
+              <button
+                id="notificationsBtn"
+                class="bb-button bb-button-outline bb-notifications-btn"
+                style="margin-right: 8px"
+                aria-label="View notifications"
+              >
+                🔔
+                <span
+                  class="bb-notifications-badge"
+                  id="notificationsBadge"
+                ></span>
+              </button>
+              <div class="bb-notifications-dropdown" id="notificationsDropdown">
+                <div class="bb-notifications-header">
+                  <span class="bb-notifications-title">Notifications</span>
+                  <button
+                    class="bb-notifications-mark-read"
+                    id="markAllReadBtn"
+                  >
+                    Mark all read
+                  </button>
+                </div>
+                <div class="bb-notifications-list" id="notificationsList">
+                  <div class="bb-notifications-empty">
+                    <div class="bb-notifications-empty-icon">🔔</div>
+                    <div>No notifications yet</div>
+                  </div>
+                </div>
+                <div class="bb-notifications-footer">
+                  <button
+                    class="bb-notifications-footer-btn bb-notifications-settings-btn"
+                    id="notificationsSettingsBtn"
+                  >
+                    ⚙️ Notification Settings
+                  </button>
+                </div>
+              </div>
+            </div>
             <!-- Admin: Reset Database Button (only show for system admins) -->
             <button
               id="resetDbBtn"
@@ -2076,21 +2285,33 @@
       </div>
     </div>
 
-    <!-- Notifications/Slack Settings Modal -->
+    <!-- Notification Channel Settings Modal -->
     <div id="notificationsModal" class="bb-modal">
       <div class="bb-modal-content" style="max-width: 600px">
         <div class="bb-modal-header">
-          <h2 class="bb-modal-title">🔔 Notification Settings</h2>
+          <h2 class="bb-modal-title">⚙️ Notification Channels</h2>
           <button
             class="bb-modal-close"
             bbb-action="close-notifications-modal"
-            aria-label="Close notifications modal"
+            aria-label="Close notification settings"
           >
             &times;
           </button>
         </div>
 
-        <!-- Slack Integration Section -->
+        <p
+          style="
+            color: #6b7280;
+            font-size: 14px;
+            margin: 0 0 24px 0;
+            padding: 0 24px;
+          "
+        >
+          Configure how you receive notifications for job completions, failures,
+          and other events.
+        </p>
+
+        <!-- Slack Channel Section -->
         <div class="bb-modal-section">
           <h3
             class="bb-modal-section-title"
@@ -2794,31 +3015,54 @@
           }
         });
 
-      // Notifications Modal Setup
+      // Notifications Dropdown and Modal Setup
       function setupNotificationsModal() {
         const modal = document.getElementById("notificationsModal");
-        const openBtn = document.getElementById("notificationsBtn");
+        const container = document.getElementById("notificationsContainer");
+        const toggleBtn = document.getElementById("notificationsBtn");
+        const settingsBtn = document.getElementById("notificationsSettingsBtn");
+        const markAllReadBtn = document.getElementById("markAllReadBtn");
 
-        // Open modal
-        if (openBtn) {
-          openBtn.addEventListener("click", async () => {
+        // Toggle dropdown
+        if (toggleBtn) {
+          toggleBtn.addEventListener("click", async (e) => {
+            e.stopPropagation();
+            const isOpen = container.classList.toggle("open");
+            if (isOpen) {
+              await loadNotifications();
+            }
+          });
+        }
+
+        // Settings button opens the modal
+        if (settingsBtn) {
+          settingsBtn.addEventListener("click", async () => {
+            container.classList.remove("open");
             modal.classList.add("show");
             try {
-              // Load Slack connections when modal opens
               if (window.loadSlackConnections) {
                 await window.loadSlackConnections();
                 updateSlackEmptyState();
               }
             } catch (err) {
               console.error("Failed to load Slack connections:", err);
-              if (window.showSlackError) {
-                window.showSlackError(
-                  "Failed to load connections. Please try again."
-                );
-              }
             }
           });
         }
+
+        // Mark all read button
+        if (markAllReadBtn) {
+          markAllReadBtn.addEventListener("click", async () => {
+            await markAllNotificationsRead();
+          });
+        }
+
+        // Close dropdown on outside click
+        document.addEventListener("click", (e) => {
+          if (!container.contains(e.target)) {
+            container.classList.remove("open");
+          }
+        });
 
         // Close modal handlers
         document
@@ -2838,10 +3082,210 @@
 
         // Close on Escape key
         document.addEventListener("keydown", (e) => {
-          if (e.key === "Escape" && modal.classList.contains("show")) {
-            modal.classList.remove("show");
+          if (e.key === "Escape") {
+            if (modal.classList.contains("show")) {
+              modal.classList.remove("show");
+            }
+            if (container.classList.contains("open")) {
+              container.classList.remove("open");
+            }
           }
         });
+
+        // Load notifications on page load for badge
+        loadNotificationCount();
+      }
+
+      // Load notification count for badge
+      async function loadNotificationCount() {
+        try {
+          const {
+            data: { session },
+          } = await window.supabase.auth.getSession();
+          if (!session) return;
+
+          const response = await fetch("/v1/notifications?limit=1", {
+            headers: { Authorization: `Bearer ${session.access_token}` },
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            updateNotificationBadge(data.unread_count);
+          }
+        } catch (err) {
+          console.error("Failed to load notification count:", err);
+        }
+      }
+
+      // Load full notifications list
+      async function loadNotifications() {
+        const list = document.getElementById("notificationsList");
+        if (!list) return;
+
+        try {
+          const {
+            data: { session },
+          } = await window.supabase.auth.getSession();
+          if (!session) {
+            list.innerHTML =
+              '<div class="bb-notifications-empty"><div>Please sign in</div></div>';
+            return;
+          }
+
+          const response = await fetch("/v1/notifications?limit=10", {
+            headers: { Authorization: `Bearer ${session.access_token}` },
+          });
+
+          if (!response.ok) {
+            throw new Error("Failed to fetch notifications");
+          }
+
+          const data = await response.json();
+          updateNotificationBadge(data.unread_count);
+          renderNotifications(data.notifications);
+        } catch (err) {
+          console.error("Failed to load notifications:", err);
+          list.innerHTML =
+            '<div class="bb-notifications-empty"><div>Failed to load</div></div>';
+        }
+      }
+
+      // Render notifications list
+      function renderNotifications(notifications) {
+        const list = document.getElementById("notificationsList");
+        if (!list) return;
+
+        if (!notifications || notifications.length === 0) {
+          list.innerHTML = `
+            <div class="bb-notifications-empty">
+              <div class="bb-notifications-empty-icon">🔔</div>
+              <div>No notifications yet</div>
+            </div>
+          `;
+          return;
+        }
+
+        const typeIcons = {
+          job_completed: "✅",
+          job_failed: "❌",
+          job_started: "🚀",
+          system: "ℹ️",
+        };
+
+        list.innerHTML = notifications
+          .map((n) => {
+            const isUnread = !n.read_at;
+            const icon = typeIcons[n.type] || "📬";
+            const time = formatRelativeTime(n.created_at);
+
+            return `
+            <div class="bb-notification-item ${isUnread ? "unread" : ""}"
+                 data-id="${n.id}"
+                 data-link="${n.link || ""}"
+                 onclick="handleNotificationClick('${n.id}', '${n.link || ""}')">
+              <div class="bb-notification-item-icon">${icon}</div>
+              <div class="bb-notification-item-content">
+                <div class="bb-notification-item-subject">${escapeHtml(n.subject)}</div>
+                <div class="bb-notification-item-preview">${escapeHtml(n.preview)}</div>
+                <div class="bb-notification-item-time">${time}</div>
+              </div>
+            </div>
+          `;
+          })
+          .join("");
+      }
+
+      // Handle notification click
+      async function handleNotificationClick(id, link) {
+        // Mark as read
+        try {
+          const {
+            data: { session },
+          } = await window.supabase.auth.getSession();
+          if (session) {
+            await fetch(`/v1/notifications/${id}/read`, {
+              method: "POST",
+              headers: { Authorization: `Bearer ${session.access_token}` },
+            });
+            // Update badge
+            loadNotificationCount();
+          }
+        } catch (err) {
+          console.error("Failed to mark notification read:", err);
+        }
+
+        // Navigate if there's a link
+        if (link) {
+          document
+            .getElementById("notificationsContainer")
+            .classList.remove("open");
+          // Handle relative links
+          if (link.startsWith("/")) {
+            window.location.href = link;
+          } else {
+            window.open(link, "_blank");
+          }
+        }
+      }
+
+      // Mark all notifications as read
+      async function markAllNotificationsRead() {
+        try {
+          const {
+            data: { session },
+          } = await window.supabase.auth.getSession();
+          if (!session) return;
+
+          const response = await fetch("/v1/notifications/read-all", {
+            method: "POST",
+            headers: { Authorization: `Bearer ${session.access_token}` },
+          });
+
+          if (response.ok) {
+            updateNotificationBadge(0);
+            // Remove unread styling from visible notifications
+            document
+              .querySelectorAll(".bb-notification-item.unread")
+              .forEach((el) => {
+                el.classList.remove("unread");
+              });
+          }
+        } catch (err) {
+          console.error("Failed to mark all read:", err);
+        }
+      }
+
+      // Update badge count
+      function updateNotificationBadge(count) {
+        const badge = document.getElementById("notificationsBadge");
+        if (badge) {
+          badge.textContent = count > 9 ? "9+" : count || "";
+          badge.dataset.count = count || 0;
+        }
+      }
+
+      // Format relative time
+      function formatRelativeTime(dateStr) {
+        const date = new Date(dateStr);
+        const now = new Date();
+        const diffMs = now - date;
+        const diffMins = Math.floor(diffMs / 60000);
+        const diffHours = Math.floor(diffMs / 3600000);
+        const diffDays = Math.floor(diffMs / 86400000);
+
+        if (diffMins < 1) return "just now";
+        if (diffMins < 60) return `${diffMins}m ago`;
+        if (diffHours < 24) return `${diffHours}h ago`;
+        if (diffDays < 7) return `${diffDays}d ago`;
+        return date.toLocaleDateString();
+      }
+
+      // Escape HTML to prevent XSS
+      function escapeHtml(text) {
+        if (!text) return "";
+        const div = document.createElement("div");
+        div.textContent = text;
+        return div.innerHTML;
       }
 
       // Update empty state visibility based on connections
