@@ -1131,6 +1131,29 @@
         font-weight: 500;
       }
 
+      .bb-org-dropdown-footer {
+        border-top: 1px solid #e5e7eb;
+        padding: 8px;
+      }
+
+      .bb-org-create-btn {
+        width: 100%;
+        padding: 10px 12px;
+        background: #f3f4f6;
+        border: 1px dashed #d1d5db;
+        border-radius: 6px;
+        color: #4b5563;
+        font-size: 13px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+      }
+
+      .bb-org-create-btn:hover {
+        background: #e5e7eb;
+        border-color: #9ca3af;
+        color: #374151;
+      }
+
       /* Dropdown menu styles */
       .bb-dropdown {
         position: relative;
@@ -1420,6 +1443,11 @@
                 <div class="bb-org-dropdown-header">Switch Organisation</div>
                 <div class="bb-org-list" id="orgList">
                   <!-- Populated dynamically -->
+                </div>
+                <div class="bb-org-dropdown-footer">
+                  <button class="bb-org-create-btn" id="createOrgBtn">
+                    + Create Organisation
+                  </button>
                 </div>
               </div>
             </div>
@@ -2035,6 +2063,64 @@
       </div>
     </div>
 
+    <!-- Create Organisation Modal -->
+    <div id="createOrgModal" class="bb-modal">
+      <div class="bb-modal-content" style="max-width: 440px">
+        <div class="bb-modal-header">
+          <h2 class="bb-modal-title">Create Organisation</h2>
+          <button
+            class="bb-modal-close"
+            id="closeCreateOrgModal"
+            aria-label="Close create organisation modal"
+          >
+            ×
+          </button>
+        </div>
+        <form id="createOrgForm">
+          <div class="bb-form-group">
+            <label for="newOrgName">Organisation Name</label>
+            <input
+              type="text"
+              id="newOrgName"
+              name="name"
+              required
+              maxlength="100"
+              placeholder="Enter organisation name"
+              class="bb-form-input"
+            />
+          </div>
+          <div
+            style="
+              display: flex;
+              gap: 12px;
+              justify-content: flex-end;
+              margin-top: 24px;
+            "
+          >
+            <button
+              type="button"
+              class="bb-button bb-button-outline"
+              id="cancelCreateOrg"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              class="bb-button bb-button-primary"
+              id="submitCreateOrg"
+            >
+              Create
+            </button>
+          </div>
+        </form>
+        <div
+          id="createOrgError"
+          class="bb-auth-error"
+          style="display: none"
+        ></div>
+      </div>
+    </div>
+
     <!-- Include the data binding and dashboard logic -->
     <script src="/js/bb-data-binder.js?v=20251222" defer></script>
     <script src="/js/bb-auth-extension.js?v=20251222" defer></script>
@@ -2299,6 +2385,124 @@
           divider.style.display = "none";
         }
       }
+
+      // Create Organisation Modal Handler
+      function initCreateOrgModal() {
+        const modal = document.getElementById("createOrgModal");
+        const form = document.getElementById("createOrgForm");
+        const nameInput = document.getElementById("newOrgName");
+        const errorDiv = document.getElementById("createOrgError");
+        const createBtn = document.getElementById("createOrgBtn");
+        const closeBtn = document.getElementById("closeCreateOrgModal");
+        const cancelBtn = document.getElementById("cancelCreateOrg");
+        const submitBtn = document.getElementById("submitCreateOrg");
+
+        if (!modal || !form) return;
+
+        const openModal = () => {
+          modal.classList.add("show");
+          nameInput.value = "";
+          errorDiv.style.display = "none";
+          nameInput.focus();
+        };
+
+        const closeModal = () => {
+          modal.classList.remove("show");
+        };
+
+        // Open modal when "Create Organisation" button is clicked
+        createBtn?.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const switcher = document.getElementById("orgSwitcher");
+          switcher?.classList.remove("open");
+          openModal();
+        });
+
+        // Close modal handlers
+        closeBtn?.addEventListener("click", closeModal);
+        cancelBtn?.addEventListener("click", closeModal);
+        modal?.addEventListener("click", (e) => {
+          if (e.target === modal) closeModal();
+        });
+
+        // Handle form submission
+        form?.addEventListener("submit", async (e) => {
+          e.preventDefault();
+
+          const name = nameInput.value.trim();
+          if (!name) {
+            errorDiv.textContent = "Organisation name is required";
+            errorDiv.style.display = "block";
+            return;
+          }
+
+          submitBtn.disabled = true;
+          submitBtn.textContent = "Creating...";
+          errorDiv.style.display = "none";
+
+          try {
+            const {
+              data: { session },
+            } = await window.supabase.auth.getSession();
+            if (!session) {
+              throw new Error("Not authenticated");
+            }
+
+            const response = await fetch("/v1/organisations", {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${session.access_token}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({ name }),
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+              closeModal();
+
+              // Update the org switcher UI
+              const currentOrgName = document.getElementById("currentOrgName");
+              if (currentOrgName) {
+                currentOrgName.textContent = name;
+              }
+              window.BB_ACTIVE_ORG = data.data?.organisation;
+
+              // Refresh the org switcher to show new org in list
+              await initOrgSwitcher();
+
+              // Refresh dashboard
+              if (window.refreshDashboard) {
+                window.refreshDashboard();
+              }
+
+              if (window.showNotification) {
+                window.showNotification(
+                  `Organisation "${name}" created`,
+                  "success"
+                );
+              }
+            } else {
+              errorDiv.textContent =
+                data.error || "Failed to create organisation";
+              errorDiv.style.display = "block";
+            }
+          } catch (err) {
+            console.error("Error creating organisation:", err);
+            errorDiv.textContent = "An error occurred. Please try again.";
+            errorDiv.style.display = "block";
+          } finally {
+            submitBtn.disabled = false;
+            submitBtn.textContent = "Create";
+          }
+        });
+      }
+
+      // Initialise create org modal after DOM ready
+      document.addEventListener("DOMContentLoaded", () => {
+        initCreateOrgModal();
+      });
 
       // Admin: Reset Database Button Handler
       // Button visibility is controlled by system-admin role check in dashboard initialization

@@ -8,13 +8,16 @@ import (
 	"github.com/Harvey-AU/blue-banded-bee/internal/auth"
 )
 
-// OrganisationsHandler handles GET /v1/organisations
+// OrganisationsHandler handles GET and POST /v1/organisations
 func (h *Handler) OrganisationsHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
+	switch r.Method {
+	case http.MethodGet:
+		h.listUserOrganisations(w, r)
+	case http.MethodPost:
+		h.createOrganisation(w, r)
+	default:
 		MethodNotAllowed(w, r)
-		return
 	}
-	h.listUserOrganisations(w, r)
 }
 
 // listUserOrganisations returns all organisations the user is a member of
@@ -57,6 +60,67 @@ func (h *Handler) listUserOrganisations(w http.ResponseWriter, r *http.Request) 
 	WriteSuccess(w, r, map[string]interface{}{
 		"organisations": formattedOrgs,
 	}, "Organisations retrieved successfully")
+}
+
+// CreateOrganisationRequest represents the request to create an organisation
+type CreateOrganisationRequest struct {
+	Name string `json:"name"`
+}
+
+// createOrganisation creates a new organisation and adds the user as a member
+func (h *Handler) createOrganisation(w http.ResponseWriter, r *http.Request) {
+	userClaims, ok := auth.GetUserFromContext(r.Context())
+	if !ok {
+		Unauthorised(w, r, "User information not found")
+		return
+	}
+
+	var req CreateOrganisationRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		BadRequest(w, r, "Invalid JSON request body")
+		return
+	}
+
+	// Validate name
+	name := req.Name
+	if name == "" {
+		BadRequest(w, r, "name is required")
+		return
+	}
+	if len(name) > 100 {
+		BadRequest(w, r, "name must be 100 characters or fewer")
+		return
+	}
+
+	// Create the organisation
+	org, err := h.DB.CreateOrganisation(name)
+	if err != nil {
+		InternalError(w, r, err)
+		return
+	}
+
+	// Add user as member
+	err = h.DB.AddOrganisationMember(userClaims.UserID, org.ID)
+	if err != nil {
+		InternalError(w, r, err)
+		return
+	}
+
+	// Set as active organisation
+	err = h.DB.SetActiveOrganisation(userClaims.UserID, org.ID)
+	if err != nil {
+		InternalError(w, r, err)
+		return
+	}
+
+	WriteSuccess(w, r, map[string]interface{}{
+		"organisation": map[string]interface{}{
+			"id":         org.ID,
+			"name":       org.Name,
+			"created_at": org.CreatedAt.Format(time.RFC3339),
+			"updated_at": org.UpdatedAt.Format(time.RFC3339),
+		},
+	}, "Organisation created successfully")
 }
 
 // SwitchOrganisationHandler handles POST /v1/organisations/switch
