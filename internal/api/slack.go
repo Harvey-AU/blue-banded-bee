@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -64,6 +65,17 @@ type OAuthState struct {
 	Timestamp int64  `json:"t"`
 	Nonce     string `json:"n"`
 }
+
+const (
+	// slackOAuthScopes defines the permissions requested from Slack during OAuth
+	slackOAuthScopes = "chat:write,im:write,users:read,users:read.email"
+	// slackAPITimeout is the timeout for Slack API calls
+	slackAPITimeout = 30 * time.Second
+	// oauthStateExpiry is how long OAuth state tokens are valid (15 minutes)
+	oauthStateExpiry = 900
+	// defaultAppURL is the fallback URL when APP_URL env var is not set
+	defaultAppURL = "https://app.bluebandedbee.co"
+)
 
 var (
 	slackClientID     = os.Getenv("SLACK_CLIENT_ID")
@@ -206,21 +218,12 @@ func (h *Handler) initiateSlackOAuth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Build Slack OAuth URL - use APP_URL if set, otherwise default to production
-	redirectURI := os.Getenv("SLACK_REDIRECT_URI")
-	if redirectURI == "" {
-		appURL := os.Getenv("APP_URL")
-		if appURL == "" {
-			appURL = "https://app.bluebandedbee.co"
-		}
-		redirectURI = appURL + "/v1/integrations/slack/callback"
-	}
-
+	// Build Slack OAuth URL
 	authURL := fmt.Sprintf(
 		"https://slack.com/oauth/v2/authorize?client_id=%s&scope=%s&redirect_uri=%s&state=%s",
 		url.QueryEscape(slackClientID),
-		url.QueryEscape("chat:write,im:write,users:read,users:read.email"),
-		url.QueryEscape(redirectURI),
+		url.QueryEscape(slackOAuthScopes),
+		url.QueryEscape(getSlackRedirectURI()),
 		url.QueryEscape(state),
 	)
 
@@ -255,22 +258,13 @@ func (h *Handler) handleSlackOAuthCallback(w http.ResponseWriter, r *http.Reques
 	}
 
 	// Exchange code for access token
-	redirectURI := os.Getenv("SLACK_REDIRECT_URI")
-	if redirectURI == "" {
-		appURL := os.Getenv("APP_URL")
-		if appURL == "" {
-			appURL = "https://app.bluebandedbee.co"
-		}
-		redirectURI = appURL + "/v1/integrations/slack/callback"
-	}
-
-	httpClient := &http.Client{Timeout: 30 * time.Second}
+	httpClient := &http.Client{Timeout: slackAPITimeout}
 	resp, err := slack.GetOAuthV2Response(
 		httpClient,
 		slackClientID,
 		slackClientSecret,
 		code,
-		redirectURI,
+		getSlackRedirectURI(),
 	)
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to exchange OAuth code")
@@ -375,7 +369,7 @@ func (h *Handler) getSlackConnection(w http.ResponseWriter, r *http.Request, con
 
 	conn, err := h.DB.GetSlackConnection(r.Context(), connectionID)
 	if err != nil {
-		if err == db.ErrSlackConnectionNotFound {
+		if errors.Is(err, db.ErrSlackConnectionNotFound) {
 			NotFound(w, r, "Slack connection not found")
 			return
 		}
@@ -442,7 +436,7 @@ func (h *Handler) deleteSlackConnection(w http.ResponseWriter, r *http.Request, 
 
 	err = h.DB.DeleteSlackConnection(r.Context(), connectionID, *user.OrganisationID)
 	if err != nil {
-		if err == db.ErrSlackConnectionNotFound {
+		if errors.Is(err, db.ErrSlackConnectionNotFound) {
 			NotFound(w, r, "Slack connection not found")
 			return
 		}
@@ -477,7 +471,7 @@ func (h *Handler) linkSlackUser(w http.ResponseWriter, r *http.Request, connecti
 	// Verify connection belongs to user's org
 	conn, err := h.DB.GetSlackConnection(r.Context(), connectionID)
 	if err != nil {
-		if err == db.ErrSlackConnectionNotFound {
+		if errors.Is(err, db.ErrSlackConnectionNotFound) {
 			NotFound(w, r, "Slack connection not found")
 			return
 		}
@@ -511,15 +505,16 @@ func (h *Handler) linkSlackUser(w http.ResponseWriter, r *http.Request, connecti
 			return
 		}
 
-		client := slack.New(token)
+		httpClient := &http.Client{Timeout: slackAPITimeout}
+		client := slack.New(token, slack.OptionHTTPClient(httpClient))
 		slackUser, err := client.GetUserByEmail(userClaims.Email)
 		if err != nil {
-			logger.Warn().Err(err).Str("email", userClaims.Email).Msg("Could not find Slack user by email")
+			logger.Warn().Err(err).Msg("Could not find Slack user by email")
 			BadRequest(w, r, "Could not find your Slack user. Make sure your email matches your Slack account.")
 			return
 		}
 		slackUserID = slackUser.ID
-		logger.Info().Str("email", userClaims.Email).Str("slack_user_id", slackUserID).Msg("Found Slack user by email")
+		logger.Info().Str("slack_user_id", slackUserID).Msg("Found Slack user by email lookup")
 	}
 
 	if slackUserID == "" {
@@ -570,7 +565,7 @@ func (h *Handler) unlinkSlackUser(w http.ResponseWriter, r *http.Request, connec
 
 	err := h.DB.DeleteSlackUserLink(r.Context(), userClaims.UserID, connectionID)
 	if err != nil {
-		if err == db.ErrSlackUserLinkNotFound {
+		if errors.Is(err, db.ErrSlackUserLinkNotFound) {
 			NotFound(w, r, "User link not found")
 			return
 		}
@@ -601,7 +596,7 @@ func (h *Handler) updateSlackUserNotifications(w http.ResponseWriter, r *http.Re
 
 	err := h.DB.UpdateSlackUserLinkNotifications(r.Context(), userClaims.UserID, connectionID, req.DMNotifications)
 	if err != nil {
-		if err == db.ErrSlackUserLinkNotFound {
+		if errors.Is(err, db.ErrSlackUserLinkNotFound) {
 			NotFound(w, r, "User link not found")
 			return
 		}
@@ -632,7 +627,7 @@ func (h *Handler) listSlackWorkspaceUsers(w http.ResponseWriter, r *http.Request
 
 	conn, err := h.DB.GetSlackConnection(r.Context(), connectionID)
 	if err != nil {
-		if err == db.ErrSlackConnectionNotFound {
+		if errors.Is(err, db.ErrSlackConnectionNotFound) {
 			NotFound(w, r, "Slack connection not found")
 			return
 		}
@@ -655,7 +650,8 @@ func (h *Handler) listSlackWorkspaceUsers(w http.ResponseWriter, r *http.Request
 	}
 
 	// List users from Slack
-	client := slack.New(token)
+	httpClient := &http.Client{Timeout: slackAPITimeout}
+	client := slack.New(token, slack.OptionHTTPClient(httpClient))
 	users, err := client.GetUsers()
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to fetch Slack users")
@@ -699,7 +695,7 @@ func (h *Handler) getSlackUserLink(w http.ResponseWriter, r *http.Request, conne
 
 	link, err := h.DB.GetSlackUserLink(r.Context(), userClaims.UserID, connectionID)
 	if err != nil {
-		if err == db.ErrSlackUserLinkNotFound {
+		if errors.Is(err, db.ErrSlackUserLinkNotFound) {
 			NotFound(w, r, "User not linked to this Slack connection")
 			return
 		}
@@ -773,33 +769,41 @@ func (h *Handler) validateOAuthState(stateParam string) (*OAuthState, error) {
 	}
 
 	// Check timestamp (15 minute expiry)
-	if time.Now().Unix()-state.Timestamp > 900 {
+	if time.Now().Unix()-state.Timestamp > oauthStateExpiry {
 		return nil, fmt.Errorf("state expired")
 	}
 
 	return &state, nil
 }
 
-func (h *Handler) redirectToDashboardWithError(w http.ResponseWriter, r *http.Request, errMsg string) {
-	dashboardURL := os.Getenv("DASHBOARD_URL")
-	if dashboardURL == "" {
-		appURL := os.Getenv("APP_URL")
-		if appURL == "" {
-			appURL = "https://app.bluebandedbee.co"
-		}
-		dashboardURL = appURL + "/dashboard"
+// getSlackRedirectURI returns the OAuth callback URL for Slack
+func getSlackRedirectURI() string {
+	if uri := os.Getenv("SLACK_REDIRECT_URI"); uri != "" {
+		return uri
 	}
-	http.Redirect(w, r, dashboardURL+"?slack_error="+url.QueryEscape(errMsg), http.StatusSeeOther)
+	return getAppURL() + "/v1/integrations/slack/callback"
+}
+
+// getAppURL returns the application URL, defaulting to production
+func getAppURL() string {
+	if appURL := os.Getenv("APP_URL"); appURL != "" {
+		return appURL
+	}
+	return defaultAppURL
+}
+
+// getDashboardURL returns the dashboard URL
+func getDashboardURL() string {
+	if dashURL := os.Getenv("DASHBOARD_URL"); dashURL != "" {
+		return dashURL
+	}
+	return getAppURL() + "/dashboard"
+}
+
+func (h *Handler) redirectToDashboardWithError(w http.ResponseWriter, r *http.Request, errMsg string) {
+	http.Redirect(w, r, getDashboardURL()+"?slack_error="+url.QueryEscape(errMsg), http.StatusSeeOther)
 }
 
 func (h *Handler) redirectToDashboardWithSuccess(w http.ResponseWriter, r *http.Request, workspaceName string) {
-	dashboardURL := os.Getenv("DASHBOARD_URL")
-	if dashboardURL == "" {
-		appURL := os.Getenv("APP_URL")
-		if appURL == "" {
-			appURL = "https://app.bluebandedbee.co"
-		}
-		dashboardURL = appURL + "/dashboard"
-	}
-	http.Redirect(w, r, dashboardURL+"?slack_connected="+url.QueryEscape(workspaceName), http.StatusSeeOther)
+	http.Redirect(w, r, getDashboardURL()+"?slack_connected="+url.QueryEscape(workspaceName), http.StatusSeeOther)
 }

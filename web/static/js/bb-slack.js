@@ -66,6 +66,8 @@ function handleSlackAction(action, element) {
       const connectionId = element.getAttribute("bbb-id");
       if (connectionId) {
         disconnectSlackWorkspace(connectionId);
+      } else {
+        console.warn("slack-disconnect: missing bbb-id attribute");
       }
       break;
     }
@@ -74,6 +76,8 @@ function handleSlackAction(action, element) {
       const connectionId = element.getAttribute("bbb-id");
       if (connectionId) {
         linkSlackUser(connectionId);
+      } else {
+        console.warn("slack-link-user: missing bbb-id attribute");
       }
       break;
     }
@@ -82,6 +86,8 @@ function handleSlackAction(action, element) {
       const connectionId = element.getAttribute("bbb-id");
       if (connectionId) {
         unlinkSlackUser(connectionId);
+      } else {
+        console.warn("slack-unlink-user: missing bbb-id attribute");
       }
       break;
     }
@@ -90,6 +96,8 @@ function handleSlackAction(action, element) {
       const connectionId = element.getAttribute("bbb-id");
       if (connectionId) {
         toggleSlackNotifications(connectionId, element);
+      } else {
+        console.warn("slack-toggle-notifications: missing bbb-id attribute");
       }
       break;
     }
@@ -146,6 +154,8 @@ async function loadSlackConnections() {
     // Still show connect button for additional workspaces
     if (connectButton) connectButton.style.display = "inline-block";
 
+    // Build all connection elements first
+    const clones = [];
     for (const conn of connections) {
       const clone = template.cloneNode(true);
       clone.style.display = "block";
@@ -178,11 +188,16 @@ async function loadSlackConnections() {
       );
       if (toggleBtn) toggleBtn.setAttribute("bbb-id", conn.id);
 
-      // Check if current user is linked to this connection
-      await updateUserLinkStatus(clone, conn.id);
-
+      clones.push({ clone, connectionId: conn.id });
       connectionsList.appendChild(clone);
     }
+
+    // Update user link status in parallel for better performance
+    await Promise.all(
+      clones.map(({ clone, connectionId }) =>
+        updateUserLinkStatus(clone, connectionId)
+      )
+    );
   } catch (error) {
     console.error("Failed to load Slack connections:", error);
     showSlackError("Failed to load Slack connections");
@@ -326,7 +341,11 @@ async function linkSlackUser(connectionId) {
     loadSlackConnections();
   } catch (error) {
     console.error("Failed to link Slack user:", error);
-    if (error.message && error.message.includes("not found")) {
+    // Check for 404 or "not found" message to give specific feedback
+    if (
+      error.status === 404 ||
+      (error.message && error.message.toLowerCase().includes("not found"))
+    ) {
       showSlackError(
         "Could not find your Slack user. Make sure your email matches your Slack account."
       );

@@ -2,7 +2,7 @@ package notifications
 
 import (
 	"context"
-	"database/sql"
+	"strings"
 	"time"
 
 	"github.com/lib/pq"
@@ -15,8 +15,13 @@ type Listener struct {
 	service *Service
 }
 
-// NewListener creates a new notification listener
+// NewListener creates a new notification listener.
+// Returns nil if service is nil to prevent nil pointer dereferences.
 func NewListener(connStr string, service *Service) *Listener {
+	if service == nil {
+		log.Error().Msg("Cannot create notification listener: service is nil")
+		return nil
+	}
 	return &Listener{
 		connStr: connStr,
 		service: service,
@@ -101,11 +106,16 @@ func (l *Listener) processPending(ctx context.Context) {
 	}
 }
 
-// StartWithFallback starts the listener with polling fallback
-// This is useful when the database doesn't support LISTEN (e.g., connection poolers)
-func StartWithFallback(ctx context.Context, db *sql.DB, connStr string, service *Service) {
+// StartWithFallback starts the listener with polling fallback.
+// This is useful when the database doesn't support LISTEN (e.g., connection poolers).
+func StartWithFallback(ctx context.Context, connStr string, service *Service) {
 	// Try to use LISTEN/NOTIFY first
 	listener := NewListener(connStr, service)
+	if listener == nil {
+		log.Warn().Msg("Notification listener not created, using polling fallback")
+		go startPolling(ctx, service)
+		return
+	}
 
 	// Check if we can use LISTEN (direct connection, not pooled)
 	if canUseListen(connStr) {
@@ -118,10 +128,17 @@ func StartWithFallback(ctx context.Context, db *sql.DB, connStr string, service 
 	go startPolling(ctx, service)
 }
 
+// canUseListen checks if the connection string supports LISTEN/NOTIFY.
+// Connection poolers like PgBouncer in transaction mode don't support LISTEN.
 func canUseListen(connStr string) bool {
-	// Connection poolers (like PgBouncer in transaction mode) don't support LISTEN
 	// Supabase's pooler URLs contain "pooler" in the host
-	// For now, always try LISTEN - it will fall back if it fails
+	if strings.Contains(connStr, "pooler") {
+		return false
+	}
+	// PgBouncer typically runs on port 6543
+	if strings.Contains(connStr, ":6543") {
+		return false
+	}
 	return true
 }
 
