@@ -212,6 +212,15 @@ func (c *SlackChannel) buildMessageBlocks(n *db.Notification) []slack.Block {
 		))
 	}
 
+	// Message block (detailed stats)
+	if n.Message != "" {
+		blocks = append(blocks, slack.NewSectionBlock(
+			slack.NewTextBlockObject("mrkdwn", "```\n"+n.Message+"\n```", false, false),
+			nil,
+			nil,
+		))
+	}
+
 	// Link block - relative paths get APP_URL prepended, absolute URLs used as-is
 	if n.Link != "" {
 		linkURL := n.Link
