@@ -6,6 +6,8 @@
 --
 -- This replaces the Go-based notification creation, providing a single
 -- source of truth in the database trigger.
+--
+-- Uses pg_notify to signal the Go notification service for real-time delivery.
 
 CREATE OR REPLACE FUNCTION update_job_progress()
 RETURNS TRIGGER AS $$
@@ -22,6 +24,7 @@ DECLARE
     job_user_id TEXT;
     job_domain_name TEXT;
     duration_secs INTEGER;
+    notification_id TEXT;
 BEGIN
     -- Determine which job to update
     IF TG_OP = 'DELETE' THEN
@@ -77,9 +80,10 @@ BEGIN
     -- Create notification when job transitions to completed
     -- Only for jobs with an organisation_id
     IF current_status != 'completed' AND new_status = 'completed' AND job_org_id IS NOT NULL THEN
+        notification_id := gen_random_uuid()::text;
         INSERT INTO notifications (id, organisation_id, user_id, type, title, message, data, created_at)
         VALUES (
-            gen_random_uuid(),
+            notification_id,
             job_org_id,
             job_user_id,
             'job_complete',
@@ -94,14 +98,17 @@ BEGIN
             ),
             NOW()
         );
+        -- Signal Go service for real-time delivery
+        PERFORM pg_notify('new_notification', notification_id);
     END IF;
 
     -- Create notification when job transitions to failed
     -- Only for jobs with an organisation_id
     IF current_status NOT IN ('failed', 'cancelled') AND new_status = 'failed' AND job_org_id IS NOT NULL THEN
+        notification_id := gen_random_uuid()::text;
         INSERT INTO notifications (id, organisation_id, user_id, type, title, message, data, created_at)
         VALUES (
-            gen_random_uuid(),
+            notification_id,
             job_org_id,
             job_user_id,
             'job_failed',
@@ -116,6 +123,8 @@ BEGIN
             ),
             NOW()
         );
+        -- Signal Go service for real-time delivery
+        PERFORM pg_notify('new_notification', notification_id);
     END IF;
 
     -- Return the appropriate record based on operation

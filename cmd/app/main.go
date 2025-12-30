@@ -715,9 +715,13 @@ func main() {
 	backgroundWG.Add(1)
 	go startJobScheduler(appCtx, &backgroundWG, jobsManager, pgDB)
 
-	// Start notification processor
+	// Start notification listener (uses PostgreSQL LISTEN for real-time delivery)
 	backgroundWG.Add(1)
-	go startNotificationProcessor(appCtx, &backgroundWG, notificationService)
+	go func() {
+		defer backgroundWG.Done()
+		listener := notifications.NewListener(pgDB.GetConfig().ConnectionString(), notificationService)
+		listener.Start(appCtx)
+	}()
 
 	// Wait for either the server to exit or shutdown signal completion
 	var serverErr error
@@ -878,31 +882,4 @@ func getClientIP(r *http.Request) string {
 	// If no X-Forwarded-For, use RemoteAddr
 	ip, _, _ = net.SplitHostPort(r.RemoteAddr)
 	return ip
-}
-
-// startNotificationProcessor processes pending notifications for delivery
-// It respects context cancellation for graceful shutdown
-func startNotificationProcessor(ctx context.Context, wg *sync.WaitGroup, notificationService *notifications.Service) {
-	defer wg.Done()
-
-	ticker := time.NewTicker(10 * time.Second)
-	defer ticker.Stop()
-
-	log.Info().Msg("Notification processor started")
-
-	for {
-		select {
-		case <-ctx.Done():
-			log.Info().Msg("Notification processor stopped")
-			return
-		case <-ticker.C:
-			if err := notificationService.ProcessPendingNotifications(ctx, 50); err != nil {
-				// Skip logging for normal shutdown cancellation
-				if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-					return
-				}
-				log.Warn().Err(err).Msg("Failed to process pending notifications")
-			}
-		}
-	}
 }
