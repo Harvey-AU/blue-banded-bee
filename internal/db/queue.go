@@ -1631,3 +1631,12 @@ func (q *DbQueue) jobHasConcurrencyBlockedTasks(ctx context.Context, tx *sql.Tx,
 	}
 	return exists
 }
+
+// UpdateDomainTechnologies updates the detected technologies for a domain.
+// Delegates to the underlying DB implementation.
+func (q *DbQueue) UpdateDomainTechnologies(ctx context.Context, domainID int, technologies, headers []byte, htmlPath string) error {
+	if q == nil || q.db == nil {
+		return fmt.Errorf("queue not initialised")
+	}
+	return q.db.UpdateDomainTechnologies(ctx, domainID, technologies, headers, htmlPath)
+}

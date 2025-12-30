@@ -195,3 +195,105 @@ func TestWarmURLWithTimeout(t *testing.T) {
 		t.Error("Expected timeout error, got nil")
 	}
 }
+
+func TestNormaliseCacheStatus(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		// Empty input
+		{"empty string", "", ""},
+
+		// CloudFront formats (3% market share) - verified Dec 2025
+		{"cloudfront hit", "Hit from cloudfront", "HIT"},
+		{"cloudfront miss", "Miss from cloudfront", "MISS"},
+		{"cloudfront refresh hit", "RefreshHit from cloudfront", "HIT"},
+		{"cloudfront lambda generated", "LambdaGeneratedResponse from cloudfront", "BYPASS"},
+		{"cloudfront error", "Error from cloudfront", "BYPASS"},
+		{"cloudfront case insensitive", "MISS FROM CLOUDFRONT", "MISS"},
+		{"cloudfront mixed case", "hit FROM CloudFront", "HIT"},
+
+		// Akamai formats (3% market share) - verified Dec 2025
+		{"akamai hit", "TCP_HIT", "HIT"},
+		{"akamai miss", "TCP_MISS", "MISS"},
+		{"akamai refresh hit", "TCP_REFRESH_HIT", "HIT"},
+		{"akamai refresh miss", "TCP_REFRESH_MISS", "MISS"},
+		{"akamai expired hit", "TCP_EXPIRED_HIT", "HIT"},
+		{"akamai expired miss", "TCP_EXPIRED_MISS", "MISS"},
+		{"akamai mem hit", "TCP_MEM_HIT", "HIT"},
+		{"akamai ims hit", "TCP_IMS_HIT", "HIT"},
+		{"akamai negative hit", "TCP_NEGATIVE_HIT", "HIT"},
+		{"akamai refresh fail hit", "TCP_REFRESH_FAIL_HIT", "HIT"},
+		{"akamai denied", "TCP_DENIED", "BYPASS"},
+		{"akamai cookie deny", "TCP_COOKIE_DENY", "BYPASS"},
+		{"akamai lowercase", "tcp_hit", "HIT"},
+		{"akamai from child", "TCP_HIT from child", "HIT"},
+		{"akamai from parent", "TCP_MISS from child, TCP_HIT from parent", "HIT"},
+
+		// Azure CDN formats (~2% market share) - same TCP_ prefix as Akamai
+		{"azure remote hit", "TCP_REMOTE_HIT", "HIT"},
+		{"azure uncacheable", "UNCACHEABLE", "BYPASS"},
+		{"azure uncacheable lowercase", "uncacheable", "BYPASS"},
+
+		// Fastly shielding formats (12% market share) - verified Dec 2025
+		{"fastly shield hit hit", "HIT, HIT", "HIT"},
+		{"fastly shield miss hit", "MISS, HIT", "HIT"},
+		{"fastly shield hit miss", "HIT, MISS", "MISS"},
+		{"fastly shield miss miss", "MISS, MISS", "MISS"},
+
+		// Cloudflare formats (64% market share) - verified Dec 2025
+		{"cloudflare none", "NONE", "BYPASS"},
+		{"cloudflare unknown", "UNKNOWN", "BYPASS"},
+		{"cloudflare updating", "UPDATING", "UPDATING"},
+
+		// RFC 9211 Cache-Status format (Netlify ~1%, future CDNs)
+		{"netlify hit", `"Netlify Edge"; hit`, "HIT"},
+		{"netlify hit no space", `"Netlify Edge";hit`, "HIT"},
+		{"netlify miss", `"Netlify Edge"; fwd=miss`, "MISS"},
+		{"netlify uri miss", `"Netlify Edge"; fwd=uri-miss`, "MISS"},
+		{"netlify vary miss", `"Netlify Edge"; fwd=vary-miss`, "MISS"},
+		{"netlify stale", `"Netlify Edge"; fwd=stale`, "MISS"},
+		{"rfc9211 multi cache hit", `"Origin"; fwd=miss, "CDN"; hit`, "HIT"},
+		{"rfc9211 with ttl", `ExampleCache; hit; ttl=30`, "HIT"},
+
+		// Standard formats (Cloudflare 64%, Fastly 12%, Vercel ~1%, KeyCDN <1%)
+		{"standard hit", "HIT", "HIT"},
+		{"standard miss", "MISS", "MISS"},
+		{"standard dynamic", "DYNAMIC", "DYNAMIC"},
+		{"standard bypass", "BYPASS", "BYPASS"},
+		{"standard expired", "EXPIRED", "EXPIRED"},
+		{"standard stale", "STALE", "STALE"},
+		{"standard revalidated", "REVALIDATED", "REVALIDATED"},
+		{"vercel prerender", "PRERENDER", "PRERENDER"},
+		{"fastly pass", "PASS", "PASS"},
+
+		// Preserve unknown formats
+		{"unknown format", "SOME_CUSTOM_VALUE", "SOME_CUSTOM_VALUE"},
+
+		// Mixed case standard formats - normalise to uppercase
+		{"mixed case hit", "Hit", "HIT"},
+		{"lowercase miss", "miss", "MISS"},
+		{"mixed case dynamic", "Dynamic", "DYNAMIC"},
+		{"lowercase stale", "stale", "STALE"},
+
+		// Whitespace handling
+		{"leading spaces", "  HIT", "HIT"},
+		{"trailing spaces", "MISS  ", "MISS"},
+		{"both spaces", "  DYNAMIC  ", "DYNAMIC"},
+		{"spaces only", "   ", ""},
+
+		// TCP_ edge cases without HIT/MISS
+		{"tcp client refresh", "TCP_CLIENT_REFRESH", "BYPASS"},
+		{"tcp swapfail", "TCP_SWAPFAIL", "BYPASS"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := normaliseCacheStatus(tt.input)
+			if result != tt.expected {
+				t.Errorf("normaliseCacheStatus(%q) = %q, want %q", tt.input, result, tt.expected)
+			}
+		})
+	}
+}

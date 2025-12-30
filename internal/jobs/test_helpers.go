@@ -106,6 +106,10 @@ func (m *simpleDbQueueMock) SetConcurrencyOverride(fn db.ConcurrencyOverrideFunc
 	// No-op for simple mock
 }
 
+func (m *simpleDbQueueMock) UpdateDomainTechnologies(ctx context.Context, domainID int, technologies, headers []byte, htmlPath string) error {
+	return nil
+}
+
 // simpleCrawlerMock is a minimal mock implementation of CrawlerInterface for unit tests
 type simpleCrawlerMock struct{}
 

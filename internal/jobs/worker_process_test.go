@@ -152,6 +152,10 @@ func (m *MockDbQueue) SetConcurrencyOverride(fn db.ConcurrencyOverrideFunc) {
 	// No-op for mock
 }
 
+func (m *MockDbQueue) UpdateDomainTechnologies(ctx context.Context, domainID int, technologies, headers []byte, htmlPath string) error {
+	return nil
+}
+
 // TestWorkerPoolProcessTask demonstrates the test structure for processTask
 // NOTE: This test cannot actually execute processTask due to concrete type dependencies.
 // It documents the test cases we would run if WorkerPool used interfaces instead of concrete types.

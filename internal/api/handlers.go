@@ -123,6 +123,9 @@ type DBClient interface {
 	ValidateOrganisationMembership(userID, organisationID string) (bool, error)
 	SetActiveOrganisation(userID, organisationID string) error
 	GetEffectiveOrganisationID(user *db.User) string
+	// Organisation management methods
+	CreateOrganisation(name string) (*db.Organisation, error)
+	AddOrganisationMember(userID, organisationID string) error
 	// Slack integration methods
 	CreateSlackConnection(ctx context.Context, conn *db.SlackConnection) error
 	GetSlackConnection(ctx context.Context, connectionID string) (*db.SlackConnection, error)

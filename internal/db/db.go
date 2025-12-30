@@ -557,6 +557,45 @@ func (db *DB) GetDomainNames(ctx context.Context, domainIDs []int) (map[int]stri
 	return domainNames, nil
 }
 
+// UpdateDomainTechnologies updates the detected technologies for a domain.
+// Called after first successful task crawl in a job to store tech detection results.
+func (db *DB) UpdateDomainTechnologies(ctx context.Context, domainID int, technologies, headers []byte, htmlPath string) error {
+	if domainID <= 0 {
+		return fmt.Errorf("invalid domain ID: %d", domainID)
+	}
+
+	// Validate JSON for JSONB columns
+	if len(technologies) > 0 && !json.Valid(technologies) {
+		return fmt.Errorf("technologies parameter is not valid JSON")
+	}
+	if len(headers) > 0 && !json.Valid(headers) {
+		return fmt.Errorf("headers parameter is not valid JSON")
+	}
+
+	query := `
+		UPDATE domains
+		SET technologies = $2,
+			tech_headers = $3,
+			tech_html_path = $4,
+			tech_detected_at = NOW()
+		WHERE id = $1`
+
+	result, err := db.client.ExecContext(ctx, query, domainID, technologies, headers, htmlPath)
+	if err != nil {
+		return fmt.Errorf("failed to update domain technologies: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to verify update: %w", err)
+	}
+	if rowsAffected == 0 {
+		return fmt.Errorf("domain with ID %d not found", domainID)
+	}
+
+	return nil
+}
+
 // ResetDataOnly clears all data from tables but preserves the schema.
 // This is the safe option for clearing test data without triggering schema changes.
 func (db *DB) ResetDataOnly() error {

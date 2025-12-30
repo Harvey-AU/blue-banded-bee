@@ -18,6 +18,9 @@ type PerformanceMetrics struct {
 	ContentTransferTime int64 `json:"content_transfer_time"`
 }
 
+// MaxBodySampleSize is the maximum size of body sample stored for tech detection (50KB)
+const MaxBodySampleSize = 50 * 1024
+
 // CrawlResult represents the result of a URL crawl operation
 type CrawlResult struct {
 	URL                 string              `json:"url"`
@@ -41,6 +44,8 @@ type CrawlResult struct {
 	SecondHeaders       http.Header         `json:"second_headers,omitempty"`
 	SecondPerformance   *PerformanceMetrics `json:"second_performance,omitempty"`
 	CacheCheckAttempts  []CacheCheckAttempt `json:"cache_check_attempts,omitempty"`
+	BodySample          []byte              `json:"-"` // Truncated body for tech detection (not serialised)
+	Body                []byte              `json:"-"` // Full body for storage upload (not serialised)
 }
 
 // CrawlOptions defines configuration options for a crawl operation
