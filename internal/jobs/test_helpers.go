@@ -67,6 +67,10 @@ func float64Ptr(f float64) *float64 {
 	return &f
 }
 
+func strPtr(s string) *string {
+	return &s
+}
+
 // simpleDbQueueMock is a minimal mock implementation of DbQueueInterface for unit tests
 type simpleDbQueueMock struct{}
 
