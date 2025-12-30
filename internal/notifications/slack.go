@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/Harvey-AU/blue-banded-bee/internal/db"
 	"github.com/rs/zerolog/log"
@@ -211,10 +212,14 @@ func (c *SlackChannel) buildMessageBlocks(n *db.Notification) []slack.Block {
 		))
 	}
 
-	// Link block (uses stored link path)
+	// Link block - relative paths get APP_URL prepended, absolute URLs used as-is
 	if n.Link != "" {
+		linkURL := n.Link
+		if strings.HasPrefix(n.Link, "/") {
+			linkURL = appURL + n.Link
+		}
 		blocks = append(blocks, slack.NewSectionBlock(
-			slack.NewTextBlockObject("mrkdwn", fmt.Sprintf("<%s%s|View details>", appURL, n.Link), false, false),
+			slack.NewTextBlockObject("mrkdwn", fmt.Sprintf("<%s|View details>", linkURL), false, false),
 			nil,
 			nil,
 		))
