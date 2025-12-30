@@ -714,12 +714,11 @@ func main() {
 	backgroundWG.Add(1)
 	go startJobScheduler(appCtx, &backgroundWG, jobsManager, pgDB)
 
-	// Start notification listener (uses PostgreSQL LISTEN for real-time delivery)
+	// Start notification listener (uses polling mode with Supabase pooler)
 	backgroundWG.Add(1)
 	go func() {
 		defer backgroundWG.Done()
-		listener := notifications.NewListener(pgDB.GetConfig().ConnectionString(), notificationService)
-		listener.Start(appCtx)
+		notifications.StartWithFallback(appCtx, pgDB.GetConfig().ConnectionString(), notificationService)
 	}()
 
 	// Wait for either the server to exit or shutdown signal completion
