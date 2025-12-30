@@ -270,3 +270,18 @@ func (m *MockDB) GetEffectiveOrganisationID(user *db.User) string {
 	args := m.Called(user)
 	return args.String(0)
 }
+
+// CreateOrganisation mocks the CreateOrganisation method
+func (m *MockDB) CreateOrganisation(name string) (*db.Organisation, error) {
+	args := m.Called(name)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*db.Organisation), args.Error(1)
+}
+
+// AddOrganisationMember mocks the AddOrganisationMember method
+func (m *MockDB) AddOrganisationMember(userID, organisationID string) error {
+	args := m.Called(userID, organisationID)
+	return args.Error(0)
+}

@@ -204,3 +204,11 @@ func (m *MockDBWithRealDB) GetEffectiveOrganisationID(user *db.User) string {
 	}
 	return ""
 }
+
+func (m *MockDBWithRealDB) CreateOrganisation(name string) (*db.Organisation, error) {
+	return nil, nil
+}
+
+func (m *MockDBWithRealDB) AddOrganisationMember(userID, organisationID string) error {
+	return nil
+}

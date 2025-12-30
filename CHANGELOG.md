@@ -29,6 +29,20 @@ On merge, CI will:
 
 ## [Unreleased]
 
+## [0.19.3] – 2025-12-30
+
+### Added
+
+- **Organisation Switcher UI**: Dashboard header now shows organisation switcher
+  dropdown
+  - Users can switch between organisations they belong to
+  - Dropdown shows all member organisations with visual indicator for active org
+  - "Create Organisation" option allows users to create new organisations
+  - Modal form for entering new organisation name with validation
+  - Newly created organisations automatically set as active
+  - Accessibility improvements: aria-labels, keyboard navigation (Escape to
+    close)
+
 ## [0.19.2] – 2025-12-29
 
 ## [0.19.1] – 2025-12-29

@@ -1131,6 +1131,29 @@
         font-weight: 500;
       }
 
+      .bb-org-dropdown-footer {
+        border-top: 1px solid #e5e7eb;
+        padding: 8px;
+      }
+
+      .bb-org-create-btn {
+        width: 100%;
+        padding: 10px 12px;
+        background: #f3f4f6;
+        border: 1px dashed #d1d5db;
+        border-radius: 6px;
+        color: #4b5563;
+        font-size: 13px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+      }
+
+      .bb-org-create-btn:hover {
+        background: #e5e7eb;
+        border-color: #9ca3af;
+        color: #374151;
+      }
+
       /* Dropdown menu styles */
       .bb-dropdown {
         position: relative;
@@ -1420,6 +1443,15 @@
                 <div class="bb-org-dropdown-header">Switch Organisation</div>
                 <div class="bb-org-list" id="orgList">
                   <!-- Populated dynamically -->
+                </div>
+                <div class="bb-org-dropdown-footer">
+                  <button
+                    class="bb-org-create-btn"
+                    id="createOrgBtn"
+                    aria-label="Create a new organisation"
+                  >
+                    + Create Organisation
+                  </button>
                 </div>
               </div>
             </div>
@@ -2035,6 +2067,65 @@
       </div>
     </div>
 
+    <!-- Create Organisation Modal -->
+    <div id="createOrgModal" class="bb-modal">
+      <div class="bb-modal-content" style="max-width: 440px">
+        <div class="bb-modal-header">
+          <h2 class="bb-modal-title">Create Organisation</h2>
+          <button
+            class="bb-modal-close"
+            id="closeCreateOrgModal"
+            aria-label="Close create organisation modal"
+          >
+            ×
+          </button>
+        </div>
+        <form id="createOrgForm">
+          <div class="bb-form-group">
+            <label for="newOrgName">Organisation Name</label>
+            <input
+              type="text"
+              id="newOrgName"
+              name="name"
+              required
+              maxlength="100"
+              placeholder="Enter organisation name"
+              class="bb-form-input"
+              aria-describedby="createOrgError"
+            />
+          </div>
+          <div
+            style="
+              display: flex;
+              gap: 12px;
+              justify-content: flex-end;
+              margin-top: 24px;
+            "
+          >
+            <button
+              type="button"
+              class="bb-button bb-button-outline"
+              id="cancelCreateOrg"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              class="bb-button bb-button-primary"
+              id="submitCreateOrg"
+            >
+              Create
+            </button>
+          </div>
+        </form>
+        <div
+          id="createOrgError"
+          class="bb-auth-error"
+          style="display: none"
+        ></div>
+      </div>
+    </div>
+
     <!-- Include the data binding and dashboard logic -->
     <script src="/js/bb-data-binder.js?v=20251222" defer></script>
     <script src="/js/bb-auth-extension.js?v=20251222" defer></script>
@@ -2081,9 +2172,10 @@
             window.loadSchedules();
           }
 
-          // Initialise organisation switcher
+          // Initialise organisation switcher and create modal
           if (session?.user) {
             await initOrgSwitcher();
+            initCreateOrgModal();
           }
 
           if (session?.user) {
@@ -2134,6 +2226,22 @@
 
         if (!switcher || !btn || !divider) return;
 
+        // Reset button state for re-initialization
+        btn.disabled = false;
+        btn.style.cursor = "";
+        const chevron = btn.querySelector(".bb-org-chevron");
+        if (chevron) chevron.style.display = "";
+
+        // Remove old event listeners by cloning elements
+        const newBtn = btn.cloneNode(true);
+        btn.parentNode.replaceChild(newBtn, btn);
+        const newOrgList = orgList.cloneNode(false); // shallow clone to clear children and listeners
+        orgList.parentNode.replaceChild(newOrgList, orgList);
+
+        // Update references to new elements
+        const btnRef = newBtn;
+        const orgListRef = newOrgList;
+
         try {
           const {
             data: { session },
@@ -2155,116 +2263,122 @@
           const data = await response.json();
           const orgs = data.data?.organisations || [];
 
+          // Handle no orgs case - still show switcher for create option
           if (orgs.length === 0) {
-            // No orgs - hide switcher
-            switcher.style.display = "none";
-            divider.style.display = "none";
-            return;
+            document.getElementById("currentOrgName").textContent =
+              "No Organisation";
+          } else {
+            // Get active org from user data or use first org
+            const { data: userData, error: userError } = await window.supabase
+              .from("users")
+              .select("active_organisation_id")
+              .eq("id", session.user.id)
+              .single();
+
+            if (userError) {
+              console.warn("Failed to fetch user active org:", userError);
+            }
+
+            const activeOrgId = userData?.active_organisation_id || orgs[0].id;
+            const activeOrg = orgs.find((o) => o.id === activeOrgId) || orgs[0];
+
+            document.getElementById("currentOrgName").textContent =
+              activeOrg.name;
+            window.BB_ACTIVE_ORG = activeOrg;
+
+            // Populate dropdown (using DOM methods to prevent XSS)
+            orgs.forEach((org) => {
+              const button = document.createElement("button");
+              button.className = `bb-org-item ${org.id === activeOrg.id ? "active" : ""}`;
+              button.dataset.orgId = org.id;
+              button.dataset.orgName = org.name;
+
+              const span = document.createElement("span");
+              span.className = "bb-org-item-name";
+              span.textContent = org.name;
+
+              button.appendChild(span);
+              orgListRef.appendChild(button);
+            });
           }
 
-          if (orgs.length === 1) {
-            // Single org - show name only, no dropdown
-            currentOrgName.textContent = orgs[0].name;
-            btn.querySelector(".bb-org-chevron").style.display = "none";
-            btn.style.cursor = "default";
-            btn.disabled = true;
-            return;
-          }
-
-          // Multiple orgs - enable switcher
-          // Get active org from user data or use first org
-          const { data: userData, error: userError } = await window.supabase
-            .from("users")
-            .select("active_organisation_id")
-            .eq("id", session.user.id)
-            .single();
-
-          if (userError) {
-            console.warn("Failed to fetch user active org:", userError);
-          }
-
-          const activeOrgId = userData?.active_organisation_id || orgs[0].id;
-          const activeOrg = orgs.find((o) => o.id === activeOrgId) || orgs[0];
-
-          currentOrgName.textContent = activeOrg.name;
-          window.BB_ACTIVE_ORG = activeOrg;
-
-          // Populate dropdown (using DOM methods to prevent XSS)
-          orgList.innerHTML = "";
-          orgs.forEach((org) => {
-            const button = document.createElement("button");
-            button.className = `bb-org-item ${org.id === activeOrg.id ? "active" : ""}`;
-            button.dataset.orgId = org.id;
-            button.dataset.orgName = org.name;
-
-            const span = document.createElement("span");
-            span.className = "bb-org-item-name";
-            span.textContent = org.name; // Safe - uses textContent
-
-            button.appendChild(span);
-            orgList.appendChild(button);
-          });
-
-          // Toggle dropdown
-          btn.addEventListener("click", (e) => {
+          // Toggle dropdown (works for both 0 and 1+ orgs)
+          btnRef.addEventListener("click", (e) => {
             e.stopPropagation();
             switcher.classList.toggle("open");
-            btn.setAttribute(
+            btnRef.setAttribute(
               "aria-expanded",
               switcher.classList.contains("open")
             );
           });
 
-          // Handle org selection
-          orgList.addEventListener("click", async (e) => {
-            const item = e.target.closest(".bb-org-item");
-            if (!item || item.classList.contains("active")) {
+          // Handle org selection (only if we have orgs)
+          if (orgs.length > 0) {
+            orgListRef.addEventListener("click", async (e) => {
+              const item = e.target.closest(".bb-org-item");
+              if (!item || item.classList.contains("active")) {
+                switcher.classList.remove("open");
+                return;
+              }
+
+              const orgId = item.dataset.orgId;
+              const orgName = item.dataset.orgName;
+
+              // Show loading state
+              document.getElementById("currentOrgName").textContent =
+                "Switching...";
               switcher.classList.remove("open");
-              return;
-            }
 
-            const orgId = item.dataset.orgId;
-            const orgName = item.dataset.orgName;
-
-            // Show loading state
-            currentOrgName.textContent = "Switching...";
-            switcher.classList.remove("open");
-
-            try {
-              const switchRes = await fetch("/v1/organisations/switch", {
-                method: "POST",
-                headers: {
-                  Authorization: `Bearer ${session.access_token}`,
-                  "Content-Type": "application/json",
-                },
-                body: JSON.stringify({ organisation_id: orgId }),
-              });
-
-              if (switchRes.ok) {
-                // Update UI
-                currentOrgName.textContent = orgName;
-                orgList.querySelectorAll(".bb-org-item").forEach((el) => {
-                  el.classList.toggle("active", el.dataset.orgId === orgId);
+              try {
+                const switchRes = await fetch("/v1/organisations/switch", {
+                  method: "POST",
+                  headers: {
+                    Authorization: `Bearer ${session.access_token}`,
+                    "Content-Type": "application/json",
+                  },
+                  body: JSON.stringify({ organisation_id: orgId }),
                 });
-                window.BB_ACTIVE_ORG = orgs.find((o) => o.id === orgId) || {
-                  id: orgId,
-                  name: orgName,
-                };
 
-                // Refresh dashboard data
-                if (window.refreshDashboard) {
-                  window.refreshDashboard();
-                }
+                if (switchRes.ok) {
+                  // Update UI
+                  document.getElementById("currentOrgName").textContent =
+                    orgName;
+                  orgListRef.querySelectorAll(".bb-org-item").forEach((el) => {
+                    el.classList.toggle("active", el.dataset.orgId === orgId);
+                  });
+                  window.BB_ACTIVE_ORG = orgs.find((o) => o.id === orgId) || {
+                    id: orgId,
+                    name: orgName,
+                  };
 
-                // Show success notification
-                if (window.showNotification) {
-                  window.showNotification(`Switched to ${orgName}`, "success");
+                  // Refresh dashboard data
+                  if (window.refreshDashboard) {
+                    window.refreshDashboard();
+                  }
+
+                  // Show success notification
+                  if (window.showNotification) {
+                    window.showNotification(
+                      `Switched to ${orgName}`,
+                      "success"
+                    );
+                  }
+                } else {
+                  const err = await switchRes.json();
+                  console.error("Failed to switch org:", err);
+                  document.getElementById("currentOrgName").textContent =
+                    window.BB_ACTIVE_ORG?.name || "Unknown";
+                  if (window.showNotification) {
+                    window.showNotification(
+                      "Failed to switch organisation",
+                      "error"
+                    );
+                  }
                 }
-              } else {
-                const err = await switchRes.json();
-                console.error("Failed to switch org:", err);
-                currentOrgName.textContent =
-                  window.BB_ACTIVE_ORG?.name || activeOrg.name;
+              } catch (err) {
+                console.error("Error switching org:", err);
+                document.getElementById("currentOrgName").textContent =
+                  window.BB_ACTIVE_ORG?.name || "Unknown";
                 if (window.showNotification) {
                   window.showNotification(
                     "Failed to switch organisation",
@@ -2272,23 +2386,13 @@
                   );
                 }
               }
-            } catch (err) {
-              console.error("Error switching org:", err);
-              currentOrgName.textContent =
-                window.BB_ACTIVE_ORG?.name || activeOrg.name;
-              if (window.showNotification) {
-                window.showNotification(
-                  "Failed to switch organisation",
-                  "error"
-                );
-              }
-            }
-          });
+            });
+          }
 
           // Close dropdown on outside click (use named function to prevent duplicates)
           const closeOrgDropdown = () => {
             switcher.classList.remove("open");
-            btn.setAttribute("aria-expanded", "false");
+            btnRef.setAttribute("aria-expanded", "false");
           };
           document.removeEventListener("click", window._closeOrgDropdown);
           window._closeOrgDropdown = closeOrgDropdown;
@@ -2298,6 +2402,124 @@
           switcher.style.display = "none";
           divider.style.display = "none";
         }
+      }
+
+      // Create Organisation Modal Handler
+      function initCreateOrgModal() {
+        const modal = document.getElementById("createOrgModal");
+        const form = document.getElementById("createOrgForm");
+        const nameInput = document.getElementById("newOrgName");
+        const errorDiv = document.getElementById("createOrgError");
+        const createBtn = document.getElementById("createOrgBtn");
+        const closeBtn = document.getElementById("closeCreateOrgModal");
+        const cancelBtn = document.getElementById("cancelCreateOrg");
+        const submitBtn = document.getElementById("submitCreateOrg");
+
+        if (!modal || !form) return;
+
+        const openModal = () => {
+          modal.classList.add("show");
+          nameInput.value = "";
+          errorDiv.style.display = "none";
+          nameInput.focus();
+        };
+
+        const closeModal = () => {
+          modal.classList.remove("show");
+        };
+
+        // Open modal when "Create Organisation" button is clicked
+        createBtn?.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const switcher = document.getElementById("orgSwitcher");
+          switcher?.classList.remove("open");
+          openModal();
+        });
+
+        // Close modal handlers
+        closeBtn?.addEventListener("click", closeModal);
+        cancelBtn?.addEventListener("click", closeModal);
+        modal?.addEventListener("click", (e) => {
+          if (e.target === modal) closeModal();
+        });
+        document.addEventListener("keydown", (e) => {
+          if (e.key === "Escape" && modal?.classList.contains("show")) {
+            closeModal();
+          }
+        });
+
+        // Handle form submission
+        form?.addEventListener("submit", async (e) => {
+          e.preventDefault();
+
+          const name = nameInput.value.trim();
+          if (!name) {
+            errorDiv.textContent = "Organisation name is required";
+            errorDiv.style.display = "block";
+            return;
+          }
+
+          submitBtn.disabled = true;
+          submitBtn.textContent = "Creating...";
+          errorDiv.style.display = "none";
+
+          try {
+            const {
+              data: { session },
+            } = await window.supabase.auth.getSession();
+            if (!session) {
+              throw new Error("Not authenticated");
+            }
+
+            const response = await fetch("/v1/organisations", {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${session.access_token}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({ name }),
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+              closeModal();
+
+              // Update the org switcher UI
+              const currentOrgName = document.getElementById("currentOrgName");
+              if (currentOrgName) {
+                currentOrgName.textContent = name;
+              }
+              window.BB_ACTIVE_ORG = data.data?.organisation;
+
+              // Refresh the org switcher to show new org in list
+              await initOrgSwitcher();
+
+              // Refresh dashboard
+              if (window.refreshDashboard) {
+                window.refreshDashboard();
+              }
+
+              if (window.showNotification) {
+                window.showNotification(
+                  `Organisation "${name}" created`,
+                  "success"
+                );
+              }
+            } else {
+              errorDiv.textContent =
+                data.message || "Failed to create organisation";
+              errorDiv.style.display = "block";
+            }
+          } catch (err) {
+            console.error("Error creating organisation:", err);
+            errorDiv.textContent = "An error occurred. Please try again.";
+            errorDiv.style.display = "block";
+          } finally {
+            submitBtn.disabled = false;
+            submitBtn.textContent = "Create";
+          }
+        });
       }
 
       // Admin: Reset Database Button Handler

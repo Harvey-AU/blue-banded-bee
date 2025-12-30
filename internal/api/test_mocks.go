@@ -277,6 +277,19 @@ func (m *MockDBClient) GetEffectiveOrganisationID(user *db.User) string {
 	return args.String(0)
 }
 
+func (m *MockDBClient) CreateOrganisation(name string) (*db.Organisation, error) {
+	args := m.Called(name)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*db.Organisation), args.Error(1)
+}
+
+func (m *MockDBClient) AddOrganisationMember(userID, organisationID string) error {
+	args := m.Called(userID, organisationID)
+	return args.Error(0)
+}
+
 // Test helpers
 func createTestHandler() (*Handler, *MockDBClient, *MockJobManager) {
 	mockDB := new(MockDBClient)
