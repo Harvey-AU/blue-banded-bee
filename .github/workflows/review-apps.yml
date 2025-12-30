@@ -67,9 +67,8 @@ jobs:
           # Extract pooler URL (for general queries) - try multiple field names
           PREVIEW_DB_URL=$(echo "$BRANCH_JSON" | jq -r '.POSTGRES_URL // .postgres_url // .db_url // empty' 2>/dev/null)
 
-          # Extract direct URL (for LISTEN/NOTIFY) - try multiple field names
-          # Supabase may use DATABASE_URL, db_direct_url, or other variations
-          DIRECT_DB_URL=$(echo "$BRANCH_JSON" | jq -r '.DATABASE_URL // .database_url // .db_direct_url // .direct_url // empty' 2>/dev/null)
+          # Extract direct URL (for LISTEN/NOTIFY) - Supabase uses POSTGRES_URL_NON_POOLING
+          DIRECT_DB_URL=$(echo "$BRANCH_JSON" | jq -r '.POSTGRES_URL_NON_POOLING // empty' 2>/dev/null)
 
           echo "📊 URLs found:"
           echo "  Pooler URL present: $([ -n "$PREVIEW_DB_URL" ] && echo 'yes' || echo 'no')"
