@@ -77,11 +77,21 @@ const (
 	defaultAppURL = "https://app.bluebandedbee.co"
 )
 
-var (
-	slackClientID     = os.Getenv("SLACK_CLIENT_ID")
-	slackClientSecret = os.Getenv("SLACK_CLIENT_SECRET")
-	slackStateSecret  = os.Getenv("SUPABASE_JWT_SECRET") // Use JWT secret for state signing
-)
+// getSlackClientID returns the Slack OAuth client ID
+func getSlackClientID() string {
+	return os.Getenv("SLACK_CLIENT_ID")
+}
+
+// getSlackClientSecret returns the Slack OAuth client secret
+func getSlackClientSecret() string {
+	return os.Getenv("SLACK_CLIENT_SECRET")
+}
+
+// getSlackStateSecret returns the secret used for HMAC signing OAuth state
+// Returns empty string if not configured - callers should validate
+func getSlackStateSecret() string {
+	return os.Getenv("SUPABASE_JWT_SECRET")
+}
 
 // SlackConnectionsHandler handles requests to /v1/integrations/slack
 func (h *Handler) SlackConnectionsHandler(w http.ResponseWriter, r *http.Request) {
@@ -204,7 +214,7 @@ func (h *Handler) initiateSlackOAuth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if slackClientID == "" {
+	if getSlackClientID() == "" {
 		logger.Error().Msg("SLACK_CLIENT_ID not configured")
 		InternalError(w, r, fmt.Errorf("slack integration not configured"))
 		return
@@ -221,7 +231,7 @@ func (h *Handler) initiateSlackOAuth(w http.ResponseWriter, r *http.Request) {
 	// Build Slack OAuth URL
 	authURL := fmt.Sprintf(
 		"https://slack.com/oauth/v2/authorize?client_id=%s&scope=%s&redirect_uri=%s&state=%s",
-		url.QueryEscape(slackClientID),
+		url.QueryEscape(getSlackClientID()),
 		url.QueryEscape(slackOAuthScopes),
 		url.QueryEscape(getSlackRedirectURI()),
 		url.QueryEscape(state),
@@ -261,8 +271,8 @@ func (h *Handler) handleSlackOAuthCallback(w http.ResponseWriter, r *http.Reques
 	httpClient := &http.Client{Timeout: slackAPITimeout}
 	resp, err := slack.GetOAuthV2Response(
 		httpClient,
-		slackClientID,
-		slackClientSecret,
+		getSlackClientID(),
+		getSlackClientSecret(),
 		code,
 		getSlackRedirectURI(),
 	)
@@ -732,7 +742,7 @@ func (h *Handler) generateOAuthState(userID, orgID string) (string, error) {
 	}
 
 	// Sign with HMAC
-	mac := hmac.New(sha256.New, []byte(slackStateSecret))
+	mac := hmac.New(sha256.New, []byte(getSlackStateSecret()))
 	mac.Write(data)
 	sig := mac.Sum(nil)
 
@@ -755,7 +765,7 @@ func (h *Handler) validateOAuthState(stateParam string) (*OAuthState, error) {
 	sig := payload[len(payload)-32:]
 
 	// Verify HMAC
-	mac := hmac.New(sha256.New, []byte(slackStateSecret))
+	mac := hmac.New(sha256.New, []byte(getSlackStateSecret()))
 	mac.Write(data)
 	expectedSig := mac.Sum(nil)
 
