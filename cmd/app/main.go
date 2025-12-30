@@ -609,7 +609,6 @@ func main() {
 		notificationService.AddChannel(slackChannel)
 		log.Info().Msg("Slack notification channel enabled")
 	}
-	workerPool.SetNotifier(notificationService)
 
 	// Create context for background goroutines that need graceful shutdown
 	appCtx, appCancel := context.WithCancel(context.Background())

@@ -32,12 +32,6 @@ import (
 	"golang.org/x/sync/singleflight"
 )
 
-// JobNotifier is the interface for job completion notifications
-type JobNotifier interface {
-	NotifyJobComplete(ctx context.Context, job *Job)
-	NotifyJobFailed(ctx context.Context, job *Job)
-}
-
 const (
 	taskProcessingTimeout      = 2 * time.Minute
 	poolSaturationBackoff      = 2 * time.Second
@@ -105,7 +99,6 @@ type WorkerPool struct {
 	cleanupInterval  time.Duration
 	notifyCh         chan struct{}
 	jobManager       *JobManager // Reference to JobManager for duplicate checking
-	notifier         JobNotifier // Optional notification service for job events
 
 	// Per-worker task concurrency
 	workerConcurrency int               // How many tasks each worker can process concurrently
@@ -530,11 +523,6 @@ func NewWorkerPool(sqlDB *sql.DB, dbQueue DbQueueInterface, crawler CrawlerInter
 	}
 
 	return wp
-}
-
-// SetNotifier sets the notification service for job events
-func (wp *WorkerPool) SetNotifier(n JobNotifier) {
-	wp.notifier = n
 }
 
 func (wp *WorkerPool) Start(ctx context.Context) {
