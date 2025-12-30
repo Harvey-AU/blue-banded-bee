@@ -493,6 +493,7 @@ func (h *Handler) linkSlackUser(w http.ResponseWriter, r *http.Request, connecti
 
 	// Get slack_user_id from user profile (populated via Slack OIDC login)
 	// or from request body for manual override
+	// or look up by email as fallback
 	var req SlackLinkUserRequest
 	_ = json.NewDecoder(r.Body).Decode(&req) // Ignore errors - body may be empty
 
@@ -501,8 +502,28 @@ func (h *Handler) linkSlackUser(w http.ResponseWriter, r *http.Request, connecti
 		slackUserID = *user.SlackUserID
 	}
 
+	// If still no Slack user ID, try to find by email
+	if slackUserID == "" && userClaims.Email != "" {
+		token, err := h.DB.GetSlackToken(r.Context(), connectionID)
+		if err != nil {
+			logger.Error().Err(err).Msg("Failed to get Slack token for user lookup")
+			InternalError(w, r, err)
+			return
+		}
+
+		client := slack.New(token)
+		slackUser, err := client.GetUserByEmail(userClaims.Email)
+		if err != nil {
+			logger.Warn().Err(err).Str("email", userClaims.Email).Msg("Could not find Slack user by email")
+			BadRequest(w, r, "Could not find your Slack user. Make sure your email matches your Slack account.")
+			return
+		}
+		slackUserID = slackUser.ID
+		logger.Info().Str("email", userClaims.Email).Str("slack_user_id", slackUserID).Msg("Found Slack user by email")
+	}
+
 	if slackUserID == "" {
-		BadRequest(w, r, "No Slack user ID available. Please sign in with Slack first.")
+		BadRequest(w, r, "No Slack user ID available and no email to look up")
 		return
 	}
 
