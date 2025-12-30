@@ -1,9 +1,5 @@
--- Update notification trigger to include detailed job stats in message
---
--- Format:
---   subject: "example.com completed"
---   preview: "150 URLs processed in 2m 30s"
---   message: Detailed stats (pages, cache, performance, issues)
+-- Job notification trigger
+-- Creates notifications when jobs complete or fail, with detailed stats
 
 CREATE OR REPLACE FUNCTION notify_job_status_change()
 RETURNS TRIGGER AS $$
@@ -163,8 +159,12 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- Create trigger on jobs table
+CREATE TRIGGER on_job_status_change
+    AFTER UPDATE OF status ON jobs
+    FOR EACH ROW
+    EXECUTE FUNCTION notify_job_status_change();
+
 COMMENT ON FUNCTION notify_job_status_change() IS
   'Creates notifications when job status transitions to completed or failed.
-   Includes detailed stats in message field for completed jobs.
-
-   Updated in migration: 20251230110416';
+   Uses stats from calculate_job_stats trigger for detailed message.';

@@ -131,8 +131,10 @@ CREATE TABLE notifications (
   organisation_id UUID NOT NULL REFERENCES organisations(id) ON DELETE CASCADE,
   user_id UUID REFERENCES users(id) ON DELETE SET NULL,  -- Optional: specific user
   type TEXT NOT NULL,                      -- 'job_complete', 'job_failed', etc.
-  title TEXT NOT NULL,
-  message TEXT,
+  subject TEXT NOT NULL,                   -- Main heading (e.g., "example.com completed")
+  preview TEXT,                            -- Short summary for toasts/previews
+  message TEXT,                            -- Full details (optional)
+  link TEXT,                               -- URL path (e.g., "/jobs/abc-123")
   data JSONB,                              -- Additional structured data
   read_at TIMESTAMPTZ,                     -- When user read in-app
   slack_delivered_at TIMESTAMPTZ,          -- When sent via Slack
