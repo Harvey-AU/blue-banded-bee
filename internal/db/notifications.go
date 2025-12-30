@@ -188,6 +188,10 @@ func (db *DB) ListNotifications(ctx context.Context, organisationID string, limi
 		notifications = append(notifications, n)
 	}
 
+	if err := rows.Err(); err != nil {
+		return nil, 0, fmt.Errorf("error iterating notifications: %w", err)
+	}
+
 	return notifications, total, nil
 }
 
@@ -204,7 +208,10 @@ func (db *DB) MarkNotificationRead(ctx context.Context, notificationID, organisa
 		return fmt.Errorf("failed to mark notification read: %w", err)
 	}
 
-	rowsAffected, _ := result.RowsAffected()
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
 	if rowsAffected == 0 {
 		return fmt.Errorf("notification not found")
 	}
@@ -290,6 +297,10 @@ func (db *DB) GetPendingSlackNotifications(ctx context.Context, limit int) ([]*N
 		}
 
 		notifications = append(notifications, n)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating notifications: %w", err)
 	}
 
 	return notifications, nil
