@@ -31,6 +31,13 @@ On merge, CI will:
 
 ### Added
 
+- **Notifications Dropdown**: Bell icon in header shows recent notifications
+  - Displays last 10 notifications with unread count badge
+  - Click-to-mark-read with navigation to notification link
+  - "Mark all read" action for bulk clearing
+  - "Notification Settings" button opens channel configuration modal
+  - API endpoints: `GET /v1/notifications`, `POST /v1/notifications/{id}/read`,
+    `POST /v1/notifications/read-all`
 - **Slack Integration**: Job completion notifications via Slack DMs
   - OAuth flow for installing BBB Slack app to workspaces
   - Bot tokens stored securely in Supabase Vault (replaces custom AES-256-GCM)
