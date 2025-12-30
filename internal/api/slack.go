@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -499,7 +500,10 @@ func (h *Handler) linkSlackUser(w http.ResponseWriter, r *http.Request, connecti
 	// or from request body for manual override
 	// or look up by email as fallback
 	var req SlackLinkUserRequest
-	_ = json.NewDecoder(r.Body).Decode(&req) // Ignore errors - body may be empty
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil && !errors.Is(err, io.EOF) {
+		// Log but continue - body is optional
+		logger.Debug().Err(err).Msg("Failed to decode link-user request body")
+	}
 
 	slackUserID := req.SlackUserID
 	if slackUserID == "" && user.SlackUserID != nil {
