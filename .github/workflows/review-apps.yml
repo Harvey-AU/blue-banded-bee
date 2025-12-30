@@ -60,12 +60,31 @@ jobs:
           # Get branch details as JSON for robust parsing
           BRANCH_JSON=$(supabase branches get "$BRANCH_NAME" --project-ref "$SUPABASE_PROJECT_REF" --output json 2>/dev/null) || true
 
-          # Extract database URL directly from JSON (pooled for better performance)
+          # Extract pooler URL (for general queries)
           PREVIEW_DB_URL=$(echo "$BRANCH_JSON" | jq -r '.POSTGRES_URL // empty' 2>/dev/null)
+
+          # Extract or derive direct URL (for LISTEN/NOTIFY real-time notifications)
+          # Try to get direct URL from JSON first, otherwise derive from pooler URL
+          DIRECT_DB_URL=$(echo "$BRANCH_JSON" | jq -r '.DATABASE_URL // empty' 2>/dev/null)
+
+          # If no direct URL in JSON, derive it from pooler URL
+          # Pooler: postgres://postgres.[ref]:[pass]@aws-0-region.pooler.supabase.com:6543/postgres
+          # Direct: postgres://postgres.[ref]:[pass]@db.[ref].supabase.co:5432/postgres
+          if [ -z "$DIRECT_DB_URL" ] && [ -n "$PREVIEW_DB_URL" ]; then
+            # Extract project ref from username (postgres.[ref])
+            PROJECT_REF=$(echo "$PREVIEW_DB_URL" | sed -n 's|.*postgres\.\([^:]*\):.*|\1|p')
+            # Extract password
+            PASSWORD=$(echo "$PREVIEW_DB_URL" | sed -n 's|.*:\([^@]*\)@.*|\1|p')
+            if [ -n "$PROJECT_REF" ] && [ -n "$PASSWORD" ]; then
+              DIRECT_DB_URL="postgres://postgres.${PROJECT_REF}:${PASSWORD}@db.${PROJECT_REF}.supabase.co:5432/postgres"
+              echo "📡 Derived direct URL from pooler URL"
+            fi
+          fi
 
           if [ -n "$PREVIEW_DB_URL" ]; then
             echo "✅ Found Supabase preview branch!"
             echo "preview_db_url=$PREVIEW_DB_URL" >> $GITHUB_OUTPUT
+            echo "direct_db_url=$DIRECT_DB_URL" >> $GITHUB_OUTPUT
             echo "branch_exists=true" >> $GITHUB_OUTPUT
           else
             echo "⚠️ No Supabase preview branch found"
@@ -94,10 +113,12 @@ jobs:
           # Use Supabase preview branch if available
           if [ "${{ steps.supabase.outputs.branch_exists }}" == "true" ]; then
             DB_URL="${{ steps.supabase.outputs.preview_db_url }}"
+            DIRECT_URL="${{ steps.supabase.outputs.direct_db_url }}"
             echo "🔀 Using Supabase PREVIEW database"
             echo "db_type=preview" >> $GITHUB_OUTPUT
           else
             DB_URL="${{ secrets.TEST_DATABASE_URL }}"
+            DIRECT_URL=""
             if [ -z "$DB_URL" ]; then
               DB_URL="${{ secrets.DATABASE_URL }}"
             fi
@@ -120,9 +141,18 @@ jobs:
             echo "Review app already exists: $APP_NAME"
           fi
 
+          # Build secrets command
+          SECRETS_CMD="flyctl secrets set DATABASE_URL=\"$DB_URL\""
+
+          # Add direct URL for real-time notifications if available
+          if [ -n "$DIRECT_URL" ]; then
+            echo "📡 Setting DATABASE_DIRECT_URL for real-time notifications"
+            SECRETS_CMD="$SECRETS_CMD DATABASE_DIRECT_URL=\"$DIRECT_URL\""
+          fi
+
           # Set secrets for Review App WITHOUT triggering deployment
           echo "Setting test database connection and auth secrets for review app..."
-          flyctl secrets set DATABASE_URL="$DB_URL" \
+          eval $SECRETS_CMD \
             SUPABASE_JWT_SECRET="${{ secrets.SUPABASE_JWT_SECRET }}" \
             SUPABASE_SERVICE_ROLE_KEY="${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
             SENTRY_DSN="${{ secrets.SENTRY_DSN }}" \
