@@ -2172,9 +2172,10 @@
             window.loadSchedules();
           }
 
-          // Initialise organisation switcher
+          // Initialise organisation switcher and create modal
           if (session?.user) {
             await initOrgSwitcher();
+            initCreateOrgModal();
           }
 
           if (session?.user) {
@@ -2520,11 +2521,6 @@
           }
         });
       }
-
-      // Initialise create org modal after DOM ready
-      document.addEventListener("DOMContentLoaded", () => {
-        initCreateOrgModal();
-      });
 
       // Admin: Reset Database Button Handler
       // Button visibility is controlled by system-admin role check in dashboard initialization
