@@ -26,9 +26,11 @@ type Notification struct {
 	OrganisationID   string
 	UserID           *string // nil for org-wide notifications
 	Type             NotificationType
-	Title            string
-	Message          string
-	Data             map[string]interface{}
+	Subject          string                 // Main heading (e.g., "✅ Job completed: example.com")
+	Preview          string                 // Short summary for previews/toasts
+	Message          string                 // Full details (optional)
+	Link             string                 // URL path to view details (e.g., "/jobs/abc-123")
+	Data             map[string]interface{} // Additional structured data
 	ReadAt           *time.Time
 	SlackDeliveredAt *time.Time
 	EmailDeliveredAt *time.Time
@@ -46,47 +48,25 @@ type NotificationData struct {
 	SchedulerID    string `json:"scheduler_id,omitempty"`
 }
 
-// CreateNotification inserts a new notification
-func (db *DB) CreateNotification(ctx context.Context, n *Notification) error {
-	dataJSON, err := json.Marshal(n.Data)
-	if err != nil {
-		return fmt.Errorf("failed to marshal notification data: %w", err)
-	}
-
-	query := `
-		INSERT INTO notifications (
-			id, organisation_id, user_id, type, title, message, data, created_at
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-	`
-
-	_, err = db.client.ExecContext(ctx, query,
-		n.ID, n.OrganisationID, n.UserID, n.Type, n.Title, n.Message, dataJSON, n.CreatedAt,
-	)
-	if err != nil {
-		log.Error().Err(err).Str("notification_id", n.ID).Msg("Failed to create notification")
-		return fmt.Errorf("failed to create notification: %w", err)
-	}
-
-	return nil
-}
+// Note: Notifications are created by PostgreSQL trigger (notify_job_status_change)
+// when job status transitions to 'completed' or 'failed'. No Go code needed.
 
 // GetNotification retrieves a notification by ID
 func (db *DB) GetNotification(ctx context.Context, notificationID string) (*Notification, error) {
 	n := &Notification{}
-	var userID sql.NullString
-	var message sql.NullString
+	var userID, preview, message, link sql.NullString
 	var dataJSON []byte
 	var readAt, slackDeliveredAt, emailDeliveredAt sql.NullTime
 
 	query := `
-		SELECT id, organisation_id, user_id, type, title, message, data,
+		SELECT id, organisation_id, user_id, type, subject, preview, message, link, data,
 		       read_at, slack_delivered_at, email_delivered_at, created_at
 		FROM notifications
 		WHERE id = $1
 	`
 
 	err := db.client.QueryRowContext(ctx, query, notificationID).Scan(
-		&n.ID, &n.OrganisationID, &userID, &n.Type, &n.Title, &message, &dataJSON,
+		&n.ID, &n.OrganisationID, &userID, &n.Type, &n.Subject, &preview, &message, &link, &dataJSON,
 		&readAt, &slackDeliveredAt, &emailDeliveredAt, &n.CreatedAt,
 	)
 	if err != nil {
@@ -99,8 +79,14 @@ func (db *DB) GetNotification(ctx context.Context, notificationID string) (*Noti
 	if userID.Valid {
 		n.UserID = &userID.String
 	}
+	if preview.Valid {
+		n.Preview = preview.String
+	}
 	if message.Valid {
 		n.Message = message.String
+	}
+	if link.Valid {
+		n.Link = link.String
 	}
 	if readAt.Valid {
 		n.ReadAt = &readAt.Time
@@ -141,7 +127,7 @@ func (db *DB) ListNotifications(ctx context.Context, organisationID string, limi
 
 	// Fetch notifications
 	query := fmt.Sprintf(`
-		SELECT id, organisation_id, user_id, type, title, message, data,
+		SELECT id, organisation_id, user_id, type, subject, preview, message, link, data,
 		       read_at, slack_delivered_at, email_delivered_at, created_at
 		FROM notifications
 		%s
@@ -159,13 +145,12 @@ func (db *DB) ListNotifications(ctx context.Context, organisationID string, limi
 	var notifications []*Notification
 	for rows.Next() {
 		n := &Notification{}
-		var userID sql.NullString
-		var message sql.NullString
+		var userID, preview, message, link sql.NullString
 		var dataJSON []byte
 		var readAt, slackDeliveredAt, emailDeliveredAt sql.NullTime
 
 		err := rows.Scan(
-			&n.ID, &n.OrganisationID, &userID, &n.Type, &n.Title, &message, &dataJSON,
+			&n.ID, &n.OrganisationID, &userID, &n.Type, &n.Subject, &preview, &message, &link, &dataJSON,
 			&readAt, &slackDeliveredAt, &emailDeliveredAt, &n.CreatedAt,
 		)
 		if err != nil {
@@ -175,8 +160,14 @@ func (db *DB) ListNotifications(ctx context.Context, organisationID string, limi
 		if userID.Valid {
 			n.UserID = &userID.String
 		}
+		if preview.Valid {
+			n.Preview = preview.String
+		}
 		if message.Valid {
 			n.Message = message.String
+		}
+		if link.Valid {
+			n.Link = link.String
 		}
 		if readAt.Valid {
 			n.ReadAt = &readAt.Time
@@ -240,7 +231,7 @@ func (db *DB) MarkAllNotificationsRead(ctx context.Context, organisationID strin
 // GetPendingSlackNotifications retrieves notifications not yet delivered to Slack
 func (db *DB) GetPendingSlackNotifications(ctx context.Context, limit int) ([]*Notification, error) {
 	query := `
-		SELECT n.id, n.organisation_id, n.user_id, n.type, n.title, n.message, n.data,
+		SELECT n.id, n.organisation_id, n.user_id, n.type, n.subject, n.preview, n.message, n.link, n.data,
 		       n.read_at, n.slack_delivered_at, n.email_delivered_at, n.created_at
 		FROM notifications n
 		WHERE n.slack_delivered_at IS NULL
@@ -258,13 +249,12 @@ func (db *DB) GetPendingSlackNotifications(ctx context.Context, limit int) ([]*N
 	var notifications []*Notification
 	for rows.Next() {
 		n := &Notification{}
-		var userID sql.NullString
-		var message sql.NullString
+		var userID, preview, message, link sql.NullString
 		var dataJSON []byte
 		var readAt, slackDeliveredAt, emailDeliveredAt sql.NullTime
 
 		err := rows.Scan(
-			&n.ID, &n.OrganisationID, &userID, &n.Type, &n.Title, &message, &dataJSON,
+			&n.ID, &n.OrganisationID, &userID, &n.Type, &n.Subject, &preview, &message, &link, &dataJSON,
 			&readAt, &slackDeliveredAt, &emailDeliveredAt, &n.CreatedAt,
 		)
 		if err != nil {
@@ -274,8 +264,14 @@ func (db *DB) GetPendingSlackNotifications(ctx context.Context, limit int) ([]*N
 		if userID.Valid {
 			n.UserID = &userID.String
 		}
+		if preview.Valid {
+			n.Preview = preview.String
+		}
 		if message.Valid {
 			n.Message = message.String
+		}
+		if link.Valid {
+			n.Link = link.String
 		}
 		if readAt.Valid {
 			n.ReadAt = &readAt.Time

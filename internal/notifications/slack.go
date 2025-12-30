@@ -4,16 +4,14 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"time"
 
 	"github.com/Harvey-AU/blue-banded-bee/internal/db"
-	"github.com/Harvey-AU/blue-banded-bee/internal/jobs"
-	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 	"github.com/slack-go/slack"
 )
 
-// Service handles notification creation and delivery
+// Service handles notification delivery to various channels.
+// Note: Notifications are created by PostgreSQL triggers, not Go code.
 type Service struct {
 	db       NotificationDB
 	channels []DeliveryChannel
@@ -21,7 +19,6 @@ type Service struct {
 
 // NotificationDB defines the database operations needed by the service
 type NotificationDB interface {
-	CreateNotification(ctx context.Context, n *db.Notification) error
 	GetPendingSlackNotifications(ctx context.Context, limit int) ([]*db.Notification, error)
 	MarkNotificationDelivered(ctx context.Context, notificationID, channel string) error
 	GetSlackConnectionsForOrg(ctx context.Context, organisationID string) ([]*db.SlackConnection, error)
@@ -42,105 +39,6 @@ func NewService(database NotificationDB) *Service {
 // AddChannel adds a delivery channel to the service
 func (s *Service) AddChannel(ch DeliveryChannel) {
 	s.channels = append(s.channels, ch)
-}
-
-// CreateJobCompleteNotification creates a notification for a completed job
-func (s *Service) CreateJobCompleteNotification(ctx context.Context, job *jobs.Job) error {
-	if job.OrganisationID == nil {
-		log.Debug().Str("job_id", job.ID).Msg("Job has no organisation, skipping notification")
-		return nil
-	}
-
-	// Calculate duration
-	duration := "N/A"
-	if job.DurationSeconds != nil && *job.DurationSeconds > 0 {
-		d := time.Duration(*job.DurationSeconds) * time.Second
-		if d < time.Minute {
-			duration = fmt.Sprintf("%ds", int(d.Seconds()))
-		} else if d < time.Hour {
-			duration = fmt.Sprintf("%dm %ds", int(d.Minutes()), int(d.Seconds())%60)
-		} else {
-			duration = fmt.Sprintf("%dh %dm", int(d.Hours()), int(d.Minutes())%60)
-		}
-	}
-
-	n := &db.Notification{
-		ID:             uuid.New().String(),
-		OrganisationID: *job.OrganisationID,
-		UserID:         job.UserID, // Notify the user who created the job
-		Type:           db.NotificationJobComplete,
-		Title:          fmt.Sprintf("Cache warming complete: %s", job.Domain),
-		Message:        fmt.Sprintf("%d pages warmed in %s", job.CompletedTasks, duration),
-		Data: map[string]interface{}{
-			"job_id":          job.ID,
-			"domain":          job.Domain,
-			"completed_tasks": job.CompletedTasks,
-			"failed_tasks":    job.FailedTasks,
-			"duration":        duration,
-		},
-		CreatedAt: time.Now().UTC(),
-	}
-
-	if err := s.db.CreateNotification(ctx, n); err != nil {
-		return fmt.Errorf("failed to create job complete notification: %w", err)
-	}
-
-	log.Info().
-		Str("notification_id", n.ID).
-		Str("job_id", job.ID).
-		Str("domain", job.Domain).
-		Msg("Job complete notification created")
-
-	return nil
-}
-
-// CreateJobFailedNotification creates a notification for a failed job
-func (s *Service) CreateJobFailedNotification(ctx context.Context, job *jobs.Job) error {
-	if job.OrganisationID == nil {
-		log.Debug().Str("job_id", job.ID).Msg("Job has no organisation, skipping failure notification")
-		return nil
-	}
-
-	n := &db.Notification{
-		ID:             uuid.New().String(),
-		OrganisationID: *job.OrganisationID,
-		UserID:         job.UserID,
-		Type:           db.NotificationJobFailed,
-		Title:          fmt.Sprintf("Cache warming failed: %s", job.Domain),
-		Message:        job.ErrorMessage,
-		Data: map[string]interface{}{
-			"job_id":        job.ID,
-			"domain":        job.Domain,
-			"error_message": job.ErrorMessage,
-		},
-		CreatedAt: time.Now().UTC(),
-	}
-
-	if err := s.db.CreateNotification(ctx, n); err != nil {
-		return fmt.Errorf("failed to create job failed notification: %w", err)
-	}
-
-	log.Info().
-		Str("notification_id", n.ID).
-		Str("job_id", job.ID).
-		Str("domain", job.Domain).
-		Msg("Job failed notification created")
-
-	return nil
-}
-
-// NotifyJobComplete implements the JobNotifier interface for the worker pool
-func (s *Service) NotifyJobComplete(ctx context.Context, job *jobs.Job) {
-	if err := s.CreateJobCompleteNotification(ctx, job); err != nil {
-		log.Warn().Err(err).Str("job_id", job.ID).Msg("Failed to create job complete notification")
-	}
-}
-
-// NotifyJobFailed implements the JobNotifier interface for the worker pool
-func (s *Service) NotifyJobFailed(ctx context.Context, job *jobs.Job) {
-	if err := s.CreateJobFailedNotification(ctx, job); err != nil {
-		log.Warn().Err(err).Str("job_id", job.ID).Msg("Failed to create job failed notification")
-	}
 }
 
 // ProcessPendingNotifications delivers pending notifications to all channels
@@ -259,7 +157,7 @@ func (c *SlackChannel) deliverToConnection(ctx context.Context, conn *db.SlackCo
 	}
 
 	blocks := c.buildMessageBlocks(n)
-	fallbackText := fmt.Sprintf("%s: %s", n.Title, n.Message)
+	fallbackText := fmt.Sprintf("%s: %s", n.Subject, n.Preview)
 
 	var lastErr error
 	for _, link := range links {
@@ -287,54 +185,36 @@ func (c *SlackChannel) deliverToConnection(ctx context.Context, conn *db.SlackCo
 	return lastErr
 }
 
+// buildMessageBlocks creates Slack Block Kit blocks from notification fields.
+// The notification already contains formatted content (emoji, text) from the DB trigger.
 func (c *SlackChannel) buildMessageBlocks(n *db.Notification) []slack.Block {
 	appURL := os.Getenv("APP_URL")
 	if appURL == "" {
-		log.Warn().Msg("APP_URL not set, using default https://app.bluebandedbee.co")
 		appURL = "https://app.bluebandedbee.co"
 	}
 
-	var emoji string
-	switch n.Type {
-	case db.NotificationJobComplete:
-		emoji = ":white_check_mark:"
-	case db.NotificationJobFailed:
-		emoji = ":x:"
-	default:
-		emoji = ":bell:"
-	}
-
+	// Subject block (already includes emoji from DB)
 	blocks := []slack.Block{
 		slack.NewSectionBlock(
-			slack.NewTextBlockObject(
-				"mrkdwn",
-				fmt.Sprintf("%s *%s*", emoji, n.Title),
-				false,
-				false,
-			),
+			slack.NewTextBlockObject("mrkdwn", fmt.Sprintf("*%s*", n.Subject), false, false),
 			nil,
 			nil,
 		),
 	}
 
-	// Add message if present
-	if n.Message != "" {
+	// Preview block (short summary)
+	if n.Preview != "" {
 		blocks = append(blocks, slack.NewSectionBlock(
-			slack.NewTextBlockObject("mrkdwn", n.Message, false, false),
+			slack.NewTextBlockObject("mrkdwn", n.Preview, false, false),
 			nil,
 			nil,
 		))
 	}
 
-	// Add link to job if job_id is in data
-	if jobID, ok := n.Data["job_id"].(string); ok && jobID != "" {
+	// Link block (uses stored link path)
+	if n.Link != "" {
 		blocks = append(blocks, slack.NewSectionBlock(
-			slack.NewTextBlockObject(
-				"mrkdwn",
-				fmt.Sprintf("<%s/jobs/%s|View details>", appURL, jobID),
-				false,
-				false,
-			),
+			slack.NewTextBlockObject("mrkdwn", fmt.Sprintf("<%s%s|View details>", appURL, n.Link), false, false),
 			nil,
 			nil,
 		))
