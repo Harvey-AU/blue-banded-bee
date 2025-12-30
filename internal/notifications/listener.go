@@ -2,6 +2,7 @@ package notifications
 
 import (
 	"context"
+	"os"
 	"strings"
 	"time"
 
@@ -108,8 +109,20 @@ func (l *Listener) processPending(ctx context.Context) {
 
 // StartWithFallback starts the listener with polling fallback.
 // This is useful when the database doesn't support LISTEN (e.g., connection poolers).
+// If DATABASE_DIRECT_URL is set, uses that for real-time LISTEN/NOTIFY.
 func StartWithFallback(ctx context.Context, connStr string, service *Service) {
-	// Try to use LISTEN/NOTIFY first
+	// Check for direct connection URL (bypasses pooler for LISTEN/NOTIFY)
+	directURL := os.Getenv("DATABASE_DIRECT_URL")
+	if directURL != "" {
+		listener := NewListener(directURL, service)
+		if listener != nil {
+			log.Info().Msg("Notification listener started (real-time via DATABASE_DIRECT_URL)")
+			go listener.Start(ctx)
+			return
+		}
+	}
+
+	// Try to use LISTEN/NOTIFY with main connection
 	listener := NewListener(connStr, service)
 	if listener == nil {
 		log.Warn().Msg("Notification listener not created, using polling fallback")
