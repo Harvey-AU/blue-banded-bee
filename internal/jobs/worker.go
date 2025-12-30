@@ -1785,11 +1785,12 @@ type jobQueueState struct {
 	Total       int
 	Completed   int
 	Failed      int
+	Skipped     int
 	Concurrency sql.NullInt64
 }
 
 func (s jobQueueState) remainingWork() int {
-	remaining := s.Total - (s.Completed + s.Failed)
+	remaining := s.Total - (s.Completed + s.Failed + s.Skipped)
 	if remaining < 0 {
 		return 0
 	}
@@ -1878,7 +1879,7 @@ func (wp *WorkerPool) loadJobQueueState(ctx context.Context, jobID string) (*job
 	err := wp.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
 		return tx.QueryRowContext(ctx, `
 			SELECT status, pending_tasks, waiting_tasks, running_tasks,
-			       total_tasks, completed_tasks, failed_tasks, concurrency
+			       total_tasks, completed_tasks, failed_tasks, skipped_tasks, concurrency
 			FROM jobs
 			WHERE id = $1
 		`, jobID).Scan(
@@ -1889,6 +1890,7 @@ func (wp *WorkerPool) loadJobQueueState(ctx context.Context, jobID string) (*job
 			&state.Total,
 			&state.Completed,
 			&state.Failed,
+			&state.Skipped,
 			&state.Concurrency,
 		)
 	})
