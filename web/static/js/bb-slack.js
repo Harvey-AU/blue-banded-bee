@@ -160,6 +160,7 @@ async function loadSlackConnections() {
       const clone = template.cloneNode(true);
       clone.style.display = "block";
       clone.removeAttribute("bbb-template");
+      clone.classList.add("slack-connection");
 
       // Set workspace name
       const nameEl = clone.querySelector(".slack-workspace-name");
@@ -311,10 +312,21 @@ async function disconnectSlackWorkspace(connectionId) {
   }
 
   try {
-    await window.dataBinder.fetchData(
+    // Use raw fetch for DELETE since it may return no body
+    const token = await window.dataBinder.getAccessToken();
+    const response = await fetch(
       `/v1/integrations/slack/${encodeURIComponent(connectionId)}`,
-      { method: "DELETE" }
+      {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
     );
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
 
     showSlackSuccess("Slack workspace disconnected");
     loadSlackConnections();
@@ -439,19 +451,41 @@ function showSlackError(message) {
 /**
  * Handle OAuth callback result from URL parameters
  */
-function handleSlackOAuthCallback() {
+async function handleSlackOAuthCallback() {
   const params = new URLSearchParams(window.location.search);
   const slackConnected = params.get("slack_connected");
+  const slackConnectionId = params.get("slack_connection_id");
   const slackError = params.get("slack_error");
 
   if (slackConnected) {
-    showSlackSuccess(
-      `Slack workspace "${slackConnected}" connected successfully!`
-    );
-    // Clean up URL
+    // Clean up URL first
     const url = new URL(window.location.href);
     url.searchParams.delete("slack_connected");
+    url.searchParams.delete("slack_connection_id");
     window.history.replaceState({}, "", url.toString());
+
+    // Auto-link user to the new connection
+    if (slackConnectionId) {
+      try {
+        await window.dataBinder.fetchData(
+          `/v1/integrations/slack/${encodeURIComponent(slackConnectionId)}/link-user`,
+          { method: "POST" }
+        );
+        showSlackSuccess(
+          `Slack workspace "${slackConnected}" connected and linked! You'll receive job notifications.`
+        );
+      } catch (linkError) {
+        // Link failed, but connection succeeded - show partial success
+        console.warn("Auto-link failed after OAuth:", linkError);
+        showSlackSuccess(
+          `Slack workspace "${slackConnected}" connected. Click "Link My Account" to enable notifications.`
+        );
+      }
+    } else {
+      showSlackSuccess(
+        `Slack workspace "${slackConnected}" connected successfully!`
+      );
+    }
   } else if (slackError) {
     showSlackError(`Failed to connect Slack: ${slackError}`);
     // Clean up URL

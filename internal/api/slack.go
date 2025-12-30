@@ -304,8 +304,8 @@ func (h *Handler) handleSlackOAuthCallback(w http.ResponseWriter, r *http.Reques
 		Str("organisation_id", state.OrgID).
 		Msg("Slack workspace connected")
 
-	// Redirect to dashboard with success
-	h.redirectToDashboardWithSuccess(w, r, resp.Team.Name)
+	// Redirect to dashboard with success (includes connection ID for auto-linking)
+	h.redirectToDashboardWithSuccess(w, r, resp.Team.Name, conn.ID)
 }
 
 // listSlackConnections lists all Slack connections for the user's organisation
@@ -804,6 +804,10 @@ func (h *Handler) redirectToDashboardWithError(w http.ResponseWriter, r *http.Re
 	http.Redirect(w, r, getDashboardURL()+"?slack_error="+url.QueryEscape(errMsg), http.StatusSeeOther)
 }
 
-func (h *Handler) redirectToDashboardWithSuccess(w http.ResponseWriter, r *http.Request, workspaceName string) {
-	http.Redirect(w, r, getDashboardURL()+"?slack_connected="+url.QueryEscape(workspaceName), http.StatusSeeOther)
+func (h *Handler) redirectToDashboardWithSuccess(w http.ResponseWriter, r *http.Request, workspaceName string, connectionID string) {
+	redirectURL := getDashboardURL() + "?slack_connected=" + url.QueryEscape(workspaceName)
+	if connectionID != "" {
+		redirectURL += "&slack_connection_id=" + url.QueryEscape(connectionID)
+	}
+	http.Redirect(w, r, redirectURL, http.StatusSeeOther)
 }
