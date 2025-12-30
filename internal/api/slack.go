@@ -762,7 +762,11 @@ func (h *Handler) validateOAuthState(stateParam string) (*OAuthState, error) {
 func (h *Handler) redirectToDashboardWithError(w http.ResponseWriter, r *http.Request, errMsg string) {
 	dashboardURL := os.Getenv("DASHBOARD_URL")
 	if dashboardURL == "" {
-		dashboardURL = "https://app.bluebandedbee.co/dashboard"
+		appURL := os.Getenv("APP_URL")
+		if appURL == "" {
+			appURL = "https://app.bluebandedbee.co"
+		}
+		dashboardURL = appURL + "/dashboard"
 	}
 	http.Redirect(w, r, dashboardURL+"?slack_error="+url.QueryEscape(errMsg), http.StatusSeeOther)
 }
@@ -770,7 +774,11 @@ func (h *Handler) redirectToDashboardWithError(w http.ResponseWriter, r *http.Re
 func (h *Handler) redirectToDashboardWithSuccess(w http.ResponseWriter, r *http.Request, workspaceName string) {
 	dashboardURL := os.Getenv("DASHBOARD_URL")
 	if dashboardURL == "" {
-		dashboardURL = "https://app.bluebandedbee.co/dashboard"
+		appURL := os.Getenv("APP_URL")
+		if appURL == "" {
+			appURL = "https://app.bluebandedbee.co"
+		}
+		dashboardURL = appURL + "/dashboard"
 	}
 	http.Redirect(w, r, dashboardURL+"?slack_connected="+url.QueryEscape(workspaceName), http.StatusSeeOther)
 }
