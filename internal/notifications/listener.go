@@ -2,6 +2,7 @@ package notifications
 
 import (
 	"context"
+	"database/sql"
 	"os"
 	"strings"
 	"time"
@@ -109,16 +110,22 @@ func (l *Listener) processPending(ctx context.Context) {
 
 // StartWithFallback starts the listener with polling fallback.
 // This is useful when the database doesn't support LISTEN (e.g., connection poolers).
-// If DATABASE_DIRECT_URL is set, uses that for real-time LISTEN/NOTIFY.
+// If DATABASE_DIRECT_URL is set, tests the connection first and uses it for real-time LISTEN/NOTIFY.
+// Falls back to polling if the direct connection fails or is unavailable.
 func StartWithFallback(ctx context.Context, connStr string, service *Service) {
 	// Check for direct connection URL (bypasses pooler for LISTEN/NOTIFY)
 	directURL := os.Getenv("DATABASE_DIRECT_URL")
 	if directURL != "" {
-		listener := NewListener(directURL, service)
-		if listener != nil {
-			log.Info().Msg("Notification listener started (real-time via DATABASE_DIRECT_URL)")
-			go listener.Start(ctx)
-			return
+		// Test the direct connection before committing to listener mode
+		if testConnection(directURL) {
+			listener := NewListener(directURL, service)
+			if listener != nil {
+				log.Info().Msg("Notification listener started (real-time via DATABASE_DIRECT_URL)")
+				go listener.Start(ctx)
+				return
+			}
+		} else {
+			log.Warn().Msg("DATABASE_DIRECT_URL connection failed, falling back to polling")
 		}
 	}
 
@@ -139,6 +146,25 @@ func StartWithFallback(ctx context.Context, connStr string, service *Service) {
 	// Fall back to polling
 	log.Info().Msg("Using polling mode for notifications (connection pooler detected)")
 	go startPolling(ctx, service)
+}
+
+// testConnection tests if a database connection can be established.
+func testConnection(connStr string) bool {
+	db, err := sql.Open("postgres", connStr)
+	if err != nil {
+		log.Debug().Err(err).Msg("Failed to open direct connection")
+		return false
+	}
+	defer db.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := db.PingContext(ctx); err != nil {
+		log.Debug().Err(err).Msg("Failed to ping direct connection")
+		return false
+	}
+	return true
 }
 
 // canUseListen checks if the connection string supports LISTEN/NOTIFY.

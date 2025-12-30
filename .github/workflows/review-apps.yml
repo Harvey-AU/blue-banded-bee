@@ -60,35 +60,20 @@ jobs:
           # Get branch details as JSON for robust parsing
           BRANCH_JSON=$(supabase branches get "$BRANCH_NAME" --project-ref "$SUPABASE_PROJECT_REF" --output json 2>/dev/null) || true
 
-          # Extract pooler URL (for general queries)
-          PREVIEW_DB_URL=$(echo "$BRANCH_JSON" | jq -r '.POSTGRES_URL // empty' 2>/dev/null)
+          # Debug: show available fields (keys only, not values)
+          echo "🔑 Available JSON fields:"
+          echo "$BRANCH_JSON" | jq -r 'keys[]' 2>/dev/null || echo "  (none)"
 
-          # Extract or derive direct URL (for LISTEN/NOTIFY real-time notifications)
-          # Try to get direct URL from JSON first, otherwise derive from pooler URL
-          DIRECT_DB_URL=$(echo "$BRANCH_JSON" | jq -r '.DATABASE_URL // empty' 2>/dev/null)
+          # Extract pooler URL (for general queries) - try multiple field names
+          PREVIEW_DB_URL=$(echo "$BRANCH_JSON" | jq -r '.POSTGRES_URL // .postgres_url // .db_url // empty' 2>/dev/null)
 
-          # If no direct URL in JSON, derive it from pooler URL
-          # Pooler: postgres://postgres.[ref]:[pass]@aws-0-region.pooler.supabase.com:6543/postgres
-          # Direct: postgres://postgres.[ref]:[pass]@db.[ref].supabase.co:5432/postgres
-          if [ -z "$DIRECT_DB_URL" ] && [ -n "$PREVIEW_DB_URL" ]; then
-            # Extract project ref from username (postgres.[ref])
-            PROJECT_REF=$(echo "$PREVIEW_DB_URL" | sed -n 's|.*postgres\.\([^:]*\):.*|\1|p')
-            # Extract password - get everything between first : after postgres.[ref] and @
-            # Use parameter expansion to handle special chars in password
-            USERINFO="${PREVIEW_DB_URL#*://}"  # Remove scheme
-            USERINFO="${USERINFO%%@*}"          # Remove everything after @
-            PASSWORD="${USERINFO#*:}"           # Remove username: prefix
-            if [ -n "$PROJECT_REF" ] && [ -n "$PASSWORD" ]; then
-              DIRECT_DB_URL="postgres://postgres.${PROJECT_REF}:${PASSWORD}@db.${PROJECT_REF}.supabase.co:5432/postgres"
-              # Validate the constructed URL has expected format
-              if echo "$DIRECT_DB_URL" | grep -qE '^postgres://[^:]+:[^@]+@[^:]+:[0-9]+/'; then
-                echo "📡 Derived direct URL from pooler URL"
-              else
-                echo "⚠️ Derived direct URL appears invalid, skipping"
-                DIRECT_DB_URL=""
-              fi
-            fi
-          fi
+          # Extract direct URL (for LISTEN/NOTIFY) - try multiple field names
+          # Supabase may use DATABASE_URL, db_direct_url, or other variations
+          DIRECT_DB_URL=$(echo "$BRANCH_JSON" | jq -r '.DATABASE_URL // .database_url // .db_direct_url // .direct_url // empty' 2>/dev/null)
+
+          echo "📊 URLs found:"
+          echo "  Pooler URL present: $([ -n "$PREVIEW_DB_URL" ] && echo 'yes' || echo 'no')"
+          echo "  Direct URL present: $([ -n "$DIRECT_DB_URL" ] && echo 'yes' || echo 'no')"
 
           if [ -n "$PREVIEW_DB_URL" ]; then
             echo "✅ Found Supabase preview branch!"
