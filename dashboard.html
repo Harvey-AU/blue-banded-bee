@@ -2241,10 +2241,28 @@
           const data = await response.json();
           const orgs = data.data?.organisations || [];
 
+          // Handle no orgs case - still show switcher for create option
           if (orgs.length === 0) {
-            // No orgs - hide switcher
-            switcher.style.display = "none";
-            divider.style.display = "none";
+            currentOrgName.textContent = "No Organisation";
+            orgList.innerHTML = "";
+
+            // Toggle dropdown for create option
+            btn.addEventListener("click", (e) => {
+              e.stopPropagation();
+              switcher.classList.toggle("open");
+              btn.setAttribute(
+                "aria-expanded",
+                switcher.classList.contains("open")
+              );
+            });
+
+            // Close on outside click
+            document.addEventListener("click", (e) => {
+              if (!switcher.contains(e.target)) {
+                switcher.classList.remove("open");
+                btn.setAttribute("aria-expanded", "false");
+              }
+            });
             return;
           }
 
