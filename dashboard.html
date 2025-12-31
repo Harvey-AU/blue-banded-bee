@@ -3118,8 +3118,8 @@
 
           const channel = window.supabase
             .channel(`notifications:${orgId}`, { config: { private: true } })
-            .on("broadcast", { event: "INSERT" }, (payload) => {
-              console.log("Notification received:", payload);
+            .on("broadcast", { event: "notification" }, (payload) => {
+              console.log("[Realtime] Notification received:", payload);
               loadNotificationCount();
               // Refresh dropdown if it's open
               const container = document.getElementById(
@@ -3129,8 +3129,11 @@
                 loadNotifications();
               }
             })
-            .subscribe((status) => {
-              console.log("Notifications subscription status:", status);
+            .subscribe((status, err) => {
+              console.log("[Realtime] Subscription status:", status, err || "");
+              if (status === "SUBSCRIBED") {
+                console.log("[Realtime] Connected to notifications:" + orgId);
+              }
             });
 
           window.notificationsChannel = channel;
