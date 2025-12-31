@@ -462,13 +462,35 @@ performance, cost, and accessibility.
 
 ## Supabase Integration Strategy
 
-### Real-time Features (Stage 4+)
+### Real-time Features
 
-- **Live Job Progress**: Replace polling with WebSocket subscriptions for
-  instant updates
-- **Dashboard Updates**: Real-time status changes in Web Components without
-  refresh
-- **Team Collaboration**: Live presence indicators for multi-user organisations
+Uses **Postgres Changes** subscriptions via Supabase Realtime. See
+[SUPABASE-REALTIME.md](../development/SUPABASE-REALTIME.md) for implementation
+patterns and lessons learned.
+
+**Implemented:**
+
+- ✅ **Notification Badge**: Real-time updates when jobs complete (v0.20.0)
+  - Postgres Changes subscription on `notifications` table
+  - WebSocket CSP configured for `wss://auth.bluebandedbee.co`
+  - 200ms query delay to avoid transaction visibility race condition
+
+**Planned:**
+
+- **Live Job Progress**: Postgres Changes on `jobs` table for instant updates
+- **Dashboard Stats**: Real-time totals without page refresh
+- **Team Presence**: Live indicators for multi-user organisations
+
+**Key Pattern:**
+
+```javascript
+window.supabase
+  .channel("table-changes")
+  .on("postgres_changes", { event: "INSERT", table: "notifications" }, () => {
+    setTimeout(() => refreshData(), 200); // Delay for transaction visibility
+  })
+  .subscribe();
+```
 
 ### Database Functions (Stage 5)
 
