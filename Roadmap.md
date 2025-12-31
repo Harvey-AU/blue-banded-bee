@@ -349,31 +349,31 @@ Organisation model implemented:
         scheduler system)
   - [ ] Webhook integration to trigger crawls on site publish
 
-### 🔴 Slack Integration
+### ✅ Slack Integration (Completed v0.20.0)
 
-- [ ] **Slack Application Development**
-  - [ ] Create Slack app with slash commands (`/crawl sitedomain.com`)
-  - [ ] Integrate with existing Supabase Auth system (no separate API keys)
-  - [ ] Simple job creation workflow via slash commands
-- [ ] **Threading & Progress Updates**
-  - [ ] Create thread for each job with initial status
-  - [ ] Post progress updates as thread replies
-  - [ ] Final completion summary with link to main website
-  - [ ] Error notifications with basic troubleshooting info
-- [ ] **Commands & Help**
-  - [ ] `/crawl [domain]` - Start cache warming job
-  - [ ] `/crawl help` - Show available commands
-  - [ ] Simple installation and setup documentation
+- [x] **Slack Application Development**
+  - [x] OAuth flow for installing BBB Slack app to workspaces
+  - [x] Bot tokens stored securely in Supabase Vault
+  - [x] Auto-linking users to Slack workspaces via database triggers
+  - [x] Supabase Slack OIDC support for user authentication
+- [x] **Notification Delivery**
+  - [x] Job completion notifications via Slack DMs
+  - [x] Error notifications when jobs fail
+  - [x] API endpoints for workspace management and user preferences
+- [ ] **Future Enhancements** (Not in scope for MVP)
+  - [ ] Slash commands (`/crawl sitedomain.com`)
+  - [ ] Threading with progress updates
+  - [ ] Interactive message actions
 
 ## ⚪ Stage 4.5: Platform Integration Foundation
 
-### 🔴 Multi-Platform Authentication Architecture
+### 🟡 Multi-Platform Authentication Architecture
 
-- [ ] **Organisation-Based Data Model**
-  - [ ] Implement many-to-many user-organisation relationships
+- [x] **Organisation-Based Data Model** (Completed v0.19.0)
+  - [x] Implement many-to-many user-organisation relationships
+  - [x] Create organisation context switching logic
+  - [x] Implement data isolation between organisations
   - [ ] Add store/site entity linked to single organisation
-  - [ ] Create organisation context switching logic
-  - [ ] Implement data isolation between organisations
 - [ ] **Platform Authentication Adapters**
   - [ ] Shopify OAuth and session management
   - [ ] Webflow OAuth and site context handling
@@ -431,6 +431,7 @@ Organisation model implemented:
 ### 🔴 Supabase Platform Integration
 
 - [ ] **Real-time Features**
+  - [x] Real-time notification badge updates via Postgres Changes subscription
   - [ ] Replace polling with WebSocket subscriptions for live job progress
   - [ ] Live presence indicators for multi-user organisations
   - [ ] Real-time dashboard updates without page refresh

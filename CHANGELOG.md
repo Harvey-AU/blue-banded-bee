@@ -29,6 +29,13 @@ On merge, CI will:
 
 ## [Unreleased]
 
+### Added
+
+- **Realtime Notification Updates**: Badge updates instantly when jobs complete
+  - Supabase Postgres Changes subscription for `notifications` table
+  - WebSocket CSP configured for `wss://auth.bluebandedbee.co`
+  - 200ms delay before querying to avoid transaction visibility race condition
+
 ## [0.20.0] – 2025-12-31
 
 ### Added
