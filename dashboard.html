@@ -3126,14 +3126,17 @@
               },
               (payload) => {
                 console.log("[Realtime] Notification received:", payload);
-                loadNotificationCount();
-                // Refresh dropdown if it's open
-                const container = document.getElementById(
-                  "notificationsContainer"
-                );
-                if (container?.classList.contains("open")) {
-                  loadNotifications();
-                }
+                // Small delay to ensure transaction is committed before querying
+                setTimeout(() => {
+                  loadNotificationCount();
+                  // Refresh dropdown if it's open
+                  const container = document.getElementById(
+                    "notificationsContainer"
+                  );
+                  if (container?.classList.contains("open")) {
+                    loadNotifications();
+                  }
+                }, 200);
               }
             )
             .subscribe((status, err) => {
