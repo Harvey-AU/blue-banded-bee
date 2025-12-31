@@ -3113,11 +3113,9 @@
         }
 
         try {
-          // Set auth for private channel access
-          await window.supabase.realtime.setAuth();
-
+          // Public channel - org ID in name provides isolation
           const channel = window.supabase
-            .channel(`notifications:${orgId}`, { config: { private: true } })
+            .channel(`notifications:${orgId}`)
             .on("broadcast", { event: "notification" }, (payload) => {
               console.log("[Realtime] Notification received:", payload);
               loadNotificationCount();
