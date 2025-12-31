@@ -3098,7 +3098,7 @@
         subscribeToNotifications();
       }
 
-      // Subscribe to realtime notifications via Broadcast
+      // Subscribe to realtime notifications via postgres_changes
       async function subscribeToNotifications() {
         const orgId = window.BB_ACTIVE_ORG?.id;
         if (!orgId || !window.supabase) {
@@ -3113,24 +3113,35 @@
         }
 
         try {
-          // Public channel - org ID in name provides isolation
+          // Subscribe to INSERT events on notifications table for this org
           const channel = window.supabase
-            .channel(`notifications:${orgId}`)
-            .on("broadcast", { event: "notification" }, (payload) => {
-              console.log("[Realtime] Notification received:", payload);
-              loadNotificationCount();
-              // Refresh dropdown if it's open
-              const container = document.getElementById(
-                "notificationsContainer"
-              );
-              if (container?.classList.contains("open")) {
-                loadNotifications();
+            .channel(`notifications-changes:${orgId}`)
+            .on(
+              "postgres_changes",
+              {
+                event: "INSERT",
+                schema: "public",
+                table: "notifications",
+                filter: `organisation_id=eq.${orgId}`,
+              },
+              (payload) => {
+                console.log("[Realtime] Notification received:", payload);
+                loadNotificationCount();
+                // Refresh dropdown if it's open
+                const container = document.getElementById(
+                  "notificationsContainer"
+                );
+                if (container?.classList.contains("open")) {
+                  loadNotifications();
+                }
               }
-            })
+            )
             .subscribe((status, err) => {
               console.log("[Realtime] Subscription status:", status, err || "");
               if (status === "SUBSCRIBED") {
-                console.log("[Realtime] Connected to notifications:" + orgId);
+                console.log(
+                  "[Realtime] Listening for notifications on org:" + orgId
+                );
               }
             });
 
