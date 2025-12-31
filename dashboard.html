@@ -3235,9 +3235,8 @@
 
             return `
             <div class="bb-notification-item ${isUnread ? "unread" : ""}"
-                 data-id="${n.id}"
-                 data-link="${n.link || ""}"
-                 onclick="handleNotificationClick('${n.id}', '${n.link || ""}')">
+                 data-id="${escapeHtml(n.id)}"
+                 data-link="${escapeHtml(n.link || "")}">
               <div class="bb-notification-item-icon">${icon}</div>
               <div class="bb-notification-item-content">
                 <div class="bb-notification-item-subject">${escapeHtml(n.subject)}</div>
@@ -3248,6 +3247,14 @@
           `;
           })
           .join("");
+
+        // Use event delegation for click handling (avoids XSS from inline onclick)
+        list.onclick = (e) => {
+          const item = e.target.closest(".bb-notification-item");
+          if (item) {
+            handleNotificationClick(item.dataset.id, item.dataset.link);
+          }
+        };
       }
 
       // Handle notification click

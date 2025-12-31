@@ -221,6 +221,12 @@ func (h *Handler) initiateSlackOAuth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if getSlackStateSecret() == "" {
+		logger.Error().Msg("SUPABASE_JWT_SECRET not configured for OAuth state signing")
+		InternalError(w, r, fmt.Errorf("slack integration not configured"))
+		return
+	}
+
 	// Generate state token
 	state, err := h.generateOAuthState(userClaims.UserID, *user.OrganisationID)
 	if err != nil {

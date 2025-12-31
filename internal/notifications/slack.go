@@ -5,11 +5,14 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/Harvey-AU/blue-banded-bee/internal/db"
 	"github.com/rs/zerolog/log"
 	"github.com/slack-go/slack"
 )
+
+const slackAPITimeout = 10 * time.Second
 
 // Service handles notification delivery to various channels.
 // Note: Notifications are created by PostgreSQL triggers, not Go code.
@@ -162,11 +165,15 @@ func (c *SlackChannel) deliverToConnection(ctx context.Context, conn *db.SlackCo
 
 	var lastErr error
 	for _, link := range links {
-		_, _, err := client.PostMessage(
+		// Use timeout context to prevent hanging on Slack API calls
+		msgCtx, cancel := context.WithTimeout(ctx, slackAPITimeout)
+		_, _, err := client.PostMessageContext(
+			msgCtx,
 			link.SlackUserID,
 			slack.MsgOptionBlocks(blocks...),
 			slack.MsgOptionText(fallbackText, false),
 		)
+		cancel()
 		if err != nil {
 			log.Warn().
 				Err(err).
