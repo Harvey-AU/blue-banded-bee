@@ -64,6 +64,11 @@ function setupDashboardActions() {
 }
 
 function handleDashboardAction(action, element) {
+  // Skip slack-* actions - handled by bb-slack.js
+  if (action.startsWith("slack-")) {
+    return;
+  }
+
   switch (action) {
     case "refresh-dashboard":
       if (window.dataBinder) {

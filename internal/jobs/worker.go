@@ -1227,6 +1227,9 @@ func (wp *WorkerPool) markJobFailedDueToConsecutiveFailures(ctx context.Context,
 	}
 
 	wp.RemoveJob(jobID)
+
+	// Notifications are created by the database trigger (update_job_progress)
+	// when job status transitions to 'failed'.
 }
 
 // processTaskResult handles the result from a task execution and updates backoff state
@@ -1798,11 +1801,12 @@ type jobQueueState struct {
 	Total       int
 	Completed   int
 	Failed      int
+	Skipped     int
 	Concurrency sql.NullInt64
 }
 
 func (s jobQueueState) remainingWork() int {
-	remaining := s.Total - (s.Completed + s.Failed)
+	remaining := s.Total - (s.Completed + s.Failed + s.Skipped)
 	if remaining < 0 {
 		return 0
 	}
@@ -1891,7 +1895,7 @@ func (wp *WorkerPool) loadJobQueueState(ctx context.Context, jobID string) (*job
 	err := wp.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
 		return tx.QueryRowContext(ctx, `
 			SELECT status, pending_tasks, waiting_tasks, running_tasks,
-			       total_tasks, completed_tasks, failed_tasks, concurrency
+			       total_tasks, completed_tasks, failed_tasks, skipped_tasks, concurrency
 			FROM jobs
 			WHERE id = $1
 		`, jobID).Scan(
@@ -1902,6 +1906,7 @@ func (wp *WorkerPool) loadJobQueueState(ctx context.Context, jobID string) (*job
 			&state.Total,
 			&state.Completed,
 			&state.Failed,
+			&state.Skipped,
 			&state.Concurrency,
 		)
 	})
@@ -1912,6 +1917,9 @@ func (wp *WorkerPool) loadJobQueueState(ctx context.Context, jobID string) (*job
 }
 
 func (wp *WorkerPool) markJobCompleted(ctx context.Context, jobID string) error {
+	// Notifications are now created by the database trigger (update_job_progress)
+	// when job status transitions to 'completed'. This ensures notifications are
+	// created regardless of which code path completes the job.
 	return wp.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
 		// Only update if job is not already in a terminal state (cancelled, failed)
 		// This prevents race conditions where a job was cancelled but running tasks complete
@@ -2743,7 +2751,7 @@ func (wp *WorkerPool) CleanupStuckJobs(ctx context.Context) error {
 				progress = 100.0
 			WHERE (status = $3 OR status = $4)
 			AND total_tasks > 0
-			AND total_tasks = completed_tasks + failed_tasks
+			AND total_tasks = completed_tasks + failed_tasks + skipped_tasks
 		`, JobStatusCompleted, time.Now().UTC(), JobStatusPending, JobStatusRunning)
 
 		if err != nil {

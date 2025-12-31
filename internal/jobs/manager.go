@@ -592,17 +592,18 @@ func (jm *JobManager) GetJob(ctx context.Context, jobID string) (*Job, error) {
 	var job Job
 	var includePaths, excludePaths []byte
 	var startedAt, completedAt sql.NullTime
-	var errorMessage sql.NullString
+	var errorMessage, userID, organisationID sql.NullString
 
 	// Use DbQueue.Execute for transactional safety
 	err := jm.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
 		// Query for job with domain join
 		err := tx.QueryRowContext(ctx, `
-			SELECT 
+			SELECT
 				j.id, d.name, j.status, j.progress, j.total_tasks, j.completed_tasks, j.failed_tasks, j.skipped_tasks,
 				j.created_at, j.started_at, j.completed_at, j.concurrency, j.find_links,
 				j.include_paths, j.exclude_paths, j.error_message, j.required_workers,
-				j.found_tasks, j.sitemap_tasks, j.duration_seconds, j.avg_time_per_task_seconds
+				j.found_tasks, j.sitemap_tasks, j.duration_seconds, j.avg_time_per_task_seconds,
+				j.user_id, j.organisation_id
 			FROM jobs j
 			JOIN domains d ON j.domain_id = d.id
 			WHERE j.id = $1
@@ -611,6 +612,7 @@ func (jm *JobManager) GetJob(ctx context.Context, jobID string) (*Job, error) {
 			&job.FailedTasks, &job.SkippedTasks, &job.CreatedAt, &startedAt, &completedAt, &job.Concurrency,
 			&job.FindLinks, &includePaths, &excludePaths, &errorMessage, &job.RequiredWorkers,
 			&job.FoundTasks, &job.SitemapTasks, &job.DurationSeconds, &job.AvgTimePerTaskSeconds,
+			&userID, &organisationID,
 		)
 		return err
 	})
@@ -634,6 +636,14 @@ func (jm *JobManager) GetJob(ctx context.Context, jobID string) (*Job, error) {
 
 	if errorMessage.Valid {
 		job.ErrorMessage = errorMessage.String
+	}
+
+	if userID.Valid {
+		job.UserID = &userID.String
+	}
+
+	if organisationID.Valid {
+		job.OrganisationID = &organisationID.String
 	}
 
 	// Parse arrays from JSON
