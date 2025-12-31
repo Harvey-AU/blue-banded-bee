@@ -20,6 +20,7 @@ import (
 	"github.com/Harvey-AU/blue-banded-bee/internal/crawler"
 	"github.com/Harvey-AU/blue-banded-bee/internal/db"
 	"github.com/Harvey-AU/blue-banded-bee/internal/jobs"
+	"github.com/Harvey-AU/blue-banded-bee/internal/notifications"
 	"github.com/Harvey-AU/blue-banded-bee/internal/observability"
 	"github.com/getsentry/sentry-go"
 	"github.com/joho/godotenv"
@@ -599,6 +600,16 @@ func main() {
 	// Set the job manager in the worker pool for duplicate checking
 	workerPool.SetJobManager(jobsManager)
 
+	// Create notification service with Slack channel
+	notificationService := notifications.NewService(pgDB)
+	slackChannel, err := notifications.NewSlackChannel(pgDB)
+	if err != nil {
+		log.Warn().Err(err).Msg("Failed to create Slack channel - notifications disabled")
+	} else {
+		notificationService.AddChannel(slackChannel)
+		log.Info().Msg("Slack notification channel enabled")
+	}
+
 	// Create context for background goroutines that need graceful shutdown
 	appCtx, appCancel := context.WithCancel(context.Background())
 	defer appCancel() // Ensure context is cancelled on exit
@@ -702,6 +713,13 @@ func main() {
 	// Start scheduler service
 	backgroundWG.Add(1)
 	go startJobScheduler(appCtx, &backgroundWG, jobsManager, pgDB)
+
+	// Start notification listener (uses polling mode with Supabase pooler)
+	backgroundWG.Add(1)
+	go func() {
+		defer backgroundWG.Done()
+		notifications.StartWithFallback(appCtx, pgDB.GetConfig().ConnectionString(), notificationService)
+	}()
 
 	// Wait for either the server to exit or shutdown signal completion
 	var serverErr error

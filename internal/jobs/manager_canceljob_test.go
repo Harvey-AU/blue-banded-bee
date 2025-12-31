@@ -35,7 +35,7 @@ func TestCancelJob_Unit(t *testing.T) {
 					"failed_tasks", "skipped_tasks", "created_at", "started_at", "completed_at",
 					"concurrency", "find_links", "include_paths", "exclude_paths", "error_message",
 					"required_workers", "found_tasks", "sitemap_tasks", "duration_seconds",
-					"avg_time_per_task_seconds",
+					"avg_time_per_task_seconds", "user_id", "organisation_id",
 				}).AddRow(
 					"running-job-123",
 					"example.com",
@@ -58,13 +58,16 @@ func TestCancelJob_Unit(t *testing.T) {
 					50,
 					sql.NullInt64{Valid: false},
 					sql.NullFloat64{Valid: false},
+					sql.NullString{Valid: false},
+					sql.NullString{Valid: false},
 				)
 
-				mock.ExpectQuery(`SELECT 
+				mock.ExpectQuery(`SELECT
 				j.id, d.name, j.status, j.progress, j.total_tasks, j.completed_tasks, j.failed_tasks, j.skipped_tasks,
 				j.created_at, j.started_at, j.completed_at, j.concurrency, j.find_links,
 				j.include_paths, j.exclude_paths, j.error_message, j.required_workers,
-				j.found_tasks, j.sitemap_tasks, j.duration_seconds, j.avg_time_per_task_seconds
+				j.found_tasks, j.sitemap_tasks, j.duration_seconds, j.avg_time_per_task_seconds,
+				j.user_id, j.organisation_id
 			FROM jobs j
 			JOIN domains d ON j.domain_id = d.id
 			WHERE j.id = \$1`).
@@ -106,7 +109,7 @@ func TestCancelJob_Unit(t *testing.T) {
 					"failed_tasks", "skipped_tasks", "created_at", "started_at", "completed_at",
 					"concurrency", "find_links", "include_paths", "exclude_paths", "error_message",
 					"required_workers", "found_tasks", "sitemap_tasks", "duration_seconds",
-					"avg_time_per_task_seconds",
+					"avg_time_per_task_seconds", "user_id", "organisation_id",
 				}).AddRow(
 					"pending-job-123",
 					"example.com",
@@ -129,13 +132,16 @@ func TestCancelJob_Unit(t *testing.T) {
 					0,
 					sql.NullInt64{Valid: false},
 					sql.NullFloat64{Valid: false},
+					sql.NullString{Valid: false},
+					sql.NullString{Valid: false},
 				)
 
-				mock.ExpectQuery(`SELECT 
+				mock.ExpectQuery(`SELECT
 				j.id, d.name, j.status, j.progress, j.total_tasks, j.completed_tasks, j.failed_tasks, j.skipped_tasks,
 				j.created_at, j.started_at, j.completed_at, j.concurrency, j.find_links,
 				j.include_paths, j.exclude_paths, j.error_message, j.required_workers,
-				j.found_tasks, j.sitemap_tasks, j.duration_seconds, j.avg_time_per_task_seconds
+				j.found_tasks, j.sitemap_tasks, j.duration_seconds, j.avg_time_per_task_seconds,
+				j.user_id, j.organisation_id
 			FROM jobs j
 			JOIN domains d ON j.domain_id = d.id
 			WHERE j.id = \$1`).
@@ -175,7 +181,7 @@ func TestCancelJob_Unit(t *testing.T) {
 					"failed_tasks", "skipped_tasks", "created_at", "started_at", "completed_at",
 					"concurrency", "find_links", "include_paths", "exclude_paths", "error_message",
 					"required_workers", "found_tasks", "sitemap_tasks", "duration_seconds",
-					"avg_time_per_task_seconds",
+					"avg_time_per_task_seconds", "user_id", "organisation_id",
 				}).AddRow(
 					"paused-job-123",
 					"example.com",
@@ -198,13 +204,16 @@ func TestCancelJob_Unit(t *testing.T) {
 					75,
 					sql.NullInt64{Valid: false},
 					sql.NullFloat64{Valid: false},
+					sql.NullString{Valid: false},
+					sql.NullString{Valid: false},
 				)
 
-				mock.ExpectQuery(`SELECT 
+				mock.ExpectQuery(`SELECT
 				j.id, d.name, j.status, j.progress, j.total_tasks, j.completed_tasks, j.failed_tasks, j.skipped_tasks,
 				j.created_at, j.started_at, j.completed_at, j.concurrency, j.find_links,
 				j.include_paths, j.exclude_paths, j.error_message, j.required_workers,
-				j.found_tasks, j.sitemap_tasks, j.duration_seconds, j.avg_time_per_task_seconds
+				j.found_tasks, j.sitemap_tasks, j.duration_seconds, j.avg_time_per_task_seconds,
+				j.user_id, j.organisation_id
 			FROM jobs j
 			JOIN domains d ON j.domain_id = d.id
 			WHERE j.id = \$1`).
@@ -244,7 +253,7 @@ func TestCancelJob_Unit(t *testing.T) {
 					"failed_tasks", "skipped_tasks", "created_at", "started_at", "completed_at",
 					"concurrency", "find_links", "include_paths", "exclude_paths", "error_message",
 					"required_workers", "found_tasks", "sitemap_tasks", "duration_seconds",
-					"avg_time_per_task_seconds",
+					"avg_time_per_task_seconds", "user_id", "organisation_id",
 				}).AddRow(
 					"completed-job-123",
 					"example.com",
@@ -267,13 +276,16 @@ func TestCancelJob_Unit(t *testing.T) {
 					0,
 					sql.NullInt64{Int64: 3600, Valid: true},
 					sql.NullFloat64{Float64: 36.0, Valid: true},
+					sql.NullString{Valid: false},
+					sql.NullString{Valid: false},
 				)
 
-				mock.ExpectQuery(`SELECT 
+				mock.ExpectQuery(`SELECT
 				j.id, d.name, j.status, j.progress, j.total_tasks, j.completed_tasks, j.failed_tasks, j.skipped_tasks,
 				j.created_at, j.started_at, j.completed_at, j.concurrency, j.find_links,
 				j.include_paths, j.exclude_paths, j.error_message, j.required_workers,
-				j.found_tasks, j.sitemap_tasks, j.duration_seconds, j.avg_time_per_task_seconds
+				j.found_tasks, j.sitemap_tasks, j.duration_seconds, j.avg_time_per_task_seconds,
+				j.user_id, j.organisation_id
 			FROM jobs j
 			JOIN domains d ON j.domain_id = d.id
 			WHERE j.id = \$1`).
@@ -296,7 +308,7 @@ func TestCancelJob_Unit(t *testing.T) {
 					"failed_tasks", "skipped_tasks", "created_at", "started_at", "completed_at",
 					"concurrency", "find_links", "include_paths", "exclude_paths", "error_message",
 					"required_workers", "found_tasks", "sitemap_tasks", "duration_seconds",
-					"avg_time_per_task_seconds",
+					"avg_time_per_task_seconds", "user_id", "organisation_id",
 				}).AddRow(
 					"failed-job-123",
 					"example.com",
@@ -319,13 +331,16 @@ func TestCancelJob_Unit(t *testing.T) {
 					50,
 					sql.NullInt64{Int64: 3600, Valid: true},
 					sql.NullFloat64{Float64: 72.0, Valid: true},
+					sql.NullString{Valid: false},
+					sql.NullString{Valid: false},
 				)
 
-				mock.ExpectQuery(`SELECT 
+				mock.ExpectQuery(`SELECT
 				j.id, d.name, j.status, j.progress, j.total_tasks, j.completed_tasks, j.failed_tasks, j.skipped_tasks,
 				j.created_at, j.started_at, j.completed_at, j.concurrency, j.find_links,
 				j.include_paths, j.exclude_paths, j.error_message, j.required_workers,
-				j.found_tasks, j.sitemap_tasks, j.duration_seconds, j.avg_time_per_task_seconds
+				j.found_tasks, j.sitemap_tasks, j.duration_seconds, j.avg_time_per_task_seconds,
+				j.user_id, j.organisation_id
 			FROM jobs j
 			JOIN domains d ON j.domain_id = d.id
 			WHERE j.id = \$1`).
@@ -348,7 +363,7 @@ func TestCancelJob_Unit(t *testing.T) {
 					"failed_tasks", "skipped_tasks", "created_at", "started_at", "completed_at",
 					"concurrency", "find_links", "include_paths", "exclude_paths", "error_message",
 					"required_workers", "found_tasks", "sitemap_tasks", "duration_seconds",
-					"avg_time_per_task_seconds",
+					"avg_time_per_task_seconds", "user_id", "organisation_id",
 				}).AddRow(
 					"cancelled-job-123",
 					"example.com",
@@ -371,13 +386,16 @@ func TestCancelJob_Unit(t *testing.T) {
 					100,
 					sql.NullInt64{Int64: 1800, Valid: true},
 					sql.NullFloat64{Float64: 72.0, Valid: true},
+					sql.NullString{Valid: false},
+					sql.NullString{Valid: false},
 				)
 
-				mock.ExpectQuery(`SELECT 
+				mock.ExpectQuery(`SELECT
 				j.id, d.name, j.status, j.progress, j.total_tasks, j.completed_tasks, j.failed_tasks, j.skipped_tasks,
 				j.created_at, j.started_at, j.completed_at, j.concurrency, j.find_links,
 				j.include_paths, j.exclude_paths, j.error_message, j.required_workers,
-				j.found_tasks, j.sitemap_tasks, j.duration_seconds, j.avg_time_per_task_seconds
+				j.found_tasks, j.sitemap_tasks, j.duration_seconds, j.avg_time_per_task_seconds,
+				j.user_id, j.organisation_id
 			FROM jobs j
 			JOIN domains d ON j.domain_id = d.id
 			WHERE j.id = \$1`).
@@ -395,11 +413,12 @@ func TestCancelJob_Unit(t *testing.T) {
 				// GetJob transaction
 				mock.ExpectBegin()
 
-				mock.ExpectQuery(`SELECT 
+				mock.ExpectQuery(`SELECT
 				j.id, d.name, j.status, j.progress, j.total_tasks, j.completed_tasks, j.failed_tasks, j.skipped_tasks,
 				j.created_at, j.started_at, j.completed_at, j.concurrency, j.find_links,
 				j.include_paths, j.exclude_paths, j.error_message, j.required_workers,
-				j.found_tasks, j.sitemap_tasks, j.duration_seconds, j.avg_time_per_task_seconds
+				j.found_tasks, j.sitemap_tasks, j.duration_seconds, j.avg_time_per_task_seconds,
+				j.user_id, j.organisation_id
 			FROM jobs j
 			JOIN domains d ON j.domain_id = d.id
 			WHERE j.id = \$1`).
@@ -417,11 +436,12 @@ func TestCancelJob_Unit(t *testing.T) {
 				// GetJob transaction
 				mock.ExpectBegin()
 
-				mock.ExpectQuery(`SELECT 
+				mock.ExpectQuery(`SELECT
 				j.id, d.name, j.status, j.progress, j.total_tasks, j.completed_tasks, j.failed_tasks, j.skipped_tasks,
 				j.created_at, j.started_at, j.completed_at, j.concurrency, j.find_links,
 				j.include_paths, j.exclude_paths, j.error_message, j.required_workers,
-				j.found_tasks, j.sitemap_tasks, j.duration_seconds, j.avg_time_per_task_seconds
+				j.found_tasks, j.sitemap_tasks, j.duration_seconds, j.avg_time_per_task_seconds,
+				j.user_id, j.organisation_id
 			FROM jobs j
 			JOIN domains d ON j.domain_id = d.id
 			WHERE j.id = \$1`).
@@ -444,7 +464,7 @@ func TestCancelJob_Unit(t *testing.T) {
 					"failed_tasks", "skipped_tasks", "created_at", "started_at", "completed_at",
 					"concurrency", "find_links", "include_paths", "exclude_paths", "error_message",
 					"required_workers", "found_tasks", "sitemap_tasks", "duration_seconds",
-					"avg_time_per_task_seconds",
+					"avg_time_per_task_seconds", "user_id", "organisation_id",
 				}).AddRow(
 					"running-job-456",
 					"example.com",
@@ -467,13 +487,16 @@ func TestCancelJob_Unit(t *testing.T) {
 					50,
 					sql.NullInt64{Valid: false},
 					sql.NullFloat64{Valid: false},
+					sql.NullString{Valid: false},
+					sql.NullString{Valid: false},
 				)
 
-				mock.ExpectQuery(`SELECT 
+				mock.ExpectQuery(`SELECT
 				j.id, d.name, j.status, j.progress, j.total_tasks, j.completed_tasks, j.failed_tasks, j.skipped_tasks,
 				j.created_at, j.started_at, j.completed_at, j.concurrency, j.find_links,
 				j.include_paths, j.exclude_paths, j.error_message, j.required_workers,
-				j.found_tasks, j.sitemap_tasks, j.duration_seconds, j.avg_time_per_task_seconds
+				j.found_tasks, j.sitemap_tasks, j.duration_seconds, j.avg_time_per_task_seconds,
+				j.user_id, j.organisation_id
 			FROM jobs j
 			JOIN domains d ON j.domain_id = d.id
 			WHERE j.id = \$1`).

@@ -285,3 +285,89 @@ func (m *MockDB) AddOrganisationMember(userID, organisationID string) error {
 	args := m.Called(userID, organisationID)
 	return args.Error(0)
 }
+
+// Slack integration methods
+
+func (m *MockDB) CreateSlackConnection(ctx context.Context, conn *db.SlackConnection) error {
+	args := m.Called(ctx, conn)
+	return args.Error(0)
+}
+
+func (m *MockDB) GetSlackConnection(ctx context.Context, connectionID string) (*db.SlackConnection, error) {
+	args := m.Called(ctx, connectionID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*db.SlackConnection), args.Error(1)
+}
+
+func (m *MockDB) ListSlackConnections(ctx context.Context, organisationID string) ([]*db.SlackConnection, error) {
+	args := m.Called(ctx, organisationID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*db.SlackConnection), args.Error(1)
+}
+
+func (m *MockDB) DeleteSlackConnection(ctx context.Context, connectionID, organisationID string) error {
+	args := m.Called(ctx, connectionID, organisationID)
+	return args.Error(0)
+}
+
+func (m *MockDB) CreateSlackUserLink(ctx context.Context, link *db.SlackUserLink) error {
+	args := m.Called(ctx, link)
+	return args.Error(0)
+}
+
+func (m *MockDB) GetSlackUserLink(ctx context.Context, userID, connectionID string) (*db.SlackUserLink, error) {
+	args := m.Called(ctx, userID, connectionID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*db.SlackUserLink), args.Error(1)
+}
+
+func (m *MockDB) UpdateSlackUserLinkNotifications(ctx context.Context, userID, connectionID string, dmNotifications bool) error {
+	args := m.Called(ctx, userID, connectionID, dmNotifications)
+	return args.Error(0)
+}
+
+func (m *MockDB) DeleteSlackUserLink(ctx context.Context, userID, connectionID string) error {
+	args := m.Called(ctx, userID, connectionID)
+	return args.Error(0)
+}
+
+func (m *MockDB) StoreSlackToken(ctx context.Context, connectionID, token string) error {
+	args := m.Called(ctx, connectionID, token)
+	return args.Error(0)
+}
+
+func (m *MockDB) GetSlackToken(ctx context.Context, connectionID string) (string, error) {
+	args := m.Called(ctx, connectionID)
+	return args.String(0), args.Error(1)
+}
+
+// Notification methods
+
+func (m *MockDB) ListNotifications(ctx context.Context, organisationID string, limit, offset int, unreadOnly bool) ([]*db.Notification, int, error) {
+	args := m.Called(ctx, organisationID, limit, offset, unreadOnly)
+	if args.Get(0) == nil {
+		return nil, args.Int(1), args.Error(2)
+	}
+	return args.Get(0).([]*db.Notification), args.Int(1), args.Error(2)
+}
+
+func (m *MockDB) GetUnreadNotificationCount(ctx context.Context, organisationID string) (int, error) {
+	args := m.Called(ctx, organisationID)
+	return args.Int(0), args.Error(1)
+}
+
+func (m *MockDB) MarkNotificationRead(ctx context.Context, notificationID, organisationID string) error {
+	args := m.Called(ctx, notificationID, organisationID)
+	return args.Error(0)
+}
+
+func (m *MockDB) MarkAllNotificationsRead(ctx context.Context, organisationID string) error {
+	args := m.Called(ctx, organisationID)
+	return args.Error(0)
+}

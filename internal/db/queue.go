@@ -1337,13 +1337,13 @@ func (q *DbQueue) CleanupStuckJobs(ctx context.Context) error {
 	)
 
 	result, err := q.db.client.ExecContext(ctx, `
-		UPDATE jobs 
-		SET status = $1, 
+		UPDATE jobs
+		SET status = $1,
 			completed_at = COALESCE(completed_at, $2),
 			progress = 100.0
 		WHERE (status = $3 OR status = $4)
-		AND total_tasks > 0 
-		AND total_tasks = completed_tasks + failed_tasks
+		AND total_tasks > 0
+		AND total_tasks = completed_tasks + failed_tasks + skipped_tasks
 	`, JobStatusCompleted, time.Now().UTC(), JobStatusPending, JobStatusRunning)
 
 	if err != nil {
