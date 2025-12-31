@@ -3094,6 +3094,49 @@
 
         // Load notifications on page load for badge
         loadNotificationCount();
+        // Subscribe to realtime updates
+        subscribeToNotifications();
+      }
+
+      // Subscribe to realtime notifications via Broadcast
+      async function subscribeToNotifications() {
+        const orgId = window.BB_ACTIVE_ORG?.id;
+        if (!orgId || !window.supabase) {
+          // Retry once org is loaded
+          setTimeout(subscribeToNotifications, 1000);
+          return;
+        }
+
+        // Clean up existing subscription if any
+        if (window.notificationsChannel) {
+          window.supabase.removeChannel(window.notificationsChannel);
+        }
+
+        try {
+          // Set auth for private channel access
+          await window.supabase.realtime.setAuth();
+
+          const channel = window.supabase
+            .channel(`notifications:${orgId}`, { config: { private: true } })
+            .on("broadcast", { event: "INSERT" }, (payload) => {
+              console.log("Notification received:", payload);
+              loadNotificationCount();
+              // Refresh dropdown if it's open
+              const container = document.getElementById(
+                "notificationsContainer"
+              );
+              if (container?.classList.contains("open")) {
+                loadNotifications();
+              }
+            })
+            .subscribe((status) => {
+              console.log("Notifications subscription status:", status);
+            });
+
+          window.notificationsChannel = channel;
+        } catch (err) {
+          console.error("Failed to subscribe to notifications:", err);
+        }
       }
 
       // Load notification count for badge
