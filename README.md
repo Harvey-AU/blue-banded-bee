@@ -27,6 +27,7 @@ native to where we live in Castlemaine, Victoria, Australia.
 ### Integration & Monitoring
 
 - 📊 Real-time dashboard with job progress tracking
+- 🔔 Slack notifications when jobs complete
 - 🔐 Multi-tenant architecture with Supabase Auth
 - 🎨 Template-based integration (ready for Webflow/Shopify apps)
 - 🔌 API-first architecture for platform integrations
@@ -79,6 +80,7 @@ Next up: Platform integrations (Webflow/Shopify apps) and subscriptions. See
 - [Getting Started](docs/development/DEVELOPMENT.md)
 - [API Reference](docs/architecture/API.md)
 - [Architecture Overview](docs/architecture/ARCHITECTURE.md)
+- [Supabase Realtime](docs/development/SUPABASE-REALTIME.md)
 - [Observability & Tracing](docs/operations/OBSERVABILITY.md)
 - [All Documentation →](docs/)
 

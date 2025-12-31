@@ -430,11 +430,12 @@ Organisation model implemented:
 
 ### 🔴 Supabase Platform Integration
 
-- [ ] **Real-time Features**
+- [ ] **Real-time Features** (See
+      [SUPABASE-REALTIME.md](docs/development/SUPABASE-REALTIME.md))
   - [x] Real-time notification badge updates via Postgres Changes subscription
-  - [ ] Replace polling with WebSocket subscriptions for live job progress
+  - [ ] Live job progress via Postgres Changes (replace polling)
+  - [ ] Real-time dashboard stats without page refresh
   - [ ] Live presence indicators for multi-user organisations
-  - [ ] Real-time dashboard updates without page refresh
 - [ ] **Database Optimisation**
   - [x] Move CPU-intensive analytics queries to PostgreSQL functions
   - [ ] Optimise task acquisition with database-side logic
