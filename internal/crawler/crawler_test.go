@@ -14,7 +14,7 @@ func TestWarmURL(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("CF-Cache-Status", "HIT")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("Hello, World!"))
+		_, _ = w.Write([]byte("Hello, World!"))
 	}))
 	defer ts.Close()
 
@@ -47,7 +47,7 @@ func TestPerformanceMetrics(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)        // Small delay to ensure measurable times
 		w.Header().Set("CF-Cache-Status", "HIT") // Use HIT to avoid cache warming loop
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("Performance test response"))
+		_, _ = w.Write([]byte("Performance test response"))
 	}))
 	defer ts.Close()
 
@@ -141,6 +141,7 @@ func TestWarmURLWithDifferentStatuses(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(tt.statusCode)
+				_, _ = w.Write([]byte("status check"))
 			}))
 			defer ts.Close()
 

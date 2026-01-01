@@ -136,6 +136,47 @@ else
     fi
 fi
 
+
+
+# === SECURITY CHECKS ===
+echo ""
+echo "🛡️  Running Security Checks..."
+
+# 1. Govulncheck (Fast dependency scanning)
+if command -v govulncheck &> /dev/null; then
+    echo "  Running govulncheck..."
+    if ! govulncheck ./... > /dev/null; then
+        echo -e "${RED}❌ Govulncheck failed (Vulnerabilities found)${NC}"
+        echo "Run './scripts/security-check.sh' for details."
+        exit 1
+    fi
+else
+    echo -e "${YELLOW}⚠️  govulncheck not found (Skipping)${NC}"
+fi
+
+# 2. Trivy (Secrets & Config)
+if command -v trivy &> /dev/null; then
+    echo "  Running Trivy (Secrets & Config)..."
+    # Run only on staged files/changes would be ideal, but for now we scan the repo (ignoring worktrees)
+    if ! trivy fs --scanners secret,misconfig --severity HIGH,CRITICAL --ignore-unfixed --skip-dirs .worktrees . > /dev/null 2>&1; then
+        echo -e "${RED}❌ Trivy found secrets or misconfigurations${NC}"
+        echo "Run './scripts/security-check.sh' for details."
+        exit 1
+    fi
+else
+    echo -e "${YELLOW}⚠️  trivy not found (Skipping)${NC}"
+fi
+
+# 3. ESLint Security (Frontend)
+if [ -f "eslint.config.mjs" ]; then
+    echo "  Running ESLint Security..."
+    if ! npx eslint "web/**/*.js" > /dev/null 2>&1; then
+        echo -e "${RED}❌ ESLint found security issues${NC}"
+        echo "Run './scripts/security-check.sh' for details."
+        exit 1
+    fi
+fi
+
 # === SUMMARY ===
 echo ""
 if [ "$FILES_FORMATTED" = true ]; then

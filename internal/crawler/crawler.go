@@ -2,8 +2,10 @@ package crawler
 
 import (
 	"context"
+	crand "crypto/rand"
 	"crypto/tls"
 	"fmt"
+	"math/big"
 	"math/rand"
 	"net/http"
 	"net/http/httptrace"
@@ -412,8 +414,14 @@ func (c *Crawler) performCacheValidation(ctx context.Context, targetURL string, 
 	}
 
 	// Apply randomized delay between 500-1000ms to avoid hammering origins
-	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
-	jitteredDelay := 500 + rng.Intn(501)
+	randomInt := 0
+	if n, err := crand.Int(crand.Reader, big.NewInt(501)); err == nil {
+		randomInt = int(n.Int64())
+	} else {
+		// Fallback to basic rand if crypto rand fails
+		randomInt = rand.Intn(501) //nolint:gosec // safe fallback for non-sensitive jitter
+	}
+	jitteredDelay := 500 + randomInt
 
 	log.Debug().
 		Str("url", targetURL).

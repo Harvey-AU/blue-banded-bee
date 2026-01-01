@@ -377,13 +377,16 @@ type Config struct {
 	OTLPInsecure          bool   // Disable TLS verification for OTLP exporter
 }
 
+//nolint:gocyclo // main function setup is naturally complex but straightforward setup logic
 func main() {
 	// Parse command line flags
 	logLevelFlag := flag.String("log-level", "", "Log level (debug, info, warn, error) - overrides LOG_LEVEL env var")
 	flag.Parse()
 
 	// Load .env files - .env.local takes priority for development
-	godotenv.Load(".env.local", ".env")
+	if err := godotenv.Load(".env.local", ".env"); err != nil {
+		log.Debug().Err(err).Msg("Notice: .env files not loaded (expected in some environments)")
+	}
 
 	// Determine log level: command line flag takes priority over environment variable
 	logLevel := getEnvWithDefault("LOG_LEVEL", "info")
@@ -420,7 +423,9 @@ func main() {
 		// Defer closing the trace and the file to the shutdown sequence
 		defer func() {
 			trace.Stop()
-			f.Close()
+			if err := f.Close(); err != nil {
+				log.Error().Err(err).Msg("failed to close trace file")
+			}
 			log.Info().Msg("Flight recorder stopped and trace file closed.")
 		}()
 	}
@@ -649,8 +654,9 @@ func main() {
 
 	// Create a new HTTP server
 	server := &http.Server{
-		Addr:    ":" + config.Port,
-		Handler: handler,
+		Addr:              ":" + config.Port,
+		Handler:           handler,
+		ReadHeaderTimeout: 5 * time.Second, // Fix G112: Potential Slowloris Attack
 	}
 
 	// Channel to listen for termination signals
