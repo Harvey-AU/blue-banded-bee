@@ -610,6 +610,9 @@ async function setupQuickAuth(dataBinder) {
   console.log("Quick auth setup complete");
 }
 
+let subscribeRetryCount = 0;
+const MAX_SUBSCRIBE_RETRIES = 15;
+
 /**
  * Subscribe to job updates via Supabase Realtime
  * Listens for INSERT and UPDATE events on the jobs table for the active organisation
@@ -617,10 +620,17 @@ async function setupQuickAuth(dataBinder) {
 async function subscribeToJobUpdates() {
   const orgId = window.BB_ACTIVE_ORG?.id;
   if (!orgId || !window.supabase) {
-    // Retry once org/supabase is loaded
-    setTimeout(subscribeToJobUpdates, 1000);
+    if (subscribeRetryCount < MAX_SUBSCRIBE_RETRIES) {
+      subscribeRetryCount++;
+      // Retry once org/supabase is loaded
+      setTimeout(subscribeToJobUpdates, 1000);
+    } else {
+      console.warn("[Realtime] Max retries reached for job subscription");
+    }
     return;
   }
+
+  subscribeRetryCount = 0; // Reset on success
 
   // Clean up existing subscription if any
   if (window.jobsChannel) {
