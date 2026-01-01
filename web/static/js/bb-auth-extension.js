@@ -578,8 +578,9 @@ async function initializeDashboard(config = {}) {
   // Setup login page handlers
   window.BBAuth.setupLoginPageHandlers();
 
-  // Initial load (only if authenticated)
+  // Subscribe to job updates
   if (autoRefresh) {
+    await subscribeToJobUpdates();
     await dataBinder.refresh();
   }
 
@@ -609,6 +610,71 @@ async function setupQuickAuth(dataBinder) {
   console.log("Quick auth setup complete");
 }
 
+/**
+ * Subscribe to job updates via Supabase Realtime
+ * Listens for INSERT and UPDATE events on the jobs table for the active organisation
+ */
+async function subscribeToJobUpdates() {
+  const orgId = window.BB_ACTIVE_ORG?.id;
+  if (!orgId || !window.supabase) {
+    // Retry once org/supabase is loaded
+    setTimeout(subscribeToJobUpdates, 1000);
+    return;
+  }
+
+  // Clean up existing subscription if any
+  if (window.jobsChannel) {
+    window.supabase.removeChannel(window.jobsChannel);
+  }
+
+  try {
+    const channel = window.supabase
+      .channel(`jobs-changes:${orgId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "jobs",
+          filter: `organisation_id=eq.${orgId}`,
+        },
+        (payload) => {
+          console.log("[Realtime] Job updated:", payload);
+          // 200ms delay for transaction visibility
+          setTimeout(() => {
+            window.dataBinder?.refresh(); // Refresh stats + job list
+          }, 200);
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "jobs",
+          filter: `organisation_id=eq.${orgId}`,
+        },
+        (payload) => {
+          console.log("[Realtime] New job:", payload);
+          setTimeout(() => {
+            window.dataBinder?.refresh();
+          }, 200);
+        }
+      )
+      .subscribe((status, err) => {
+        if (status === "SUBSCRIBED") {
+          console.log("[Realtime] Listening for job updates on org:" + orgId);
+        } else if (err) {
+          console.error("[Realtime] Job subscription error:", err);
+        }
+      });
+
+    window.jobsChannel = channel;
+  } catch (err) {
+    console.error("Failed to subscribe to jobs:", err);
+  }
+}
+
 // Export functions for use by other modules
 if (typeof module !== "undefined" && module.exports) {
   // Node.js environment
@@ -635,6 +701,7 @@ if (typeof module !== "undefined" && module.exports) {
     getTimezone,
     changeTimeRange,
     initializeDashboard,
+    subscribeToJobUpdates,
     setupQuickAuth,
   };
 
@@ -648,5 +715,6 @@ if (typeof module !== "undefined" && module.exports) {
   window.getTimezone = getTimezone;
   window.changeTimeRange = changeTimeRange;
   window.initializeDashboard = initializeDashboard;
+  window.subscribeToJobUpdates = subscribeToJobUpdates;
   window.setupQuickAuth = setupQuickAuth;
 }
