@@ -1499,6 +1499,68 @@ function triggerFileDownload(content, mimeType, filename) {
   URL.revokeObjectURL(downloadUrl);
 }
 
+/**
+ * Subscribe to job progress via Supabase Realtime
+ * @param {Object} state Page state
+ */
+async function subscribeToJobProgress(state) {
+  if (!window.supabase || !state.jobId) return;
+
+  // Clean up existing subscription if any
+  if (window.jobProgressChannel) {
+    window.supabase.removeChannel(window.jobProgressChannel);
+  }
+
+  console.log("[Realtime] Subscribing to job progress:", state.jobId);
+
+  try {
+    const channel = window.supabase
+      .channel(`job-progress:${state.jobId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "jobs",
+          filter: `id=eq.${state.jobId}`,
+        },
+        (payload) => {
+          console.log("[Realtime] Job updated on page:", payload.new);
+          // 200ms delay for transaction visibility
+          setTimeout(async () => {
+            try {
+              const updatedJob = await loadJob(state);
+              await loadTasks(state);
+
+              // Stop auto-refresh if job is no longer active
+              if (
+                updatedJob &&
+                !["running", "pending"].includes(updatedJob.status)
+              ) {
+                console.log("[Realtime] Job finished, removing subscription");
+                window.supabase.removeChannel(channel);
+                window.jobProgressChannel = null;
+              }
+            } catch (err) {
+              console.warn("Realtime data reload failed:", err);
+            }
+          }, 200);
+        }
+      )
+      .subscribe((status, err) => {
+        if (status === "SUBSCRIBED") {
+          console.log("[Realtime] Listening for job progress:" + state.jobId);
+        } else if (err) {
+          console.error("[Realtime] Job progress subscription error:", err);
+        }
+      });
+
+    window.jobProgressChannel = channel;
+  } catch (err) {
+    console.error("Failed to subscribe to job progress:", err);
+  }
+}
+
 function showToast(message, isError = false) {
   const toast = document.createElement("div");
   toast.className = "toast";
