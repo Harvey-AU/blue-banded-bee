@@ -1,10 +1,6 @@
 package api
 
 import (
-	"crypto/hmac"
-	"crypto/rand"
-	"crypto/sha256"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -59,21 +55,13 @@ type SlackUpdateNotificationsRequest struct {
 	DMNotifications bool `json:"dm_notifications"`
 }
 
-// OAuthState contains signed state data for CSRF protection
-type OAuthState struct {
-	UserID    string `json:"u"`
-	OrgID     string `json:"o"`
-	Timestamp int64  `json:"t"`
-	Nonce     string `json:"n"`
-}
+// OAuthState type moved to oauth_utils.go
 
 const (
 	// slackOAuthScopes defines the permissions requested from Slack during OAuth
 	slackOAuthScopes = "chat:write,im:write,users:read,users:read.email"
 	// slackAPITimeout is the timeout for Slack API calls
 	slackAPITimeout = 30 * time.Second
-	// oauthStateExpiry is how long OAuth state tokens are valid (15 minutes)
-	oauthStateExpiry = 900
 	// defaultAppURL is the fallback URL when APP_URL env var is not set
 	defaultAppURL = "https://app.bluebandedbee.co"
 )
@@ -743,68 +731,7 @@ func (h *Handler) getSlackUserLink(w http.ResponseWriter, r *http.Request, conne
 
 // Helper functions
 
-func (h *Handler) generateOAuthState(userID, orgID string) (string, error) {
-	nonce := make([]byte, 16)
-	if _, err := rand.Read(nonce); err != nil {
-		return "", fmt.Errorf("failed to generate nonce: %w", err)
-	}
-
-	state := OAuthState{
-		UserID:    userID,
-		OrgID:     orgID,
-		Timestamp: time.Now().Unix(),
-		Nonce:     base64.URLEncoding.EncodeToString(nonce),
-	}
-
-	data, err := json.Marshal(state)
-	if err != nil {
-		return "", fmt.Errorf("failed to marshal state: %w", err)
-	}
-
-	// Sign with HMAC
-	mac := hmac.New(sha256.New, []byte(getSlackStateSecret()))
-	mac.Write(data)
-	sig := mac.Sum(nil)
-
-	// Combine data + signature
-	payload := append(data, sig...)
-	return base64.URLEncoding.EncodeToString(payload), nil
-}
-
-func (h *Handler) validateOAuthState(stateParam string) (*OAuthState, error) {
-	payload, err := base64.URLEncoding.DecodeString(stateParam)
-	if err != nil {
-		return nil, fmt.Errorf("invalid state encoding: %w", err)
-	}
-
-	if len(payload) < sha256.Size {
-		return nil, fmt.Errorf("state too short")
-	}
-
-	data := payload[:len(payload)-sha256.Size]
-	sig := payload[len(payload)-sha256.Size:]
-
-	// Verify HMAC
-	mac := hmac.New(sha256.New, []byte(getSlackStateSecret()))
-	mac.Write(data)
-	expectedSig := mac.Sum(nil)
-
-	if !hmac.Equal(sig, expectedSig) {
-		return nil, fmt.Errorf("invalid state signature")
-	}
-
-	var state OAuthState
-	if err := json.Unmarshal(data, &state); err != nil {
-		return nil, fmt.Errorf("invalid state data: %w", err)
-	}
-
-	// Check timestamp (15 minute expiry)
-	if time.Now().Unix()-state.Timestamp > oauthStateExpiry {
-		return nil, fmt.Errorf("state expired")
-	}
-
-	return &state, nil
-}
+// generateOAuthState and validateOAuthState moved to oauth_utils.go
 
 // getSlackRedirectURI returns the OAuth callback URL for Slack
 func getSlackRedirectURI() string {

@@ -70,3 +70,7 @@ alloy.river
 # Snyk Security Extension - AI Rules (auto-generated)
 .cursor/rules/snyk_rules.mdc
 .github/instructions/snyk_rules.instructions.md
+
+# Worktrees
+.worktrees/
+.worktrees/

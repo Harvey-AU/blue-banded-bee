@@ -270,3 +270,23 @@ func (m *MockDBWithRealDB) MarkNotificationRead(ctx context.Context, notificatio
 func (m *MockDBWithRealDB) MarkAllNotificationsRead(ctx context.Context, organisationID string) error {
 	return nil
 }
+
+// Webflow integration methods
+func (m *MockDBWithRealDB) CreateWebflowConnection(ctx context.Context, conn *db.WebflowConnection) error {
+	return nil
+}
+func (m *MockDBWithRealDB) GetWebflowConnection(ctx context.Context, connectionID string) (*db.WebflowConnection, error) {
+	return nil, nil
+}
+func (m *MockDBWithRealDB) ListWebflowConnections(ctx context.Context, organisationID string) ([]*db.WebflowConnection, error) {
+	return nil, nil
+}
+func (m *MockDBWithRealDB) DeleteWebflowConnection(ctx context.Context, connectionID, organisationID string) error {
+	return nil
+}
+func (m *MockDBWithRealDB) StoreWebflowToken(ctx context.Context, connectionID, token string) error {
+	return nil
+}
+func (m *MockDBWithRealDB) GetWebflowToken(ctx context.Context, connectionID string) (string, error) {
+	return "", nil
+}
