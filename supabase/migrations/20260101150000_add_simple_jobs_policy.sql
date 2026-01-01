@@ -6,5 +6,5 @@
 CREATE POLICY "users_own_jobs_simple" ON jobs
 FOR SELECT
 USING (
-    user_id = auth.uid()::text
+    user_id = auth.uid()
 );
