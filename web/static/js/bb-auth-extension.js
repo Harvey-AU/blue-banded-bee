@@ -629,21 +629,17 @@ async function subscribeToJobUpdates() {
 
   try {
     const channel = window.supabase
-      .channel(`jobs-changes:${orgId}`)
+      .channel(`jobs-changes-debug`)
       .on(
         "postgres_changes",
         {
-          event: "UPDATE",
+          event: "*",
           schema: "public",
           table: "jobs",
-          // filter: `organisation_id=eq.${orgId}`,
         },
         (payload) => {
-          console.log("[Realtime] Job updated:", payload);
-          // 200ms delay for transaction visibility
-          setTimeout(() => {
-            window.dataBinder?.refresh(); // Refresh stats + job list
-          }, 200);
+          console.log("[DEBUG Realtime] Payload:", payload);
+          window.dataBinder?.refresh();
         }
       )
       .on(
