@@ -1648,7 +1648,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // Clean up on page unload
     window.addEventListener("beforeunload", () => {
-      if (window.jobProgressChannel) {
+      if (window.jobProgressChannel && window.supabase) {
         window.supabase.removeChannel(window.jobProgressChannel);
       }
     });
