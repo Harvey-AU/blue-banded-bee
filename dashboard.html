@@ -2571,6 +2571,32 @@
             data: { session },
           } = await window.supabase.auth.getSession();
 
+          // Pre-load active org from Supabase DB directly to ensure Realtime starts
+          // This bypasses potential 429s on the /v1/organisations API endpoint
+          if (session?.user) {
+            try {
+              const { data: userRow } = await window.supabase
+                .from("users")
+                .select("organisation_id")
+                .eq("id", session.user.id)
+                .single();
+
+              if (userRow?.organisation_id) {
+                window.BB_ACTIVE_ORG = { id: userRow.organisation_id };
+                console.log(
+                  "[Auth] Pre-loaded active org:",
+                  window.BB_ACTIVE_ORG
+                );
+                // Trigger subscription immediately
+                if (window.subscribeToJobUpdates) {
+                  window.subscribeToJobUpdates();
+                }
+              }
+            } catch (err) {
+              console.warn("Failed to pre-load org:", err);
+            }
+          }
+
           // Load schedules after auth is confirmed
           if (session?.user && window.loadSchedules) {
             window.loadSchedules();
