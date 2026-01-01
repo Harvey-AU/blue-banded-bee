@@ -1,4 +1,6 @@
 # Build stage
+# Build stage
+# Build stage
 FROM golang:1.25-alpine AS builder
 
 WORKDIR /app
@@ -17,6 +19,9 @@ RUN CGO_ENABLED=0 GOOS=linux GOEXPERIMENT=greenteagc go build -o main ./cmd/app/
 
 # Final stage
 FROM alpine:3.19
+
+# Create a non-root user
+RUN adduser -D -g '' appuser
 
 WORKDIR /app
 
@@ -43,6 +48,9 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
 
 # Expose port
 EXPOSE 8080
+
+# Switch to non-root user
+USER appuser
 
 # Run the binary
 CMD ["./main"]
