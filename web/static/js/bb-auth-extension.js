@@ -629,7 +629,7 @@ async function subscribeToJobUpdates() {
 
   try {
     const channel = window.supabase
-      .channel(`jobs-changes-debug`)
+      .channel(`jobs-debug`)
       .on(
         "postgres_changes",
         {
@@ -642,28 +642,17 @@ async function subscribeToJobUpdates() {
           window.dataBinder?.refresh();
         }
       )
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "jobs",
-          // filter: `organisation_id=eq.${orgId}`,
-        },
-        (payload) => {
-          console.log("[Realtime] New job:", payload);
-          setTimeout(() => {
-            window.dataBinder?.refresh();
-          }, 200);
-        }
-      )
       .subscribe((status, err) => {
         if (status === "SUBSCRIBED") {
-          console.log("[Realtime] Listening for job updates on org:" + orgId);
+          console.log(
+            "[DEBUG Realtime] Subscription status: SUBSCRIBED (Catch-all)"
+          );
         } else if (err) {
-          console.error("[Realtime] Job subscription error:", err);
+          console.error("[DEBUG Realtime] Subscription error:", err);
         }
       });
+
+    window.jobsChannel = channel;
 
     window.jobsChannel = channel;
   } catch (err) {
