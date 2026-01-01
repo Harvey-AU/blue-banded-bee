@@ -629,30 +629,45 @@ async function subscribeToJobUpdates() {
 
   try {
     const channel = window.supabase
-      .channel(`jobs-debug`)
+      .channel(`jobs-changes:${orgId}`)
       .on(
         "postgres_changes",
         {
-          event: "*",
+          event: "UPDATE",
           schema: "public",
           table: "jobs",
+          filter: `organisation_id=eq.${orgId}`,
         },
         (payload) => {
-          console.log("[DEBUG Realtime] Payload:", payload);
-          window.dataBinder?.refresh();
+          console.log("[Realtime] Job updated:", payload.new);
+          // 200ms delay for transaction visibility
+          setTimeout(() => {
+            window.dataBinder?.refresh(); // Refresh stats + job list
+          }, 200);
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "jobs",
+          filter: `organisation_id=eq.${orgId}`,
+        },
+        (payload) => {
+          console.log("[Realtime] New job:", payload.new);
+          setTimeout(() => {
+            window.dataBinder?.refresh();
+          }, 200);
         }
       )
       .subscribe((status, err) => {
         if (status === "SUBSCRIBED") {
-          console.log(
-            "[DEBUG Realtime] Subscription status: SUBSCRIBED (Catch-all)"
-          );
+          console.log("[Realtime] Listening for job updates on org:" + orgId);
         } else if (err) {
-          console.error("[DEBUG Realtime] Subscription error:", err);
+          console.error("[Realtime] Job updates subscription error:", err);
         }
       });
-
-    window.jobsChannel = channel;
 
     window.jobsChannel = channel;
   } catch (err) {

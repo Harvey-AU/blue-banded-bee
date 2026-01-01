@@ -1599,7 +1599,7 @@ document.addEventListener("DOMContentLoaded", async () => {
               event: "UPDATE",
               schema: "public",
               table: "jobs",
-              // filter: `id=eq.${state.jobId}`,
+              filter: `id=eq.${state.jobId}`,
             },
             (payload) => {
               console.log("[Realtime] Job updated on page:", payload.new);
