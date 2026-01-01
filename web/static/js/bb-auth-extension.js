@@ -636,7 +636,7 @@ async function subscribeToJobUpdates() {
           event: "UPDATE",
           schema: "public",
           table: "jobs",
-          filter: `organisation_id=eq.${orgId}`,
+          // filter: `organisation_id=eq.${orgId}`,
         },
         (payload) => {
           console.log("[Realtime] Job updated:", payload);
@@ -652,7 +652,7 @@ async function subscribeToJobUpdates() {
           event: "INSERT",
           schema: "public",
           table: "jobs",
-          filter: `organisation_id=eq.${orgId}`,
+          // filter: `organisation_id=eq.${orgId}`,
         },
         (payload) => {
           console.log("[Realtime] New job:", payload);
