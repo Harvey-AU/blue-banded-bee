@@ -698,6 +698,7 @@ if (typeof module !== "undefined" && module.exports) {
     getTimezone,
     initializeDashboard,
     setupQuickAuth,
+    subscribeToJobUpdates,
   };
 } else {
   // Browser environment - make functions globally available
