@@ -616,12 +616,30 @@ window.TRANSACTION_VISIBILITY_DELAY_MS = TRANSACTION_VISIBILITY_DELAY_MS;
 const SUBSCRIBE_RETRY_INTERVAL_MS = 1000;
 const FALLBACK_POLLING_INTERVAL_MS = 60000;
 const MAX_SUBSCRIBE_RETRIES = 15;
+const REALTIME_DEBOUNCE_MS = 1000; // Debounce rapid realtime notifications
 
 // Realtime subscription state
 let subscribeRetryCount = 0;
 let subscribeRetryTimeoutId = null;
 let fallbackPollingIntervalId = null;
 let cleanupHandlerRegistered = false;
+let realtimeRefreshTimeoutId = null;
+
+/**
+ * Debounced refresh for realtime notifications.
+ * Coalesces multiple rapid notifications into a single refresh.
+ */
+function debouncedRealtimeRefresh() {
+  // Clear any pending refresh
+  if (realtimeRefreshTimeoutId) {
+    clearTimeout(realtimeRefreshTimeoutId);
+  }
+  // Schedule a new refresh
+  realtimeRefreshTimeoutId = setTimeout(() => {
+    realtimeRefreshTimeoutId = null;
+    window.dataBinder?.refresh();
+  }, REALTIME_DEBOUNCE_MS);
+}
 
 /**
  * Start fallback polling when realtime connection fails
@@ -655,6 +673,12 @@ function cleanupRealtimeSubscription() {
   if (subscribeRetryTimeoutId) {
     clearTimeout(subscribeRetryTimeoutId);
     subscribeRetryTimeoutId = null;
+  }
+
+  // Clear debounced refresh timeout
+  if (realtimeRefreshTimeoutId) {
+    clearTimeout(realtimeRefreshTimeoutId);
+    realtimeRefreshTimeoutId = null;
   }
 
   // Clear fallback polling
@@ -724,9 +748,9 @@ async function subscribeToJobUpdates() {
           filter: `organisation_id=eq.${orgId}`,
         },
         (payload) => {
-          // Delay for transaction visibility
+          // Use debounced refresh to coalesce rapid notifications
           setTimeout(() => {
-            window.dataBinder?.refresh();
+            debouncedRealtimeRefresh();
           }, TRANSACTION_VISIBILITY_DELAY_MS);
         }
       )
@@ -740,7 +764,7 @@ async function subscribeToJobUpdates() {
         },
         (payload) => {
           setTimeout(() => {
-            window.dataBinder?.refresh();
+            debouncedRealtimeRefresh();
           }, TRANSACTION_VISIBILITY_DELAY_MS);
         }
       )
@@ -754,7 +778,7 @@ async function subscribeToJobUpdates() {
         },
         (payload) => {
           setTimeout(() => {
-            window.dataBinder?.refresh();
+            debouncedRealtimeRefresh();
           }, TRANSACTION_VISIBILITY_DELAY_MS);
         }
       )
