@@ -3526,35 +3526,18 @@
         }
       }
 
-      // Expose functions for bb-slack.js to use
-      window.showSlackSuccess = function (message) {
-        const el = document.getElementById("slackSuccessMessage");
-        const text = document.getElementById("slackSuccessText");
-        if (el && text) {
-          text.textContent = message;
-          el.style.display = "block";
-          setTimeout(() => {
-            el.style.display = "none";
-          }, 5000);
-        }
-      };
+      // Generic integration feedback helper
+      window.showIntegrationFeedback = function (integration, type, message) {
+        const suffix = type === "success" ? "Success" : "Error";
+        const el = document.getElementById(`${integration}${suffix}Message`);
+        const textEl = document.getElementById(`${integration}${suffix}Text`);
 
-      window.showSlackError = function (message) {
-        const el = document.getElementById("slackErrorMessage");
-        const text = document.getElementById("slackErrorText");
-        if (el && text) {
-          text.textContent = message;
-          el.style.display = "block";
-          setTimeout(() => {
-            el.style.display = "none";
-          }, 5000);
-        }
-      };
-
-      window.showWebflowSuccess = function (message) {
-        const el = document.getElementById("webflowSuccessMessage");
         if (el) {
-          el.textContent = message;
+          if (textEl) {
+            textEl.textContent = message;
+          } else {
+            el.textContent = message;
+          }
           el.style.display = "block";
           setTimeout(() => {
             el.style.display = "none";
@@ -3562,16 +3545,15 @@
         }
       };
 
-      window.showWebflowError = function (message) {
-        const el = document.getElementById("webflowErrorMessage");
-        if (el) {
-          el.textContent = message;
-          el.style.display = "block";
-          setTimeout(() => {
-            el.style.display = "none";
-          }, 5000);
-        }
-      };
+      // Convenience wrappers for each integration
+      window.showSlackSuccess = (msg) =>
+        window.showIntegrationFeedback("slack", "success", msg);
+      window.showSlackError = (msg) =>
+        window.showIntegrationFeedback("slack", "error", msg);
+      window.showWebflowSuccess = (msg) =>
+        window.showIntegrationFeedback("webflow", "success", msg);
+      window.showWebflowError = (msg) =>
+        window.showIntegrationFeedback("webflow", "error", msg);
     </script>
   </body>
 </html>
