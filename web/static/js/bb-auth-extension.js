@@ -578,8 +578,9 @@ async function initializeDashboard(config = {}) {
   // Setup login page handlers
   window.BBAuth.setupLoginPageHandlers();
 
-  // Initial load (only if authenticated)
+  // Subscribe to job updates
   if (autoRefresh) {
+    await subscribeToJobUpdates();
     await dataBinder.refresh();
   }
 
@@ -609,6 +610,177 @@ async function setupQuickAuth(dataBinder) {
   console.log("Quick auth setup complete");
 }
 
+// Realtime subscription constants (exposed on window for job-page.js)
+const TRANSACTION_VISIBILITY_DELAY_MS = 200;
+window.TRANSACTION_VISIBILITY_DELAY_MS = TRANSACTION_VISIBILITY_DELAY_MS;
+const SUBSCRIBE_RETRY_INTERVAL_MS = 1000;
+const FALLBACK_POLLING_INTERVAL_MS = 60000;
+const MAX_SUBSCRIBE_RETRIES = 15;
+
+// Realtime subscription state
+let subscribeRetryCount = 0;
+let subscribeRetryTimeoutId = null;
+let fallbackPollingIntervalId = null;
+let cleanupHandlerRegistered = false;
+
+/**
+ * Start fallback polling when realtime connection fails
+ */
+function startFallbackPolling() {
+  if (fallbackPollingIntervalId) {
+    return; // Already polling
+  }
+  fallbackPollingIntervalId = setInterval(() => {
+    if (window.dataBinder) {
+      window.dataBinder.refresh();
+    }
+  }, FALLBACK_POLLING_INTERVAL_MS);
+}
+
+/**
+ * Stop fallback polling when realtime connection is restored
+ */
+function clearFallbackPolling() {
+  if (fallbackPollingIntervalId) {
+    clearInterval(fallbackPollingIntervalId);
+    fallbackPollingIntervalId = null;
+  }
+}
+
+/**
+ * Clean up realtime subscriptions and timers
+ */
+function cleanupRealtimeSubscription() {
+  // Clear retry timeout
+  if (subscribeRetryTimeoutId) {
+    clearTimeout(subscribeRetryTimeoutId);
+    subscribeRetryTimeoutId = null;
+  }
+
+  // Clear fallback polling
+  clearFallbackPolling();
+
+  // Remove channel
+  if (window.jobsChannel && window.supabase) {
+    window.supabase.removeChannel(window.jobsChannel);
+    window.jobsChannel = null;
+  }
+
+  // Reset state for next page load / SPA navigation
+  subscribeRetryCount = 0;
+  cleanupHandlerRegistered = false;
+}
+
+/**
+ * Subscribe to job updates via Supabase Realtime
+ * Listens for INSERT and UPDATE events on the jobs table for the active organisation
+ */
+async function subscribeToJobUpdates() {
+  const orgId = window.BB_ACTIVE_ORG?.id;
+  if (!orgId || !window.supabase) {
+    if (subscribeRetryCount < MAX_SUBSCRIBE_RETRIES) {
+      subscribeRetryCount++;
+      // Retry once org/supabase is loaded - track timeout for cleanup
+      subscribeRetryTimeoutId = setTimeout(
+        subscribeToJobUpdates,
+        SUBSCRIBE_RETRY_INTERVAL_MS
+      );
+    } else {
+      console.warn("[Realtime] Max retries reached, enabling fallback polling");
+      startFallbackPolling();
+    }
+    return;
+  }
+
+  // Reset retry state on success
+  subscribeRetryCount = 0;
+  subscribeRetryTimeoutId = null;
+
+  // Clean up existing subscription if any (await to prevent race condition)
+  if (window.jobsChannel && window.supabase) {
+    try {
+      await window.supabase.removeChannel(window.jobsChannel);
+    } catch (e) {
+      // Ignore removal errors
+    }
+    window.jobsChannel = null;
+  }
+
+  // Register cleanup handler once
+  if (!cleanupHandlerRegistered) {
+    window.addEventListener("beforeunload", cleanupRealtimeSubscription);
+    cleanupHandlerRegistered = true;
+  }
+
+  try {
+    const channel = window.supabase
+      .channel(`jobs-changes:${orgId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "jobs",
+          filter: `organisation_id=eq.${orgId}`,
+        },
+        (payload) => {
+          // Delay for transaction visibility
+          setTimeout(() => {
+            window.dataBinder?.refresh();
+          }, TRANSACTION_VISIBILITY_DELAY_MS);
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "jobs",
+          filter: `organisation_id=eq.${orgId}`,
+        },
+        (payload) => {
+          setTimeout(() => {
+            window.dataBinder?.refresh();
+          }, TRANSACTION_VISIBILITY_DELAY_MS);
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "DELETE",
+          schema: "public",
+          table: "jobs",
+          filter: `organisation_id=eq.${orgId}`,
+        },
+        (payload) => {
+          setTimeout(() => {
+            window.dataBinder?.refresh();
+          }, TRANSACTION_VISIBILITY_DELAY_MS);
+        }
+      )
+      .subscribe((status, err) => {
+        if (status === "SUBSCRIBED") {
+          // Connection successful - stop fallback polling
+          clearFallbackPolling();
+        } else if (
+          status === "CHANNEL_ERROR" ||
+          status === "TIMED_OUT" ||
+          err
+        ) {
+          console.warn(
+            "[Realtime] Connection issue, enabling fallback polling"
+          );
+          startFallbackPolling();
+        }
+      });
+
+    window.jobsChannel = channel;
+  } catch (err) {
+    console.error("[Realtime] Failed to subscribe to jobs:", err);
+    startFallbackPolling();
+  }
+}
+
 // Export functions for use by other modules
 if (typeof module !== "undefined" && module.exports) {
   // Node.js environment
@@ -622,6 +794,8 @@ if (typeof module !== "undefined" && module.exports) {
     getTimezone,
     initializeDashboard,
     setupQuickAuth,
+    subscribeToJobUpdates,
+    cleanupRealtimeSubscription,
   };
 } else {
   // Browser environment - make functions globally available
@@ -635,6 +809,8 @@ if (typeof module !== "undefined" && module.exports) {
     getTimezone,
     changeTimeRange,
     initializeDashboard,
+    subscribeToJobUpdates,
+    cleanupRealtimeSubscription,
     setupQuickAuth,
   };
 
@@ -648,5 +824,7 @@ if (typeof module !== "undefined" && module.exports) {
   window.getTimezone = getTimezone;
   window.changeTimeRange = changeTimeRange;
   window.initializeDashboard = initializeDashboard;
+  window.subscribeToJobUpdates = subscribeToJobUpdates;
+  window.cleanupRealtimeSubscription = cleanupRealtimeSubscription;
   window.setupQuickAuth = setupQuickAuth;
 }
