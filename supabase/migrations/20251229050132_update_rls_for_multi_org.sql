@@ -8,6 +8,10 @@
 
 DROP POLICY IF EXISTS "Users can access own organisation" ON organisations;
 DROP POLICY IF EXISTS "Users can access member organisations" ON organisations;
+DROP POLICY IF EXISTS "Users can view member organisations" ON organisations;
+DROP POLICY IF EXISTS "Users can modify member organisations" ON organisations;
+DROP POLICY IF EXISTS "Users can update member organisations" ON organisations;
+DROP POLICY IF EXISTS "Users can delete member organisations" ON organisations;
 
 -- Users can view organisations they are members of
 CREATE POLICY "Users can view member organisations"
@@ -44,6 +48,7 @@ USING (
 -- =============================================================================
 
 DROP POLICY IF EXISTS "Organisation members can access jobs" ON jobs;
+DROP POLICY IF EXISTS "Users can access active org jobs" ON jobs;
 
 -- Users can access jobs for their active organisation only
 -- Double-checks both active org match AND membership validation
@@ -59,6 +64,7 @@ USING (
 -- =============================================================================
 
 DROP POLICY IF EXISTS "Organisation members can access tasks" ON tasks;
+DROP POLICY IF EXISTS "Users can access active org tasks" ON tasks;
 
 -- Tasks accessible via job membership
 CREATE POLICY "Users can access active org tasks"
@@ -80,6 +86,10 @@ DROP POLICY IF EXISTS "Users can view own org schedulers" ON schedulers;
 DROP POLICY IF EXISTS "Users can create own org schedulers" ON schedulers;
 DROP POLICY IF EXISTS "Users can update own org schedulers" ON schedulers;
 DROP POLICY IF EXISTS "Users can delete own org schedulers" ON schedulers;
+DROP POLICY IF EXISTS "Users can view active org schedulers" ON schedulers;
+DROP POLICY IF EXISTS "Users can create active org schedulers" ON schedulers;
+DROP POLICY IF EXISTS "Users can update active org schedulers" ON schedulers;
+DROP POLICY IF EXISTS "Users can delete active org schedulers" ON schedulers;
 
 CREATE POLICY "Users can view active org schedulers"
 ON schedulers FOR SELECT
@@ -121,6 +131,10 @@ DROP POLICY IF EXISTS "Users can view own org share links" ON job_share_links;
 DROP POLICY IF EXISTS "Users can create share links for own org jobs" ON job_share_links;
 DROP POLICY IF EXISTS "Users can update own org share links" ON job_share_links;
 DROP POLICY IF EXISTS "Users can delete own org share links" ON job_share_links;
+DROP POLICY IF EXISTS "Users can view active org share links" ON job_share_links;
+DROP POLICY IF EXISTS "Users can create active org share links" ON job_share_links;
+DROP POLICY IF EXISTS "Users can update active org share links" ON job_share_links;
+DROP POLICY IF EXISTS "Users can delete active org share links" ON job_share_links;
 
 CREATE POLICY "Users can view active org share links"
 ON job_share_links FOR SELECT
