@@ -1499,6 +1499,63 @@ function triggerFileDownload(content, mimeType, filename) {
   URL.revokeObjectURL(downloadUrl);
 }
 
+// Throttling state for job page realtime updates
+const JOB_PAGE_THROTTLE_MS = 2000;
+let jobPageLastRefresh = 0;
+let jobPageThrottleTimeoutId = null;
+let jobPageIsRefreshing = false;
+
+/**
+ * Throttled refresh for job page realtime notifications
+ */
+function throttledJobPageRefresh(state, channel) {
+  const now = Date.now();
+  const timeSinceLastRefresh = now - jobPageLastRefresh;
+
+  // If enough time has passed, refresh immediately
+  if (timeSinceLastRefresh >= JOB_PAGE_THROTTLE_MS && !jobPageIsRefreshing) {
+    executeJobPageRefresh(state, channel);
+    return;
+  }
+
+  // Otherwise, schedule a refresh for when the throttle window expires
+  if (!jobPageThrottleTimeoutId && !jobPageIsRefreshing) {
+    const delay = JOB_PAGE_THROTTLE_MS - timeSinceLastRefresh;
+    jobPageThrottleTimeoutId = setTimeout(
+      () => {
+        jobPageThrottleTimeoutId = null;
+        if (!jobPageIsRefreshing) {
+          executeJobPageRefresh(state, channel);
+        }
+      },
+      Math.max(delay, 100)
+    );
+  }
+}
+
+/**
+ * Execute the actual job page refresh
+ */
+async function executeJobPageRefresh(state, channel) {
+  if (jobPageIsRefreshing) return;
+  jobPageIsRefreshing = true;
+  jobPageLastRefresh = Date.now();
+  try {
+    const updatedJob = await loadJob(state);
+    await loadTasks(state);
+
+    // Stop auto-refresh if job is no longer active
+    if (updatedJob && !["running", "pending"].includes(updatedJob.status)) {
+      window.supabase.removeChannel(channel);
+      window.jobProgressChannel = null;
+    }
+  } catch (err) {
+    console.warn("Realtime data reload failed:", err);
+  } finally {
+    jobPageIsRefreshing = false;
+  }
+}
+
 /**
  * Subscribe to job progress via Supabase Realtime
  * @param {Object} state Page state
@@ -1509,6 +1566,12 @@ async function subscribeToJobProgress(state) {
   // Clean up existing subscription if any
   if (window.jobProgressChannel) {
     window.supabase.removeChannel(window.jobProgressChannel);
+  }
+
+  // Clear any pending throttle timeout
+  if (jobPageThrottleTimeoutId) {
+    clearTimeout(jobPageThrottleTimeoutId);
+    jobPageThrottleTimeoutId = null;
   }
 
   try {
@@ -1523,24 +1586,7 @@ async function subscribeToJobProgress(state) {
           filter: `id=eq.${state.jobId}`,
         },
         (payload) => {
-          // Delay for transaction visibility
-          setTimeout(async () => {
-            try {
-              const updatedJob = await loadJob(state);
-              await loadTasks(state);
-
-              // Stop auto-refresh if job is no longer active
-              if (
-                updatedJob &&
-                !["running", "pending"].includes(updatedJob.status)
-              ) {
-                window.supabase.removeChannel(channel);
-                window.jobProgressChannel = null;
-              }
-            } catch (err) {
-              console.warn("Realtime data reload failed:", err);
-            }
-          }, window.TRANSACTION_VISIBILITY_DELAY_MS || 200);
+          throttledJobPageRefresh(state, channel);
         }
       )
       .subscribe((status, err) => {
