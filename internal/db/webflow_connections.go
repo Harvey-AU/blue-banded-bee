@@ -19,6 +19,7 @@ type WebflowConnection struct {
 	ID                 string
 	OrganisationID     string
 	WebflowWorkspaceID string
+	WorkspaceName      string // Display name of the Webflow workspace
 	AuthedUserID       string
 	VaultSecretName    string // Name of the secret in Supabase Vault
 	InstallingUserID   string
@@ -31,19 +32,20 @@ type WebflowConnection struct {
 func (db *DB) CreateWebflowConnection(ctx context.Context, conn *WebflowConnection) error {
 	query := `
 		INSERT INTO webflow_connections (
-			id, organisation_id, webflow_workspace_id, authed_user_id,
+			id, organisation_id, webflow_workspace_id, workspace_name, authed_user_id,
 			installing_user_id, created_at, updated_at
-		) VALUES ($1, $2, $3, $4, $5, $6, $7)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 		ON CONFLICT (organisation_id, authed_user_id)
 		DO UPDATE SET
 			webflow_workspace_id = EXCLUDED.webflow_workspace_id,
+			workspace_name = EXCLUDED.workspace_name,
 			installing_user_id = EXCLUDED.installing_user_id,
 			updated_at = EXCLUDED.updated_at
 		RETURNING id
 	`
 
 	err := db.client.QueryRowContext(ctx, query,
-		conn.ID, conn.OrganisationID, conn.WebflowWorkspaceID, conn.AuthedUserID,
+		conn.ID, conn.OrganisationID, conn.WebflowWorkspaceID, conn.WorkspaceName, conn.AuthedUserID,
 		conn.InstallingUserID, conn.CreatedAt, conn.UpdatedAt,
 	).Scan(&conn.ID)
 	if err != nil {
@@ -88,10 +90,10 @@ func (db *DB) GetWebflowToken(ctx context.Context, connectionID string) (string,
 // GetWebflowConnection retrieves a Webflow connection by ID
 func (db *DB) GetWebflowConnection(ctx context.Context, connectionID string) (*WebflowConnection, error) {
 	conn := &WebflowConnection{}
-	var installingUserID, vaultSecretName, webflowWorkspaceID, authedUserID sql.NullString
+	var installingUserID, vaultSecretName, webflowWorkspaceID, workspaceName, authedUserID sql.NullString
 
 	query := `
-		SELECT id, organisation_id, webflow_workspace_id, authed_user_id,
+		SELECT id, organisation_id, webflow_workspace_id, workspace_name, authed_user_id,
 		       vault_secret_name, installing_user_id,
 		       created_at, updated_at
 		FROM webflow_connections
@@ -99,7 +101,7 @@ func (db *DB) GetWebflowConnection(ctx context.Context, connectionID string) (*W
 	`
 
 	err := db.client.QueryRowContext(ctx, query, connectionID).Scan(
-		&conn.ID, &conn.OrganisationID, &webflowWorkspaceID, &authedUserID,
+		&conn.ID, &conn.OrganisationID, &webflowWorkspaceID, &workspaceName, &authedUserID,
 		&vaultSecretName, &installingUserID,
 		&conn.CreatedAt, &conn.UpdatedAt,
 	)
@@ -113,6 +115,9 @@ func (db *DB) GetWebflowConnection(ctx context.Context, connectionID string) (*W
 
 	if webflowWorkspaceID.Valid {
 		conn.WebflowWorkspaceID = webflowWorkspaceID.String
+	}
+	if workspaceName.Valid {
+		conn.WorkspaceName = workspaceName.String
 	}
 	if authedUserID.Valid {
 		conn.AuthedUserID = authedUserID.String
@@ -130,7 +135,7 @@ func (db *DB) GetWebflowConnection(ctx context.Context, connectionID string) (*W
 // ListWebflowConnections lists all Webflow connections for an organisation
 func (db *DB) ListWebflowConnections(ctx context.Context, organisationID string) ([]*WebflowConnection, error) {
 	query := `
-		SELECT id, organisation_id, webflow_workspace_id, authed_user_id,
+		SELECT id, organisation_id, webflow_workspace_id, workspace_name, authed_user_id,
 		       vault_secret_name, installing_user_id,
 		       created_at, updated_at
 		FROM webflow_connections
@@ -148,10 +153,10 @@ func (db *DB) ListWebflowConnections(ctx context.Context, organisationID string)
 	var connections []*WebflowConnection
 	for rows.Next() {
 		conn := &WebflowConnection{}
-		var installingUserID, vaultSecretName, webflowWorkspaceID, authedUserID sql.NullString
+		var installingUserID, vaultSecretName, webflowWorkspaceID, workspaceName, authedUserID sql.NullString
 
 		err := rows.Scan(
-			&conn.ID, &conn.OrganisationID, &webflowWorkspaceID, &authedUserID,
+			&conn.ID, &conn.OrganisationID, &webflowWorkspaceID, &workspaceName, &authedUserID,
 			&vaultSecretName, &installingUserID,
 			&conn.CreatedAt, &conn.UpdatedAt,
 		)
@@ -162,6 +167,9 @@ func (db *DB) ListWebflowConnections(ctx context.Context, organisationID string)
 
 		if webflowWorkspaceID.Valid {
 			conn.WebflowWorkspaceID = webflowWorkspaceID.String
+		}
+		if workspaceName.Valid {
+			conn.WorkspaceName = workspaceName.String
 		}
 		if authedUserID.Valid {
 			conn.AuthedUserID = authedUserID.String

@@ -134,10 +134,12 @@ async function loadWebflowConnections() {
       clone.removeAttribute("bbb-template");
       clone.classList.add("webflow-connection");
 
-      // Set workspace name - use workspace ID if available, otherwise fallback
+      // Set workspace name - prefer display name, fall back to ID
       const nameEl = clone.querySelector(".webflow-name");
       if (nameEl) {
-        if (conn.webflow_workspace_id) {
+        if (conn.workspace_name) {
+          nameEl.textContent = conn.workspace_name;
+        } else if (conn.webflow_workspace_id) {
           nameEl.textContent = `Workspace ${conn.webflow_workspace_id}`;
         } else {
           nameEl.textContent = "Webflow Connection";

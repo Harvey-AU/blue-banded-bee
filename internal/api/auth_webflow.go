@@ -149,11 +149,13 @@ func (h *Handler) HandleWebflowOAuthCallback(w http.ResponseWriter, r *http.Requ
 		logger.Warn().Err(err).Msg("Failed to fetch Webflow auth info, proceeding with empty values")
 	}
 
-	// Extract user and workspace IDs
+	// Extract user and workspace info
 	authedUserID := ""
 	workspaceID := ""
+	workspaceName := ""
 	if authInfo != nil {
 		authedUserID = authInfo.UserID
+		workspaceName = authInfo.WorkspaceName
 		if len(authInfo.WorkspaceIDs) > 0 {
 			workspaceID = authInfo.WorkspaceIDs[0] // Use first workspace
 		}
@@ -165,6 +167,7 @@ func (h *Handler) HandleWebflowOAuthCallback(w http.ResponseWriter, r *http.Requ
 		OrganisationID:     state.OrgID,
 		AuthedUserID:       authedUserID,
 		WebflowWorkspaceID: workspaceID,
+		WorkspaceName:      workspaceName,
 		InstallingUserID:   state.UserID,
 		CreatedAt:          now,
 		UpdatedAt:          now,
@@ -231,8 +234,9 @@ func (h *Handler) exchangeWebflowCode(code string) (*WebflowTokenResponse, error
 
 // WebflowAuthInfo contains user and workspace info from Webflow's token introspection
 type WebflowAuthInfo struct {
-	UserID       string
-	WorkspaceIDs []string
+	UserID        string
+	WorkspaceIDs  []string
+	WorkspaceName string // Display name of the first workspace
 }
 
 // fetchWebflowAuthInfo calls Webflow's token introspect endpoint to get user/workspace info
@@ -267,10 +271,53 @@ func (h *Handler) fetchWebflowAuthInfo(ctx context.Context, token string) (*Webf
 		return nil, fmt.Errorf("failed to decode introspect response: %w", err)
 	}
 
-	return &WebflowAuthInfo{
+	authInfo := &WebflowAuthInfo{
 		UserID:       introspectResp.Authorization.AuthorizedTo.UserID,
 		WorkspaceIDs: introspectResp.Authorization.AuthorizedTo.WorkspaceIDs,
-	}, nil
+	}
+
+	// Fetch workspace name if we have a workspace ID
+	if len(authInfo.WorkspaceIDs) > 0 {
+		workspaceName, err := h.fetchWebflowWorkspaceName(ctx, token, authInfo.WorkspaceIDs[0])
+		if err != nil {
+			// Log but don't fail - workspace name is nice to have
+			log.Warn().Err(err).Str("workspace_id", authInfo.WorkspaceIDs[0]).Msg("Failed to fetch workspace name")
+		} else {
+			authInfo.WorkspaceName = workspaceName
+		}
+	}
+
+	return authInfo, nil
+}
+
+// fetchWebflowWorkspaceName fetches the display name of a Webflow workspace
+func (h *Handler) fetchWebflowWorkspaceName(ctx context.Context, token, workspaceID string) (string, error) {
+	client := &http.Client{Timeout: 10 * time.Second}
+	req, err := http.NewRequestWithContext(ctx, "GET", fmt.Sprintf("https://api.webflow.com/v2/workspaces/%s", workspaceID), nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to create workspace request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("accept", "application/json")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("failed to call workspace endpoint: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("workspace endpoint returned status: %d", resp.StatusCode)
+	}
+
+	var workspaceResp struct {
+		DisplayName string `json:"displayName"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&workspaceResp); err != nil {
+		return "", fmt.Errorf("failed to decode workspace response: %w", err)
+	}
+
+	return workspaceResp.DisplayName, nil
 }
 
 func (h *Handler) registerWebflowWebhooksSafe(userID, token string) {
@@ -374,6 +421,7 @@ func (h *Handler) registerSiteWebhook(ctx context.Context, siteID, token, webhoo
 type WebflowConnectionResponse struct {
 	ID                 string `json:"id"`
 	WebflowWorkspaceID string `json:"webflow_workspace_id,omitempty"`
+	WorkspaceName      string `json:"workspace_name,omitempty"`
 	CreatedAt          string `json:"created_at"`
 }
 
@@ -455,6 +503,7 @@ func (h *Handler) listWebflowConnections(w http.ResponseWriter, r *http.Request)
 		response = append(response, WebflowConnectionResponse{
 			ID:                 conn.ID,
 			WebflowWorkspaceID: conn.WebflowWorkspaceID,
+			WorkspaceName:      conn.WorkspaceName,
 			CreatedAt:          conn.CreatedAt.Format(time.RFC3339),
 		})
 	}
