@@ -212,7 +212,7 @@ func (db *DB) runMigrations() (int, error) {
 			Msg("Applying migration")
 
 		// Read migration file
-		filePath := filepath.Join(migrationsDir, filepath.Clean(filename))
+		filePath := filepath.Clean(filepath.Join(migrationsDir, filename))
 		content, err := os.ReadFile(filePath) //nolint:gosec // filePath is built from internal migrations directory
 		if err != nil {
 			return migrationsApplied, fmt.Errorf("failed to read migration %s: %w", filename, err)
