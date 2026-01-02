@@ -20,6 +20,7 @@ type Config struct {
 	AuthToken      string        // Database authentication token
 	SentryDSN      string        // Sentry DSN for error tracking
 	FindLinks      bool          // Whether to extract links (e.g. PDFs/docs) from pages
+	SkipSSRFCheck  bool          // Skip SSRF protection (for tests only, never enable in production)
 }
 
 // DefaultConfig returns a Config instance with default values

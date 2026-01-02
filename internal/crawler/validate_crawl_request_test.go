@@ -75,7 +75,8 @@ func TestValidateCrawlRequest(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			parsedURL, err := validateCrawlRequest(tt.ctx, tt.targetURL)
+			// Skip SSRF check for these URL format tests (DNS may not resolve)
+			parsedURL, err := validateCrawlRequest(tt.ctx, tt.targetURL, true)
 
 			if tt.expectError {
 				assert.Error(t, err)
@@ -95,7 +96,7 @@ func TestValidateCrawlRequestContextCancellation(t *testing.T) {
 	cancelledCtx, cancel := context.WithCancel(context.Background())
 	cancel() // Cancel immediately
 
-	parsedURL, err := validateCrawlRequest(cancelledCtx, "https://example.com")
+	parsedURL, err := validateCrawlRequest(cancelledCtx, "https://example.com", true)
 
 	assert.Error(t, err)
 	assert.Nil(t, parsedURL)
@@ -128,7 +129,7 @@ func TestValidateCrawlRequestErrorMessages(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := validateCrawlRequest(context.Background(), tt.url)
+			_, err := validateCrawlRequest(context.Background(), tt.url, true)
 			assert.Error(t, err)
 			assert.Contains(t, err.Error(), tt.errorContains)
 		})
@@ -136,7 +137,7 @@ func TestValidateCrawlRequestErrorMessages(t *testing.T) {
 }
 
 func TestValidateCrawlRequestURLEdgeCases(t *testing.T) {
-	// Test edge cases for URL validation
+	// Test edge cases for URL validation (skip SSRF for format-only tests)
 	edgeCases := []struct {
 		name      string
 		url       string
@@ -159,7 +160,7 @@ func TestValidateCrawlRequestURLEdgeCases(t *testing.T) {
 
 	for _, tc := range edgeCases {
 		t.Run(tc.name, func(t *testing.T) {
-			parsedURL, err := validateCrawlRequest(context.Background(), tc.url)
+			parsedURL, err := validateCrawlRequest(context.Background(), tc.url, true)
 
 			if tc.shouldErr {
 				assert.Error(t, err)

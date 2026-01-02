@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math/big"
 	"math/rand"
+	"net"
 	"net/http"
 	"net/http/httptrace"
 	"net/url"
@@ -276,8 +277,39 @@ func New(config *Config, id ...string) *Crawler {
 	}
 }
 
-// validateCrawlRequest validates the crawl request parameters and URL format
-func validateCrawlRequest(ctx context.Context, targetURL string) (*url.URL, error) {
+// isPrivateOrLocalIP checks if an IP address is in a private, loopback, or link-local range.
+// This prevents SSRF attacks by blocking requests to internal network resources.
+func isPrivateOrLocalIP(ip net.IP) bool {
+	if ip == nil {
+		return false
+	}
+
+	// Check for loopback (127.x.x.x, ::1)
+	if ip.IsLoopback() {
+		return true
+	}
+
+	// Check for link-local (169.254.x.x, fe80::/10)
+	if ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
+		return true
+	}
+
+	// Check for private ranges (10.x, 172.16-31.x, 192.168.x, fc00::/7)
+	if ip.IsPrivate() {
+		return true
+	}
+
+	// Check for unspecified (0.0.0.0, ::)
+	if ip.IsUnspecified() {
+		return true
+	}
+
+	return false
+}
+
+// validateCrawlRequest validates the crawl request parameters and URL format.
+// It also performs SSRF protection by blocking requests to private/local IPs (unless skipSSRF is true).
+func validateCrawlRequest(ctx context.Context, targetURL string, skipSSRF bool) (*url.URL, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -289,6 +321,32 @@ func validateCrawlRequest(ctx context.Context, targetURL string) (*url.URL, erro
 
 	if parsed.Scheme == "" || parsed.Host == "" {
 		return nil, fmt.Errorf("invalid URL format: %s", targetURL)
+	}
+
+	// Skip SSRF check if configured (for tests only)
+	if skipSSRF {
+		return parsed, nil
+	}
+
+	// SSRF protection: resolve hostname and check for private/local IPs
+	host := parsed.Hostname()
+	ips, err := net.LookupIP(host)
+	if err != nil {
+		// DNS resolution failed - allow the request to proceed
+		// (the HTTP client will fail with a more specific error)
+		log.Debug().Err(err).Str("host", host).Msg("DNS lookup failed during SSRF check")
+		return parsed, nil
+	}
+
+	for _, ip := range ips {
+		if isPrivateOrLocalIP(ip) {
+			log.Warn().
+				Str("url", targetURL).
+				Str("host", host).
+				Str("ip", ip.String()).
+				Msg("SSRF protection: blocked request to private/local IP")
+			return nil, fmt.Errorf("blocked request to private/local IP address: %s resolves to %s", host, ip.String())
+		}
 	}
 
 	return parsed, nil
@@ -666,8 +724,8 @@ func executeCollyRequest(ctx context.Context, collyClone *colly.Collector, targe
 // WarmURL performs a crawl of the specified URL and returns the result.
 // It respects context cancellation, enforces timeout, and treats non-2xx statuses as errors.
 func (c *Crawler) WarmURL(ctx context.Context, targetURL string, findLinks bool) (*CrawlResult, error) {
-	// Validate the crawl request
-	_, err := validateCrawlRequest(ctx, targetURL)
+	// Validate the crawl request (with SSRF protection unless skipped for tests)
+	_, err := validateCrawlRequest(ctx, targetURL, c.config.SkipSSRFCheck)
 	if err != nil {
 		// Create error result - caller (WarmURL) is responsible for CrawlResult construction
 		res := &CrawlResult{URL: targetURL, Timestamp: time.Now().Unix(), Error: err.Error()}

@@ -2,12 +2,21 @@ package crawler
 
 import (
 	"context"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"testing"
 	"time"
 )
+
+// testConfig returns a config suitable for tests with SSRF checks disabled
+// to allow httptest.NewServer (127.0.0.1) to work
+func testConfig() *Config {
+	cfg := DefaultConfig()
+	cfg.SkipSSRFCheck = true
+	return cfg
+}
 
 func TestWarmURL(t *testing.T) {
 	// Create a test server
@@ -18,7 +27,7 @@ func TestWarmURL(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	crawler := New(nil)
+	crawler := New(testConfig())
 	result, err := crawler.WarmURL(context.Background(), ts.URL, false)
 	if err != nil {
 		t.Errorf("Expected no error, got %v", err)
@@ -51,7 +60,7 @@ func TestPerformanceMetrics(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	crawler := New(nil)
+	crawler := New(testConfig())
 	result, err := crawler.WarmURL(context.Background(), ts.URL, false)
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
@@ -145,7 +154,7 @@ func TestWarmURLWithDifferentStatuses(t *testing.T) {
 			}))
 			defer ts.Close()
 
-			crawler := New(nil)
+			crawler := New(testConfig())
 			result, err := crawler.WarmURL(context.Background(), ts.URL, false)
 
 			if (err != nil) != tt.wantError {
@@ -160,7 +169,7 @@ func TestWarmURLWithDifferentStatuses(t *testing.T) {
 
 func TestWarmURLContextCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
-	crawler := New(nil)
+	crawler := New(testConfig())
 
 	// Create a test server that delays
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -183,7 +192,7 @@ func TestWarmURLWithTimeout(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
 
-	crawler := New(nil)
+	crawler := New(testConfig())
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		time.Sleep(100 * time.Millisecond)
@@ -296,5 +305,86 @@ func TestNormaliseCacheStatus(t *testing.T) {
 				t.Errorf("normaliseCacheStatus(%q) = %q, want %q", tt.input, result, tt.expected)
 			}
 		})
+	}
+}
+
+// TestIsPrivateOrLocalIP tests the SSRF protection IP classification
+func TestIsPrivateOrLocalIP(t *testing.T) {
+	tests := []struct {
+		name     string
+		ip       string
+		expected bool
+	}{
+		// Loopback addresses
+		{"ipv4 loopback", "127.0.0.1", true},
+		{"ipv4 loopback alt", "127.0.0.2", true},
+		{"ipv6 loopback", "::1", true},
+
+		// Private ranges
+		{"10.x.x.x", "10.0.0.1", true},
+		{"10.x.x.x end", "10.255.255.255", true},
+		{"172.16.x.x", "172.16.0.1", true},
+		{"172.31.x.x", "172.31.255.255", true},
+		{"192.168.x.x", "192.168.1.1", true},
+		{"192.168.x.x end", "192.168.255.255", true},
+
+		// Link-local
+		{"ipv4 link-local", "169.254.1.1", true},
+		{"ipv6 link-local", "fe80::1", true},
+
+		// Unspecified
+		{"ipv4 unspecified", "0.0.0.0", true},
+		{"ipv6 unspecified", "::", true},
+
+		// Public IPs (should NOT be blocked)
+		{"google dns", "8.8.8.8", false},
+		{"cloudflare dns", "1.1.1.1", false},
+		{"public ip", "203.0.113.1", false},
+		{"public ipv6", "2001:4860:4860::8888", false},
+
+		// Edge cases - just outside private ranges
+		{"172.15.x.x", "172.15.255.255", false},
+		{"172.32.x.x", "172.32.0.1", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ip := net.ParseIP(tt.ip)
+			if ip == nil {
+				t.Fatalf("Failed to parse IP: %s", tt.ip)
+			}
+			result := isPrivateOrLocalIP(ip)
+			if result != tt.expected {
+				t.Errorf("isPrivateOrLocalIP(%s) = %v, want %v", tt.ip, result, tt.expected)
+			}
+		})
+	}
+}
+
+// TestSSRFProtection tests that validateCrawlRequest blocks private/local IPs
+func TestSSRFProtection(t *testing.T) {
+	ctx := context.Background()
+
+	// Test blocking localhost (SSRF protection enabled)
+	_, err := validateCrawlRequest(ctx, "http://localhost/admin", false)
+	if err == nil {
+		t.Error("Expected error for localhost, got nil")
+	}
+
+	_, err = validateCrawlRequest(ctx, "http://127.0.0.1/admin", false)
+	if err == nil {
+		t.Error("Expected error for 127.0.0.1, got nil")
+	}
+
+	// Test that valid public URLs are allowed
+	_, err = validateCrawlRequest(ctx, "https://example.com/page", false)
+	if err != nil {
+		t.Errorf("Expected no error for example.com, got %v", err)
+	}
+
+	// Test that skip flag works (for testing purposes)
+	_, err = validateCrawlRequest(ctx, "http://127.0.0.1/admin", true)
+	if err != nil {
+		t.Errorf("Expected no error with skip=true, got %v", err)
 	}
 }
