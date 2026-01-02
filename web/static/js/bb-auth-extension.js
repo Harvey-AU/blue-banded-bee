@@ -743,6 +743,20 @@ async function subscribeToJobUpdates() {
           }, TRANSACTION_VISIBILITY_DELAY_MS);
         }
       )
+      .on(
+        "postgres_changes",
+        {
+          event: "DELETE",
+          schema: "public",
+          table: "jobs",
+          filter: `organisation_id=eq.${orgId}`,
+        },
+        (payload) => {
+          setTimeout(() => {
+            window.dataBinder?.refresh();
+          }, TRANSACTION_VISIBILITY_DELAY_MS);
+        }
+      )
       .subscribe((status, err) => {
         if (status === "SUBSCRIBED") {
           // Connection successful - stop fallback polling
