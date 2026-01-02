@@ -240,44 +240,7 @@ func New(config *Config, id ...string) *Crawler {
 	// Add SSRF-safe DialContext if protection is enabled
 	// This validates IPs at connection time to prevent DNS rebinding attacks
 	if !config.SkipSSRFCheck {
-		baseTransport.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
-			host, port, err := net.SplitHostPort(addr)
-			if err != nil {
-				return nil, err
-			}
-
-			// Resolve hostname and validate all IPs
-			ips, err := net.LookupIP(host)
-			if err != nil {
-				return nil, fmt.Errorf("DNS lookup failed: %w", err)
-			}
-
-			// Check all resolved IPs for private/local addresses
-			for _, ip := range ips {
-				if isPrivateOrLocalIP(ip) {
-					log.Warn().
-						Str("host", host).
-						Str("ip", ip.String()).
-						Msg("SSRF protection: blocked connection to private/local IP")
-					return nil, fmt.Errorf("blocked connection to private/local IP: %s resolves to %s", host, ip.String())
-				}
-			}
-
-			// Connect using a validated IP (prefer IPv4 for compatibility)
-			var connectAddr string
-			for _, ip := range ips {
-				if ip.To4() != nil {
-					connectAddr = net.JoinHostPort(ip.String(), port)
-					break
-				}
-			}
-			if connectAddr == "" && len(ips) > 0 {
-				connectAddr = net.JoinHostPort(ips[0].String(), port)
-			}
-
-			dialer := &net.Dialer{}
-			return dialer.DialContext(ctx, network, connectAddr)
-		}
+		baseTransport.DialContext = ssrfSafeDialContext()
 	}
 
 	// Wrap the base transport with our custom tracing transport
@@ -348,6 +311,51 @@ func isPrivateOrLocalIP(ip net.IP) bool {
 	}
 
 	return false
+}
+
+// ssrfSafeDialContext returns a DialContext function that validates resolved IPs
+// before connecting, preventing DNS rebinding attacks and SSRF to private networks.
+// It performs DNS resolution, validates all IPs are public, then connects using
+// the validated IP (preferring IPv4 for compatibility).
+func ssrfSafeDialContext() func(ctx context.Context, network, addr string) (net.Conn, error) {
+	return func(ctx context.Context, network, addr string) (net.Conn, error) {
+		host, port, err := net.SplitHostPort(addr)
+		if err != nil {
+			return nil, err
+		}
+
+		// Resolve hostname and validate all IPs
+		ips, err := net.LookupIP(host)
+		if err != nil {
+			return nil, fmt.Errorf("DNS lookup failed: %w", err)
+		}
+
+		// Check all resolved IPs for private/local addresses
+		for _, ip := range ips {
+			if isPrivateOrLocalIP(ip) {
+				log.Warn().
+					Str("host", host).
+					Str("ip", ip.String()).
+					Msg("SSRF protection: blocked connection to private/local IP")
+				return nil, fmt.Errorf("blocked connection to private/local IP: %s resolves to %s", host, ip.String())
+			}
+		}
+
+		// Connect using a validated IP (prefer IPv4 for compatibility)
+		var connectAddr string
+		for _, ip := range ips {
+			if ip.To4() != nil {
+				connectAddr = net.JoinHostPort(ip.String(), port)
+				break
+			}
+		}
+		if connectAddr == "" && len(ips) > 0 {
+			connectAddr = net.JoinHostPort(ips[0].String(), port)
+		}
+
+		dialer := &net.Dialer{}
+		return dialer.DialContext(ctx, network, connectAddr)
+	}
 }
 
 // validateCrawlRequest validates the crawl request parameters and URL format.
@@ -871,38 +879,7 @@ func (c *Crawler) CheckCacheStatus(ctx context.Context, targetURL string) (strin
 	}
 
 	if !c.config.SkipSSRFCheck {
-		transport.DialContext = func(dialCtx context.Context, network, addr string) (net.Conn, error) {
-			host, port, splitErr := net.SplitHostPort(addr)
-			if splitErr != nil {
-				return nil, splitErr
-			}
-
-			ips, lookupErr := net.LookupIP(host)
-			if lookupErr != nil {
-				return nil, fmt.Errorf("DNS lookup failed: %w", lookupErr)
-			}
-
-			for _, ip := range ips {
-				if isPrivateOrLocalIP(ip) {
-					return nil, fmt.Errorf("blocked connection to private/local IP: %s", ip.String())
-				}
-			}
-
-			// Connect using validated IP
-			var connectAddr string
-			for _, ip := range ips {
-				if ip.To4() != nil {
-					connectAddr = net.JoinHostPort(ip.String(), port)
-					break
-				}
-			}
-			if connectAddr == "" && len(ips) > 0 {
-				connectAddr = net.JoinHostPort(ips[0].String(), port)
-			}
-
-			dialer := &net.Dialer{}
-			return dialer.DialContext(dialCtx, network, connectAddr)
-		}
+		transport.DialContext = ssrfSafeDialContext()
 	}
 
 	client := &http.Client{
@@ -936,37 +913,7 @@ func (c *Crawler) CreateHTTPClient(timeout time.Duration) *http.Client {
 
 	// Add SSRF-safe DialContext if protection is enabled
 	if !c.config.SkipSSRFCheck {
-		transport.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
-			host, port, err := net.SplitHostPort(addr)
-			if err != nil {
-				return nil, err
-			}
-
-			ips, err := net.LookupIP(host)
-			if err != nil {
-				return nil, fmt.Errorf("DNS lookup failed: %w", err)
-			}
-
-			for _, ip := range ips {
-				if isPrivateOrLocalIP(ip) {
-					return nil, fmt.Errorf("blocked connection to private/local IP: %s", ip.String())
-				}
-			}
-
-			var connectAddr string
-			for _, ip := range ips {
-				if ip.To4() != nil {
-					connectAddr = net.JoinHostPort(ip.String(), port)
-					break
-				}
-			}
-			if connectAddr == "" && len(ips) > 0 {
-				connectAddr = net.JoinHostPort(ips[0].String(), port)
-			}
-
-			dialer := &net.Dialer{}
-			return dialer.DialContext(ctx, network, connectAddr)
-		}
+		transport.DialContext = ssrfSafeDialContext()
 	}
 
 	return &http.Client{
