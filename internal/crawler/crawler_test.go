@@ -346,6 +346,12 @@ func TestIsPrivateOrLocalIP(t *testing.T) {
 		// Edge cases - just outside private ranges
 		{"172.15.x.x", "172.15.255.255", false},
 		{"172.32.x.x", "172.32.0.1", false},
+
+		// IPv4-mapped IPv6 addresses (Go's net.IP normalises these)
+		{"ipv4-mapped loopback", "::ffff:127.0.0.1", true},
+		{"ipv4-mapped private 10.x", "::ffff:10.0.0.1", true},
+		{"ipv4-mapped private 192.168.x", "::ffff:192.168.1.1", true},
+		{"ipv4-mapped public", "::ffff:8.8.8.8", false},
 	}
 
 	for _, tt := range tests {
