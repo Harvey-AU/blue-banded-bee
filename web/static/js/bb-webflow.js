@@ -134,13 +134,14 @@ async function loadWebflowConnections() {
       clone.removeAttribute("bbb-template");
       clone.classList.add("webflow-connection");
 
-      // Set workspace name (Webflow doesn't always give workspace name, relying on what we stored)
-      // Since our DB stores specific site/user info, we might want to display that.
-      // For now assuming the API returns a structure similar to Slack.
+      // Set workspace name - use workspace ID if available, otherwise fallback
       const nameEl = clone.querySelector(".webflow-name");
       if (nameEl) {
-        // Fallback or specific logic
-        nameEl.textContent = "Webflow Connection";
+        if (conn.webflow_workspace_id) {
+          nameEl.textContent = `Workspace ${conn.webflow_workspace_id}`;
+        } else {
+          nameEl.textContent = "Webflow Connection";
+        }
       }
 
       // Set connected date

@@ -142,28 +142,33 @@ func (h *Handler) HandleWebflowOAuthCallback(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Get Authorized User/Workspace Info?
-	// Webflow API: GET /authenticated_user (requires authorized_user:read which we might not have asked for?)
-	// Actually, we usually need to call GET /sites to see what we have access to contextually.
-	// For now, we will store the connection.
+	// Fetch user/workspace info from Webflow
+	authInfo, err := h.fetchWebflowAuthInfo(r.Context(), tokenResp.AccessToken)
+	if err != nil {
+		// Log but don't fail - we can still create the connection with empty values
+		logger.Warn().Err(err).Msg("Failed to fetch Webflow auth info, proceeding with empty values")
+	}
 
-	// Get Auth User ID or Workspace ID if available (Webflow might not return this in token resp)
-	// We will assume 1 connection per org for MVP, but let's query /sites to get a site/workspace context if possible.
-	// Or just store generic connection.
+	// Extract user and workspace IDs
+	authedUserID := ""
+	workspaceID := ""
+	if authInfo != nil {
+		authedUserID = authInfo.UserID
+		if len(authInfo.WorkspaceIDs) > 0 {
+			workspaceID = authInfo.WorkspaceIDs[0] // Use first workspace
+		}
+	}
 
 	now := time.Now().UTC()
 	conn := &db.WebflowConnection{
 		ID:                 uuid.New().String(),
 		OrganisationID:     state.OrgID,
-		AuthedUserID:       "unknown", // Populate if we call user info
-		WebflowWorkspaceID: "unknown",
+		AuthedUserID:       authedUserID,
+		WebflowWorkspaceID: workspaceID,
 		InstallingUserID:   state.UserID,
 		CreatedAt:          now,
 		UpdatedAt:          now,
 	}
-
-	// Optional: Fetch User Info or Sites to populate metadata
-	// ... logic to call Webflow API ...
 
 	if err := h.DB.CreateWebflowConnection(r.Context(), conn); err != nil {
 		logger.Error().Err(err).Msg("Failed to save Webflow connection")
@@ -189,6 +194,8 @@ func (h *Handler) HandleWebflowOAuthCallback(w http.ResponseWriter, r *http.Requ
 
 	logger.Info().
 		Str("organisation_id", state.OrgID).
+		Str("webflow_workspace_id", workspaceID).
+		Str("webflow_user_id", authedUserID).
 		Msg("Webflow connection established")
 
 	// Redirect to dashboard with success
@@ -220,6 +227,50 @@ func (h *Handler) exchangeWebflowCode(code string) (*WebflowTokenResponse, error
 	}
 
 	return &tokenResp, nil
+}
+
+// WebflowAuthInfo contains user and workspace info from Webflow's token introspection
+type WebflowAuthInfo struct {
+	UserID       string
+	WorkspaceIDs []string
+}
+
+// fetchWebflowAuthInfo calls Webflow's token introspect endpoint to get user/workspace info
+func (h *Handler) fetchWebflowAuthInfo(ctx context.Context, token string) (*WebflowAuthInfo, error) {
+	client := &http.Client{Timeout: 10 * time.Second}
+	req, err := http.NewRequestWithContext(ctx, "GET", "https://api.webflow.com/v2/token/introspect", nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create introspect request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("accept", "application/json")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to call introspect endpoint: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("introspect endpoint returned status: %d", resp.StatusCode)
+	}
+
+	var introspectResp struct {
+		Authorization struct {
+			AuthorizedTo struct {
+				UserID       string   `json:"userId"`
+				WorkspaceIDs []string `json:"workspaceIds"`
+			} `json:"authorizedTo"`
+		} `json:"authorization"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&introspectResp); err != nil {
+		return nil, fmt.Errorf("failed to decode introspect response: %w", err)
+	}
+
+	return &WebflowAuthInfo{
+		UserID:       introspectResp.Authorization.AuthorizedTo.UserID,
+		WorkspaceIDs: introspectResp.Authorization.AuthorizedTo.WorkspaceIDs,
+	}, nil
 }
 
 func (h *Handler) registerWebflowWebhooksSafe(userID, token string) {
