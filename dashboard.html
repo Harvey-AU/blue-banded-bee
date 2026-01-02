@@ -2766,6 +2766,11 @@
                     name: orgName,
                   };
 
+                  // Re-establish realtime subscription for new org
+                  if (window.subscribeToJobUpdates) {
+                    await window.subscribeToJobUpdates();
+                  }
+
                   // Refresh dashboard data
                   if (window.refreshDashboard) {
                     window.refreshDashboard();
