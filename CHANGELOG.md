@@ -29,6 +29,49 @@ On merge, CI will:
 
 ## [Unreleased]
 
+### Fixed
+
+- **JS Constant Sharing**: Fixed duplicate `TRANSACTION_VISIBILITY_DELAY_MS`
+  declaration across scripts by exposing shared constant via `window` object
+
+## [0.21.0] – 2026-01-02
+
+### Added
+
+- **SSRF Protection**: Crawler now blocks requests to private/local IP addresses
+  - Custom `DialContext` validates IPs at connection time (prevents DNS
+    rebinding)
+  - Blocks loopback (127.x.x.x, ::1), private (10.x, 172.16-31.x, 192.168.x),
+    link-local (169.254.x.x, fe80::), and unspecified (0.0.0.0, ::) addresses
+  - `SkipSSRFCheck` config option for test environments only
+- **Pre-commit Security Hooks**: Automated security scanning before each commit
+  - `govulncheck` for Go dependency vulnerabilities
+  - `trivy` for secrets and misconfigurations
+  - `eslint-plugin-security` for JavaScript security issues
+  - Graceful skip when tools not installed (CI still enforces)
+- **ESLint Security Plugin**: JavaScript security linting with blocking rules
+  - Critical rules as errors: `detect-child-process`,
+    `detect-eval-with-expression`, `detect-non-literal-require`
+  - Additional rules as warnings for false-positive-prone checks
+- **Docker Security Hardening**: Container runs as non-root user (`appuser`)
+- **HTTP Server Hardening**: `ReadHeaderTimeout: 5s` prevents Slowloris attacks
+- **Cryptographic Jitter**: Retry delays use `crypto/rand` instead of
+  `math/rand`
+  - Fallback to `math/rand` only if crypto source unavailable
+- **gosec Linter**: Static security analysis integrated into golangci-lint
+
+### Changed
+
+- **ESLint Config**: Reorganised rules with comments separating critical vs
+  warning
+- **Package.json**: Added `name`, `version`, `private: true` fields
+- **SSRF Protection Refactored**: Extracted `ssrfSafeDialContext()` helper to
+  eliminate code duplication across transport configurations
+- **URL Validation Simplified**: Removed redundant DNS lookup from
+  `validateCrawlRequest()` (SSRF check now happens at connection time only)
+
+## [0.20.1] – 2026-01-02
+
 ### Added
 
 - **Realtime Dashboard Updates**: Dashboard job list updates instantly via
@@ -54,11 +97,6 @@ On merge, CI will:
 
 - **Dashboard Polling Interval**: Reduced from 1 second to 60 seconds (fallback
   only, realtime handles immediate updates)
-
-### Fixed
-
-- **JS Constant Sharing**: Fixed duplicate `TRANSACTION_VISIBILITY_DELAY_MS`
-  declaration across scripts by exposing shared constant via `window` object
 
 ## [0.20.0] – 2025-12-31
 

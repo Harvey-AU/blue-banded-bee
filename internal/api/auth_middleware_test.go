@@ -131,7 +131,7 @@ func TestAuthMiddleware(t *testing.T) {
 			// Create test handler that returns success
 			testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
-				w.Write([]byte("authenticated"))
+				_, _ = w.Write([]byte("authenticated"))
 			})
 
 			// Create middleware with mock client

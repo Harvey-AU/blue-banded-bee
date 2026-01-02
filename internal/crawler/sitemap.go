@@ -119,7 +119,7 @@ func (c *Crawler) DiscoverSitemapsAndRobots(ctx context.Context, domain string) 
 				continue
 			}
 
-			resp.Body.Close()
+			_ = resp.Body.Close()
 			log.Debug().Str("url", sitemapURL).Int("status", resp.StatusCode).Msg("Sitemap check response")
 			if resp.StatusCode == http.StatusOK {
 				result.Sitemaps = append(result.Sitemaps, sitemapURL)

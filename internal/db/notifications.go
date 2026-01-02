@@ -119,13 +119,14 @@ func (db *DB) ListNotifications(ctx context.Context, organisationID string, limi
 	}
 
 	// Count total
-	countQuery := fmt.Sprintf(`SELECT COUNT(*) FROM notifications %s`, whereClause)
+	countQuery := fmt.Sprintf(`SELECT COUNT(*) FROM notifications %s`, whereClause) //nolint:gosec // whereClause is whitelisted internal string
 	var total int
 	if err := db.client.QueryRowContext(ctx, countQuery, organisationID).Scan(&total); err != nil {
 		return nil, 0, fmt.Errorf("failed to count notifications: %w", err)
 	}
 
 	// Fetch notifications
+	// #nosec G201
 	query := fmt.Sprintf(`
 		SELECT id, organisation_id, user_id, type, subject, preview, message, link, data,
 		       read_at, slack_delivered_at, email_delivered_at, created_at
@@ -318,6 +319,7 @@ func (db *DB) MarkNotificationDelivered(ctx context.Context, notificationID, cha
 		return fmt.Errorf("unknown channel: %s", channel)
 	}
 
+	// #nosec G201
 	query := fmt.Sprintf(`
 		UPDATE notifications
 		SET %s = NOW()

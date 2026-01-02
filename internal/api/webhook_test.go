@@ -14,7 +14,7 @@ import (
 )
 
 func TestWebhookSignatureValidation(t *testing.T) {
-	secret := "test-webhook-secret"
+	secret := "test-webhook-secret" //nolint:gosec // This is a test secret for signature validation experiments
 
 	tests := []struct {
 		name           string
@@ -92,7 +92,7 @@ func TestWebhookSignatureValidation(t *testing.T) {
 				}
 
 				w.WriteHeader(http.StatusOK)
-				json.NewEncoder(w).Encode(map[string]string{"status": "received"})
+				_ = json.NewEncoder(w).Encode(map[string]string{"status": "received"})
 			})
 
 			handler.ServeHTTP(w, req)
@@ -178,7 +178,7 @@ func TestWebhookPayloadParsing(t *testing.T) {
 				// Check content type
 				if r.Header.Get("Content-Type") != "application/json" {
 					w.WriteHeader(http.StatusBadRequest)
-					json.NewEncoder(w).Encode(map[string]string{"error": "Invalid content type"})
+					_ = json.NewEncoder(w).Encode(map[string]string{"error": "Invalid content type"})
 					return
 				}
 
@@ -186,19 +186,19 @@ func TestWebhookPayloadParsing(t *testing.T) {
 				var payload map[string]interface{}
 				if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 					w.WriteHeader(http.StatusBadRequest)
-					json.NewEncoder(w).Encode(map[string]string{"error": "Invalid JSON"})
+					_ = json.NewEncoder(w).Encode(map[string]string{"error": "Invalid JSON"})
 					return
 				}
 
 				// Check required fields
 				if _, ok := payload["site"]; !ok {
 					w.WriteHeader(http.StatusBadRequest)
-					json.NewEncoder(w).Encode(map[string]string{"error": "Missing required field: site"})
+					_ = json.NewEncoder(w).Encode(map[string]string{"error": "Missing required field: site"})
 					return
 				}
 
 				w.WriteHeader(http.StatusOK)
-				json.NewEncoder(w).Encode(map[string]string{"status": "processed"})
+				_ = json.NewEncoder(w).Encode(map[string]string{"status": "processed"})
 			})
 
 			handler.ServeHTTP(w, req)
@@ -254,7 +254,7 @@ func TestWebhookDuplication(t *testing.T) {
 			// Mock handler with deduplication
 			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				var p map[string]interface{}
-				json.NewDecoder(r.Body).Decode(&p)
+				_ = json.NewDecoder(r.Body).Decode(&p)
 
 				webhookID, _ := p["id"].(string)
 
@@ -262,7 +262,7 @@ func TestWebhookDuplication(t *testing.T) {
 				if _, exists := processedWebhooks[webhookID]; exists {
 					// Return success but don't reprocess
 					w.WriteHeader(http.StatusOK)
-					json.NewEncoder(w).Encode(map[string]string{
+					_ = json.NewEncoder(w).Encode(map[string]string{
 						"status": "already_processed",
 					})
 					return
@@ -272,7 +272,7 @@ func TestWebhookDuplication(t *testing.T) {
 				processedWebhooks[webhookID] = true
 
 				w.WriteHeader(http.StatusOK)
-				json.NewEncoder(w).Encode(map[string]string{
+				_ = json.NewEncoder(w).Encode(map[string]string{
 					"status": "processed",
 				})
 			})
@@ -283,7 +283,7 @@ func TestWebhookDuplication(t *testing.T) {
 
 			// Verify response
 			var response map[string]string
-			json.Unmarshal(w.Body.Bytes(), &response)
+			_ = json.Unmarshal(w.Body.Bytes(), &response)
 
 			if tt.name == "duplicate_webhook" {
 				assert.Equal(t, "already_processed", response["status"])
@@ -346,14 +346,14 @@ func TestWebhookTokenAuthentication(t *testing.T) {
 
 				if token != validToken {
 					w.WriteHeader(http.StatusUnauthorized)
-					json.NewEncoder(w).Encode(map[string]string{
+					_ = json.NewEncoder(w).Encode(map[string]string{
 						"error": "Unauthorized",
 					})
 					return
 				}
 
 				w.WriteHeader(http.StatusOK)
-				json.NewEncoder(w).Encode(map[string]string{
+				_ = json.NewEncoder(w).Encode(map[string]string{
 					"status": "authenticated",
 				})
 			})
@@ -423,7 +423,7 @@ func TestWebhookRateLimit(t *testing.T) {
 					w.Header().Set("X-RateLimit-Remaining", "0")
 					w.Header().Set("Retry-After", "60")
 					w.WriteHeader(http.StatusTooManyRequests)
-					json.NewEncoder(w).Encode(map[string]string{
+					_ = json.NewEncoder(w).Encode(map[string]string{
 						"error": "Rate limit exceeded",
 					})
 					return
@@ -432,7 +432,7 @@ func TestWebhookRateLimit(t *testing.T) {
 				w.Header().Set("X-RateLimit-Limit", "3")
 				w.Header().Set("X-RateLimit-Remaining", string(rune(maxRequests-requestCount+'0')))
 				w.WriteHeader(http.StatusOK)
-				json.NewEncoder(w).Encode(map[string]string{
+				_ = json.NewEncoder(w).Encode(map[string]string{
 					"status": "processed",
 				})
 			})

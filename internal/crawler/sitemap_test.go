@@ -98,14 +98,14 @@ func TestDiscoverSitemapsAndRobots(t *testing.T) {
 		switch r.URL.Path {
 		case "/robots.txt":
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(`User-agent: *
+			_, _ = w.Write([]byte(`User-agent: *
 Disallow: /admin
 Allow: /
 Sitemap: https://example.com/sitemap.xml
 `))
 		case "/sitemap.xml":
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>
+			_, _ = w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 	<url><loc>https://example.com/page1</loc></url>
 </urlset>`))
@@ -172,7 +172,7 @@ func TestParseSitemap(t *testing.T) {
 		case "/sitemap.xml":
 			w.Header().Set("Content-Type", "application/xml")
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>
+			_, _ = w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 	<url><loc>http://` + r.Host + `/page1</loc></url>
 	<url><loc>http://` + r.Host + `/page2</loc></url>
@@ -180,7 +180,7 @@ func TestParseSitemap(t *testing.T) {
 		case "/sitemap_index.xml":
 			w.Header().Set("Content-Type", "application/xml")
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>
+			_, _ = w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>
 <sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 	<sitemap><loc>http://` + r.Host + `/sitemap1.xml</loc></sitemap>
 	<sitemap><loc>http://` + r.Host + `/sitemap2.xml</loc></sitemap>
@@ -188,11 +188,11 @@ func TestParseSitemap(t *testing.T) {
 		case "/empty.xml":
 			w.Header().Set("Content-Type", "application/xml")
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>
+			_, _ = w.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"></urlset>`))
 		case "/invalid.xml":
 			w.WriteHeader(http.StatusOK)
-			w.Write([]byte(`not xml`))
+			_, _ = w.Write([]byte(`not xml`))
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}
@@ -378,8 +378,8 @@ func TestParseSitemapGzip(t *testing.T) {
 	gzipContent := func(content []byte) []byte {
 		var buf bytes.Buffer
 		gzWriter := gzip.NewWriter(&buf)
-		gzWriter.Write(content)
-		gzWriter.Close()
+		_, _ = gzWriter.Write(content)
+		_ = gzWriter.Close()
 		return buf.Bytes()
 	}
 
@@ -396,18 +396,18 @@ func TestParseSitemapGzip(t *testing.T) {
 			// Serve gzipped content without Content-Encoding header (file-based compression)
 			w.Header().Set("Content-Type", "application/gzip")
 			w.WriteHeader(http.StatusOK)
-			w.Write(gzipContent(sitemapXML))
+			_, _ = w.Write(gzipContent(sitemapXML))
 		case "/sitemap-encoded.xml":
 			// Serve with Content-Encoding: gzip header (transfer encoding)
 			w.Header().Set("Content-Type", "application/xml")
 			w.Header().Set("Content-Encoding", "gzip")
 			w.WriteHeader(http.StatusOK)
-			w.Write(gzipContent(sitemapXML))
+			_, _ = w.Write(gzipContent(sitemapXML))
 		case "/sitemap.xml":
 			// Normal uncompressed sitemap
 			w.Header().Set("Content-Type", "application/xml")
 			w.WriteHeader(http.StatusOK)
-			w.Write(sitemapXML)
+			_, _ = w.Write(sitemapXML)
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}

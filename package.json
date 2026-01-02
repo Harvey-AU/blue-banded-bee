@@ -1,0 +1,10 @@
+{
+  "name": "blue-banded-bee",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Web cache warming service",
+  "devDependencies": {
+    "eslint": "^9.39.2",
+    "eslint-plugin-security": "^3.0.1"
+  }
+}
