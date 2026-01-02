@@ -19,7 +19,7 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// NOTE: Webflow Client ID/Secret should be loaded from config/env
+// Webflow OAuth credentials loaded from environment variables
 func getWebflowClientID() string {
 	return os.Getenv("WEBFLOW_CLIENT_ID")
 }
