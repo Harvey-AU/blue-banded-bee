@@ -3222,6 +3222,13 @@
             } catch (err) {
               console.error("Failed to load Slack connections:", err);
             }
+            try {
+              if (window.loadWebflowConnections) {
+                await window.loadWebflowConnections();
+              }
+            } catch (err) {
+              console.error("Failed to load Webflow connections:", err);
+            }
           });
         }
 
