@@ -87,9 +87,9 @@ func (h *Handler) InitiateWebflowOAuth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Scopes: sites:read, sites:write (for webhooks), cms:read
-	// Note: workspaces:read is only available for Enterprise accounts
-	scopes := "sites:read sites:write cms:read"
+	// Scopes: authorized_user:read (for user name), sites:read, sites:write (for webhooks), cms:read
+	// Note: workspaces:read is Enterprise-only, so we use authorized_user:read to identify the connection
+	scopes := "authorized_user:read sites:read sites:write cms:read"
 
 	// Build Webflow OAuth URL
 	authURL := fmt.Sprintf(
@@ -153,10 +153,10 @@ func (h *Handler) HandleWebflowOAuthCallback(w http.ResponseWriter, r *http.Requ
 	// Extract user and workspace info
 	authedUserID := ""
 	workspaceID := ""
-	workspaceName := ""
+	displayName := ""
 	if authInfo != nil {
 		authedUserID = authInfo.UserID
-		workspaceName = authInfo.WorkspaceName
+		displayName = authInfo.DisplayName // User's name or email
 		if len(authInfo.WorkspaceIDs) > 0 {
 			workspaceID = authInfo.WorkspaceIDs[0] // Use first workspace
 		}
@@ -168,7 +168,7 @@ func (h *Handler) HandleWebflowOAuthCallback(w http.ResponseWriter, r *http.Requ
 		OrganisationID:     state.OrgID,
 		AuthedUserID:       authedUserID,
 		WebflowWorkspaceID: workspaceID,
-		WorkspaceName:      workspaceName,
+		WorkspaceName:      displayName, // User's name or email from authorized_by endpoint
 		InstallingUserID:   state.UserID,
 		CreatedAt:          now,
 		UpdatedAt:          now,
@@ -233,16 +233,22 @@ func (h *Handler) exchangeWebflowCode(code string) (*WebflowTokenResponse, error
 	return &tokenResp, nil
 }
 
-// WebflowAuthInfo contains user and workspace info from Webflow's token introspection
+// WebflowAuthInfo contains user and workspace info from Webflow's API
 type WebflowAuthInfo struct {
-	UserID        string
-	WorkspaceIDs  []string
-	WorkspaceName string // Display name of the first workspace
+	UserID       string
+	WorkspaceIDs []string
+	// User info from authorized_by endpoint
+	UserEmail     string
+	UserFirstName string
+	UserLastName  string
+	DisplayName   string // Combined name for display (e.g., "Simon Chua" or email)
 }
 
-// fetchWebflowAuthInfo calls Webflow's token introspect endpoint to get user/workspace info
+// fetchWebflowAuthInfo calls Webflow's API to get user and workspace info
 func (h *Handler) fetchWebflowAuthInfo(ctx context.Context, token string) (*WebflowAuthInfo, error) {
 	client := &http.Client{Timeout: 10 * time.Second}
+
+	// First, get authorization info (workspace IDs)
 	req, err := http.NewRequestWithContext(ctx, "GET", "https://api.webflow.com/v2/token/introspect", nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create introspect request: %w", err)
@@ -277,90 +283,75 @@ func (h *Handler) fetchWebflowAuthInfo(ctx context.Context, token string) (*Webf
 		WorkspaceIDs: introspectResp.Authorization.AuthorizedTo.WorkspaceIDs,
 	}
 
-	// Fetch workspace name if we have a workspace ID
-	if len(authInfo.WorkspaceIDs) > 0 {
-		workspaceName, err := h.fetchWebflowWorkspaceName(ctx, token, authInfo.WorkspaceIDs[0])
-		if err != nil {
-			// Log but don't fail - workspace name is nice to have
-			log.Warn().Err(err).Str("workspace_id", authInfo.WorkspaceIDs[0]).Msg("Failed to fetch workspace name")
-		} else {
-			authInfo.WorkspaceName = workspaceName
-		}
+	// Fetch user info from authorized_by endpoint
+	userInfo, err := h.fetchWebflowUserInfo(ctx, client, token)
+	if err != nil {
+		log.Warn().Err(err).Msg("Failed to fetch Webflow user info")
+	} else {
+		authInfo.UserEmail = userInfo.Email
+		authInfo.UserFirstName = userInfo.FirstName
+		authInfo.UserLastName = userInfo.LastName
+		authInfo.DisplayName = userInfo.DisplayName
 	}
 
 	return authInfo, nil
 }
 
-// fetchWebflowWorkspaceName fetches the display name of a Webflow workspace
-// Uses the sites endpoint since workspaces:read scope requires Enterprise
-// Sites include workspace name in the response
-func (h *Handler) fetchWebflowWorkspaceName(ctx context.Context, token, workspaceID string) (string, error) {
-	client := &http.Client{Timeout: 10 * time.Second}
-	req, err := http.NewRequestWithContext(ctx, "GET", "https://api.webflow.com/v2/sites", nil)
+// WebflowUserInfo contains user details from the authorized_by endpoint
+type WebflowUserInfo struct {
+	ID          string
+	Email       string
+	FirstName   string
+	LastName    string
+	DisplayName string
+}
+
+// fetchWebflowUserInfo fetches the authorizing user's info
+func (h *Handler) fetchWebflowUserInfo(ctx context.Context, client *http.Client, token string) (*WebflowUserInfo, error) {
+	req, err := http.NewRequestWithContext(ctx, "GET", "https://api.webflow.com/v2/token/authorized_by", nil)
 	if err != nil {
-		return "", fmt.Errorf("failed to create sites request: %w", err)
+		return nil, fmt.Errorf("failed to create authorized_by request: %w", err)
 	}
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("accept", "application/json")
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("failed to call sites endpoint: %w", err)
+		return nil, fmt.Errorf("failed to call authorized_by endpoint: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("sites endpoint returned status: %d", resp.StatusCode)
+		return nil, fmt.Errorf("authorized_by endpoint returned status: %d", resp.StatusCode)
 	}
 
-	var listResp struct {
-		Sites []struct {
-			ID            string `json:"id"`
-			WorkspaceID   string `json:"workspaceId"`
-			DisplayName   string `json:"displayName"`
-			ShortName     string `json:"shortName"`
-			CustomDomains []struct {
-				ID  string `json:"id"`
-				URL string `json:"url"`
-			} `json:"customDomains"`
-		} `json:"sites"`
+	var userResp struct {
+		ID        string `json:"id"`
+		Email     string `json:"email"`
+		FirstName string `json:"firstName"`
+		LastName  string `json:"lastName"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&listResp); err != nil {
-		return "", fmt.Errorf("failed to decode sites response: %w", err)
+	if err := json.NewDecoder(resp.Body).Decode(&userResp); err != nil {
+		return nil, fmt.Errorf("failed to decode authorized_by response: %w", err)
 	}
 
-	// Find first site in the workspace and use its display name or domain
-	for _, site := range listResp.Sites {
-		if site.WorkspaceID == workspaceID {
-			// Prefer a domain name if available
-			if len(site.CustomDomains) > 0 {
-				return site.CustomDomains[0].URL, nil
-			}
-			// Otherwise use site display name
-			if site.DisplayName != "" {
-				return site.DisplayName, nil
-			}
-			if site.ShortName != "" {
-				return site.ShortName, nil
-			}
-		}
+	userInfo := &WebflowUserInfo{
+		ID:        userResp.ID,
+		Email:     userResp.Email,
+		FirstName: userResp.FirstName,
+		LastName:  userResp.LastName,
 	}
 
-	// If no matching workspace, use first site's info
-	if len(listResp.Sites) > 0 {
-		site := listResp.Sites[0]
-		if len(site.CustomDomains) > 0 {
-			return site.CustomDomains[0].URL, nil
-		}
-		if site.DisplayName != "" {
-			return site.DisplayName, nil
-		}
-		if site.ShortName != "" {
-			return site.ShortName, nil
-		}
+	// Build display name: prefer "FirstName LastName", fall back to email
+	if userResp.FirstName != "" || userResp.LastName != "" {
+		userInfo.DisplayName = strings.TrimSpace(userResp.FirstName + " " + userResp.LastName)
+	} else if userResp.Email != "" {
+		userInfo.DisplayName = userResp.Email
+	} else {
+		userInfo.DisplayName = "Webflow User"
 	}
 
-	return "", fmt.Errorf("no sites found")
+	return userInfo, nil
 }
 
 func (h *Handler) registerWebflowWebhooksSafe(userID, token string) {
