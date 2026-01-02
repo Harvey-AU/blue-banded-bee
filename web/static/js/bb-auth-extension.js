@@ -616,7 +616,7 @@ window.TRANSACTION_VISIBILITY_DELAY_MS = TRANSACTION_VISIBILITY_DELAY_MS;
 const SUBSCRIBE_RETRY_INTERVAL_MS = 1000;
 const FALLBACK_POLLING_INTERVAL_MS = 60000;
 const MAX_SUBSCRIBE_RETRIES = 15;
-const REALTIME_DEBOUNCE_MS = 1000; // Debounce rapid realtime notifications
+const REALTIME_DEBOUNCE_MS = 2000; // Debounce rapid realtime notifications (includes transaction visibility delay)
 
 // Realtime subscription state
 let subscribeRetryCount = 0;
@@ -748,10 +748,8 @@ async function subscribeToJobUpdates() {
           filter: `organisation_id=eq.${orgId}`,
         },
         (payload) => {
-          // Use debounced refresh to coalesce rapid notifications
-          setTimeout(() => {
-            debouncedRealtimeRefresh();
-          }, TRANSACTION_VISIBILITY_DELAY_MS);
+          // Debounce coalesces rapid notifications - delay already includes transaction visibility buffer
+          debouncedRealtimeRefresh();
         }
       )
       .on(
@@ -763,9 +761,7 @@ async function subscribeToJobUpdates() {
           filter: `organisation_id=eq.${orgId}`,
         },
         (payload) => {
-          setTimeout(() => {
-            debouncedRealtimeRefresh();
-          }, TRANSACTION_VISIBILITY_DELAY_MS);
+          debouncedRealtimeRefresh();
         }
       )
       .on(
@@ -777,9 +773,7 @@ async function subscribeToJobUpdates() {
           filter: `organisation_id=eq.${orgId}`,
         },
         (payload) => {
-          setTimeout(() => {
-            debouncedRealtimeRefresh();
-          }, TRANSACTION_VISIBILITY_DELAY_MS);
+          debouncedRealtimeRefresh();
         }
       )
       .subscribe((status, err) => {
