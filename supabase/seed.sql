@@ -63,12 +63,12 @@ SELECT setval('domains_id_seq', (SELECT MAX(id) FROM domains));
 
 --
 -- Data for Name: schedulers; Type: TABLE DATA; Schema: public; Owner: -
--- Note: Schedulers are optional seed data - uncomment if needed
 --
--- INSERT INTO public.schedulers (id, domain_id, organisation_id, schedule_interval_hours, next_run_at, is_enabled, concurrency, find_links, max_pages, include_paths, exclude_paths, required_workers, created_at, updated_at)
--- VALUES
---     ('14dd9d7a-2696-4479-831c-e43163795e36', 1, '96f7546c-47ea-41f8-a3a3-46b4deb84105', 12, NOW() + INTERVAL '12 hours', true, 20, true, 0, NULL, NULL, 1, NOW(), NOW()),
---     ('4db618ce-5b05-409f-8a06-fdf4a4a9745c', 2, '96f7546c-47ea-41f8-a3a3-46b4deb84105', 12, NOW() + INTERVAL '12 hours', true, 20, true, 0, NULL, NULL, 1, NOW(), NOW());
+INSERT INTO public.schedulers (id, domain_id, organisation_id, schedule_interval_hours, next_run_at, is_enabled, concurrency, find_links, max_pages, include_paths, exclude_paths, required_workers, created_at, updated_at)
+VALUES
+    ('14dd9d7a-2696-4479-831c-e43163795e36', 1, '96f7546c-47ea-41f8-a3a3-46b4deb84105', 12, NOW() + INTERVAL '12 hours', true, 20, true, 0, NULL, NULL, 1, NOW(), NOW()),
+    ('4db618ce-5b05-409f-8a06-fdf4a4a9745c', 2, '96f7546c-47ea-41f8-a3a3-46b4deb84105', 12, NOW() + INTERVAL '12 hours', true, 20, true, 0, NULL, NULL, 1, NOW(), NOW()),
+    ('5ec729df-6c16-5100-9b17-ae05b5ba856d', 3, '96f7546c-47ea-41f8-a3a3-46b4deb84105', 24, NOW() + INTERVAL '24 hours', true, 20, true, 0, NULL, NULL, 1, NOW(), NOW());
 
 -- Re-enable triggers
 SET session_replication_role = DEFAULT;
