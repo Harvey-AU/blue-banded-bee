@@ -359,8 +359,9 @@ func ssrfSafeDialContext() func(ctx context.Context, network, addr string) (net.
 }
 
 // validateCrawlRequest validates the crawl request parameters and URL format.
-// It also performs SSRF protection by blocking requests to private/local IPs (unless skipSSRF is true).
-func validateCrawlRequest(ctx context.Context, targetURL string, skipSSRF bool) (*url.URL, error) {
+// Note: SSRF protection is handled at connection time by ssrfSafeDialContext(),
+// which prevents DNS rebinding attacks by validating IPs after resolution.
+func validateCrawlRequest(ctx context.Context, targetURL string, _ bool) (*url.URL, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -372,32 +373,6 @@ func validateCrawlRequest(ctx context.Context, targetURL string, skipSSRF bool) 
 
 	if parsed.Scheme == "" || parsed.Host == "" {
 		return nil, fmt.Errorf("invalid URL format: %s", targetURL)
-	}
-
-	// Skip SSRF check if configured (for tests only)
-	if skipSSRF {
-		return parsed, nil
-	}
-
-	// SSRF protection: resolve hostname and check for private/local IPs
-	host := parsed.Hostname()
-	ips, err := net.LookupIP(host)
-	if err != nil {
-		// DNS resolution failed - allow the request to proceed
-		// (the HTTP client will fail with a more specific error)
-		log.Debug().Err(err).Str("host", host).Msg("DNS lookup failed during SSRF check")
-		return parsed, nil
-	}
-
-	for _, ip := range ips {
-		if isPrivateOrLocalIP(ip) {
-			log.Warn().
-				Str("url", targetURL).
-				Str("host", host).
-				Str("ip", ip.String()).
-				Msg("SSRF protection: blocked request to private/local IP")
-			return nil, fmt.Errorf("blocked request to private/local IP address: %s resolves to %s", host, ip.String())
-		}
 	}
 
 	return parsed, nil

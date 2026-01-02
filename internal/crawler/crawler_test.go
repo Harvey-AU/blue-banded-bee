@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 	"time"
 )
@@ -361,30 +362,44 @@ func TestIsPrivateOrLocalIP(t *testing.T) {
 	}
 }
 
-// TestSSRFProtection tests that validateCrawlRequest blocks private/local IPs
+// TestSSRFProtection tests that ssrfSafeDialContext blocks connections to private/local IPs.
+// Note: SSRF protection happens at connection time via the custom DialContext,
+// not at URL validation time (which prevents DNS rebinding attacks).
 func TestSSRFProtection(t *testing.T) {
 	ctx := context.Background()
 
-	// Test blocking localhost (SSRF protection enabled)
-	_, err := validateCrawlRequest(ctx, "http://localhost/admin", false)
-	if err == nil {
-		t.Error("Expected error for localhost, got nil")
-	}
+	// Get the SSRF-safe dialer
+	dialFunc := ssrfSafeDialContext()
 
-	_, err = validateCrawlRequest(ctx, "http://127.0.0.1/admin", false)
+	// Test blocking localhost - dial should fail for private IPs
+	_, err := dialFunc(ctx, "tcp", "127.0.0.1:80")
 	if err == nil {
 		t.Error("Expected error for 127.0.0.1, got nil")
 	}
-
-	// Test that valid public URLs are allowed
-	_, err = validateCrawlRequest(ctx, "https://example.com/page", false)
-	if err != nil {
-		t.Errorf("Expected no error for example.com, got %v", err)
+	if err != nil && !strings.Contains(err.Error(), "blocked connection to private/local IP") {
+		t.Errorf("Expected SSRF blocking error, got: %v", err)
 	}
 
-	// Test that skip flag works (for testing purposes)
-	_, err = validateCrawlRequest(ctx, "http://127.0.0.1/admin", true)
+	// Test blocking private network IPs
+	_, err = dialFunc(ctx, "tcp", "10.0.0.1:80")
+	if err == nil {
+		t.Error("Expected error for 10.0.0.1, got nil")
+	}
+
+	_, err = dialFunc(ctx, "tcp", "192.168.1.1:80")
+	if err == nil {
+		t.Error("Expected error for 192.168.1.1, got nil")
+	}
+
+	// Test that validateCrawlRequest only validates URL format (SSRF moved to DialContext)
+	_, err = validateCrawlRequest(ctx, "https://example.com/page", false)
 	if err != nil {
-		t.Errorf("Expected no error with skip=true, got %v", err)
+		t.Errorf("Expected no error for valid URL, got %v", err)
+	}
+
+	// Invalid URLs should still fail validation
+	_, err = validateCrawlRequest(ctx, "not-a-valid-url", false)
+	if err == nil {
+		t.Error("Expected error for invalid URL, got nil")
 	}
 }
