@@ -30,6 +30,11 @@ func getOAuthStateSecret() string {
 }
 
 func (h *Handler) generateOAuthState(userID, orgID string) (string, error) {
+	secret := getOAuthStateSecret()
+	if secret == "" {
+		return "", fmt.Errorf("OAuth state signing secret not configured")
+	}
+
 	nonce := make([]byte, 16)
 	if _, err := rand.Read(nonce); err != nil {
 		return "", fmt.Errorf("failed to generate nonce: %w", err)
@@ -48,7 +53,7 @@ func (h *Handler) generateOAuthState(userID, orgID string) (string, error) {
 	}
 
 	// Sign with HMAC
-	mac := hmac.New(sha256.New, []byte(getOAuthStateSecret()))
+	mac := hmac.New(sha256.New, []byte(secret))
 	mac.Write(data)
 	sig := mac.Sum(nil)
 

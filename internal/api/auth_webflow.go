@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -294,7 +295,7 @@ func (h *Handler) registerSiteWebhook(ctx context.Context, siteID, token, webhoo
 	}
 
 	reqURL := fmt.Sprintf("https://api.webflow.com/v2/sites/%s/webhooks", siteID)
-	req, err := http.NewRequestWithContext(ctx, "POST", reqURL, strings.NewReader(string(body)))
+	req, err := http.NewRequestWithContext(ctx, "POST", reqURL, bytes.NewReader(body))
 	if err != nil {
 		logger.Error().Err(err).Str("site_id", siteID).Msg("Failed to create webhook registration request")
 		return
