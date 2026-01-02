@@ -31,6 +31,24 @@ On merge, CI will:
 
 ### Added
 
+- **Webflow Integration**: OAuth 2.0 connection for Webflow workspaces
+  - Full OAuth flow with HMAC-signed state for CSRF protection
+  - API endpoints: `POST /v1/integrations/webflow` (initiate),
+    `GET /v1/integrations/webflow` (list),
+    `DELETE /v1/integrations/webflow/{id}` (disconnect)
+  - Callback handler at `/v1/integrations/webflow/callback`
+  - Access tokens stored securely in Supabase Vault with auto-cleanup on
+    deletion
+  - Token introspection fetches real Webflow user and workspace IDs
+- **Run on Publish**: Automatic cache warming when Webflow sites are published
+  - Auto-registers `site_publish` webhooks for all connected sites during OAuth
+  - Webhook handler at `/v1/webhooks/webflow/{token}` triggers cache warming
+    jobs
+  - Filters to primary domain (excludes `.webflow.io` staging domains)
+- **Webflow Dashboard UI**: Connection management in integrations modal
+  - Connect/disconnect Webflow workspaces
+  - Displays workspace ID and connection date
+  - Success/error feedback using generic integration helper
 - **SSRF Protection**: Crawler now blocks requests to private/local IP addresses
   - Custom `DialContext` validates IPs at connection time (prevents DNS
     rebinding)
@@ -55,6 +73,13 @@ On merge, CI will:
 
 ### Changed
 
+- **OAuth Utils Refactoring**: Extracted shared OAuth state signing to
+  `oauth_utils.go`
+  - HMAC-SHA256 signed state with nonce and 15-minute expiry
+  - Shared between Slack and Webflow integrations
+  - Defence-in-depth: secret validation in both generate and validate functions
+- **Dashboard Feedback Helper**: Consolidated `showSlackSuccess/Error` and
+  `showWebflowSuccess/Error` into generic `showIntegrationFeedback` function
 - **ESLint Config**: Reorganised rules with comments separating critical vs
   warning
 - **Package.json**: Added `name`, `version`, `private: true` fields
@@ -62,6 +87,14 @@ On merge, CI will:
   eliminate code duplication across transport configurations
 - **URL Validation Simplified**: Removed redundant DNS lookup from
   `validateCrawlRequest()` (SSRF check now happens at connection time only)
+
+### Security
+
+- OAuth state secret validated before signing and verification (prevents empty
+  key attacks)
+- Webflow tokens encrypted at rest in Supabase Vault
+- Webhook tokens per-user for secure callback routing
+- `WebhookToken` field excluded from JSON serialisation
 
 ## [0.20.1] – 2026-01-02
 
