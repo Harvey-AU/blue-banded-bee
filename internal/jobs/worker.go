@@ -1254,7 +1254,7 @@ func (wp *WorkerPool) processTaskResult(result error, workerID int, consecutiveN
 // calculateBackoffSleep computes the sleep duration with exponential backoff and jitter
 func calculateBackoffSleep(consecutiveNoTasks int, baseSleep, maxSleep time.Duration) time.Duration {
 	baseSleepTime := min(time.Duration(float64(baseSleep)*math.Pow(1.5, float64(min(consecutiveNoTasks, 10)))), maxSleep)
-	jitter := time.Duration(rand.Int63n(2000)) * time.Millisecond // 0-2s jitter
+	jitter := time.Duration(rand.Int63n(2000)) * time.Millisecond //nolint:gosec // 0-2s jitter for retry logic is not security-sensitive
 	return baseSleepTime + jitter
 }
 
@@ -3763,7 +3763,15 @@ func isClientOrRedirectError(err error) bool {
 // Uses 2^retryCount formula with a maximum cap of 60 seconds
 func calculateBackoffDuration(retryCount int) time.Duration {
 	// 2^0 = 1s, 2^1 = 2s, 2^2 = 4s, 2^3 = 8s, etc.
-	backoffSeconds := 1 << uint(retryCount) // Bit shift for 2^retryCount
+	// Cap retryCount to a safe value to prevent overflow during bit shift
+	if retryCount < 0 {
+		retryCount = 0
+	}
+	shift := uint(retryCount) //nolint:gosec // retryCount is capped and checked for negative
+	if shift > 30 {
+		shift = 30
+	}
+	backoffSeconds := 1 << shift // Bit shift for 2^retryCount
 	backoffDuration := time.Duration(backoffSeconds) * time.Second
 
 	// Cap at 60 seconds maximum
@@ -4036,7 +4044,7 @@ func (wp *WorkerPool) listenForNotifications(ctx context.Context) {
 		}
 		_, err = c.Exec(ctx, "LISTEN new_tasks")
 		if err != nil {
-			c.Close(ctx)
+			_ = c.Close(ctx)
 			return nil, err
 		}
 		return c, nil
@@ -4067,7 +4075,7 @@ func (wp *WorkerPool) listenForNotifications(ctx context.Context) {
 				return // Context cancelled or pool is stopping
 			}
 			log.Warn().Err(err).Msg("Error waiting for notification, reconnecting...")
-			conn.Close(ctx)
+			_ = conn.Close(ctx)
 			time.Sleep(5 * time.Second) // Wait before reconnecting
 
 			conn, err = connect()

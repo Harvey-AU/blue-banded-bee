@@ -209,7 +209,7 @@ func TestInitFromEnv(t *testing.T) {
 
 			// Set test env vars
 			for k, v := range tt.envVars {
-				os.Setenv(k, v)
+				_ = os.Setenv(k, v)
 			}
 
 			db, err := InitFromEnv()

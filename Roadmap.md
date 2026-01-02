@@ -495,6 +495,8 @@ Organisation model implemented:
 
 - [ ] **Core app functionality**
   - [ ] Path inclusion/exclusion rules
+  - [ ] Domain blocklist/allowlist for crawler (prevent crawling specific
+        domains)
 - [ ] **Enhanced Authentication**
   - [ ] Test and refine multi-provider account linking
   - [ ] Member invitation system for organisations

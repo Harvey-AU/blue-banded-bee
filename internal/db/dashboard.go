@@ -114,6 +114,7 @@ func (db *DB) GetJobActivity(organisationID string, startDate, endDate *time.Tim
 		intervalStr = "1 day"
 	}
 
+	// #nosec G201
 	query := fmt.Sprintf(`
 		WITH time_series AS (
 			SELECT generate_series(
@@ -144,7 +145,7 @@ func (db *DB) GetJobActivity(organisationID string, startDate, endDate *time.Tim
 		query += fmt.Sprintf(" AND created_at <= $%d", argCount)
 		args = append(args, *endDate)
 	}
-
+	//nolint:gosec // intervalStr and timeGroup are internal logic constants
 	query += `
 			GROUP BY ` + timeGroup + `
 		)
@@ -269,6 +270,7 @@ func (db *DB) ListJobs(organisationID string, limit, offset int, status, dateRan
 	}
 
 	// Get jobs with pagination
+	// #nosec G202
 	selectQuery := `
 	SELECT 
 		j.id, j.status, j.progress, j.total_tasks, j.completed_tasks, 
@@ -279,9 +281,9 @@ func (db *DB) ListJobs(organisationID string, limit, offset int, status, dateRan
 			WHEN j.completed_tasks > 0 AND j.duration_seconds IS NOT NULL THEN j.duration_seconds::double precision / NULLIF(j.completed_tasks, 0)
 			ELSE NULL
 		END AS avg_time_per_task_seconds
-	` + baseQuery + `
-	ORDER BY j.created_at DESC
-	LIMIT $` + fmt.Sprintf("%d", argCount+1) + ` OFFSET $` + fmt.Sprintf("%d", argCount+2)
+	` + baseQuery
+	// #nosec G202
+	selectQuery += fmt.Sprintf(" ORDER BY j.created_at DESC LIMIT %d OFFSET %d", limit, offset)
 
 	args = append(args, limit, offset)
 
@@ -371,6 +373,7 @@ func (db *DB) ListJobsWithOffset(organisationID string, limit, offset int, statu
 	}
 
 	// Get jobs with pagination
+	// #nosec G202
 	selectQuery := `
 	SELECT
 		j.id, j.status, j.progress, j.total_tasks, j.completed_tasks,
@@ -381,9 +384,9 @@ func (db *DB) ListJobsWithOffset(organisationID string, limit, offset int, statu
 			WHEN j.completed_tasks > 0 AND j.duration_seconds IS NOT NULL THEN j.duration_seconds::double precision / NULLIF(j.completed_tasks, 0)
 			ELSE NULL
 		END AS avg_time_per_task_seconds
-	` + baseQuery + `
-	ORDER BY j.created_at DESC
-	LIMIT $` + fmt.Sprintf("%d", argCount+1) + ` OFFSET $` + fmt.Sprintf("%d", argCount+2)
+	` + baseQuery
+	// #nosec G202
+	selectQuery += fmt.Sprintf(" ORDER BY j.created_at DESC LIMIT %d OFFSET %d", limit, offset)
 
 	args = append(args, limit, offset)
 

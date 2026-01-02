@@ -2,9 +2,12 @@ package crawler
 
 import (
 	"context"
+	crand "crypto/rand"
 	"crypto/tls"
 	"fmt"
+	"math/big"
 	"math/rand"
+	"net"
 	"net/http"
 	"net/http/httptrace"
 	"net/url"
@@ -224,7 +227,7 @@ func New(config *Config, id ...string) *Crawler {
 	// Create metrics map for this crawler instance
 	metricsMap := &sync.Map{}
 
-	// Set up base transport
+	// Set up base transport with SSRF-safe dialer
 	baseTransport := &http.Transport{
 		MaxIdleConnsPerHost: 25,
 		MaxConnsPerHost:     50,
@@ -232,6 +235,12 @@ func New(config *Config, id ...string) *Crawler {
 		TLSHandshakeTimeout: 10 * time.Second,
 		DisableCompression:  true,
 		ForceAttemptHTTP2:   true,
+	}
+
+	// Add SSRF-safe DialContext if protection is enabled
+	// This validates IPs at connection time to prevent DNS rebinding attacks
+	if !config.SkipSSRFCheck {
+		baseTransport.DialContext = ssrfSafeDialContext()
 	}
 
 	// Wrap the base transport with our custom tracing transport
@@ -274,8 +283,85 @@ func New(config *Config, id ...string) *Crawler {
 	}
 }
 
-// validateCrawlRequest validates the crawl request parameters and URL format
-func validateCrawlRequest(ctx context.Context, targetURL string) (*url.URL, error) {
+// isPrivateOrLocalIP checks if an IP address is in a private, loopback, or link-local range.
+// This prevents SSRF attacks by blocking requests to internal network resources.
+func isPrivateOrLocalIP(ip net.IP) bool {
+	if ip == nil {
+		return false
+	}
+
+	// Check for loopback (127.x.x.x, ::1)
+	if ip.IsLoopback() {
+		return true
+	}
+
+	// Check for link-local (169.254.x.x, fe80::/10)
+	if ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
+		return true
+	}
+
+	// Check for private ranges (10.x, 172.16-31.x, 192.168.x, fc00::/7)
+	if ip.IsPrivate() {
+		return true
+	}
+
+	// Check for unspecified (0.0.0.0, ::)
+	if ip.IsUnspecified() {
+		return true
+	}
+
+	return false
+}
+
+// ssrfSafeDialContext returns a DialContext function that validates resolved IPs
+// before connecting, preventing DNS rebinding attacks and SSRF to private networks.
+// It performs DNS resolution, validates all IPs are public, then connects using
+// the validated IP (preferring IPv4 for compatibility).
+func ssrfSafeDialContext() func(ctx context.Context, network, addr string) (net.Conn, error) {
+	return func(ctx context.Context, network, addr string) (net.Conn, error) {
+		host, port, err := net.SplitHostPort(addr)
+		if err != nil {
+			return nil, err
+		}
+
+		// Resolve hostname and validate all IPs
+		ips, err := net.LookupIP(host)
+		if err != nil {
+			return nil, fmt.Errorf("DNS lookup failed: %w", err)
+		}
+
+		// Check all resolved IPs for private/local addresses
+		for _, ip := range ips {
+			if isPrivateOrLocalIP(ip) {
+				log.Warn().
+					Str("host", host).
+					Str("ip", ip.String()).
+					Msg("SSRF protection: blocked connection to private/local IP")
+				return nil, fmt.Errorf("blocked connection to private/local IP: %s resolves to %s", host, ip.String())
+			}
+		}
+
+		// Connect using a validated IP (prefer IPv4 for compatibility)
+		var connectAddr string
+		for _, ip := range ips {
+			if ip.To4() != nil {
+				connectAddr = net.JoinHostPort(ip.String(), port)
+				break
+			}
+		}
+		if connectAddr == "" && len(ips) > 0 {
+			connectAddr = net.JoinHostPort(ips[0].String(), port)
+		}
+
+		dialer := &net.Dialer{}
+		return dialer.DialContext(ctx, network, connectAddr)
+	}
+}
+
+// validateCrawlRequest validates the crawl request parameters and URL format.
+// Note: SSRF protection is handled at connection time by ssrfSafeDialContext(),
+// which prevents DNS rebinding attacks by validating IPs after resolution.
+func validateCrawlRequest(ctx context.Context, targetURL string, _ bool) (*url.URL, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -412,8 +498,14 @@ func (c *Crawler) performCacheValidation(ctx context.Context, targetURL string, 
 	}
 
 	// Apply randomized delay between 500-1000ms to avoid hammering origins
-	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
-	jitteredDelay := 500 + rng.Intn(501)
+	randomInt := 0
+	if n, err := crand.Int(crand.Reader, big.NewInt(501)); err == nil {
+		randomInt = int(n.Int64())
+	} else {
+		// Fallback to basic rand if crypto rand fails
+		randomInt = rand.Intn(501) //nolint:gosec // safe fallback for non-sensitive jitter
+	}
+	jitteredDelay := 500 + randomInt
 
 	log.Debug().
 		Str("url", targetURL).
@@ -658,8 +750,8 @@ func executeCollyRequest(ctx context.Context, collyClone *colly.Collector, targe
 // WarmURL performs a crawl of the specified URL and returns the result.
 // It respects context cancellation, enforces timeout, and treats non-2xx statuses as errors.
 func (c *Crawler) WarmURL(ctx context.Context, targetURL string, findLinks bool) (*CrawlResult, error) {
-	// Validate the crawl request
-	_, err := validateCrawlRequest(ctx, targetURL)
+	// Validate the crawl request (with SSRF protection unless skipped for tests)
+	_, err := validateCrawlRequest(ctx, targetURL, c.config.SkipSSRFCheck)
 	if err != nil {
 		// Create error result - caller (WarmURL) is responsible for CrawlResult construction
 		res := &CrawlResult{URL: targetURL, Timestamp: time.Now().Unix(), Error: err.Error()}
@@ -756,8 +848,18 @@ func (c *Crawler) CheckCacheStatus(ctx context.Context, targetURL string) (strin
 	req.Header.Set("Accept-Language", "en-US,en;q=0.9")
 	req.Header.Set("Accept-Encoding", "gzip, deflate, br")
 
+	// Use SSRF-safe transport if protection is enabled
+	transport := &http.Transport{
+		TLSHandshakeTimeout: 10 * time.Second,
+	}
+
+	if !c.config.SkipSSRFCheck {
+		transport.DialContext = ssrfSafeDialContext()
+	}
+
 	client := &http.Client{
-		Timeout: c.config.DefaultTimeout,
+		Timeout:   c.config.DefaultTimeout,
+		Transport: transport,
 	}
 
 	resp, err := client.Do(req)
@@ -769,22 +871,29 @@ func (c *Crawler) CheckCacheStatus(ctx context.Context, targetURL string) (strin
 	return resp.Header.Get("CF-Cache-Status"), nil
 }
 
-// CreateHTTPClient returns a configured HTTP client
+// CreateHTTPClient returns a configured HTTP client with SSRF protection
 func (c *Crawler) CreateHTTPClient(timeout time.Duration) *http.Client {
 	if timeout == 0 {
 		timeout = c.config.DefaultTimeout
 	}
 
+	transport := &http.Transport{
+		MaxIdleConnsPerHost: 25,
+		MaxConnsPerHost:     50,
+		IdleConnTimeout:     120 * time.Second,
+		TLSHandshakeTimeout: 10 * time.Second,
+		DisableCompression:  true,
+		ForceAttemptHTTP2:   true,
+	}
+
+	// Add SSRF-safe DialContext if protection is enabled
+	if !c.config.SkipSSRFCheck {
+		transport.DialContext = ssrfSafeDialContext()
+	}
+
 	return &http.Client{
-		Timeout: timeout,
-		Transport: &http.Transport{
-			MaxIdleConnsPerHost: 25,
-			MaxConnsPerHost:     50,
-			IdleConnTimeout:     120 * time.Second,
-			TLSHandshakeTimeout: 10 * time.Second,
-			DisableCompression:  true,
-			ForceAttemptHTTP2:   true,
-		},
+		Timeout:   timeout,
+		Transport: transport,
 	}
 }
 

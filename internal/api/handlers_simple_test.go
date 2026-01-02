@@ -281,6 +281,6 @@ func BenchmarkWebflowPayloadParsing(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		var payload WebflowWebhookPayload
-		json.Unmarshal(jsonData, &payload)
+		_ = json.Unmarshal(jsonData, &payload)
 	}
 }

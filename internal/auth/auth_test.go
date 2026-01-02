@@ -288,13 +288,13 @@ func startTestJWKS(tb testing.TB) (*rsa.PrivateKey, string, string, func()) {
 		if prevURL == "" {
 			os.Unsetenv("SUPABASE_AUTH_URL")
 		} else {
-			os.Setenv("SUPABASE_AUTH_URL", prevURL)
+			_ = os.Setenv("SUPABASE_AUTH_URL", prevURL)
 		}
 
 		if prevKey == "" {
 			os.Unsetenv("SUPABASE_PUBLISHABLE_KEY")
 		} else {
-			os.Setenv("SUPABASE_PUBLISHABLE_KEY", prevKey)
+			_ = os.Setenv("SUPABASE_PUBLISHABLE_KEY", prevKey)
 		}
 
 		resetJWKSForTest()
@@ -384,15 +384,15 @@ func startTestJWKSWithES256(tb testing.TB) (*ecdsa.PrivateKey, string, string, f
 		server.Close()
 
 		if prevURL == "" {
-			os.Unsetenv("SUPABASE_AUTH_URL")
+			_ = os.Unsetenv("SUPABASE_AUTH_URL")
 		} else {
-			os.Setenv("SUPABASE_AUTH_URL", prevURL)
+			_ = os.Setenv("SUPABASE_AUTH_URL", prevURL)
 		}
 
 		if prevKey == "" {
-			os.Unsetenv("SUPABASE_PUBLISHABLE_KEY")
+			_ = os.Unsetenv("SUPABASE_PUBLISHABLE_KEY")
 		} else {
-			os.Setenv("SUPABASE_PUBLISHABLE_KEY", prevKey)
+			_ = os.Setenv("SUPABASE_PUBLISHABLE_KEY", prevKey)
 		}
 
 		resetJWKSForTest()

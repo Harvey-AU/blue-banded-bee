@@ -249,14 +249,14 @@ func TestAdminResetDatabase(t *testing.T) {
 			// Save original env vars
 			originalReset := os.Getenv("ALLOW_DB_RESET")
 			defer func() {
-				os.Setenv("ALLOW_DB_RESET", originalReset)
+				_ = os.Setenv("ALLOW_DB_RESET", originalReset)
 			}()
 
 			// Set environment variables for test
 			if tt.allowReset {
-				os.Setenv("ALLOW_DB_RESET", "true")
+				_ = os.Setenv("ALLOW_DB_RESET", "true")
 			} else {
-				os.Setenv("ALLOW_DB_RESET", "false")
+				_ = os.Setenv("ALLOW_DB_RESET", "false")
 			}
 
 			// Create mock database
