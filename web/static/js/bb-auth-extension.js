@@ -624,12 +624,19 @@ let subscribeRetryTimeoutId = null;
 let fallbackPollingIntervalId = null;
 let cleanupHandlerRegistered = false;
 let realtimeRefreshTimeoutId = null;
+let isRefreshing = false;
 
 /**
  * Debounced refresh for realtime notifications.
  * Coalesces multiple rapid notifications into a single refresh.
+ * Also prevents concurrent refreshes via isRefreshing lock.
  */
 function debouncedRealtimeRefresh() {
+  // Skip if a refresh is already in progress
+  if (isRefreshing) {
+    console.log("[Realtime] Refresh already in progress, skipping");
+    return;
+  }
   console.log("[Realtime] Notification received, scheduling debounced refresh");
   // Clear any pending refresh
   if (realtimeRefreshTimeoutId) {
@@ -637,10 +644,19 @@ function debouncedRealtimeRefresh() {
     console.log("[Realtime] Cleared pending refresh, rescheduling");
   }
   // Schedule a new refresh
-  realtimeRefreshTimeoutId = setTimeout(() => {
+  realtimeRefreshTimeoutId = setTimeout(async () => {
     realtimeRefreshTimeoutId = null;
+    if (isRefreshing) {
+      console.log("[Realtime] Refresh started elsewhere, skipping");
+      return;
+    }
+    isRefreshing = true;
     console.log("[Realtime] Executing debounced refresh now");
-    window.dataBinder?.refresh();
+    try {
+      await window.dataBinder?.refresh();
+    } finally {
+      isRefreshing = false;
+    }
   }, REALTIME_DEBOUNCE_MS);
 }
 
