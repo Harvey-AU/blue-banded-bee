@@ -616,7 +616,7 @@ window.TRANSACTION_VISIBILITY_DELAY_MS = TRANSACTION_VISIBILITY_DELAY_MS;
 const SUBSCRIBE_RETRY_INTERVAL_MS = 1000;
 const FALLBACK_POLLING_INTERVAL_MS = 60000;
 const MAX_SUBSCRIBE_RETRIES = 15;
-const REALTIME_DEBOUNCE_MS = 1000; // Throttle realtime notifications to max 1 refresh per second
+const REALTIME_DEBOUNCE_MS = 250; // Throttle realtime notifications to max 4 refreshes per second
 
 // Realtime subscription state
 let subscribeRetryCount = 0;
