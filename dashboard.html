@@ -2577,16 +2577,12 @@
             try {
               const { data: userRow } = await window.supabase
                 .from("users")
-                .select("organisation_id")
+                .select("active_organisation_id")
                 .eq("id", session.user.id)
                 .single();
 
-              if (userRow?.organisation_id) {
-                window.BB_ACTIVE_ORG = { id: userRow.organisation_id };
-                console.log(
-                  "[Auth] Pre-loaded active org:",
-                  window.BB_ACTIVE_ORG
-                );
+              if (userRow?.active_organisation_id) {
+                window.BB_ACTIVE_ORG = { id: userRow.active_organisation_id };
                 // Trigger subscription immediately
                 if (window.subscribeToJobUpdates) {
                   window.subscribeToJobUpdates();
