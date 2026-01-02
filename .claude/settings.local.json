@@ -102,7 +102,8 @@
       "mcp__plugin_serena_serena__activate_project",
       "Bash(git worktree:*)",
       "WebFetch(domain:docs.developers.webflow.com)",
-      "WebFetch(domain:developers.webflow.com)"
+      "WebFetch(domain:developers.webflow.com)",
+      "mcp__plugin_serena_serena__list_memories"
     ],
     "deny": []
   },
