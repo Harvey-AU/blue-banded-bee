@@ -55,6 +55,11 @@ On merge, CI will:
 - **Dashboard Polling Interval**: Reduced from 1 second to 60 seconds (fallback
   only, realtime handles immediate updates)
 
+### Fixed
+
+- **JS Constant Sharing**: Fixed duplicate `TRANSACTION_VISIBILITY_DELAY_MS`
+  declaration across scripts by exposing shared constant via `window` object
+
 ## [0.20.0] – 2025-12-31
 
 ### Added
