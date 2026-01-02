@@ -87,8 +87,8 @@ func (h *Handler) InitiateWebflowOAuth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Scopes: sites:read, sites:write (for webhooks), cms:read
-	scopes := "sites:read sites:write cms:read"
+	// Scopes: workspaces:read (for name), sites:read, sites:write (for webhooks), cms:read
+	scopes := "workspaces:read sites:read sites:write cms:read"
 
 	// Build Webflow OAuth URL
 	authURL := fmt.Sprintf(
