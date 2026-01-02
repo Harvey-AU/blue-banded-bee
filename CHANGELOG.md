@@ -31,10 +31,29 @@ On merge, CI will:
 
 ### Added
 
+- **Realtime Dashboard Updates**: Dashboard job list updates instantly via
+  Supabase Realtime, replacing 1-second polling with WebSocket subscriptions
+  - Organisation-scoped channel subscribes to INSERT, UPDATE, DELETE events
+  - Fallback polling (60s) when realtime connection fails
+  - Proper cleanup on page unload and SPA navigation
+  - Retry logic with maximum attempts to prevent infinite loops
+- **Realtime Job Progress**: Job detail page receives live progress updates
+  - Per-job subscription for status and task completion changes
+  - Auto-unsubscribes when job reaches terminal status
+- **Realtime Performance Optimisations**: Database changes to support efficient
+  realtime filtering
+  - `jobs` table added to Supabase Realtime publication
+  - `REPLICA IDENTITY FULL` set on `jobs` table for RLS-filtered events
+  - New `users_own_jobs_simple` RLS policy for fast user-based filtering
 - **Realtime Notification Updates**: Badge updates instantly when jobs complete
   - Supabase Postgres Changes subscription for `notifications` table
   - WebSocket CSP configured for `wss://auth.bluebandedbee.co`
   - 200ms delay before querying to avoid transaction visibility race condition
+
+### Changed
+
+- **Dashboard Polling Interval**: Reduced from 1 second to 60 seconds (fallback
+  only, realtime handles immediate updates)
 
 ## [0.20.0] – 2025-12-31
 
