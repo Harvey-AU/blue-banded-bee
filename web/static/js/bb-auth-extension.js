@@ -610,8 +610,9 @@ async function setupQuickAuth(dataBinder) {
   console.log("Quick auth setup complete");
 }
 
-// Realtime subscription constants
+// Realtime subscription constants (exposed on window for job-page.js)
 const TRANSACTION_VISIBILITY_DELAY_MS = 200;
+window.TRANSACTION_VISIBILITY_DELAY_MS = TRANSACTION_VISIBILITY_DELAY_MS;
 const SUBSCRIBE_RETRY_INTERVAL_MS = 1000;
 const FALLBACK_POLLING_INTERVAL_MS = 60000;
 const MAX_SUBSCRIBE_RETRIES = 15;
