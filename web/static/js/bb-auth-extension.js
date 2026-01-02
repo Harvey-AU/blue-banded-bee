@@ -634,24 +634,19 @@ let isRefreshing = false;
 function debouncedRealtimeRefresh() {
   // Skip if a refresh is already in progress
   if (isRefreshing) {
-    console.log("[Realtime] Refresh already in progress, skipping");
     return;
   }
-  console.log("[Realtime] Notification received, scheduling debounced refresh");
   // Clear any pending refresh
   if (realtimeRefreshTimeoutId) {
     clearTimeout(realtimeRefreshTimeoutId);
-    console.log("[Realtime] Cleared pending refresh, rescheduling");
   }
   // Schedule a new refresh
   realtimeRefreshTimeoutId = setTimeout(async () => {
     realtimeRefreshTimeoutId = null;
     if (isRefreshing) {
-      console.log("[Realtime] Refresh started elsewhere, skipping");
       return;
     }
     isRefreshing = true;
-    console.log("[Realtime] Executing debounced refresh now");
     try {
       await window.dataBinder?.refresh();
     } finally {
