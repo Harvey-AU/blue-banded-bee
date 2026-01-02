@@ -2,9 +2,11 @@ package db
 
 import (
 	"context"
+	crand "crypto/rand"
 	"database/sql"
 	"errors"
 	"fmt"
+	"math/big"
 	"math/rand"
 	"net"
 	"os"
@@ -41,9 +43,7 @@ type DbQueue struct {
 	retryBaseDelay      time.Duration
 	retryMaxDelay       time.Duration
 	rng                 *rand.Rand
-	rngMutex            sync.Mutex
-
-	// Optional callback to get effective concurrency overrides from domain limiter
+	// concurrencyOverride is a callback to get effective concurrency overrides from domain limiter
 	concurrencyOverride ConcurrencyOverrideFunc
 }
 
@@ -126,7 +126,7 @@ func NewDbQueue(db *DB) *DbQueue {
 		maxTxRetries:        txRetries,
 		retryBaseDelay:      baseDelay,
 		retryMaxDelay:       maxDelay,
-		rng:                 rand.New(rand.NewSource(time.Now().UnixNano())),
+		rng:                 nil, // Initialised on first use in randInt63n
 	}
 }
 
@@ -692,12 +692,13 @@ func (q *DbQueue) randInt63n(n int64) int64 {
 	if n <= 0 {
 		return 0
 	}
-	q.rngMutex.Lock()
-	defer q.rngMutex.Unlock()
-	if q.rng == nil {
-		q.rng = rand.New(rand.NewSource(time.Now().UnixNano()))
+	// Use crypto/rand for security compliance, even for non-sensitive jitter
+	res, err := crand.Int(crand.Reader, big.NewInt(n))
+	if err == nil {
+		return res.Int64()
 	}
-	return q.rng.Int63n(n)
+	// Fallback to basic rand if crypto fails
+	return rand.Int63n(n) //nolint:gosec // safe fallback for non-sensitive jitter
 }
 
 // ExecuteMaintenance runs a low-impact transaction that bypasses pool saturation guards.

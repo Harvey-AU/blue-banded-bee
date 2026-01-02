@@ -2788,6 +2788,21 @@
                     name: orgName,
                   };
 
+                  // Re-establish realtime subscription for new org
+                  // Wrapped in separate try-catch so subscription failure doesn't
+                  // incorrectly show "Failed to switch organisation" error
+                  if (window.subscribeToJobUpdates) {
+                    try {
+                      await window.subscribeToJobUpdates();
+                    } catch (subErr) {
+                      console.warn(
+                        "Failed to re-establish realtime subscription:",
+                        subErr
+                      );
+                      // Don't block org switch - subscription will retry on next page load
+                    }
+                  }
+
                   // Refresh dashboard data
                   if (window.refreshDashboard) {
                     window.refreshDashboard();

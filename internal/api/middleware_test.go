@@ -240,7 +240,7 @@ func TestResponseWrapper(t *testing.T) {
 			}
 
 			if tt.writeData {
-				wrapper.Write([]byte("test response"))
+				_, _ = wrapper.Write([]byte("test response"))
 			}
 
 			assert.Equal(t, tt.expectedStatusCode, wrapper.statusCode)
@@ -310,7 +310,7 @@ func TestCORSMiddleware(t *testing.T) {
 func TestCrossOriginProtectionMiddleware(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("protected"))
+		_, _ = w.Write([]byte("protected"))
 	})
 
 	middlewareHandler := CrossOriginProtectionMiddleware(handler)
@@ -380,7 +380,7 @@ func TestMiddlewareChaining(t *testing.T) {
 		finalHandlerCalled = true
 		capturedRequestID = GetRequestID(r)
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("success"))
+		_, _ = w.Write([]byte("success"))
 	})
 
 	// Chain middlewares
