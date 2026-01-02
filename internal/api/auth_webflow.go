@@ -27,14 +27,7 @@ func getWebflowClientSecret() string {
 }
 
 func getWebflowRedirectURI() string {
-	// Fallback or env var, should ideally match what was registered in Webflow App
-	// TODO: Make this dynamic based on environment if needed, but Webflow requires exact match
-	// For now assuming PROD URL structure or LOCAL based on APP_URL
-	appURL := os.Getenv("APP_URL")
-	if appURL == "" {
-		appURL = "http://localhost:8080"
-	}
-	return fmt.Sprintf("%s/v1/integrations/webflow/callback", appURL)
+	return getAppURL() + "/v1/integrations/webflow/callback"
 }
 
 // WebflowTokenResponse represents the response from Webflow's token endpoint
@@ -201,9 +194,7 @@ func (h *Handler) exchangeWebflowCode(code string) (*WebflowTokenResponse, error
 	values.Set("client_secret", getWebflowClientSecret())
 	values.Set("grant_type", "authorization_code")
 	values.Set("code", code)
-	// redirect_uri is optional in some flows but safer to include? check docs. explicit is better.
-	// Webflow docs say: redirect_uri is required if it was included in the authorization request.
-	// values.Set("redirect_uri", getWebflowRedirectURI())
+	values.Set("redirect_uri", getWebflowRedirectURI())
 
 	resp, err := http.PostForm("https://api.webflow.com/oauth/access_token", values)
 	if err != nil {
@@ -309,4 +300,133 @@ func (h *Handler) registerSiteWebhook(ctx context.Context, siteID, token, webhoo
 		// Log error but continue for other sites
 		logger.Warn().Int("status", resp.StatusCode).Str("site_id", siteID).Msg("Webflow API returned error registering webhook")
 	}
+}
+
+// WebflowConnectionResponse represents a Webflow connection in API responses
+type WebflowConnectionResponse struct {
+	ID                 string `json:"id"`
+	WebflowWorkspaceID string `json:"webflow_workspace_id,omitempty"`
+	CreatedAt          string `json:"created_at"`
+}
+
+// WebflowConnectionsHandler handles requests to /v1/integrations/webflow
+func (h *Handler) WebflowConnectionsHandler(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		h.listWebflowConnections(w, r)
+	case http.MethodPost:
+		h.InitiateWebflowOAuth(w, r)
+	default:
+		MethodNotAllowed(w, r)
+	}
+}
+
+// WebflowConnectionHandler handles requests to /v1/integrations/webflow/:id
+func (h *Handler) WebflowConnectionHandler(w http.ResponseWriter, r *http.Request) {
+	path := strings.TrimPrefix(r.URL.Path, "/v1/integrations/webflow/")
+	if path == "" {
+		BadRequest(w, r, "Connection ID is required")
+		return
+	}
+
+	// Handle callback separately (no auth required)
+	if path == "callback" {
+		if r.Method == http.MethodGet {
+			h.HandleWebflowOAuthCallback(w, r)
+			return
+		}
+		MethodNotAllowed(w, r)
+		return
+	}
+
+	connectionID := strings.Split(path, "/")[0]
+	if _, err := uuid.Parse(connectionID); err != nil {
+		BadRequest(w, r, "Invalid connection ID format")
+		return
+	}
+
+	switch r.Method {
+	case http.MethodDelete:
+		h.deleteWebflowConnection(w, r, connectionID)
+	default:
+		MethodNotAllowed(w, r)
+	}
+}
+
+// listWebflowConnections lists all Webflow connections for the user's organisation
+func (h *Handler) listWebflowConnections(w http.ResponseWriter, r *http.Request) {
+	logger := loggerWithRequest(r)
+
+	userClaims, ok := auth.GetUserFromContext(r.Context())
+	if !ok {
+		Unauthorised(w, r, "User information not found")
+		return
+	}
+
+	user, err := h.DB.GetOrCreateUser(userClaims.UserID, userClaims.Email, nil)
+	if err != nil {
+		logger.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get or create user")
+		InternalError(w, r, err)
+		return
+	}
+
+	if user.OrganisationID == nil {
+		WriteSuccess(w, r, []WebflowConnectionResponse{}, "No organisation")
+		return
+	}
+
+	connections, err := h.DB.ListWebflowConnections(r.Context(), *user.OrganisationID)
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to list Webflow connections")
+		InternalError(w, r, err)
+		return
+	}
+
+	response := make([]WebflowConnectionResponse, 0, len(connections))
+	for _, conn := range connections {
+		response = append(response, WebflowConnectionResponse{
+			ID:                 conn.ID,
+			WebflowWorkspaceID: conn.WebflowWorkspaceID,
+			CreatedAt:          conn.CreatedAt.Format(time.RFC3339),
+		})
+	}
+
+	WriteSuccess(w, r, response, "")
+}
+
+// deleteWebflowConnection deletes a Webflow connection
+func (h *Handler) deleteWebflowConnection(w http.ResponseWriter, r *http.Request, connectionID string) {
+	logger := loggerWithRequest(r)
+
+	userClaims, ok := auth.GetUserFromContext(r.Context())
+	if !ok {
+		Unauthorised(w, r, "User information not found")
+		return
+	}
+
+	user, err := h.DB.GetOrCreateUser(userClaims.UserID, userClaims.Email, nil)
+	if err != nil {
+		logger.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get or create user")
+		InternalError(w, r, err)
+		return
+	}
+
+	if user.OrganisationID == nil {
+		Forbidden(w, r, "User must belong to an organisation")
+		return
+	}
+
+	err = h.DB.DeleteWebflowConnection(r.Context(), connectionID, *user.OrganisationID)
+	if err != nil {
+		if err == db.ErrWebflowConnectionNotFound {
+			NotFound(w, r, "Webflow connection not found")
+			return
+		}
+		logger.Error().Err(err).Msg("Failed to delete Webflow connection")
+		InternalError(w, r, err)
+		return
+	}
+
+	logger.Info().Str("connection_id", connectionID).Msg("Webflow connection deleted")
+	WriteNoContent(w, r)
 }

@@ -258,7 +258,8 @@ func (h *Handler) SetupRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/v1/integrations/slack/callback", h.SlackOAuthCallback) // No auth - state validation
 
 	// Webflow integration endpoints
-	mux.Handle("/v1/integrations/webflow", auth.AuthMiddleware(http.HandlerFunc(h.InitiateWebflowOAuth)))
+	mux.Handle("/v1/integrations/webflow", auth.AuthMiddleware(http.HandlerFunc(h.WebflowConnectionsHandler)))
+	mux.Handle("/v1/integrations/webflow/", auth.AuthMiddleware(http.HandlerFunc(h.WebflowConnectionHandler)))
 	mux.HandleFunc("/v1/integrations/webflow/callback", h.HandleWebflowOAuthCallback) // No auth - state validation
 
 	// Notification endpoints
