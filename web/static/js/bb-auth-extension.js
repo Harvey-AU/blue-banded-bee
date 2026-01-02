@@ -630,13 +630,16 @@ let realtimeRefreshTimeoutId = null;
  * Coalesces multiple rapid notifications into a single refresh.
  */
 function debouncedRealtimeRefresh() {
+  console.log("[Realtime] Notification received, scheduling debounced refresh");
   // Clear any pending refresh
   if (realtimeRefreshTimeoutId) {
     clearTimeout(realtimeRefreshTimeoutId);
+    console.log("[Realtime] Cleared pending refresh, rescheduling");
   }
   // Schedule a new refresh
   realtimeRefreshTimeoutId = setTimeout(() => {
     realtimeRefreshTimeoutId = null;
+    console.log("[Realtime] Executing debounced refresh now");
     window.dataBinder?.refresh();
   }, REALTIME_DEBOUNCE_MS);
 }
