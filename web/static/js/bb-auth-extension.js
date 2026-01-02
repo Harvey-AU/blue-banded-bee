@@ -665,8 +665,9 @@ function cleanupRealtimeSubscription() {
     window.jobsChannel = null;
   }
 
-  // Reset retry counter for next page load
+  // Reset state for next page load / SPA navigation
   subscribeRetryCount = 0;
+  cleanupHandlerRegistered = false;
 }
 
 /**
