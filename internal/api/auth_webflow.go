@@ -87,8 +87,9 @@ func (h *Handler) InitiateWebflowOAuth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Scopes: workspaces:read (for name), sites:read, sites:write (for webhooks), cms:read
-	scopes := "workspaces:read sites:read sites:write cms:read"
+	// Scopes: sites:read, sites:write (for webhooks), cms:read
+	// Note: workspaces:read is only available for Enterprise accounts
+	scopes := "sites:read sites:write cms:read"
 
 	// Build Webflow OAuth URL
 	authURL := fmt.Sprintf(
@@ -291,49 +292,75 @@ func (h *Handler) fetchWebflowAuthInfo(ctx context.Context, token string) (*Webf
 }
 
 // fetchWebflowWorkspaceName fetches the display name of a Webflow workspace
-// Uses the list endpoint and finds the matching workspace by ID
+// Uses the sites endpoint since workspaces:read scope requires Enterprise
+// Sites include workspace name in the response
 func (h *Handler) fetchWebflowWorkspaceName(ctx context.Context, token, workspaceID string) (string, error) {
 	client := &http.Client{Timeout: 10 * time.Second}
-	req, err := http.NewRequestWithContext(ctx, "GET", "https://api.webflow.com/v2/workspaces", nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", "https://api.webflow.com/v2/sites", nil)
 	if err != nil {
-		return "", fmt.Errorf("failed to create workspaces request: %w", err)
+		return "", fmt.Errorf("failed to create sites request: %w", err)
 	}
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("accept", "application/json")
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("failed to call workspaces endpoint: %w", err)
+		return "", fmt.Errorf("failed to call sites endpoint: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("workspaces endpoint returned status: %d", resp.StatusCode)
+		return "", fmt.Errorf("sites endpoint returned status: %d", resp.StatusCode)
 	}
 
 	var listResp struct {
-		Workspaces []struct {
-			ID          string `json:"id"`
-			DisplayName string `json:"displayName"`
-		} `json:"workspaces"`
+		Sites []struct {
+			ID            string `json:"id"`
+			WorkspaceID   string `json:"workspaceId"`
+			DisplayName   string `json:"displayName"`
+			ShortName     string `json:"shortName"`
+			CustomDomains []struct {
+				ID  string `json:"id"`
+				URL string `json:"url"`
+			} `json:"customDomains"`
+		} `json:"sites"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&listResp); err != nil {
-		return "", fmt.Errorf("failed to decode workspaces response: %w", err)
+		return "", fmt.Errorf("failed to decode sites response: %w", err)
 	}
 
-	// Find workspace by ID
-	for _, ws := range listResp.Workspaces {
-		if ws.ID == workspaceID {
-			return ws.DisplayName, nil
+	// Find first site in the workspace and use its display name or domain
+	for _, site := range listResp.Sites {
+		if site.WorkspaceID == workspaceID {
+			// Prefer a domain name if available
+			if len(site.CustomDomains) > 0 {
+				return site.CustomDomains[0].URL, nil
+			}
+			// Otherwise use site display name
+			if site.DisplayName != "" {
+				return site.DisplayName, nil
+			}
+			if site.ShortName != "" {
+				return site.ShortName, nil
+			}
 		}
 	}
 
-	// If no match, return first workspace name if available
-	if len(listResp.Workspaces) > 0 {
-		return listResp.Workspaces[0].DisplayName, nil
+	// If no matching workspace, use first site's info
+	if len(listResp.Sites) > 0 {
+		site := listResp.Sites[0]
+		if len(site.CustomDomains) > 0 {
+			return site.CustomDomains[0].URL, nil
+		}
+		if site.DisplayName != "" {
+			return site.DisplayName, nil
+		}
+		if site.ShortName != "" {
+			return site.ShortName, nil
+		}
 	}
 
-	return "", fmt.Errorf("no workspaces found")
+	return "", fmt.Errorf("no sites found")
 }
 
 func (h *Handler) registerWebflowWebhooksSafe(userID, token string) {
