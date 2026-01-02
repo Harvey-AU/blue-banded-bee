@@ -58,6 +58,10 @@ On merge, CI will:
 - **ESLint Config**: Reorganised rules with comments separating critical vs
   warning
 - **Package.json**: Added `name`, `version`, `private: true` fields
+- **SSRF Protection Refactored**: Extracted `ssrfSafeDialContext()` helper to
+  eliminate code duplication across transport configurations
+- **URL Validation Simplified**: Removed redundant DNS lookup from
+  `validateCrawlRequest()` (SSRF check now happens at connection time only)
 
 ## [0.20.1] – 2026-01-02
 
