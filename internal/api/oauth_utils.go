@@ -7,7 +7,10 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"net/http"
+	"net/url"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -87,4 +90,36 @@ func (h *Handler) validateOAuthState(stateParam string) (*OAuthState, error) {
 	}
 
 	return &state, nil
+}
+
+// getAppURL returns the application URL, defaulting to production
+func getAppURL() string {
+	if appURL := os.Getenv("APP_URL"); appURL != "" {
+		return appURL
+	}
+	// defaultAppURL is defined as a constant
+	return "https://app.bluebandedbee.co"
+}
+
+// getDashboardURL returns the dashboard URL
+func getDashboardURL() string {
+	if dashURL := os.Getenv("DASHBOARD_URL"); dashURL != "" {
+		return dashURL
+	}
+	return getAppURL() + "/dashboard"
+}
+
+func (h *Handler) redirectToDashboardWithError(w http.ResponseWriter, r *http.Request, integration, errMsg string) {
+	paramName := fmt.Sprintf("%s_error", strings.ToLower(integration))
+	http.Redirect(w, r, getDashboardURL()+"?"+paramName+"="+url.QueryEscape(errMsg), http.StatusSeeOther)
+}
+
+func (h *Handler) redirectToDashboardWithSuccess(w http.ResponseWriter, r *http.Request, integration, label, connectionID string) {
+	paramName := fmt.Sprintf("%s_connected", strings.ToLower(integration))
+	redirectURL := getDashboardURL() + "?" + paramName + "=" + url.QueryEscape(label)
+	if connectionID != "" {
+		idParamName := fmt.Sprintf("%s_connection_id", strings.ToLower(integration))
+		redirectURL += "&" + idParamName + "=" + url.QueryEscape(connectionID)
+	}
+	http.Redirect(w, r, redirectURL, http.StatusSeeOther)
 }

@@ -117,7 +117,7 @@ func (h *Handler) HandleWebflowOAuthCallback(w http.ResponseWriter, r *http.Requ
 
 	if errParam != "" {
 		logger.Warn().Str("error", errParam).Msg("Webflow OAuth denied")
-		h.redirectToDashboardWithError(w, r, "Webflow connection was cancelled")
+		h.redirectToDashboardWithError(w, r, "Webflow", "Webflow connection was cancelled")
 		return
 	}
 
@@ -130,7 +130,7 @@ func (h *Handler) HandleWebflowOAuthCallback(w http.ResponseWriter, r *http.Requ
 	state, err := h.validateOAuthState(stateParam)
 	if err != nil {
 		logger.Warn().Err(err).Msg("Invalid OAuth state")
-		h.redirectToDashboardWithError(w, r, "Invalid or expired state")
+		h.redirectToDashboardWithError(w, r, "Webflow", "Invalid or expired state")
 		return
 	}
 
@@ -138,7 +138,7 @@ func (h *Handler) HandleWebflowOAuthCallback(w http.ResponseWriter, r *http.Requ
 	tokenResp, err := h.exchangeWebflowCode(code)
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to exchange Webflow OAuth code")
-		h.redirectToDashboardWithError(w, r, "Failed to connect to Webflow")
+		h.redirectToDashboardWithError(w, r, "Webflow", "Failed to connect to Webflow")
 		return
 	}
 
@@ -167,14 +167,14 @@ func (h *Handler) HandleWebflowOAuthCallback(w http.ResponseWriter, r *http.Requ
 
 	if err := h.DB.CreateWebflowConnection(r.Context(), conn); err != nil {
 		logger.Error().Err(err).Msg("Failed to save Webflow connection")
-		h.redirectToDashboardWithError(w, r, "Failed to save connection")
+		h.redirectToDashboardWithError(w, r, "Webflow", "Failed to save connection")
 		return
 	}
 
 	// Store access token in Supabase Vault
 	if err := h.DB.StoreWebflowToken(r.Context(), conn.ID, tokenResp.AccessToken); err != nil {
 		logger.Error().Err(err).Msg("Failed to store access token in vault")
-		h.redirectToDashboardWithError(w, r, "Failed to secure connection")
+		h.redirectToDashboardWithError(w, r, "Webflow", "Failed to secure connection")
 		return
 	}
 
@@ -192,7 +192,7 @@ func (h *Handler) HandleWebflowOAuthCallback(w http.ResponseWriter, r *http.Requ
 		Msg("Webflow connection established")
 
 	// Redirect to dashboard with success
-	h.redirectToDashboardWithSuccess(w, r, "Webflow", conn.ID)
+	h.redirectToDashboardWithSuccess(w, r, "Webflow", "Webflow Connection", conn.ID)
 }
 
 func (h *Handler) exchangeWebflowCode(code string) (*WebflowTokenResponse, error) {
@@ -310,10 +310,3 @@ func (h *Handler) registerSiteWebhook(ctx context.Context, siteID, token, webhoo
 		logger.Warn().Int("status", resp.StatusCode).Str("site_id", siteID).Msg("Webflow API returned error registering webhook")
 	}
 }
-
-// Reuse/Duplicate helpers from slack.go (or move to common)
-// For now assuming shared or duplicated for simplicity in this file
-// NOTE: Ideally `generateOAuthState` and `validateOAuthState` should be moved to `auth/` package to be shared.
-// I will reuse the existing methods attached to `Handler` if they are public, but they are private in slack.go
-// I should refactor them to `internal/api/oauth_utils.go` in a real refactor.
-// For this Turn, I'll copy them to ensure self-contained code, or I'd need to edit slack.go to export them.
