@@ -1500,7 +1500,7 @@ function triggerFileDownload(content, mimeType, filename) {
 }
 
 // Throttling state for job page realtime updates
-const JOB_PAGE_THROTTLE_MS = 2000;
+const JOB_PAGE_THROTTLE_MS = 250;
 let jobPageLastRefresh = 0;
 let jobPageThrottleTimeoutId = null;
 let jobPageIsRefreshing = false;
