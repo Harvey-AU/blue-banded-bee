@@ -46,7 +46,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 -- ============================================================================
 -- 4. Create slack_connections table (with Vault integration from start)
 -- ============================================================================
-CREATE TABLE slack_connections (
+CREATE TABLE IF NOT EXISTS slack_connections (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   organisation_id UUID NOT NULL REFERENCES organisations(id) ON DELETE CASCADE,
   workspace_id TEXT NOT NULL,              -- Slack team_id
@@ -59,10 +59,16 @@ CREATE TABLE slack_connections (
   UNIQUE(organisation_id, workspace_id)
 );
 
-CREATE INDEX idx_slack_connections_org ON slack_connections(organisation_id);
+CREATE INDEX IF NOT EXISTS idx_slack_connections_org ON slack_connections(organisation_id);
 
 -- Enable RLS
 ALTER TABLE slack_connections ENABLE ROW LEVEL SECURITY;
+
+-- Drop existing policies if they exist (for idempotent migrations)
+DROP POLICY IF EXISTS "slack_connections_select_own_org" ON slack_connections;
+DROP POLICY IF EXISTS "slack_connections_insert_own_org" ON slack_connections;
+DROP POLICY IF EXISTS "slack_connections_update_own_org" ON slack_connections;
+DROP POLICY IF EXISTS "slack_connections_delete_own_org" ON slack_connections;
 
 -- RLS policies
 CREATE POLICY "slack_connections_select_own_org" ON slack_connections
@@ -86,6 +92,7 @@ CREATE POLICY "slack_connections_delete_own_org" ON slack_connections
   );
 
 -- Updated at trigger
+DROP TRIGGER IF EXISTS update_slack_connections_updated_at ON slack_connections;
 CREATE TRIGGER update_slack_connections_updated_at
   BEFORE UPDATE ON slack_connections
   FOR EACH ROW
@@ -94,7 +101,7 @@ CREATE TRIGGER update_slack_connections_updated_at
 -- ============================================================================
 -- 5. Create slack_user_links table
 -- ============================================================================
-CREATE TABLE slack_user_links (
+CREATE TABLE IF NOT EXISTS slack_user_links (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   slack_connection_id UUID NOT NULL REFERENCES slack_connections(id) ON DELETE CASCADE,
@@ -104,11 +111,17 @@ CREATE TABLE slack_user_links (
   UNIQUE(user_id, slack_connection_id)
 );
 
-CREATE INDEX idx_slack_user_links_connection ON slack_user_links(slack_connection_id);
-CREATE INDEX idx_slack_user_links_user ON slack_user_links(user_id);
+CREATE INDEX IF NOT EXISTS idx_slack_user_links_connection ON slack_user_links(slack_connection_id);
+CREATE INDEX IF NOT EXISTS idx_slack_user_links_user ON slack_user_links(user_id);
 
 -- Enable RLS
 ALTER TABLE slack_user_links ENABLE ROW LEVEL SECURITY;
+
+-- Drop existing policies if they exist (for idempotent migrations)
+DROP POLICY IF EXISTS "slack_user_links_select_own" ON slack_user_links;
+DROP POLICY IF EXISTS "slack_user_links_insert_own" ON slack_user_links;
+DROP POLICY IF EXISTS "slack_user_links_update_own" ON slack_user_links;
+DROP POLICY IF EXISTS "slack_user_links_delete_own" ON slack_user_links;
 
 -- RLS policies
 CREATE POLICY "slack_user_links_select_own" ON slack_user_links
@@ -126,7 +139,7 @@ CREATE POLICY "slack_user_links_delete_own" ON slack_user_links
 -- ============================================================================
 -- 6. Create notifications table
 -- ============================================================================
-CREATE TABLE notifications (
+CREATE TABLE IF NOT EXISTS notifications (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   organisation_id UUID NOT NULL REFERENCES organisations(id) ON DELETE CASCADE,
   user_id UUID REFERENCES users(id) ON DELETE SET NULL,  -- Optional: specific user
@@ -142,14 +155,18 @@ CREATE TABLE notifications (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_notifications_org ON notifications(organisation_id);
-CREATE INDEX idx_notifications_user ON notifications(user_id) WHERE user_id IS NOT NULL;
-CREATE INDEX idx_notifications_unread ON notifications(organisation_id, read_at) WHERE read_at IS NULL;
-CREATE INDEX idx_notifications_pending_slack ON notifications(created_at)
+CREATE INDEX IF NOT EXISTS idx_notifications_org ON notifications(organisation_id);
+CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id) WHERE user_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_notifications_unread ON notifications(organisation_id, read_at) WHERE read_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_notifications_pending_slack ON notifications(created_at)
   WHERE slack_delivered_at IS NULL;
 
 -- Enable RLS
 ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
+
+-- Drop existing policies if they exist (for idempotent migrations)
+DROP POLICY IF EXISTS "notifications_select_own_org" ON notifications;
+DROP POLICY IF EXISTS "notifications_update_own" ON notifications;
 
 -- RLS policies
 CREATE POLICY "notifications_select_own_org" ON notifications
@@ -232,6 +249,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+DROP TRIGGER IF EXISTS on_slack_connection_delete ON slack_connections;
 CREATE TRIGGER on_slack_connection_delete
   BEFORE DELETE ON slack_connections
   FOR EACH ROW
@@ -263,6 +281,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+DROP TRIGGER IF EXISTS on_user_slack_link ON users;
 CREATE TRIGGER on_user_slack_link
   AFTER INSERT OR UPDATE OF slack_user_id ON users
   FOR EACH ROW
@@ -289,6 +308,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+DROP TRIGGER IF EXISTS on_slack_connection_create ON slack_connections;
 CREATE TRIGGER on_slack_connection_create
   AFTER INSERT ON slack_connections
   FOR EACH ROW

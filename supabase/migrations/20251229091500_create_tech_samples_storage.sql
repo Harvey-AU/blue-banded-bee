@@ -11,6 +11,7 @@ ON CONFLICT (id) DO NOTHING;
 
 -- Allow service role full access to page-crawls bucket
 -- Note: RLS is disabled by default for storage, service role bypasses anyway
+DROP POLICY IF EXISTS "Service role can manage page crawls" ON storage.objects;
 CREATE POLICY "Service role can manage page crawls"
 ON storage.objects
 FOR ALL

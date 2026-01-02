@@ -28,6 +28,10 @@ ON organisation_members(organisation_id);
 
 ALTER TABLE organisation_members ENABLE ROW LEVEL SECURITY;
 
+-- Drop existing policies if they exist (for idempotent migrations)
+DROP POLICY IF EXISTS "Users can view own memberships" ON organisation_members;
+DROP POLICY IF EXISTS "Users can view org co-members" ON organisation_members;
+
 -- Users can view their own memberships
 CREATE POLICY "Users can view own memberships"
 ON organisation_members FOR SELECT

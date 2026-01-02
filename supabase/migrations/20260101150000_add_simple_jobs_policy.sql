@@ -3,6 +3,7 @@
 -- for the common case where a user is just viewing their own jobs.
 -- This DOES NOT replace the organisation-based policy, but adds an alternative path.
 
+DROP POLICY IF EXISTS "users_own_jobs_simple" ON jobs;
 CREATE POLICY "users_own_jobs_simple" ON jobs
 FOR SELECT
 USING (

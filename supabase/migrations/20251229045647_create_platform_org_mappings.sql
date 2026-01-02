@@ -48,6 +48,9 @@ ON platform_org_mappings(organisation_id);
 
 ALTER TABLE platform_org_mappings ENABLE ROW LEVEL SECURITY;
 
+-- Drop existing policies if they exist (for idempotent migrations)
+DROP POLICY IF EXISTS "Users can view own org mappings" ON platform_org_mappings;
+
 -- Users can view mappings for organisations they belong to
 CREATE POLICY "Users can view own org mappings"
 ON platform_org_mappings FOR SELECT
