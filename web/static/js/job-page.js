@@ -1,8 +1,5 @@
 const DEFAULT_PAGE_SIZE = 50;
 const PAGE_SIZE_OPTIONS = [25, 50, 100, 200];
-// TRANSACTION_VISIBILITY_DELAY_MS exposed on window by bb-auth-extension.js
-const TRANSACTION_VISIBILITY_DELAY_MS =
-  window.TRANSACTION_VISIBILITY_DELAY_MS || 200;
 
 const integerFormatter = new Intl.NumberFormat("en-AU", {
   maximumFractionDigits: 0,
@@ -1543,7 +1540,7 @@ async function subscribeToJobProgress(state) {
             } catch (err) {
               console.warn("Realtime data reload failed:", err);
             }
-          }, TRANSACTION_VISIBILITY_DELAY_MS);
+          }, window.TRANSACTION_VISIBILITY_DELAY_MS || 200);
         }
       )
       .subscribe((status, err) => {
