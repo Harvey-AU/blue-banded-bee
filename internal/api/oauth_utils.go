@@ -111,15 +111,18 @@ func getDashboardURL() string {
 
 func (h *Handler) redirectToDashboardWithError(w http.ResponseWriter, r *http.Request, integration, errMsg string) {
 	paramName := fmt.Sprintf("%s_error", strings.ToLower(integration))
-	http.Redirect(w, r, getDashboardURL()+"?"+paramName+"="+url.QueryEscape(errMsg), http.StatusSeeOther)
+	params := url.Values{}
+	params.Set(paramName, errMsg)
+	http.Redirect(w, r, getDashboardURL()+"?"+params.Encode(), http.StatusSeeOther)
 }
 
 func (h *Handler) redirectToDashboardWithSuccess(w http.ResponseWriter, r *http.Request, integration, label, connectionID string) {
 	paramName := fmt.Sprintf("%s_connected", strings.ToLower(integration))
-	redirectURL := getDashboardURL() + "?" + paramName + "=" + url.QueryEscape(label)
+	params := url.Values{}
+	params.Set(paramName, label)
 	if connectionID != "" {
 		idParamName := fmt.Sprintf("%s_connection_id", strings.ToLower(integration))
-		redirectURL += "&" + idParamName + "=" + url.QueryEscape(connectionID)
+		params.Set(idParamName, connectionID)
 	}
-	http.Redirect(w, r, redirectURL, http.StatusSeeOther)
+	http.Redirect(w, r, getDashboardURL()+"?"+params.Encode(), http.StatusSeeOther)
 }

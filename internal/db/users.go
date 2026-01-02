@@ -18,7 +18,7 @@ type User struct {
 	OrganisationID       *string   `json:"organisation_id,omitempty"`
 	ActiveOrganisationID *string   `json:"active_organisation_id,omitempty"`
 	SlackUserID          *string   `json:"slack_user_id,omitempty"`
-	WebhookToken         string    `json:"webhook_token,omitempty"`
+	WebhookToken         *string   `json:"-"` // Excluded from JSON - sensitive credential
 	CreatedAt            time.Time `json:"created_at"`
 	UpdatedAt            time.Time `json:"updated_at"`
 }

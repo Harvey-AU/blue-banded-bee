@@ -104,7 +104,7 @@ func (db *DB) GetWebflowConnection(ctx context.Context, connectionID string) (*W
 		&conn.CreatedAt, &conn.UpdatedAt,
 	)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrWebflowConnectionNotFound
 		}
 		log.Error().Err(err).Str("connection_id", connectionID).Msg("Failed to get webflow connection")

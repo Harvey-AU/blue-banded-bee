@@ -87,8 +87,14 @@ function handleWebflowAction(action, element) {
  */
 async function loadWebflowConnections() {
   try {
+    if (!window.dataBinder?.fetchData) {
+      console.warn(
+        "dataBinder not available, skipping Webflow connections load"
+      );
+      return;
+    }
     const connections = await window.dataBinder.fetchData(
-      "/v1/integrations/webflow" // This endpoint was added to the Go interface list
+      "/v1/integrations/webflow"
     );
 
     const connectionsList = document.getElementById("webflowConnectionsList");
@@ -195,10 +201,14 @@ async function disconnectWebflow(connectionId) {
   }
 
   try {
-    const session = await window.supabase.auth.getSession();
-    const token = session?.data?.session?.access_token;
+    const { data: { session } = {} } = await window.supabase.auth.getSession();
+    const token = session?.access_token;
+    if (!token) {
+      showWebflowError("Not authenticated. Please sign in.");
+      return;
+    }
     const response = await fetch(
-      `/v1/integrations/webflow/${encodeURIComponent(connectionId)}`, // Requires this endpoint to be handled
+      `/v1/integrations/webflow/${encodeURIComponent(connectionId)}`,
       {
         method: "DELETE",
         headers: {

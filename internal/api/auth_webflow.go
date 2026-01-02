@@ -71,8 +71,13 @@ func (h *Handler) InitiateWebflowOAuth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Sign state with JWT Secret (reusing Slack state logic helper if possible, or duplicate)
-	// Replicating generateOAuthState logic from slack.go to avoid coupling or cyclic deps if not shared
+	if getOAuthStateSecret() == "" {
+		logger.Error().Msg("SUPABASE_JWT_SECRET not configured for OAuth state signing")
+		InternalError(w, r, fmt.Errorf("webflow integration not configured"))
+		return
+	}
+
+	// Sign state with JWT Secret
 	state, err := h.generateOAuthState(userClaims.UserID, *user.OrganisationID)
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to generate OAuth state")
@@ -217,7 +222,8 @@ func (h *Handler) exchangeWebflowCode(code string) (*WebflowTokenResponse, error
 func (h *Handler) registerWebflowWebhooksSafe(userID, token string) {
 	// Simple wrapper to run in background and log errors
 	logger := log.With().Str("user_id", userID).Logger()
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
 
 	logger.Info().Msg("Starting Webflow webhook registration")
 
@@ -228,20 +234,20 @@ func (h *Handler) registerWebflowWebhooksSafe(userID, token string) {
 		return
 	}
 
-	if user.WebhookToken == "" {
+	if user.WebhookToken == nil || *user.WebhookToken == "" {
 		logger.Warn().Msg("User has no webhook token, cannot register webhooks")
 		return
 	}
 
-	appURL := os.Getenv("APP_URL")
-	if appURL == "" {
-		appURL = "http://localhost:8080"
-	}
-	webhookURL := fmt.Sprintf("%s/v1/webhooks/webflow/%s", appURL, user.WebhookToken)
+	webhookURL := fmt.Sprintf("%s/v1/webhooks/webflow/%s", getAppURL(), *user.WebhookToken)
 
 	// 2. List sites
 	client := &http.Client{Timeout: 10 * time.Second}
-	req, _ := http.NewRequestWithContext(ctx, "GET", "https://api.webflow.com/v2/sites", nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", "https://api.webflow.com/v2/sites", nil)
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to create request for Webflow sites")
+		return
+	}
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("accept", "application/json")
 
@@ -281,8 +287,12 @@ func (h *Handler) registerSiteWebhook(ctx context.Context, siteID, token, webhoo
 	}
 	body, _ := json.Marshal(payload)
 
-	url := fmt.Sprintf("https://api.webflow.com/v2/sites/%s/webhooks", siteID)
-	req, _ := http.NewRequestWithContext(ctx, "POST", url, strings.NewReader(string(body)))
+	reqURL := fmt.Sprintf("https://api.webflow.com/v2/sites/%s/webhooks", siteID)
+	req, err := http.NewRequestWithContext(ctx, "POST", reqURL, strings.NewReader(string(body)))
+	if err != nil {
+		logger.Error().Err(err).Str("site_id", siteID).Msg("Failed to create webhook registration request")
+		return
+	}
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", "application/json")
 
