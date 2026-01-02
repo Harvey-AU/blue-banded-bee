@@ -45,6 +45,10 @@ let turnstileRetryCount = 0;
 let awaitingCaptchaRefresh = false;
 let captchaIssuedAt = null;
 
+// Auth state refresh debouncing - prevents rapid-fire dashboard refreshes
+const AUTH_REFRESH_DEBOUNCE_MS = 500;
+let authRefreshTimeoutId = null;
+
 /**
  * Initialise Supabase client
  * @returns {boolean} Success status
@@ -296,9 +300,16 @@ function updateAuthState(isAuthenticated) {
       : "none";
   });
 
-  // If user just authenticated and dataBinder exists, load dashboard data
+  // If user just authenticated and dataBinder exists, load dashboard data (debounced)
   if (isAuthenticated && window.dataBinder) {
-    setTimeout(() => window.dataBinder.refresh(), 100);
+    // Clear any pending refresh to debounce rapid auth state changes
+    if (authRefreshTimeoutId) {
+      clearTimeout(authRefreshTimeoutId);
+    }
+    authRefreshTimeoutId = setTimeout(() => {
+      authRefreshTimeoutId = null;
+      window.dataBinder.refresh();
+    }, AUTH_REFRESH_DEBOUNCE_MS);
   }
 
   // Re-setup logout handler after elements become visible
