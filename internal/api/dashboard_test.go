@@ -69,7 +69,7 @@ func TestDashboardStatsEndpoint(t *testing.T) {
 				if startDate != "" {
 					if _, err := time.Parse("2006-01-02", startDate); err != nil {
 						w.WriteHeader(http.StatusBadRequest)
-						json.NewEncoder(w).Encode(map[string]string{"error": "Invalid start date"})
+						_ = json.NewEncoder(w).Encode(map[string]string{"error": "Invalid start date"})
 						return
 					}
 				}
@@ -77,7 +77,7 @@ func TestDashboardStatsEndpoint(t *testing.T) {
 				if endDate != "" {
 					if _, err := time.Parse("2006-01-02", endDate); err != nil {
 						w.WriteHeader(http.StatusBadRequest)
-						json.NewEncoder(w).Encode(map[string]string{"error": "Invalid end date"})
+						_ = json.NewEncoder(w).Encode(map[string]string{"error": "Invalid end date"})
 						return
 					}
 				}
@@ -87,7 +87,7 @@ func TestDashboardStatsEndpoint(t *testing.T) {
 					end, _ := time.Parse("2006-01-02", endDate)
 					if start.After(end) {
 						w.WriteHeader(http.StatusBadRequest)
-						json.NewEncoder(w).Encode(map[string]string{"error": "Start date must be before end date"})
+						_ = json.NewEncoder(w).Encode(map[string]string{"error": "Start date must be before end date"})
 						return
 					}
 				}
@@ -112,7 +112,7 @@ func TestDashboardStatsEndpoint(t *testing.T) {
 				}
 
 				w.WriteHeader(http.StatusOK)
-				json.NewEncoder(w).Encode(stats)
+				_ = json.NewEncoder(w).Encode(stats)
 			})
 
 			handler.ServeHTTP(w, req)
@@ -121,7 +121,7 @@ func TestDashboardStatsEndpoint(t *testing.T) {
 
 			if tt.expectedStatus == http.StatusOK && tt.expectedFields != nil {
 				var response map[string]interface{}
-				json.Unmarshal(w.Body.Bytes(), &response)
+				_ = json.Unmarshal(w.Body.Bytes(), &response)
 
 				for _, field := range tt.expectedFields {
 					assert.Contains(t, response, field, "Response should contain field: %s", field)
@@ -202,13 +202,13 @@ func TestDashboardActivityTimeline(t *testing.T) {
 							limit = limit*10 + int(c-'0')
 						} else if c == '-' && limit == 0 {
 							w.WriteHeader(http.StatusBadRequest)
-							json.NewEncoder(w).Encode(map[string]string{"error": "Invalid limit"})
+							_ = json.NewEncoder(w).Encode(map[string]string{"error": "Invalid limit"})
 							return
 						}
 					}
 					if err != nil {
 						w.WriteHeader(http.StatusBadRequest)
-						json.NewEncoder(w).Encode(map[string]string{"error": "Invalid limit"})
+						_ = json.NewEncoder(w).Encode(map[string]string{"error": "Invalid limit"})
 						return
 					}
 				}
@@ -243,7 +243,7 @@ func TestDashboardActivityTimeline(t *testing.T) {
 				}
 
 				w.WriteHeader(http.StatusOK)
-				json.NewEncoder(w).Encode(map[string]interface{}{
+				_ = json.NewEncoder(w).Encode(map[string]interface{}{
 					"activities": activities,
 					"total":      100,
 					"offset":     offset,
@@ -257,7 +257,7 @@ func TestDashboardActivityTimeline(t *testing.T) {
 
 			if tt.expectedStatus == http.StatusOK {
 				var response map[string]interface{}
-				json.Unmarshal(w.Body.Bytes(), &response)
+				_ = json.Unmarshal(w.Body.Bytes(), &response)
 
 				if activities, ok := response["activities"].([]interface{}); ok {
 					if tt.expectedCount > 0 {
@@ -489,19 +489,19 @@ func TestDashboardErrorResponses(t *testing.T) {
 				switch {
 				case r.URL.Path == "/v1/dashboard/invalid":
 					w.WriteHeader(http.StatusNotFound)
-					json.NewEncoder(w).Encode(map[string]string{"error": "Not Found"})
+					_ = json.NewEncoder(w).Encode(map[string]string{"error": "Not Found"})
 				case r.URL.Path == "/v1/dashboard/admin/stats":
 					w.WriteHeader(http.StatusForbidden)
-					json.NewEncoder(w).Encode(map[string]string{"error": "Forbidden"})
+					_ = json.NewEncoder(w).Encode(map[string]string{"error": "Forbidden"})
 				case r.URL.Query().Get("trigger_error") == "true":
 					w.WriteHeader(http.StatusInternalServerError)
-					json.NewEncoder(w).Encode(map[string]string{"error": "Internal Server Error"})
+					_ = json.NewEncoder(w).Encode(map[string]string{"error": "Internal Server Error"})
 				case r.Header.Get("Authorization") == "":
 					w.WriteHeader(http.StatusUnauthorized)
-					json.NewEncoder(w).Encode(map[string]string{"error": "Unauthorized"})
+					_ = json.NewEncoder(w).Encode(map[string]string{"error": "Unauthorized"})
 				default:
 					w.WriteHeader(http.StatusOK)
-					json.NewEncoder(w).Encode(map[string]interface{}{"status": "ok"})
+					_ = json.NewEncoder(w).Encode(map[string]interface{}{"status": "ok"})
 				}
 			})
 
@@ -516,7 +516,7 @@ func TestDashboardErrorResponses(t *testing.T) {
 
 			if tt.expectedError != "" {
 				var response map[string]string
-				json.Unmarshal(w.Body.Bytes(), &response)
+				_ = json.Unmarshal(w.Body.Bytes(), &response)
 				assert.Equal(t, tt.expectedError, response["error"], "Error message should match")
 			}
 		})

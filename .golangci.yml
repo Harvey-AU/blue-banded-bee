@@ -12,6 +12,7 @@ linters:
     - ineffassign
     - gocyclo
     - misspell
+    - gosec
 
   settings:
     gocyclo:

@@ -39,7 +39,7 @@ func (db *DB) ResetSchema() error {
 			Int("total_tables", len(tables)).
 			Msg("Dropping table")
 
-		_, err := db.client.Exec(fmt.Sprintf(`DROP TABLE IF EXISTS %s CASCADE`, table))
+		_, err := db.client.Exec(fmt.Sprintf(`DROP TABLE IF EXISTS %s CASCADE`, table)) //nolint:gosec // table names are hardcoded
 		if err != nil {
 			log.Error().
 				Err(err).
@@ -71,7 +71,7 @@ func (db *DB) ResetSchema() error {
 	}
 	for _, signature := range functionSignatures {
 		dropStart := time.Now()
-		if _, err := db.client.Exec(fmt.Sprintf("DROP FUNCTION IF EXISTS %s", signature)); err != nil {
+		if _, err := db.client.Exec(fmt.Sprintf("DROP FUNCTION IF EXISTS %s", signature)); err != nil { //nolint:gosec // function signatures are hardcoded
 			log.Warn().Err(err).Str("function", signature).Msg("Failed to drop function during reset")
 		} else {
 			log.Info().Str("function", signature).Dur("duration", time.Since(dropStart)).Msg("Dropped function if existed")
@@ -212,8 +212,8 @@ func (db *DB) runMigrations() (int, error) {
 			Msg("Applying migration")
 
 		// Read migration file
-		filePath := filepath.Join(migrationsDir, filename)
-		content, err := os.ReadFile(filePath)
+		filePath := filepath.Clean(filepath.Join(migrationsDir, filename))
+		content, err := os.ReadFile(filePath) //nolint:gosec // filePath is built from internal migrations directory
 		if err != nil {
 			return migrationsApplied, fmt.Errorf("failed to read migration %s: %w", filename, err)
 		}
@@ -307,7 +307,7 @@ func (db *DB) terminateActiveConnections() error {
 				cancelledCount++
 			}
 		}
-		rows.Close()
+		_ = rows.Close()
 		log.Info().Int("queries_cancelled", cancelledCount).Msg("Cancelled running queries")
 	}
 
