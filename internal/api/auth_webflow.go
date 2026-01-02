@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -201,14 +202,15 @@ func (h *Handler) exchangeWebflowCode(code string) (*WebflowTokenResponse, error
 	values.Set("code", code)
 	values.Set("redirect_uri", getWebflowRedirectURI())
 
-	resp, err := http.PostForm("https://api.webflow.com/oauth/access_token", values)
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.PostForm("https://api.webflow.com/oauth/access_token", values)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("webflow api returned status: %d", resp.StatusCode)
+		return nil, fmt.Errorf("webflow API returned status: %d", resp.StatusCode)
 	}
 
 	var tokenResp WebflowTokenResponse
@@ -285,7 +287,11 @@ func (h *Handler) registerSiteWebhook(ctx context.Context, siteID, token, webhoo
 		"triggerType": "site_publish",
 		"url":         webhookURL,
 	}
-	body, _ := json.Marshal(payload)
+	body, err := json.Marshal(payload)
+	if err != nil {
+		logger.Error().Err(err).Str("site_id", siteID).Msg("Failed to marshal webhook payload")
+		return
+	}
 
 	reqURL := fmt.Sprintf("https://api.webflow.com/v2/sites/%s/webhooks", siteID)
 	req, err := http.NewRequestWithContext(ctx, "POST", reqURL, strings.NewReader(string(body)))
@@ -428,7 +434,7 @@ func (h *Handler) deleteWebflowConnection(w http.ResponseWriter, r *http.Request
 
 	err = h.DB.DeleteWebflowConnection(r.Context(), connectionID, *user.OrganisationID)
 	if err != nil {
-		if err == db.ErrWebflowConnectionNotFound {
+		if errors.Is(err, db.ErrWebflowConnectionNotFound) {
 			NotFound(w, r, "Webflow connection not found")
 			return
 		}
