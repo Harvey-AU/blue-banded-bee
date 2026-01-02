@@ -2531,7 +2531,7 @@
 
     <!-- Include the data binding and dashboard logic -->
     <script src="/js/bb-data-binder.js?v=20251222" defer></script>
-    <script src="/js/bb-auth-extension.js?v=20251222" defer></script>
+    <script src="/js/bb-auth-extension.js?v=20260102" defer></script>
     <script src="/js/bb-metadata.js?v=20251222" defer></script>
     <script src="/js/bb-dashboard-actions.js?v=20251222" defer></script>
     <script src="/js/bb-slack.js?v=20251229" defer></script>
@@ -2570,6 +2570,28 @@
           const {
             data: { session },
           } = await window.supabase.auth.getSession();
+
+          // Pre-load active org from Supabase DB directly to ensure Realtime starts
+          // This bypasses potential 429s on the /v1/organisations API endpoint
+          if (session?.user) {
+            try {
+              const { data: userRow } = await window.supabase
+                .from("users")
+                .select("active_organisation_id")
+                .eq("id", session.user.id)
+                .single();
+
+              if (userRow?.active_organisation_id) {
+                window.BB_ACTIVE_ORG = { id: userRow.active_organisation_id };
+                // Trigger subscription immediately
+                if (window.subscribeToJobUpdates) {
+                  window.subscribeToJobUpdates();
+                }
+              }
+            } catch (err) {
+              console.warn("Failed to pre-load org:", err);
+            }
+          }
 
           // Load schedules after auth is confirmed
           if (session?.user && window.loadSchedules) {
