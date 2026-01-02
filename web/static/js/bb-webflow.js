@@ -233,10 +233,11 @@ async function disconnectWebflow(connectionId) {
 
 /**
  * Show a success message
+ * Uses dashboard's generic integration feedback helper if available
  */
 function showWebflowSuccess(message) {
-  if (window.showWebflowSuccess) {
-    window.showWebflowSuccess(message);
+  if (window.showIntegrationFeedback) {
+    window.showIntegrationFeedback("webflow", "success", message);
   } else if (window.showDashboardSuccess) {
     window.showDashboardSuccess(message);
   } else {
@@ -246,10 +247,11 @@ function showWebflowSuccess(message) {
 
 /**
  * Show an error message
+ * Uses dashboard's generic integration feedback helper if available
  */
 function showWebflowError(message) {
-  if (window.showWebflowError) {
-    window.showWebflowError(message);
+  if (window.showIntegrationFeedback) {
+    window.showIntegrationFeedback("webflow", "error", message);
   } else if (window.showDashboardError) {
     window.showDashboardError(message);
   } else {
