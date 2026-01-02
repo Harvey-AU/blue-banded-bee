@@ -160,6 +160,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Create trigger on jobs table
+DROP TRIGGER IF EXISTS on_job_status_change ON jobs;
 CREATE TRIGGER on_job_status_change
     AFTER UPDATE OF status ON jobs
     FOR EACH ROW

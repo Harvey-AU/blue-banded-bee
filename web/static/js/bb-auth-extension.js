@@ -616,29 +616,60 @@ window.TRANSACTION_VISIBILITY_DELAY_MS = TRANSACTION_VISIBILITY_DELAY_MS;
 const SUBSCRIBE_RETRY_INTERVAL_MS = 1000;
 const FALLBACK_POLLING_INTERVAL_MS = 60000;
 const MAX_SUBSCRIBE_RETRIES = 15;
-const REALTIME_DEBOUNCE_MS = 1000; // Debounce rapid realtime notifications
+const REALTIME_DEBOUNCE_MS = 2000; // Debounce rapid realtime notifications (includes transaction visibility delay)
 
 // Realtime subscription state
 let subscribeRetryCount = 0;
 let subscribeRetryTimeoutId = null;
 let fallbackPollingIntervalId = null;
 let cleanupHandlerRegistered = false;
-let realtimeRefreshTimeoutId = null;
+let lastRealtimeRefresh = 0;
+let throttleTimeoutId = null;
+let isRefreshing = false;
 
 /**
- * Debounced refresh for realtime notifications.
- * Coalesces multiple rapid notifications into a single refresh.
+ * Throttled refresh for realtime notifications.
+ * Guarantees at most one refresh per REALTIME_DEBOUNCE_MS interval,
+ * but ensures refresh happens even with continuous notifications.
  */
-function debouncedRealtimeRefresh() {
-  // Clear any pending refresh
-  if (realtimeRefreshTimeoutId) {
-    clearTimeout(realtimeRefreshTimeoutId);
+function throttledRealtimeRefresh() {
+  const now = Date.now();
+  const timeSinceLastRefresh = now - lastRealtimeRefresh;
+
+  // If enough time has passed, refresh immediately
+  if (timeSinceLastRefresh >= REALTIME_DEBOUNCE_MS && !isRefreshing) {
+    executeRealtimeRefresh();
+    return;
   }
-  // Schedule a new refresh
-  realtimeRefreshTimeoutId = setTimeout(() => {
-    realtimeRefreshTimeoutId = null;
-    window.dataBinder?.refresh();
-  }, REALTIME_DEBOUNCE_MS);
+
+  // Otherwise, schedule a refresh for when the throttle window expires
+  // (only if one isn't already scheduled)
+  if (!throttleTimeoutId && !isRefreshing) {
+    const delay = REALTIME_DEBOUNCE_MS - timeSinceLastRefresh;
+    throttleTimeoutId = setTimeout(
+      () => {
+        throttleTimeoutId = null;
+        if (!isRefreshing) {
+          executeRealtimeRefresh();
+        }
+      },
+      Math.max(delay, 100)
+    );
+  }
+}
+
+/**
+ * Execute the actual refresh
+ */
+async function executeRealtimeRefresh() {
+  if (isRefreshing) return;
+  isRefreshing = true;
+  lastRealtimeRefresh = Date.now();
+  try {
+    await window.dataBinder?.refresh();
+  } finally {
+    isRefreshing = false;
+  }
 }
 
 /**
@@ -675,10 +706,10 @@ function cleanupRealtimeSubscription() {
     subscribeRetryTimeoutId = null;
   }
 
-  // Clear debounced refresh timeout
-  if (realtimeRefreshTimeoutId) {
-    clearTimeout(realtimeRefreshTimeoutId);
-    realtimeRefreshTimeoutId = null;
+  // Clear throttled refresh timeout
+  if (throttleTimeoutId) {
+    clearTimeout(throttleTimeoutId);
+    throttleTimeoutId = null;
   }
 
   // Clear fallback polling
@@ -748,10 +779,8 @@ async function subscribeToJobUpdates() {
           filter: `organisation_id=eq.${orgId}`,
         },
         (payload) => {
-          // Use debounced refresh to coalesce rapid notifications
-          setTimeout(() => {
-            debouncedRealtimeRefresh();
-          }, TRANSACTION_VISIBILITY_DELAY_MS);
+          // Debounce coalesces rapid notifications - delay already includes transaction visibility buffer
+          throttledRealtimeRefresh();
         }
       )
       .on(
@@ -763,9 +792,7 @@ async function subscribeToJobUpdates() {
           filter: `organisation_id=eq.${orgId}`,
         },
         (payload) => {
-          setTimeout(() => {
-            debouncedRealtimeRefresh();
-          }, TRANSACTION_VISIBILITY_DELAY_MS);
+          throttledRealtimeRefresh();
         }
       )
       .on(
@@ -777,9 +804,7 @@ async function subscribeToJobUpdates() {
           filter: `organisation_id=eq.${orgId}`,
         },
         (payload) => {
-          setTimeout(() => {
-            debouncedRealtimeRefresh();
-          }, TRANSACTION_VISIBILITY_DELAY_MS);
+          throttledRealtimeRefresh();
         }
       )
       .subscribe((status, err) => {

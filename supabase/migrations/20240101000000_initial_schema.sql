@@ -41,7 +41,7 @@ CREATE TABLE IF NOT EXISTS domains (
 -- Create pages lookup table
 CREATE TABLE IF NOT EXISTS pages (
     id SERIAL PRIMARY KEY,
-    domain_id INTEGER NOT NULL REFERENCES domains(id),
+    domain_id INTEGER NOT NULL REFERENCES domains(id) ON DELETE CASCADE,
     path TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE(domain_id, path)
@@ -50,9 +50,9 @@ CREATE TABLE IF NOT EXISTS pages (
 -- Create jobs table with generated columns for duration calculations
 CREATE TABLE IF NOT EXISTS jobs (
     id TEXT PRIMARY KEY,
-    domain_id INTEGER NOT NULL REFERENCES domains(id),
-    user_id UUID REFERENCES users(id),
-    organisation_id UUID REFERENCES organisations(id),
+    domain_id INTEGER NOT NULL REFERENCES domains(id) ON DELETE CASCADE,
+    user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+    organisation_id UUID REFERENCES organisations(id) ON DELETE CASCADE,
     status TEXT NOT NULL,
     progress REAL NOT NULL,
     sitemap_tasks INTEGER NOT NULL DEFAULT 0,
@@ -97,7 +97,7 @@ CREATE TABLE IF NOT EXISTS jobs (
 CREATE TABLE IF NOT EXISTS tasks (
     id TEXT PRIMARY KEY,
     job_id TEXT NOT NULL,
-    page_id INTEGER NOT NULL REFERENCES pages(id),
+    page_id INTEGER NOT NULL REFERENCES pages(id) ON DELETE CASCADE,
     path TEXT NOT NULL,
     status TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL,
@@ -130,7 +130,7 @@ CREATE TABLE IF NOT EXISTS tasks (
     second_content_transfer_time INTEGER,
     cache_check_attempts JSONB,
     priority_score NUMERIC(4,3) DEFAULT 0.000,
-    FOREIGN KEY (job_id) REFERENCES jobs(id)
+    FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE
 );
 
 -- =============================================================================

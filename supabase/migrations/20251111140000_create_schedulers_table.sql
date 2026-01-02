@@ -4,8 +4,8 @@
 -- Create schedulers table
 CREATE TABLE IF NOT EXISTS schedulers (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    domain_id INTEGER NOT NULL REFERENCES domains(id),
-    organisation_id UUID NOT NULL REFERENCES organisations(id),
+    domain_id INTEGER NOT NULL REFERENCES domains(id) ON DELETE CASCADE,
+    organisation_id UUID NOT NULL REFERENCES organisations(id) ON DELETE CASCADE,
     schedule_interval_hours INTEGER NOT NULL CHECK (schedule_interval_hours IN (6, 12, 24, 48)),
     next_run_at TIMESTAMPTZ NOT NULL,
     is_enabled BOOLEAN NOT NULL DEFAULT TRUE,
