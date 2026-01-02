@@ -285,8 +285,6 @@ func (db *DB) ListJobs(organisationID string, limit, offset int, status, dateRan
 	// #nosec G202
 	selectQuery += fmt.Sprintf(" ORDER BY j.created_at DESC LIMIT %d OFFSET %d", limit, offset)
 
-	args = append(args, limit, offset)
-
 	rows, err := db.client.Query(selectQuery, args...)
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to query jobs: %w", err)
@@ -387,8 +385,6 @@ func (db *DB) ListJobsWithOffset(organisationID string, limit, offset int, statu
 	` + baseQuery
 	// #nosec G202
 	selectQuery += fmt.Sprintf(" ORDER BY j.created_at DESC LIMIT %d OFFSET %d", limit, offset)
-
-	args = append(args, limit, offset)
 
 	rows, err := db.client.Query(selectQuery, args...)
 	if err != nil {
