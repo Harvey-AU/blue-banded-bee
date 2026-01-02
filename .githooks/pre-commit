@@ -145,7 +145,7 @@ echo "🛡️  Running Security Checks..."
 # 1. Govulncheck (Fast dependency scanning)
 if command -v govulncheck &> /dev/null; then
     echo "  Running govulncheck..."
-    if ! govulncheck ./... > /dev/null; then
+    if ! govulncheck ./... > /dev/null 2>&1; then
         echo -e "${RED}❌ Govulncheck failed (Vulnerabilities found)${NC}"
         echo "Run './scripts/security-check.sh' for details."
         exit 1
