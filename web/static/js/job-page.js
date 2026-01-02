@@ -1,5 +1,6 @@
 const DEFAULT_PAGE_SIZE = 50;
 const PAGE_SIZE_OPTIONS = [25, 50, 100, 200];
+const TRANSACTION_VISIBILITY_DELAY_MS = 200;
 
 const integerFormatter = new Intl.NumberFormat("en-AU", {
   maximumFractionDigits: 0,
@@ -1511,8 +1512,6 @@ async function subscribeToJobProgress(state) {
     window.supabase.removeChannel(window.jobProgressChannel);
   }
 
-  console.log("[Realtime] Subscribing to job progress:", state.jobId);
-
   try {
     const channel = window.supabase
       .channel(`job-progress:${state.jobId}`)
@@ -1525,8 +1524,7 @@ async function subscribeToJobProgress(state) {
           filter: `id=eq.${state.jobId}`,
         },
         (payload) => {
-          console.log("[Realtime] Job updated on page:", payload.new);
-          // 200ms delay for transaction visibility
+          // Delay for transaction visibility
           setTimeout(async () => {
             try {
               const updatedJob = await loadJob(state);
@@ -1537,27 +1535,24 @@ async function subscribeToJobProgress(state) {
                 updatedJob &&
                 !["running", "pending"].includes(updatedJob.status)
               ) {
-                console.log("[Realtime] Job finished, removing subscription");
                 window.supabase.removeChannel(channel);
                 window.jobProgressChannel = null;
               }
             } catch (err) {
               console.warn("Realtime data reload failed:", err);
             }
-          }, 200);
+          }, TRANSACTION_VISIBILITY_DELAY_MS);
         }
       )
       .subscribe((status, err) => {
-        if (status === "SUBSCRIBED") {
-          console.log("[Realtime] Listening for job progress:" + state.jobId);
-        } else if (err) {
+        if (err) {
           console.error("[Realtime] Job progress subscription error:", err);
         }
       });
 
     window.jobProgressChannel = channel;
   } catch (err) {
-    console.error("Failed to subscribe to job progress:", err);
+    console.error("[Realtime] Failed to subscribe to job progress:", err);
   }
 }
 

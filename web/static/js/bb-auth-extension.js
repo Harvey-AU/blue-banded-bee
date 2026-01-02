@@ -610,8 +610,64 @@ async function setupQuickAuth(dataBinder) {
   console.log("Quick auth setup complete");
 }
 
-let subscribeRetryCount = 0;
+// Realtime subscription constants
+const TRANSACTION_VISIBILITY_DELAY_MS = 200;
+const SUBSCRIBE_RETRY_INTERVAL_MS = 1000;
+const FALLBACK_POLLING_INTERVAL_MS = 60000;
 const MAX_SUBSCRIBE_RETRIES = 15;
+
+// Realtime subscription state
+let subscribeRetryCount = 0;
+let subscribeRetryTimeoutId = null;
+let fallbackPollingIntervalId = null;
+let cleanupHandlerRegistered = false;
+
+/**
+ * Start fallback polling when realtime connection fails
+ */
+function startFallbackPolling() {
+  if (fallbackPollingIntervalId) {
+    return; // Already polling
+  }
+  fallbackPollingIntervalId = setInterval(() => {
+    if (window.dataBinder) {
+      window.dataBinder.refresh();
+    }
+  }, FALLBACK_POLLING_INTERVAL_MS);
+}
+
+/**
+ * Stop fallback polling when realtime connection is restored
+ */
+function clearFallbackPolling() {
+  if (fallbackPollingIntervalId) {
+    clearInterval(fallbackPollingIntervalId);
+    fallbackPollingIntervalId = null;
+  }
+}
+
+/**
+ * Clean up realtime subscriptions and timers
+ */
+function cleanupRealtimeSubscription() {
+  // Clear retry timeout
+  if (subscribeRetryTimeoutId) {
+    clearTimeout(subscribeRetryTimeoutId);
+    subscribeRetryTimeoutId = null;
+  }
+
+  // Clear fallback polling
+  clearFallbackPolling();
+
+  // Remove channel
+  if (window.jobsChannel && window.supabase) {
+    window.supabase.removeChannel(window.jobsChannel);
+    window.jobsChannel = null;
+  }
+
+  // Reset retry counter for next page load
+  subscribeRetryCount = 0;
+}
 
 /**
  * Subscribe to job updates via Supabase Realtime
@@ -622,19 +678,36 @@ async function subscribeToJobUpdates() {
   if (!orgId || !window.supabase) {
     if (subscribeRetryCount < MAX_SUBSCRIBE_RETRIES) {
       subscribeRetryCount++;
-      // Retry once org/supabase is loaded
-      setTimeout(subscribeToJobUpdates, 1000);
+      // Retry once org/supabase is loaded - track timeout for cleanup
+      subscribeRetryTimeoutId = setTimeout(
+        subscribeToJobUpdates,
+        SUBSCRIBE_RETRY_INTERVAL_MS
+      );
     } else {
-      console.warn("[Realtime] Max retries reached for job subscription");
+      console.warn("[Realtime] Max retries reached, enabling fallback polling");
+      startFallbackPolling();
     }
     return;
   }
 
-  subscribeRetryCount = 0; // Reset on success
+  // Reset retry state on success
+  subscribeRetryCount = 0;
+  subscribeRetryTimeoutId = null;
 
-  // Clean up existing subscription if any
-  if (window.jobsChannel) {
-    window.supabase.removeChannel(window.jobsChannel);
+  // Clean up existing subscription if any (await to prevent race condition)
+  if (window.jobsChannel && window.supabase) {
+    try {
+      await window.supabase.removeChannel(window.jobsChannel);
+    } catch (e) {
+      // Ignore removal errors
+    }
+    window.jobsChannel = null;
+  }
+
+  // Register cleanup handler once
+  if (!cleanupHandlerRegistered) {
+    window.addEventListener("beforeunload", cleanupRealtimeSubscription);
+    cleanupHandlerRegistered = true;
   }
 
   try {
@@ -649,11 +722,10 @@ async function subscribeToJobUpdates() {
           filter: `organisation_id=eq.${orgId}`,
         },
         (payload) => {
-          console.log("[Realtime] Job updated:", payload.new);
-          // 200ms delay for transaction visibility
+          // Delay for transaction visibility
           setTimeout(() => {
-            window.dataBinder?.refresh(); // Refresh stats + job list
-          }, 200);
+            window.dataBinder?.refresh();
+          }, TRANSACTION_VISIBILITY_DELAY_MS);
         }
       )
       .on(
@@ -665,23 +737,31 @@ async function subscribeToJobUpdates() {
           filter: `organisation_id=eq.${orgId}`,
         },
         (payload) => {
-          console.log("[Realtime] New job:", payload.new);
           setTimeout(() => {
             window.dataBinder?.refresh();
-          }, 200);
+          }, TRANSACTION_VISIBILITY_DELAY_MS);
         }
       )
       .subscribe((status, err) => {
         if (status === "SUBSCRIBED") {
-          console.log("[Realtime] Listening for job updates on org:" + orgId);
-        } else if (err) {
-          console.error("[Realtime] Job updates subscription error:", err);
+          // Connection successful - stop fallback polling
+          clearFallbackPolling();
+        } else if (
+          status === "CHANNEL_ERROR" ||
+          status === "TIMED_OUT" ||
+          err
+        ) {
+          console.warn(
+            "[Realtime] Connection issue, enabling fallback polling"
+          );
+          startFallbackPolling();
         }
       });
 
     window.jobsChannel = channel;
   } catch (err) {
-    console.error("Failed to subscribe to jobs:", err);
+    console.error("[Realtime] Failed to subscribe to jobs:", err);
+    startFallbackPolling();
   }
 }
 
@@ -699,6 +779,7 @@ if (typeof module !== "undefined" && module.exports) {
     initializeDashboard,
     setupQuickAuth,
     subscribeToJobUpdates,
+    cleanupRealtimeSubscription,
   };
 } else {
   // Browser environment - make functions globally available
@@ -713,6 +794,7 @@ if (typeof module !== "undefined" && module.exports) {
     changeTimeRange,
     initializeDashboard,
     subscribeToJobUpdates,
+    cleanupRealtimeSubscription,
     setupQuickAuth,
   };
 
@@ -727,5 +809,6 @@ if (typeof module !== "undefined" && module.exports) {
   window.changeTimeRange = changeTimeRange;
   window.initializeDashboard = initializeDashboard;
   window.subscribeToJobUpdates = subscribeToJobUpdates;
+  window.cleanupRealtimeSubscription = cleanupRealtimeSubscription;
   window.setupQuickAuth = setupQuickAuth;
 }
