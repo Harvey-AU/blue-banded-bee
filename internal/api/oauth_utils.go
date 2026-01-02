@@ -63,6 +63,11 @@ func (h *Handler) generateOAuthState(userID, orgID string) (string, error) {
 }
 
 func (h *Handler) validateOAuthState(stateParam string) (*OAuthState, error) {
+	secret := getOAuthStateSecret()
+	if secret == "" {
+		return nil, fmt.Errorf("OAuth state secret not configured")
+	}
+
 	payload, err := base64.URLEncoding.DecodeString(stateParam)
 	if err != nil {
 		return nil, fmt.Errorf("invalid state encoding: %w", err)
@@ -76,7 +81,7 @@ func (h *Handler) validateOAuthState(stateParam string) (*OAuthState, error) {
 	sig := payload[len(payload)-sha256.Size:]
 
 	// Verify HMAC
-	mac := hmac.New(sha256.New, []byte(getOAuthStateSecret()))
+	mac := hmac.New(sha256.New, []byte(secret))
 	mac.Write(data)
 	expectedSig := mac.Sum(nil)
 
