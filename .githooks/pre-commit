@@ -168,13 +168,15 @@ else
 fi
 
 # 3. ESLint Security (Frontend)
-if [ -f "eslint.config.mjs" ]; then
+if [ -f "eslint.config.mjs" ] && command -v npx &> /dev/null; then
     echo "  Running ESLint Security..."
     if ! npx eslint "web/**/*.js" > /dev/null 2>&1; then
         echo -e "${RED}❌ ESLint found security issues${NC}"
         echo "Run './scripts/security-check.sh' for details."
         exit 1
     fi
+elif [ -f "eslint.config.mjs" ]; then
+    echo -e "${YELLOW}⚠️  npx not found (Skipping ESLint Security)${NC}"
 fi
 
 # === SUMMARY ===
