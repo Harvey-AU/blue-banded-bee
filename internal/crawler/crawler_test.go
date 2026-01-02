@@ -397,6 +397,17 @@ func TestSSRFProtection(t *testing.T) {
 		t.Error("Expected error for 192.168.1.1, got nil")
 	}
 
+	// Test blocking IPv6 loopback and link-local
+	_, err = dialFunc(ctx, "tcp", "[::1]:80")
+	if err == nil {
+		t.Error("Expected error for ::1, got nil")
+	}
+
+	_, err = dialFunc(ctx, "tcp", "[fe80::1]:80")
+	if err == nil {
+		t.Error("Expected error for fe80::1, got nil")
+	}
+
 	// Test that validateCrawlRequest only validates URL format (SSRF moved to DialContext)
 	_, err = validateCrawlRequest(ctx, "https://example.com/page", false)
 	if err != nil {
