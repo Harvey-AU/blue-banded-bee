@@ -291,33 +291,49 @@ func (h *Handler) fetchWebflowAuthInfo(ctx context.Context, token string) (*Webf
 }
 
 // fetchWebflowWorkspaceName fetches the display name of a Webflow workspace
+// Uses the list endpoint and finds the matching workspace by ID
 func (h *Handler) fetchWebflowWorkspaceName(ctx context.Context, token, workspaceID string) (string, error) {
 	client := &http.Client{Timeout: 10 * time.Second}
-	req, err := http.NewRequestWithContext(ctx, "GET", fmt.Sprintf("https://api.webflow.com/v2/workspaces/%s", workspaceID), nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", "https://api.webflow.com/v2/workspaces", nil)
 	if err != nil {
-		return "", fmt.Errorf("failed to create workspace request: %w", err)
+		return "", fmt.Errorf("failed to create workspaces request: %w", err)
 	}
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("accept", "application/json")
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("failed to call workspace endpoint: %w", err)
+		return "", fmt.Errorf("failed to call workspaces endpoint: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("workspace endpoint returned status: %d", resp.StatusCode)
+		return "", fmt.Errorf("workspaces endpoint returned status: %d", resp.StatusCode)
 	}
 
-	var workspaceResp struct {
-		DisplayName string `json:"displayName"`
+	var listResp struct {
+		Workspaces []struct {
+			ID          string `json:"id"`
+			DisplayName string `json:"displayName"`
+		} `json:"workspaces"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&workspaceResp); err != nil {
-		return "", fmt.Errorf("failed to decode workspace response: %w", err)
+	if err := json.NewDecoder(resp.Body).Decode(&listResp); err != nil {
+		return "", fmt.Errorf("failed to decode workspaces response: %w", err)
 	}
 
-	return workspaceResp.DisplayName, nil
+	// Find workspace by ID
+	for _, ws := range listResp.Workspaces {
+		if ws.ID == workspaceID {
+			return ws.DisplayName, nil
+		}
+	}
+
+	// If no match, return first workspace name if available
+	if len(listResp.Workspaces) > 0 {
+		return listResp.Workspaces[0].DisplayName, nil
+	}
+
+	return "", fmt.Errorf("no workspaces found")
 }
 
 func (h *Handler) registerWebflowWebhooksSafe(userID, token string) {
