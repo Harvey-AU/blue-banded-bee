@@ -64,7 +64,10 @@ CREATE POLICY "webflow_connections_delete_own_org" ON webflow_connections
 -- Slack auto-linking (use active organisation)
 -- ============================================================================
 CREATE OR REPLACE FUNCTION auto_link_slack_user()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER
+SECURITY DEFINER
+SET search_path = public
+AS $$
 BEGIN
   IF NEW.slack_user_id IS NOT NULL AND NEW.active_organisation_id IS NOT NULL THEN
     INSERT INTO slack_user_links (id, user_id, slack_connection_id, slack_user_id, dm_notifications, created_at)
@@ -82,10 +85,13 @@ BEGIN
   END IF;
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql;
 
 CREATE OR REPLACE FUNCTION auto_link_existing_slack_users()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER
+SECURITY DEFINER
+SET search_path = public
+AS $$
 BEGIN
   INSERT INTO slack_user_links (id, user_id, slack_connection_id, slack_user_id, dm_notifications, created_at)
   SELECT
@@ -101,4 +107,4 @@ BEGIN
   ON CONFLICT (user_id, slack_connection_id) DO NOTHING;
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql;

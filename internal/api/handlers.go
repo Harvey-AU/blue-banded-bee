@@ -885,6 +885,7 @@ func (h *Handler) WebflowWebhook(w http.ResponseWriter, r *http.Request) {
 		SourceInfo:   &sourceInfo,
 	}
 
+	// Shallow copy to avoid mutating the original user while injecting org context.
 	userForJob := *user
 	if orgID != "" {
 		userForJob.ActiveOrganisationID = &orgID
@@ -902,12 +903,10 @@ func (h *Handler) WebflowWebhook(w http.ResponseWriter, r *http.Request) {
 
 	// Job processing starts automatically via worker pool when CreateJob adds it
 
-	orgIDStr := orgID
-
 	logger.Info().
 		Str("job_id", job.ID).
 		Str("user_id", user.ID).
-		Str("org_id", orgIDStr).
+		Str("org_id", orgID).
 		Str("domain", selectedDomain).
 		Str("selected_from", strings.Join(payload.Payload.Domains, ", ")).
 		Msg("Successfully created and started job from Webflow webhook")
@@ -915,7 +914,7 @@ func (h *Handler) WebflowWebhook(w http.ResponseWriter, r *http.Request) {
 	WriteSuccess(w, r, map[string]interface{}{
 		"job_id":  job.ID,
 		"user_id": user.ID,
-		"org_id":  orgIDStr,
+		"org_id":  orgID,
 		"domain":  selectedDomain,
 		"status":  "created",
 	}, "Job created successfully from webhook")

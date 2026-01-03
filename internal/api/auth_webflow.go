@@ -206,7 +206,7 @@ func (h *Handler) HandleWebflowOAuthCallback(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Register site_publish webhooks in background for "Run on Publish" feature
+	// Register site_publish webhooks in background for "Run on Publish" feature (best-effort).
 	go h.registerWebflowWebhooksSafe(state.OrgID, workspaceID, tokenResp.AccessToken)
 
 	logger.Info().
