@@ -156,6 +156,12 @@ function setupDashboardRefresh(dataBinder) {
           : "-",
       }));
 
+      // Clear any existing empty state before binding
+      const existingEmptyState = document.querySelector(".bb-jobs-empty-state");
+      if (existingEmptyState) {
+        existingEmptyState.remove();
+      }
+
       // Bind all templates
       this.bindTemplates({
         job: processedJobs,
@@ -165,13 +171,32 @@ function setupDashboardRefresh(dataBinder) {
       if (processedJobs.length === 0) {
         const jobsList = document.querySelector(".bb-jobs-list");
         if (jobsList) {
-          jobsList.innerHTML = `
-            <div style="text-align: center; padding: 40px 20px; color: #6b7280;">
-              <div style="font-size: 48px; margin-bottom: 16px;">🐝</div>
-              <h3 style="margin: 0 0 8px 0; color: #374151;">No jobs yet</h3>
-              <p style="margin: 0; font-size: 14px;">Use the form above to start your first cache warming job</p>
-            </div>
-          `;
+          const emptyState = document.createElement("div");
+          emptyState.className = "bb-jobs-empty-state";
+          emptyState.style.cssText =
+            "text-align: center; padding: 40px 20px; color: #6b7280;";
+
+          const icon = document.createElement("div");
+          icon.style.cssText = "font-size: 48px; margin-bottom: 16px;";
+          icon.textContent = "🐝";
+          emptyState.appendChild(icon);
+
+          const heading = document.createElement("h3");
+          heading.style.cssText = "margin: 0 0 8px 0; color: #374151;";
+          heading.textContent = "No jobs yet";
+          emptyState.appendChild(heading);
+
+          const message = document.createElement("p");
+          message.style.cssText = "margin: 0; font-size: 14px;";
+          message.textContent =
+            "Use the form above to start your first cache warming job";
+          emptyState.appendChild(message);
+
+          // Clear the list and add empty state
+          while (jobsList.firstChild) {
+            jobsList.removeChild(jobsList.firstChild);
+          }
+          jobsList.appendChild(emptyState);
         }
       } else {
         // Update job action visibility and visual states
