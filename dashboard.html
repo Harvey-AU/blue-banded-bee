@@ -2941,18 +2941,37 @@
 
                   // Refresh all org-scoped data
                   if (window.dataBinder) {
-                    await window.dataBinder.refresh();
+                    try {
+                      await window.dataBinder.refresh();
+                    } catch (err) {
+                      console.warn("Failed to refresh data binder:", err);
+                    }
                   }
                   if (window.loadSchedules) {
-                    await window.loadSchedules();
+                    try {
+                      await window.loadSchedules();
+                    } catch (err) {
+                      console.warn("Failed to load schedules:", err);
+                    }
                   }
 
                   // Re-subscribe to notifications for new org + refresh badge
                   if (typeof subscribeToNotifications === "function") {
-                    await subscribeToNotifications();
+                    try {
+                      await subscribeToNotifications();
+                    } catch (err) {
+                      console.warn(
+                        "Failed to subscribe to notifications:",
+                        err
+                      );
+                    }
                   }
                   if (typeof loadNotificationCount === "function") {
-                    await loadNotificationCount();
+                    try {
+                      await loadNotificationCount();
+                    } catch (err) {
+                      console.warn("Failed to load notification count:", err);
+                    }
                   }
 
                   // Only refresh Slack connections if settings modal is open
@@ -2962,7 +2981,11 @@
                     settingsModal?.classList.contains("show") &&
                     window.loadSlackConnections
                   ) {
-                    await window.loadSlackConnections();
+                    try {
+                      await window.loadSlackConnections();
+                    } catch (err) {
+                      console.warn("Failed to load Slack connections:", err);
+                    }
                   }
 
                   // Show success notification
