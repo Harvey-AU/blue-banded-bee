@@ -2539,38 +2539,32 @@
                 </button>
               </div>
             </div>
-
-            <!-- Empty state -->
-            <div
-              id="webflowEmptyState"
-              style="
-                text-align: center;
-                padding: 20px;
-                background: #f9fafb;
-                border-radius: 8px;
-                margin-bottom: 16px;
-                color: #6b7280;
-                font-size: 14px;
-                display: none;
-              "
-            >
-              No Webflow connection yet.
-            </div>
           </div>
 
-          <button
-            class="bb-button bb-button-primary"
-            bbb-action="webflow-connect"
+          <!-- Empty state / Connect button -->
+          <div
+            id="webflowEmptyState"
             style="
-              width: 100%;
-              display: flex;
-              align-items: center;
-              justify-content: center;
-              gap: 8px;
+              text-align: center;
+              padding: 24px;
+              background: #f9fafb;
+              border-radius: 8px;
+              border: 2px dashed #e5e7eb;
             "
           >
-            Connect Webflow
-          </button>
+            <p style="color: #6b7280; margin-bottom: 16px">
+              No Webflow connection yet.
+            </p>
+            <button
+              class="bb-button bb-button-primary"
+              bbb-action="webflow-connect"
+              style="display: inline-flex; align-items: center; gap: 8px"
+            >
+              Connect Webflow
+            </button>
+          </div>
+
+          <!-- Success/Error Messages -->
           <div
             class="bb-notification-success"
             id="webflowSuccessMessage"
