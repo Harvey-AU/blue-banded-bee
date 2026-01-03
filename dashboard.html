@@ -2956,9 +2956,8 @@
                   }
 
                   // Only refresh Slack connections if settings modal is open
-                  const settingsModal = document.getElementById(
-                    "notificationSettingsModal"
-                  );
+                  const settingsModal =
+                    document.getElementById("notificationsModal");
                   if (
                     settingsModal?.classList.contains("show") &&
                     window.loadSlackConnections
