@@ -196,7 +196,8 @@ func (h *Handler) initiateSlackOAuth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if user.OrganisationID == nil {
+	orgID := h.DB.GetEffectiveOrganisationID(user)
+	if orgID == "" {
 		BadRequest(w, r, "User must belong to an organisation")
 		return
 	}
@@ -214,7 +215,7 @@ func (h *Handler) initiateSlackOAuth(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Generate state token
-	state, err := h.generateOAuthState(userClaims.UserID, *user.OrganisationID)
+	state, err := h.generateOAuthState(userClaims.UserID, orgID)
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to generate OAuth state")
 		InternalError(w, r, err)
@@ -328,12 +329,13 @@ func (h *Handler) listSlackConnections(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if user.OrganisationID == nil {
+	orgID := h.DB.GetEffectiveOrganisationID(user)
+	if orgID == "" {
 		WriteSuccess(w, r, []SlackConnectionResponse{}, "No organisation")
 		return
 	}
 
-	connections, err := h.DB.ListSlackConnections(r.Context(), *user.OrganisationID)
+	connections, err := h.DB.ListSlackConnections(r.Context(), orgID)
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to list Slack connections")
 		InternalError(w, r, err)
@@ -370,6 +372,7 @@ func (h *Handler) getSlackConnection(w http.ResponseWriter, r *http.Request, con
 		return
 	}
 
+	orgID := h.DB.GetEffectiveOrganisationID(user)
 	conn, err := h.DB.GetSlackConnection(r.Context(), connectionID)
 	if err != nil {
 		if errors.Is(err, db.ErrSlackConnectionNotFound) {
@@ -382,7 +385,7 @@ func (h *Handler) getSlackConnection(w http.ResponseWriter, r *http.Request, con
 	}
 
 	// Verify org ownership
-	if user.OrganisationID == nil || *user.OrganisationID != conn.OrganisationID {
+	if orgID == "" || orgID != conn.OrganisationID {
 		Forbidden(w, r, "You don't have access to this connection")
 		return
 	}
@@ -432,12 +435,13 @@ func (h *Handler) deleteSlackConnection(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 
-	if user.OrganisationID == nil {
+	orgID := h.DB.GetEffectiveOrganisationID(user)
+	if orgID == "" {
 		Forbidden(w, r, "User must belong to an organisation")
 		return
 	}
 
-	err = h.DB.DeleteSlackConnection(r.Context(), connectionID, *user.OrganisationID)
+	err = h.DB.DeleteSlackConnection(r.Context(), connectionID, orgID)
 	if err != nil {
 		if errors.Is(err, db.ErrSlackConnectionNotFound) {
 			NotFound(w, r, "Slack connection not found")
@@ -471,6 +475,7 @@ func (h *Handler) linkSlackUser(w http.ResponseWriter, r *http.Request, connecti
 		return
 	}
 
+	orgID := h.DB.GetEffectiveOrganisationID(user)
 	// Verify connection belongs to user's org
 	conn, err := h.DB.GetSlackConnection(r.Context(), connectionID)
 	if err != nil {
@@ -483,7 +488,7 @@ func (h *Handler) linkSlackUser(w http.ResponseWriter, r *http.Request, connecti
 		return
 	}
 
-	if user.OrganisationID == nil || *user.OrganisationID != conn.OrganisationID {
+	if orgID == "" || orgID != conn.OrganisationID {
 		Forbidden(w, r, "You don't have access to this connection")
 		return
 	}
@@ -631,6 +636,7 @@ func (h *Handler) listSlackWorkspaceUsers(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	orgID := h.DB.GetEffectiveOrganisationID(user)
 	conn, err := h.DB.GetSlackConnection(r.Context(), connectionID)
 	if err != nil {
 		if errors.Is(err, db.ErrSlackConnectionNotFound) {
@@ -642,7 +648,7 @@ func (h *Handler) listSlackWorkspaceUsers(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	if user.OrganisationID == nil || *user.OrganisationID != conn.OrganisationID {
+	if orgID == "" || orgID != conn.OrganisationID {
 		Forbidden(w, r, "You don't have access to this connection")
 		return
 	}

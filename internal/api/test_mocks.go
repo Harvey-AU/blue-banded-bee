@@ -410,6 +410,20 @@ func (m *MockDBClient) GetWebflowToken(ctx context.Context, connectionID string)
 	return args.String(0), args.Error(1)
 }
 
+// Platform integration mock methods
+func (m *MockDBClient) UpsertPlatformOrgMapping(ctx context.Context, mapping *db.PlatformOrgMapping) error {
+	args := m.Called(ctx, mapping)
+	return args.Error(0)
+}
+
+func (m *MockDBClient) GetPlatformOrgMapping(ctx context.Context, platform, platformID string) (*db.PlatformOrgMapping, error) {
+	args := m.Called(ctx, platform, platformID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*db.PlatformOrgMapping), args.Error(1)
+}
+
 // Test helpers
 func createTestHandler() (*Handler, *MockDBClient, *MockJobManager) {
 	mockDB := new(MockDBClient)

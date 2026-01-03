@@ -408,3 +408,18 @@ func (m *MockDB) GetWebflowToken(ctx context.Context, connectionID string) (stri
 	args := m.Called(ctx, connectionID)
 	return args.String(0), args.Error(1)
 }
+
+// Platform integration methods
+
+func (m *MockDB) UpsertPlatformOrgMapping(ctx context.Context, mapping *db.PlatformOrgMapping) error {
+	args := m.Called(ctx, mapping)
+	return args.Error(0)
+}
+
+func (m *MockDB) GetPlatformOrgMapping(ctx context.Context, platform, platformID string) (*db.PlatformOrgMapping, error) {
+	args := m.Called(ctx, platform, platformID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*db.PlatformOrgMapping), args.Error(1)
+}
