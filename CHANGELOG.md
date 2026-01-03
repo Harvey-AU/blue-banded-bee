@@ -40,6 +40,8 @@ On merge, CI will:
   - Slack auto-linking functions now use an explicit `search_path` for safer
     SECURITY DEFINER execution
 
+## [0.22.2] – 2026-01-03
+
 ## [0.22.1] – 2026-01-03
 
 ## [0.22.0] – 2026-01-03
