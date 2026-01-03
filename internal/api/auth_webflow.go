@@ -242,7 +242,7 @@ type WebflowAuthInfo struct {
 func (h *Handler) fetchWebflowAuthInfo(ctx context.Context, token string) (*WebflowAuthInfo, error) {
 	client := &http.Client{Timeout: 10 * time.Second}
 
-	// First, get authorization info (workspace IDs)
+	// First, get authorisation info (workspace IDs)
 	req, err := http.NewRequestWithContext(ctx, "GET", "https://api.webflow.com/v2/token/introspect", nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create introspect request: %w", err)
@@ -300,7 +300,7 @@ type WebflowUserInfo struct {
 	DisplayName string
 }
 
-// fetchWebflowUserInfo fetches the authorizing user's info
+// fetchWebflowUserInfo fetches the authorising user's info
 func (h *Handler) fetchWebflowUserInfo(ctx context.Context, client *http.Client, token string) (*WebflowUserInfo, error) {
 	req, err := http.NewRequestWithContext(ctx, "GET", "https://api.webflow.com/v2/token/authorized_by", nil)
 	if err != nil {
