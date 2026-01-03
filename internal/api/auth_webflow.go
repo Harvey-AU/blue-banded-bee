@@ -557,7 +557,7 @@ func (h *Handler) deleteWebflowConnection(w http.ResponseWriter, r *http.Request
 	}
 
 	if user.OrganisationID == nil {
-		Forbidden(w, r, "User must belong to an organisation")
+		BadRequest(w, r, "User must belong to an organisation")
 		return
 	}
 
