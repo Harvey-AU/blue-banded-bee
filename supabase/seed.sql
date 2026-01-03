@@ -37,9 +37,9 @@ VALUES
 --
 -- Data for Name: users; Type: TABLE DATA; Schema: public; Owner: -
 --
-INSERT INTO public.users (id, email, full_name, organisation_id, created_at, updated_at, api_key, api_key_created_at)
+INSERT INTO public.users (id, email, full_name, organisation_id, created_at, updated_at, active_organisation_id)
 VALUES
-    ('64d361fa-23fc-4deb-8a1b-3016a6c2e339', 'simon@teamharvey.co', 'Simon Smallchua', '96f7546c-47ea-41f8-a3a3-46b4deb84105', '2025-11-02 00:11:21.520651+00', '2025-11-02 00:11:21.520651+00', 'wh_bM6qezLYUpwykJHjg3QRC5QzXT12KkhB', '2025-11-02 00:11:21.520651+00');
+    ('64d361fa-23fc-4deb-8a1b-3016a6c2e339', 'simon@teamharvey.co', 'Simon Smallchua', '96f7546c-47ea-41f8-a3a3-46b4deb84105', '2025-11-02 00:11:21.520651+00', '2025-11-02 00:11:21.520651+00', '96f7546c-47ea-41f8-a3a3-46b4deb84105');
 
 --
 -- Data for Name: organisation_members; Type: TABLE DATA; Schema: public; Owner: -
