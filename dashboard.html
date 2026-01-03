@@ -2939,9 +2939,31 @@
                     }
                   }
 
-                  // Refresh dashboard data
-                  if (window.refreshDashboard) {
-                    window.refreshDashboard();
+                  // Refresh all org-scoped data
+                  if (window.dataBinder) {
+                    await window.dataBinder.refresh();
+                  }
+                  if (window.loadSchedules) {
+                    await window.loadSchedules();
+                  }
+
+                  // Re-subscribe to notifications for new org + refresh badge
+                  if (typeof subscribeToNotifications === "function") {
+                    await subscribeToNotifications();
+                  }
+                  if (typeof loadNotificationCount === "function") {
+                    await loadNotificationCount();
+                  }
+
+                  // Only refresh Slack connections if settings modal is open
+                  const settingsModal = document.getElementById(
+                    "notificationSettingsModal"
+                  );
+                  if (
+                    settingsModal?.classList.contains("show") &&
+                    window.loadSlackConnections
+                  ) {
+                    await window.loadSlackConnections();
                   }
 
                   // Show success notification
