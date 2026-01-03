@@ -43,6 +43,10 @@ EXCEPTION
     -- Retry as update
     UPDATE vault.secrets SET secret = token WHERE name = secret_name;
     UPDATE webflow_connections SET vault_secret_name = secret_name WHERE id = connection_id;
+    GET DIAGNOSTICS connection_updated = ROW_COUNT;
+    IF connection_updated = 0 THEN
+      RAISE EXCEPTION 'Connection % not found', connection_id;
+    END IF;
     RETURN secret_name;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, vault;
