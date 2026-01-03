@@ -44,10 +44,10 @@ VALUES
 --
 -- Data for Name: organisation_members; Type: TABLE DATA; Schema: public; Owner: -
 --
-INSERT INTO public.organisation_members (id, user_id, organisation_id, role, created_at)
+INSERT INTO public.organisation_members (user_id, organisation_id, created_at)
 VALUES
-    (gen_random_uuid(), '64d361fa-23fc-4deb-8a1b-3016a6c2e339', '96f7546c-47ea-41f8-a3a3-46b4deb84105', 'owner', '2025-11-02 00:11:21.520651+00'),
-    (gen_random_uuid(), '64d361fa-23fc-4deb-8a1b-3016a6c2e339', 'a1b2c3d4-e5f6-4a5b-8c9d-1234567890ab', 'owner', '2025-11-15 00:00:00+00');
+    ('64d361fa-23fc-4deb-8a1b-3016a6c2e339', '96f7546c-47ea-41f8-a3a3-46b4deb84105', '2025-11-02 00:11:21.520651+00'),
+    ('64d361fa-23fc-4deb-8a1b-3016a6c2e339', 'a1b2c3d4-e5f6-4a5b-8c9d-1234567890ab', '2025-11-15 00:00:00+00');
 
 --
 -- Data for Name: domains; Type: TABLE DATA; Schema: public; Owner: -
