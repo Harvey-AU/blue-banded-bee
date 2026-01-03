@@ -411,6 +411,16 @@ Organisation model implemented:
         patterns
   - [ ] Add performance benchmarks
 
+### 🔴 Security & Alpha Guardrails
+
+- [ ] **Core guardrails for alpha**
+  - [ ] Active job limits per organisation
+  - [ ] Usage guardrails to prevent abuse during alpha
+- [ ] **Audit & access basics**
+  - [ ] Audit logging for account changes and access history
+  - [ ] Login IP tracking and session limits
+  - [ ] Suspicious activity detection and monitoring
+
 ### 🔴 Payment Infrastructure
 
 - [ ] **Paddle Integration**
@@ -443,6 +453,17 @@ Organisation model implemented:
   - [x] Consolidate database connection settings into single configuration
         location and make them configurable via environment variables
         ([internal/db/db.go:113-115](./internal/db/db.go#L113))
+- [ ] **Backend Simplification via Supabase** (See
+      [supabase-simplification.md](docs/plans/supabase-simplification.md))
+  - [ ] Phase 1: Migrate stuck job cleanup to pg_cron
+    - [ ] Create `run_job_cleanup()` PostgreSQL function
+    - [ ] Schedule with `cron.schedule('job-cleanup', '* * * * *', ...)`
+    - [ ] Remove `CleanupStuckJobs()` from Go worker monitors (~100 lines)
+  - [ ] Phase 2: Migrate notification delivery to Edge Functions
+    - [ ] Create `deliver-notification` Edge Function
+    - [ ] Update `notify_job_status_change()` trigger to call via pg_net
+    - [ ] Remove Go notification listener and Slack delivery code (~451 lines)
+    - [ ] Remove `slack-go/slack` dependency
 - [ ] **File Storage & Edge Functions**
   - [ ] Store crawler logs, sitemap caches, and error reports in Supabase
         Storage
@@ -467,6 +488,12 @@ Organisation model implemented:
 
 ### 🔴 Infrastructure & Operations
 
+- [ ] **1Password Secrets Management** -
+      [Implementation Plan](./docs/plans/1password-secrets-integration.md)
+  - [ ] Set up 1Password vault structure for Blue Banded Bee
+  - [ ] Configure flyctl shell plugin for local development
+  - [ ] Implement 1Password Service Account for GitHub Actions CI/CD
+  - [ ] Migrate secrets from GitHub Secrets to 1Password
 - [ ] **Database Management**
   - [ ] Set up backup schedule and automated recovery testing
   - [ ] Implement data retention policies
@@ -488,6 +515,8 @@ Organisation model implemented:
         (not always 100%) ([internal/db/db.go:404](./internal/db/db.go#L404))
   - [ ] Publish OTEL metrics for connection pool saturation and wire Grafana
         alerts
+  - [ ] Incident runbook and escalation checklist
+  - [ ] Minimal status page for alpha
 
 ## ⚪ Stage 7: Feature Refinement & Launch Preparation
 
@@ -503,11 +532,7 @@ Organisation model implemented:
 - [ ] **Audit & Security Features**
   - [x] Secure admin endpoints properly with system_role authentication
         ([internal/api/admin.go:11,25](./internal/api/admin.go#L11))
-  - [ ] Login IP tracking and session limits
-  - [ ] Active job limits per organisation
-  - [ ] Audit logging for account changes and access history
   - [ ] GDPR compliance features (data export, deletion audit trails)
-  - [ ] Suspicious activity detection and monitoring
 
 ### 🔴 Launch & Marketing
 
@@ -530,6 +555,11 @@ Organisation model implemented:
         days to R2)
   - [ ] Update database to track storage location (hot/cold) for each archived
         file
+
+### 🟡 Alpha Data Retention
+
+- [ ] **Retention policy for alpha**
+  - [ ] Auto-delete crawler logs and stored HTML older than 90 days
 
 ### 🔴 Content Storage & Change Tracking
 
