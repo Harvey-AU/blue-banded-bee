@@ -39,7 +39,9 @@ On merge, CI will:
   - Callback handler at `/v1/integrations/webflow/callback`
   - Access tokens stored securely in Supabase Vault with auto-cleanup on
     deletion
-  - Token introspection fetches real Webflow user and workspace IDs
+  - Token introspection fetches workspace IDs from Webflow API
+  - User display name fetched via `authorized_user:read` scope (shows "FirstName
+    LastName" or email)
 - **Run on Publish**: Automatic cache warming when Webflow sites are published
   - Auto-registers `site_publish` webhooks for all connected sites during OAuth
   - Webhook handler at `/v1/webhooks/webflow/{token}` triggers cache warming
@@ -47,7 +49,7 @@ On merge, CI will:
   - Filters to primary domain (excludes `.webflow.io` staging domains)
 - **Webflow Dashboard UI**: Connection management in integrations modal
   - Connect/disconnect Webflow workspaces
-  - Displays workspace ID and connection date
+  - Displays authorising user's name and connection date
   - Success/error feedback using generic integration helper
 - **SSRF Protection**: Crawler now blocks requests to private/local IP addresses
   - Custom `DialContext` validates IPs at connection time (prevents DNS

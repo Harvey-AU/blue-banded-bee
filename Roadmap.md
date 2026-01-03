@@ -335,19 +335,34 @@ Organisation model implemented:
   - [x] Comprehensive error handling with structured logging
   - [x] Input validation and rollback logic for failed operations
 
-### 🔴 Webflow App Integration
+### 🟡 Webflow App Integration
 
-- [ ] **Webflow Developer Registration**
-  - [ ] Register as Webflow developer and create App
-  - [ ] Set up OAuth integration with existing Supabase Auth system
-- [ ] **Webflow App Development**
-  - [ ] App opens within Webflow Designer interface
-  - [ ] User login with existing Supabase Auth (no separate auth)
-  - [ ] Show last crawl status for current Webflow site
-  - [ ] "Crawl Now" button to trigger immediate cache warming
-  - [ ] "Auto-crawl on publish" toggle for webhook setup (can use existing
-        scheduler system)
-  - [ ] Webhook integration to trigger crawls on site publish
+- [x] **Webflow OAuth Connection** (PR #210)
+  - [x] Register as Webflow developer and create App
+  - [x] OAuth flow with HMAC-signed state for CSRF protection
+  - [x] Token storage in Supabase Vault with automatic cleanup
+  - [x] User identity display via `authorized_user:read` scope
+  - [x] Dashboard UI showing connection status and user name
+  - [x] Shared OAuth utilities extracted from Slack integration
+- [ ] **Webflow Site Selection**
+  - [ ] List user's accessible Webflow sites via `/v2/sites` endpoint
+  - [ ] Site picker UI in dashboard connections panel
+  - [ ] Store selected site ID with connection for job targeting
+  - [ ] Add list/delete endpoints for connection management
+- [ ] **Manual Job Triggering**
+  - [ ] "Crawl Now" button triggers job for selected Webflow site
+  - [ ] Show last crawl status and results for connected site
+  - [ ] Link Webflow connection to existing job creation flow
+- [ ] **Scheduling Configuration**
+  - [ ] Connect Webflow sites to existing scheduler system
+  - [ ] Schedule dropdown for recurring cache warming (6/12/24/48h)
+  - [ ] Per-site schedule management in dashboard
+- [ ] **Run on Publish (Webhooks)**
+  - [ ] "Auto-crawl on publish" toggle in connection settings
+  - [ ] Register `site_publish` webhook with Webflow API
+  - [ ] Webhook endpoint to receive publish events
+  - [ ] Verify webhook signatures using `x-webflow-signature` headers
+  - [ ] Trigger cache warming job on verified publish events
 
 ### ✅ Slack Integration (Completed v0.20.0)
 
