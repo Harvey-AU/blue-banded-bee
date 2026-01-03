@@ -29,6 +29,49 @@ On merge, CI will:
 
 ## [Unreleased]
 
+## [0.22.0] – 2026-01-03
+
+### Added
+
+- **Webflow Integration**: OAuth 2.0 connection for Webflow workspaces
+  - Full OAuth flow with HMAC-signed state for CSRF protection
+  - API endpoints: `POST /v1/integrations/webflow` (initiate),
+    `GET /v1/integrations/webflow` (list),
+    `DELETE /v1/integrations/webflow/{id}` (disconnect)
+  - Callback handler at `/v1/integrations/webflow/callback`
+  - Access tokens stored securely in Supabase Vault with auto-cleanup on
+    deletion
+  - Token introspection fetches workspace IDs from Webflow API
+  - User display name fetched via `authorized_user:read` scope (shows "FirstName
+    LastName" or email)
+- **Run on Publish**: Automatic cache warming when Webflow sites are published
+  - Auto-registers `site_publish` webhooks for all connected sites during OAuth
+  - Webhook handler at `/v1/webhooks/webflow/{token}` triggers cache warming
+    jobs
+  - Filters to primary domain (excludes `.webflow.io` staging domains)
+- **Webflow Dashboard UI**: Connection management in integrations modal
+  - Connect/disconnect Webflow workspaces
+  - Displays authorising user's name and connection date
+  - Success/error feedback using generic integration helper
+
+### Changed
+
+- **OAuth Utils Refactoring**: Extracted shared OAuth state signing to
+  `oauth_utils.go`
+  - HMAC-SHA256 signed state with nonce and 15-minute expiry
+  - Shared between Slack and Webflow integrations
+  - Defence-in-depth: secret validation in both generate and validate functions
+- **Dashboard Feedback Helper**: Consolidated `showSlackSuccess/Error` and
+  `showWebflowSuccess/Error` into generic `showIntegrationFeedback` function
+
+### Security
+
+- OAuth state secret validated before signing and verification (prevents empty
+  key attacks)
+- Webflow tokens encrypted at rest in Supabase Vault
+- Webhook tokens per-user for secure callback routing
+- `WebhookToken` field excluded from JSON serialisation
+
 ## [0.21.0] – 2026-01-02
 
 ### Added

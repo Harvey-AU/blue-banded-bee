@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Blue Banded Bee - Dashboard</title>
+    <title>Dashboard - Blue Banded Bee</title>
     <link rel="stylesheet" href="/styles/app.css" />
 
     <!-- Sentry Error Monitoring & Performance -->
@@ -2467,6 +2467,133 @@
             <span id="slackErrorText"></span>
           </div>
         </div>
+
+        <!-- Webflow Connection Section -->
+        <div
+          class="bb-modal-section"
+          style="
+            border-top: 1px solid #e5e7eb;
+            padding-top: 24px;
+            margin-top: 24px;
+          "
+        >
+          <h3
+            class="bb-modal-section-title"
+            style="display: flex; align-items: center; gap: 8px"
+          >
+            <span style="font-size: 20px">⚡</span>
+            Webflow Integration
+          </h3>
+          <p style="color: #6b7280; font-size: 14px; margin-bottom: 16px">
+            Connect your Webflow sites to enable "Run on Publish" and access the
+            Designer App.
+          </p>
+
+          <!-- Webflow Connections List -->
+          <div
+            id="webflowConnectionsList"
+            bbb-list="webflow-connections"
+            style="margin-bottom: 16px"
+          >
+            <!-- Template for each connection -->
+            <div
+              class="bb-job-card"
+              bbb-template="webflow-connection"
+              style="
+                display: none;
+                background: #f8f9fa;
+                border: 1px solid #e9ecef;
+                border-radius: 8px;
+                padding: 16px;
+                margin-bottom: 12px;
+              "
+            >
+              <div
+                style="
+                  display: flex;
+                  justify-content: space-between;
+                  align-items: center;
+                "
+              >
+                <div>
+                  <strong class="webflow-name" style="font-size: 16px"
+                    >Webflow Connection</strong
+                  >
+                  <span
+                    class="webflow-connected-date"
+                    style="color: #6b7280; font-size: 13px; margin-left: 8px"
+                  ></span>
+                </div>
+                <button
+                  class="bb-button bb-button-outline"
+                  bbb-action="webflow-disconnect"
+                  bbb-id=""
+                  style="
+                    font-size: 13px;
+                    padding: 6px 12px;
+                    color: #dc2626;
+                    border-color: #dc2626;
+                  "
+                >
+                  Disconnect
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Empty state / Connect button -->
+          <div
+            id="webflowEmptyState"
+            style="
+              text-align: center;
+              padding: 24px;
+              background: #f9fafb;
+              border-radius: 8px;
+              border: 2px dashed #e5e7eb;
+            "
+          >
+            <p style="color: #6b7280; margin-bottom: 16px">
+              No Webflow connection yet.
+            </p>
+            <button
+              class="bb-button bb-button-primary"
+              bbb-action="webflow-connect"
+              style="display: inline-flex; align-items: center; gap: 8px"
+            >
+              Connect Webflow
+            </button>
+          </div>
+
+          <!-- Success/Error Messages -->
+          <div
+            class="bb-notification-success"
+            id="webflowSuccessMessage"
+            style="
+              display: none;
+              margin-top: 16px;
+              background: #dcfce7;
+              color: #166534;
+              padding: 12px;
+              border-radius: 8px;
+            "
+          >
+            <span id="webflowSuccessText"></span>
+          </div>
+          <div
+            class="bb-notification-error"
+            id="webflowErrorMessage"
+            style="
+              display: none;
+              margin-top: 16px;
+              background: #fee2e2;
+              color: #dc2626;
+              padding: 12px;
+              border-radius: 8px;
+            "
+          >
+            <span id="webflowErrorText"></span>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -2535,6 +2662,7 @@
     <script src="/js/bb-metadata.js" defer></script>
     <script src="/js/bb-dashboard-actions.js" defer></script>
     <script src="/js/bb-slack.js" defer></script>
+    <script src="/js/bb-webflow.js" defer></script>
 
     <script>
       // Initialize dashboard with unified authentication system
@@ -2622,6 +2750,14 @@
           }
           if (window.handleSlackOAuthCallback) {
             window.handleSlackOAuthCallback();
+          }
+
+          // Initialize Webflow integration
+          if (window.setupWebflowIntegration) {
+            window.setupWebflowIntegration();
+          }
+          if (window.handleWebflowOAuthCallback) {
+            window.handleWebflowOAuthCallback();
           }
 
           // Setup notifications modal handlers
@@ -3084,6 +3220,13 @@
             } catch (err) {
               console.error("Failed to load Slack connections:", err);
             }
+            try {
+              if (window.loadWebflowConnections) {
+                await window.loadWebflowConnections();
+              }
+            } catch (err) {
+              console.error("Failed to load Webflow connections:", err);
+            }
           });
         }
 
@@ -3403,12 +3546,18 @@
         }
       }
 
-      // Expose functions for bb-slack.js to use
-      window.showSlackSuccess = function (message) {
-        const el = document.getElementById("slackSuccessMessage");
-        const text = document.getElementById("slackSuccessText");
-        if (el && text) {
-          text.textContent = message;
+      // Generic integration feedback helper
+      window.showIntegrationFeedback = function (integration, type, message) {
+        const suffix = type === "success" ? "Success" : "Error";
+        const el = document.getElementById(`${integration}${suffix}Message`);
+        const textEl = document.getElementById(`${integration}${suffix}Text`);
+
+        if (el) {
+          if (textEl) {
+            textEl.textContent = message;
+          } else {
+            el.textContent = message;
+          }
           el.style.display = "block";
           setTimeout(() => {
             el.style.display = "none";
@@ -3416,17 +3565,15 @@
         }
       };
 
-      window.showSlackError = function (message) {
-        const el = document.getElementById("slackErrorMessage");
-        const text = document.getElementById("slackErrorText");
-        if (el && text) {
-          text.textContent = message;
-          el.style.display = "block";
-          setTimeout(() => {
-            el.style.display = "none";
-          }, 5000);
-        }
-      };
+      // Convenience wrappers for each integration
+      window.showSlackSuccess = (msg) =>
+        window.showIntegrationFeedback("slack", "success", msg);
+      window.showSlackError = (msg) =>
+        window.showIntegrationFeedback("slack", "error", msg);
+      window.showWebflowSuccess = (msg) =>
+        window.showIntegrationFeedback("webflow", "success", msg);
+      window.showWebflowError = (msg) =>
+        window.showIntegrationFeedback("webflow", "error", msg);
     </script>
   </body>
 </html>

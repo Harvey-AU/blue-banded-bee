@@ -1,10 +1,6 @@
 package api
 
 import (
-	"crypto/hmac"
-	"crypto/rand"
-	"crypto/sha256"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -59,23 +55,13 @@ type SlackUpdateNotificationsRequest struct {
 	DMNotifications bool `json:"dm_notifications"`
 }
 
-// OAuthState contains signed state data for CSRF protection
-type OAuthState struct {
-	UserID    string `json:"u"`
-	OrgID     string `json:"o"`
-	Timestamp int64  `json:"t"`
-	Nonce     string `json:"n"`
-}
+// OAuthState type moved to oauth_utils.go
 
 const (
 	// slackOAuthScopes defines the permissions requested from Slack during OAuth
 	slackOAuthScopes = "chat:write,im:write,users:read,users:read.email"
 	// slackAPITimeout is the timeout for Slack API calls
 	slackAPITimeout = 30 * time.Second
-	// oauthStateExpiry is how long OAuth state tokens are valid (15 minutes)
-	oauthStateExpiry = 900
-	// defaultAppURL is the fallback URL when APP_URL env var is not set
-	defaultAppURL = "https://app.bluebandedbee.co"
 )
 
 // getSlackClientID returns the Slack OAuth client ID
@@ -254,7 +240,7 @@ func (h *Handler) handleSlackOAuthCallback(w http.ResponseWriter, r *http.Reques
 	// Check for error from Slack
 	if errParam := r.URL.Query().Get("error"); errParam != "" {
 		logger.Warn().Str("error", errParam).Msg("Slack OAuth denied")
-		h.redirectToDashboardWithError(w, r, "Slack connection was cancelled")
+		h.redirectToDashboardWithError(w, r, "Slack", "Slack connection was cancelled")
 		return
 	}
 
@@ -270,7 +256,7 @@ func (h *Handler) handleSlackOAuthCallback(w http.ResponseWriter, r *http.Reques
 	state, err := h.validateOAuthState(stateParam)
 	if err != nil {
 		logger.Warn().Err(err).Msg("Invalid OAuth state")
-		h.redirectToDashboardWithError(w, r, "Invalid or expired state")
+		h.redirectToDashboardWithError(w, r, "Slack", "Invalid or expired state")
 		return
 	}
 
@@ -285,7 +271,7 @@ func (h *Handler) handleSlackOAuthCallback(w http.ResponseWriter, r *http.Reques
 	)
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to exchange OAuth code")
-		h.redirectToDashboardWithError(w, r, "Failed to connect to Slack")
+		h.redirectToDashboardWithError(w, r, "Slack", "Failed to connect to Slack")
 		return
 	}
 
@@ -304,14 +290,14 @@ func (h *Handler) handleSlackOAuthCallback(w http.ResponseWriter, r *http.Reques
 
 	if err := h.DB.CreateSlackConnection(r.Context(), conn); err != nil {
 		logger.Error().Err(err).Msg("Failed to save Slack connection")
-		h.redirectToDashboardWithError(w, r, "Failed to save connection")
+		h.redirectToDashboardWithError(w, r, "Slack", "Failed to save connection")
 		return
 	}
 
 	// Store access token in Supabase Vault
 	if err := h.DB.StoreSlackToken(r.Context(), conn.ID, resp.AccessToken); err != nil {
 		logger.Error().Err(err).Msg("Failed to store access token in vault")
-		h.redirectToDashboardWithError(w, r, "Failed to secure connection")
+		h.redirectToDashboardWithError(w, r, "Slack", "Failed to secure connection")
 		return
 	}
 
@@ -322,7 +308,7 @@ func (h *Handler) handleSlackOAuthCallback(w http.ResponseWriter, r *http.Reques
 		Msg("Slack workspace connected")
 
 	// Redirect to dashboard with success (includes connection ID for auto-linking)
-	h.redirectToDashboardWithSuccess(w, r, resp.Team.Name, conn.ID)
+	h.redirectToDashboardWithSuccess(w, r, "Slack", resp.Team.Name, conn.ID)
 }
 
 // listSlackConnections lists all Slack connections for the user's organisation
@@ -743,68 +729,7 @@ func (h *Handler) getSlackUserLink(w http.ResponseWriter, r *http.Request, conne
 
 // Helper functions
 
-func (h *Handler) generateOAuthState(userID, orgID string) (string, error) {
-	nonce := make([]byte, 16)
-	if _, err := rand.Read(nonce); err != nil {
-		return "", fmt.Errorf("failed to generate nonce: %w", err)
-	}
-
-	state := OAuthState{
-		UserID:    userID,
-		OrgID:     orgID,
-		Timestamp: time.Now().Unix(),
-		Nonce:     base64.URLEncoding.EncodeToString(nonce),
-	}
-
-	data, err := json.Marshal(state)
-	if err != nil {
-		return "", fmt.Errorf("failed to marshal state: %w", err)
-	}
-
-	// Sign with HMAC
-	mac := hmac.New(sha256.New, []byte(getSlackStateSecret()))
-	mac.Write(data)
-	sig := mac.Sum(nil)
-
-	// Combine data + signature
-	payload := append(data, sig...)
-	return base64.URLEncoding.EncodeToString(payload), nil
-}
-
-func (h *Handler) validateOAuthState(stateParam string) (*OAuthState, error) {
-	payload, err := base64.URLEncoding.DecodeString(stateParam)
-	if err != nil {
-		return nil, fmt.Errorf("invalid state encoding: %w", err)
-	}
-
-	if len(payload) < sha256.Size {
-		return nil, fmt.Errorf("state too short")
-	}
-
-	data := payload[:len(payload)-sha256.Size]
-	sig := payload[len(payload)-sha256.Size:]
-
-	// Verify HMAC
-	mac := hmac.New(sha256.New, []byte(getSlackStateSecret()))
-	mac.Write(data)
-	expectedSig := mac.Sum(nil)
-
-	if !hmac.Equal(sig, expectedSig) {
-		return nil, fmt.Errorf("invalid state signature")
-	}
-
-	var state OAuthState
-	if err := json.Unmarshal(data, &state); err != nil {
-		return nil, fmt.Errorf("invalid state data: %w", err)
-	}
-
-	// Check timestamp (15 minute expiry)
-	if time.Now().Unix()-state.Timestamp > oauthStateExpiry {
-		return nil, fmt.Errorf("state expired")
-	}
-
-	return &state, nil
-}
+// generateOAuthState and validateOAuthState moved to oauth_utils.go
 
 // getSlackRedirectURI returns the OAuth callback URL for Slack
 func getSlackRedirectURI() string {
@@ -812,32 +737,4 @@ func getSlackRedirectURI() string {
 		return uri
 	}
 	return getAppURL() + "/v1/integrations/slack/callback"
-}
-
-// getAppURL returns the application URL, defaulting to production
-func getAppURL() string {
-	if appURL := os.Getenv("APP_URL"); appURL != "" {
-		return appURL
-	}
-	return defaultAppURL
-}
-
-// getDashboardURL returns the dashboard URL
-func getDashboardURL() string {
-	if dashURL := os.Getenv("DASHBOARD_URL"); dashURL != "" {
-		return dashURL
-	}
-	return getAppURL() + "/dashboard"
-}
-
-func (h *Handler) redirectToDashboardWithError(w http.ResponseWriter, r *http.Request, errMsg string) {
-	http.Redirect(w, r, getDashboardURL()+"?slack_error="+url.QueryEscape(errMsg), http.StatusSeeOther)
-}
-
-func (h *Handler) redirectToDashboardWithSuccess(w http.ResponseWriter, r *http.Request, workspaceName string, connectionID string) {
-	redirectURL := getDashboardURL() + "?slack_connected=" + url.QueryEscape(workspaceName)
-	if connectionID != "" {
-		redirectURL += "&slack_connection_id=" + url.QueryEscape(connectionID)
-	}
-	http.Redirect(w, r, redirectURL, http.StatusSeeOther)
 }

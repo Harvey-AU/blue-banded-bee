@@ -142,6 +142,13 @@ type DBClient interface {
 	GetUnreadNotificationCount(ctx context.Context, organisationID string) (int, error)
 	MarkNotificationRead(ctx context.Context, notificationID, organisationID string) error
 	MarkAllNotificationsRead(ctx context.Context, organisationID string) error
+	// Webflow integration methods
+	CreateWebflowConnection(ctx context.Context, conn *db.WebflowConnection) error
+	GetWebflowConnection(ctx context.Context, connectionID string) (*db.WebflowConnection, error)
+	ListWebflowConnections(ctx context.Context, organisationID string) ([]*db.WebflowConnection, error)
+	DeleteWebflowConnection(ctx context.Context, connectionID, organisationID string) error
+	StoreWebflowToken(ctx context.Context, connectionID, token string) error
+	GetWebflowToken(ctx context.Context, connectionID string) (string, error)
 }
 
 // Handler holds dependencies for API handlers
@@ -249,6 +256,11 @@ func (h *Handler) SetupRoutes(mux *http.ServeMux) {
 	mux.Handle("/v1/integrations/slack", auth.AuthMiddleware(http.HandlerFunc(h.SlackConnectionsHandler)))
 	mux.Handle("/v1/integrations/slack/", auth.AuthMiddleware(http.HandlerFunc(h.SlackConnectionHandler)))
 	mux.HandleFunc("/v1/integrations/slack/callback", h.SlackOAuthCallback) // No auth - state validation
+
+	// Webflow integration endpoints
+	mux.Handle("/v1/integrations/webflow", auth.AuthMiddleware(http.HandlerFunc(h.WebflowConnectionsHandler)))
+	mux.Handle("/v1/integrations/webflow/", auth.AuthMiddleware(http.HandlerFunc(h.WebflowConnectionHandler)))
+	mux.HandleFunc("/v1/integrations/webflow/callback", h.HandleWebflowOAuthCallback) // No auth - state validation
 
 	// Notification endpoints
 	mux.Handle("/v1/notifications", auth.AuthMiddleware(http.HandlerFunc(h.NotificationsHandler)))

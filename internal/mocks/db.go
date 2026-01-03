@@ -371,3 +371,40 @@ func (m *MockDB) MarkAllNotificationsRead(ctx context.Context, organisationID st
 	args := m.Called(ctx, organisationID)
 	return args.Error(0)
 }
+
+// Webflow integration mock methods
+func (m *MockDB) CreateWebflowConnection(ctx context.Context, conn *db.WebflowConnection) error {
+	args := m.Called(ctx, conn)
+	return args.Error(0)
+}
+
+func (m *MockDB) GetWebflowConnection(ctx context.Context, connectionID string) (*db.WebflowConnection, error) {
+	args := m.Called(ctx, connectionID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*db.WebflowConnection), args.Error(1)
+}
+
+func (m *MockDB) ListWebflowConnections(ctx context.Context, organisationID string) ([]*db.WebflowConnection, error) {
+	args := m.Called(ctx, organisationID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*db.WebflowConnection), args.Error(1)
+}
+
+func (m *MockDB) DeleteWebflowConnection(ctx context.Context, connectionID, organisationID string) error {
+	args := m.Called(ctx, connectionID, organisationID)
+	return args.Error(0)
+}
+
+func (m *MockDB) StoreWebflowToken(ctx context.Context, connectionID, token string) error {
+	args := m.Called(ctx, connectionID, token)
+	return args.Error(0)
+}
+
+func (m *MockDB) GetWebflowToken(ctx context.Context, connectionID string) (string, error) {
+	args := m.Called(ctx, connectionID)
+	return args.String(0), args.Error(1)
+}

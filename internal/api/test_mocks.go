@@ -373,6 +373,43 @@ func (m *MockDBClient) MarkAllNotificationsRead(ctx context.Context, organisatio
 	return args.Error(0)
 }
 
+// Webflow integration mock methods
+func (m *MockDBClient) CreateWebflowConnection(ctx context.Context, conn *db.WebflowConnection) error {
+	args := m.Called(ctx, conn)
+	return args.Error(0)
+}
+
+func (m *MockDBClient) GetWebflowConnection(ctx context.Context, connectionID string) (*db.WebflowConnection, error) {
+	args := m.Called(ctx, connectionID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*db.WebflowConnection), args.Error(1)
+}
+
+func (m *MockDBClient) ListWebflowConnections(ctx context.Context, organisationID string) ([]*db.WebflowConnection, error) {
+	args := m.Called(ctx, organisationID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*db.WebflowConnection), args.Error(1)
+}
+
+func (m *MockDBClient) DeleteWebflowConnection(ctx context.Context, connectionID, organisationID string) error {
+	args := m.Called(ctx, connectionID, organisationID)
+	return args.Error(0)
+}
+
+func (m *MockDBClient) StoreWebflowToken(ctx context.Context, connectionID, token string) error {
+	args := m.Called(ctx, connectionID, token)
+	return args.Error(0)
+}
+
+func (m *MockDBClient) GetWebflowToken(ctx context.Context, connectionID string) (string, error) {
+	args := m.Called(ctx, connectionID)
+	return args.String(0), args.Error(1)
+}
+
 // Test helpers
 func createTestHandler() (*Handler, *MockDBClient, *MockJobManager) {
 	mockDB := new(MockDBClient)
