@@ -29,6 +29,19 @@ On merge, CI will:
 
 ## [Unreleased]
 
+## [0.22.3] – 2026-01-03
+
+### Changed
+
+- **Org-scoped integrations**: Slack and Webflow connections now follow the
+  active organisation context
+  - Webflow webhooks accept workspace-based URLs and resolve via platform org
+    mappings, with legacy token support retained
+  - RLS policies for Slack and Webflow connections now enforce organisation
+    membership
+  - Slack auto-linking functions now use an explicit `search_path` for safer
+    SECURITY DEFINER execution
+
 ## [0.22.2] – 2026-01-03
 
 ## [0.22.1] – 2026-01-03
