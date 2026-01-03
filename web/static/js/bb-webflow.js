@@ -173,6 +173,10 @@ async function loadWebflowConnections() {
  */
 async function connectWebflow() {
   try {
+    if (!window.dataBinder?.fetchData) {
+      showWebflowError("System not ready. Please refresh the page.");
+      return;
+    }
     const response = await window.dataBinder.fetchData(
       "/v1/integrations/webflow",
       { method: "POST" }

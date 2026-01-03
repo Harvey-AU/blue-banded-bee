@@ -187,13 +187,7 @@ func (h *Handler) HandleWebflowOAuthCallback(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// AUTO-REGISTER WEBHOOKS (Run on Publish)
-	// 1. Get Sites
-	// 2. For each site, register 'site_publish' webhook pointing to /v1/webhooks/webflow/{token}?
-	// Wait, existing webhook handler uses a "user" token.
-	// We should probably register a webhook pointing to a new generic handler or reuse the existing logic if we can map it.
-	// Ideally: webhook url = https://app.../v1/webhooks/webflow-oauth/{connID}
-	// Updated plan said: "Automatically call Webflow API to register site_publish webhook"
+	// Register site_publish webhooks in background for "Run on Publish" feature
 	go h.registerWebflowWebhooksSafe(state.UserID, tokenResp.AccessToken)
 
 	logger.Info().
