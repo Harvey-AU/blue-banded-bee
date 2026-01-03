@@ -62,7 +62,8 @@ func (h *Handler) InitiateWebflowOAuth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if user.OrganisationID == nil {
+	orgID := h.DB.GetEffectiveOrganisationID(user)
+	if orgID == "" {
 		BadRequest(w, r, "User must belong to an organisation")
 		return
 	}
@@ -80,7 +81,7 @@ func (h *Handler) InitiateWebflowOAuth(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Sign state with JWT Secret
-	state, err := h.generateOAuthState(userClaims.UserID, *user.OrganisationID)
+	state, err := h.generateOAuthState(userClaims.UserID, orgID)
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to generate OAuth state")
 		InternalError(w, r, err)
@@ -161,6 +162,11 @@ func (h *Handler) HandleWebflowOAuthCallback(w http.ResponseWriter, r *http.Requ
 			workspaceID = authInfo.WorkspaceIDs[0] // Use first workspace
 		}
 	}
+	if workspaceID == "" {
+		logger.Warn().Msg("Webflow OAuth response missing workspace ID")
+		h.redirectToDashboardWithError(w, r, "Webflow", "Webflow workspace ID not found. Please ensure a workspace is selected.")
+		return
+	}
 
 	now := time.Now().UTC()
 	conn := &db.WebflowConnection{
@@ -187,8 +193,21 @@ func (h *Handler) HandleWebflowOAuthCallback(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Register site_publish webhooks in background for "Run on Publish" feature
-	go h.registerWebflowWebhooksSafe(state.UserID, tokenResp.AccessToken)
+	// Link workspace to organisation for webhook resolution
+	mapping := &db.PlatformOrgMapping{
+		Platform:       "webflow",
+		PlatformID:     workspaceID,
+		OrganisationID: state.OrgID,
+		CreatedBy:      &state.UserID,
+	}
+	if err := h.DB.UpsertPlatformOrgMapping(r.Context(), mapping); err != nil {
+		logger.Error().Err(err).Msg("Failed to store Webflow workspace mapping")
+		h.redirectToDashboardWithError(w, r, "Webflow", "Failed to save Webflow workspace mapping")
+		return
+	}
+
+	// Register site_publish webhooks in background for "Run on Publish" feature (best-effort).
+	go h.registerWebflowWebhooksSafe(state.OrgID, workspaceID, tokenResp.AccessToken)
 
 	logger.Info().
 		Str("organisation_id", state.OrgID).
@@ -348,27 +367,15 @@ func (h *Handler) fetchWebflowUserInfo(ctx context.Context, client *http.Client,
 	return userInfo, nil
 }
 
-func (h *Handler) registerWebflowWebhooksSafe(userID, token string) {
+func (h *Handler) registerWebflowWebhooksSafe(orgID, workspaceID, token string) {
 	// Simple wrapper to run in background and log errors
-	logger := log.With().Str("user_id", userID).Logger()
+	logger := log.With().Str("organisation_id", orgID).Str("webflow_workspace_id", workspaceID).Logger()
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
 	logger.Info().Msg("Starting Webflow webhook registration")
 
-	// 1. Get user to get webhook token
-	user, err := h.DB.GetUser(userID)
-	if err != nil {
-		logger.Error().Err(err).Msg("Failed to get user for webhook registration")
-		return
-	}
-
-	if user.WebhookToken == nil || *user.WebhookToken == "" {
-		logger.Warn().Msg("User has no webhook token, cannot register webhooks")
-		return
-	}
-
-	webhookURL := fmt.Sprintf("%s/v1/webhooks/webflow/%s", getAppURL(), *user.WebhookToken)
+	webhookURL := fmt.Sprintf("%s/v1/webhooks/webflow/workspaces/%s", getAppURL(), workspaceID)
 
 	// 2. List sites
 	client := &http.Client{Timeout: 10 * time.Second}
@@ -514,12 +521,13 @@ func (h *Handler) listWebflowConnections(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if user.OrganisationID == nil {
+	orgID := h.DB.GetEffectiveOrganisationID(user)
+	if orgID == "" {
 		WriteSuccess(w, r, []WebflowConnectionResponse{}, "No organisation")
 		return
 	}
 
-	connections, err := h.DB.ListWebflowConnections(r.Context(), *user.OrganisationID)
+	connections, err := h.DB.ListWebflowConnections(r.Context(), orgID)
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to list Webflow connections")
 		InternalError(w, r, err)
@@ -556,12 +564,13 @@ func (h *Handler) deleteWebflowConnection(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	if user.OrganisationID == nil {
+	orgID := h.DB.GetEffectiveOrganisationID(user)
+	if orgID == "" {
 		BadRequest(w, r, "User must belong to an organisation")
 		return
 	}
 
-	err = h.DB.DeleteWebflowConnection(r.Context(), connectionID, *user.OrganisationID)
+	err = h.DB.DeleteWebflowConnection(r.Context(), connectionID, orgID)
 	if err != nil {
 		if errors.Is(err, db.ErrWebflowConnectionNotFound) {
 			NotFound(w, r, "Webflow connection not found")

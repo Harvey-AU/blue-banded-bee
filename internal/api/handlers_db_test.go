@@ -290,3 +290,11 @@ func (m *MockDBWithRealDB) StoreWebflowToken(ctx context.Context, connectionID, 
 func (m *MockDBWithRealDB) GetWebflowToken(ctx context.Context, connectionID string) (string, error) {
 	return "", nil
 }
+
+func (m *MockDBWithRealDB) UpsertPlatformOrgMapping(ctx context.Context, mapping *db.PlatformOrgMapping) error {
+	return nil
+}
+
+func (m *MockDBWithRealDB) GetPlatformOrgMapping(ctx context.Context, platform, platformID string) (*db.PlatformOrgMapping, error) {
+	return nil, nil
+}

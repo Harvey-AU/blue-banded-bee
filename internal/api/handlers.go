@@ -149,6 +149,9 @@ type DBClient interface {
 	DeleteWebflowConnection(ctx context.Context, connectionID, organisationID string) error
 	StoreWebflowToken(ctx context.Context, connectionID, token string) error
 	GetWebflowToken(ctx context.Context, connectionID string) (string, error)
+	// Platform integration mappings
+	UpsertPlatformOrgMapping(ctx context.Context, mapping *db.PlatformOrgMapping) error
+	GetPlatformOrgMapping(ctx context.Context, platform, platformID string) (*db.PlatformOrgMapping, error)
 }
 
 // Handler holds dependencies for API handlers
@@ -753,14 +756,29 @@ func (h *Handler) WebflowWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Extract webhook token from URL path: /v1/webhooks/webflow/WEBHOOK_TOKEN
+	// Extract identifier from URL path:
+	// Legacy: /v1/webhooks/webflow/WEBHOOK_TOKEN
+	// Org-scoped: /v1/webhooks/webflow/workspaces/WORKSPACE_ID
 	pathParts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
 	if len(pathParts) < 4 || pathParts[3] == "" {
-		logger.Warn().Str("path", r.URL.Path).Msg("Webflow webhook missing token in URL")
-		BadRequest(w, r, "Webhook token required in URL path")
+		logger.Warn().Str("path", r.URL.Path).Msg("Webflow webhook missing identifier in URL")
+		BadRequest(w, r, "Webhook identifier required in URL path")
 		return
 	}
-	webhookToken := pathParts[3]
+
+	isWorkspaceWebhook := pathParts[3] == "workspaces"
+	webhookToken := ""
+	workspaceID := ""
+	if isWorkspaceWebhook {
+		if len(pathParts) < 5 || pathParts[4] == "" {
+			logger.Warn().Str("path", r.URL.Path).Msg("Webflow webhook missing workspace ID in URL")
+			BadRequest(w, r, "Webflow workspace ID required in URL path")
+			return
+		}
+		workspaceID = pathParts[4]
+	} else {
+		webhookToken = pathParts[3]
+	}
 
 	// Parse webhook payload
 	var payload WebflowWebhookPayload
@@ -770,13 +788,38 @@ func (h *Handler) WebflowWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get user from database using webhook token
-	user, err := h.DB.GetUserByWebhookToken(webhookToken)
-	if err != nil {
-		logger.Warn().Err(err).Msg("Failed to get user by webhook token")
-		// Return 404 to avoid leaking information about valid tokens
-		NotFound(w, r, "Invalid webhook token")
-		return
+	var user *db.User
+	orgID := ""
+	if isWorkspaceWebhook {
+		mapping, err := h.DB.GetPlatformOrgMapping(r.Context(), "webflow", workspaceID)
+		if err != nil {
+			logger.Warn().Err(err).Str("workspace_id", workspaceID).Msg("Failed to resolve Webflow workspace mapping")
+			NotFound(w, r, "Invalid Webflow workspace")
+			return
+		}
+		if mapping.CreatedBy == nil || *mapping.CreatedBy == "" {
+			logger.Error().Str("workspace_id", workspaceID).Msg("Webflow mapping missing creator user")
+			InternalError(w, r, fmt.Errorf("webflow mapping missing creator"))
+			return
+		}
+		user, err = h.DB.GetUser(*mapping.CreatedBy)
+		if err != nil {
+			logger.Error().Err(err).Str("user_id", *mapping.CreatedBy).Msg("Failed to load Webflow mapping creator")
+			InternalError(w, r, fmt.Errorf("failed to load mapping creator: %w", err))
+			return
+		}
+		orgID = mapping.OrganisationID
+	} else {
+		// Get user from database using webhook token
+		var err error
+		user, err = h.DB.GetUserByWebhookToken(webhookToken)
+		if err != nil {
+			logger.Warn().Err(err).Msg("Failed to get user by webhook token")
+			// Return 404 to avoid leaking information about valid tokens
+			NotFound(w, r, "Invalid webhook token")
+			return
+		}
+		orgID = h.DB.GetEffectiveOrganisationID(user)
 	}
 
 	// Log webhook received
@@ -842,7 +885,13 @@ func (h *Handler) WebflowWebhook(w http.ResponseWriter, r *http.Request) {
 		SourceInfo:   &sourceInfo,
 	}
 
-	job, err := h.createJobFromRequest(r.Context(), user, req)
+	// Shallow copy to avoid mutating the original user while injecting org context.
+	userForJob := *user
+	if orgID != "" {
+		userForJob.ActiveOrganisationID = &orgID
+		userForJob.OrganisationID = &orgID
+	}
+	job, err := h.createJobFromRequest(r.Context(), &userForJob, req)
 	if err != nil {
 		logger.Error().Err(err).
 			Str("user_id", user.ID).
@@ -854,15 +903,10 @@ func (h *Handler) WebflowWebhook(w http.ResponseWriter, r *http.Request) {
 
 	// Job processing starts automatically via worker pool when CreateJob adds it
 
-	orgIDStr := ""
-	if user.OrganisationID != nil {
-		orgIDStr = *user.OrganisationID
-	}
-
 	logger.Info().
 		Str("job_id", job.ID).
 		Str("user_id", user.ID).
-		Str("org_id", orgIDStr).
+		Str("org_id", orgID).
 		Str("domain", selectedDomain).
 		Str("selected_from", strings.Join(payload.Payload.Domains, ", ")).
 		Msg("Successfully created and started job from Webflow webhook")
@@ -870,7 +914,7 @@ func (h *Handler) WebflowWebhook(w http.ResponseWriter, r *http.Request) {
 	WriteSuccess(w, r, map[string]interface{}{
 		"job_id":  job.ID,
 		"user_id": user.ID,
-		"org_id":  orgIDStr,
+		"org_id":  orgID,
 		"domain":  selectedDomain,
 		"status":  "created",
 	}, "Job created successfully from webhook")

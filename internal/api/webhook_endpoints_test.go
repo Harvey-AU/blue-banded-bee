@@ -26,7 +26,7 @@ func TestWebflowWebhookIntegration(t *testing.T) {
 	}{
 		{
 			name: "successful_webhook_job_creation",
-			path: "/v1/webhooks/webflow/test-webhook-token-123",
+			path: "/v1/webhooks/webflow/workspaces/workspace-123",
 			requestBody: map[string]interface{}{
 				"triggerType": "site_publish",
 				"payload": map[string]interface{}{
@@ -37,13 +37,18 @@ func TestWebflowWebhookIntegration(t *testing.T) {
 				},
 			},
 			setupMocks: func(mockDB *MockDBClient, jm *MockJobManager) {
-				// Mock successful user lookup by webhook token
+				mapping := &db.PlatformOrgMapping{
+					OrganisationID: "webhook-org-456",
+					CreatedBy:      stringPtr("webhook-user-123"),
+				}
+				mockDB.On("GetPlatformOrgMapping", mock.Anything, "webflow", "workspace-123").Return(mapping, nil)
+
 				user := &db.User{
 					ID:             "webhook-user-123",
 					Email:          "webhook@example.com",
 					OrganisationID: stringPtr("webhook-org-456"),
 				}
-				mockDB.On("GetUserByWebhookToken", "test-webhook-token-123").Return(user, nil)
+				mockDB.On("GetUser", "webhook-user-123").Return(user, nil)
 				mockDB.On("GetEffectiveOrganisationID", mock.AnythingOfType("*db.User")).Return("webhook-org-456")
 
 				// Mock successful job creation
@@ -79,7 +84,7 @@ func TestWebflowWebhookIntegration(t *testing.T) {
 			},
 		},
 		{
-			name: "webhook_missing_token",
+			name: "webhook_missing_identifier",
 			path: "/v1/webhooks/webflow/", // No token
 			requestBody: map[string]interface{}{
 				"triggerType": "site_publish",
@@ -98,12 +103,12 @@ func TestWebflowWebhookIntegration(t *testing.T) {
 
 				assert.Equal(t, float64(400), response["status"])
 				assert.Equal(t, "BAD_REQUEST", response["code"])
-				assert.Equal(t, "Webhook token required in URL path", response["message"])
+				assert.Equal(t, "Webhook identifier required in URL path", response["message"])
 			},
 		},
 		{
-			name: "webhook_invalid_user_token",
-			path: "/v1/webhooks/webflow/invalid-token",
+			name: "webhook_invalid_workspace",
+			path: "/v1/webhooks/webflow/workspaces/invalid-workspace",
 			requestBody: map[string]interface{}{
 				"triggerType": "site_publish",
 				"payload": map[string]interface{}{
@@ -111,7 +116,7 @@ func TestWebflowWebhookIntegration(t *testing.T) {
 				},
 			},
 			setupMocks: func(mockDB *MockDBClient, jm *MockJobManager) {
-				mockDB.On("GetUserByWebhookToken", "invalid-token").Return(nil, assert.AnError)
+				mockDB.On("GetPlatformOrgMapping", mock.Anything, "webflow", "invalid-workspace").Return((*db.PlatformOrgMapping)(nil), assert.AnError)
 			},
 			expectedStatus: http.StatusNotFound,
 			checkResponse: func(t *testing.T, rec *httptest.ResponseRecorder) {
@@ -121,12 +126,12 @@ func TestWebflowWebhookIntegration(t *testing.T) {
 
 				assert.Equal(t, float64(404), response["status"])
 				assert.Equal(t, "NOT_FOUND", response["code"])
-				assert.Equal(t, "Invalid webhook token", response["message"])
+				assert.Equal(t, "Invalid Webflow workspace", response["message"])
 			},
 		},
 		{
 			name: "webhook_wrong_method",
-			path: "/v1/webhooks/webflow/test-token",
+			path: "/v1/webhooks/webflow/workspaces/workspace-123",
 			requestBody: map[string]interface{}{
 				"triggerType": "site_publish",
 			},
@@ -193,7 +198,7 @@ func TestWebflowWebhookEdgeCases(t *testing.T) {
 	}{
 		{
 			name: "webhook_non_site_publish_trigger",
-			path: "/v1/webhooks/webflow/test-token",
+			path: "/v1/webhooks/webflow/workspaces/workspace-123",
 			requestBody: map[string]interface{}{
 				"triggerType": "form_submission", // Not site_publish
 				"payload": map[string]interface{}{
@@ -201,12 +206,18 @@ func TestWebflowWebhookEdgeCases(t *testing.T) {
 				},
 			},
 			setupMocks: func(mockDB *MockDBClient, jm *MockJobManager) {
+				mapping := &db.PlatformOrgMapping{
+					OrganisationID: "webhook-org-456",
+					CreatedBy:      stringPtr("webhook-user-123"),
+				}
+				mockDB.On("GetPlatformOrgMapping", mock.Anything, "webflow", "workspace-123").Return(mapping, nil)
+
 				user := &db.User{
 					ID:             "webhook-user-123",
 					Email:          "webhook@example.com",
 					OrganisationID: stringPtr("webhook-org-456"),
 				}
-				mockDB.On("GetUserByWebhookToken", "test-token").Return(user, nil)
+				mockDB.On("GetUser", "webhook-user-123").Return(user, nil)
 				// No JobManager mocks - should be ignored
 			},
 			expectedStatus: http.StatusOK,
@@ -221,7 +232,7 @@ func TestWebflowWebhookEdgeCases(t *testing.T) {
 		},
 		{
 			name: "webhook_job_creation_failure",
-			path: "/v1/webhooks/webflow/test-token",
+			path: "/v1/webhooks/webflow/workspaces/workspace-123",
 			requestBody: map[string]interface{}{
 				"triggerType": "site_publish",
 				"payload": map[string]interface{}{
@@ -232,12 +243,18 @@ func TestWebflowWebhookEdgeCases(t *testing.T) {
 				},
 			},
 			setupMocks: func(mockDB *MockDBClient, jm *MockJobManager) {
+				mapping := &db.PlatformOrgMapping{
+					OrganisationID: "webhook-org-456",
+					CreatedBy:      stringPtr("webhook-user-123"),
+				}
+				mockDB.On("GetPlatformOrgMapping", mock.Anything, "webflow", "workspace-123").Return(mapping, nil)
+
 				user := &db.User{
 					ID:             "webhook-user-123",
 					Email:          "webhook@example.com",
 					OrganisationID: stringPtr("webhook-org-456"),
 				}
-				mockDB.On("GetUserByWebhookToken", "test-token").Return(user, nil)
+				mockDB.On("GetUser", "webhook-user-123").Return(user, nil)
 				mockDB.On("GetEffectiveOrganisationID", mock.AnythingOfType("*db.User")).Return("webhook-org-456")
 
 				// Mock job creation failure
