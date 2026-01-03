@@ -7,16 +7,17 @@ CREATE OR REPLACE FUNCTION store_webflow_token(connection_id UUID, token TEXT)
 RETURNS TEXT AS $$
 DECLARE
   secret_name TEXT;
-  rows_updated INT;
+  secret_updated INT;
+  connection_updated INT;
 BEGIN
   secret_name := 'webflow_token_' || connection_id::TEXT;
 
   -- Try to update existing secret first (safe - no data loss if it fails)
   UPDATE vault.secrets SET secret = token WHERE name = secret_name;
-  GET DIAGNOSTICS rows_updated = ROW_COUNT;
+  GET DIAGNOSTICS secret_updated = ROW_COUNT;
 
   -- If no existing secret, create new one
-  IF rows_updated = 0 THEN
+  IF secret_updated = 0 THEN
     PERFORM vault.create_secret(token, secret_name);
   END IF;
 
@@ -26,14 +27,23 @@ BEGIN
   WHERE id = connection_id;
 
   -- Verify the connection was updated (catches invalid connection_id)
-  GET DIAGNOSTICS rows_updated = ROW_COUNT;
-  IF rows_updated = 0 THEN
-    -- Clean up the secret we just created since connection doesn't exist
-    DELETE FROM vault.secrets WHERE name = secret_name;
+  GET DIAGNOSTICS connection_updated = ROW_COUNT;
+  IF connection_updated = 0 THEN
+    -- Only clean up if WE created the secret (not if it already existed)
+    IF secret_updated = 0 THEN
+      DELETE FROM vault.secrets WHERE name = secret_name;
+    END IF;
     RAISE EXCEPTION 'Connection % not found', connection_id;
   END IF;
 
   RETURN secret_name;
+EXCEPTION
+  WHEN unique_violation THEN
+    -- Race condition: another call created the secret between our UPDATE and CREATE
+    -- Retry as update
+    UPDATE vault.secrets SET secret = token WHERE name = secret_name;
+    UPDATE webflow_connections SET vault_secret_name = secret_name WHERE id = connection_id;
+    RETURN secret_name;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, vault;
 
