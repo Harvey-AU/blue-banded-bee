@@ -298,3 +298,38 @@ func (m *MockDBWithRealDB) UpsertPlatformOrgMapping(ctx context.Context, mapping
 func (m *MockDBWithRealDB) GetPlatformOrgMapping(ctx context.Context, platform, platformID string) (*db.PlatformOrgMapping, error) {
 	return nil, nil
 }
+
+// Webflow site settings methods
+func (m *MockDBWithRealDB) CreateOrUpdateSiteSetting(ctx context.Context, setting *db.WebflowSiteSetting) error {
+	return nil
+}
+func (m *MockDBWithRealDB) GetSiteSetting(ctx context.Context, orgID, siteID string) (*db.WebflowSiteSetting, error) {
+	return nil, nil
+}
+func (m *MockDBWithRealDB) GetSiteSettingByID(ctx context.Context, settingID string) (*db.WebflowSiteSetting, error) {
+	return nil, nil
+}
+func (m *MockDBWithRealDB) ListConfiguredSiteSettings(ctx context.Context, orgID string) ([]*db.WebflowSiteSetting, error) {
+	return nil, nil
+}
+func (m *MockDBWithRealDB) ListAllSiteSettings(ctx context.Context, orgID string) ([]*db.WebflowSiteSetting, error) {
+	return nil, nil
+}
+func (m *MockDBWithRealDB) ListSiteSettingsByConnection(ctx context.Context, connectionID string) ([]*db.WebflowSiteSetting, error) {
+	return nil, nil
+}
+func (m *MockDBWithRealDB) UpdateSiteSchedule(ctx context.Context, orgID, siteID string, intervalHours *int, schedulerID string) error {
+	return nil
+}
+func (m *MockDBWithRealDB) UpdateSiteAutoPublish(ctx context.Context, orgID, siteID string, enabled bool, webhookID string) error {
+	return nil
+}
+func (m *MockDBWithRealDB) DeleteSiteSetting(ctx context.Context, orgID, siteID string) error {
+	return nil
+}
+func (m *MockDBWithRealDB) DeleteSiteSettingsByConnection(ctx context.Context, connectionID string) error {
+	return nil
+}
+func (m *MockDBWithRealDB) GetSiteSettingBySiteID(ctx context.Context, orgID, webflowSiteID string) (*db.WebflowSiteSetting, error) {
+	return nil, nil
+}
