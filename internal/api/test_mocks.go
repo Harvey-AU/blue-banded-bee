@@ -441,6 +441,72 @@ func (m *MockDBClient) GetActivePlans(ctx context.Context) ([]db.Plan, error) {
 	return args.Get(0).([]db.Plan), args.Error(1)
 }
 
+// Webflow site settings mock methods
+func (m *MockDBClient) CreateOrUpdateSiteSetting(ctx context.Context, setting *db.WebflowSiteSetting) error {
+	args := m.Called(ctx, setting)
+	return args.Error(0)
+}
+
+func (m *MockDBClient) GetSiteSetting(ctx context.Context, organisationID, webflowSiteID string) (*db.WebflowSiteSetting, error) {
+	args := m.Called(ctx, organisationID, webflowSiteID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*db.WebflowSiteSetting), args.Error(1)
+}
+
+func (m *MockDBClient) GetSiteSettingByID(ctx context.Context, id string) (*db.WebflowSiteSetting, error) {
+	args := m.Called(ctx, id)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*db.WebflowSiteSetting), args.Error(1)
+}
+
+func (m *MockDBClient) ListConfiguredSiteSettings(ctx context.Context, organisationID string) ([]*db.WebflowSiteSetting, error) {
+	args := m.Called(ctx, organisationID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*db.WebflowSiteSetting), args.Error(1)
+}
+
+func (m *MockDBClient) ListAllSiteSettings(ctx context.Context, organisationID string) ([]*db.WebflowSiteSetting, error) {
+	args := m.Called(ctx, organisationID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*db.WebflowSiteSetting), args.Error(1)
+}
+
+func (m *MockDBClient) ListSiteSettingsByConnection(ctx context.Context, connectionID string) ([]*db.WebflowSiteSetting, error) {
+	args := m.Called(ctx, connectionID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*db.WebflowSiteSetting), args.Error(1)
+}
+
+func (m *MockDBClient) UpdateSiteSchedule(ctx context.Context, organisationID, webflowSiteID string, scheduleIntervalHours *int, schedulerID string) error {
+	args := m.Called(ctx, organisationID, webflowSiteID, scheduleIntervalHours, schedulerID)
+	return args.Error(0)
+}
+
+func (m *MockDBClient) UpdateSiteAutoPublish(ctx context.Context, organisationID, webflowSiteID string, enabled bool, webhookID string) error {
+	args := m.Called(ctx, organisationID, webflowSiteID, enabled, webhookID)
+	return args.Error(0)
+}
+
+func (m *MockDBClient) DeleteSiteSetting(ctx context.Context, organisationID, webflowSiteID string) error {
+	args := m.Called(ctx, organisationID, webflowSiteID)
+	return args.Error(0)
+}
+
+func (m *MockDBClient) DeleteSiteSettingsByConnection(ctx context.Context, connectionID string) error {
+	args := m.Called(ctx, connectionID)
+	return args.Error(0)
+}
+
 // Test helpers
 func createTestHandler() (*Handler, *MockDBClient, *MockJobManager) {
 	mockDB := new(MockDBClient)
