@@ -2995,6 +2995,10 @@
             }
           }
 
+          // Setup notifications modal handlers BEFORE OAuth callbacks
+          // (callbacks may need to open the modal)
+          setupNotificationsModal();
+
           // Initialize Slack integration
           if (window.setupSlackIntegration) {
             window.setupSlackIntegration();
@@ -3010,9 +3014,6 @@
           if (window.handleWebflowOAuthCallback) {
             window.handleWebflowOAuthCallback();
           }
-
-          // Setup notifications modal handlers
-          setupNotificationsModal();
 
           console.log(
             "Dashboard initialized successfully with unified auth system"
