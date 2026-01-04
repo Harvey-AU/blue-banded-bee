@@ -23,7 +23,8 @@ native to where we live in Castlemaine, Victoria, Australia.
 
 - 🔍 Broken link detection across your entire site
 - 🚨 Identify 404s, timeouts, and redirect chains
-- 📈 Track link health over time
+- 🐌 Detect slow-loading pages and performance bottlenecks
+- 📈 Track link health and performance over time
 - ⚡ Fast concurrent crawling with configurable worker pools
 
 ### Cache Warming
@@ -33,12 +34,13 @@ native to where we live in Castlemaine, Victoria, Australia.
 - ⚡ Improved initial page load times after publishing
 - 🤖 Robots.txt compliance with crawl-delay honouring
 
-### Integration & Monitoring
+### Automation & Integration
 
+- 🔄 Scheduled crawls to monitor site health continuously
+- 🚀 Automatic runs triggered by Webflow/Shopify publishing events
 - 📊 Real-time dashboard with job progress tracking
 - 🔔 Slack notifications when jobs complete
 - 🔐 Multi-tenant architecture with Supabase Auth
-- 🎨 Template-based integration (ready for Webflow/Shopify apps)
 - 🔌 API-first architecture for platform integrations
 
 ## Quick Start
