@@ -410,6 +410,43 @@ func (m *MockDBClient) GetWebflowToken(ctx context.Context, connectionID string)
 	return args.String(0), args.Error(1)
 }
 
+// Google Analytics integration mock methods
+func (m *MockDBClient) CreateGoogleConnection(ctx context.Context, conn *db.GoogleAnalyticsConnection) error {
+	args := m.Called(ctx, conn)
+	return args.Error(0)
+}
+
+func (m *MockDBClient) GetGoogleConnection(ctx context.Context, connectionID string) (*db.GoogleAnalyticsConnection, error) {
+	args := m.Called(ctx, connectionID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*db.GoogleAnalyticsConnection), args.Error(1)
+}
+
+func (m *MockDBClient) ListGoogleConnections(ctx context.Context, organisationID string) ([]*db.GoogleAnalyticsConnection, error) {
+	args := m.Called(ctx, organisationID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*db.GoogleAnalyticsConnection), args.Error(1)
+}
+
+func (m *MockDBClient) DeleteGoogleConnection(ctx context.Context, connectionID, organisationID string) error {
+	args := m.Called(ctx, connectionID, organisationID)
+	return args.Error(0)
+}
+
+func (m *MockDBClient) StoreGoogleToken(ctx context.Context, connectionID, refreshToken string) error {
+	args := m.Called(ctx, connectionID, refreshToken)
+	return args.Error(0)
+}
+
+func (m *MockDBClient) GetGoogleToken(ctx context.Context, connectionID string) (string, error) {
+	args := m.Called(ctx, connectionID)
+	return args.String(0), args.Error(1)
+}
+
 // Platform integration mock methods
 func (m *MockDBClient) UpsertPlatformOrgMapping(ctx context.Context, mapping *db.PlatformOrgMapping) error {
 	args := m.Called(ctx, mapping)

@@ -298,3 +298,28 @@ func (m *MockDBWithRealDB) UpsertPlatformOrgMapping(ctx context.Context, mapping
 func (m *MockDBWithRealDB) GetPlatformOrgMapping(ctx context.Context, platform, platformID string) (*db.PlatformOrgMapping, error) {
 	return nil, nil
 }
+
+// Google Analytics integration mock methods
+func (m *MockDBWithRealDB) CreateGoogleConnection(ctx context.Context, conn *db.GoogleAnalyticsConnection) error {
+	return nil
+}
+
+func (m *MockDBWithRealDB) GetGoogleConnection(ctx context.Context, connectionID string) (*db.GoogleAnalyticsConnection, error) {
+	return nil, nil
+}
+
+func (m *MockDBWithRealDB) ListGoogleConnections(ctx context.Context, organisationID string) ([]*db.GoogleAnalyticsConnection, error) {
+	return nil, nil
+}
+
+func (m *MockDBWithRealDB) DeleteGoogleConnection(ctx context.Context, connectionID, organisationID string) error {
+	return nil
+}
+
+func (m *MockDBWithRealDB) StoreGoogleToken(ctx context.Context, connectionID, token string) error {
+	return nil
+}
+
+func (m *MockDBWithRealDB) GetGoogleToken(ctx context.Context, connectionID string) (string, error) {
+	return "", nil
+}
