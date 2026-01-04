@@ -152,6 +152,9 @@ type DBClient interface {
 	// Platform integration mappings
 	UpsertPlatformOrgMapping(ctx context.Context, mapping *db.PlatformOrgMapping) error
 	GetPlatformOrgMapping(ctx context.Context, platform, platformID string) (*db.PlatformOrgMapping, error)
+	// Usage and plans methods
+	GetOrganisationUsageStats(ctx context.Context, orgID string) (*db.UsageStats, error)
+	GetActivePlans(ctx context.Context) ([]db.Plan, error)
 }
 
 // Handler holds dependencies for API handlers
@@ -251,6 +254,10 @@ func (h *Handler) SetupRoutes(mux *http.ServeMux) {
 	// Organisation routes (require auth)
 	mux.Handle("/v1/organisations", auth.AuthMiddleware(http.HandlerFunc(h.OrganisationsHandler)))
 	mux.Handle("/v1/organisations/switch", auth.AuthMiddleware(http.HandlerFunc(h.SwitchOrganisationHandler)))
+
+	// Usage and plans routes (require auth)
+	mux.Handle("/v1/usage", auth.AuthMiddleware(http.HandlerFunc(h.UsageHandler)))
+	mux.Handle("/v1/plans", http.HandlerFunc(h.PlansHandler)) // Public - for pricing page
 
 	// Webhook endpoints (no auth required)
 	mux.HandleFunc("/v1/webhooks/webflow/", h.WebflowWebhook) // Note: trailing slash for path params

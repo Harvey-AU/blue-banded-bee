@@ -190,3 +190,48 @@ func (h *Handler) switchOrganisation(w http.ResponseWriter, r *http.Request) {
 		},
 	}, "Organisation switched successfully")
 }
+
+// UsageHandler handles GET /v1/usage
+// Returns current usage statistics for the user's active organisation
+func (h *Handler) UsageHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		MethodNotAllowed(w, r)
+		return
+	}
+
+	// Get user's active organisation using the helper
+	orgID := h.GetActiveOrganisation(w, r)
+	if orgID == "" {
+		return // Error already written by helper
+	}
+
+	// Get usage stats from database
+	stats, err := h.DB.GetOrganisationUsageStats(r.Context(), orgID)
+	if err != nil {
+		InternalError(w, r, err)
+		return
+	}
+
+	WriteSuccess(w, r, map[string]interface{}{
+		"usage": stats,
+	}, "Usage statistics retrieved successfully")
+}
+
+// PlansHandler handles GET /v1/plans
+// Returns available subscription plans
+func (h *Handler) PlansHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		MethodNotAllowed(w, r)
+		return
+	}
+
+	plans, err := h.DB.GetActivePlans(r.Context())
+	if err != nil {
+		InternalError(w, r, err)
+		return
+	}
+
+	WriteSuccess(w, r, map[string]interface{}{
+		"plans": plans,
+	}, "Plans retrieved successfully")
+}

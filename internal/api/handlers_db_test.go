@@ -298,3 +298,12 @@ func (m *MockDBWithRealDB) UpsertPlatformOrgMapping(ctx context.Context, mapping
 func (m *MockDBWithRealDB) GetPlatformOrgMapping(ctx context.Context, platform, platformID string) (*db.PlatformOrgMapping, error) {
 	return nil, nil
 }
+
+// Usage and plans methods
+func (m *MockDBWithRealDB) GetOrganisationUsageStats(ctx context.Context, orgID string) (*db.UsageStats, error) {
+	return nil, nil
+}
+
+func (m *MockDBWithRealDB) GetActivePlans(ctx context.Context) ([]db.Plan, error) {
+	return nil, nil
+}
