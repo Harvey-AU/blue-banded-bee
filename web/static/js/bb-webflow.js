@@ -558,6 +558,7 @@ async function handleScheduleChange(event) {
     const token = session?.access_token;
     if (!token) {
       showWebflowError("Not authenticated. Please sign in.");
+      select.disabled = false;
       return;
     }
 
