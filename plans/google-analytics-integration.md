@@ -1,12 +1,13 @@
 # Google Analytics 4 Integration Plan
 
-This document outlines the technical plan for integrating Google Analytics 4 (GA4) with Blue Banded Bee to track and store traffic volume data by page/path.
+This document outlines the technical plan for integrating Google Analytics 4
+(GA4) with Blue Banded Bee to track and store traffic volume data by page/path.
 
 ## Table of Contents
 
 1. [OAuth User Consent Flow](#oauth-user-consent-flow)
 2. [Comprehensive Implementation Plan](#comprehensive-implementation-plan)
-3. [Architecture Overview](#architecture-overview)
+3. [Integration Architecture](#integration-architecture)
 4. [Database Schema](#database-schema)
 5. [Go Implementation](#go-implementation)
 6. [Next Steps](#next-steps)
@@ -15,7 +16,8 @@ This document outlines the technical plan for integrating Google Analytics 4 (GA
 
 ## OAuth User Consent Flow
 
-This is the **recommended approach** for allowing users to connect their own Google Analytics accounts.
+This is the **recommended approach** for allowing users to connect their own
+Google Analytics accounts.
 
 ### User Experience Flow
 
@@ -31,7 +33,8 @@ This is the **recommended approach** for allowing users to connect their own Goo
 
 #### a) Create OAuth 2.0 Credentials
 
-- Go to [Google Cloud Console](https://console.cloud.google.com) → APIs & Services → Credentials
+- Go to [Google Cloud Console](https://console.cloud.google.com) → APIs &
+  Services → Credentials
 - Click "Create Credentials" → "OAuth client ID"
 - Application type: "Web application"
 - Add authorised redirect URI: `https://yourdomain.com/api/auth/google/callback`
@@ -53,13 +56,13 @@ This is the **recommended approach** for allowing users to connect their own Goo
 
 #### Step 1: User clicks "Connect GA" button
 
-```
+```text
 User → Blue Banded Bee dashboard → "Connect GA" button
 ```
 
 #### Step 2: Redirect to Google OAuth consent screen
 
-```
+```text
 Your backend generates OAuth URL:
 https://accounts.google.com/o/oauth2/v2/auth?
   client_id=YOUR_CLIENT_ID
@@ -78,13 +81,13 @@ https://accounts.google.com/o/oauth2/v2/auth?
 
 #### Step 4: Google redirects back to your app
 
-```
+```text
 https://yourdomain.com/api/auth/google/callback?code=AUTHORIZATION_CODE
 ```
 
 #### Step 5: Exchange code for tokens
 
-```
+```http
 Your backend:
 POST https://oauth2.googleapis.com/token
   code=AUTHORIZATION_CODE
@@ -104,7 +107,7 @@ Response:
 
 #### Step 6: List user's GA4 properties
 
-```
+```http
 Your backend calls Admin API:
 GET https://analyticsadmin.googleapis.com/v1beta/accounts
 Authorization: Bearer ACCESS_TOKEN
@@ -127,7 +130,7 @@ Response:
 
 #### Step 7: Show property picker to user
 
-```
+```text
 User sees list:
 [ ] My Website (123456789)
 [ ] My Blog (987654321)
@@ -153,7 +156,7 @@ INSERT INTO user_ga_connections (
 
 #### Step 9: Query analytics data
 
-```
+```http
 Now you can call Data API:
 POST https://analyticsdata.googleapis.com/v1beta/properties/123456789:runReport
 Authorization: Bearer ACCESS_TOKEN
@@ -278,15 +281,19 @@ func getValidToken(ctx context.Context, conn *UserGAConnection) (*oauth2.Token, 
 
 ## Comprehensive Implementation Plan
 
-This section covers the full architecture and implementation details beyond just the OAuth flow.
+This section covers the full architecture and implementation details beyond just
+the OAuth flow.
 
 ### How GA Integrations Work
 
-Google Analytics 4 (GA4) provides a **Data API** that allows you to programmatically query analytics data. The basic flow is:
+Google Analytics 4 (GA4) provides a **Data API** that allows you to
+programmatically query analytics data. The basic flow is:
 
 1. **Authentication**: Use OAuth 2.0 to get user consent and access tokens
-2. **API Requests**: Make HTTP requests to GA4's Data API using the `runReport` method
-3. **Data Retrieval**: Query specific dimensions (like `pagePath`) and metrics (like `screenPageViews`, `sessions`)
+2. **API Requests**: Make HTTP requests to GA4's Data API using the `runReport`
+   method
+3. **Data Retrieval**: Query specific dimensions (like `pagePath`) and metrics
+   (like `screenPageViews`, `sessions`)
 4. **Storage**: Store the returned metrics in your database
 
 ### What Data You Can Track
@@ -307,11 +314,12 @@ The GA4 Data API provides access to various **page-level metrics**:
 - `pagePathPlusQueryString` - Path with query parameters
 - `date` / `dateHour` - Time-based grouping
 
-You can query historical data (e.g., "last 30 days") and aggregate by day, week, or month.
+You can query historical data (e.g., "last 30 days") and aggregate by day, week,
+or month.
 
-### Integration Architecture
+## Integration Architecture
 
-```
+```text
 ┌─────────────────────────────────────────────────────┐
 │  Blue Banded Bee                                    │
 │                                                     │
@@ -377,7 +385,7 @@ CREATE INDEX idx_user_ga_connections_domain ON user_ga_connections(domain_id);
 
 ### Analytics Data Storage
 
-**Option 1: Add columns directly to pages table (simple approach)**
+### Option 1: Add columns directly to pages table (simple approach)
 
 ```sql
 -- Migration: add_ga_analytics_to_pages.sql
@@ -390,7 +398,7 @@ ADD COLUMN IF NOT EXISTS sessions_7d INTEGER DEFAULT 0,
 ADD COLUMN IF NOT EXISTS avg_engagement_time_30d REAL DEFAULT 0;
 ```
 
-**Option 2: Create separate analytics table (historical tracking)**
+### Option 2: Create separate analytics table (historical tracking)
 
 ```sql
 CREATE TABLE IF NOT EXISTS page_analytics_snapshots (
@@ -409,7 +417,8 @@ CREATE INDEX idx_page_analytics_page_date
 ON page_analytics_snapshots(page_id, snapshot_date DESC);
 ```
 
-**Recommended: Use both approaches**
+### Recommended: Use both approaches
+
 - Recent metrics on `pages` for quick access
 - Historical snapshots for trend analysis
 
@@ -435,7 +444,7 @@ ON domain_ga4_configs(ga4_property_id);
 
 ### Package Structure
 
-```
+```text
 internal/
 ├── analytics/
 │   ├── ga4_client.go       # GA4 Data API client
@@ -458,6 +467,8 @@ import (
     "fmt"
     "strconv"
 
+    "github.com/rs/zerolog/log"
+    "golang.org/x/oauth2"
     "google.golang.org/api/analyticsdata/v1beta"
     "google.golang.org/api/option"
 )
@@ -519,10 +530,26 @@ func (c *GA4Client) GetPageMetrics(ctx context.Context, startDate, endDate strin
             continue
         }
 
-        pageViews, _ := strconv.ParseInt(row.MetricValues[0].Value, 10, 64)
-        sessions, _ := strconv.ParseInt(row.MetricValues[1].Value, 10, 64)
-        activeUsers, _ := strconv.ParseInt(row.MetricValues[2].Value, 10, 64)
-        engagementTime, _ := strconv.ParseFloat(row.MetricValues[3].Value, 64)
+        pageViews, err := strconv.ParseInt(row.MetricValues[0].Value, 10, 64)
+        if err != nil {
+            log.Warn().Err(err).Str("path", row.DimensionValues[0].Value).Msg("failed to parse pageViews, skipping row")
+            continue
+        }
+        sessions, err := strconv.ParseInt(row.MetricValues[1].Value, 10, 64)
+        if err != nil {
+            log.Warn().Err(err).Str("path", row.DimensionValues[0].Value).Msg("failed to parse sessions, skipping row")
+            continue
+        }
+        activeUsers, err := strconv.ParseInt(row.MetricValues[2].Value, 10, 64)
+        if err != nil {
+            log.Warn().Err(err).Str("path", row.DimensionValues[0].Value).Msg("failed to parse activeUsers, skipping row")
+            continue
+        }
+        engagementTime, err := strconv.ParseFloat(row.MetricValues[3].Value, 64)
+        if err != nil {
+            log.Warn().Err(err).Str("path", row.DimensionValues[0].Value).Msg("failed to parse engagementTime, skipping row")
+            continue
+        }
 
         results = append(results, PageMetrics{
             Path:            row.DimensionValues[0].Value,
@@ -750,14 +777,19 @@ func syncAllDomains(syncService *analytics.SyncService) error {
 
 - **Free tier**: 200,000 requests/day
 - Each `runReport` call = 1 request
-- Typically 1-2 requests per domain per sync is sufficient
+- Typically 1–2 requests per domain per sync is sufficient
 - For high-volume usage, apply for increased quota limits
 
 ### Security Considerations
 
 1. **Token Storage**: Encrypt access tokens and refresh tokens at rest
+   - Use the application's existing secret management layer (e.g.,
+     environment-based encryption keys)
+   - Consider Go's `crypto/aes` package with GCM mode for symmetric encryption
+   - Store encrypted tokens in the database; decrypt only when making API calls
 2. **CSRF Protection**: Use state parameter in OAuth flow
-3. **Scope Minimisation**: Only request `analytics.readonly` unless write access is needed
+3. **Scope Minimisation**: Only request `analytics.readonly` unless write access
+   is needed
 4. **Token Rotation**: Implement automatic token refresh
 5. **Audit Logging**: Log all GA API access and data syncs
 
@@ -765,41 +797,41 @@ func syncAllDomains(syncService *analytics.SyncService) error {
 
 ## Next Steps
 
-### Phase 1: OAuth Integration (Week 1-2)
+### Phase 1: OAuth Integration
 
-1. ✅ Set up Google Cloud Console project and OAuth credentials
-2. ✅ Create database migrations for `user_ga_connections` table
-3. ✅ Implement OAuth flow handlers (`/connect`, `/callback`, `/save`)
-4. ✅ Implement Admin API integration to list accounts/properties
-5. ✅ Build frontend UI for "Connect GA" flow
-6. ✅ Test with one GA4 property
+- [ ] Set up Google Cloud Console project and OAuth credentials
+- [ ] Create database migrations for `user_ga_connections` table
+- [ ] Implement OAuth flow handlers (`/connect`, `/callback`, `/save`)
+- [ ] Implement Admin API integration to list accounts/properties
+- [ ] Build frontend UI for "Connect GA" flow
+- [ ] Test with one GA4 property
 
-### Phase 2: Data Sync (Week 2-3)
+### Phase 2: Data Sync
 
-1. ✅ Create database migrations for analytics columns/tables
-2. ✅ Implement GA4 Data API client
-3. ✅ Implement sync service with token refresh logic
-4. ✅ Add scheduled background sync job
-5. ✅ Test data accuracy against GA4 dashboard
-6. ✅ Add error handling and retry logic
+- [ ] Create database migrations for analytics columns/tables
+- [ ] Implement GA4 Data API client
+- [ ] Implement sync service with token refresh logic
+- [ ] Add scheduled background sync job
+- [ ] Test data accuracy against GA4 dashboard
+- [ ] Add error handling and retry logic
 
-### Phase 3: Integration & UI (Week 3-4)
+### Phase 3: Integration & UI
 
-1. ✅ Expose analytics data via API endpoints
-2. ✅ Update dashboard to show page traffic metrics
-3. ✅ Add ability to disconnect/reconnect GA
-4. ✅ Implement multi-domain support
-5. ✅ Add admin controls for sync frequency
-6. ✅ Document user-facing features
+- [ ] Expose analytics data via API endpoints
+- [ ] Update dashboard to show page traffic metrics
+- [ ] Add ability to disconnect/reconnect GA
+- [ ] Implement multi-domain support
+- [ ] Add admin controls for sync frequency
+- [ ] Document user-facing features
 
-### Phase 4: Optimisation (Week 4-5)
+### Phase 4: Optimisation
 
-1. ✅ Use analytics data to prioritise cache warming (high-traffic pages first)
-2. ✅ Add trend analysis (compare 30d vs 7d traffic)
-3. ✅ Create reports showing cache warming ROI
-4. ✅ Optimise database queries with proper indexes
-5. ✅ Monitor API quota usage
-6. ✅ Add Sentry alerting for sync failures
+- [ ] Use analytics data to prioritise cache warming (high-traffic pages first)
+- [ ] Add trend analysis (compare 30d vs 7d traffic)
+- [ ] Create reports showing cache warming ROI
+- [ ] Optimise database queries with proper indexes
+- [ ] Monitor API quota usage
+- [ ] Add Sentry alerting for sync failures
 
 ---
 
@@ -829,6 +861,5 @@ func syncAllDomains(syncService *analytics.SyncService) error {
 
 ---
 
-**Document Version**: 1.0
-**Last Updated**: 2026-01-04
-**Status**: Planning Phase
+**Document Version**: 1.0 **Last Updated**: 2026-01-04 **Status**: Planning
+Phase
