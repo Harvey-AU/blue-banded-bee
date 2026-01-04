@@ -365,18 +365,22 @@ function handleWebflowOAuthCallback() {
  * Open the settings modal and scroll to Webflow section
  */
 function openSettingsModalForWebflow() {
-  // Try to open settings modal - look for the settings button or modal opener
-  const settingsBtn = document.querySelector('[data-modal="settingsModal"]');
+  const settingsBtn = document.getElementById("notificationsSettingsBtn");
+  const modal = document.getElementById("notificationsModal");
+
   if (settingsBtn) {
     settingsBtn.click();
-    // Give modal time to open, then scroll to Webflow section
-    setTimeout(() => {
-      const webflowSection = document.getElementById("webflowSitesConfig");
-      if (webflowSection) {
-        webflowSection.scrollIntoView({ behavior: "smooth", block: "start" });
-      }
-    }, 200);
+  } else if (modal) {
+    modal.classList.add("show");
   }
+
+  // Give modal time to open, then scroll to Webflow section
+  setTimeout(() => {
+    const webflowSection = document.getElementById("webflowSitesConfig");
+    if (webflowSection) {
+      webflowSection.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, 200);
 }
 
 /**
@@ -419,10 +423,13 @@ async function loadWebflowSites(connectionId, page = 1) {
       throw new Error(text || `HTTP ${response.status}`);
     }
 
-    const sites = await response.json();
+    const json = await response.json();
+    const data = json && json.data ? json.data : { sites: [] };
+    const sites = Array.isArray(data.sites) ? data.sites : [];
+
     webflowSitesState.connectionId = connectionId;
-    webflowSitesState.sites = sites || [];
-    webflowSitesState.filteredSites = [...webflowSitesState.sites];
+    webflowSitesState.sites = sites;
+    webflowSitesState.filteredSites = [...sites];
     webflowSitesState.currentPage = page;
 
     // Show search box if >5 sites
@@ -631,6 +638,12 @@ async function handleAutoPublishToggle(event) {
     const token = session?.access_token;
     if (!token) {
       showWebflowError("Not authenticated. Please sign in.");
+      toggle.checked = !enabled;
+      toggle.disabled = false;
+      if (statusEl) {
+        statusEl.textContent = "Not authenticated";
+        statusEl.style.color = "#ef4444";
+      }
       return;
     }
 
