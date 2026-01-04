@@ -29,6 +29,13 @@ On merge, CI will:
 
 ## [Unreleased]
 
+## [0.22.4] – 2026-01-04
+
+### Changed
+
+- Auto-release now runs on main pushes and only tags when the Unreleased section
+  contains actual entries
+
 ## [0.22.3] – 2026-01-03
 
 ### Changed
