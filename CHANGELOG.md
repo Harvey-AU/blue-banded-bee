@@ -29,6 +29,25 @@ On merge, CI will:
 
 ## [Unreleased]
 
+### Added
+
+- **Google Analytics Integration**: OAuth 2.0 connection for GA4 properties
+  - Full OAuth flow with HMAC-signed state for CSRF protection
+  - API endpoints: `POST /v1/integrations/google` (initiate),
+    `GET /v1/integrations/google` (list),
+    `DELETE /v1/integrations/google/{id}` (disconnect)
+  - Callback handler at `/v1/integrations/google/callback`
+  - Property selection UI when user has multiple GA4 properties
+  - Save property endpoint at `POST /v1/integrations/google/save-property`
+  - Refresh tokens stored securely in Supabase Vault with auto-cleanup on
+    deletion
+  - Atomic upsert pattern for vault token storage (matching Webflow pattern)
+- **Google Analytics Dashboard UI**: Connection management in integrations modal
+  - Connect/disconnect GA4 properties
+  - Displays property name, Google email, and connection date
+  - Property selection interface for accounts with multiple GA4 properties
+  - Success/error feedback using generic integration helper
+
 ## [0.23.0] – 2026-01-04
 
 ### Added
