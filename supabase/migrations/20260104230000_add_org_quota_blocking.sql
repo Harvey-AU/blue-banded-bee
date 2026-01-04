@@ -248,6 +248,9 @@ Used by workers and scaling calculations to skip blocked orgs.';
 -- =============================================================================
 -- STEP 8: Update the organisation_quota_status view
 -- =============================================================================
+-- Drop existing view first to allow column structure changes
+DROP VIEW IF EXISTS organisation_quota_status;
+
 CREATE OR REPLACE VIEW organisation_quota_status AS
 SELECT
     o.id AS organisation_id,
