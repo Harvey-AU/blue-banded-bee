@@ -517,11 +517,17 @@ function renderWebflowSites(page = 1) {
 
     // Set auto-publish toggle
     const autoPublishToggle = clone.querySelector(".site-autopublish");
-    if (autoPublishToggle) {
+    const toggleLabel = autoPublishToggle?.closest(".bb-toggle");
+    if (autoPublishToggle && toggleLabel) {
       autoPublishToggle.checked = site.auto_publish_enabled || false;
       autoPublishToggle.dataset.siteId = site.webflow_site_id;
       autoPublishToggle.dataset.connectionId = webflowSitesState.connectionId;
-      autoPublishToggle.addEventListener("change", handleAutoPublishToggle);
+      // Use click on label for reliability (hidden checkbox can be finicky)
+      toggleLabel.addEventListener("click", (e) => {
+        e.preventDefault();
+        autoPublishToggle.checked = !autoPublishToggle.checked;
+        handleAutoPublishToggle({ target: autoPublishToggle });
+      });
     }
 
     listEl.appendChild(clone);
