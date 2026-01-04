@@ -9,11 +9,11 @@
 
 # Blue Banded Bee 🐝
 
-A comprehensive website health and performance tool designed for
-[Webflow](https://www.webflow.com) sites (expanding to other platforms). Monitor
-your site's health by detecting broken links, warm caches for optimal
-performance after publishing, and ensure your visitors always get the best
-experience. Named after
+A comprehensive website health and performance tool designed to monitor your site's health by detecting broken links, identifying slow pages, and speeding up slow page by warming cache for optimal performance after publishing, and ensure your visitors always get the best experience. Works with any site and integrates seamlessly with Webflow, Shopify and Wordpress.
+
+Schedule your site audit as often as you need and when your site is published.
+
+Named after
 [a special little bee](https://www.aussiebee.com.au/blue-banded-bee-information.html)
 native to where we live in Castlemaine, Victoria, Australia.
 
@@ -24,8 +24,8 @@ native to where we live in Castlemaine, Victoria, Australia.
 - 🔍 Broken link detection across your entire site
 - 🚨 Identify 404s, timeouts, and redirect chains
 - 🐌 Detect slow-loading pages and performance bottlenecks
-- 📈 Track link health and performance over time
-- ⚡ Fast concurrent crawling with configurable worker pools
+- 📈 Track broken link and performance over time
+- ⚡ Lightening fast speed, without being blocked or spamming your site
 
 ### Cache Warming
 
@@ -77,13 +77,13 @@ One command starts everything:
 
 **Stage 4 of 7** - Core Authentication & MVP Interface (mostly complete)
 
-Next up: Platform integrations (Webflow/Shopify apps) and subscriptions. See
+In progress: Platform integrations (Webflow/Shopify apps) and subscriptions. See
 [roadmap](./Roadmap.md) for details.
 
 ## Tech Stack
 
 - **Backend**: Go with PostgreSQL
-- **Infrastructure**: Fly.io, Cloudflare CDN, Supabase Auth
+- **Infrastructure**: Fly.io, Cloudflare CDN, Supabase DB and Auth
 - **Monitoring**: Sentry, Grafana Cloud (traces), Codecov
 
 ## Documentation
