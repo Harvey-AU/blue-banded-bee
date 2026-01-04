@@ -16,15 +16,21 @@ import (
 	"github.com/google/uuid"
 )
 
-// WebflowSite represents a site from the Webflow API
+// WebflowCustomDomain represents a custom domain from the Webflow API v2
+type WebflowCustomDomain struct {
+	ID            string  `json:"id"`
+	URL           string  `json:"url"`
+	LastPublished *string `json:"lastPublished,omitempty"`
+}
+
+// WebflowSite represents a site from the Webflow API v2
 type WebflowSite struct {
-	ID            string   `json:"id"`
-	DisplayName   string   `json:"displayName"`
-	ShortName     string   `json:"shortName"`
-	LastPublished string   `json:"lastPublished,omitempty"`
-	LastUpdated   string   `json:"lastUpdated,omitempty"`
-	CustomDomains []string `json:"customDomains,omitempty"`
-	DefaultDomain string   `json:"defaultDomain,omitempty"`
+	ID            string                `json:"id"`
+	DisplayName   string                `json:"displayName"`
+	ShortName     string                `json:"shortName"`
+	LastPublished string                `json:"lastPublished,omitempty"`
+	LastUpdated   string                `json:"lastUpdated,omitempty"`
+	CustomDomains []WebflowCustomDomain `json:"customDomains,omitempty"`
 }
 
 // WebflowSitesResponse represents the response from Webflow's list sites API
@@ -768,9 +774,9 @@ func (h *Handler) deleteWebflowWebhook(ctx context.Context, token, webhookID str
 
 // Helper functions
 
-func containsDomain(domains []string, search string) bool {
+func containsDomain(domains []WebflowCustomDomain, search string) bool {
 	for _, d := range domains {
-		if strings.Contains(strings.ToLower(d), search) {
+		if strings.Contains(strings.ToLower(d.URL), search) {
 			return true
 		}
 	}
@@ -778,19 +784,19 @@ func containsDomain(domains []string, search string) bool {
 }
 
 func getPrimaryDomain(site WebflowSite) string {
-	// Prefer custom domains over default webflow.io domain
+	// Prefer custom domains over default webflow.io subdomain
 	for _, d := range site.CustomDomains {
-		if !strings.Contains(d, "webflow.io") {
-			return d
+		if d.URL != "" && !strings.Contains(d.URL, "webflow.io") {
+			return d.URL
 		}
 	}
-	// Fall back to first custom domain
-	if len(site.CustomDomains) > 0 {
-		return site.CustomDomains[0]
+	// Fall back to first custom domain (may be webflow.io subdomain)
+	if len(site.CustomDomains) > 0 && site.CustomDomains[0].URL != "" {
+		return site.CustomDomains[0].URL
 	}
-	// Fall back to default domain
-	if site.DefaultDomain != "" {
-		return site.DefaultDomain
+	// Fall back to constructed default domain from shortName
+	if site.ShortName != "" {
+		return site.ShortName + ".webflow.io"
 	}
 	return ""
 }
