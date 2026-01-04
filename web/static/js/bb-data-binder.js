@@ -582,9 +582,16 @@ class BBDataBinder {
       errors.push(`Must be no more than ${rules.maxLength} characters`);
     }
 
-    // Custom pattern validation
-    if (value && rules.pattern && !new RegExp(rules.pattern).test(value)) {
-      errors.push(rules.patternMessage || "Invalid format");
+    // Custom pattern validation (wrapped in try-catch for ReDoS prevention)
+    if (value && rules.pattern) {
+      try {
+        if (!new RegExp(rules.pattern).test(value)) {
+          errors.push(rules.patternMessage || "Invalid format");
+        }
+      } catch (e) {
+        console.warn("Invalid validation pattern:", rules.pattern, e);
+        errors.push("Unable to validate format");
+      }
     }
 
     // Update field UI
