@@ -400,6 +400,8 @@ async function loadWebflowSites(connectionId, page = 1) {
     const token = session?.access_token;
     if (!token) {
       showWebflowError("Not authenticated. Please sign in.");
+      webflowSitesState.loading = false;
+      if (loadingEl) loadingEl.style.display = "none";
       return;
     }
 
