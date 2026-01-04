@@ -515,19 +515,13 @@ function renderWebflowSites(page = 1) {
       scheduleSelect.addEventListener("change", handleScheduleChange);
     }
 
-    // Set auto-publish toggle
+    // Set auto-publish toggle (standard change event on checkbox)
     const autoPublishToggle = clone.querySelector(".site-autopublish");
-    const toggleLabel = autoPublishToggle?.closest(".bb-toggle");
-    if (autoPublishToggle && toggleLabel) {
+    if (autoPublishToggle) {
       autoPublishToggle.checked = site.auto_publish_enabled || false;
       autoPublishToggle.dataset.siteId = site.webflow_site_id;
       autoPublishToggle.dataset.connectionId = webflowSitesState.connectionId;
-      // Use click on label for reliability (hidden checkbox can be finicky)
-      toggleLabel.addEventListener("click", (e) => {
-        e.preventDefault();
-        autoPublishToggle.checked = !autoPublishToggle.checked;
-        handleAutoPublishToggle({ target: autoPublishToggle });
-      });
+      autoPublishToggle.addEventListener("change", handleAutoPublishToggle);
     }
 
     listEl.appendChild(clone);
