@@ -136,3 +136,18 @@ func (h *Handler) redirectToDashboardWithSuccess(w http.ResponseWriter, r *http.
 	}
 	http.Redirect(w, r, getDashboardURL()+"?"+params.Encode(), http.StatusSeeOther)
 }
+
+// redirectToDashboardWithSetup redirects to dashboard with setup flag for post-OAuth configuration
+func (h *Handler) redirectToDashboardWithSetup(w http.ResponseWriter, r *http.Request, integration, label, connectionID string) {
+	paramName := fmt.Sprintf("%s_connected", strings.ToLower(integration))
+	params := url.Values{}
+	params.Set(paramName, label)
+	if connectionID != "" {
+		idParamName := fmt.Sprintf("%s_connection_id", strings.ToLower(integration))
+		params.Set(idParamName, connectionID)
+	}
+	// Add setup flag to indicate frontend should open site configuration
+	setupParamName := fmt.Sprintf("%s_setup", strings.ToLower(integration))
+	params.Set(setupParamName, "true")
+	http.Redirect(w, r, getDashboardURL()+"?"+params.Encode(), http.StatusSeeOther)
+}

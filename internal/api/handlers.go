@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -152,6 +153,17 @@ type DBClient interface {
 	// Platform integration mappings
 	UpsertPlatformOrgMapping(ctx context.Context, mapping *db.PlatformOrgMapping) error
 	GetPlatformOrgMapping(ctx context.Context, platform, platformID string) (*db.PlatformOrgMapping, error)
+	// Webflow site settings methods
+	CreateOrUpdateSiteSetting(ctx context.Context, setting *db.WebflowSiteSetting) error
+	GetSiteSetting(ctx context.Context, organisationID, webflowSiteID string) (*db.WebflowSiteSetting, error)
+	GetSiteSettingByID(ctx context.Context, id string) (*db.WebflowSiteSetting, error)
+	ListConfiguredSiteSettings(ctx context.Context, organisationID string) ([]*db.WebflowSiteSetting, error)
+	ListAllSiteSettings(ctx context.Context, organisationID string) ([]*db.WebflowSiteSetting, error)
+	ListSiteSettingsByConnection(ctx context.Context, connectionID string) ([]*db.WebflowSiteSetting, error)
+	UpdateSiteSchedule(ctx context.Context, organisationID, webflowSiteID string, scheduleIntervalHours *int, schedulerID string) error
+	UpdateSiteAutoPublish(ctx context.Context, organisationID, webflowSiteID string, enabled bool, webhookID string) error
+	DeleteSiteSetting(ctx context.Context, organisationID, webflowSiteID string) error
+	DeleteSiteSettingsByConnection(ctx context.Context, connectionID string) error
 }
 
 // Handler holds dependencies for API handlers
@@ -262,8 +274,10 @@ func (h *Handler) SetupRoutes(mux *http.ServeMux) {
 
 	// Webflow integration endpoints
 	mux.Handle("/v1/integrations/webflow", auth.AuthMiddleware(http.HandlerFunc(h.WebflowConnectionsHandler)))
-	mux.Handle("/v1/integrations/webflow/", auth.AuthMiddleware(http.HandlerFunc(h.WebflowConnectionHandler)))
 	mux.HandleFunc("/v1/integrations/webflow/callback", h.HandleWebflowOAuthCallback) // No auth - state validation
+	// Webflow site settings endpoints (must be before catch-all)
+	mux.Handle("/v1/integrations/webflow/sites/", auth.AuthMiddleware(http.HandlerFunc(h.webflowSitesRouter)))
+	mux.Handle("/v1/integrations/webflow/", auth.AuthMiddleware(http.HandlerFunc(h.WebflowConnectionHandler)))
 
 	// Notification endpoints
 	mux.Handle("/v1/notifications", auth.AuthMiddleware(http.HandlerFunc(h.NotificationsHandler)))
@@ -739,6 +753,7 @@ func (h *Handler) DashboardExternalRedirects(w http.ResponseWriter, r *http.Requ
 // WebflowWebhookPayload represents the structure of Webflow's site publish webhook
 type WebflowWebhookPayload struct {
 	TriggerType string `json:"triggerType"`
+	SiteID      string `json:"siteId,omitempty"` // Webflow site ID for per-site settings lookup
 	Payload     struct {
 		Domains     []string `json:"domains"`
 		PublishedBy struct {
@@ -835,6 +850,37 @@ func (h *Handler) WebflowWebhook(w http.ResponseWriter, r *http.Request) {
 		logger.Warn().Str("trigger_type", payload.TriggerType).Msg("Ignoring non-site-publish webhook")
 		WriteSuccess(w, r, nil, "Webhook received but ignored (not site_publish)")
 		return
+	}
+
+	// Check if this site has auto-publish enabled (per-site settings)
+	if payload.SiteID != "" && orgID != "" {
+		siteSetting, err := h.DB.GetSiteSetting(r.Context(), orgID, payload.SiteID)
+		if err != nil {
+			if !errors.Is(err, db.ErrWebflowSiteSettingNotFound) {
+				logger.Error().Err(err).Str("site_id", payload.SiteID).Msg("Failed to check site settings")
+			}
+			// No settings found or error - site not configured for auto-publish
+			logger.Info().
+				Str("site_id", payload.SiteID).
+				Str("organisation_id", orgID).
+				Msg("Site not configured for auto-publish, ignoring webhook")
+			WriteSuccess(w, r, nil, "Webhook received but site not configured for auto-publish")
+			return
+		}
+
+		if !siteSetting.AutoPublishEnabled {
+			logger.Info().
+				Str("site_id", payload.SiteID).
+				Str("organisation_id", orgID).
+				Msg("Auto-publish disabled for site, ignoring webhook")
+			WriteSuccess(w, r, nil, "Webhook received but auto-publish disabled for this site")
+			return
+		}
+
+		logger.Debug().
+			Str("site_id", payload.SiteID).
+			Bool("auto_publish_enabled", siteSetting.AutoPublishEnabled).
+			Msg("Site auto-publish check passed")
 	}
 
 	// Validate domains are provided

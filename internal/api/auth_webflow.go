@@ -1,7 +1,6 @@
 package api
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -15,7 +14,6 @@ import (
 	"github.com/Harvey-AU/blue-banded-bee/internal/auth"
 	"github.com/Harvey-AU/blue-banded-bee/internal/db"
 	"github.com/google/uuid"
-	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
 
@@ -206,8 +204,8 @@ func (h *Handler) HandleWebflowOAuthCallback(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Register site_publish webhooks in background for "Run on Publish" feature (best-effort).
-	go h.registerWebflowWebhooksSafe(state.OrgID, workspaceID, tokenResp.AccessToken)
+	// Note: Webhooks are now registered per-site via the site settings UI
+	// instead of bulk registration during OAuth
 
 	logger.Info().
 		Str("organisation_id", state.OrgID).
@@ -215,8 +213,8 @@ func (h *Handler) HandleWebflowOAuthCallback(w http.ResponseWriter, r *http.Requ
 		Str("webflow_user_id", authedUserID).
 		Msg("Webflow connection established")
 
-	// Redirect to dashboard with success
-	h.redirectToDashboardWithSuccess(w, r, "Webflow", "Webflow Connection", conn.ID)
+	// Redirect to dashboard with success + setup flag to open site configuration
+	h.redirectToDashboardWithSetup(w, r, "Webflow", "Webflow Connection", conn.ID)
 }
 
 func (h *Handler) exchangeWebflowCode(code string) (*WebflowTokenResponse, error) {
@@ -367,91 +365,6 @@ func (h *Handler) fetchWebflowUserInfo(ctx context.Context, client *http.Client,
 	return userInfo, nil
 }
 
-func (h *Handler) registerWebflowWebhooksSafe(orgID, workspaceID, token string) {
-	// Simple wrapper to run in background and log errors
-	logger := log.With().Str("organisation_id", orgID).Str("webflow_workspace_id", workspaceID).Logger()
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-	defer cancel()
-
-	logger.Info().Msg("Starting Webflow webhook registration")
-
-	webhookURL := fmt.Sprintf("%s/v1/webhooks/webflow/workspaces/%s", getAppURL(), workspaceID)
-
-	// 2. List sites
-	client := &http.Client{Timeout: 10 * time.Second}
-	req, err := http.NewRequestWithContext(ctx, "GET", "https://api.webflow.com/v2/sites", nil)
-	if err != nil {
-		logger.Error().Err(err).Msg("Failed to create request for Webflow sites")
-		return
-	}
-	req.Header.Set("Authorization", "Bearer "+token)
-	req.Header.Set("accept", "application/json")
-
-	resp, err := client.Do(req)
-	if err != nil {
-		logger.Error().Err(err).Msg("Failed to list Webflow sites")
-		return
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		logger.Error().Int("status", resp.StatusCode).Msg("Webflow API returned error listing sites")
-		return
-	}
-
-	var sitesResp struct {
-		Sites []struct {
-			ID   string `json:"id"`
-			Name string `json:"name"`
-		} `json:"sites"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&sitesResp); err != nil {
-		logger.Error().Err(err).Msg("Failed to decode Webflow sites response")
-		return
-	}
-
-	// 3. Register webhook for each site
-	for _, site := range sitesResp.Sites {
-		h.registerSiteWebhook(ctx, site.ID, token, webhookURL, logger)
-	}
-}
-
-func (h *Handler) registerSiteWebhook(ctx context.Context, siteID, token, webhookURL string, logger zerolog.Logger) {
-	payload := map[string]string{
-		"triggerType": "site_publish",
-		"url":         webhookURL,
-	}
-	body, err := json.Marshal(payload)
-	if err != nil {
-		logger.Error().Err(err).Str("site_id", siteID).Msg("Failed to marshal webhook payload")
-		return
-	}
-
-	reqURL := fmt.Sprintf("https://api.webflow.com/v2/sites/%s/webhooks", siteID)
-	req, err := http.NewRequestWithContext(ctx, "POST", reqURL, bytes.NewReader(body))
-	if err != nil {
-		logger.Error().Err(err).Str("site_id", siteID).Msg("Failed to create webhook registration request")
-		return
-	}
-	req.Header.Set("Authorization", "Bearer "+token)
-	req.Header.Set("Content-Type", "application/json")
-
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		logger.Error().Err(err).Str("site_id", siteID).Msg("Failed to register webhook for site")
-		return
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == http.StatusCreated || resp.StatusCode == http.StatusOK {
-		logger.Info().Str("site_id", siteID).Msg("Successfully registered Webflow webhook")
-	} else {
-		// Log error but continue for other sites
-		logger.Warn().Int("status", resp.StatusCode).Str("site_id", siteID).Msg("Webflow API returned error registering webhook")
-	}
-}
-
 // WebflowConnectionResponse represents a Webflow connection in API responses
 type WebflowConnectionResponse struct {
 	ID                 string `json:"id"`
@@ -490,9 +403,16 @@ func (h *Handler) WebflowConnectionHandler(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	connectionID := strings.Split(path, "/")[0]
+	parts := strings.Split(path, "/")
+	connectionID := parts[0]
 	if _, err := uuid.Parse(connectionID); err != nil {
 		BadRequest(w, r, "Invalid connection ID format")
+		return
+	}
+
+	// Handle /v1/integrations/webflow/{connection_id}/sites
+	if len(parts) > 1 && parts[1] == "sites" {
+		h.WebflowSitesHandler(w, r)
 		return
 	}
 
