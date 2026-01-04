@@ -423,3 +423,78 @@ func (m *MockDB) GetPlatformOrgMapping(ctx context.Context, platform, platformID
 	}
 	return args.Get(0).(*db.PlatformOrgMapping), args.Error(1)
 }
+
+// Webflow site settings mock methods
+
+func (m *MockDB) CreateOrUpdateSiteSetting(ctx context.Context, setting *db.WebflowSiteSetting) error {
+	args := m.Called(ctx, setting)
+	return args.Error(0)
+}
+
+func (m *MockDB) GetSiteSetting(ctx context.Context, orgID, siteID string) (*db.WebflowSiteSetting, error) {
+	args := m.Called(ctx, orgID, siteID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*db.WebflowSiteSetting), args.Error(1)
+}
+
+func (m *MockDB) GetSiteSettingByID(ctx context.Context, settingID string) (*db.WebflowSiteSetting, error) {
+	args := m.Called(ctx, settingID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*db.WebflowSiteSetting), args.Error(1)
+}
+
+func (m *MockDB) ListConfiguredSiteSettings(ctx context.Context, orgID string) ([]*db.WebflowSiteSetting, error) {
+	args := m.Called(ctx, orgID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*db.WebflowSiteSetting), args.Error(1)
+}
+
+func (m *MockDB) ListAllSiteSettings(ctx context.Context, orgID string) ([]*db.WebflowSiteSetting, error) {
+	args := m.Called(ctx, orgID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*db.WebflowSiteSetting), args.Error(1)
+}
+
+func (m *MockDB) ListSiteSettingsByConnection(ctx context.Context, connectionID string) ([]*db.WebflowSiteSetting, error) {
+	args := m.Called(ctx, connectionID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*db.WebflowSiteSetting), args.Error(1)
+}
+
+func (m *MockDB) UpdateSiteSchedule(ctx context.Context, orgID, siteID string, intervalHours *int, schedulerID string) error {
+	args := m.Called(ctx, orgID, siteID, intervalHours, schedulerID)
+	return args.Error(0)
+}
+
+func (m *MockDB) UpdateSiteAutoPublish(ctx context.Context, orgID, siteID string, enabled bool, webhookID string) error {
+	args := m.Called(ctx, orgID, siteID, enabled, webhookID)
+	return args.Error(0)
+}
+
+func (m *MockDB) DeleteSiteSetting(ctx context.Context, orgID, siteID string) error {
+	args := m.Called(ctx, orgID, siteID)
+	return args.Error(0)
+}
+
+func (m *MockDB) DeleteSiteSettingsByConnection(ctx context.Context, connectionID string) error {
+	args := m.Called(ctx, connectionID)
+	return args.Error(0)
+}
+
+func (m *MockDB) GetSiteSettingBySiteID(ctx context.Context, orgID, webflowSiteID string) (*db.WebflowSiteSetting, error) {
+	args := m.Called(ctx, orgID, webflowSiteID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*db.WebflowSiteSetting), args.Error(1)
+}
