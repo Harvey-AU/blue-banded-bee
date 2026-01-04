@@ -1136,7 +1136,6 @@ func calculateAvailableSlots(
 	effectiveConcurrency sql.NullInt64,
 	runningTasks, pendingTaskCount int,
 	quotaRemaining sql.NullInt64,
-	maxPages int,
 ) (slots int, quotaLimited bool) {
 	const maxPendingQueueSize = 100
 
@@ -1202,8 +1201,8 @@ func (q *DbQueue) EnqueueURLs(ctx context.Context, jobID string, pages []Page, s
 
 		// Calculate available slots with concurrency override and quota limits
 		effectiveConcurrency := q.calculateEffectiveConcurrency(jobID, cfg.concurrency, cfg.domainName)
-		concurrencySlots, _ := calculateAvailableSlots(effectiveConcurrency, cfg.runningTasks, cfg.pendingTaskCount, sql.NullInt64{}, cfg.maxPages)
-		availableSlots, quotaLimited := calculateAvailableSlots(effectiveConcurrency, cfg.runningTasks, cfg.pendingTaskCount, cfg.quotaRemaining, cfg.maxPages)
+		concurrencySlots, _ := calculateAvailableSlots(effectiveConcurrency, cfg.runningTasks, cfg.pendingTaskCount, sql.NullInt64{})
+		availableSlots, quotaLimited := calculateAvailableSlots(effectiveConcurrency, cfg.runningTasks, cfg.pendingTaskCount, cfg.quotaRemaining)
 
 		// Ensure we don't try to create more tasks than we have pages
 		if availableSlots > len(uniquePages) {

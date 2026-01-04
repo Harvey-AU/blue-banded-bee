@@ -55,9 +55,15 @@ UPDATE organisations
 SET plan_id = (SELECT id FROM plans WHERE name = 'free')
 WHERE plan_id IS NULL;
 
+-- Create function to get free plan ID (required because DEFAULT cannot use subquery)
+CREATE OR REPLACE FUNCTION get_free_plan_id()
+RETURNS UUID AS $$
+    SELECT id FROM plans WHERE name = 'free' LIMIT 1;
+$$ LANGUAGE SQL STABLE;
+
 -- Make plan_id NOT NULL after backfill (with default for new orgs)
 ALTER TABLE organisations
-ALTER COLUMN plan_id SET DEFAULT (SELECT id FROM plans WHERE name = 'free');
+ALTER COLUMN plan_id SET DEFAULT get_free_plan_id();
 
 -- Add index for plan lookups
 CREATE INDEX IF NOT EXISTS idx_organisations_plan_id ON organisations(plan_id);
