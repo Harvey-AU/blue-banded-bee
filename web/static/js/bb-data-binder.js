@@ -589,7 +589,8 @@ class BBDataBinder {
           errors.push(rules.patternMessage || "Invalid format");
         }
       } catch (e) {
-        console.warn("Invalid validation pattern:", rules.pattern);
+        console.warn("Invalid validation pattern:", rules.pattern, e);
+        errors.push("Unable to validate format");
       }
     }
 

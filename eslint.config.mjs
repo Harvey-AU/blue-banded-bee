@@ -12,8 +12,8 @@ export default [
       "security/detect-object-injection": "off",
       // Timing attacks: Flagged on password confirmation UI, not secret comparison
       "security/detect-possible-timing-attacks": "off",
-      // Non-literal regexp: Pattern comes from code, not user input
-      "security/detect-non-literal-regexp": "off",
+      // Non-literal regexp: Pattern comes from code, not user input; wrapped in try-catch
+      "security/detect-non-literal-regexp": "warn",
     },
   },
 ];

@@ -38,7 +38,7 @@ frontend dashboard. This is NOT a secret key.
 | ---------------------------------- | ------ | -------------------------------------- |
 | A. Add `.trivyignore` rule         | Low    | **Recommended**                        |
 | B. Move to env-only (no fallback)  | Medium | Not recommended - breaks CLI usability |
-| C. Accept as-is with documentation | None   | Acceptable                             |
+| C. Accept as is with documentation | None   | Acceptable                             |
 
 **Action**:
 
@@ -67,7 +67,7 @@ real vulnerability.
 | ------------------------------- | ------ | -------------------------- |
 | A. Add ESLint disable comments  | Low    | **Recommended**            |
 | B. Use constant-time comparison | Medium | Overkill for this use case |
-| C. Accept as-is                 | None   | Acceptable                 |
+| C. Accept as is                 | None   | Acceptable                 |
 
 **Action**: Add inline `// eslint-disable-next-line` comments with explanation.
 
@@ -181,7 +181,7 @@ Add to `.eslintrc.js` or create `web/static/js/.eslintrc.json`:
 
 Create `.trivyignore`:
 
-```
+```text
 # Supabase anon key is a publishable key (like Stripe pk_*), not a secret
 # It's designed to be public and is already in the frontend
 scripts/auth/config.py
