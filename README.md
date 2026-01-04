@@ -9,19 +9,28 @@
 
 # Blue Banded Bee 🐝
 
-Automatically warm site caches (especially built for
-[Webflow](https://www.webflow.com)) after publishing to improve initial page
-load times. Named after
+A comprehensive website health and performance tool designed for
+[Webflow](https://www.webflow.com) sites (expanding to other platforms). Monitor
+your site's health by detecting broken links, warm caches for optimal
+performance after publishing, and ensure your visitors always get the best
+experience. Named after
 [a special little bee](https://www.aussiebee.com.au/blue-banded-bee-information.html)
 native to where we live in Castlemaine, Victoria, Australia.
 
 ## Key Features
 
+### Site Health Monitoring
+
+- 🔍 Broken link detection across your entire site
+- 🚨 Identify 404s, timeouts, and redirect chains
+- 📈 Track link health over time
+- ⚡ Fast concurrent crawling with configurable worker pools
+
 ### Cache Warming
 
-- 🚀 Concurrent crawling with configurable worker pools
 - 🔥 Smart warming with automatic retry on cache MISS
 - 🥇 Priority processing - homepage and critical pages first
+- ⚡ Improved initial page load times after publishing
 - 🤖 Robots.txt compliance with crawl-delay honouring
 
 ### Integration & Monitoring
