@@ -24,7 +24,7 @@ native to where we live in Castlemaine, Victoria, Australia.
 - 🔍 Broken link detection across your entire site
 - 🚨 Identify 404s, timeouts, and redirect chains
 - 🐌 Detect slow-loading pages and performance bottlenecks
-- 📈 Track broken link and performance over time
+- 📈 Track broken links and performance over time
 - ⚡ Lightning fast speed, without being blocked or spamming your site
 
 ### Cache Warming
