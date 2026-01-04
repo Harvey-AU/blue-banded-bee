@@ -30,6 +30,29 @@ type WebflowSiteSetting struct {
 	UpdatedAt             time.Time
 }
 
+// mapNullFieldsToSetting maps nullable SQL types to WebflowSiteSetting fields
+func mapNullFieldsToSetting(setting *WebflowSiteSetting, siteName, primaryDomain, webhookID, schedulerID sql.NullString, webhookRegisteredAt sql.NullTime, scheduleIntervalHours sql.NullInt32) {
+	if siteName.Valid {
+		setting.SiteName = siteName.String
+	}
+	if primaryDomain.Valid {
+		setting.PrimaryDomain = primaryDomain.String
+	}
+	if webhookID.Valid {
+		setting.WebhookID = webhookID.String
+	}
+	if schedulerID.Valid {
+		setting.SchedulerID = schedulerID.String
+	}
+	if webhookRegisteredAt.Valid {
+		setting.WebhookRegisteredAt = &webhookRegisteredAt.Time
+	}
+	if scheduleIntervalHours.Valid {
+		hours := int(scheduleIntervalHours.Int32)
+		setting.ScheduleIntervalHours = &hours
+	}
+}
+
 // CreateOrUpdateSiteSetting creates or updates a Webflow site setting
 func (db *DB) CreateOrUpdateSiteSetting(ctx context.Context, setting *WebflowSiteSetting) error {
 	query := `
@@ -119,25 +142,7 @@ func (db *DB) GetSiteSetting(ctx context.Context, organisationID, webflowSiteID 
 		return nil, fmt.Errorf("failed to get webflow site setting: %w", err)
 	}
 
-	if siteName.Valid {
-		setting.SiteName = siteName.String
-	}
-	if primaryDomain.Valid {
-		setting.PrimaryDomain = primaryDomain.String
-	}
-	if webhookID.Valid {
-		setting.WebhookID = webhookID.String
-	}
-	if schedulerID.Valid {
-		setting.SchedulerID = schedulerID.String
-	}
-	if webhookRegisteredAt.Valid {
-		setting.WebhookRegisteredAt = &webhookRegisteredAt.Time
-	}
-	if scheduleIntervalHours.Valid {
-		hours := int(scheduleIntervalHours.Int32)
-		setting.ScheduleIntervalHours = &hours
-	}
+	mapNullFieldsToSetting(setting, siteName, primaryDomain, webhookID, schedulerID, webhookRegisteredAt, scheduleIntervalHours)
 
 	return setting, nil
 }
@@ -170,25 +175,7 @@ func (db *DB) GetSiteSettingByID(ctx context.Context, id string) (*WebflowSiteSe
 		return nil, fmt.Errorf("failed to get webflow site setting: %w", err)
 	}
 
-	if siteName.Valid {
-		setting.SiteName = siteName.String
-	}
-	if primaryDomain.Valid {
-		setting.PrimaryDomain = primaryDomain.String
-	}
-	if webhookID.Valid {
-		setting.WebhookID = webhookID.String
-	}
-	if schedulerID.Valid {
-		setting.SchedulerID = schedulerID.String
-	}
-	if webhookRegisteredAt.Valid {
-		setting.WebhookRegisteredAt = &webhookRegisteredAt.Time
-	}
-	if scheduleIntervalHours.Valid {
-		hours := int(scheduleIntervalHours.Int32)
-		setting.ScheduleIntervalHours = &hours
-	}
+	mapNullFieldsToSetting(setting, siteName, primaryDomain, webhookID, schedulerID, webhookRegisteredAt, scheduleIntervalHours)
 
 	return setting, nil
 }
@@ -262,25 +249,7 @@ func (db *DB) querySiteSettings(ctx context.Context, query string, arg string) (
 			return nil, fmt.Errorf("failed to scan webflow site setting: %w", err)
 		}
 
-		if siteName.Valid {
-			setting.SiteName = siteName.String
-		}
-		if primaryDomain.Valid {
-			setting.PrimaryDomain = primaryDomain.String
-		}
-		if webhookID.Valid {
-			setting.WebhookID = webhookID.String
-		}
-		if schedulerID.Valid {
-			setting.SchedulerID = schedulerID.String
-		}
-		if webhookRegisteredAt.Valid {
-			setting.WebhookRegisteredAt = &webhookRegisteredAt.Time
-		}
-		if scheduleIntervalHours.Valid {
-			hours := int(scheduleIntervalHours.Int32)
-			setting.ScheduleIntervalHours = &hours
-		}
+		mapNullFieldsToSetting(setting, siteName, primaryDomain, webhookID, schedulerID, webhookRegisteredAt, scheduleIntervalHours)
 
 		settings = append(settings, setting)
 	}

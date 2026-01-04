@@ -82,15 +82,20 @@ func (h *Handler) webflowSitesRouter(w http.ResponseWriter, r *http.Request) {
 	siteID := parts[0]
 	action := parts[1]
 
+	// Validate method
+	if r.Method != http.MethodPut {
+		MethodNotAllowed(w, r)
+		return
+	}
+
 	switch action {
 	case "schedule":
-		h.WebflowSiteScheduleHandler(w, r)
+		h.updateSiteSchedule(w, r, siteID)
 	case "auto-publish":
-		h.WebflowSiteAutoPublishHandler(w, r)
+		h.toggleSiteAutoPublish(w, r, siteID)
 	default:
 		NotFound(w, r, "Endpoint not found")
 	}
-	_ = siteID // Used in the handlers via path parsing
 }
 
 // WebflowSitesHandler handles requests to /v1/integrations/webflow/{connection_id}/sites
@@ -115,44 +120,6 @@ func (h *Handler) WebflowSitesHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.listWebflowSites(w, r, connectionID)
-}
-
-// WebflowSiteScheduleHandler handles requests to /v1/integrations/webflow/sites/{site_id}/schedule
-func (h *Handler) WebflowSiteScheduleHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPut {
-		MethodNotAllowed(w, r)
-		return
-	}
-
-	// Extract site_id from path
-	path := strings.TrimPrefix(r.URL.Path, "/v1/integrations/webflow/sites/")
-	parts := strings.Split(path, "/")
-	if len(parts) < 2 || parts[1] != "schedule" {
-		BadRequest(w, r, "Invalid path")
-		return
-	}
-
-	siteID := parts[0]
-	h.updateSiteSchedule(w, r, siteID)
-}
-
-// WebflowSiteAutoPublishHandler handles requests to /v1/integrations/webflow/sites/{site_id}/auto-publish
-func (h *Handler) WebflowSiteAutoPublishHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPut {
-		MethodNotAllowed(w, r)
-		return
-	}
-
-	// Extract site_id from path
-	path := strings.TrimPrefix(r.URL.Path, "/v1/integrations/webflow/sites/")
-	parts := strings.Split(path, "/")
-	if len(parts) < 2 || parts[1] != "auto-publish" {
-		BadRequest(w, r, "Invalid path")
-		return
-	}
-
-	siteID := parts[0]
-	h.toggleSiteAutoPublish(w, r, siteID)
 }
 
 // listWebflowSites fetches sites from Webflow API and merges with local settings
@@ -258,7 +225,7 @@ func (h *Handler) listWebflowSites(w http.ResponseWriter, r *http.Request, conne
 	paginatedSites := filteredSites[start:end]
 
 	// Build response with merged settings
-	var responseItems []WebflowSiteSettingResponse
+	responseItems := make([]WebflowSiteSettingResponse, 0, len(paginatedSites))
 	for _, site := range paginatedSites {
 		item := WebflowSiteSettingResponse{
 			WebflowSiteID: site.ID,
@@ -403,10 +370,24 @@ func (h *Handler) updateSiteSchedule(w http.ResponseWriter, r *http.Request, sit
 			}
 			schedulerID = existingScheduler.ID
 		} else {
+			// Get or create domain for the scheduler
+			var domainID int
+			err := h.DB.GetDB().QueryRowContext(ctx, `
+				INSERT INTO domains(name) VALUES($1)
+				ON CONFLICT (name) DO UPDATE SET name=EXCLUDED.name
+				RETURNING id
+			`, normalizedDomain).Scan(&domainID)
+			if err != nil {
+				logger.Error().Err(err).Str("domain", normalizedDomain).Msg("Failed to get or create domain")
+				InternalError(w, r, err)
+				return
+			}
+
 			// Create new scheduler
 			newScheduler := &db.Scheduler{
 				ID:                    uuid.New().String(),
 				OrganisationID:        orgID,
+				DomainID:              domainID,
 				ScheduleIntervalHours: *req.ScheduleIntervalHours,
 				NextRunAt:             time.Now().Add(time.Duration(*req.ScheduleIntervalHours) * time.Hour),
 				IsEnabled:             true,

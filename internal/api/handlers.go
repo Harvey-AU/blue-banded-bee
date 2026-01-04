@@ -856,15 +856,18 @@ func (h *Handler) WebflowWebhook(w http.ResponseWriter, r *http.Request) {
 	if payload.SiteID != "" && orgID != "" {
 		siteSetting, err := h.DB.GetSiteSetting(r.Context(), orgID, payload.SiteID)
 		if err != nil {
-			if !errors.Is(err, db.ErrWebflowSiteSettingNotFound) {
-				logger.Error().Err(err).Str("site_id", payload.SiteID).Msg("Failed to check site settings")
+			if errors.Is(err, db.ErrWebflowSiteSettingNotFound) {
+				// Site not configured - expected scenario, ignore webhook
+				logger.Warn().
+					Str("site_id", payload.SiteID).
+					Str("organisation_id", orgID).
+					Msg("Site not configured for auto-publish, ignoring webhook")
+				WriteSuccess(w, r, nil, "Webhook received but site not configured for auto-publish")
+				return
 			}
-			// No settings found or error - site not configured for auto-publish
-			logger.Info().
-				Str("site_id", payload.SiteID).
-				Str("organisation_id", orgID).
-				Msg("Site not configured for auto-publish, ignoring webhook")
-			WriteSuccess(w, r, nil, "Webhook received but site not configured for auto-publish")
+			// Unexpected database error - return 500 so Webflow can retry
+			logger.Error().Err(err).Str("site_id", payload.SiteID).Msg("Failed to check site settings")
+			InternalError(w, r, err)
 			return
 		}
 
