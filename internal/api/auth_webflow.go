@@ -187,6 +187,10 @@ func (h *Handler) HandleWebflowOAuthCallback(w http.ResponseWriter, r *http.Requ
 	// Store access token in Supabase Vault
 	if err := h.DB.StoreWebflowToken(r.Context(), conn.ID, tokenResp.AccessToken); err != nil {
 		logger.Error().Err(err).Msg("Failed to store access token in vault")
+		// Clean up the orphan connection since we can't use it without the token
+		if delErr := h.DB.DeleteWebflowConnection(r.Context(), conn.ID, state.OrgID); delErr != nil {
+			logger.Error().Err(delErr).Msg("Failed to clean up orphan connection after token storage failure")
+		}
 		h.redirectToDashboardWithError(w, r, "Webflow", "Failed to secure connection")
 		return
 	}
