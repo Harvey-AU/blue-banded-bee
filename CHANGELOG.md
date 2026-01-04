@@ -34,8 +34,8 @@ On merge, CI will:
 - **Google Analytics Integration**: OAuth 2.0 connection for GA4 properties
   - Full OAuth flow with HMAC-signed state for CSRF protection
   - API endpoints: `POST /v1/integrations/google` (initiate),
-    `GET /v1/integrations/google` (list),
-    `DELETE /v1/integrations/google/{id}` (disconnect)
+    `GET /v1/integrations/google` (list), `DELETE /v1/integrations/google/{id}`
+    (disconnect)
   - Callback handler at `/v1/integrations/google/callback`
   - Property selection UI when user has multiple GA4 properties
   - Save property endpoint at `POST /v1/integrations/google/save-property`
