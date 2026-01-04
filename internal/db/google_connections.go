@@ -172,7 +172,7 @@ func (db *DB) ListGoogleConnections(ctx context.Context, organisationID string) 
 			&conn.CreatedAt, &conn.UpdatedAt,
 		)
 		if err != nil {
-			log.Error().Err(err).Msg("Failed to scan Google Analytics connection row")
+			log.Error().Err(err).Str("organisation_id", organisationID).Msg("Failed to scan Google Analytics connection row")
 			return nil, fmt.Errorf("failed to scan Google Analytics connection: %w", err)
 		}
 

@@ -48,8 +48,6 @@ function setupGoogleIntegration() {
     event.preventDefault();
     handleGoogleAction(action, element);
   });
-
-  console.log("Google Analytics integration handlers initialised");
 }
 
 /**

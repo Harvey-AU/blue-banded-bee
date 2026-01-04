@@ -405,9 +405,6 @@ func (h *Handler) fetchGA4Properties(ctx context.Context, accessToken string) ([
 }
 
 func (h *Handler) fetchPropertiesForAccount(ctx context.Context, client *http.Client, accessToken, accountName string) ([]GA4Property, error) {
-	// accountName is like "accounts/123456", extract the ID
-	accountID := strings.TrimPrefix(accountName, "accounts/")
-
 	url := fmt.Sprintf("https://analyticsadmin.googleapis.com/v1beta/properties?filter=parent:%s", accountName)
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
@@ -446,9 +443,6 @@ func (h *Handler) fetchPropertiesForAccount(ctx context.Context, client *http.Cl
 			PropertyType: p.PropertyType,
 		})
 	}
-
-	// Suppress unused variable warning
-	_ = accountID
 
 	return properties, nil
 }
