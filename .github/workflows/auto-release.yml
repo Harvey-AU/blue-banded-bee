@@ -43,7 +43,7 @@ jobs:
       - name: Check changelog for release marker
         id: check
         run: |
-          # Check if CHANGELOG.md has [Unreleased:*] or content under [Unreleased]
+          # Check if CHANGELOG.md has [Unreleased:*] and non-empty content under it
           if grep -q "^## \[Unreleased" CHANGELOG.md; then
             # Extract the release type from changelog
             CHANGELOG_HEADER=$(grep "^## \[Unreleased" CHANGELOG.md | head -1)
@@ -57,10 +57,18 @@ jobs:
               RELEASE_TYPE="patch"
             fi
 
-            # Always create release if [Unreleased] section exists, even if empty
-            echo "should_release=true" >> $GITHUB_OUTPUT
-            echo "release_type=$RELEASE_TYPE" >> $GITHUB_OUTPUT
-            echo "Detected release type: $RELEASE_TYPE"
+            # Extract content between [Unreleased] and next version header
+            UNRELEASED_CONTENT=$(awk '/^## \[Unreleased/ {flag=1; next} /^## \[[0-9]/ {flag=0} flag' CHANGELOG.md)
+
+            # Only create release when there is actual content (non-blank)
+            if [ -z "$(echo "$UNRELEASED_CONTENT" | grep -v '^[[:space:]]*$')" ]; then
+              echo "should_release=false" >> $GITHUB_OUTPUT
+              echo "Unreleased section is empty - skipping release"
+            else
+              echo "should_release=true" >> $GITHUB_OUTPUT
+              echo "release_type=$RELEASE_TYPE" >> $GITHUB_OUTPUT
+              echo "Detected release type: $RELEASE_TYPE"
+            fi
           else
             echo "should_release=false" >> $GITHUB_OUTPUT
             echo "No [Unreleased] section found - skipping release"
