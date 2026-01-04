@@ -455,7 +455,7 @@ function showAuthForm(formType) {
   };
 
   const authModalTitle = document.getElementById("authModalTitle");
-  if (authModalTitle) {
+  if (authModalTitle && Object.hasOwn(titles, formType)) {
     authModalTitle.textContent = titles[formType];
   }
 
