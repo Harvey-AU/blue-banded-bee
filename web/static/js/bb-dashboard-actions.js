@@ -69,6 +69,11 @@ function handleDashboardAction(action, element) {
     return;
   }
 
+  // Skip webflow-* and site-* actions - handled by bb-webflow.js
+  if (action.startsWith("webflow-") || action.startsWith("site-")) {
+    return;
+  }
+
   switch (action) {
     case "refresh-dashboard":
       if (window.dataBinder) {

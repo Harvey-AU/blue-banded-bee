@@ -1,8 +1,19 @@
 /**
  * Webflow Integration Handler
- * Handles Webflow workspace/site connections.
- * Flow: Connect -> OAuth -> Auto-Register Webhooks -> List Connections
+ * Handles Webflow workspace/site connections and per-site configuration.
+ * Flow: Connect -> OAuth -> Return to modal -> Configure Sites
  */
+
+// State for site configuration
+let webflowSitesState = {
+  connectionId: null,
+  sites: [],
+  filteredSites: [],
+  currentPage: 1,
+  sitesPerPage: 10,
+  searchQuery: "",
+  loading: false,
+};
 
 /**
  * Formats a timestamp as a relative date string
@@ -34,6 +45,7 @@ function formatWebflowDate(timestamp) {
  * Initialise Webflow integration UI handlers
  */
 function setupWebflowIntegration() {
+  // Click handlers for webflow actions
   document.addEventListener("click", (event) => {
     const element = event.target.closest("[bbb-action]");
     if (!element) {
@@ -48,6 +60,16 @@ function setupWebflowIntegration() {
     event.preventDefault();
     handleWebflowAction(action, element);
   });
+
+  // Search input handler
+  const searchInput = document.getElementById("webflowSiteSearch");
+  if (searchInput) {
+    let debounceTimer;
+    searchInput.addEventListener("input", (event) => {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => handleSiteSearch(event), 200);
+    });
+  }
 
   console.log("Webflow integration handlers initialised");
 }
@@ -77,6 +99,28 @@ function handleWebflowAction(action, element) {
       loadWebflowConnections();
       break;
 
+    case "webflow-sites-refresh":
+      if (webflowSitesState.connectionId) {
+        loadWebflowSites(webflowSitesState.connectionId, 1);
+      }
+      break;
+
+    case "webflow-sites-prev":
+      if (webflowSitesState.currentPage > 1) {
+        renderWebflowSites(webflowSitesState.currentPage - 1);
+      }
+      break;
+
+    case "webflow-sites-next": {
+      const totalPages = Math.ceil(
+        webflowSitesState.filteredSites.length / webflowSitesState.sitesPerPage
+      );
+      if (webflowSitesState.currentPage < totalPages) {
+        renderWebflowSites(webflowSitesState.currentPage + 1);
+      }
+      break;
+    }
+
     default:
       console.log("Unhandled Webflow action:", action);
   }
@@ -99,6 +143,7 @@ async function loadWebflowConnections() {
 
     const connectionsList = document.getElementById("webflowConnectionsList");
     const emptyState = document.getElementById("webflowEmptyState");
+    const sitesConfig = document.getElementById("webflowSitesConfig");
 
     if (!connectionsList) {
       // It's possible the user hasn't opened the modal yet or element doesn't exist
@@ -122,6 +167,7 @@ async function loadWebflowConnections() {
 
     if (!connections || connections.length === 0) {
       if (emptyState) emptyState.style.display = "block";
+      if (sitesConfig) sitesConfig.style.display = "none";
       return;
     }
 
@@ -161,6 +207,15 @@ async function loadWebflowConnections() {
       }
 
       connectionsList.appendChild(clone);
+    }
+
+    // Show sites configuration and load sites for the first connection
+    if (sitesConfig && connections.length > 0) {
+      sitesConfig.style.display = "block";
+      // Load sites for the first connection (or the one specified in state)
+      const targetConnectionId =
+        webflowSitesState.connectionId || connections[0].id;
+      loadWebflowSites(targetConnectionId);
     }
   } catch (error) {
     console.error("Failed to load Webflow connections:", error);
@@ -271,16 +326,32 @@ function showWebflowError(message) {
 function handleWebflowOAuthCallback() {
   const params = new URLSearchParams(window.location.search);
   const webflowConnected = params.get("webflow_connected");
+  const webflowSetup = params.get("webflow_setup");
+  const connectionId = params.get("webflow_connection_id");
   const webflowError = params.get("webflow_error");
 
-  if (webflowConnected) {
+  if (webflowSetup === "true" || webflowConnected) {
     // Clean up URL
     const url = new URL(window.location.href);
     url.searchParams.delete("webflow_connected");
+    url.searchParams.delete("webflow_setup");
+    url.searchParams.delete("webflow_connection_id");
     window.history.replaceState({}, "", url.toString());
 
-    showWebflowSuccess("Webflow connected successfully!");
-    // Trigger reload of connections if the modal is open, or just wait for user to open it
+    // Store connection ID if provided
+    if (connectionId) {
+      webflowSitesState.connectionId = connectionId;
+    }
+
+    // Show success message for new connections
+    if (webflowConnected) {
+      showWebflowSuccess("Webflow connected! Configure your sites below.");
+    }
+
+    // Open the settings modal to show site configuration
+    openSettingsModalForWebflow();
+
+    // Load connections (which will also load sites)
     loadWebflowConnections();
   } else if (webflowError) {
     showWebflowError(`Failed to connect Webflow: ${webflowError}`);
@@ -290,9 +361,370 @@ function handleWebflowOAuthCallback() {
   }
 }
 
+/**
+ * Open the settings modal and scroll to Webflow section
+ */
+function openSettingsModalForWebflow() {
+  const settingsBtn = document.getElementById("notificationsSettingsBtn");
+  const modal = document.getElementById("notificationsModal");
+
+  if (settingsBtn) {
+    settingsBtn.click();
+  } else if (modal) {
+    modal.classList.add("show");
+  }
+
+  // Give modal time to open, then scroll to Webflow section
+  setTimeout(() => {
+    const webflowSection = document.getElementById("webflowSitesConfig");
+    if (webflowSection) {
+      webflowSection.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, 200);
+}
+
+/**
+ * Load sites from Webflow API for a connection
+ * @param {string} connectionId - The connection ID
+ * @param {number} page - Page number (default 1)
+ */
+async function loadWebflowSites(connectionId, page = 1) {
+  if (webflowSitesState.loading) return;
+  webflowSitesState.loading = true;
+
+  const loadingEl = document.getElementById("webflowSitesLoading");
+  const emptyEl = document.getElementById("webflowSitesEmpty");
+  const listEl = document.getElementById("webflowSitesList");
+
+  if (loadingEl) loadingEl.style.display = "block";
+  if (emptyEl) emptyEl.style.display = "none";
+
+  try {
+    const { data: { session } = {} } = await window.supabase.auth.getSession();
+    const token = session?.access_token;
+    if (!token) {
+      showWebflowError("Not authenticated. Please sign in.");
+      webflowSitesState.loading = false;
+      if (loadingEl) loadingEl.style.display = "none";
+      return;
+    }
+
+    const response = await fetch(
+      `/v1/integrations/webflow/${encodeURIComponent(connectionId)}/sites`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(text || `HTTP ${response.status}`);
+    }
+
+    const json = await response.json();
+    const data = json && json.data ? json.data : { sites: [] };
+    const sites = Array.isArray(data.sites) ? data.sites : [];
+
+    webflowSitesState.connectionId = connectionId;
+    webflowSitesState.sites = sites;
+    webflowSitesState.filteredSites = [...sites];
+    webflowSitesState.currentPage = page;
+
+    // Show search box if >5 sites
+    const searchBox = document.getElementById("webflowSitesSearchBox");
+    if (searchBox) {
+      searchBox.style.display = sites.length > 5 ? "block" : "none";
+    }
+
+    renderWebflowSites(page);
+  } catch (error) {
+    console.error("Failed to load Webflow sites:", error);
+    showWebflowError("Failed to load sites. Please try again.");
+  } finally {
+    webflowSitesState.loading = false;
+    if (loadingEl) loadingEl.style.display = "none";
+  }
+}
+
+/**
+ * Render sites list with pagination
+ * @param {number} page - Page number
+ */
+function renderWebflowSites(page = 1) {
+  const listEl = document.getElementById("webflowSitesList");
+  const emptyEl = document.getElementById("webflowSitesEmpty");
+  const loadingEl = document.getElementById("webflowSitesLoading");
+  const paginationEl = document.getElementById("webflowSitesPagination");
+  const template = listEl?.querySelector('[bbb-template="webflow-site"]');
+
+  if (!listEl || !template) return;
+  if (loadingEl) loadingEl.style.display = "none";
+
+  // Clear existing site rows (except template)
+  const existingRows = listEl.querySelectorAll(
+    ".webflow-site-row:not([bbb-template])"
+  );
+  existingRows.forEach((el) => el.remove());
+
+  const sites = webflowSitesState.filteredSites;
+
+  if (sites.length === 0) {
+    if (emptyEl) emptyEl.style.display = "block";
+    if (paginationEl) paginationEl.style.display = "none";
+    return;
+  }
+
+  if (emptyEl) emptyEl.style.display = "none";
+  webflowSitesState.currentPage = page;
+
+  // Paginate
+  const startIdx = (page - 1) * webflowSitesState.sitesPerPage;
+  const endIdx = startIdx + webflowSitesState.sitesPerPage;
+  const pageSites = sites.slice(startIdx, endIdx);
+  const totalPages = Math.ceil(sites.length / webflowSitesState.sitesPerPage);
+
+  // Build site rows
+  for (const site of pageSites) {
+    const clone = template.cloneNode(true);
+    clone.style.display = "block";
+    clone.removeAttribute("bbb-template");
+    clone.dataset.siteId = site.webflow_site_id;
+    clone.dataset.connectionId = webflowSitesState.connectionId;
+
+    // Set site name
+    const nameEl = clone.querySelector(".site-name");
+    if (nameEl) {
+      nameEl.textContent =
+        site.display_name || site.site_name || "Unnamed Site";
+    }
+
+    // Set domain
+    const domainEl = clone.querySelector(".site-domain");
+    if (domainEl && site.primary_domain) {
+      domainEl.textContent = site.primary_domain;
+    }
+
+    // Set schedule dropdown value
+    const scheduleSelect = clone.querySelector(".site-schedule");
+    if (scheduleSelect) {
+      scheduleSelect.value = site.schedule_interval_hours || "";
+      scheduleSelect.dataset.siteId = site.webflow_site_id;
+      scheduleSelect.dataset.connectionId = webflowSitesState.connectionId;
+      scheduleSelect.addEventListener("change", handleScheduleChange);
+    }
+
+    // Set auto-publish toggle (standard change event on checkbox)
+    const autoPublishToggle = clone.querySelector(".site-autopublish");
+    if (autoPublishToggle) {
+      autoPublishToggle.checked = site.auto_publish_enabled || false;
+      autoPublishToggle.dataset.siteId = site.webflow_site_id;
+      autoPublishToggle.dataset.connectionId = webflowSitesState.connectionId;
+      autoPublishToggle.addEventListener("change", handleAutoPublishToggle);
+    }
+
+    listEl.appendChild(clone);
+  }
+
+  // Update pagination
+  if (paginationEl) {
+    paginationEl.style.display = totalPages > 1 ? "flex" : "none";
+    const prevBtn = document.getElementById("webflowSitesPrevPage");
+    const nextBtn = document.getElementById("webflowSitesNextPage");
+    const pageInfo = document.getElementById("webflowSitesPageInfo");
+
+    if (prevBtn) prevBtn.disabled = page <= 1;
+    if (nextBtn) nextBtn.disabled = page >= totalPages;
+    if (pageInfo) pageInfo.textContent = `Page ${page} of ${totalPages}`;
+  }
+}
+
+/**
+ * Handle schedule dropdown change
+ * @param {Event} event - Change event
+ */
+async function handleScheduleChange(event) {
+  const select = event.target;
+  const siteId = select.dataset.siteId;
+  const connectionId = select.dataset.connectionId;
+  const interval = select.value ? parseInt(select.value, 10) : null;
+
+  // Disable while saving
+  select.disabled = true;
+
+  try {
+    const { data: { session } = {} } = await window.supabase.auth.getSession();
+    const token = session?.access_token;
+    if (!token) {
+      showWebflowError("Not authenticated. Please sign in.");
+      select.disabled = false;
+      return;
+    }
+
+    const response = await fetch(
+      `/v1/integrations/webflow/sites/${encodeURIComponent(siteId)}/schedule`,
+      {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          connection_id: connectionId,
+          schedule_interval_hours: interval,
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(text || `HTTP ${response.status}`);
+    }
+
+    // Update local state
+    const site = webflowSitesState.sites.find(
+      (s) => s.webflow_site_id === siteId
+    );
+    if (site) {
+      site.schedule_interval_hours = interval;
+    }
+
+    // Brief visual feedback
+    select.style.borderColor = "#10b981";
+    setTimeout(() => {
+      select.style.borderColor = "";
+    }, 1000);
+  } catch (error) {
+    console.error("Failed to update schedule:", error);
+    showWebflowError("Failed to save schedule");
+    // Revert selection
+    const site = webflowSitesState.sites.find(
+      (s) => s.webflow_site_id === siteId
+    );
+    if (site) {
+      select.value = site.schedule_interval_hours || "";
+    }
+  } finally {
+    select.disabled = false;
+  }
+}
+
+/**
+ * Handle auto-publish toggle change
+ * @param {Event} event - Change event
+ */
+async function handleAutoPublishToggle(event) {
+  const toggle = event.target;
+  const siteId = toggle.dataset.siteId;
+  const connectionId = toggle.dataset.connectionId;
+  const enabled = toggle.checked;
+
+  // Disable while saving
+  toggle.disabled = true;
+
+  // Show status
+  const row = toggle.closest(".webflow-site-row");
+  const statusEl = row?.querySelector(".site-status");
+  if (statusEl) {
+    statusEl.style.display = "block";
+    statusEl.textContent = enabled
+      ? "Registering webhook..."
+      : "Removing webhook...";
+    statusEl.style.color = "#6b7280";
+  }
+
+  try {
+    const { data: { session } = {} } = await window.supabase.auth.getSession();
+    const token = session?.access_token;
+    if (!token) {
+      showWebflowError("Not authenticated. Please sign in.");
+      toggle.checked = !enabled;
+      toggle.disabled = false;
+      if (statusEl) {
+        statusEl.textContent = "Not authenticated";
+        statusEl.style.color = "#ef4444";
+      }
+      return;
+    }
+
+    const response = await fetch(
+      `/v1/integrations/webflow/sites/${encodeURIComponent(siteId)}/auto-publish`,
+      {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          connection_id: connectionId,
+          enabled: enabled,
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(text || `HTTP ${response.status}`);
+    }
+
+    // Update local state
+    const site = webflowSitesState.sites.find(
+      (s) => s.webflow_site_id === siteId
+    );
+    if (site) {
+      site.auto_publish_enabled = enabled;
+    }
+
+    // Success feedback
+    if (statusEl) {
+      statusEl.textContent = enabled ? "Webhook active" : "";
+      statusEl.style.color = "#10b981";
+      setTimeout(() => {
+        statusEl.style.display = "none";
+      }, 2000);
+    }
+  } catch (error) {
+    console.error("Failed to toggle auto-publish:", error);
+    showWebflowError("Failed to update Run on Publish");
+    // Revert toggle
+    toggle.checked = !enabled;
+    if (statusEl) {
+      statusEl.textContent = "Failed to update";
+      statusEl.style.color = "#dc2626";
+    }
+  } finally {
+    toggle.disabled = false;
+  }
+}
+
+/**
+ * Handle site search input
+ * @param {Event} event - Input event
+ */
+function handleSiteSearch(event) {
+  const query = event.target.value.toLowerCase().trim();
+  webflowSitesState.searchQuery = query;
+
+  if (!query) {
+    webflowSitesState.filteredSites = [...webflowSitesState.sites];
+  } else {
+    webflowSitesState.filteredSites = webflowSitesState.sites.filter(
+      (site) =>
+        (site.display_name || site.site_name || "")
+          .toLowerCase()
+          .includes(query) ||
+        (site.primary_domain || "").toLowerCase().includes(query)
+    );
+  }
+
+  renderWebflowSites(1);
+}
+
 // Export functions
 if (typeof window !== "undefined") {
   window.setupWebflowIntegration = setupWebflowIntegration;
   window.loadWebflowConnections = loadWebflowConnections;
+  window.loadWebflowSites = loadWebflowSites;
   window.handleWebflowOAuthCallback = handleWebflowOAuthCallback;
 }

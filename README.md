@@ -9,7 +9,11 @@
 
 # Blue Banded Bee 🐝
 
-A comprehensive website health and performance tool designed to monitor your site's health by detecting broken links, identifying slow pages, and speeding up slow pages by warming cache for optimal performance after publishing, and ensure your visitors always get the best experience. Works with any site and integrates seamlessly with Webflow, Shopify and WordPress.
+A comprehensive website health and performance tool designed to monitor your
+site's health by detecting broken links, identifying slow pages, and speeding up
+slow pages by warming cache for optimal performance after publishing, and ensure
+your visitors always get the best experience. Works with any site and integrates
+seamlessly with Webflow, Shopify and WordPress.
 
 Schedule your site audit as often as you need and when your site is published.
 
