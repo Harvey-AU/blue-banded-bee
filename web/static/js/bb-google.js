@@ -77,7 +77,8 @@ function handleGoogleAction(action, element) {
 
     case "google-select-property": {
       const propertyId = element.getAttribute("data-property-id");
-      const propertyName = element.getAttribute("data-property-name");
+      const propertyName =
+        element.getAttribute("data-property-name") || `Property ${propertyId}`;
       if (propertyId) {
         saveGoogleProperty(propertyId, propertyName);
       }
@@ -89,7 +90,7 @@ function handleGoogleAction(action, element) {
       break;
 
     default:
-      console.log("Unhandled Google action:", action);
+      break;
   }
 }
 

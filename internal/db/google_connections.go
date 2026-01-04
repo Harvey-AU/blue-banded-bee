@@ -13,6 +13,9 @@ import (
 // ErrGoogleConnectionNotFound is returned when a Google Analytics connection is not found
 var ErrGoogleConnectionNotFound = errors.New("google analytics connection not found")
 
+// ErrGoogleTokenNotFound is returned when a Google Analytics token is not found in vault
+var ErrGoogleTokenNotFound = errors.New("google analytics token not found")
+
 // GoogleAnalyticsConnection represents an organisation's connection to a GA4 property
 type GoogleAnalyticsConnection struct {
 	ID               string
@@ -84,7 +87,7 @@ func (db *DB) GetGoogleToken(ctx context.Context, connectionID string) (string, 
 	}
 
 	if !token.Valid {
-		return "", fmt.Errorf("google token not found for connection %s", connectionID)
+		return "", ErrGoogleTokenNotFound
 	}
 
 	return token.String, nil

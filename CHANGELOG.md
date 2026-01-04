@@ -29,6 +29,36 @@ On merge, CI will:
 
 ## [Unreleased]
 
+## [0.23.0] – 2026-01-04
+
+### Added
+
+- **Per-site Webflow Configuration**: Site-level settings for connected Webflow
+  workspaces
+  - Site list shows connected Webflow sites with search and pagination
+  - Per-site schedule dropdown (None/6h/12h/24h/48h) creates schedulers
+    automatically
+  - Per-site "Run on Publish" toggle manages site-specific webhooks
+  - Sites sorted by last updated with configuration persisted in
+    `webflow_site_settings` table
+  - OAuth callback now redirects to site configuration modal for initial setup
+
+### Changed
+
+- **Webflow webhook registration**: Moved from bulk registration during OAuth to
+  per-site toggle control
+  - Webhook handler now validates `auto_publish_enabled` before triggering cache
+    warming jobs
+  - Improved domain resolution for Webflow API v2 (custom domains as objects,
+    constructed default from shortName)
+
+### Fixed
+
+- Fixed schedule dropdown not working due to Webflow API v2 returning custom
+  domains as objects instead of strings
+- Fixed auto-publish toggle not responding to clicks (hidden checkbox event
+  handling)
+
 ## [0.22.4] – 2026-01-04
 
 ### Changed

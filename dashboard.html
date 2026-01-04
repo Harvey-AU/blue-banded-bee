@@ -1559,6 +1559,25 @@
       .bb-tooltip-close:hover {
         color: #374151;
       }
+
+      /* Toggle switch styles */
+      .bb-toggle input:checked + .bb-toggle-slider {
+        background-color: #3b82f6;
+      }
+      .bb-toggle input:checked + .bb-toggle-slider:before {
+        transform: translateX(18px);
+      }
+      .bb-toggle-slider:before {
+        position: absolute;
+        content: "";
+        height: 16px;
+        width: 16px;
+        left: 3px;
+        bottom: 3px;
+        background-color: white;
+        transition: 0.3s;
+        border-radius: 50%;
+      }
     </style>
 
     <!-- Google tag (gtag.js) -->
@@ -2541,6 +2560,241 @@
             </div>
           </div>
 
+          <!-- Site Configuration (shown after connection is established) -->
+          <div
+            id="webflowSitesConfig"
+            style="
+              display: none;
+              margin-top: 20px;
+              background: #f9fafb;
+              border: 1px solid #e5e7eb;
+              border-radius: 8px;
+              padding: 16px;
+            "
+          >
+            <div
+              style="
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 12px;
+              "
+            >
+              <h4 style="margin: 0; font-size: 15px; color: #374151">
+                Configure Sites
+              </h4>
+              <button
+                id="webflowSitesRefresh"
+                class="bb-button bb-button-outline"
+                bbb-action="webflow-sites-refresh"
+                style="font-size: 12px; padding: 4px 10px"
+                title="Refresh sites list"
+                aria-label="Refresh sites list"
+              >
+                Refresh
+              </button>
+            </div>
+
+            <!-- Search box (shown when >5 sites) -->
+            <div
+              id="webflowSitesSearchBox"
+              style="display: none; margin-bottom: 12px"
+            >
+              <input
+                type="text"
+                id="webflowSiteSearch"
+                placeholder="Search sites..."
+                aria-label="Search Webflow sites"
+                style="
+                  width: 100%;
+                  padding: 8px 12px;
+                  border: 1px solid #d1d5db;
+                  border-radius: 6px;
+                  font-size: 14px;
+                "
+              />
+            </div>
+
+            <!-- Sites list -->
+            <div id="webflowSitesList">
+              <!-- Template for each site row -->
+              <div
+                class="webflow-site-row"
+                bbb-template="webflow-site"
+                style="
+                  display: none;
+                  background: white;
+                  border: 1px solid #e5e7eb;
+                  border-radius: 6px;
+                  padding: 12px;
+                  margin-bottom: 8px;
+                "
+              >
+                <div
+                  style="
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    flex-wrap: wrap;
+                    gap: 8px;
+                  "
+                >
+                  <div style="flex: 1; min-width: 150px">
+                    <span
+                      class="site-name"
+                      style="font-weight: 500; font-size: 14px"
+                    ></span>
+                    <span
+                      class="site-domain"
+                      style="color: #6b7280; font-size: 12px; margin-left: 8px"
+                    ></span>
+                  </div>
+                  <div
+                    style="
+                      display: flex;
+                      align-items: center;
+                      gap: 12px;
+                      flex-wrap: wrap;
+                    "
+                  >
+                    <!-- Schedule dropdown -->
+                    <div style="display: flex; align-items: center; gap: 6px">
+                      <label style="font-size: 12px; color: #6b7280"
+                        >Schedule:</label
+                      >
+                      <select
+                        class="site-schedule"
+                        bbb-action="site-schedule-change"
+                        aria-label="Schedule frequency for site"
+                        style="
+                          padding: 4px 8px;
+                          border: 1px solid #d1d5db;
+                          border-radius: 4px;
+                          font-size: 13px;
+                          background: white;
+                          cursor: pointer;
+                        "
+                      >
+                        <option value="">None</option>
+                        <option value="6">Every 6 hours</option>
+                        <option value="12">Every 12 hours</option>
+                        <option value="24">Every 24 hours</option>
+                        <option value="48">Every 48 hours</option>
+                      </select>
+                    </div>
+                    <!-- Auto-publish toggle -->
+                    <div style="display: flex; align-items: center; gap: 6px">
+                      <label style="font-size: 12px; color: #6b7280"
+                        >Run on Publish:</label
+                      >
+                      <label
+                        class="bb-toggle"
+                        style="
+                          position: relative;
+                          display: inline-block;
+                          width: 40px;
+                          height: 22px;
+                        "
+                      >
+                        <input
+                          type="checkbox"
+                          class="site-autopublish"
+                          style="
+                            position: absolute;
+                            opacity: 0;
+                            width: 0;
+                            height: 0;
+                          "
+                        />
+                        <span
+                          class="bb-toggle-slider"
+                          style="
+                            position: absolute;
+                            cursor: pointer;
+                            top: 0;
+                            left: 0;
+                            right: 0;
+                            bottom: 0;
+                            background-color: #ccc;
+                            transition: 0.3s;
+                            border-radius: 22px;
+                          "
+                        ></span>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+                <!-- Status indicator -->
+                <div
+                  class="site-status"
+                  style="
+                    display: none;
+                    margin-top: 8px;
+                    font-size: 12px;
+                    color: #6b7280;
+                  "
+                ></div>
+              </div>
+
+              <!-- Loading state -->
+              <div
+                id="webflowSitesLoading"
+                style="text-align: center; padding: 20px; color: #6b7280"
+              >
+                Loading sites...
+              </div>
+
+              <!-- Empty state for sites -->
+              <div
+                id="webflowSitesEmpty"
+                style="
+                  display: none;
+                  text-align: center;
+                  padding: 20px;
+                  color: #6b7280;
+                "
+              >
+                No sites found in this Webflow workspace.
+              </div>
+            </div>
+
+            <!-- Pagination (shown when >10 configured sites) -->
+            <div
+              id="webflowSitesPagination"
+              style="
+                display: none;
+                margin-top: 12px;
+                padding-top: 12px;
+                border-top: 1px solid #e5e7eb;
+                text-align: center;
+              "
+            >
+              <button
+                id="webflowSitesPrevPage"
+                class="bb-button bb-button-outline"
+                bbb-action="webflow-sites-prev"
+                style="font-size: 12px; padding: 4px 12px; margin-right: 8px"
+                aria-label="Previous page of Webflow sites"
+                disabled
+              >
+                Previous
+              </button>
+              <span
+                id="webflowSitesPageInfo"
+                style="font-size: 13px; color: #6b7280; margin: 0 8px"
+              ></span>
+              <button
+                id="webflowSitesNextPage"
+                class="bb-button bb-button-outline"
+                bbb-action="webflow-sites-next"
+                style="font-size: 12px; padding: 4px 12px; margin-left: 8px"
+                aria-label="Next page of Webflow sites"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+
           <!-- Empty state / Connect button -->
           <div
             id="webflowEmptyState"
@@ -2927,6 +3181,10 @@
               }
             }
           }
+
+          // Setup notifications modal handlers BEFORE OAuth callbacks
+          // (callbacks may need to open the modal)
+          setupNotificationsModal();
 
           // Initialize Slack integration
           if (window.setupSlackIntegration) {

@@ -14,6 +14,7 @@ import (
 	"github.com/Harvey-AU/blue-banded-bee/internal/auth"
 	"github.com/Harvey-AU/blue-banded-bee/internal/db"
 	"github.com/google/uuid"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
 
@@ -295,7 +296,6 @@ func (h *Handler) SaveGoogleProperty(w http.ResponseWriter, r *http.Request) {
 	logger.Info().
 		Str("organisation_id", orgID).
 		Str("ga4_property_id", req.PropertyID).
-		Str("google_email", req.GoogleEmail).
 		Msg("Google Analytics connection established")
 
 	WriteSuccess(w, r, map[string]string{
@@ -473,7 +473,7 @@ func (h *Handler) saveGoogleConnection(ctx context.Context, state *OAuthState, t
 		return fmt.Errorf("failed to store token: %w", err)
 	}
 
-	log.Info().
+	zerolog.Ctx(ctx).Info().
 		Str("organisation_id", state.OrgID).
 		Str("ga4_property_id", property.PropertyID).
 		Msg("Google Analytics connection established")

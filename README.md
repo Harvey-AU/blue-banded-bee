@@ -9,27 +9,42 @@
 
 # Blue Banded Bee 🐝
 
-Automatically warm site caches (especially built for
-[Webflow](https://www.webflow.com)) after publishing to improve initial page
-load times. Named after
+A comprehensive website health and performance tool designed to monitor your
+site's health by detecting broken links, identifying slow pages, and speeding up
+slow pages by warming cache for optimal performance after publishing, and ensure
+your visitors always get the best experience. Works with any site and integrates
+seamlessly with Webflow, Shopify and WordPress.
+
+Schedule your site audit as often as you need and when your site is published.
+
+Named after
 [a special little bee](https://www.aussiebee.com.au/blue-banded-bee-information.html)
 native to where we live in Castlemaine, Victoria, Australia.
 
 ## Key Features
 
+### Site Health Monitoring
+
+- 🔍 Broken link detection across your entire site
+- 🚨 Identify 404s, timeouts, and redirect chains
+- 🐌 Detect slow-loading pages and performance bottlenecks
+- 📈 Track broken links and performance over time
+- ⚡ Lightning fast speed, without being blocked or spamming your site
+
 ### Cache Warming
 
-- 🚀 Concurrent crawling with configurable worker pools
 - 🔥 Smart warming with automatic retry on cache MISS
 - 🥇 Priority processing - homepage and critical pages first
+- ⚡ Improved initial page load times after publishing
 - 🤖 Robots.txt compliance with crawl-delay honouring
 
-### Integration & Monitoring
+### Automation & Integration
 
+- 🔄 Scheduled crawls to monitor site health continuously
+- 🚀 Automatic runs triggered by Webflow/Shopify publishing events
 - 📊 Real-time dashboard with job progress tracking
 - 🔔 Slack notifications when jobs complete
 - 🔐 Multi-tenant architecture with Supabase Auth
-- 🎨 Template-based integration (ready for Webflow/Shopify apps)
 - 🔌 API-first architecture for platform integrations
 
 ## Quick Start
@@ -66,13 +81,13 @@ One command starts everything:
 
 **Stage 4 of 7** - Core Authentication & MVP Interface (mostly complete)
 
-Next up: Platform integrations (Webflow/Shopify apps) and subscriptions. See
+In progress: Platform integrations (Webflow/Shopify apps) and subscriptions. See
 [roadmap](./Roadmap.md) for details.
 
 ## Tech Stack
 
 - **Backend**: Go with PostgreSQL
-- **Infrastructure**: Fly.io, Cloudflare CDN, Supabase Auth
+- **Infrastructure**: Fly.io, Cloudflare CDN, Supabase DB and Auth
 - **Monitoring**: Sentry, Grafana Cloud (traces), Codecov
 
 ## Documentation
