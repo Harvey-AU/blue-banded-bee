@@ -213,6 +213,10 @@ Called when tasks are promoted from waiting to pending.';
 -- =============================================================================
 -- STEP 5: Update promote_waiting_task_for_job to check quota
 -- =============================================================================
+-- Drop existing versions to avoid "function name is not unique" error
+DROP FUNCTION IF EXISTS promote_waiting_task_for_job(TEXT);
+DROP FUNCTION IF EXISTS promote_waiting_task_for_job(UUID);
+
 CREATE OR REPLACE FUNCTION promote_waiting_task_for_job(p_job_id UUID)
 RETURNS VOID
 LANGUAGE plpgsql
