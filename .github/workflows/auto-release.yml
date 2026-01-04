@@ -1,6 +1,6 @@
 name: Auto Release
 
-# This workflow automatically creates releases when PRs are merged to main.
+# This workflow automatically creates releases when commits land on main.
 # It uses a fine-grained Personal Access Token (PAT_TOKEN) to bypass branch protection.
 #
 # PAT Configuration:
@@ -18,27 +18,50 @@ name: Auto Release
 # - Update PAT_TOKEN secret with new value
 
 on:
-  pull_request:
-    types: [closed]
+  push:
     branches:
       - main
 
 jobs:
   auto-tag:
     name: Auto Tag Release
-    # Only run if PR was merged and does NOT have no-release label
-    if: |
-      github.event.pull_request.merged == true &&
-      !contains(github.event.pull_request.labels.*.name, 'no-release')
     runs-on: blacksmith-4vcpu-ubuntu-2404
     permissions:
       contents: write
+      pull-requests: read
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
           token: ${{ secrets.PAT_TOKEN }}
+
+      - name: Check for no-release label
+        id: skip
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const core = require('@actions/core');
+            const sha = context.sha;
+            let shouldSkip = false;
+
+            try {
+              const { data: prs } = await github.rest.repos.listPullRequestsAssociatedWithCommit({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                commit_sha: sha
+              });
+
+              if (prs && prs.length > 0) {
+                shouldSkip = prs.some(pr =>
+                  pr.labels && pr.labels.some(label => label.name === 'no-release')
+                );
+              }
+            } catch (error) {
+              core.warning(`Could not check PR labels: ${error.message}`);
+            }
+
+            core.setOutput('should_skip', shouldSkip ? 'true' : 'false');
 
       - name: Check changelog for release marker
         id: check
@@ -75,7 +98,9 @@ jobs:
           fi
 
       - name: Determine version bump
-        if: steps.check.outputs.should_release == 'true'
+        if:
+          steps.check.outputs.should_release == 'true' &&
+          steps.skip.outputs.should_skip != 'true'
         id: bump
         run: |
           # Get current version (strip 'v' prefix and any suffix)
@@ -106,7 +131,9 @@ jobs:
           echo "Next version: $NEW_VERSION"
 
       - name: Update changelog
-        if: steps.check.outputs.should_release == 'true'
+        if:
+          steps.check.outputs.should_release == 'true' &&
+          steps.skip.outputs.should_skip != 'true'
         run: |
           NEW_VERSION="${{ steps.bump.outputs.new_version }}"
           VERSION_NO_V="${NEW_VERSION#v}"
@@ -119,7 +146,9 @@ jobs:
           echo "Updated CHANGELOG.md with version $VERSION_NO_V"
 
       - name: Commit changelog update
-        if: steps.check.outputs.should_release == 'true'
+        if:
+          steps.check.outputs.should_release == 'true' &&
+          steps.skip.outputs.should_skip != 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -129,7 +158,9 @@ jobs:
           git push --force-with-lease origin main
 
       - name: Create and push tag
-        if: steps.check.outputs.should_release == 'true'
+        if:
+          steps.check.outputs.should_release == 'true' &&
+          steps.skip.outputs.should_skip != 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -137,7 +168,9 @@ jobs:
           git push origin "${{ steps.bump.outputs.new_version }}"
 
       - name: Extract changelog content
-        if: steps.check.outputs.should_release == 'true'
+        if:
+          steps.check.outputs.should_release == 'true' &&
+          steps.skip.outputs.should_skip != 'true'
         id: changelog
         run: |
           VERSION_NO_V="${{ steps.bump.outputs.new_version }}"
@@ -154,14 +187,18 @@ jobs:
           echo "Extracted changelog content for $VERSION_NO_V"
 
       - name: Create GitHub Release
-        if: steps.check.outputs.should_release == 'true'
+        if:
+          steps.check.outputs.should_release == 'true' &&
+          steps.skip.outputs.should_skip != 'true'
         uses: actions/github-script@v7
         with:
           script: |
             const fs = require('fs');
             const newVersion = '${{ steps.bump.outputs.new_version }}';
-            const prNumber = context.payload.pull_request.number;
-            const prTitle = context.payload.pull_request.title;
+            const prNumber = context.payload.pull_request && context.payload.pull_request.number;
+            const prTitle = context.payload.pull_request && context.payload.pull_request.title;
+            const commitSha = context.sha;
+            const commitMessage = context.payload.head_commit && context.payload.head_commit.message;
 
             // Read changelog content
             let changelogContent = '';
@@ -173,7 +210,11 @@ jobs:
             }
 
             // Build release body
-            const releaseBody = changelogContent || `Automated release from PR #${prNumber}: ${prTitle}`;
+            const fallback = prNumber
+              ? `Automated release from PR #${prNumber}: ${prTitle}`
+              : `Automated release from ${commitSha}: ${commitMessage || 'Update'}`;
+
+            const releaseBody = changelogContent || fallback;
 
             github.rest.repos.createRelease({
               owner: context.repo.owner,
