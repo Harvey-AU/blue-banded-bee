@@ -87,6 +87,7 @@ function handleGoogleAction(action, element) {
 
     case "google-cancel-selection":
       hidePropertySelection();
+      loadGoogleConnections(); // Show empty state or existing connections
       break;
 
     default:
@@ -111,6 +112,7 @@ async function loadGoogleConnections() {
 
     const connectionsList = document.getElementById("googleConnectionsList");
     const emptyState = document.getElementById("googleEmptyState");
+    const propertySelection = document.getElementById("googlePropertySelection");
 
     if (!connectionsList) {
       return;
@@ -131,11 +133,15 @@ async function loadGoogleConnections() {
     existingConnections.forEach((el) => el.remove());
 
     if (!connections || connections.length === 0) {
+      // No connections - show empty state, hide property selection
+      if (propertySelection) propertySelection.style.display = "none";
       if (emptyState) emptyState.style.display = "block";
       return;
     }
 
+    // Has connections - hide empty state AND property selection, show connections
     if (emptyState) emptyState.style.display = "none";
+    if (propertySelection) propertySelection.style.display = "none";
 
     // Build connection elements
     for (const conn of connections) {
@@ -452,8 +458,13 @@ function hidePropertySelection() {
   if (selectionUI) {
     selectionUI.style.display = "none";
   }
-  // Show empty state again if no connections
-  loadGoogleConnections();
+  // Clear search input if present
+  const searchInput = document.querySelector("#googlePropertySearch input");
+  if (searchInput) {
+    searchInput.value = "";
+  }
+  // Clear stored properties
+  allGoogleProperties = [];
 }
 
 /**
