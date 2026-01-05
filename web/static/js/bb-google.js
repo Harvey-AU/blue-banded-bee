@@ -534,6 +534,11 @@ function handleGoogleOAuthCallback() {
     // Multiple properties returned - need user to select one
     try {
       const properties = JSON.parse(decodeURIComponent(gaProperties));
+      // Open integrations modal so user can see the property selection
+      const integrationsModal = document.getElementById("integrationsModal");
+      if (integrationsModal) {
+        integrationsModal.style.display = "flex";
+      }
       showPropertySelection(properties);
     } catch (e) {
       console.error("Failed to parse properties:", e);
