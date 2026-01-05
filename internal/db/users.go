@@ -588,7 +588,7 @@ func (db *DB) GetEffectiveOrganisationID(user *User) string {
 
 // GetOrganisationUsageStats returns current usage statistics for an organisation
 func (db *DB) GetOrganisationUsageStats(ctx context.Context, orgID string) (*UsageStats, error) {
-	query := `SELECT daily_limit, daily_used, daily_remaining, plan_name, plan_display_name, resets_at
+	query := `SELECT daily_limit, daily_used, daily_remaining, plan_name, plan_display_name, reset_time
 	          FROM get_organisation_usage_stats($1)`
 
 	var stats UsageStats
