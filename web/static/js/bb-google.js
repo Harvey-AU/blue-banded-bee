@@ -314,26 +314,41 @@ async function saveGoogleProperty(propertyId, propertyName) {
   }
 }
 
+// Store all properties for filtering
+let allGoogleProperties = [];
+const MAX_VISIBLE_PROPERTIES = 10;
+
 /**
- * Show property selection UI when multiple properties are available
- * @param {Array} properties - Array of GA4 properties to choose from
+ * Render filtered property list
+ * @param {Array} properties - Filtered properties to display
+ * @param {number} totalCount - Total number of properties before filtering
  */
-function showPropertySelection(properties) {
-  const selectionUI = document.getElementById("googlePropertySelection");
+function renderPropertyList(properties, totalCount) {
   const list = document.getElementById("googlePropertyList");
+  if (!list) return;
 
-  if (!selectionUI || !list) {
-    console.error("Property selection UI not found");
-    return;
-  }
-
-  // Clear existing items using safe DOM method
+  // Clear existing items
   while (list.firstChild) {
     list.removeChild(list.firstChild);
   }
 
-  // Add property options using safe DOM methods
-  for (const prop of properties) {
+  // Show count info
+  const countInfo = document.createElement("div");
+  countInfo.style.cssText =
+    "color: #6b7280; font-size: 13px; margin-bottom: 12px;";
+  if (properties.length === 0) {
+    countInfo.textContent = "No properties match your search";
+  } else if (properties.length < totalCount) {
+    countInfo.textContent = `Showing ${properties.length} of ${totalCount} properties`;
+  } else if (totalCount > MAX_VISIBLE_PROPERTIES) {
+    countInfo.textContent = `Showing first ${properties.length} of ${totalCount} properties — use search to find more`;
+  } else {
+    countInfo.textContent = `${totalCount} properties available`;
+  }
+  list.appendChild(countInfo);
+
+  // Add property options
+  for (const prop of properties.slice(0, MAX_VISIBLE_PROPERTIES)) {
     const item = document.createElement("button");
     item.className = "bb-button";
     item.style.cssText =
@@ -342,7 +357,6 @@ function showPropertySelection(properties) {
     item.setAttribute("data-property-id", prop.property_id);
     item.setAttribute("data-property-name", prop.display_name);
 
-    // Build content safely using DOM methods
     const strongEl = document.createElement("strong");
     strongEl.textContent = prop.display_name;
     item.appendChild(strongEl);
@@ -359,6 +373,70 @@ function showPropertySelection(properties) {
 
     list.appendChild(item);
   }
+}
+
+/**
+ * Filter properties based on search query
+ * @param {string} query - Search query
+ */
+function filterGoogleProperties(query) {
+  const lowerQuery = query.toLowerCase().trim();
+  if (!lowerQuery) {
+    renderPropertyList(allGoogleProperties, allGoogleProperties.length);
+    return;
+  }
+
+  const filtered = allGoogleProperties.filter(
+    (prop) =>
+      prop.display_name?.toLowerCase().includes(lowerQuery) ||
+      prop.property_id?.toLowerCase().includes(lowerQuery) ||
+      prop.account_name?.toLowerCase().includes(lowerQuery)
+  );
+  renderPropertyList(filtered, allGoogleProperties.length);
+}
+
+/**
+ * Show property selection UI when multiple properties are available
+ * @param {Array} properties - Array of GA4 properties to choose from
+ */
+function showPropertySelection(properties) {
+  const selectionUI = document.getElementById("googlePropertySelection");
+  const list = document.getElementById("googlePropertyList");
+
+  if (!selectionUI || !list) {
+    console.error("Property selection UI not found");
+    return;
+  }
+
+  // Store all properties for filtering
+  allGoogleProperties = properties;
+
+  // Add search input if not already present
+  let searchContainer = document.getElementById("googlePropertySearch");
+  if (!searchContainer) {
+    searchContainer = document.createElement("div");
+    searchContainer.id = "googlePropertySearch";
+    searchContainer.style.cssText = "margin-bottom: 16px;";
+
+    const searchInput = document.createElement("input");
+    searchInput.type = "text";
+    searchInput.placeholder = "Search properties...";
+    searchInput.style.cssText =
+      "width: 100%; padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;";
+    searchInput.addEventListener("input", (e) => {
+      filterGoogleProperties(e.target.value);
+    });
+
+    searchContainer.appendChild(searchInput);
+    list.parentNode.insertBefore(searchContainer, list);
+  } else {
+    // Clear existing search
+    const input = searchContainer.querySelector("input");
+    if (input) input.value = "";
+  }
+
+  // Render initial list (max 10)
+  renderPropertyList(properties, properties.length);
 
   // Hide empty state and show selection
   const emptyState = document.getElementById("googleEmptyState");

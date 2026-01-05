@@ -106,7 +106,8 @@
       "mcp__plugin_serena_serena__list_memories",
       "mcp__plugin_serena_serena__find_symbol",
       "mcp__plugin_serena_serena__think_about_collected_information",
-      "Bash(git stash:*)"
+      "Bash(git stash:*)",
+      "Bash(git show:*)"
     ],
     "deny": []
   },
