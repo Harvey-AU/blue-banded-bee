@@ -3966,12 +3966,20 @@
         const quotaUsage = document.getElementById("quotaUsage");
         const quotaReset = document.getElementById("quotaReset");
 
-        if (!quotaDisplay) return;
+        if (!quotaDisplay || !window.supabase) return;
 
         try {
+          // Get auth token from Supabase session
+          const session = await window.supabase.auth.getSession();
+          const token = session?.data?.session?.access_token;
+
+          if (!token) {
+            return;
+          }
+
           const response = await fetch("/v1/usage", {
             headers: {
-              Authorization: `Bearer ${window.bbbAuth?.accessToken || ""}`,
+              Authorization: `Bearer ${token}`,
             },
           });
 
@@ -4012,17 +4020,24 @@
         quotaResetInterval = setInterval(fetchAndDisplayQuota, 60000);
       }
 
-      // Listen for auth ready event
-      document.addEventListener("bbb:auth:ready", () => {
-        fetchAndDisplayQuota();
-        startQuotaResetCountdown();
-      });
-
-      // Also try on page load if already authenticated
-      if (window.bbbAuth?.accessToken) {
-        fetchAndDisplayQuota();
-        startQuotaResetCountdown();
+      // Listen for Supabase auth state change
+      if (window.supabase) {
+        window.supabase.auth.onAuthStateChange((event, session) => {
+          if (session) {
+            fetchAndDisplayQuota();
+            startQuotaResetCountdown();
+          } else {
+            const quotaDisplay = document.getElementById("quotaDisplay");
+            if (quotaDisplay) quotaDisplay.style.display = "none";
+            if (quotaResetInterval) clearInterval(quotaResetInterval);
+          }
+        });
       }
+
+      // Also try on DOMContentLoaded
+      document.addEventListener("DOMContentLoaded", () => {
+        setTimeout(fetchAndDisplayQuota, 1000);
+      });
     </script>
   </body>
 </html>
