@@ -1657,7 +1657,7 @@ func (q *DbQueue) DecrementRunningTasksBy(ctx context.Context, jobID string, cou
 // promoteWaitingTask best-effort promotes a single waiting task for the given job.
 func (q *DbQueue) promoteWaitingTask(ctx context.Context, jobID string) error {
 	return q.ExecuteWithContext(ctx, func(txCtx context.Context, tx *sql.Tx) error {
-		_, err := tx.ExecContext(txCtx, `SELECT promote_waiting_task_for_job($1)`, jobID)
+		_, err := tx.ExecContext(txCtx, `SELECT promote_waiting_task_for_job($1::uuid)`, jobID)
 		return err
 	})
 }
