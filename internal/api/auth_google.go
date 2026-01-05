@@ -207,14 +207,15 @@ func (h *Handler) HandleGoogleOAuthCallback(w http.ResponseWriter, r *http.Reque
 	// This is janky but works for testing. In production, use a proper session.
 	propertiesJSON, _ := json.Marshal(properties)
 	params := url.Values{}
-	params.Set("google_properties", string(propertiesJSON))
-	params.Set("google_state", stateParam)
+	params.Set("ga_properties", string(propertiesJSON))
+	params.Set("ga_state", stateParam)
 	if userInfo != nil {
-		params.Set("google_email", userInfo.Email)
+		params.Set("ga_user_id", userInfo.ID)
+		params.Set("ga_email", userInfo.Email)
 	}
 	// Store refresh token temporarily (in production, use encrypted session)
-	params.Set("google_refresh_token", tokenResp.RefreshToken)
-	params.Set("google_access_token", tokenResp.AccessToken)
+	params.Set("ga_refresh_token", tokenResp.RefreshToken)
+	params.Set("ga_access_token", tokenResp.AccessToken)
 
 	http.Redirect(w, r, getDashboardURL()+"?"+params.Encode(), http.StatusSeeOther)
 }
