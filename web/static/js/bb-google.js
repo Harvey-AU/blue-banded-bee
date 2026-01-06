@@ -112,7 +112,9 @@ async function loadGoogleConnections() {
 
     const connectionsList = document.getElementById("googleConnectionsList");
     const emptyState = document.getElementById("googleEmptyState");
-    const propertySelection = document.getElementById("googlePropertySelection");
+    const propertySelection = document.getElementById(
+      "googlePropertySelection"
+    );
 
     if (!connectionsList) {
       return;
