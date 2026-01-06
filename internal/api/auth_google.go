@@ -360,6 +360,8 @@ func (h *Handler) fetchGoogleUserInfo(ctx context.Context, accessToken string) (
 	return &userInfo, nil
 }
 
+const maxPropertiesForURL = 100 // Limit to avoid URL length issues
+
 func (h *Handler) fetchGA4Properties(ctx context.Context, accessToken string) ([]GA4Property, error) {
 	client := &http.Client{Timeout: 30 * time.Second}
 
@@ -390,16 +392,38 @@ func (h *Handler) fetchGA4Properties(ctx context.Context, accessToken string) ([
 		return nil, fmt.Errorf("failed to decode accounts response: %w", err)
 	}
 
-	// Now list properties for each account
-	var allProperties []GA4Property
+	// Fetch properties for all accounts concurrently
+	type accountResult struct {
+		properties []GA4Property
+		err        error
+	}
+	results := make(chan accountResult, len(accountsResp.Accounts))
 
 	for _, account := range accountsResp.Accounts {
-		properties, err := h.fetchPropertiesForAccount(ctx, client, accessToken, account.Name)
-		if err != nil {
-			log.Warn().Err(err).Str("account", account.Name).Msg("Failed to fetch properties for account")
+		go func(acc struct {
+			Name        string `json:"name"`
+			DisplayName string `json:"displayName"`
+		}) {
+			props, err := h.fetchPropertiesForAccount(ctx, client, accessToken, acc.Name)
+			results <- accountResult{properties: props, err: err}
+		}(account)
+	}
+
+	// Collect results
+	var allProperties []GA4Property
+	for range accountsResp.Accounts {
+		result := <-results
+		if result.err != nil {
+			log.Warn().Err(result.err).Msg("Failed to fetch properties for account")
 			continue
 		}
-		allProperties = append(allProperties, properties...)
+		allProperties = append(allProperties, result.properties...)
+	}
+
+	// Limit properties to avoid URL length issues (user can search within these)
+	if len(allProperties) > maxPropertiesForURL {
+		log.Info().Int("total", len(allProperties)).Int("limited_to", maxPropertiesForURL).Msg("Limiting GA4 properties to avoid URL length issues")
+		allProperties = allProperties[:maxPropertiesForURL]
 	}
 
 	return allProperties, nil
