@@ -400,7 +400,7 @@ func TestDbQueueEnqueueURLs(t *testing.T) {
 				mock.ExpectBegin()
 
 				// Expect SELECT of job limits and current tasks (including concurrency, running_tasks, pending count, domain name, org_id, and quota)
-				mock.ExpectQuery(`SELECT j\.max_pages, j\.concurrency, j\.running_tasks, j\.pending_tasks, d\.name,\s+COALESCE\(\(SELECT COUNT\(\*\) FROM tasks WHERE job_id = \$1 AND status != 'skipped'\), 0\),\s+j\.organisation_id,\s+CASE WHEN j\.organisation_id IS NOT NULL\s+THEN get_daily_quota_remaining\(j\.organisation_id\)\s+ELSE NULL\s+END\s+FROM jobs j\s+LEFT JOIN domains d ON j\.domain_id = d\.id\s+WHERE j\.id = \$1\s+FOR UPDATE OF j`).
+				mock.ExpectQuery(`SELECT j\.max_pages, j\.concurrency, j\.running_tasks, j\.pending_tasks, d\.name,\s+COALESCE\(\(SELECT COUNT\(\*\) FROM tasks WHERE job_id = \$1 AND status != 'skipped'\), 0\),\s+j\.organisation_id,\s+CASE WHEN j\.organisation_id IS NOT NULL\s+THEN get_daily_quota_remaining\(j\.organisation_id\)\s+ELSE NULL\s+END\s+FROM jobs j\s+LEFT JOIN domains d ON j\.domain_id = d\.id\s+LEFT JOIN organisations o ON j\.organisation_id = o\.id\s+WHERE j\.id = \$1\s+FOR UPDATE OF j, o`).
 					WithArgs("job-1").
 					WillReturnRows(sqlmock.NewRows([]string{"max_pages", "concurrency", "running_tasks", "pending_tasks", "domain_name", "total_count", "organisation_id", "quota_remaining"}).
 						AddRow(0, nil, 0, 0, "example.com", 0, nil, nil))
@@ -435,7 +435,7 @@ func TestDbQueueEnqueueURLs(t *testing.T) {
 			setupMock: func(mock sqlmock.Sqlmock) {
 				mock.ExpectBegin()
 
-				mock.ExpectQuery(`SELECT j\.max_pages, j\.concurrency, j\.running_tasks, j\.pending_tasks, d\.name,\s+COALESCE\(\(SELECT COUNT\(\*\) FROM tasks WHERE job_id = \$1 AND status != 'skipped'\), 0\),\s+j\.organisation_id,\s+CASE WHEN j\.organisation_id IS NOT NULL\s+THEN get_daily_quota_remaining\(j\.organisation_id\)\s+ELSE NULL\s+END\s+FROM jobs j\s+LEFT JOIN domains d ON j\.domain_id = d\.id\s+WHERE j\.id = \$1\s+FOR UPDATE OF j`).
+				mock.ExpectQuery(`SELECT j\.max_pages, j\.concurrency, j\.running_tasks, j\.pending_tasks, d\.name,\s+COALESCE\(\(SELECT COUNT\(\*\) FROM tasks WHERE job_id = \$1 AND status != 'skipped'\), 0\),\s+j\.organisation_id,\s+CASE WHEN j\.organisation_id IS NOT NULL\s+THEN get_daily_quota_remaining\(j\.organisation_id\)\s+ELSE NULL\s+END\s+FROM jobs j\s+LEFT JOIN domains d ON j\.domain_id = d\.id\s+LEFT JOIN organisations o ON j\.organisation_id = o\.id\s+WHERE j\.id = \$1\s+FOR UPDATE OF j, o`).
 					WithArgs("job-2").
 					WillReturnRows(sqlmock.NewRows([]string{"max_pages", "concurrency", "running_tasks", "pending_tasks", "domain_name", "total_count", "organisation_id", "quota_remaining"}).
 						AddRow(0, nil, 0, 0, "example.com", 0, nil, nil))
@@ -477,7 +477,7 @@ func TestDbQueueEnqueueURLs(t *testing.T) {
 			setupMock: func(mock sqlmock.Sqlmock) {
 				mock.ExpectBegin()
 
-				mock.ExpectQuery(`SELECT j\.max_pages, j\.concurrency, j\.running_tasks, j\.pending_tasks, d\.name,\s+COALESCE\(\(SELECT COUNT\(\*\) FROM tasks WHERE job_id = \$1 AND status != 'skipped'\), 0\),\s+j\.organisation_id,\s+CASE WHEN j\.organisation_id IS NOT NULL\s+THEN get_daily_quota_remaining\(j\.organisation_id\)\s+ELSE NULL\s+END\s+FROM jobs j\s+LEFT JOIN domains d ON j\.domain_id = d\.id\s+WHERE j\.id = \$1\s+FOR UPDATE OF j`).
+				mock.ExpectQuery(`SELECT j\.max_pages, j\.concurrency, j\.running_tasks, j\.pending_tasks, d\.name,\s+COALESCE\(\(SELECT COUNT\(\*\) FROM tasks WHERE job_id = \$1 AND status != 'skipped'\), 0\),\s+j\.organisation_id,\s+CASE WHEN j\.organisation_id IS NOT NULL\s+THEN get_daily_quota_remaining\(j\.organisation_id\)\s+ELSE NULL\s+END\s+FROM jobs j\s+LEFT JOIN domains d ON j\.domain_id = d\.id\s+LEFT JOIN organisations o ON j\.organisation_id = o\.id\s+WHERE j\.id = \$1\s+FOR UPDATE OF j, o`).
 					WithArgs("job-4").
 					WillReturnRows(sqlmock.NewRows([]string{"max_pages", "concurrency", "running_tasks", "pending_tasks", "domain_name", "total_count", "organisation_id", "quota_remaining"}).
 						AddRow(0, nil, 0, 0, "example.com", 0, nil, nil))
