@@ -4034,9 +4034,15 @@
         });
       }
 
-      // Also try on DOMContentLoaded
-      document.addEventListener("DOMContentLoaded", () => {
-        setTimeout(fetchAndDisplayQuota, 1000);
+      // Also try on DOMContentLoaded - start polling if already logged in
+      document.addEventListener("DOMContentLoaded", async () => {
+        if (window.supabase) {
+          const session = await window.supabase.auth.getSession();
+          if (session?.data?.session) {
+            fetchAndDisplayQuota();
+            startQuotaResetCountdown();
+          }
+        }
       });
     </script>
   </body>
