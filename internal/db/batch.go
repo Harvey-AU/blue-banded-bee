@@ -475,7 +475,7 @@ func (bm *BatchManager) flushTaskUpdates(ctx context.Context, updates []*TaskUpd
 		// Call promote_waiting_task_for_job() for each affected job
 		promotedCount := 0
 		for jobID := range jobIDsToPromote {
-			_, err := tx.ExecContext(txCtx, `SELECT promote_waiting_task_for_job($1::uuid)`, jobID)
+			_, err := tx.ExecContext(txCtx, `SELECT promote_waiting_task_for_job($1)`, jobID)
 			if err != nil {
 				log.Warn().
 					Err(err).
