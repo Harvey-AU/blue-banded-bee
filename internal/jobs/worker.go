@@ -2931,9 +2931,14 @@ func (wp *WorkerPool) CleanupStuckJobs(ctx context.Context) error {
 				(status = $5 AND total_tasks > 0 AND total_tasks = failed_tasks)
 				OR
 				-- Running jobs with no task updates for 30+ minutes
-				-- Exclude jobs with waiting tasks (they're legitimately waiting for quota)
+				-- Exclude jobs with waiting tasks ONLY if org is over quota (legitimate wait)
+				-- If quota available but tasks still waiting, something is stuck - should timeout
 				(status = $5 AND total_tasks > 0
-					AND NOT EXISTS (SELECT 1 FROM tasks WHERE job_id = jobs.id AND status = 'waiting')
+					AND NOT (
+						EXISTS (SELECT 1 FROM tasks WHERE job_id = jobs.id AND status = 'waiting')
+						AND organisation_id IS NOT NULL
+						AND get_daily_quota_remaining(organisation_id) <= 0
+					)
 					AND COALESCE((
 						SELECT MAX(GREATEST(started_at, completed_at))
 						FROM tasks
