@@ -1180,6 +1180,7 @@ func (q *DbQueue) EnqueueURLs(ctx context.Context, jobID string, pages []Page, s
 		}
 
 		// Get job's max_pages, concurrency, domain, org, and current task counts
+		// Lock both job AND org rows to prevent concurrent quota races
 		var cfg enqueueJobConfig
 		err := tx.QueryRowContext(ctx, `
 			SELECT j.max_pages, j.concurrency, j.running_tasks, j.pending_tasks, d.name,
@@ -1191,8 +1192,9 @@ func (q *DbQueue) EnqueueURLs(ctx context.Context, jobID string, pages []Page, s
 				   END
 			FROM jobs j
 			LEFT JOIN domains d ON j.domain_id = d.id
+			LEFT JOIN organisations o ON j.organisation_id = o.id
 			WHERE j.id = $1
-			FOR UPDATE OF j
+			FOR UPDATE OF j, o
 		`, jobID).Scan(&cfg.maxPages, &cfg.concurrency, &cfg.runningTasks, &cfg.pendingTaskCount,
 			&cfg.domainName, &cfg.currentTaskCount, &cfg.orgID, &cfg.quotaRemaining)
 		if err != nil {
