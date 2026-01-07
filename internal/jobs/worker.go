@@ -2762,16 +2762,21 @@ func (wp *WorkerPool) StartQuotaPromotionMonitor(ctx context.Context) {
 
 // promoteWaitingTasksWithQuota finds jobs with waiting tasks where quota is now available
 func (wp *WorkerPool) promoteWaitingTasksWithQuota(ctx context.Context) error {
-	var jobIDs []string
+	type jobInfo struct {
+		ID     string
+		Status string
+	}
+	var jobs []jobInfo
 
 	// Find jobs with waiting tasks that have quota available
+	// Include both 'running' and 'pending' jobs - pending jobs may have been blocked by quota at creation
 	err := wp.dbQueue.ExecuteMaintenance(ctx, func(tx *sql.Tx) error {
 		rows, err := tx.QueryContext(ctx, `
-			SELECT DISTINCT j.id
+			SELECT DISTINCT j.id, j.status
 			FROM jobs j
 			JOIN tasks t ON t.job_id = j.id
 			WHERE t.status = 'waiting'
-			  AND j.status = 'running'
+			  AND j.status IN ('running', 'pending')
 			  AND j.organisation_id IS NOT NULL
 			  AND get_daily_quota_remaining(j.organisation_id) > 0
 		`)
@@ -2781,11 +2786,11 @@ func (wp *WorkerPool) promoteWaitingTasksWithQuota(ctx context.Context) error {
 		defer rows.Close()
 
 		for rows.Next() {
-			var jobID string
-			if err := rows.Scan(&jobID); err != nil {
-				return fmt.Errorf("failed to scan job ID: %w", err)
+			var j jobInfo
+			if err := rows.Scan(&j.ID, &j.Status); err != nil {
+				return fmt.Errorf("failed to scan job: %w", err)
 			}
-			jobIDs = append(jobIDs, jobID)
+			jobs = append(jobs, j)
 		}
 
 		return rows.Err()
@@ -2796,7 +2801,26 @@ func (wp *WorkerPool) promoteWaitingTasksWithQuota(ctx context.Context) error {
 
 	// Promote waiting tasks for each job (keep promoting until quota/concurrency exhausted)
 	totalPromoted := 0
-	for _, jobID := range jobIDs {
+	for _, job := range jobs {
+		// If job is pending, transition it to running and add to worker pool
+		if job.Status == "pending" {
+			err := wp.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
+				_, err := tx.ExecContext(ctx, `
+					UPDATE jobs SET
+						status = $1,
+						started_at = CASE WHEN started_at IS NULL THEN $2 ELSE started_at END
+					WHERE id = $3 AND status = 'pending'
+				`, JobStatusRunning, time.Now().UTC(), job.ID)
+				return err
+			})
+			if err != nil {
+				log.Warn().Err(err).Str("job_id", job.ID).Msg("Failed to transition job to running")
+				continue
+			}
+			wp.AddJob(job.ID, nil)
+			log.Info().Str("job_id", job.ID).Msg("Transitioned pending job to running after quota became available")
+		}
+
 		jobPromoted := 0
 		// Keep calling promote until it stops promoting (quota exhausted or no more waiting)
 		for {
@@ -2824,7 +2848,7 @@ func (wp *WorkerPool) promoteWaitingTasksWithQuota(ctx context.Context) error {
 						RETURNING id
 					)
 					SELECT id FROM promoted
-				`, jobID).Scan(&taskID)
+				`, job.ID).Scan(&taskID)
 				if err == sql.ErrNoRows || taskID == nil {
 					promoted = false
 					return nil
@@ -2836,7 +2860,7 @@ func (wp *WorkerPool) promoteWaitingTasksWithQuota(ctx context.Context) error {
 				return nil
 			})
 			if err != nil {
-				log.Warn().Err(err).Str("job_id", jobID).Msg("Failed to promote waiting task for job")
+				log.Warn().Err(err).Str("job_id", job.ID).Msg("Failed to promote waiting task for job")
 				break
 			}
 			if !promoted {
@@ -2846,12 +2870,12 @@ func (wp *WorkerPool) promoteWaitingTasksWithQuota(ctx context.Context) error {
 			totalPromoted++
 		}
 		if jobPromoted > 0 {
-			log.Debug().Str("job_id", jobID).Int("promoted", jobPromoted).Msg("Promoted waiting tasks for job")
+			log.Debug().Str("job_id", job.ID).Int("promoted", jobPromoted).Msg("Promoted waiting tasks for job")
 		}
 	}
 
 	if totalPromoted > 0 {
-		log.Info().Int("total_promoted", totalPromoted).Int("jobs", len(jobIDs)).Msg("Promoted waiting tasks after quota became available")
+		log.Info().Int("total_promoted", totalPromoted).Int("jobs", len(jobs)).Msg("Promoted waiting tasks after quota became available")
 	}
 
 	return nil
