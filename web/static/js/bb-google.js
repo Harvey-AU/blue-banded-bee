@@ -1,7 +1,7 @@
 /**
  * Google Analytics Integration Handler
- * Handles GA4 property connections.
- * Flow: Connect -> OAuth -> Select Property -> Save Connection
+ * Handles GA4 property connections with two-step account/property selection.
+ * Flow: Connect -> OAuth -> Select Account (if multiple) -> Review Properties -> Save All
  */
 
 /**
@@ -75,19 +75,30 @@ function handleGoogleAction(action, element) {
       loadGoogleConnections();
       break;
 
-    case "google-select-property": {
-      const propertyId = element.getAttribute("data-property-id");
-      const propertyName =
-        element.getAttribute("data-property-name") || `Property ${propertyId}`;
-      if (propertyId) {
-        saveGoogleProperty(propertyId, propertyName);
+    case "google-select-account": {
+      const accountId = element.getAttribute("data-account-id");
+      if (accountId) {
+        selectGoogleAccount(accountId);
       }
       break;
     }
 
+    case "google-toggle-property": {
+      const propertyId = element.getAttribute("data-property-id");
+      if (propertyId) {
+        togglePropertySelection(propertyId, element);
+      }
+      break;
+    }
+
+    case "google-save-properties":
+      saveGoogleProperties();
+      break;
+
     case "google-cancel-selection":
       hidePropertySelection();
-      loadGoogleConnections(); // Show empty state or existing connections
+      hideAccountSelection();
+      loadGoogleConnections();
       break;
 
     default:
@@ -176,12 +187,31 @@ async function loadGoogleConnections() {
         dateEl.textContent = `Connected ${formatGoogleDate(conn.created_at)}`;
       }
 
+      // Set status indicator
+      const statusEl = clone.querySelector(".google-status");
+      if (statusEl) {
+        const isActive = conn.status === "active";
+        statusEl.textContent = isActive ? "Active" : "Inactive";
+        statusEl.classList.toggle("status-active", isActive);
+        statusEl.classList.toggle("status-inactive", !isActive);
+      }
+
       // Set connection ID on disconnect button
       const disconnectBtn = clone.querySelector(
         '[bbb-action="google-disconnect"]'
       );
       if (disconnectBtn) {
         disconnectBtn.setAttribute("bbb-id", conn.id);
+      }
+
+      // Set up status toggle if present
+      const statusToggle = clone.querySelector(".google-status-toggle");
+      if (statusToggle) {
+        statusToggle.checked = conn.status === "active";
+        statusToggle.setAttribute("data-connection-id", conn.id);
+        statusToggle.addEventListener("change", (e) => {
+          toggleConnectionStatus(conn.id, e.target.checked);
+        });
       }
 
       connectionsList.appendChild(clone);
@@ -257,11 +287,10 @@ async function disconnectGoogle(connectionId) {
 }
 
 /**
- * Save the selected GA4 property after OAuth
- * @param {string} propertyId - The GA4 property ID
- * @param {string} propertyName - The property display name
+ * Select a Google Analytics account and fetch its properties
+ * @param {string} accountId - The GA account ID
  */
-async function saveGoogleProperty(propertyId, propertyName) {
+async function selectGoogleAccount(accountId) {
   try {
     const { data: { session } = {} } = await window.supabase.auth.getSession();
     const token = session?.access_token;
@@ -270,26 +299,132 @@ async function saveGoogleProperty(propertyId, propertyName) {
       return;
     }
 
-    // Get the pending OAuth data from stored session
+    if (!pendingGASessionData || !pendingGASessionData.session_id) {
+      showGoogleError("OAuth session expired. Please reconnect.");
+      hideAccountSelection();
+      return;
+    }
+
+    // Show loading state
+    const accountList = document.getElementById("googleAccountList");
+    if (accountList) {
+      accountList.innerHTML =
+        '<div style="text-align: center; padding: 20px;">Loading properties...</div>';
+    }
+
+    // Fetch properties for this account
+    const response = await fetch(
+      `/v1/integrations/google/pending-session/${pendingGASessionData.session_id}/accounts/${encodeURIComponent(accountId)}/properties`,
+      {
+        headers: { Authorization: `Bearer ${token}` },
+      }
+    );
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(text || `HTTP ${response.status}`);
+    }
+
+    const result = await response.json();
+    const properties = result.data?.properties || [];
+
+    // Store selected account and properties
+    pendingGASessionData.selected_account_id = accountId;
+    pendingGASessionData.properties = properties;
+
+    // Hide account selection, show property selection
+    hideAccountSelection();
+    showPropertySelection(properties);
+  } catch (error) {
+    console.error("Failed to fetch properties for account:", error);
+    showGoogleError("Failed to load properties. Please try again.");
+  }
+}
+
+/**
+ * Toggle a property's selection state
+ * @param {string} propertyId - The property ID
+ * @param {HTMLElement} element - The toggle element
+ */
+function togglePropertySelection(propertyId, element) {
+  const isSelected = element.classList.contains("selected");
+  element.classList.toggle("selected", !isSelected);
+
+  // Update the checkbox visual
+  const checkbox = element.querySelector(".property-checkbox");
+  if (checkbox) {
+    if (!isSelected) {
+      // Now selected - show checkmark
+      checkbox.innerHTML = "✓";
+      checkbox.style.backgroundColor = "#10b981";
+      checkbox.style.borderColor = "#10b981";
+      checkbox.style.color = "#ffffff";
+    } else {
+      // Now unselected - clear checkmark
+      checkbox.innerHTML = "";
+      checkbox.style.backgroundColor = "#ffffff";
+      checkbox.style.borderColor = "#d1d5db";
+      checkbox.style.color = "";
+    }
+  }
+
+  // Update button style
+  if (!isSelected) {
+    element.style.borderColor = "#10b981";
+    element.style.backgroundColor = "#ecfdf5";
+  } else {
+    element.style.borderColor = "#d1d5db";
+    element.style.backgroundColor = "#ffffff";
+  }
+}
+
+/**
+ * Save all properties (bulk save with active/inactive status)
+ */
+async function saveGoogleProperties() {
+  try {
+    const { data: { session } = {} } = await window.supabase.auth.getSession();
+    const token = session?.access_token;
+    if (!token) {
+      showGoogleError("Not authenticated. Please sign in.");
+      return;
+    }
+
     if (!pendingGASessionData) {
       showGoogleError("OAuth session expired. Please reconnect.");
       hidePropertySelection();
       return;
     }
 
-    const response = await fetch("/v1/integrations/google/save-property", {
+    // Get selected (active) property IDs
+    const selectedButtons = document.querySelectorAll(
+      "#googlePropertyList button.selected[data-property-id]"
+    );
+    const activePropertyIds = Array.from(selectedButtons).map((btn) =>
+      btn.getAttribute("data-property-id")
+    );
+
+    // Show saving state
+    const saveBtn = document.querySelector(
+      '[bbb-action="google-save-properties"]'
+    );
+    if (saveBtn) {
+      saveBtn.disabled = true;
+      saveBtn.textContent = "Saving...";
+    }
+
+    const response = await fetch("/v1/integrations/google/save-properties", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        property_id: propertyId,
-        property_name: propertyName,
-        access_token: pendingGASessionData.access_token,
-        refresh_token: pendingGASessionData.refresh_token,
-        google_user_id: pendingGASessionData.user_id,
-        google_email: pendingGASessionData.email,
+        session_id: pendingGASessionData.session_id,
+        account_id:
+          pendingGASessionData.selected_account_id ||
+          pendingGASessionData.accounts?.[0]?.account_id,
+        active_property_ids: activePropertyIds,
       }),
     });
 
@@ -302,11 +437,65 @@ async function saveGoogleProperty(propertyId, propertyName) {
     pendingGASessionData = null;
 
     hidePropertySelection();
-    showGoogleSuccess("Google Analytics connected successfully!");
+    const activeCount = activePropertyIds.length;
+    const totalCount = allGoogleProperties.length;
+    showGoogleSuccess(
+      `Saved ${totalCount} properties (${activeCount} active, ${totalCount - activeCount} inactive)`
+    );
     loadGoogleConnections();
   } catch (error) {
-    console.error("Failed to save Google property:", error);
-    showGoogleError("Failed to save property selection");
+    console.error("Failed to save Google properties:", error);
+    showGoogleError("Failed to save properties");
+  } finally {
+    const saveBtn = document.querySelector(
+      '[bbb-action="google-save-properties"]'
+    );
+    if (saveBtn) {
+      saveBtn.disabled = false;
+      saveBtn.textContent = "Save Properties";
+    }
+  }
+}
+
+/**
+ * Toggle an existing connection's status (active/inactive)
+ * @param {string} connectionId - The connection ID
+ * @param {boolean} active - Whether to set active
+ */
+async function toggleConnectionStatus(connectionId, active) {
+  try {
+    const { data: { session } = {} } = await window.supabase.auth.getSession();
+    const token = session?.access_token;
+    if (!token) {
+      showGoogleError("Not authenticated. Please sign in.");
+      return;
+    }
+
+    const response = await fetch(
+      `/v1/integrations/google/${encodeURIComponent(connectionId)}/status`,
+      {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          status: active ? "active" : "inactive",
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(text || `HTTP ${response.status}`);
+    }
+
+    // Reload to update UI
+    loadGoogleConnections();
+  } catch (error) {
+    console.error("Failed to toggle connection status:", error);
+    showGoogleError("Failed to update status");
+    loadGoogleConnections(); // Reload to reset toggle state
   }
 }
 
@@ -315,7 +504,7 @@ let allGoogleProperties = [];
 const MAX_VISIBLE_PROPERTIES = 10;
 
 /**
- * Render filtered property list
+ * Render filtered property list with toggle selection
  * @param {Array} properties - Filtered properties to display
  * @param {number} totalCount - Total number of properties before filtering
  */
@@ -328,46 +517,80 @@ function renderPropertyList(properties, totalCount) {
     list.removeChild(list.firstChild);
   }
 
-  // Show count info
+  // Show count info and instructions
   const countInfo = document.createElement("div");
   countInfo.style.cssText =
     "color: #6b7280; font-size: 13px; margin-bottom: 12px;";
   if (properties.length === 0) {
     countInfo.textContent = "No properties match your search";
   } else if (properties.length < totalCount) {
-    countInfo.textContent = `Showing ${properties.length} of ${totalCount} properties`;
-  } else if (totalCount > MAX_VISIBLE_PROPERTIES) {
-    countInfo.textContent = `Showing first ${properties.length} of ${totalCount} properties — use search to find more`;
+    countInfo.textContent = `Showing ${properties.length} of ${totalCount} properties. Click to toggle active/inactive.`;
   } else {
-    countInfo.textContent = `${totalCount} properties available`;
+    countInfo.textContent = `${totalCount} properties found. Click to toggle active/inactive.`;
   }
   list.appendChild(countInfo);
 
-  // Add property options
-  for (const prop of properties.slice(0, MAX_VISIBLE_PROPERTIES)) {
+  // Add property options with toggle functionality
+  for (const prop of properties) {
     const item = document.createElement("button");
+    item.type = "button";
     item.className = "bb-button";
     item.style.cssText =
-      "display: block; width: 100%; text-align: left; margin-bottom: 8px; padding: 12px 16px;";
-    item.setAttribute("bbb-action", "google-select-property");
+      "display: flex; align-items: center; width: 100%; text-align: left; margin-bottom: 8px; padding: 12px 16px; border: 2px solid #d1d5db; background: #ffffff; cursor: pointer; transition: all 0.15s;";
+    item.setAttribute("bbb-action", "google-toggle-property");
     item.setAttribute("data-property-id", prop.property_id);
     item.setAttribute("data-property-name", prop.display_name);
 
+    // Checkbox indicator
+    const checkbox = document.createElement("div");
+    checkbox.className = "property-checkbox";
+    checkbox.style.cssText =
+      "width: 20px; height: 20px; border: 2px solid #d1d5db; border-radius: 4px; margin-right: 12px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;";
+    checkbox.innerHTML = "";
+    item.appendChild(checkbox);
+
+    // Property details
+    const details = document.createElement("div");
+    details.style.cssText = "flex: 1;";
+
     const strongEl = document.createElement("strong");
     strongEl.textContent = prop.display_name;
-    item.appendChild(strongEl);
+    details.appendChild(strongEl);
 
     const detailSpan = document.createElement("span");
     detailSpan.style.cssText =
       "color: #6b7280; font-size: 13px; display: block;";
-    let detailText = `Property ID: ${prop.property_id}`;
-    if (prop.account_name) {
-      detailText += ` • ${prop.account_name}`;
-    }
-    detailSpan.textContent = detailText;
-    item.appendChild(detailSpan);
+    detailSpan.textContent = `Property ID: ${prop.property_id}`;
+    details.appendChild(detailSpan);
 
+    item.appendChild(details);
     list.appendChild(item);
+  }
+
+  // Add save button if not already present
+  let saveContainer = document.getElementById("googlePropertySaveContainer");
+  if (!saveContainer && properties.length > 0) {
+    saveContainer = document.createElement("div");
+    saveContainer.id = "googlePropertySaveContainer";
+    saveContainer.style.cssText =
+      "margin-top: 16px; padding-top: 16px; border-top: 1px solid #e5e7eb;";
+
+    const saveBtn = document.createElement("button");
+    saveBtn.className = "bb-button bb-button-primary";
+    saveBtn.setAttribute("bbb-action", "google-save-properties");
+    saveBtn.style.cssText = "width: 100%; padding: 12px;";
+    saveBtn.textContent = "Save Properties";
+    saveContainer.appendChild(saveBtn);
+
+    const cancelBtn = document.createElement("button");
+    cancelBtn.className = "bb-button";
+    cancelBtn.setAttribute("bbb-action", "google-cancel-selection");
+    cancelBtn.style.cssText =
+      "width: 100%; padding: 12px; margin-top: 8px; background: transparent;";
+    cancelBtn.textContent = "Cancel";
+    saveContainer.appendChild(cancelBtn);
+
+    list.parentNode.appendChild(saveContainer);
   }
 }
 
@@ -463,8 +686,99 @@ function hidePropertySelection() {
   if (searchInput) {
     searchInput.value = "";
   }
+  // Remove save container if present
+  const saveContainer = document.getElementById("googlePropertySaveContainer");
+  if (saveContainer) {
+    saveContainer.remove();
+  }
   // Clear stored properties
   allGoogleProperties = [];
+}
+
+/**
+ * Show account selection UI when multiple accounts are available
+ * @param {Array} accounts - Array of GA accounts to choose from
+ */
+function showAccountSelection(accounts) {
+  console.log(
+    "[GA OAuth] showAccountSelection called with",
+    accounts?.length,
+    "accounts"
+  );
+
+  // Create or get the account selection UI
+  let accountUI = document.getElementById("googleAccountSelection");
+  if (!accountUI) {
+    // Create the UI dynamically
+    const propertySelection = document.getElementById(
+      "googlePropertySelection"
+    );
+    if (propertySelection) {
+      accountUI = document.createElement("div");
+      accountUI.id = "googleAccountSelection";
+      accountUI.style.cssText = "padding: 16px;";
+      propertySelection.parentNode.insertBefore(accountUI, propertySelection);
+    } else {
+      console.error("Cannot find googlePropertySelection to insert account UI");
+      return;
+    }
+  }
+
+  // Build the account list
+  accountUI.innerHTML = `
+    <h3 style="margin: 0 0 8px 0; font-size: 16px; font-weight: 600;">Select Google Analytics Account</h3>
+    <p style="color: #6b7280; font-size: 14px; margin: 0 0 16px 0;">
+      You have access to ${accounts.length} accounts. Select one to view its properties.
+    </p>
+    <div id="googleAccountList"></div>
+  `;
+
+  const list = document.getElementById("googleAccountList");
+  for (const account of accounts) {
+    const item = document.createElement("button");
+    item.type = "button";
+    item.className = "bb-button";
+    item.style.cssText =
+      "display: block; width: 100%; text-align: left; margin-bottom: 8px; padding: 12px 16px; cursor: pointer;";
+    item.setAttribute("bbb-action", "google-select-account");
+    item.setAttribute("data-account-id", account.account_id);
+
+    const strongEl = document.createElement("strong");
+    strongEl.textContent = account.display_name || account.account_id;
+    item.appendChild(strongEl);
+
+    const detailSpan = document.createElement("span");
+    detailSpan.style.cssText =
+      "color: #6b7280; font-size: 13px; display: block;";
+    detailSpan.textContent = `Account ID: ${account.account_id.replace("accounts/", "")}`;
+    item.appendChild(detailSpan);
+
+    list.appendChild(item);
+  }
+
+  // Add cancel button
+  const cancelBtn = document.createElement("button");
+  cancelBtn.className = "bb-button";
+  cancelBtn.setAttribute("bbb-action", "google-cancel-selection");
+  cancelBtn.style.cssText =
+    "width: 100%; padding: 12px; margin-top: 8px; background: transparent;";
+  cancelBtn.textContent = "Cancel";
+  list.appendChild(cancelBtn);
+
+  // Hide empty state and show account selection
+  const emptyState = document.getElementById("googleEmptyState");
+  if (emptyState) emptyState.style.display = "none";
+  accountUI.style.display = "block";
+}
+
+/**
+ * Hide account selection UI
+ */
+function hideAccountSelection() {
+  const accountUI = document.getElementById("googleAccountSelection");
+  if (accountUI) {
+    accountUI.style.display = "none";
+  }
 }
 
 /**
@@ -569,16 +883,15 @@ async function handleGoogleOAuthCallback() {
       const result = await response.json();
       const sessionData = result.data;
       console.log("[GA OAuth] Session data received:", {
+        hasAccounts: !!sessionData?.accounts,
+        accountCount: sessionData?.accounts?.length,
         hasProperties: !!sessionData?.properties,
         propertyCount: sessionData?.properties?.length,
         email: sessionData?.email,
       });
 
-      if (!sessionData || !sessionData.properties) {
-        throw new Error("Invalid session data");
-      }
-
-      // Store session data for when user selects a property
+      // Store session ID for subsequent requests
+      sessionData.session_id = gaSession;
       pendingGASessionData = sessionData;
 
       // Open notifications modal (contains Google Analytics section)
@@ -588,13 +901,29 @@ async function handleGoogleOAuthCallback() {
         notificationsModal.classList.add("show");
       }
 
-      // Show property selection
-      console.log(
-        "[GA OAuth] Calling showPropertySelection with",
-        sessionData.properties.length,
-        "properties"
-      );
-      showPropertySelection(sessionData.properties);
+      // Determine which UI to show based on session data
+      const accounts = sessionData.accounts || [];
+      const properties = sessionData.properties || [];
+
+      if (accounts.length > 1 && properties.length === 0) {
+        // Multiple accounts, no properties yet - show account picker
+        console.log("[GA OAuth] Multiple accounts, showing account picker");
+        showAccountSelection(accounts);
+      } else if (properties.length > 0) {
+        // Single account with properties already fetched, or properties from selected account
+        console.log(
+          "[GA OAuth] Showing property selection with",
+          properties.length,
+          "properties"
+        );
+        showPropertySelection(properties);
+      } else if (accounts.length === 1) {
+        // Single account but no properties - should not happen normally
+        console.log("[GA OAuth] Single account, no properties - fetching...");
+        selectGoogleAccount(accounts[0].account_id);
+      } else {
+        throw new Error("No accounts or properties found");
+      }
 
       // Clean up URL
       const url = new URL(window.location.href);
