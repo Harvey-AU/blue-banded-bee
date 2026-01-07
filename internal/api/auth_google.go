@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -15,6 +16,7 @@ import (
 	"github.com/Harvey-AU/blue-banded-bee/internal/auth"
 	"github.com/Harvey-AU/blue-banded-bee/internal/db"
 	"github.com/google/uuid"
+	"github.com/rs/zerolog/log"
 )
 
 // Pending OAuth sessions - stores properties and tokens temporarily after OAuth callback
@@ -653,6 +655,9 @@ func (h *Handler) fetchGA4Accounts(ctx context.Context, accessToken string) ([]G
 func (h *Handler) fetchPropertiesForAccount(ctx context.Context, client *http.Client, accessToken, accountName string) ([]GA4Property, error) {
 	// URL-encode the filter value (accountName contains slash like "accounts/123456")
 	apiURL := fmt.Sprintf("https://analyticsadmin.googleapis.com/v1beta/properties?filter=parent:%s", url.QueryEscape(accountName))
+
+	log.Debug().Str("account_name", accountName).Str("api_url", apiURL).Msg("Fetching GA4 properties for account")
+
 	req, err := http.NewRequestWithContext(ctx, "GET", apiURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create properties request: %w", err)
@@ -666,6 +671,8 @@ func (h *Handler) fetchPropertiesForAccount(ctx context.Context, client *http.Cl
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		log.Error().Int("status", resp.StatusCode).Str("body", string(body)).Msg("Google API properties request failed")
 		return nil, fmt.Errorf("properties endpoint returned status: %d", resp.StatusCode)
 	}
 
@@ -690,6 +697,8 @@ func (h *Handler) fetchPropertiesForAccount(ctx context.Context, client *http.Cl
 			PropertyType: p.PropertyType,
 		})
 	}
+
+	log.Info().Str("account_name", accountName).Int("property_count", len(properties)).Msg("Fetched GA4 properties")
 
 	return properties, nil
 }
@@ -854,6 +863,8 @@ func (h *Handler) fetchAccountProperties(w http.ResponseWriter, r *http.Request,
 	}
 
 	// Fetch properties for this account
+	logger.Info().Str("account_id", accountID).Str("session_id", sessionID).Msg("Fetching properties for account")
+
 	client := &http.Client{Timeout: 30 * time.Second}
 	properties, err := h.fetchPropertiesForAccount(r.Context(), client, session.AccessToken, accountID)
 	if err != nil {
@@ -861,6 +872,8 @@ func (h *Handler) fetchAccountProperties(w http.ResponseWriter, r *http.Request,
 		InternalError(w, r, fmt.Errorf("failed to fetch properties: %w", err))
 		return
 	}
+
+	logger.Info().Str("account_id", accountID).Int("property_count", len(properties)).Msg("Properties fetched successfully")
 
 	// Update session with these properties
 	pendingGASessionsMu.Lock()
