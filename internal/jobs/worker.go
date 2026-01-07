@@ -2912,7 +2912,7 @@ func (wp *WorkerPool) CleanupStuckJobs(ctx context.Context) error {
 
 		// 2. Mark jobs as failed when stuck for too long
 		// - Pending jobs with 0 tasks for 5 minutes (sitemap processing likely failed)
-		// - Running jobs with no task progress for 30 minutes
+		// - Running jobs with no task progress for 30 minutes (excluding jobs with waiting tasks)
 		// - Jobs running for all tasks failed
 		result, err = tx.ExecContext(ctx, `
 			UPDATE jobs
@@ -2931,11 +2931,14 @@ func (wp *WorkerPool) CleanupStuckJobs(ctx context.Context) error {
 				(status = $5 AND total_tasks > 0 AND total_tasks = failed_tasks)
 				OR
 				-- Running jobs with no task updates for 30+ minutes
-				(status = $5 AND total_tasks > 0 AND COALESCE((
-					SELECT MAX(GREATEST(started_at, completed_at))
-					FROM tasks
-					WHERE job_id = jobs.id
-				), created_at) < $6)
+				-- Exclude jobs with waiting tasks (they're legitimately waiting for quota)
+				(status = $5 AND total_tasks > 0
+					AND NOT EXISTS (SELECT 1 FROM tasks WHERE job_id = jobs.id AND status = 'waiting')
+					AND COALESCE((
+						SELECT MAX(GREATEST(started_at, completed_at))
+						FROM tasks
+						WHERE job_id = jobs.id
+					), created_at) < $6)
 			)
 		`, JobStatusFailed, time.Now().UTC(), JobStatusPending, time.Now().UTC().Add(-5*time.Minute), JobStatusRunning, time.Now().UTC().Add(-30*time.Minute))
 
