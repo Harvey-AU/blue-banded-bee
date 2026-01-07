@@ -493,6 +493,11 @@ func (bm *BatchManager) flushTaskUpdates(ctx context.Context, updates []*TaskUpd
 				Msg("Promoted waiting tasks to pending")
 		}
 
+		// Increment daily usage for completed+failed tasks (actual work done)
+		if len(completedTasks) > 0 || len(failedTasks) > 0 {
+			incrementDailyUsageForTasks(txCtx, tx, completedTasks, failedTasks)
+		}
+
 		return nil
 	})
 
@@ -521,6 +526,54 @@ func (bm *BatchManager) flushTaskUpdates(ctx context.Context, updates []*TaskUpd
 		Msg("Batch update successful")
 
 	return nil
+}
+
+// incrementDailyUsageForTasks increments the daily usage counter for completed/failed tasks
+func incrementDailyUsageForTasks(txCtx context.Context, tx *sql.Tx, completedTasks, failedTasks []*Task) {
+	// Get unique job IDs from completed and failed tasks
+	jobIDSet := make(map[string]bool)
+	for _, task := range completedTasks {
+		jobIDSet[task.JobID] = true
+	}
+	for _, task := range failedTasks {
+		jobIDSet[task.JobID] = true
+	}
+
+	// Count tasks per org and increment usage
+	for jobID := range jobIDSet {
+		var orgID sql.NullString
+		err := tx.QueryRowContext(txCtx, `SELECT organisation_id FROM jobs WHERE id = $1`, jobID).Scan(&orgID)
+		if err != nil || !orgID.Valid || orgID.String == "" {
+			continue // Skip jobs without org
+		}
+
+		// Count tasks for this job
+		count := 0
+		for _, task := range completedTasks {
+			if task.JobID == jobID {
+				count++
+			}
+		}
+		for _, task := range failedTasks {
+			if task.JobID == jobID {
+				count++
+			}
+		}
+
+		if count > 0 {
+			_, err := tx.ExecContext(txCtx, `SELECT increment_daily_usage($1, $2)`, orgID.String, count)
+			if err != nil {
+				log.Warn().Err(err).Str("org_id", orgID.String).Int("pages", count).
+					Msg("Failed to increment daily usage counter")
+				sentry.WithScope(func(scope *sentry.Scope) {
+					scope.SetLevel(sentry.LevelWarning)
+					scope.SetTag("org_id", orgID.String)
+					scope.SetExtra("pages", count)
+					sentry.CaptureException(fmt.Errorf("quota increment failed: %w", err))
+				})
+			}
+		}
+	}
 }
 
 // flushIndividualUpdates attempts to update tasks one-by-one to isolate poison pills

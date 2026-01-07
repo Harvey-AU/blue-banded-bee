@@ -4013,11 +4013,11 @@
         }
       }
 
-      // Update quota reset countdown every minute
+      // Update quota display every 0.5s for realtime feel
       let quotaResetInterval;
       function startQuotaResetCountdown() {
         if (quotaResetInterval) clearInterval(quotaResetInterval);
-        quotaResetInterval = setInterval(fetchAndDisplayQuota, 60000);
+        quotaResetInterval = setInterval(fetchAndDisplayQuota, 500);
       }
 
       // Listen for Supabase auth state change

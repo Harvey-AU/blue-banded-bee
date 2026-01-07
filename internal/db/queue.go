@@ -1351,22 +1351,8 @@ func (q *DbQueue) EnqueueURLs(ctx context.Context, jobID string, pages []Page, s
 			return fmt.Errorf("failed to insert tasks: %w", err)
 		}
 
-		// Increment daily usage for tasks set to pending (if org has quota system)
-		if processedPending > 0 && cfg.orgID.Valid && cfg.orgID.String != "" {
-			_, err = tx.ExecContext(ctx, `SELECT increment_daily_usage($1, $2)`, cfg.orgID.String, processedPending)
-			if err != nil {
-				log.Warn().Err(err).Str("org_id", cfg.orgID.String).Int("pages", processedPending).
-					Msg("Failed to increment daily usage counter")
-				// Alert via Sentry - quota tracking becomes inconsistent if this fails frequently
-				sentry.WithScope(func(scope *sentry.Scope) {
-					scope.SetLevel(sentry.LevelWarning)
-					scope.SetTag("org_id", cfg.orgID.String)
-					scope.SetExtra("pages", processedPending)
-					sentry.CaptureException(fmt.Errorf("quota increment failed: %w", err))
-				})
-				// Don't fail the transaction - usage tracking is secondary to task creation
-			}
-		}
+		// Note: Daily usage is incremented when tasks COMPLETE, not when created
+		// See batch.go FlushUpdates for quota increment on completion/failure
 
 		// Log when tasks are placed in waiting status
 		if processedWaiting > 0 {
