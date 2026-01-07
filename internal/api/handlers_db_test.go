@@ -299,6 +299,15 @@ func (m *MockDBWithRealDB) GetPlatformOrgMapping(ctx context.Context, platform, 
 	return nil, nil
 }
 
+// Usage and plans methods
+func (m *MockDBWithRealDB) GetOrganisationUsageStats(ctx context.Context, orgID string) (*db.UsageStats, error) {
+	return nil, nil
+}
+
+func (m *MockDBWithRealDB) GetActivePlans(ctx context.Context) ([]db.Plan, error) {
+	return nil, nil
+}
+
 // Webflow site settings methods
 func (m *MockDBWithRealDB) CreateOrUpdateSiteSetting(ctx context.Context, setting *db.WebflowSiteSetting) error {
 	return nil

@@ -424,6 +424,24 @@ func (m *MockDB) GetPlatformOrgMapping(ctx context.Context, platform, platformID
 	return args.Get(0).(*db.PlatformOrgMapping), args.Error(1)
 }
 
+// Usage and plans methods
+
+func (m *MockDB) GetOrganisationUsageStats(ctx context.Context, orgID string) (*db.UsageStats, error) {
+	args := m.Called(ctx, orgID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*db.UsageStats), args.Error(1)
+}
+
+func (m *MockDB) GetActivePlans(ctx context.Context) ([]db.Plan, error) {
+	args := m.Called(ctx)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]db.Plan), args.Error(1)
+}
+
 // Webflow site settings mock methods
 
 func (m *MockDB) CreateOrUpdateSiteSetting(ctx context.Context, setting *db.WebflowSiteSetting) error {

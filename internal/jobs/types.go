@@ -124,3 +124,15 @@ type JobOptions struct {
 	SourceInfo      *string  `json:"source_info,omitempty"`
 	SchedulerID     *string  `json:"scheduler_id,omitempty"`
 }
+
+// QuotaExceededError represents when an org has exceeded their daily quota
+type QuotaExceededError struct {
+	Used     int       `json:"used"`
+	Limit    int       `json:"limit"`
+	ResetsAt time.Time `json:"resets_at"`
+	PlanName string    `json:"plan_name"`
+}
+
+func (e *QuotaExceededError) Error() string {
+	return "daily quota exceeded"
+}
