@@ -4034,8 +4034,8 @@
         });
       }
 
-      // Also try on DOMContentLoaded - start polling if already logged in
-      document.addEventListener("DOMContentLoaded", async () => {
+      // Also try after a delay to catch already-logged-in users
+      setTimeout(async () => {
         if (window.supabase) {
           const session = await window.supabase.auth.getSession();
           if (session?.data?.session) {
@@ -4043,7 +4043,7 @@
             startQuotaResetCountdown();
           }
         }
-      });
+      }, 1000);
     </script>
   </body>
 </html>
