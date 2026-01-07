@@ -556,10 +556,10 @@ async function handleGoogleOAuthCallback() {
       // Store session data for when user selects a property
       pendingGASessionData = sessionData;
 
-      // Open integrations modal
-      const integrationsModal = document.getElementById("integrationsModal");
-      if (integrationsModal) {
-        integrationsModal.style.display = "flex";
+      // Open notifications modal (contains Google Analytics section)
+      const notificationsModal = document.getElementById("notificationsModal");
+      if (notificationsModal) {
+        notificationsModal.classList.add("show");
       }
 
       // Show property selection
