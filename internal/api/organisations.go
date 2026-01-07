@@ -217,8 +217,20 @@ func (h *Handler) UsageHandler(w http.ResponseWriter, r *http.Request) {
 	}, "Usage statistics retrieved successfully")
 }
 
+// PublicPlan is a DTO for the public /v1/plans endpoint
+// Excludes internal metadata fields (is_active, sort_order, created_at)
+type PublicPlan struct {
+	ID                string `json:"id"`
+	Name              string `json:"name"`
+	DisplayName       string `json:"display_name"`
+	DailyPageLimit    int    `json:"daily_page_limit"`
+	MonthlyPriceCents int    `json:"monthly_price_cents"`
+	MaxConcurrentJobs int    `json:"max_concurrent_jobs"`
+	MaxPagesPerJob    int    `json:"max_pages_per_job"`
+}
+
 // PlansHandler handles GET /v1/plans
-// Returns available subscription plans
+// Returns available subscription plans (public endpoint for pricing page)
 func (h *Handler) PlansHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		MethodNotAllowed(w, r)
@@ -231,7 +243,21 @@ func (h *Handler) PlansHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Transform to public DTOs (filter out internal metadata)
+	publicPlans := make([]PublicPlan, len(plans))
+	for i, p := range plans {
+		publicPlans[i] = PublicPlan{
+			ID:                p.ID,
+			Name:              p.Name,
+			DisplayName:       p.DisplayName,
+			DailyPageLimit:    p.DailyPageLimit,
+			MonthlyPriceCents: p.MonthlyPriceCents,
+			MaxConcurrentJobs: p.MaxConcurrentJobs,
+			MaxPagesPerJob:    p.MaxPagesPerJob,
+		}
+	}
+
 	WriteSuccess(w, r, map[string]interface{}{
-		"plans": plans,
+		"plans": publicPlans,
 	}, "Plans retrieved successfully")
 }

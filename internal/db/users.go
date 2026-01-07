@@ -601,6 +601,9 @@ func (db *DB) GetOrganisationUsageStats(ctx context.Context, orgID string) (*Usa
 		&stats.ResetsAt,
 	)
 	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("organisation not found or has no plan: %s", orgID)
+		}
 		return nil, fmt.Errorf("failed to get organisation usage stats: %w", err)
 	}
 
