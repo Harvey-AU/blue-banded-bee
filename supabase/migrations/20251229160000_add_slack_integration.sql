@@ -1,13 +1,9 @@
 -- Slack Integration with Supabase Vault
 -- Single consolidated migration for proper ordering
+-- Note: Vault extension is enabled by 20251229155959_enable_vault_extension.sql
 
 -- ============================================================================
--- 1. Enable Vault extension
--- ============================================================================
-CREATE EXTENSION IF NOT EXISTS supabase_vault WITH SCHEMA vault;
-
--- ============================================================================
--- 2. Create utility function for updated_at triggers
+-- 1. Create utility function for updated_at triggers
 -- ============================================================================
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$
