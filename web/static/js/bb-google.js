@@ -524,6 +524,16 @@ function handleGoogleOAuthCallback() {
   const googleError = params.get("google_error");
   const gaProperties = params.get("ga_properties");
 
+  // Debug: log what we received
+  if (gaProperties || googleConnected || googleError) {
+    console.log("[GA OAuth] Callback params:", {
+      hasProperties: !!gaProperties,
+      propertiesLength: gaProperties?.length,
+      connected: googleConnected,
+      error: googleError,
+    });
+  }
+
   if (googleConnected) {
     // Clean up URL
     const url = new URL(window.location.href);

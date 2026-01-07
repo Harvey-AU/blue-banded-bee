@@ -217,7 +217,9 @@ func (h *Handler) HandleGoogleOAuthCallback(w http.ResponseWriter, r *http.Reque
 	params.Set("ga_refresh_token", tokenResp.RefreshToken)
 	params.Set("ga_access_token", tokenResp.AccessToken)
 
-	http.Redirect(w, r, getDashboardURL()+"?"+params.Encode(), http.StatusSeeOther)
+	redirectURL := getDashboardURL() + "?" + params.Encode()
+	logger.Info().Int("property_count", len(properties)).Int("url_length", len(redirectURL)).Msg("Redirecting with GA4 properties")
+	http.Redirect(w, r, redirectURL, http.StatusSeeOther)
 }
 
 // SaveGoogleProperty saves the selected GA4 property
