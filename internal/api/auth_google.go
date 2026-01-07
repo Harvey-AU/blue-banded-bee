@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Harvey-AU/blue-banded-bee/internal/auth"
@@ -17,6 +18,73 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
+
+// Pending OAuth sessions - stores properties and tokens temporarily after OAuth callback
+// Key is session ID, value is PendingGASession
+var (
+	pendingGASessions   = make(map[string]*PendingGASession)
+	pendingGASessionsMu sync.RWMutex
+)
+
+// PendingGASession stores OAuth data temporarily until user selects a property
+type PendingGASession struct {
+	Properties   []GA4Property
+	RefreshToken string
+	AccessToken  string
+	State        string
+	UserID       string
+	Email        string
+	ExpiresAt    time.Time
+}
+
+// storePendingGASession stores a pending session and returns the session ID
+func storePendingGASession(session *PendingGASession) string {
+	sessionID := uuid.New().String()
+	session.ExpiresAt = time.Now().Add(10 * time.Minute)
+
+	pendingGASessionsMu.Lock()
+	pendingGASessions[sessionID] = session
+	pendingGASessionsMu.Unlock()
+
+	// Cleanup old sessions in background
+	go cleanupExpiredGASessions()
+
+	return sessionID
+}
+
+// getPendingGASession retrieves and removes a pending session
+func getPendingGASession(sessionID string) *PendingGASession {
+	pendingGASessionsMu.Lock()
+	defer pendingGASessionsMu.Unlock()
+
+	session, ok := pendingGASessions[sessionID]
+	if !ok || time.Now().After(session.ExpiresAt) {
+		delete(pendingGASessions, sessionID)
+		return nil
+	}
+
+	// Don't delete yet - user might refresh the page
+	return session
+}
+
+// deletePendingGASession removes a pending session after use
+func deletePendingGASession(sessionID string) {
+	pendingGASessionsMu.Lock()
+	delete(pendingGASessions, sessionID)
+	pendingGASessionsMu.Unlock()
+}
+
+func cleanupExpiredGASessions() {
+	pendingGASessionsMu.Lock()
+	defer pendingGASessionsMu.Unlock()
+
+	now := time.Now()
+	for id, session := range pendingGASessions {
+		if now.After(session.ExpiresAt) {
+			delete(pendingGASessions, id)
+		}
+	}
+}
 
 // Google OAuth credentials loaded from environment variables
 func getGoogleClientID() string {
@@ -203,23 +271,23 @@ func (h *Handler) HandleGoogleOAuthCallback(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	// Multiple properties - for now, redirect with property list as JSON in URL
-	// This is janky but works for testing. In production, use a proper session.
-	propertiesJSON, _ := json.Marshal(properties)
-	params := url.Values{}
-	params.Set("ga_properties", string(propertiesJSON))
-	params.Set("ga_state", stateParam)
-	if userInfo != nil {
-		params.Set("ga_user_id", userInfo.ID)
-		params.Set("ga_email", userInfo.Email)
+	// Multiple properties - store in server-side session to avoid URL length limits
+	session := &PendingGASession{
+		Properties:   properties,
+		RefreshToken: tokenResp.RefreshToken,
+		AccessToken:  tokenResp.AccessToken,
+		State:        stateParam,
 	}
-	// Store refresh token temporarily (in production, use encrypted session)
-	params.Set("ga_refresh_token", tokenResp.RefreshToken)
-	params.Set("ga_access_token", tokenResp.AccessToken)
+	if userInfo != nil {
+		session.UserID = userInfo.ID
+		session.Email = userInfo.Email
+	}
+	sessionID := storePendingGASession(session)
 
-	redirectURL := getDashboardURL() + "?" + params.Encode()
-	logger.Info().Int("property_count", len(properties)).Int("url_length", len(redirectURL)).Msg("Redirecting with GA4 properties")
-	http.Redirect(w, r, redirectURL, http.StatusSeeOther)
+	logger.Info().Int("property_count", len(properties)).Str("session_id", sessionID).Msg("Stored GA4 properties in session")
+
+	// Redirect with just the session ID
+	http.Redirect(w, r, getDashboardURL()+"?ga_session="+sessionID, http.StatusSeeOther)
 }
 
 // SaveGoogleProperty saves the selected GA4 property
@@ -362,7 +430,7 @@ func (h *Handler) fetchGoogleUserInfo(ctx context.Context, accessToken string) (
 	return &userInfo, nil
 }
 
-const maxPropertiesForURL = 100 // Limit to avoid URL length issues
+const maxPropertiesForURL = 50 // Limit to avoid URL length issues (each property ~100 chars in JSON)
 
 func (h *Handler) fetchGA4Properties(ctx context.Context, accessToken string) ([]GA4Property, error) {
 	client := &http.Client{Timeout: 30 * time.Second}
@@ -557,6 +625,17 @@ func (h *Handler) GoogleConnectionHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	// Handle pending-session endpoint (get properties from server-side session)
+	if strings.HasPrefix(path, "pending-session/") {
+		sessionID := strings.TrimPrefix(path, "pending-session/")
+		if r.Method == http.MethodGet {
+			h.getPendingSession(w, r, sessionID)
+			return
+		}
+		MethodNotAllowed(w, r)
+		return
+	}
+
 	connectionID := strings.Split(path, "/")[0]
 	if _, err := uuid.Parse(connectionID); err != nil {
 		BadRequest(w, r, "Invalid connection ID format")
@@ -569,6 +648,24 @@ func (h *Handler) GoogleConnectionHandler(w http.ResponseWriter, r *http.Request
 	default:
 		MethodNotAllowed(w, r)
 	}
+}
+
+// getPendingSession returns the pending OAuth session data (properties, tokens)
+func (h *Handler) getPendingSession(w http.ResponseWriter, r *http.Request, sessionID string) {
+	session := getPendingGASession(sessionID)
+	if session == nil {
+		BadRequest(w, r, "Session expired or not found. Please reconnect to Google Analytics.")
+		return
+	}
+
+	WriteSuccess(w, r, map[string]interface{}{
+		"properties":    session.Properties,
+		"state":         session.State,
+		"user_id":       session.UserID,
+		"email":         session.Email,
+		"access_token":  session.AccessToken,
+		"refresh_token": session.RefreshToken,
+	}, "")
 }
 
 // listGoogleConnections lists all Google Analytics connections for the user's organisation

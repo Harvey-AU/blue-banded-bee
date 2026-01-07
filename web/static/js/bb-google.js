@@ -270,14 +270,8 @@ async function saveGoogleProperty(propertyId, propertyName) {
       return;
     }
 
-    // Get the pending OAuth data from URL params
-    const params = new URLSearchParams(window.location.search);
-    const accessToken = params.get("ga_access_token");
-    const refreshToken = params.get("ga_refresh_token");
-    const googleUserId = params.get("ga_user_id");
-    const googleEmail = params.get("ga_email");
-
-    if (!accessToken || !refreshToken) {
+    // Get the pending OAuth data from stored session
+    if (!pendingGASessionData) {
       showGoogleError("OAuth session expired. Please reconnect.");
       hidePropertySelection();
       return;
@@ -292,10 +286,10 @@ async function saveGoogleProperty(propertyId, propertyName) {
       body: JSON.stringify({
         property_id: propertyId,
         property_name: propertyName,
-        access_token: accessToken,
-        refresh_token: refreshToken,
-        google_user_id: googleUserId,
-        google_email: googleEmail,
+        access_token: pendingGASessionData.access_token,
+        refresh_token: pendingGASessionData.refresh_token,
+        google_user_id: pendingGASessionData.user_id,
+        google_email: pendingGASessionData.email,
       }),
     });
 
@@ -304,14 +298,8 @@ async function saveGoogleProperty(propertyId, propertyName) {
       throw new Error(text || `HTTP ${response.status}`);
     }
 
-    // Clean up URL
-    const url = new URL(window.location.href);
-    url.searchParams.delete("ga_access_token");
-    url.searchParams.delete("ga_refresh_token");
-    url.searchParams.delete("ga_user_id");
-    url.searchParams.delete("ga_email");
-    url.searchParams.delete("ga_properties");
-    window.history.replaceState({}, "", url.toString());
+    // Clear stored session data
+    pendingGASessionData = null;
 
     hidePropertySelection();
     showGoogleSuccess("Google Analytics connected successfully!");
@@ -515,24 +503,17 @@ function showGoogleError(message) {
   }
 }
 
+// Store pending session data for property selection
+let pendingGASessionData = null;
+
 /**
  * Handle OAuth callback result checks
  */
-function handleGoogleOAuthCallback() {
+async function handleGoogleOAuthCallback() {
   const params = new URLSearchParams(window.location.search);
   const googleConnected = params.get("google_connected");
   const googleError = params.get("google_error");
-  const gaProperties = params.get("ga_properties");
-
-  // Debug: log what we received
-  if (gaProperties || googleConnected || googleError) {
-    console.log("[GA OAuth] Callback params:", {
-      hasProperties: !!gaProperties,
-      propertiesLength: gaProperties?.length,
-      connected: googleConnected,
-      error: googleError,
-    });
-  }
+  const gaSession = params.get("ga_session");
 
   if (googleConnected) {
     // Clean up URL
@@ -542,19 +523,59 @@ function handleGoogleOAuthCallback() {
 
     showGoogleSuccess("Google Analytics connected successfully!");
     loadGoogleConnections();
-  } else if (gaProperties) {
-    // Multiple properties returned - need user to select one
+  } else if (gaSession) {
+    // Fetch session data from server
     try {
-      const properties = JSON.parse(decodeURIComponent(gaProperties));
-      // Open integrations modal so user can see the property selection
+      const { data: { session } = {} } =
+        await window.supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) {
+        showGoogleError("Not authenticated. Please sign in.");
+        return;
+      }
+
+      const response = await fetch(
+        `/v1/integrations/google/pending-session/${gaSession}`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(text || `HTTP ${response.status}`);
+      }
+
+      const result = await response.json();
+      const sessionData = result.data;
+
+      if (!sessionData || !sessionData.properties) {
+        throw new Error("Invalid session data");
+      }
+
+      // Store session data for when user selects a property
+      pendingGASessionData = sessionData;
+
+      // Open integrations modal
       const integrationsModal = document.getElementById("integrationsModal");
       if (integrationsModal) {
         integrationsModal.style.display = "flex";
       }
-      showPropertySelection(properties);
+
+      // Show property selection
+      showPropertySelection(sessionData.properties);
+
+      // Clean up URL
+      const url = new URL(window.location.href);
+      url.searchParams.delete("ga_session");
+      window.history.replaceState({}, "", url.toString());
     } catch (e) {
-      console.error("Failed to parse properties:", e);
-      showGoogleError("Failed to load properties. Please try again.");
+      console.error("Failed to load session:", e);
+      showGoogleError("Session expired. Please reconnect to Google Analytics.");
+      // Clean up URL
+      const url = new URL(window.location.href);
+      url.searchParams.delete("ga_session");
+      window.history.replaceState({}, "", url.toString());
     }
   } else if (googleError) {
     showGoogleError(`Failed to connect Google Analytics: ${googleError}`);
