@@ -2794,22 +2794,64 @@ func (wp *WorkerPool) promoteWaitingTasksWithQuota(ctx context.Context) error {
 		return err
 	}
 
-	// Promote waiting tasks for each job
-	promotedCount := 0
+	// Promote waiting tasks for each job (keep promoting until quota/concurrency exhausted)
+	totalPromoted := 0
 	for _, jobID := range jobIDs {
-		err := wp.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
-			_, err := tx.ExecContext(ctx, `SELECT promote_waiting_task_for_job($1)`, jobID)
-			return err
-		})
-		if err != nil {
-			log.Warn().Err(err).Str("job_id", jobID).Msg("Failed to promote waiting task for job")
-			continue
+		jobPromoted := 0
+		// Keep calling promote until it stops promoting (quota exhausted or no more waiting)
+		for {
+			var promoted bool
+			err := wp.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
+				// Check if a task was actually promoted by looking for newly pending tasks
+				var taskID *string
+				err := tx.QueryRowContext(ctx, `
+					WITH promoted AS (
+						UPDATE tasks
+						SET status = 'pending'
+						WHERE id = (
+							SELECT t.id
+							FROM tasks t
+							INNER JOIN jobs j ON t.job_id = j.id
+							WHERE t.job_id = $1
+							  AND t.status = 'waiting'
+							  AND j.status = 'running'
+							  AND (j.concurrency IS NULL OR j.concurrency = 0 OR j.running_tasks + j.pending_tasks < j.concurrency)
+							  AND (j.organisation_id IS NULL OR get_daily_quota_remaining(j.organisation_id) > 0)
+							ORDER BY t.priority_score DESC, t.created_at ASC
+							LIMIT 1
+							FOR UPDATE OF t SKIP LOCKED
+						)
+						RETURNING id
+					)
+					SELECT id FROM promoted
+				`, jobID).Scan(&taskID)
+				if err == sql.ErrNoRows || taskID == nil {
+					promoted = false
+					return nil
+				}
+				if err != nil {
+					return err
+				}
+				promoted = true
+				return nil
+			})
+			if err != nil {
+				log.Warn().Err(err).Str("job_id", jobID).Msg("Failed to promote waiting task for job")
+				break
+			}
+			if !promoted {
+				break // No more tasks to promote for this job
+			}
+			jobPromoted++
+			totalPromoted++
 		}
-		promotedCount++
+		if jobPromoted > 0 {
+			log.Debug().Str("job_id", jobID).Int("promoted", jobPromoted).Msg("Promoted waiting tasks for job")
+		}
 	}
 
-	if promotedCount > 0 {
-		log.Info().Int("jobs_promoted", promotedCount).Msg("Promoted waiting tasks after quota became available")
+	if totalPromoted > 0 {
+		log.Info().Int("total_promoted", totalPromoted).Int("jobs", len(jobIDs)).Msg("Promoted waiting tasks after quota became available")
 	}
 
 	return nil
