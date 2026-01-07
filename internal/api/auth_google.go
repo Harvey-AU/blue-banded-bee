@@ -67,7 +67,6 @@ func getPendingGASession(sessionID string) *PendingGASession {
 	return session
 }
 
-
 func cleanupExpiredGASessions() {
 	pendingGASessionsMu.Lock()
 	defer pendingGASessionsMu.Unlock()
