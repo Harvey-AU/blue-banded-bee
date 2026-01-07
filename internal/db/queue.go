@@ -1157,9 +1157,14 @@ func calculateAvailableSlots(
 	}
 
 	// Cap available slots by daily quota remaining (if org has quota system)
-	if quotaRemaining.Valid && quotaRemaining.Int64 >= 0 {
-		if int(quotaRemaining.Int64) < slots {
-			slots = int(quotaRemaining.Int64)
+	if quotaRemaining.Valid {
+		remaining := int(quotaRemaining.Int64)
+		if remaining <= 0 {
+			// Quota exhausted or exceeded - no new pending tasks
+			slots = 0
+			quotaLimited = true
+		} else if remaining < slots {
+			slots = remaining
 			quotaLimited = true
 		}
 	}
@@ -1180,7 +1185,6 @@ func (q *DbQueue) EnqueueURLs(ctx context.Context, jobID string, pages []Page, s
 		}
 
 		// Get job's max_pages, concurrency, domain, org, and current task counts
-		// Lock both job AND org rows to prevent concurrent quota races
 		var cfg enqueueJobConfig
 		err := tx.QueryRowContext(ctx, `
 			SELECT j.max_pages, j.concurrency, j.running_tasks, j.pending_tasks, d.name,
@@ -1192,9 +1196,8 @@ func (q *DbQueue) EnqueueURLs(ctx context.Context, jobID string, pages []Page, s
 				   END
 			FROM jobs j
 			LEFT JOIN domains d ON j.domain_id = d.id
-			LEFT JOIN organisations o ON j.organisation_id = o.id
 			WHERE j.id = $1
-			FOR UPDATE OF j, o
+			FOR UPDATE OF j
 		`, jobID).Scan(&cfg.maxPages, &cfg.concurrency, &cfg.runningTasks, &cfg.pendingTaskCount,
 			&cfg.domainName, &cfg.currentTaskCount, &cfg.orgID, &cfg.quotaRemaining)
 		if err != nil {
