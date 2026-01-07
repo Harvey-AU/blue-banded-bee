@@ -396,8 +396,18 @@ function filterGoogleProperties(query) {
  * @param {Array} properties - Array of GA4 properties to choose from
  */
 function showPropertySelection(properties) {
+  console.log(
+    "[GA OAuth] showPropertySelection called with",
+    properties?.length,
+    "properties"
+  );
   const selectionUI = document.getElementById("googlePropertySelection");
   const list = document.getElementById("googlePropertyList");
+
+  console.log("[GA OAuth] DOM elements found:", {
+    selectionUI: !!selectionUI,
+    list: !!list,
+  });
 
   if (!selectionUI || !list) {
     console.error("Property selection UI not found");
@@ -515,6 +525,12 @@ async function handleGoogleOAuthCallback() {
   const googleError = params.get("google_error");
   const gaSession = params.get("ga_session");
 
+  console.log("[GA OAuth] Checking URL params:", {
+    googleConnected,
+    googleError,
+    gaSession,
+  });
+
   if (googleConnected) {
     // Clean up URL
     const url = new URL(window.location.href);
@@ -525,15 +541,18 @@ async function handleGoogleOAuthCallback() {
     loadGoogleConnections();
   } else if (gaSession) {
     // Fetch session data from server
+    console.log("[GA OAuth] Found ga_session, fetching from server...");
     try {
       const { data: { session } = {} } =
         await window.supabase.auth.getSession();
       const token = session?.access_token;
+      console.log("[GA OAuth] Supabase token:", token ? "present" : "missing");
       if (!token) {
         showGoogleError("Not authenticated. Please sign in.");
         return;
       }
 
+      console.log("[GA OAuth] Fetching pending session:", gaSession);
       const response = await fetch(
         `/v1/integrations/google/pending-session/${gaSession}`,
         {
@@ -541,6 +560,7 @@ async function handleGoogleOAuthCallback() {
         }
       );
 
+      console.log("[GA OAuth] Response status:", response.status);
       if (!response.ok) {
         const text = await response.text();
         throw new Error(text || `HTTP ${response.status}`);
@@ -548,6 +568,11 @@ async function handleGoogleOAuthCallback() {
 
       const result = await response.json();
       const sessionData = result.data;
+      console.log("[GA OAuth] Session data received:", {
+        hasProperties: !!sessionData?.properties,
+        propertyCount: sessionData?.properties?.length,
+        email: sessionData?.email,
+      });
 
       if (!sessionData || !sessionData.properties) {
         throw new Error("Invalid session data");
@@ -558,11 +583,17 @@ async function handleGoogleOAuthCallback() {
 
       // Open notifications modal (contains Google Analytics section)
       const notificationsModal = document.getElementById("notificationsModal");
+      console.log("[GA OAuth] Opening modal:", !!notificationsModal);
       if (notificationsModal) {
         notificationsModal.classList.add("show");
       }
 
       // Show property selection
+      console.log(
+        "[GA OAuth] Calling showPropertySelection with",
+        sessionData.properties.length,
+        "properties"
+      );
       showPropertySelection(sessionData.properties);
 
       // Clean up URL
