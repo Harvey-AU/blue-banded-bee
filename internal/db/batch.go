@@ -459,6 +459,11 @@ func (bm *BatchManager) flushTaskUpdates(ctx context.Context, updates []*TaskUpd
 			}
 		}
 
+		// Increment daily usage FIRST so quota check sees accurate values
+		if len(completedTasks) > 0 || len(failedTasks) > 0 {
+			incrementDailyUsageForTasks(txCtx, tx, completedTasks, failedTasks)
+		}
+
 		// Promote waiting→pending for jobs that freed capacity
 		// Completed/failed/skipped tasks all free up job slots
 		jobIDsToPromote := make(map[string]bool)
@@ -491,11 +496,6 @@ func (bm *BatchManager) flushTaskUpdates(ctx context.Context, updates []*TaskUpd
 			log.Debug().
 				Int("jobs_promoted", promotedCount).
 				Msg("Promoted waiting tasks to pending")
-		}
-
-		// Increment daily usage for completed+failed tasks (actual work done)
-		if len(completedTasks) > 0 || len(failedTasks) > 0 {
-			incrementDailyUsageForTasks(txCtx, tx, completedTasks, failedTasks)
 		}
 
 		return nil
