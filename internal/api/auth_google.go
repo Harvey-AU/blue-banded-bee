@@ -762,6 +762,10 @@ func (h *Handler) GoogleConnectionHandler(w http.ResponseWriter, r *http.Request
 		// Format: pending-session/{sessionID}/accounts/{accountID}/properties
 		if len(parts) >= 4 && parts[1] == "accounts" && parts[3] == "properties" {
 			accountID := parts[2]
+			// URL-decode the account ID (it may contain slashes like "accounts/123456")
+			if decoded, err := url.PathUnescape(accountID); err == nil {
+				accountID = decoded
+			}
 			if r.Method == http.MethodGet {
 				h.fetchAccountProperties(w, r, sessionID, accountID)
 				return
