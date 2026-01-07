@@ -67,12 +67,6 @@ func getPendingGASession(sessionID string) *PendingGASession {
 	return session
 }
 
-// deletePendingGASession removes a pending session after use
-func deletePendingGASession(sessionID string) {
-	pendingGASessionsMu.Lock()
-	delete(pendingGASessions, sessionID)
-	pendingGASessionsMu.Unlock()
-}
 
 func cleanupExpiredGASessions() {
 	pendingGASessionsMu.Lock()
