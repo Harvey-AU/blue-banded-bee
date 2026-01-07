@@ -599,6 +599,7 @@ func (wp *WorkerPool) Start(ctx context.Context) {
 
 	wp.StartTaskMonitor(ctx)
 	wp.StartCleanupMonitor(ctx)
+	wp.StartQuotaPromotionMonitor(ctx)
 	wp.startRunningTaskReleaseLoop(ctx)
 
 	// Start orphaned task cleanup loop
@@ -2732,6 +2733,86 @@ func (wp *WorkerPool) StartCleanupMonitor(ctx context.Context) {
 		}
 	}()
 	log.Info().Msg("Job cleanup monitor started")
+}
+
+// StartQuotaPromotionMonitor checks for waiting tasks that can be promoted when quota becomes available
+func (wp *WorkerPool) StartQuotaPromotionMonitor(ctx context.Context) {
+	wp.wg.Add(1)
+	go func() {
+		defer wp.wg.Done()
+		// Check every 30 seconds for waiting tasks that can now be promoted
+		ticker := time.NewTicker(30 * time.Second)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-wp.stopCh:
+				return
+			case <-ticker.C:
+				if err := wp.promoteWaitingTasksWithQuota(ctx); err != nil {
+					log.Error().Err(err).Msg("Failed to promote waiting tasks")
+				}
+			}
+		}
+	}()
+	log.Info().Msg("Quota promotion monitor started")
+}
+
+// promoteWaitingTasksWithQuota finds jobs with waiting tasks where quota is now available
+func (wp *WorkerPool) promoteWaitingTasksWithQuota(ctx context.Context) error {
+	var jobIDs []string
+
+	// Find jobs with waiting tasks that have quota available
+	err := wp.dbQueue.ExecuteMaintenance(ctx, func(tx *sql.Tx) error {
+		rows, err := tx.QueryContext(ctx, `
+			SELECT DISTINCT j.id
+			FROM jobs j
+			JOIN tasks t ON t.job_id = j.id
+			WHERE t.status = 'waiting'
+			  AND j.status = 'running'
+			  AND j.organisation_id IS NOT NULL
+			  AND get_daily_quota_remaining(j.organisation_id) > 0
+		`)
+		if err != nil {
+			return fmt.Errorf("failed to find jobs with promotable tasks: %w", err)
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			var jobID string
+			if err := rows.Scan(&jobID); err != nil {
+				return fmt.Errorf("failed to scan job ID: %w", err)
+			}
+			jobIDs = append(jobIDs, jobID)
+		}
+
+		return rows.Err()
+	})
+	if err != nil {
+		return err
+	}
+
+	// Promote waiting tasks for each job
+	promotedCount := 0
+	for _, jobID := range jobIDs {
+		err := wp.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
+			_, err := tx.ExecContext(ctx, `SELECT promote_waiting_task_for_job($1)`, jobID)
+			return err
+		})
+		if err != nil {
+			log.Warn().Err(err).Str("job_id", jobID).Msg("Failed to promote waiting task for job")
+			continue
+		}
+		promotedCount++
+	}
+
+	if promotedCount > 0 {
+		log.Info().Int("jobs_promoted", promotedCount).Msg("Promoted waiting tasks after quota became available")
+	}
+
+	return nil
 }
 
 // CleanupStuckJobs finds and fixes jobs that are stuck in pending/running state
