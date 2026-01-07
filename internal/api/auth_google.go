@@ -651,8 +651,9 @@ func (h *Handler) fetchGA4Accounts(ctx context.Context, accessToken string) ([]G
 }
 
 func (h *Handler) fetchPropertiesForAccount(ctx context.Context, client *http.Client, accessToken, accountName string) ([]GA4Property, error) {
-	url := fmt.Sprintf("https://analyticsadmin.googleapis.com/v1beta/properties?filter=parent:%s", accountName)
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	// URL-encode the filter value (accountName contains slash like "accounts/123456")
+	apiURL := fmt.Sprintf("https://analyticsadmin.googleapis.com/v1beta/properties?filter=parent:%s", url.QueryEscape(accountName))
+	req, err := http.NewRequestWithContext(ctx, "GET", apiURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create properties request: %w", err)
 	}
