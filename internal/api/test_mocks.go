@@ -437,6 +437,11 @@ func (m *MockDBClient) DeleteGoogleConnection(ctx context.Context, connectionID,
 	return args.Error(0)
 }
 
+func (m *MockDBClient) UpdateGoogleConnectionStatus(ctx context.Context, connectionID, organisationID, status string) error {
+	args := m.Called(ctx, connectionID, organisationID, status)
+	return args.Error(0)
+}
+
 func (m *MockDBClient) StoreGoogleToken(ctx context.Context, connectionID, refreshToken string) error {
 	args := m.Called(ctx, connectionID, refreshToken)
 	return args.Error(0)

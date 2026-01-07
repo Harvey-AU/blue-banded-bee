@@ -15,8 +15,6 @@ import (
 	"github.com/Harvey-AU/blue-banded-bee/internal/auth"
 	"github.com/Harvey-AU/blue-banded-bee/internal/db"
 	"github.com/google/uuid"
-	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 )
 
 // Pending OAuth sessions - stores properties and tokens temporarily after OAuth callback
@@ -26,14 +24,16 @@ var (
 	pendingGASessionsMu sync.RWMutex
 )
 
-// PendingGASession stores OAuth data temporarily until user selects a property
+// PendingGASession stores OAuth data temporarily until user completes account/property selection
 type PendingGASession struct {
-	Properties   []GA4Property
+	Accounts     []GA4Account  // Accounts fetched during OAuth
+	Properties   []GA4Property // Properties fetched when account selected (optional, for backwards compat)
 	RefreshToken string
 	AccessToken  string
 	State        string
 	UserID       string
 	Email        string
+	OrgID        string // Organisation ID from OAuth state
 	ExpiresAt    time.Time
 }
 
@@ -237,49 +237,52 @@ func (h *Handler) HandleGoogleOAuthCallback(w http.ResponseWriter, r *http.Reque
 		logger.Warn().Err(err).Msg("Failed to fetch Google user info")
 	}
 
-	// Fetch GA4 properties
-	properties, err := h.fetchGA4Properties(r.Context(), tokenResp.AccessToken)
+	// Fetch GA4 accounts (fast - single API call)
+	accounts, err := h.fetchGA4Accounts(r.Context(), tokenResp.AccessToken)
 	if err != nil {
-		logger.Error().Err(err).Msg("Failed to fetch GA4 properties")
-		h.redirectToDashboardWithError(w, r, "Google", "Failed to fetch Google Analytics properties. Ensure GA4 is set up.")
+		logger.Error().Err(err).Msg("Failed to fetch GA4 accounts")
+		h.redirectToDashboardWithError(w, r, "Google", "Failed to fetch Google Analytics accounts. Ensure GA4 is set up.")
 		return
 	}
 
-	if len(properties) == 0 {
-		h.redirectToDashboardWithError(w, r, "Google", "No Google Analytics 4 properties found. Please set up GA4 first.")
+	if len(accounts) == 0 {
+		h.redirectToDashboardWithError(w, r, "Google", "No Google Analytics accounts found. Please set up GA4 first.")
 		return
 	}
 
-	// For a simple implementation, if there's only one property, auto-select it
-	// Otherwise, redirect to a property selection page
-	if len(properties) == 1 {
-		// Auto-select the single property
-		err = h.saveGoogleConnection(r.Context(), state, tokenResp, userInfo, properties[0])
-		if err != nil {
-			logger.Error().Err(err).Msg("Failed to save Google connection")
-			h.redirectToDashboardWithError(w, r, "Google", "Failed to save connection")
-			return
-		}
-		h.redirectToDashboardWithSuccess(w, r, "Google", properties[0].DisplayName, "")
-		return
-	}
-
-	// Multiple properties - store in server-side session to avoid URL length limits
+	// Store session with accounts and tokens
 	session := &PendingGASession{
-		Properties:   properties,
+		Accounts:     accounts,
 		RefreshToken: tokenResp.RefreshToken,
 		AccessToken:  tokenResp.AccessToken,
 		State:        stateParam,
+		OrgID:        state.OrgID,
 	}
 	if userInfo != nil {
 		session.UserID = userInfo.ID
 		session.Email = userInfo.Email
 	}
+
+	// If single account, auto-fetch properties for it
+	if len(accounts) == 1 {
+		properties, err := h.fetchPropertiesForAccount(r.Context(), &http.Client{Timeout: 30 * time.Second}, tokenResp.AccessToken, accounts[0].AccountID)
+		if err != nil {
+			logger.Error().Err(err).Msg("Failed to fetch properties for single account")
+			h.redirectToDashboardWithError(w, r, "Google", "Failed to fetch properties for account")
+			return
+		}
+		session.Properties = properties
+	}
+
 	sessionID := storePendingGASession(session)
 
-	logger.Info().Int("property_count", len(properties)).Str("session_id", sessionID).Msg("Stored GA4 properties in session")
+	logger.Info().
+		Int("account_count", len(accounts)).
+		Int("property_count", len(session.Properties)).
+		Str("session_id", sessionID).
+		Msg("Stored GA4 session")
 
-	// Redirect with just the session ID
+	// Redirect with session ID
 	http.Redirect(w, r, getDashboardURL()+"?ga_session="+sessionID, http.StatusSeeOther)
 }
 
@@ -369,6 +372,186 @@ func (h *Handler) SaveGoogleProperty(w http.ResponseWriter, r *http.Request) {
 	}, "Google Analytics connected successfully")
 }
 
+// SaveGoogleProperties saves all properties from a session, with specified ones marked as active
+func (h *Handler) SaveGoogleProperties(w http.ResponseWriter, r *http.Request) {
+	logger := loggerWithRequest(r)
+
+	if r.Method != http.MethodPost {
+		MethodNotAllowed(w, r)
+		return
+	}
+
+	userClaims, ok := auth.GetUserFromContext(r.Context())
+	if !ok {
+		Unauthorised(w, r, "User information not found")
+		return
+	}
+
+	user, err := h.DB.GetOrCreateUser(userClaims.UserID, userClaims.Email, nil)
+	if err != nil {
+		logger.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get or create user")
+		InternalError(w, r, err)
+		return
+	}
+
+	orgID := h.DB.GetEffectiveOrganisationID(user)
+	if orgID == "" {
+		BadRequest(w, r, "User must belong to an organisation")
+		return
+	}
+
+	// Parse request body
+	var req struct {
+		SessionID         string   `json:"session_id"`
+		AccountID         string   `json:"account_id"`
+		ActivePropertyIDs []string `json:"active_property_ids"` // Which properties should be active
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		BadRequest(w, r, "Invalid request body")
+		return
+	}
+
+	if req.SessionID == "" {
+		BadRequest(w, r, "Session ID is required")
+		return
+	}
+
+	// Get session data
+	session := getPendingGASession(req.SessionID)
+	if session == nil {
+		BadRequest(w, r, "Session expired or not found. Please reconnect to Google Analytics.")
+		return
+	}
+
+	if len(session.Properties) == 0 {
+		BadRequest(w, r, "No properties in session. Please select an account first.")
+		return
+	}
+
+	// Build set of active property IDs for quick lookup
+	activeSet := make(map[string]bool)
+	for _, pid := range req.ActivePropertyIDs {
+		activeSet[pid] = true
+	}
+
+	// Save all properties as connections
+	now := time.Now().UTC()
+	var savedCount int
+	for _, prop := range session.Properties {
+		status := "inactive"
+		if activeSet[prop.PropertyID] {
+			status = "active"
+		}
+
+		conn := &db.GoogleAnalyticsConnection{
+			ID:               uuid.New().String(),
+			OrganisationID:   orgID,
+			GA4PropertyID:    prop.PropertyID,
+			GA4PropertyName:  prop.DisplayName,
+			GoogleAccountID:  req.AccountID,
+			GoogleUserID:     session.UserID,
+			GoogleEmail:      session.Email,
+			InstallingUserID: userClaims.UserID,
+			Status:           status,
+			CreatedAt:        now,
+			UpdatedAt:        now,
+		}
+
+		if err := h.DB.CreateGoogleConnection(r.Context(), conn); err != nil {
+			logger.Warn().Err(err).Str("property_id", prop.PropertyID).Msg("Failed to save property connection")
+			continue
+		}
+
+		// Store token only for active properties (saves vault space)
+		if status == "active" && session.RefreshToken != "" {
+			if err := h.DB.StoreGoogleToken(r.Context(), conn.ID, session.RefreshToken); err != nil {
+				logger.Warn().Err(err).Str("connection_id", conn.ID).Msg("Failed to store token in vault")
+			}
+		}
+
+		savedCount++
+	}
+
+	// Clean up the session after saving
+	pendingGASessionsMu.Lock()
+	delete(pendingGASessions, req.SessionID)
+	pendingGASessionsMu.Unlock()
+
+	logger.Info().
+		Str("organisation_id", orgID).
+		Int("saved_count", savedCount).
+		Int("active_count", len(req.ActivePropertyIDs)).
+		Msg("Google Analytics properties saved")
+
+	WriteSuccess(w, r, map[string]interface{}{
+		"saved_count":  savedCount,
+		"active_count": len(req.ActivePropertyIDs),
+	}, "Google Analytics properties saved successfully")
+}
+
+// UpdateGooglePropertyStatus updates the status of a Google Analytics connection
+func (h *Handler) UpdateGooglePropertyStatus(w http.ResponseWriter, r *http.Request, connectionID string) {
+	logger := loggerWithRequest(r)
+
+	if r.Method != http.MethodPatch {
+		MethodNotAllowed(w, r)
+		return
+	}
+
+	userClaims, ok := auth.GetUserFromContext(r.Context())
+	if !ok {
+		Unauthorised(w, r, "User information not found")
+		return
+	}
+
+	user, err := h.DB.GetOrCreateUser(userClaims.UserID, userClaims.Email, nil)
+	if err != nil {
+		logger.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get or create user")
+		InternalError(w, r, err)
+		return
+	}
+
+	orgID := h.DB.GetEffectiveOrganisationID(user)
+	if orgID == "" {
+		BadRequest(w, r, "User must belong to an organisation")
+		return
+	}
+
+	// Parse request body
+	var req struct {
+		Status string `json:"status"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		BadRequest(w, r, "Invalid request body")
+		return
+	}
+
+	if req.Status != "active" && req.Status != "inactive" {
+		BadRequest(w, r, "Status must be 'active' or 'inactive'")
+		return
+	}
+
+	if err := h.DB.UpdateGoogleConnectionStatus(r.Context(), connectionID, orgID, req.Status); err != nil {
+		if errors.Is(err, db.ErrGoogleConnectionNotFound) {
+			NotFound(w, r, "Connection not found")
+			return
+		}
+		logger.Error().Err(err).Str("connection_id", connectionID).Msg("Failed to update connection status")
+		InternalError(w, r, err)
+		return
+	}
+
+	logger.Info().
+		Str("connection_id", connectionID).
+		Str("status", req.Status).
+		Msg("Google Analytics connection status updated")
+
+	WriteSuccess(w, r, map[string]string{
+		"connection_id": connectionID,
+		"status":        req.Status,
+	}, "Status updated successfully")
+}
+
 func (h *Handler) exchangeGoogleCode(code string) (*GoogleTokenResponse, error) {
 	values := url.Values{}
 	values.Set("client_id", getGoogleClientID())
@@ -423,12 +606,13 @@ func (h *Handler) fetchGoogleUserInfo(ctx context.Context, accessToken string) (
 	return &userInfo, nil
 }
 
-const maxPropertiesForURL = 50 // Limit to avoid URL length issues (each property ~100 chars in JSON)
+// maxPropertiesForURL removed - no longer needed with server-side sessions
 
-func (h *Handler) fetchGA4Properties(ctx context.Context, accessToken string) ([]GA4Property, error) {
+// fetchGA4Accounts fetches all Google Analytics accounts for the authenticated user
+// This is fast as it's a single API call
+func (h *Handler) fetchGA4Accounts(ctx context.Context, accessToken string) ([]GA4Account, error) {
 	client := &http.Client{Timeout: 30 * time.Second}
 
-	// First, list all accounts
 	req, err := http.NewRequestWithContext(ctx, "GET", "https://analyticsadmin.googleapis.com/v1beta/accounts", nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create accounts request: %w", err)
@@ -455,52 +639,15 @@ func (h *Handler) fetchGA4Properties(ctx context.Context, accessToken string) ([
 		return nil, fmt.Errorf("failed to decode accounts response: %w", err)
 	}
 
-	// Fetch properties for accounts with limited concurrency to avoid rate limits
-	var allProperties []GA4Property
-	const maxConcurrent = 3 // Limit concurrent requests to avoid Google API rate limits
-
-	// Process accounts in batches
-	for i := 0; i < len(accountsResp.Accounts); i += maxConcurrent {
-		end := i + maxConcurrent
-		if end > len(accountsResp.Accounts) {
-			end = len(accountsResp.Accounts)
-		}
-		batch := accountsResp.Accounts[i:end]
-
-		type accountResult struct {
-			properties []GA4Property
-			err        error
-		}
-		results := make(chan accountResult, len(batch))
-
-		for _, account := range batch {
-			go func(acc struct {
-				Name        string `json:"name"`
-				DisplayName string `json:"displayName"`
-			}) {
-				props, err := h.fetchPropertiesForAccount(ctx, client, accessToken, acc.Name)
-				results <- accountResult{properties: props, err: err}
-			}(account)
-		}
-
-		// Collect batch results
-		for range batch {
-			result := <-results
-			if result.err != nil {
-				log.Warn().Err(result.err).Msg("Failed to fetch properties for account")
-				continue
-			}
-			allProperties = append(allProperties, result.properties...)
-		}
+	var accounts []GA4Account
+	for _, acc := range accountsResp.Accounts {
+		accounts = append(accounts, GA4Account{
+			AccountID:   acc.Name, // Keep full format "accounts/123456"
+			DisplayName: acc.DisplayName,
+		})
 	}
 
-	// Limit properties to avoid URL length issues (user can search within these)
-	if len(allProperties) > maxPropertiesForURL {
-		log.Info().Int("total", len(allProperties)).Int("limited_to", maxPropertiesForURL).Msg("Limiting GA4 properties to avoid URL length issues")
-		allProperties = allProperties[:maxPropertiesForURL]
-	}
-
-	return allProperties, nil
+	return accounts, nil
 }
 
 func (h *Handler) fetchPropertiesForAccount(ctx context.Context, client *http.Client, accessToken, accountName string) ([]GA4Property, error) {
@@ -546,40 +693,6 @@ func (h *Handler) fetchPropertiesForAccount(ctx context.Context, client *http.Cl
 	return properties, nil
 }
 
-func (h *Handler) saveGoogleConnection(ctx context.Context, state *OAuthState, tokenResp *GoogleTokenResponse, userInfo *GoogleUserInfo, property GA4Property) error {
-	now := time.Now().UTC()
-	conn := &db.GoogleAnalyticsConnection{
-		ID:               uuid.New().String(),
-		OrganisationID:   state.OrgID,
-		GA4PropertyID:    property.PropertyID,
-		GA4PropertyName:  property.DisplayName,
-		InstallingUserID: state.UserID,
-		CreatedAt:        now,
-		UpdatedAt:        now,
-	}
-
-	if userInfo != nil {
-		conn.GoogleUserID = userInfo.ID
-		conn.GoogleEmail = userInfo.Email
-	}
-
-	if err := h.DB.CreateGoogleConnection(ctx, conn); err != nil {
-		return fmt.Errorf("failed to create connection: %w", err)
-	}
-
-	// Store refresh token in Supabase Vault
-	if err := h.DB.StoreGoogleToken(ctx, conn.ID, tokenResp.RefreshToken); err != nil {
-		return fmt.Errorf("failed to store token: %w", err)
-	}
-
-	zerolog.Ctx(ctx).Info().
-		Str("organisation_id", state.OrgID).
-		Str("ga4_property_id", property.PropertyID).
-		Msg("Google Analytics connection established")
-
-	return nil
-}
-
 // GoogleConnectionResponse represents a Google Analytics connection in API responses
 type GoogleConnectionResponse struct {
 	ID              string `json:"id"`
@@ -619,7 +732,7 @@ func (h *Handler) GoogleConnectionHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Handle save-property endpoint
+	// Handle save-property endpoint (single property - legacy)
 	if path == "save-property" {
 		if r.Method == http.MethodPost {
 			h.SaveGoogleProperty(w, r)
@@ -629,9 +742,35 @@ func (h *Handler) GoogleConnectionHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Handle pending-session endpoint (get properties from server-side session)
+	// Handle save-properties endpoint (bulk save all properties from session)
+	if path == "save-properties" {
+		if r.Method == http.MethodPost {
+			h.SaveGoogleProperties(w, r)
+			return
+		}
+		MethodNotAllowed(w, r)
+		return
+	}
+
+	// Handle pending-session endpoint (get accounts/properties from server-side session)
 	if strings.HasPrefix(path, "pending-session/") {
-		sessionID := strings.TrimPrefix(path, "pending-session/")
+		sessionPath := strings.TrimPrefix(path, "pending-session/")
+		parts := strings.Split(sessionPath, "/")
+		sessionID := parts[0]
+
+		// Check if this is a request for a specific account's properties
+		// Format: pending-session/{sessionID}/accounts/{accountID}/properties
+		if len(parts) >= 4 && parts[1] == "accounts" && parts[3] == "properties" {
+			accountID := parts[2]
+			if r.Method == http.MethodGet {
+				h.fetchAccountProperties(w, r, sessionID, accountID)
+				return
+			}
+			MethodNotAllowed(w, r)
+			return
+		}
+
+		// Default: return session data
 		if r.Method == http.MethodGet {
 			h.getPendingSession(w, r, sessionID)
 			return
@@ -646,15 +785,28 @@ func (h *Handler) GoogleConnectionHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	// Check for /status suffix for PATCH requests
+	pathParts := strings.Split(path, "/")
+	if len(pathParts) >= 2 && pathParts[1] == "status" {
+		if r.Method == http.MethodPatch {
+			h.UpdateGooglePropertyStatus(w, r, connectionID)
+			return
+		}
+		MethodNotAllowed(w, r)
+		return
+	}
+
 	switch r.Method {
 	case http.MethodDelete:
 		h.deleteGoogleConnection(w, r, connectionID)
+	case http.MethodPatch:
+		h.UpdateGooglePropertyStatus(w, r, connectionID)
 	default:
 		MethodNotAllowed(w, r)
 	}
 }
 
-// getPendingSession returns the pending OAuth session data (properties, tokens)
+// getPendingSession returns the pending OAuth session data (accounts, properties, tokens)
 func (h *Handler) getPendingSession(w http.ResponseWriter, r *http.Request, sessionID string) {
 	session := getPendingGASession(sessionID)
 	if session == nil {
@@ -663,12 +815,58 @@ func (h *Handler) getPendingSession(w http.ResponseWriter, r *http.Request, sess
 	}
 
 	WriteSuccess(w, r, map[string]interface{}{
+		"accounts":      session.Accounts,
 		"properties":    session.Properties,
 		"state":         session.State,
 		"user_id":       session.UserID,
 		"email":         session.Email,
 		"access_token":  session.AccessToken,
 		"refresh_token": session.RefreshToken,
+	}, "")
+}
+
+// fetchAccountProperties fetches properties for a specific account in a pending session
+func (h *Handler) fetchAccountProperties(w http.ResponseWriter, r *http.Request, sessionID, accountID string) {
+	logger := loggerWithRequest(r)
+
+	session := getPendingGASession(sessionID)
+	if session == nil {
+		BadRequest(w, r, "Session expired or not found. Please reconnect to Google Analytics.")
+		return
+	}
+
+	// Verify the account is in the session
+	validAccount := false
+	for _, acc := range session.Accounts {
+		if acc.AccountID == accountID {
+			validAccount = true
+			break
+		}
+	}
+	if !validAccount {
+		BadRequest(w, r, "Account not found in session")
+		return
+	}
+
+	// Fetch properties for this account
+	client := &http.Client{Timeout: 30 * time.Second}
+	properties, err := h.fetchPropertiesForAccount(r.Context(), client, session.AccessToken, accountID)
+	if err != nil {
+		logger.Error().Err(err).Str("account_id", accountID).Msg("Failed to fetch properties for account")
+		InternalError(w, r, fmt.Errorf("failed to fetch properties: %w", err))
+		return
+	}
+
+	// Update session with these properties
+	pendingGASessionsMu.Lock()
+	if s, ok := pendingGASessions[sessionID]; ok {
+		s.Properties = properties
+	}
+	pendingGASessionsMu.Unlock()
+
+	WriteSuccess(w, r, map[string]interface{}{
+		"properties": properties,
+		"account_id": accountID,
 	}, "")
 }
 

@@ -22,10 +22,12 @@ type GoogleAnalyticsConnection struct {
 	OrganisationID   string
 	GA4PropertyID    string    // GA4 property ID (e.g., "123456789")
 	GA4PropertyName  string    // Display name of the property
+	GoogleAccountID  string    // GA account ID (e.g., "accounts/123456")
 	GoogleUserID     string    // Google user ID who authorised
 	GoogleEmail      string    // Google email for display
 	VaultSecretName  string    // Name of the secret in Supabase Vault
 	InstallingUserID string    // Our user who installed
+	Status           string    // "active" or "inactive"
 	LastSyncedAt     time.Time // When analytics data was last synced
 	CreatedAt        time.Time
 	UpdatedAt        time.Time
@@ -34,14 +36,20 @@ type GoogleAnalyticsConnection struct {
 // CreateGoogleConnection creates a new Google Analytics connection for an organisation
 // Note: Use StoreGoogleToken after creating the connection to store the refresh token in Vault
 func (db *DB) CreateGoogleConnection(ctx context.Context, conn *GoogleAnalyticsConnection) error {
+	// Default status to inactive if not set
+	if conn.Status == "" {
+		conn.Status = "inactive"
+	}
+
 	query := `
 		INSERT INTO google_analytics_connections (
-			id, organisation_id, ga4_property_id, ga4_property_name, google_user_id, google_email,
-			installing_user_id, created_at, updated_at
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+			id, organisation_id, ga4_property_id, ga4_property_name, google_account_id,
+			google_user_id, google_email, installing_user_id, status, created_at, updated_at
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 		ON CONFLICT (organisation_id, ga4_property_id)
 		DO UPDATE SET
 			ga4_property_name = EXCLUDED.ga4_property_name,
+			google_account_id = EXCLUDED.google_account_id,
 			google_user_id = EXCLUDED.google_user_id,
 			google_email = EXCLUDED.google_email,
 			installing_user_id = EXCLUDED.installing_user_id,
@@ -51,8 +59,8 @@ func (db *DB) CreateGoogleConnection(ctx context.Context, conn *GoogleAnalyticsC
 
 	err := db.client.QueryRowContext(ctx, query,
 		conn.ID, conn.OrganisationID, conn.GA4PropertyID, conn.GA4PropertyName,
-		conn.GoogleUserID, conn.GoogleEmail, conn.InstallingUserID,
-		conn.CreatedAt, conn.UpdatedAt,
+		conn.GoogleAccountID, conn.GoogleUserID, conn.GoogleEmail, conn.InstallingUserID,
+		conn.Status, conn.CreatedAt, conn.UpdatedAt,
 	).Scan(&conn.ID)
 	if err != nil {
 		log.Error().Err(err).Str("organisation_id", conn.OrganisationID).Str("ga4_property_id", conn.GA4PropertyID).Msg("Failed to create Google Analytics connection")
@@ -96,21 +104,21 @@ func (db *DB) GetGoogleToken(ctx context.Context, connectionID string) (string, 
 // GetGoogleConnection retrieves a Google Analytics connection by ID
 func (db *DB) GetGoogleConnection(ctx context.Context, connectionID string) (*GoogleAnalyticsConnection, error) {
 	conn := &GoogleAnalyticsConnection{}
-	var installingUserID, vaultSecretName, ga4PropertyID, ga4PropertyName, googleUserID, googleEmail sql.NullString
+	var installingUserID, vaultSecretName, ga4PropertyID, ga4PropertyName, googleAccountID, googleUserID, googleEmail, status sql.NullString
 	var lastSyncedAt sql.NullTime
 
 	query := `
-		SELECT id, organisation_id, ga4_property_id, ga4_property_name, google_user_id, google_email,
-		       vault_secret_name, installing_user_id, last_synced_at,
-		       created_at, updated_at
+		SELECT id, organisation_id, ga4_property_id, ga4_property_name, google_account_id,
+		       google_user_id, google_email, vault_secret_name, installing_user_id, status,
+		       last_synced_at, created_at, updated_at
 		FROM google_analytics_connections
 		WHERE id = $1
 	`
 
 	err := db.client.QueryRowContext(ctx, query, connectionID).Scan(
-		&conn.ID, &conn.OrganisationID, &ga4PropertyID, &ga4PropertyName, &googleUserID, &googleEmail,
-		&vaultSecretName, &installingUserID, &lastSyncedAt,
-		&conn.CreatedAt, &conn.UpdatedAt,
+		&conn.ID, &conn.OrganisationID, &ga4PropertyID, &ga4PropertyName, &googleAccountID,
+		&googleUserID, &googleEmail, &vaultSecretName, &installingUserID, &status,
+		&lastSyncedAt, &conn.CreatedAt, &conn.UpdatedAt,
 	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -126,6 +134,9 @@ func (db *DB) GetGoogleConnection(ctx context.Context, connectionID string) (*Go
 	if ga4PropertyName.Valid {
 		conn.GA4PropertyName = ga4PropertyName.String
 	}
+	if googleAccountID.Valid {
+		conn.GoogleAccountID = googleAccountID.String
+	}
 	if googleUserID.Valid {
 		conn.GoogleUserID = googleUserID.String
 	}
@@ -138,6 +149,9 @@ func (db *DB) GetGoogleConnection(ctx context.Context, connectionID string) (*Go
 	if installingUserID.Valid {
 		conn.InstallingUserID = installingUserID.String
 	}
+	if status.Valid {
+		conn.Status = status.String
+	}
 	if lastSyncedAt.Valid {
 		conn.LastSyncedAt = lastSyncedAt.Time
 	}
@@ -148,12 +162,12 @@ func (db *DB) GetGoogleConnection(ctx context.Context, connectionID string) (*Go
 // ListGoogleConnections lists all Google Analytics connections for an organisation
 func (db *DB) ListGoogleConnections(ctx context.Context, organisationID string) ([]*GoogleAnalyticsConnection, error) {
 	query := `
-		SELECT id, organisation_id, ga4_property_id, ga4_property_name, google_user_id, google_email,
-		       vault_secret_name, installing_user_id, last_synced_at,
-		       created_at, updated_at
+		SELECT id, organisation_id, ga4_property_id, ga4_property_name, google_account_id,
+		       google_user_id, google_email, vault_secret_name, installing_user_id, status,
+		       last_synced_at, created_at, updated_at
 		FROM google_analytics_connections
 		WHERE organisation_id = $1
-		ORDER BY created_at DESC
+		ORDER BY status DESC, ga4_property_name ASC
 	`
 
 	rows, err := db.client.QueryContext(ctx, query, organisationID)
@@ -166,13 +180,13 @@ func (db *DB) ListGoogleConnections(ctx context.Context, organisationID string) 
 	var connections []*GoogleAnalyticsConnection
 	for rows.Next() {
 		conn := &GoogleAnalyticsConnection{}
-		var installingUserID, vaultSecretName, ga4PropertyID, ga4PropertyName, googleUserID, googleEmail sql.NullString
+		var installingUserID, vaultSecretName, ga4PropertyID, ga4PropertyName, googleAccountID, googleUserID, googleEmail, status sql.NullString
 		var lastSyncedAt sql.NullTime
 
 		err := rows.Scan(
-			&conn.ID, &conn.OrganisationID, &ga4PropertyID, &ga4PropertyName, &googleUserID, &googleEmail,
-			&vaultSecretName, &installingUserID, &lastSyncedAt,
-			&conn.CreatedAt, &conn.UpdatedAt,
+			&conn.ID, &conn.OrganisationID, &ga4PropertyID, &ga4PropertyName, &googleAccountID,
+			&googleUserID, &googleEmail, &vaultSecretName, &installingUserID, &status,
+			&lastSyncedAt, &conn.CreatedAt, &conn.UpdatedAt,
 		)
 		if err != nil {
 			log.Error().Err(err).Str("organisation_id", organisationID).Msg("Failed to scan Google Analytics connection row")
@@ -185,6 +199,9 @@ func (db *DB) ListGoogleConnections(ctx context.Context, organisationID string) 
 		if ga4PropertyName.Valid {
 			conn.GA4PropertyName = ga4PropertyName.String
 		}
+		if googleAccountID.Valid {
+			conn.GoogleAccountID = googleAccountID.String
+		}
 		if googleUserID.Valid {
 			conn.GoogleUserID = googleUserID.String
 		}
@@ -196,6 +213,9 @@ func (db *DB) ListGoogleConnections(ctx context.Context, organisationID string) 
 		}
 		if installingUserID.Valid {
 			conn.InstallingUserID = installingUserID.String
+		}
+		if status.Valid {
+			conn.Status = status.String
 		}
 		if lastSyncedAt.Valid {
 			conn.LastSyncedAt = lastSyncedAt.Time
@@ -222,6 +242,36 @@ func (db *DB) DeleteGoogleConnection(ctx context.Context, connectionID, organisa
 	if err != nil {
 		log.Error().Err(err).Str("connection_id", connectionID).Msg("Failed to delete Google Analytics connection")
 		return fmt.Errorf("failed to delete Google Analytics connection: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		return ErrGoogleConnectionNotFound
+	}
+
+	return nil
+}
+
+// UpdateGoogleConnectionStatus updates the status of a Google Analytics connection
+func (db *DB) UpdateGoogleConnectionStatus(ctx context.Context, connectionID, organisationID, status string) error {
+	if status != "active" && status != "inactive" {
+		return fmt.Errorf("invalid status: must be 'active' or 'inactive'")
+	}
+
+	query := `
+		UPDATE google_analytics_connections
+		SET status = $1, updated_at = NOW()
+		WHERE id = $2 AND organisation_id = $3
+	`
+
+	result, err := db.client.ExecContext(ctx, query, status, connectionID, organisationID)
+	if err != nil {
+		log.Error().Err(err).Str("connection_id", connectionID).Str("status", status).Msg("Failed to update Google Analytics connection status")
+		return fmt.Errorf("failed to update Google Analytics connection status: %w", err)
 	}
 
 	rowsAffected, err := result.RowsAffected()

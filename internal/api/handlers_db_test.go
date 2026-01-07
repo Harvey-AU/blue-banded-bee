@@ -351,6 +351,10 @@ func (m *MockDBWithRealDB) DeleteGoogleConnection(ctx context.Context, connectio
 	return nil
 }
 
+func (m *MockDBWithRealDB) UpdateGoogleConnectionStatus(ctx context.Context, connectionID, organisationID, status string) error {
+	return nil
+}
+
 func (m *MockDBWithRealDB) StoreGoogleToken(ctx context.Context, connectionID, token string) error {
 	return nil
 }

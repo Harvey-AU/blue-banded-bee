@@ -155,6 +155,7 @@ type DBClient interface {
 	GetGoogleConnection(ctx context.Context, connectionID string) (*db.GoogleAnalyticsConnection, error)
 	ListGoogleConnections(ctx context.Context, organisationID string) ([]*db.GoogleAnalyticsConnection, error)
 	DeleteGoogleConnection(ctx context.Context, connectionID, organisationID string) error
+	UpdateGoogleConnectionStatus(ctx context.Context, connectionID, organisationID, status string) error
 	StoreGoogleToken(ctx context.Context, connectionID, refreshToken string) error
 	GetGoogleToken(ctx context.Context, connectionID string) (string, error)
 	// Platform integration mappings

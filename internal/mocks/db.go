@@ -527,6 +527,11 @@ func (m *MockDB) DeleteGoogleConnection(ctx context.Context, connectionID, organ
 	return args.Error(0)
 }
 
+func (m *MockDB) UpdateGoogleConnectionStatus(ctx context.Context, connectionID, organisationID, status string) error {
+	args := m.Called(ctx, connectionID, organisationID, status)
+	return args.Error(0)
+}
+
 func (m *MockDB) StoreGoogleToken(ctx context.Context, connectionID, token string) error {
 	args := m.Called(ctx, connectionID, token)
 	return args.Error(0)
