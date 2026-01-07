@@ -462,32 +462,43 @@ func (h *Handler) fetchGA4Properties(ctx context.Context, accessToken string) ([
 		return nil, fmt.Errorf("failed to decode accounts response: %w", err)
 	}
 
-	// Fetch properties for all accounts concurrently
-	type accountResult struct {
-		properties []GA4Property
-		err        error
-	}
-	results := make(chan accountResult, len(accountsResp.Accounts))
-
-	for _, account := range accountsResp.Accounts {
-		go func(acc struct {
-			Name        string `json:"name"`
-			DisplayName string `json:"displayName"`
-		}) {
-			props, err := h.fetchPropertiesForAccount(ctx, client, accessToken, acc.Name)
-			results <- accountResult{properties: props, err: err}
-		}(account)
-	}
-
-	// Collect results
+	// Fetch properties for accounts with limited concurrency to avoid rate limits
 	var allProperties []GA4Property
-	for range accountsResp.Accounts {
-		result := <-results
-		if result.err != nil {
-			log.Warn().Err(result.err).Msg("Failed to fetch properties for account")
-			continue
+	const maxConcurrent = 3 // Limit concurrent requests to avoid Google API rate limits
+
+	// Process accounts in batches
+	for i := 0; i < len(accountsResp.Accounts); i += maxConcurrent {
+		end := i + maxConcurrent
+		if end > len(accountsResp.Accounts) {
+			end = len(accountsResp.Accounts)
 		}
-		allProperties = append(allProperties, result.properties...)
+		batch := accountsResp.Accounts[i:end]
+
+		type accountResult struct {
+			properties []GA4Property
+			err        error
+		}
+		results := make(chan accountResult, len(batch))
+
+		for _, account := range batch {
+			go func(acc struct {
+				Name        string `json:"name"`
+				DisplayName string `json:"displayName"`
+			}) {
+				props, err := h.fetchPropertiesForAccount(ctx, client, accessToken, acc.Name)
+				results <- accountResult{properties: props, err: err}
+			}(account)
+		}
+
+		// Collect batch results
+		for range batch {
+			result := <-results
+			if result.err != nil {
+				log.Warn().Err(result.err).Msg("Failed to fetch properties for account")
+				continue
+			}
+			allProperties = append(allProperties, result.properties...)
+		}
 	}
 
 	// Limit properties to avoid URL length issues (user can search within these)
