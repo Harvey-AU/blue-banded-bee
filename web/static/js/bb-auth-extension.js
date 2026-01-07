@@ -609,6 +609,17 @@ async function initializeDashboard(config = {}) {
     await dataBinder.refresh();
   }
 
+  // Handle OAuth callbacks (for Google, Webflow, Slack returns)
+  if (typeof window.handleGoogleOAuthCallback === "function") {
+    await window.handleGoogleOAuthCallback();
+  }
+  if (typeof window.handleWebflowOAuthCallback === "function") {
+    window.handleWebflowOAuthCallback();
+  }
+  if (typeof window.handleSlackOAuthCallback === "function") {
+    await window.handleSlackOAuthCallback();
+  }
+
   console.log("Enhanced dashboard initialised");
 
   return dataBinder;
