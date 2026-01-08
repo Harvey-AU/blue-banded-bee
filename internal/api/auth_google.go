@@ -656,7 +656,7 @@ func (h *Handler) fetchPropertiesForAccount(ctx context.Context, client *http.Cl
 	// URL-encode the filter value (accountName contains slash like "accounts/123456")
 	apiURL := fmt.Sprintf("https://analyticsadmin.googleapis.com/v1beta/properties?filter=parent:%s", url.QueryEscape(accountName))
 
-	log.Debug().Str("account_name", accountName).Str("api_url", apiURL).Msg("Fetching GA4 properties for account")
+	log.Info().Str("account_name", accountName).Str("api_url", apiURL).Msg("Fetching GA4 properties for account")
 
 	req, err := http.NewRequestWithContext(ctx, "GET", apiURL, nil)
 	if err != nil {
@@ -768,7 +768,7 @@ func (h *Handler) GoogleConnectionHandler(w http.ResponseWriter, r *http.Request
 		parts := strings.Split(sessionPath, "/")
 		sessionID := parts[0]
 
-		log.Debug().
+		log.Info().
 			Str("raw_path", path).
 			Str("session_path", sessionPath).
 			Strs("parts", parts).
@@ -779,7 +779,7 @@ func (h *Handler) GoogleConnectionHandler(w http.ResponseWriter, r *http.Request
 		// Format: pending-session/{sessionID}/accounts/{accountID}/properties
 		if len(parts) >= 4 && parts[1] == "accounts" && parts[3] == "properties" {
 			accountID := parts[2]
-			log.Debug().
+			log.Info().
 				Str("raw_account_id", accountID).
 				Msg("[GA Debug] Raw account ID from path")
 
@@ -788,7 +788,7 @@ func (h *Handler) GoogleConnectionHandler(w http.ResponseWriter, r *http.Request
 				accountID = decoded
 			}
 
-			log.Debug().
+			log.Info().
 				Str("decoded_account_id", accountID).
 				Msg("[GA Debug] Decoded account ID")
 
@@ -859,26 +859,26 @@ func (h *Handler) getPendingSession(w http.ResponseWriter, r *http.Request, sess
 func (h *Handler) fetchAccountProperties(w http.ResponseWriter, r *http.Request, sessionID, accountID string) {
 	logger := loggerWithRequest(r)
 
-	log.Debug().
+	log.Info().
 		Str("session_id", sessionID).
 		Str("account_id", accountID).
 		Msg("[GA Debug] fetchAccountProperties called")
 
 	session := getPendingGASession(sessionID)
 	if session == nil {
-		log.Debug().Str("session_id", sessionID).Msg("[GA Debug] Session not found")
+		log.Info().Str("session_id", sessionID).Msg("[GA Debug] Session not found")
 		BadRequest(w, r, "Session expired or not found. Please reconnect to Google Analytics.")
 		return
 	}
 
-	log.Debug().
+	log.Info().
 		Int("num_accounts", len(session.Accounts)).
 		Msg("[GA Debug] Session found")
 
 	// Verify the account is in the session
 	validAccount := false
 	for i, acc := range session.Accounts {
-		log.Debug().
+		log.Info().
 			Int("index", i).
 			Str("session_account_id", acc.AccountID).
 			Str("requested_account_id", accountID).
@@ -890,7 +890,7 @@ func (h *Handler) fetchAccountProperties(w http.ResponseWriter, r *http.Request,
 		}
 	}
 	if !validAccount {
-		log.Debug().
+		log.Info().
 			Str("requested_account_id", accountID).
 			Msg("[GA Debug] Account not found in session")
 		BadRequest(w, r, "Account not found in session")
