@@ -148,6 +148,9 @@ jobs:
               SLACK_CLIENT_SECRET="${{ secrets.SLACK_CLIENT_SECRET }}" \
               WEBFLOW_CLIENT_ID="${{ secrets.WEBFLOW_CLIENT_ID }}" \
               WEBFLOW_CLIENT_SECRET="${{ secrets.WEBFLOW_CLIENT_SECRET }}" \
+              GOOGLE_CLIENT_ID="${{ secrets.GOOGLE_CLIENT_ID }}" \
+              GOOGLE_CLIENT_SECRET="${{ secrets.GOOGLE_CLIENT_SECRET }}" \
+              GOOGLE_REDIRECT_URI="https://$APP_NAME.fly.dev/v1/integrations/google/callback" \
               APP_URL="https://$APP_NAME.fly.dev" \
               --app $APP_NAME --stage
           else
@@ -160,6 +163,9 @@ jobs:
               SLACK_CLIENT_SECRET="${{ secrets.SLACK_CLIENT_SECRET }}" \
               WEBFLOW_CLIENT_ID="${{ secrets.WEBFLOW_CLIENT_ID }}" \
               WEBFLOW_CLIENT_SECRET="${{ secrets.WEBFLOW_CLIENT_SECRET }}" \
+              GOOGLE_CLIENT_ID="${{ secrets.GOOGLE_CLIENT_ID }}" \
+              GOOGLE_CLIENT_SECRET="${{ secrets.GOOGLE_CLIENT_SECRET }}" \
+              GOOGLE_REDIRECT_URI="https://$APP_NAME.fly.dev/v1/integrations/google/callback" \
               APP_URL="https://$APP_NAME.fly.dev" \
               --app $APP_NAME --stage
           fi
