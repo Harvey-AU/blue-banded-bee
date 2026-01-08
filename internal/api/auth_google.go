@@ -768,14 +768,30 @@ func (h *Handler) GoogleConnectionHandler(w http.ResponseWriter, r *http.Request
 		parts := strings.Split(sessionPath, "/")
 		sessionID := parts[0]
 
+		log.Debug().
+			Str("raw_path", path).
+			Str("session_path", sessionPath).
+			Strs("parts", parts).
+			Int("parts_len", len(parts)).
+			Msg("[GA Debug] Parsing pending-session path")
+
 		// Check if this is a request for a specific account's properties
 		// Format: pending-session/{sessionID}/accounts/{accountID}/properties
 		if len(parts) >= 4 && parts[1] == "accounts" && parts[3] == "properties" {
 			accountID := parts[2]
+			log.Debug().
+				Str("raw_account_id", accountID).
+				Msg("[GA Debug] Raw account ID from path")
+
 			// URL-decode the account ID (it may contain slashes like "accounts/123456")
 			if decoded, err := url.PathUnescape(accountID); err == nil {
 				accountID = decoded
 			}
+
+			log.Debug().
+				Str("decoded_account_id", accountID).
+				Msg("[GA Debug] Decoded account ID")
+
 			if r.Method == http.MethodGet {
 				h.fetchAccountProperties(w, r, sessionID, accountID)
 				return
@@ -843,21 +859,40 @@ func (h *Handler) getPendingSession(w http.ResponseWriter, r *http.Request, sess
 func (h *Handler) fetchAccountProperties(w http.ResponseWriter, r *http.Request, sessionID, accountID string) {
 	logger := loggerWithRequest(r)
 
+	log.Debug().
+		Str("session_id", sessionID).
+		Str("account_id", accountID).
+		Msg("[GA Debug] fetchAccountProperties called")
+
 	session := getPendingGASession(sessionID)
 	if session == nil {
+		log.Debug().Str("session_id", sessionID).Msg("[GA Debug] Session not found")
 		BadRequest(w, r, "Session expired or not found. Please reconnect to Google Analytics.")
 		return
 	}
 
+	log.Debug().
+		Int("num_accounts", len(session.Accounts)).
+		Msg("[GA Debug] Session found")
+
 	// Verify the account is in the session
 	validAccount := false
-	for _, acc := range session.Accounts {
+	for i, acc := range session.Accounts {
+		log.Debug().
+			Int("index", i).
+			Str("session_account_id", acc.AccountID).
+			Str("requested_account_id", accountID).
+			Bool("match", acc.AccountID == accountID).
+			Msg("[GA Debug] Comparing account IDs")
 		if acc.AccountID == accountID {
 			validAccount = true
 			break
 		}
 	}
 	if !validAccount {
+		log.Debug().
+			Str("requested_account_id", accountID).
+			Msg("[GA Debug] Account not found in session")
 		BadRequest(w, r, "Account not found in session")
 		return
 	}

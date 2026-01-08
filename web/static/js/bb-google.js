@@ -291,6 +291,7 @@ async function disconnectGoogle(connectionId) {
  * @param {string} accountId - The GA account ID
  */
 async function selectGoogleAccount(accountId) {
+  console.log("[GA Debug] selectGoogleAccount called with:", accountId);
   try {
     const { data: { session } = {} } = await window.supabase.auth.getSession();
     const token = session?.access_token;
@@ -300,10 +301,17 @@ async function selectGoogleAccount(accountId) {
     }
 
     if (!pendingGASessionData || !pendingGASessionData.session_id) {
+      console.log("[GA Debug] No pending session data:", pendingGASessionData);
       showGoogleError("OAuth session expired. Please reconnect.");
       hideAccountSelection();
       return;
     }
+
+    console.log("[GA Debug] Session ID:", pendingGASessionData.session_id);
+    console.log(
+      "[GA Debug] Available accounts:",
+      pendingGASessionData.accounts
+    );
 
     // Show loading state
     const accountList = document.getElementById("googleAccountList");
@@ -313,19 +321,23 @@ async function selectGoogleAccount(accountId) {
     }
 
     // Fetch properties for this account
-    const response = await fetch(
-      `/v1/integrations/google/pending-session/${pendingGASessionData.session_id}/accounts/${encodeURIComponent(accountId)}/properties`,
-      {
-        headers: { Authorization: `Bearer ${token}` },
-      }
-    );
+    const fetchUrl = `/v1/integrations/google/pending-session/${pendingGASessionData.session_id}/accounts/${encodeURIComponent(accountId)}/properties`;
+    console.log("[GA Debug] Fetching URL:", fetchUrl);
+
+    const response = await fetch(fetchUrl, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    console.log("[GA Debug] Response status:", response.status);
 
     if (!response.ok) {
       const text = await response.text();
+      console.log("[GA Debug] Error response:", text);
       throw new Error(text || `HTTP ${response.status}`);
     }
 
     const result = await response.json();
+    console.log("[GA Debug] Full response:", JSON.stringify(result, null, 2));
     const properties = result.data?.properties || [];
 
     // Store selected account and properties
