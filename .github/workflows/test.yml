@@ -69,7 +69,6 @@ jobs:
         with:
           version: v2.5.0
           args: --config .golangci.yml --modules-download-mode=mod
-          skip-config-verification: true
 
   format:
     name: Format Check
