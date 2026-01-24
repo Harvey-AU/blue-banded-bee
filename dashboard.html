@@ -2914,19 +2914,63 @@
                     "
                   ></span>
                 </div>
-                <button
-                  class="bb-button bb-button-outline"
-                  bbb-action="google-disconnect"
-                  bbb-id=""
-                  style="
-                    font-size: 13px;
-                    padding: 6px 12px;
-                    color: #dc2626;
-                    border-color: #dc2626;
-                  "
-                >
-                  Disconnect
-                </button>
+                <div style="display: flex; align-items: center; gap: 12px">
+                  <!-- Toggle Switch -->
+                  <label
+                    class="google-toggle-container"
+                    style="
+                      display: inline-flex;
+                      align-items: center;
+                      cursor: pointer;
+                      user-select: none;
+                    "
+                  >
+                    <input
+                      type="checkbox"
+                      class="google-status-toggle"
+                      style="display: none"
+                    />
+                    <div
+                      class="google-toggle-track"
+                      style="
+                        position: relative;
+                        width: 44px;
+                        height: 24px;
+                        background-color: #d1d5db;
+                        border-radius: 12px;
+                        transition: background-color 0.2s;
+                      "
+                    >
+                      <div
+                        class="google-toggle-thumb"
+                        style="
+                          position: absolute;
+                          top: 2px;
+                          left: 2px;
+                          width: 20px;
+                          height: 20px;
+                          background-color: white;
+                          border-radius: 10px;
+                          transition: transform 0.2s;
+                          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+                        "
+                      ></div>
+                    </div>
+                  </label>
+                  <button
+                    class="bb-button bb-button-outline"
+                    bbb-action="google-disconnect"
+                    bbb-id=""
+                    style="
+                      font-size: 13px;
+                      padding: 6px 12px;
+                      color: #dc2626;
+                      border-color: #dc2626;
+                    "
+                  >
+                    Disconnect
+                  </button>
+                </div>
               </div>
             </div>
           </div>

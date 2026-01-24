@@ -207,10 +207,37 @@ async function loadGoogleConnections() {
       // Set up status toggle if present
       const statusToggle = clone.querySelector(".google-status-toggle");
       if (statusToggle) {
-        statusToggle.checked = conn.status === "active";
+        const isActive = conn.status === "active";
+        statusToggle.checked = isActive;
         statusToggle.setAttribute("data-connection-id", conn.id);
+
+        // Update toggle visual state
+        const track = clone.querySelector(".google-toggle-track");
+        const thumb = clone.querySelector(".google-toggle-thumb");
+        if (track && thumb) {
+          if (isActive) {
+            track.style.backgroundColor = "#10b981";
+            thumb.style.transform = "translateX(20px)";
+          } else {
+            track.style.backgroundColor = "#d1d5db";
+            thumb.style.transform = "translateX(0)";
+          }
+        }
+
         statusToggle.addEventListener("change", (e) => {
-          toggleConnectionStatus(conn.id, e.target.checked);
+          const newActive = e.target.checked;
+          toggleConnectionStatus(conn.id, newActive);
+
+          // Update toggle visual state immediately
+          if (track && thumb) {
+            if (newActive) {
+              track.style.backgroundColor = "#10b981";
+              thumb.style.transform = "translateX(20px)";
+            } else {
+              track.style.backgroundColor = "#d1d5db";
+              thumb.style.transform = "translateX(0)";
+            }
+          }
         });
       }
 
