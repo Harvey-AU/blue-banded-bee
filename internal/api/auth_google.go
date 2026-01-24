@@ -777,27 +777,47 @@ func (h *Handler) GoogleConnectionHandler(w http.ResponseWriter, r *http.Request
 
 		// Check if this is a request for a specific account's properties
 		// Format: pending-session/{sessionID}/accounts/{accountID}/properties
+		// Note: URL path segments are automatically decoded by the HTTP router,
+		// so "accounts%2F123456" becomes ["accounts", "123456"] in the parts array
 		log.Info().
-			Bool("len_check", len(parts) >= 4).
+			Bool("len_check_4", len(parts) >= 4).
+			Bool("len_check_5", len(parts) >= 5).
 			Bool("parts1_check", len(parts) > 1 && parts[1] == "accounts").
-			Bool("parts3_check", len(parts) > 3 && parts[3] == "properties").
 			Str("method", r.Method).
 			Msg("[GA Debug] Checking routing condition")
 
-		if len(parts) >= 4 && parts[1] == "accounts" && parts[3] == "properties" {
-			accountID := parts[2]
-			log.Info().
-				Str("raw_account_id", accountID).
-				Msg("[GA Debug] Condition matched - fetching properties")
+		// Check for two patterns:
+		// 1. parts = [sessionID, "accounts", "accounts", "123456", "properties"] (URL-decoded, 5 parts)
+		// 2. parts = [sessionID, "accounts", "accounts/123456", "properties"] (not decoded, 4 parts)
+		isPropertiesRequest := false
+		var accountID string
 
-			// URL-decode the account ID (it may contain slashes like "accounts/123456")
-			if decoded, err := url.PathUnescape(accountID); err == nil {
+		if len(parts) == 5 && parts[1] == "accounts" && parts[2] == "accounts" && parts[4] == "properties" {
+			// URL-decoded pattern: reconstruct account ID from parts[2] and parts[3]
+			accountID = parts[2] + "/" + parts[3]
+			isPropertiesRequest = true
+			log.Info().
+				Str("pattern", "decoded").
+				Str("account_id", accountID).
+				Msg("[GA Debug] Matched URL-decoded pattern")
+		} else if len(parts) == 4 && parts[1] == "accounts" && parts[3] == "properties" {
+			// Not decoded pattern (legacy or different router behaviour)
+			accountID = parts[2]
+			// URL-decode if needed
+			if decoded, err := url.PathUnescape(accountID); err == nil && decoded != accountID {
 				accountID = decoded
 			}
-
+			isPropertiesRequest = true
 			log.Info().
-				Str("decoded_account_id", accountID).
-				Msg("[GA Debug] Decoded account ID")
+				Str("pattern", "encoded").
+				Str("account_id", accountID).
+				Msg("[GA Debug] Matched URL-encoded pattern")
+		}
+
+		if isPropertiesRequest {
+			log.Info().
+				Str("account_id", accountID).
+				Msg("[GA Debug] Routing to fetchAccountProperties")
 
 			if r.Method == http.MethodGet {
 				h.fetchAccountProperties(w, r, sessionID, accountID)
