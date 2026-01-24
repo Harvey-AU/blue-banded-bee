@@ -777,11 +777,18 @@ func (h *Handler) GoogleConnectionHandler(w http.ResponseWriter, r *http.Request
 
 		// Check if this is a request for a specific account's properties
 		// Format: pending-session/{sessionID}/accounts/{accountID}/properties
+		log.Info().
+			Bool("len_check", len(parts) >= 4).
+			Bool("parts1_check", len(parts) > 1 && parts[1] == "accounts").
+			Bool("parts3_check", len(parts) > 3 && parts[3] == "properties").
+			Str("method", r.Method).
+			Msg("[GA Debug] Checking routing condition")
+
 		if len(parts) >= 4 && parts[1] == "accounts" && parts[3] == "properties" {
 			accountID := parts[2]
 			log.Info().
 				Str("raw_account_id", accountID).
-				Msg("[GA Debug] Raw account ID from path")
+				Msg("[GA Debug] Condition matched - fetching properties")
 
 			// URL-decode the account ID (it may contain slashes like "accounts/123456")
 			if decoded, err := url.PathUnescape(accountID); err == nil {
@@ -799,6 +806,8 @@ func (h *Handler) GoogleConnectionHandler(w http.ResponseWriter, r *http.Request
 			MethodNotAllowed(w, r)
 			return
 		}
+
+		log.Info().Msg("[GA Debug] Condition NOT matched - calling getPendingSession")
 
 		// Default: return session data
 		if r.Method == http.MethodGet {
