@@ -906,8 +906,6 @@ func (q *DbQueue) GetNextTask(ctx context.Context, jobID string) (*Task, error) 
 				AND j.status = 'running'
 				-- Support legacy jobs with NULL or 0 concurrency (unlimited)
 				AND (j.concurrency IS NULL OR j.concurrency = 0 OR j.running_tasks < j.concurrency)
-				-- Quota enforcement: don't claim if org has no quota remaining
-				AND (j.organisation_id IS NULL OR get_daily_quota_remaining(j.organisation_id) > 0)
 		`
 
 		// Add job filter if specified
