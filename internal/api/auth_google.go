@@ -709,6 +709,7 @@ type GoogleConnectionResponse struct {
 	GA4PropertyID   string `json:"ga4_property_id,omitempty"`
 	GA4PropertyName string `json:"ga4_property_name,omitempty"`
 	GoogleEmail     string `json:"google_email,omitempty"`
+	Status          string `json:"status"`
 	CreatedAt       string `json:"created_at"`
 }
 
@@ -989,6 +990,7 @@ func (h *Handler) listGoogleConnections(w http.ResponseWriter, r *http.Request) 
 			GA4PropertyID:   conn.GA4PropertyID,
 			GA4PropertyName: conn.GA4PropertyName,
 			GoogleEmail:     conn.GoogleEmail,
+			Status:          conn.Status,
 			CreatedAt:       conn.CreatedAt.Format(time.RFC3339),
 		})
 	}
