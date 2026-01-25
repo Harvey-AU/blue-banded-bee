@@ -6,7 +6,6 @@
       "Bash(go test:*)",
       "Bash(go build:*)",
       "Bash(go mod tidy:*)",
-      "Bash(grep:*)",
       "Bash(go vet:*)",
       "Bash(rm:*)",
       "Bash(cat:*)",
@@ -107,8 +106,7 @@
       "mcp__plugin_serena_serena__find_symbol",
       "mcp__plugin_serena_serena__think_about_collected_information",
       "Bash(git stash:*)",
-      "Bash(fly apps list:*)"
-      "Bash(git show:*)",
+      "Bash(fly apps list:*)",
       "Bash(golangci-lint run:*)"
     ],
     "deny": []
