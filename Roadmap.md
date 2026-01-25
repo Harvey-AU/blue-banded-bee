@@ -464,6 +464,8 @@ Organisation model implemented:
 - [ ] **Database Optimisation**
   - [x] Move CPU-intensive analytics queries to PostgreSQL functions
   - [ ] Optimise task acquisition with database-side logic
+  - [ ] Batch worker task promotions (replace one-by-one
+        `promoteWaitingTasksWithQuota` with bulk UPDATE)
   - [x] Enhance Row Level Security policies for multi-tenant usage
   - [x] Consolidate database connection settings into single configuration
         location and make them configurable via environment variables
