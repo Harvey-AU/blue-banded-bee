@@ -345,21 +345,21 @@ Organisation model implemented:
   - [x] Dashboard UI showing connection status and user name
   - [x] Shared OAuth utilities extracted from Slack integration
 - [ ] **Webflow Site Selection**
-  - [ ] List user's accessible Webflow sites via `/v2/sites` endpoint
-  - [ ] Site picker UI in dashboard connections panel
-  - [ ] Store selected site ID with connection for job targeting
-  - [ ] Add list/delete endpoints for connection management
+  - [x] List user's accessible Webflow sites via `/v2/sites` endpoint
+  - [x] Site picker UI in dashboard connections panel
+  - [x] Store selected site ID with connection for job targeting
+  - [x] Add list/delete endpoints for connection management
 - [ ] **Manual Job Triggering**
-  - [ ] "Crawl Now" button triggers job for selected Webflow site
+  - [x] "Crawl Now" button triggers job for selected Webflow site
   - [ ] Show last crawl status and results for connected site
   - [ ] Link Webflow connection to existing job creation flow
 - [ ] **Scheduling Configuration**
-  - [ ] Connect Webflow sites to existing scheduler system
-  - [ ] Schedule dropdown for recurring cache warming (6/12/24/48h)
-  - [ ] Per-site schedule management in dashboard
+  - [x] Connect Webflow sites to existing scheduler system
+  - [x] Schedule dropdown for recurring cache warming (6/12/24/48h)
+  - [x] Per-site schedule management in dashboard
 - [ ] **Run on Publish (Webhooks)**
-  - [ ] "Auto-crawl on publish" toggle in connection settings
-  - [ ] Register `site_publish` webhook with Webflow API
+  - [x] "Auto-crawl on publish" toggle in connection settings
+  - [x] Register `site_publish` webhook with Webflow API
   - [ ] Webhook endpoint to receive publish events
   - [ ] Verify webhook signatures using `x-webflow-signature` headers
   - [ ] Trigger cache warming job on verified publish events
@@ -446,10 +446,10 @@ Organisation model implemented:
   - [ ] Link subscriptions to organisations
   - [ ] Handle subscription updates and plan changes
   - [ ] Add subscription status checks
-- [ ] **Usage Tracking & Quotas**
-  - [ ] Implement usage counters and basic limits
-  - [ ] Set up usage reporting functionality
-  - [ ] Implement organisation-level usage quotas
+- [x] **Usage Tracking & Quotas** (Completed PR #225)
+  - [x] Implement usage counters and basic limits
+  - [x] Set up usage reporting functionality
+  - [x] Implement organisation-level usage quotas
 
 ## ⚪ Stage 6: Platform Optimisation & Advanced Features
 
