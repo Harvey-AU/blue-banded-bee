@@ -461,7 +461,9 @@ func (bm *BatchManager) flushTaskUpdates(ctx context.Context, updates []*TaskUpd
 
 		// After updating task statuses, increment daily usage so subsequent quota checks see accurate values
 		if len(completedTasks) > 0 || len(failedTasks) > 0 {
-			incrementDailyUsageForTasks(txCtx, tx, completedTasks, failedTasks)
+			if err := incrementDailyUsageForTasks(txCtx, tx, completedTasks, failedTasks); err != nil {
+				return fmt.Errorf("failed to increment daily usage: %w", err)
+			}
 		}
 
 		// Promote waiting→pending for jobs that freed capacity
@@ -528,8 +530,9 @@ func (bm *BatchManager) flushTaskUpdates(ctx context.Context, updates []*TaskUpd
 	return nil
 }
 
-// incrementDailyUsageForTasks increments the daily usage counter for completed/failed tasks
-func incrementDailyUsageForTasks(txCtx context.Context, tx *sql.Tx, completedTasks, failedTasks []*Task) {
+// incrementDailyUsageForTasks increments the daily usage counter for completed/failed tasks.
+// Returns an error if quota increment fails, allowing callers to gate subsequent operations.
+func incrementDailyUsageForTasks(txCtx context.Context, tx *sql.Tx, completedTasks, failedTasks []*Task) error {
 	// Build job counts map: jobID → task count
 	jobCounts := make(map[string]int)
 	for _, task := range completedTasks {
@@ -540,7 +543,7 @@ func incrementDailyUsageForTasks(txCtx context.Context, tx *sql.Tx, completedTas
 	}
 
 	if len(jobCounts) == 0 {
-		return
+		return nil
 	}
 
 	// Collect job IDs for batch query
@@ -555,7 +558,7 @@ func incrementDailyUsageForTasks(txCtx context.Context, tx *sql.Tx, completedTas
 		pq.Array(jobIDs))
 	if err != nil {
 		log.Warn().Err(err).Msg("Failed to fetch job organisations for quota increment")
-		return
+		return fmt.Errorf("failed to fetch job organisations: %w", err)
 	}
 	defer rows.Close()
 
@@ -565,9 +568,14 @@ func incrementDailyUsageForTasks(txCtx context.Context, tx *sql.Tx, completedTas
 		var jobID string
 		var orgID string
 		if err := rows.Scan(&jobID, &orgID); err != nil {
-			continue
+			log.Warn().Err(err).Msg("Failed to scan job organisation row for quota increment")
+			return fmt.Errorf("failed to scan job organisation row: %w", err)
 		}
 		orgCounts[orgID] += jobCounts[jobID]
+	}
+	if err := rows.Err(); err != nil {
+		log.Warn().Err(err).Msg("Failed while iterating job organisations for quota increment")
+		return fmt.Errorf("failed while iterating job organisations: %w", err)
 	}
 
 	// Increment usage once per org with aggregated count
@@ -582,8 +590,11 @@ func incrementDailyUsageForTasks(txCtx context.Context, tx *sql.Tx, completedTas
 				scope.SetExtra("pages", count)
 				sentry.CaptureException(fmt.Errorf("quota increment failed: %w", err))
 			})
+			return fmt.Errorf("failed to increment daily usage for org %s: %w", orgID, err)
 		}
 	}
+
+	return nil
 }
 
 // flushIndividualUpdates attempts to update tasks one-by-one to isolate poison pills

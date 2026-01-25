@@ -310,6 +310,10 @@ func TestFlushTaskUpdates_MixedStatuses(t *testing.T) {
 	mock.ExpectExec(`UPDATE tasks SET status = 'pending'`).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 
+	// Expect quota increment query (returns empty - tasks have no JobID)
+	mock.ExpectQuery(`SELECT id, organisation_id FROM jobs WHERE id = ANY`).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "organisation_id"}))
+
 	// Expect COMMIT
 	mock.ExpectCommit()
 
@@ -340,6 +344,9 @@ func TestBatchManager_GracefulShutdown(t *testing.T) {
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectExec(`UPDATE tasks SET status = updates.status`).
 		WillReturnResult(sqlmock.NewResult(0, 1))
+	// Expect quota increment query (returns empty - tasks have no JobID)
+	mock.ExpectQuery(`SELECT id, organisation_id FROM jobs WHERE id = ANY`).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "organisation_id"}))
 	mock.ExpectCommit()
 
 	// Stop should flush remaining updates
