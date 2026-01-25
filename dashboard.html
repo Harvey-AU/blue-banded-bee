@@ -3547,6 +3547,15 @@
                     }
                   }
 
+                  // Refresh quota display for new organisation
+                  if (typeof fetchAndDisplayQuota === "function") {
+                    try {
+                      await fetchAndDisplayQuota();
+                    } catch (err) {
+                      console.warn("Failed to refresh quota display:", err);
+                    }
+                  }
+
                   // Show success notification
                   if (window.showNotification) {
                     window.showNotification(
