@@ -194,6 +194,8 @@ func (h *Handler) switchOrganisation(w http.ResponseWriter, r *http.Request) {
 // UsageHandler handles GET /v1/usage
 // Returns current usage statistics for the user's active organisation
 func (h *Handler) UsageHandler(w http.ResponseWriter, r *http.Request) {
+	logger := loggerWithRequest(r)
+
 	if r.Method != http.MethodGet {
 		MethodNotAllowed(w, r)
 		return
@@ -211,6 +213,12 @@ func (h *Handler) UsageHandler(w http.ResponseWriter, r *http.Request) {
 		InternalError(w, r, err)
 		return
 	}
+
+	logger.Info().
+		Str("organisation_id", orgID).
+		Int("daily_used", stats.DailyUsed).
+		Int("daily_limit", stats.DailyLimit).
+		Msg("Usage statistics retrieved")
 
 	WriteSuccess(w, r, map[string]interface{}{
 		"usage": stats,
@@ -230,6 +238,8 @@ type PublicPlan struct {
 // PlansHandler handles GET /v1/plans
 // Returns available subscription plans (public endpoint for pricing page)
 func (h *Handler) PlansHandler(w http.ResponseWriter, r *http.Request) {
+	logger := loggerWithRequest(r)
+
 	if r.Method != http.MethodGet {
 		MethodNotAllowed(w, r)
 		return
@@ -252,6 +262,10 @@ func (h *Handler) PlansHandler(w http.ResponseWriter, r *http.Request) {
 			MonthlyPriceCents: p.MonthlyPriceCents,
 		}
 	}
+
+	logger.Info().
+		Int("plan_count", len(publicPlans)).
+		Msg("Plans retrieved")
 
 	WriteSuccess(w, r, map[string]interface{}{
 		"plans": publicPlans,

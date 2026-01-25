@@ -459,7 +459,7 @@ func (bm *BatchManager) flushTaskUpdates(ctx context.Context, updates []*TaskUpd
 			}
 		}
 
-		// Increment daily usage FIRST so quota check sees accurate values
+		// After updating task statuses, increment daily usage so subsequent quota checks see accurate values
 		if len(completedTasks) > 0 || len(failedTasks) > 0 {
 			incrementDailyUsageForTasks(txCtx, tx, completedTasks, failedTasks)
 		}
@@ -530,48 +530,58 @@ func (bm *BatchManager) flushTaskUpdates(ctx context.Context, updates []*TaskUpd
 
 // incrementDailyUsageForTasks increments the daily usage counter for completed/failed tasks
 func incrementDailyUsageForTasks(txCtx context.Context, tx *sql.Tx, completedTasks, failedTasks []*Task) {
-	// Get unique job IDs from completed and failed tasks
-	jobIDSet := make(map[string]bool)
+	// Build job counts map: jobID → task count
+	jobCounts := make(map[string]int)
 	for _, task := range completedTasks {
-		jobIDSet[task.JobID] = true
+		jobCounts[task.JobID]++
 	}
 	for _, task := range failedTasks {
-		jobIDSet[task.JobID] = true
+		jobCounts[task.JobID]++
 	}
 
-	// Count tasks per org and increment usage
-	for jobID := range jobIDSet {
-		var orgID sql.NullString
-		err := tx.QueryRowContext(txCtx, `SELECT organisation_id FROM jobs WHERE id = $1`, jobID).Scan(&orgID)
-		if err != nil || !orgID.Valid || orgID.String == "" {
-			continue // Skip jobs without org
-		}
+	if len(jobCounts) == 0 {
+		return
+	}
 
-		// Count tasks for this job
-		count := 0
-		for _, task := range completedTasks {
-			if task.JobID == jobID {
-				count++
-			}
-		}
-		for _, task := range failedTasks {
-			if task.JobID == jobID {
-				count++
-			}
-		}
+	// Collect job IDs for batch query
+	jobIDs := make([]string, 0, len(jobCounts))
+	for jobID := range jobCounts {
+		jobIDs = append(jobIDs, jobID)
+	}
 
-		if count > 0 {
-			_, err := tx.ExecContext(txCtx, `SELECT increment_daily_usage($1, $2)`, orgID.String, count)
-			if err != nil {
-				log.Warn().Err(err).Str("org_id", orgID.String).Int("pages", count).
-					Msg("Failed to increment daily usage counter")
-				sentry.WithScope(func(scope *sentry.Scope) {
-					scope.SetLevel(sentry.LevelWarning)
-					scope.SetTag("org_id", orgID.String)
-					scope.SetExtra("pages", count)
-					sentry.CaptureException(fmt.Errorf("quota increment failed: %w", err))
-				})
-			}
+	// Single batch query to get organisation IDs for all jobs
+	rows, err := tx.QueryContext(txCtx,
+		`SELECT id, organisation_id FROM jobs WHERE id = ANY($1) AND organisation_id IS NOT NULL`,
+		pq.Array(jobIDs))
+	if err != nil {
+		log.Warn().Err(err).Msg("Failed to fetch job organisations for quota increment")
+		return
+	}
+	defer rows.Close()
+
+	// Map job IDs to org IDs and aggregate counts per org
+	orgCounts := make(map[string]int)
+	for rows.Next() {
+		var jobID string
+		var orgID string
+		if err := rows.Scan(&jobID, &orgID); err != nil {
+			continue
+		}
+		orgCounts[orgID] += jobCounts[jobID]
+	}
+
+	// Increment usage once per org with aggregated count
+	for orgID, count := range orgCounts {
+		_, err := tx.ExecContext(txCtx, `SELECT increment_daily_usage($1, $2)`, orgID, count)
+		if err != nil {
+			log.Warn().Err(err).Str("org_id", orgID).Int("pages", count).
+				Msg("Failed to increment daily usage counter")
+			sentry.WithScope(func(scope *sentry.Scope) {
+				scope.SetLevel(sentry.LevelWarning)
+				scope.SetTag("org_id", orgID)
+				scope.SetExtra("pages", count)
+				sentry.CaptureException(fmt.Errorf("quota increment failed: %w", err))
+			})
 		}
 	}
 }
