@@ -4269,12 +4269,17 @@
         }
       }
 
-      // Update quota display every 0.5s for realtime feel
+      // Update quota display every 0.5s for real-time feel
       let quotaResetInterval;
       function startQuotaResetCountdown() {
         if (quotaResetInterval) clearInterval(quotaResetInterval);
         quotaResetInterval = setInterval(fetchAndDisplayQuota, 500);
       }
+
+      // Clean up interval on page unload to prevent memory leaks
+      window.addEventListener("beforeunload", () => {
+        if (quotaResetInterval) clearInterval(quotaResetInterval);
+      });
 
       // Listen for Supabase auth state change
       if (window.supabase) {
