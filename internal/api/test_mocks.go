@@ -466,6 +466,23 @@ func (m *MockDBClient) GetPlatformOrgMapping(ctx context.Context, platform, plat
 	return args.Get(0).(*db.PlatformOrgMapping), args.Error(1)
 }
 
+// Usage and plans mock methods
+func (m *MockDBClient) GetOrganisationUsageStats(ctx context.Context, orgID string) (*db.UsageStats, error) {
+	args := m.Called(ctx, orgID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*db.UsageStats), args.Error(1)
+}
+
+func (m *MockDBClient) GetActivePlans(ctx context.Context) ([]db.Plan, error) {
+	args := m.Called(ctx)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]db.Plan), args.Error(1)
+}
+
 // Webflow site settings mock methods
 func (m *MockDBClient) CreateOrUpdateSiteSetting(ctx context.Context, setting *db.WebflowSiteSetting) error {
 	args := m.Called(ctx, setting)

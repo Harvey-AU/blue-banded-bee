@@ -599,6 +599,7 @@ func (wp *WorkerPool) Start(ctx context.Context) {
 
 	wp.StartTaskMonitor(ctx)
 	wp.StartCleanupMonitor(ctx)
+	wp.StartQuotaPromotionMonitor(ctx)
 	wp.startRunningTaskReleaseLoop(ctx)
 
 	// Start orphaned task cleanup loop
@@ -2734,6 +2735,152 @@ func (wp *WorkerPool) StartCleanupMonitor(ctx context.Context) {
 	log.Info().Msg("Job cleanup monitor started")
 }
 
+// StartQuotaPromotionMonitor checks for waiting tasks that can be promoted when quota becomes available
+func (wp *WorkerPool) StartQuotaPromotionMonitor(ctx context.Context) {
+	wp.wg.Add(1)
+	go func() {
+		defer wp.wg.Done()
+		// Check every 30 seconds for waiting tasks that can now be promoted
+		ticker := time.NewTicker(30 * time.Second)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-wp.stopCh:
+				return
+			case <-ticker.C:
+				if err := wp.promoteWaitingTasksWithQuota(ctx); err != nil {
+					log.Error().Err(err).Msg("Failed to promote waiting tasks")
+				}
+			}
+		}
+	}()
+	log.Info().Msg("Quota promotion monitor started")
+}
+
+// promoteWaitingTasksWithQuota finds jobs with waiting tasks where quota is now available
+func (wp *WorkerPool) promoteWaitingTasksWithQuota(ctx context.Context) error {
+	type jobInfo struct {
+		ID     string
+		Status string
+	}
+	var jobs []jobInfo
+
+	// Find jobs with waiting tasks that have quota available
+	// Include both 'running' and 'pending' jobs - pending jobs may have been blocked by quota at creation
+	err := wp.dbQueue.ExecuteMaintenance(ctx, func(tx *sql.Tx) error {
+		rows, err := tx.QueryContext(ctx, `
+			SELECT DISTINCT j.id, j.status
+			FROM jobs j
+			JOIN tasks t ON t.job_id = j.id
+			WHERE t.status = 'waiting'
+			  AND j.status IN ('running', 'pending')
+			  AND j.organisation_id IS NOT NULL
+			  AND get_daily_quota_remaining(j.organisation_id) > 0
+		`)
+		if err != nil {
+			return fmt.Errorf("failed to find jobs with promotable tasks: %w", err)
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			var j jobInfo
+			if err := rows.Scan(&j.ID, &j.Status); err != nil {
+				return fmt.Errorf("failed to scan job: %w", err)
+			}
+			jobs = append(jobs, j)
+		}
+
+		return rows.Err()
+	})
+	if err != nil {
+		return err
+	}
+
+	// Promote waiting tasks for each job (keep promoting until quota/concurrency exhausted)
+	totalPromoted := 0
+	for _, job := range jobs {
+		// If job is pending, transition it to running and add to worker pool
+		if job.Status == "pending" {
+			err := wp.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
+				_, err := tx.ExecContext(ctx, `
+					UPDATE jobs SET
+						status = $1,
+						started_at = CASE WHEN started_at IS NULL THEN $2 ELSE started_at END
+					WHERE id = $3 AND status = 'pending'
+				`, JobStatusRunning, time.Now().UTC(), job.ID)
+				return err
+			})
+			if err != nil {
+				log.Warn().Err(err).Str("job_id", job.ID).Msg("Failed to transition job to running")
+				continue
+			}
+			wp.AddJob(job.ID, nil)
+			log.Info().Str("job_id", job.ID).Msg("Transitioned pending job to running after quota became available")
+		}
+
+		jobPromoted := 0
+		// Keep calling promote until it stops promoting (quota exhausted or no more waiting)
+		for {
+			var promoted bool
+			err := wp.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
+				// Check if a task was actually promoted by looking for newly pending tasks
+				var taskID *string
+				err := tx.QueryRowContext(ctx, `
+					WITH promoted AS (
+						UPDATE tasks
+						SET status = 'pending'
+						WHERE id = (
+							SELECT t.id
+							FROM tasks t
+							INNER JOIN jobs j ON t.job_id = j.id
+							WHERE t.job_id = $1
+							  AND t.status = 'waiting'
+							  AND j.status = 'running'
+							  AND (j.concurrency IS NULL OR j.concurrency = 0 OR j.running_tasks + j.pending_tasks < j.concurrency)
+							  AND (j.organisation_id IS NULL OR get_daily_quota_remaining(j.organisation_id) > 0)
+							ORDER BY t.priority_score DESC, t.created_at ASC
+							LIMIT 1
+							FOR UPDATE OF t SKIP LOCKED
+						)
+						RETURNING id
+					)
+					SELECT id FROM promoted
+				`, job.ID).Scan(&taskID)
+				if err == sql.ErrNoRows || taskID == nil {
+					promoted = false
+					return nil
+				}
+				if err != nil {
+					return err
+				}
+				promoted = true
+				return nil
+			})
+			if err != nil {
+				log.Warn().Err(err).Str("job_id", job.ID).Msg("Failed to promote waiting task for job")
+				break
+			}
+			if !promoted {
+				break // No more tasks to promote for this job
+			}
+			jobPromoted++
+			totalPromoted++
+		}
+		if jobPromoted > 0 {
+			log.Debug().Str("job_id", job.ID).Int("promoted", jobPromoted).Msg("Promoted waiting tasks for job")
+		}
+	}
+
+	if totalPromoted > 0 {
+		log.Info().Int("total_promoted", totalPromoted).Int("jobs", len(jobs)).Msg("Promoted waiting tasks after quota became available")
+	}
+
+	return nil
+}
+
 // CleanupStuckJobs finds and fixes jobs that are stuck in pending/running state
 // despite having all their tasks completed
 func (wp *WorkerPool) CleanupStuckJobs(ctx context.Context) error {
@@ -2765,7 +2912,7 @@ func (wp *WorkerPool) CleanupStuckJobs(ctx context.Context) error {
 
 		// 2. Mark jobs as failed when stuck for too long
 		// - Pending jobs with 0 tasks for 5 minutes (sitemap processing likely failed)
-		// - Running jobs with no task progress for 30 minutes
+		// - Running jobs with no task progress for 30 minutes (excluding jobs with waiting tasks)
 		// - Jobs running for all tasks failed
 		result, err = tx.ExecContext(ctx, `
 			UPDATE jobs
@@ -2784,11 +2931,19 @@ func (wp *WorkerPool) CleanupStuckJobs(ctx context.Context) error {
 				(status = $5 AND total_tasks > 0 AND total_tasks = failed_tasks)
 				OR
 				-- Running jobs with no task updates for 30+ minutes
-				(status = $5 AND total_tasks > 0 AND COALESCE((
-					SELECT MAX(GREATEST(started_at, completed_at))
-					FROM tasks
-					WHERE job_id = jobs.id
-				), created_at) < $6)
+				-- Exclude jobs with waiting tasks ONLY if org is over quota (legitimate wait)
+				-- If quota available but tasks still waiting, something is stuck - should timeout
+				(status = $5 AND total_tasks > 0
+					AND NOT (
+						EXISTS (SELECT 1 FROM tasks WHERE job_id = jobs.id AND status = 'waiting')
+						AND organisation_id IS NOT NULL
+						AND get_daily_quota_remaining(organisation_id) <= 0
+					)
+					AND COALESCE((
+						SELECT MAX(GREATEST(started_at, completed_at))
+						FROM tasks
+						WHERE job_id = jobs.id
+					), created_at) < $6)
 			)
 		`, JobStatusFailed, time.Now().UTC(), JobStatusPending, time.Now().UTC().Add(-5*time.Minute), JobStatusRunning, time.Now().UTC().Add(-30*time.Minute))
 

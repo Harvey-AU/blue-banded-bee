@@ -125,6 +125,56 @@
         font-size: 14px;
       }
 
+      /* Quota Display */
+      .bb-quota-display {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 12px;
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 6px;
+        font-size: 13px;
+        color: #475569;
+      }
+
+      .bb-quota-plan {
+        font-weight: 600;
+        color: #3b82f6;
+      }
+
+      .bb-quota-usage {
+        color: #64748b;
+      }
+
+      .bb-quota-usage-count {
+        font-weight: 600;
+        color: #1e293b;
+      }
+
+      .bb-quota-reset {
+        color: #94a3b8;
+        font-size: 12px;
+      }
+
+      .bb-quota-display.quota-warning {
+        background: #fef3c7;
+        border-color: #fcd34d;
+      }
+
+      .bb-quota-display.quota-warning .bb-quota-usage-count {
+        color: #b45309;
+      }
+
+      .bb-quota-display.quota-exhausted {
+        background: #fee2e2;
+        border-color: #fca5a5;
+      }
+
+      .bb-quota-display.quota-exhausted .bb-quota-usage-count {
+        color: #dc2626;
+      }
+
       .bb-button {
         padding: 8px 16px;
         border-radius: 6px;
@@ -1652,6 +1702,20 @@
                 </div>
               </div>
             </div>
+
+            <!-- Quota Display -->
+            <div
+              class="bb-quota-display"
+              id="quotaDisplay"
+              style="display: none"
+            >
+              <span class="bb-quota-plan" id="quotaPlan">Free</span>
+              <span class="bb-quota-usage">
+                <span class="bb-quota-usage-count" id="quotaUsage">0/1000</span>
+              </span>
+              <span class="bb-quota-reset" id="quotaReset">Resets in 12h</span>
+            </div>
+
             <span class="bb-org-divider">|</span>
             <span id="userEmail">Loading...</span>
             <div class="user-avatar" id="userAvatar">?</div>
@@ -3160,7 +3224,7 @@
           // Initialize the complete dashboard with auth integration
           await initializeDashboard({
             debug: false,
-            refreshInterval: 60,
+            refreshInterval: 1,
             apiBaseUrl: "",
             autoRefresh: true,
             networkMonitoring: true,
@@ -3480,6 +3544,15 @@
                       await window.loadSlackConnections();
                     } catch (err) {
                       console.warn("Failed to load Slack connections:", err);
+                    }
+                  }
+
+                  // Refresh quota display for new organisation
+                  if (typeof fetchAndDisplayQuota === "function") {
+                    try {
+                      await fetchAndDisplayQuota();
+                    } catch (err) {
+                      console.warn("Failed to refresh quota display:", err);
                     }
                   }
 
@@ -4120,6 +4193,118 @@
         window.showIntegrationFeedback("webflow", "success", msg);
       window.showWebflowError = (msg) =>
         window.showIntegrationFeedback("webflow", "error", msg);
+
+      // ========================================
+      // Quota Display
+      // ========================================
+
+      // Format time remaining until reset
+      function formatTimeUntilReset(resetTime) {
+        const now = new Date();
+        const reset = new Date(resetTime);
+        const diffMs = reset - now;
+
+        if (diffMs <= 0) return "Resets soon";
+
+        const hours = Math.floor(diffMs / (1000 * 60 * 60));
+        const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+
+        if (hours > 0) {
+          return `Resets in ${hours}h ${minutes}m`;
+        }
+        return `Resets in ${minutes}m`;
+      }
+
+      // Fetch and display quota information
+      async function fetchAndDisplayQuota() {
+        const quotaDisplay = document.getElementById("quotaDisplay");
+        const quotaPlan = document.getElementById("quotaPlan");
+        const quotaUsage = document.getElementById("quotaUsage");
+        const quotaReset = document.getElementById("quotaReset");
+
+        if (!quotaDisplay || !window.supabase) return;
+
+        try {
+          // Get auth token from Supabase session
+          const session = await window.supabase.auth.getSession();
+          const token = session?.data?.session?.access_token;
+
+          if (!token) {
+            return;
+          }
+
+          const response = await fetch("/v1/usage", {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          });
+
+          if (!response.ok) {
+            console.warn("Failed to fetch quota:", response.status);
+            return;
+          }
+
+          const data = await response.json();
+          const usage = data.data?.usage;
+
+          if (!usage) return;
+
+          // Update display
+          quotaPlan.textContent = usage.plan_display_name || "Free";
+          quotaUsage.textContent = `${usage.daily_used.toLocaleString()}/${usage.daily_limit.toLocaleString()}`;
+          quotaReset.textContent = formatTimeUntilReset(usage.resets_at);
+
+          // Update styling based on usage percentage
+          quotaDisplay.classList.remove("quota-warning", "quota-exhausted");
+          if (usage.usage_percentage >= 100) {
+            quotaDisplay.classList.add("quota-exhausted");
+          } else if (usage.usage_percentage >= 80) {
+            quotaDisplay.classList.add("quota-warning");
+          }
+
+          // Show the display
+          quotaDisplay.style.display = "flex";
+        } catch (err) {
+          console.warn("Error fetching quota:", err);
+        }
+      }
+
+      // Update quota display every 0.5s for real-time feel
+      let quotaResetInterval;
+      function startQuotaResetCountdown() {
+        if (quotaResetInterval) clearInterval(quotaResetInterval);
+        quotaResetInterval = setInterval(fetchAndDisplayQuota, 500);
+      }
+
+      // Clean up interval on page unload to prevent memory leaks
+      window.addEventListener("beforeunload", () => {
+        if (quotaResetInterval) clearInterval(quotaResetInterval);
+      });
+
+      // Listen for Supabase auth state change
+      if (window.supabase) {
+        window.supabase.auth.onAuthStateChange((event, session) => {
+          if (session) {
+            fetchAndDisplayQuota();
+            startQuotaResetCountdown();
+          } else {
+            const quotaDisplay = document.getElementById("quotaDisplay");
+            if (quotaDisplay) quotaDisplay.style.display = "none";
+            if (quotaResetInterval) clearInterval(quotaResetInterval);
+          }
+        });
+      }
+
+      // Also try after a delay to catch already-logged-in users
+      setTimeout(async () => {
+        if (window.supabase) {
+          const session = await window.supabase.auth.getSession();
+          if (session?.data?.session) {
+            fetchAndDisplayQuota();
+            startQuotaResetCountdown();
+          }
+        }
+      }, 1000);
     </script>
   </body>
 </html>
