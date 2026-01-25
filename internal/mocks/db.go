@@ -516,3 +516,46 @@ func (m *MockDB) GetSiteSettingBySiteID(ctx context.Context, orgID, webflowSiteI
 	}
 	return args.Get(0).(*db.WebflowSiteSetting), args.Error(1)
 }
+
+// Google Analytics integration mock methods
+
+func (m *MockDB) CreateGoogleConnection(ctx context.Context, conn *db.GoogleAnalyticsConnection) error {
+	args := m.Called(ctx, conn)
+	return args.Error(0)
+}
+
+func (m *MockDB) GetGoogleConnection(ctx context.Context, connectionID string) (*db.GoogleAnalyticsConnection, error) {
+	args := m.Called(ctx, connectionID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*db.GoogleAnalyticsConnection), args.Error(1)
+}
+
+func (m *MockDB) ListGoogleConnections(ctx context.Context, organisationID string) ([]*db.GoogleAnalyticsConnection, error) {
+	args := m.Called(ctx, organisationID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*db.GoogleAnalyticsConnection), args.Error(1)
+}
+
+func (m *MockDB) DeleteGoogleConnection(ctx context.Context, connectionID, organisationID string) error {
+	args := m.Called(ctx, connectionID, organisationID)
+	return args.Error(0)
+}
+
+func (m *MockDB) UpdateGoogleConnectionStatus(ctx context.Context, connectionID, organisationID, status string) error {
+	args := m.Called(ctx, connectionID, organisationID, status)
+	return args.Error(0)
+}
+
+func (m *MockDB) StoreGoogleToken(ctx context.Context, connectionID, token string) error {
+	args := m.Called(ctx, connectionID, token)
+	return args.Error(0)
+}
+
+func (m *MockDB) GetGoogleToken(ctx context.Context, connectionID string) (string, error) {
+	args := m.Called(ctx, connectionID)
+	return args.String(0), args.Error(1)
+}

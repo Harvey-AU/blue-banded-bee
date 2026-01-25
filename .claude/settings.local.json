@@ -108,6 +108,8 @@
       "mcp__plugin_serena_serena__think_about_collected_information",
       "Bash(git stash:*)",
       "Bash(fly apps list:*)"
+      "Bash(git show:*)",
+      "Bash(golangci-lint run:*)"
     ],
     "deny": []
   },
