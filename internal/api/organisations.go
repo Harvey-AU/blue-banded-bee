@@ -225,8 +225,6 @@ type PublicPlan struct {
 	DisplayName       string `json:"display_name"`
 	DailyPageLimit    int    `json:"daily_page_limit"`
 	MonthlyPriceCents int    `json:"monthly_price_cents"`
-	MaxConcurrentJobs int    `json:"max_concurrent_jobs"`
-	MaxPagesPerJob    int    `json:"max_pages_per_job"`
 }
 
 // PlansHandler handles GET /v1/plans
@@ -252,8 +250,6 @@ func (h *Handler) PlansHandler(w http.ResponseWriter, r *http.Request) {
 			DisplayName:       p.DisplayName,
 			DailyPageLimit:    p.DailyPageLimit,
 			MonthlyPriceCents: p.MonthlyPriceCents,
-			MaxConcurrentJobs: p.MaxConcurrentJobs,
-			MaxPagesPerJob:    p.MaxPagesPerJob,
 		}
 	}
 

@@ -27,7 +27,25 @@ On merge, CI will:
 4. Create a git tag and GitHub release
 5. Commit the updated changelog
 
-## [Unreleased]
+## [Unreleased:minor]
+
+### Added
+
+- **Daily Usage Quotas**: Organisation-level page limits with automatic reset
+  - Plans table with configurable `daily_page_limit` per tier (Free: 500)
+  - `daily_usage` table tracks pages processed per org per day (UTC)
+  - Dashboard shows quota usage with visual indicator and reset countdown
+  - Jobs pause when quota exhausted; resume automatically at midnight UTC
+  - Quota enforced at task creation and promotion stages to prevent
+    over-processing
+  - `is_org_over_daily_quota()` function provides final safety check at task
+    claim
+
+### Changed
+
+- All organisations now default to the 'free' plan on creation
+- Task promotion checks quota before moving waiting→pending
+- EnqueueURLs respects quota when creating new pending tasks
 
 ## [0.23.0] – 2026-01-04
 

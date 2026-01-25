@@ -633,8 +633,6 @@ type Plan struct {
 	DisplayName       string    `json:"display_name"`
 	DailyPageLimit    int       `json:"daily_page_limit"`
 	MonthlyPriceCents int       `json:"monthly_price_cents"`
-	MaxConcurrentJobs int       `json:"max_concurrent_jobs"`
-	MaxPagesPerJob    int       `json:"max_pages_per_job"`
 	IsActive          bool      `json:"is_active"`
 	SortOrder         int       `json:"sort_order"`
 	CreatedAt         time.Time `json:"created_at"`
@@ -644,7 +642,7 @@ type Plan struct {
 func (db *DB) GetActivePlans(ctx context.Context) ([]Plan, error) {
 	query := `
 		SELECT id, name, display_name, daily_page_limit, monthly_price_cents,
-		       max_concurrent_jobs, max_pages_per_job, is_active, sort_order, created_at
+		       is_active, sort_order, created_at
 		FROM plans
 		WHERE is_active = true
 		ORDER BY sort_order
@@ -661,7 +659,7 @@ func (db *DB) GetActivePlans(ctx context.Context) ([]Plan, error) {
 		var p Plan
 		if err := rows.Scan(
 			&p.ID, &p.Name, &p.DisplayName, &p.DailyPageLimit, &p.MonthlyPriceCents,
-			&p.MaxConcurrentJobs, &p.MaxPagesPerJob, &p.IsActive, &p.SortOrder, &p.CreatedAt,
+			&p.IsActive, &p.SortOrder, &p.CreatedAt,
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan plan: %w", err)
 		}
