@@ -33,20 +33,34 @@ On merge, CI will:
 
 - **Google Analytics Integration**: OAuth 2.0 connection for GA4 properties
   - Full OAuth flow with HMAC-signed state for CSRF protection
-  - API endpoints: `POST /v1/integrations/google` (initiate),
-    `GET /v1/integrations/google` (list), `DELETE /v1/integrations/google/{id}`
-    (disconnect)
-  - Callback handler at `/v1/integrations/google/callback`
-  - Property selection UI when user has multiple GA4 properties
-  - Save property endpoint at `POST /v1/integrations/google/save-property`
+  - Two-step selection: choose Google account, then select properties from that
+    account
+  - Multiple account support: can add properties from different Google accounts
+    to the same organisation
+  - Active/inactive status per property with toggle switches in UI
+  - API endpoints:
+    - `POST /v1/integrations/google` (initiate OAuth)
+    - `GET /v1/integrations/google` (list connections with status)
+    - `GET /v1/integrations/google/callback` (OAuth callback handler)
+    - `POST /v1/integrations/google/accounts` (fetch accounts for selection)
+    - `POST /v1/integrations/google/properties` (fetch properties for account)
+    - `POST /v1/integrations/google/save-properties` (bulk save with
+      active/inactive)
+    - `PATCH /v1/integrations/google/{id}/status` (toggle active/inactive)
+    - `DELETE /v1/integrations/google/{id}` (disconnect)
   - Refresh tokens stored securely in Supabase Vault with auto-cleanup on
     deletion
   - Atomic upsert pattern for vault token storage (matching Webflow pattern)
 - **Google Analytics Dashboard UI**: Connection management in integrations modal
-  - Connect/disconnect GA4 properties
-  - Displays property name, Google email, and connection date
-  - Property selection interface for accounts with multiple GA4 properties
+  - Connect button always visible to add properties from additional accounts
+  - Two-step selection flow: account selection → property selection with search
+  - Toggle switches for active/inactive status (both during selection and for
+    existing connections)
+  - Displays property name, Google email, connection date, and active status
+  - Real-time status updates via API with optimistic UI updates
   - Success/error feedback using generic integration helper
+
+---
 
 ## [0.23.0] – 2026-01-04
 

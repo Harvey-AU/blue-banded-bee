@@ -175,7 +175,11 @@ func (db *DB) ListGoogleConnections(ctx context.Context, organisationID string) 
 		log.Error().Err(err).Str("organisation_id", organisationID).Msg("Failed to list Google Analytics connections")
 		return nil, fmt.Errorf("failed to list Google Analytics connections: %w", err)
 	}
-	defer rows.Close()
+	defer func() {
+		if closeErr := rows.Close(); closeErr != nil {
+			log.Error().Err(closeErr).Str("organisation_id", organisationID).Msg("Failed to close rows")
+		}
+	}()
 
 	var connections []*GoogleAnalyticsConnection
 	for rows.Next() {

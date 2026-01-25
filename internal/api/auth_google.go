@@ -19,8 +19,14 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// Pending OAuth sessions - stores properties and tokens temporarily after OAuth callback
-// Key is session ID, value is PendingGASession
+// Pending OAuth sessions - stores properties and tokens temporarily after OAuth callback.
+// Key is session ID, value is PendingGASession.
+//
+// LIMITATION: This in-memory map will not work correctly in multi-instance deployments
+// because OAuth callbacks may land on a different process than the one that initiated
+// the OAuth flow. For production multi-instance deployments, this should be replaced
+// with a shared session store (e.g., Redis cache or DB-backed sessions) or use
+// signed/encrypted cookie sessions for portability.
 var (
 	pendingGASessions   = make(map[string]*PendingGASession)
 	pendingGASessionsMu sync.RWMutex
@@ -874,14 +880,14 @@ func (h *Handler) getPendingSession(w http.ResponseWriter, r *http.Request, sess
 		return
 	}
 
+	// Note: Tokens are intentionally excluded from this response for security.
+	// Server-side handlers will retrieve tokens from the session using sessionID.
 	WriteSuccess(w, r, map[string]interface{}{
-		"accounts":      session.Accounts,
-		"properties":    session.Properties,
-		"state":         session.State,
-		"user_id":       session.UserID,
-		"email":         session.Email,
-		"access_token":  session.AccessToken,
-		"refresh_token": session.RefreshToken,
+		"accounts":   session.Accounts,
+		"properties": session.Properties,
+		"state":      session.State,
+		"user_id":    session.UserID,
+		"email":      session.Email,
 	}, "")
 }
 
