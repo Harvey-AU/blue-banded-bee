@@ -150,6 +150,14 @@ type DBClient interface {
 	DeleteWebflowConnection(ctx context.Context, connectionID, organisationID string) error
 	StoreWebflowToken(ctx context.Context, connectionID, token string) error
 	GetWebflowToken(ctx context.Context, connectionID string) (string, error)
+	// Google Analytics integration methods
+	CreateGoogleConnection(ctx context.Context, conn *db.GoogleAnalyticsConnection) error
+	GetGoogleConnection(ctx context.Context, connectionID string) (*db.GoogleAnalyticsConnection, error)
+	ListGoogleConnections(ctx context.Context, organisationID string) ([]*db.GoogleAnalyticsConnection, error)
+	DeleteGoogleConnection(ctx context.Context, connectionID, organisationID string) error
+	UpdateGoogleConnectionStatus(ctx context.Context, connectionID, organisationID, status string) error
+	StoreGoogleToken(ctx context.Context, connectionID, refreshToken string) error
+	GetGoogleToken(ctx context.Context, connectionID string) (string, error)
 	// Platform integration mappings
 	UpsertPlatformOrgMapping(ctx context.Context, mapping *db.PlatformOrgMapping) error
 	GetPlatformOrgMapping(ctx context.Context, platform, platformID string) (*db.PlatformOrgMapping, error)
@@ -278,6 +286,12 @@ func (h *Handler) SetupRoutes(mux *http.ServeMux) {
 	// Webflow site settings endpoints (must be before catch-all)
 	mux.Handle("/v1/integrations/webflow/sites/", auth.AuthMiddleware(http.HandlerFunc(h.webflowSitesRouter)))
 	mux.Handle("/v1/integrations/webflow/", auth.AuthMiddleware(http.HandlerFunc(h.WebflowConnectionHandler)))
+
+	// Google Analytics integration endpoints
+	mux.Handle("/v1/integrations/google", auth.AuthMiddleware(http.HandlerFunc(h.GoogleConnectionsHandler)))
+	mux.Handle("/v1/integrations/google/", auth.AuthMiddleware(http.HandlerFunc(h.GoogleConnectionHandler)))
+	mux.HandleFunc("/v1/integrations/google/callback", h.HandleGoogleOAuthCallback) // No auth - state validation
+	mux.Handle("/v1/integrations/google/save-property", auth.AuthMiddleware(http.HandlerFunc(h.SaveGoogleProperty)))
 
 	// Notification endpoints
 	mux.Handle("/v1/notifications", auth.AuthMiddleware(http.HandlerFunc(h.NotificationsHandler)))
