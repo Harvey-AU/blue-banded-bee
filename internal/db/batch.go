@@ -557,8 +557,7 @@ func incrementDailyUsageForTasks(txCtx context.Context, tx *sql.Tx, completedTas
 		`SELECT id, organisation_id FROM jobs WHERE id = ANY($1) AND organisation_id IS NOT NULL`,
 		pq.Array(jobIDs))
 	if err != nil {
-		log.Warn().Err(err).Msg("Failed to fetch job organisations for quota increment")
-		return fmt.Errorf("failed to fetch job organisations: %w", err)
+		return fmt.Errorf("fetch job organisations for quota increment: %w", err)
 	}
 	defer rows.Close()
 
@@ -568,29 +567,25 @@ func incrementDailyUsageForTasks(txCtx context.Context, tx *sql.Tx, completedTas
 		var jobID string
 		var orgID string
 		if err := rows.Scan(&jobID, &orgID); err != nil {
-			log.Warn().Err(err).Msg("Failed to scan job organisation row for quota increment")
-			return fmt.Errorf("failed to scan job organisation row: %w", err)
+			return fmt.Errorf("scan job organisation row for quota increment: %w", err)
 		}
 		orgCounts[orgID] += jobCounts[jobID]
 	}
 	if err := rows.Err(); err != nil {
-		log.Warn().Err(err).Msg("Failed while iterating job organisations for quota increment")
-		return fmt.Errorf("failed while iterating job organisations: %w", err)
+		return fmt.Errorf("iterate job organisations for quota increment: %w", err)
 	}
 
 	// Increment usage once per org with aggregated count
 	for orgID, count := range orgCounts {
 		_, err := tx.ExecContext(txCtx, `SELECT increment_daily_usage($1, $2)`, orgID, count)
 		if err != nil {
-			log.Warn().Err(err).Str("org_id", orgID).Int("pages", count).
-				Msg("Failed to increment daily usage counter")
 			sentry.WithScope(func(scope *sentry.Scope) {
 				scope.SetLevel(sentry.LevelWarning)
 				scope.SetTag("org_id", orgID)
 				scope.SetExtra("pages", count)
 				sentry.CaptureException(fmt.Errorf("quota increment failed: %w", err))
 			})
-			return fmt.Errorf("failed to increment daily usage for org %s: %w", orgID, err)
+			return fmt.Errorf("increment daily usage for org %s (%d pages): %w", orgID, count, err)
 		}
 	}
 
