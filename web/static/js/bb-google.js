@@ -83,14 +83,6 @@ function handleGoogleAction(action, element) {
       break;
     }
 
-    case "google-toggle-property": {
-      const propertyId = element.getAttribute("data-property-id");
-      if (propertyId) {
-        togglePropertySelection(propertyId, element);
-      }
-      break;
-    }
-
     case "google-save-properties":
       saveGoogleProperties();
       break;
@@ -146,13 +138,13 @@ async function loadGoogleConnections() {
     existingConnections.forEach((el) => el.remove());
 
     if (!connections || connections.length === 0) {
-      // No connections - show empty state, hide property selection
+      // No connections - show empty state message, hide property selection
       if (propertySelection) propertySelection.style.display = "none";
       if (emptyState) emptyState.style.display = "block";
       return;
     }
 
-    // Has connections - hide empty state AND property selection, show connections
+    // Has connections - hide empty state message AND property selection, show connections
     if (emptyState) emptyState.style.display = "none";
     if (propertySelection) propertySelection.style.display = "none";
 
@@ -206,7 +198,9 @@ async function loadGoogleConnections() {
 
       // Set up status toggle if present
       const statusToggle = clone.querySelector(".google-status-toggle");
-      if (statusToggle) {
+      const toggleContainer = clone.querySelector(".google-toggle-container");
+
+      if (statusToggle && toggleContainer) {
         const isActive = conn.status === "active";
         statusToggle.checked = isActive;
         statusToggle.setAttribute("data-connection-id", conn.id);
@@ -224,11 +218,15 @@ async function loadGoogleConnections() {
           }
         }
 
-        statusToggle.addEventListener("change", (e) => {
-          const newActive = e.target.checked;
-          toggleConnectionStatus(conn.id, newActive);
+        // Listen on label container instead of hidden checkbox
+        toggleContainer.addEventListener("click", async (e) => {
+          e.preventDefault(); // Prevent default label behavior
 
-          // Update toggle visual state immediately
+          // Toggle the checkbox state
+          const newActive = !statusToggle.checked;
+          statusToggle.checked = newActive;
+
+          // Update visual state immediately
           if (track && thumb) {
             if (newActive) {
               track.style.backgroundColor = "#10b981";
@@ -238,6 +236,9 @@ async function loadGoogleConnections() {
               thumb.style.transform = "translateX(0)";
             }
           }
+
+          // Call API to persist change
+          await toggleConnectionStatus(conn.id, newActive);
         });
       }
 
@@ -381,43 +382,6 @@ async function selectGoogleAccount(accountId) {
 }
 
 /**
- * Toggle a property's selection state
- * @param {string} propertyId - The property ID
- * @param {HTMLElement} element - The toggle element
- */
-function togglePropertySelection(propertyId, element) {
-  const isSelected = element.classList.contains("selected");
-  element.classList.toggle("selected", !isSelected);
-
-  // Update the checkbox visual
-  const checkbox = element.querySelector(".property-checkbox");
-  if (checkbox) {
-    if (!isSelected) {
-      // Now selected - show checkmark
-      checkbox.innerHTML = "✓";
-      checkbox.style.backgroundColor = "#10b981";
-      checkbox.style.borderColor = "#10b981";
-      checkbox.style.color = "#ffffff";
-    } else {
-      // Now unselected - clear checkmark
-      checkbox.innerHTML = "";
-      checkbox.style.backgroundColor = "#ffffff";
-      checkbox.style.borderColor = "#d1d5db";
-      checkbox.style.color = "";
-    }
-  }
-
-  // Update button style
-  if (!isSelected) {
-    element.style.borderColor = "#10b981";
-    element.style.backgroundColor = "#ecfdf5";
-  } else {
-    element.style.borderColor = "#d1d5db";
-    element.style.backgroundColor = "#ffffff";
-  }
-}
-
-/**
  * Save all properties (bulk save with active/inactive status)
  */
 async function saveGoogleProperties() {
@@ -436,11 +400,11 @@ async function saveGoogleProperties() {
     }
 
     // Get selected (active) property IDs
-    const selectedButtons = document.querySelectorAll(
-      "#googlePropertyList button.selected[data-property-id]"
+    const selectedItems = document.querySelectorAll(
+      "#googlePropertyList .selected[data-property-id]"
     );
-    const activePropertyIds = Array.from(selectedButtons).map((btn) =>
-      btn.getAttribute("data-property-id")
+    const activePropertyIds = Array.from(selectedItems).map((item) =>
+      item.getAttribute("data-property-id")
     );
 
     // Show saving state
@@ -502,14 +466,22 @@ async function saveGoogleProperties() {
  * @param {boolean} active - Whether to set active
  */
 async function toggleConnectionStatus(connectionId, active) {
+  console.log(
+    `[GA Toggle] Toggling ${connectionId} to ${active ? "active" : "inactive"}`
+  );
+
   try {
     const { data: { session } = {} } = await window.supabase.auth.getSession();
     const token = session?.access_token;
     if (!token) {
+      console.error("[GA Toggle] No auth token available");
       showGoogleError("Not authenticated. Please sign in.");
       return;
     }
 
+    console.log(
+      `[GA Toggle] Making PATCH request to /v1/integrations/google/${connectionId}/status`
+    );
     const response = await fetch(
       `/v1/integrations/google/${encodeURIComponent(connectionId)}/status`,
       {
@@ -526,13 +498,15 @@ async function toggleConnectionStatus(connectionId, active) {
 
     if (!response.ok) {
       const text = await response.text();
+      console.error(`[GA Toggle] API error: ${response.status}`, text);
       throw new Error(text || `HTTP ${response.status}`);
     }
 
+    console.log("[GA Toggle] Status updated successfully");
     // Reload to update UI
     loadGoogleConnections();
   } catch (error) {
-    console.error("Failed to toggle connection status:", error);
+    console.error("[GA Toggle] Failed to toggle connection status:", error);
     showGoogleError("Failed to update status");
     loadGoogleConnections(); // Reload to reset toggle state
   }
@@ -571,22 +545,11 @@ function renderPropertyList(properties, totalCount) {
 
   // Add property options with toggle functionality
   for (const prop of properties) {
-    const item = document.createElement("button");
-    item.type = "button";
-    item.className = "bb-button";
+    const item = document.createElement("div");
+    item.className = "bb-job-card";
     item.style.cssText =
-      "display: flex; align-items: center; width: 100%; text-align: left; margin-bottom: 8px; padding: 12px 16px; border: 2px solid #d1d5db; background: #ffffff; cursor: pointer; transition: all 0.15s;";
-    item.setAttribute("bbb-action", "google-toggle-property");
+      "display: flex; align-items: center; width: 100%; margin-bottom: 8px; padding: 12px 16px; background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 8px;";
     item.setAttribute("data-property-id", prop.property_id);
-    item.setAttribute("data-property-name", prop.display_name);
-
-    // Checkbox indicator
-    const checkbox = document.createElement("div");
-    checkbox.className = "property-checkbox";
-    checkbox.style.cssText =
-      "width: 20px; height: 20px; border: 2px solid #d1d5db; border-radius: 4px; margin-right: 12px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;";
-    checkbox.innerHTML = "";
-    item.appendChild(checkbox);
 
     // Property details
     const details = document.createElement("div");
@@ -594,15 +557,61 @@ function renderPropertyList(properties, totalCount) {
 
     const strongEl = document.createElement("strong");
     strongEl.textContent = prop.display_name;
+    strongEl.style.fontSize = "15px";
     details.appendChild(strongEl);
 
     const detailSpan = document.createElement("span");
     detailSpan.style.cssText =
-      "color: #6b7280; font-size: 13px; display: block;";
+      "color: #6b7280; font-size: 13px; display: block; margin-top: 2px;";
     detailSpan.textContent = `Property ID: ${prop.property_id}`;
     details.appendChild(detailSpan);
 
     item.appendChild(details);
+
+    // Toggle switch
+    const toggleLabel = document.createElement("label");
+    toggleLabel.className = "property-toggle-container";
+    toggleLabel.style.cssText =
+      "display: inline-flex; align-items: center; cursor: pointer; user-select: none;";
+
+    const toggleInput = document.createElement("input");
+    toggleInput.type = "checkbox";
+    toggleInput.className = "property-status-toggle";
+    toggleInput.style.display = "none";
+    toggleInput.setAttribute("data-property-id", prop.property_id);
+
+    const track = document.createElement("div");
+    track.className = "property-toggle-track";
+    track.style.cssText =
+      "position: relative; width: 44px; height: 24px; background-color: #d1d5db; border-radius: 12px; transition: background-color 0.2s;";
+
+    const thumb = document.createElement("div");
+    thumb.className = "property-toggle-thumb";
+    thumb.style.cssText =
+      "position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; background-color: white; border-radius: 10px; transition: transform 0.2s; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);";
+
+    track.appendChild(thumb);
+    toggleLabel.appendChild(toggleInput);
+    toggleLabel.appendChild(track);
+    item.appendChild(toggleLabel);
+
+    // Add click handler
+    toggleLabel.addEventListener("click", (e) => {
+      e.preventDefault();
+      const newActive = !toggleInput.checked;
+      toggleInput.checked = newActive;
+
+      if (newActive) {
+        track.style.backgroundColor = "#10b981";
+        thumb.style.transform = "translateX(20px)";
+        item.classList.add("selected");
+      } else {
+        track.style.backgroundColor = "#d1d5db";
+        thumb.style.transform = "translateX(0)";
+        item.classList.remove("selected");
+      }
+    });
+
     list.appendChild(item);
   }
 
