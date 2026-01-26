@@ -50,6 +50,7 @@ func TestResponseHelpers(t *testing.T) {
 			},
 			validateFunc: func(t *testing.T, w *httptest.ResponseRecorder) {
 				assert.Equal(t, http.StatusOK, w.Code)
+				assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
 
 				var response SuccessResponse
 				err := json.Unmarshal(w.Body.Bytes(), &response)
@@ -58,7 +59,8 @@ func TestResponseHelpers(t *testing.T) {
 				assert.Equal(t, "success", response.Status)
 				assert.Equal(t, "operation completed", response.Message)
 
-				dataMap := response.Data.(map[string]any)
+				dataMap, ok := response.Data.(map[string]any)
+				assert.True(t, ok, "response.Data should be map[string]any")
 				assert.Equal(t, "ok", dataMap["result"])
 			},
 		},
@@ -69,6 +71,7 @@ func TestResponseHelpers(t *testing.T) {
 			},
 			validateFunc: func(t *testing.T, w *httptest.ResponseRecorder) {
 				assert.Equal(t, http.StatusOK, w.Code)
+				assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
 
 				var response SuccessResponse
 				err := json.Unmarshal(w.Body.Bytes(), &response)
@@ -85,6 +88,7 @@ func TestResponseHelpers(t *testing.T) {
 			},
 			validateFunc: func(t *testing.T, w *httptest.ResponseRecorder) {
 				assert.Equal(t, http.StatusOK, w.Code)
+				assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
 
 				var response HealthResponse
 				err := json.Unmarshal(w.Body.Bytes(), &response)
@@ -103,6 +107,7 @@ func TestResponseHelpers(t *testing.T) {
 			},
 			validateFunc: func(t *testing.T, w *httptest.ResponseRecorder) {
 				assert.Equal(t, http.StatusOK, w.Code)
+				assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
 
 				var response HealthResponse
 				err := json.Unmarshal(w.Body.Bytes(), &response)
