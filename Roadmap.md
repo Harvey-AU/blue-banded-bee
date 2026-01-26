@@ -346,7 +346,8 @@ Organisation model implemented:
   - [x] Site picker UI in dashboard connections panel with search/pagination
   - [x] Per-site settings stored in `webflow_site_settings` table
   - [x] Connection management endpoints (list/get/delete)
-- [ ] **Manual Job Triggering** (Partially complete)
+- [x] **Manual Job Triggering** (Completed v0.24.0)
+  - [x] Jobs automatically triggered when schedule or auto-publish enabled
   - [x] Jobs can be triggered via scheduler or webhooks
   - [x] Show last crawl status (via general job list)
 - [x] **Scheduling Configuration**
@@ -427,7 +428,7 @@ complete technical architecture and Go implementation details.
 
 ### 5.1: Webflow Job Triggering & Polish
 
-- [ ] **Trigger immediate job when schedule or auto-publish enabled**
+- [x] **Trigger immediate job when schedule or auto-publish enabled**
 - [ ] **Extension Development**
   - [ ] Build Webflow Designer Extension using Designer Extension SDK
   - [ ] Implement site health metrics display (broken links, slow pages)
