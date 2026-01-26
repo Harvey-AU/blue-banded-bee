@@ -29,6 +29,22 @@ On merge, CI will:
 
 ## [Unreleased]
 
+### Changed
+
+- **Test Suite Simplification**: Reduced test suite by 71% (23,000→6,778 LOC,
+  78→22 files)
+  - Removed: Mock-heavy database tests, CRUD validation tests, manager/worker
+    unit tests with extensive mocking
+  - Kept: Security tests (JWT validation, webhook signatures, SSRF protection),
+    compliance tests (robots.txt enforcement), algorithm tests (sitemap parsing,
+    error classification, job lifecycle)
+  - Philosophy: Test for breakage, not coverage. Focus on security boundaries
+    and complex business logic
+- **Documentation Updates**: Updated README and Roadmap to reflect
+  security/compliance testing approach instead of coverage percentage targets
+- **CI Configuration**: Removed coverage floor gates from CI workflow, kept
+  Codecov for visibility only (informational, non-blocking)
+
 ## [0.23.0] – 2026-01-04
 
 ### Added
