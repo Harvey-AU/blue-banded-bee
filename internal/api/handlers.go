@@ -150,9 +150,20 @@ type DBClient interface {
 	DeleteWebflowConnection(ctx context.Context, connectionID, organisationID string) error
 	StoreWebflowToken(ctx context.Context, connectionID, token string) error
 	GetWebflowToken(ctx context.Context, connectionID string) (string, error)
+	// Google Analytics integration methods
+	CreateGoogleConnection(ctx context.Context, conn *db.GoogleAnalyticsConnection) error
+	GetGoogleConnection(ctx context.Context, connectionID string) (*db.GoogleAnalyticsConnection, error)
+	ListGoogleConnections(ctx context.Context, organisationID string) ([]*db.GoogleAnalyticsConnection, error)
+	DeleteGoogleConnection(ctx context.Context, connectionID, organisationID string) error
+	UpdateGoogleConnectionStatus(ctx context.Context, connectionID, organisationID, status string) error
+	StoreGoogleToken(ctx context.Context, connectionID, refreshToken string) error
+	GetGoogleToken(ctx context.Context, connectionID string) (string, error)
 	// Platform integration mappings
 	UpsertPlatformOrgMapping(ctx context.Context, mapping *db.PlatformOrgMapping) error
 	GetPlatformOrgMapping(ctx context.Context, platform, platformID string) (*db.PlatformOrgMapping, error)
+	// Usage and plans methods
+	GetOrganisationUsageStats(ctx context.Context, orgID string) (*db.UsageStats, error)
+	GetActivePlans(ctx context.Context) ([]db.Plan, error)
 	// Webflow site settings methods
 	CreateOrUpdateSiteSetting(ctx context.Context, setting *db.WebflowSiteSetting) error
 	GetSiteSetting(ctx context.Context, organisationID, webflowSiteID string) (*db.WebflowSiteSetting, error)
@@ -264,6 +275,12 @@ func (h *Handler) SetupRoutes(mux *http.ServeMux) {
 	mux.Handle("/v1/organisations", auth.AuthMiddleware(http.HandlerFunc(h.OrganisationsHandler)))
 	mux.Handle("/v1/organisations/switch", auth.AuthMiddleware(http.HandlerFunc(h.SwitchOrganisationHandler)))
 
+	// Usage routes (require auth)
+	mux.Handle("/v1/usage", auth.AuthMiddleware(http.HandlerFunc(h.UsageHandler)))
+
+	// Plans route (public - for pricing page)
+	mux.Handle("/v1/plans", http.HandlerFunc(h.PlansHandler))
+
 	// Webhook endpoints (no auth required)
 	mux.HandleFunc("/v1/webhooks/webflow/", h.WebflowWebhook) // Note: trailing slash for path params
 
@@ -278,6 +295,12 @@ func (h *Handler) SetupRoutes(mux *http.ServeMux) {
 	// Webflow site settings endpoints (must be before catch-all)
 	mux.Handle("/v1/integrations/webflow/sites/", auth.AuthMiddleware(http.HandlerFunc(h.webflowSitesRouter)))
 	mux.Handle("/v1/integrations/webflow/", auth.AuthMiddleware(http.HandlerFunc(h.WebflowConnectionHandler)))
+
+	// Google Analytics integration endpoints
+	mux.Handle("/v1/integrations/google", auth.AuthMiddleware(http.HandlerFunc(h.GoogleConnectionsHandler)))
+	mux.Handle("/v1/integrations/google/", auth.AuthMiddleware(http.HandlerFunc(h.GoogleConnectionHandler)))
+	mux.HandleFunc("/v1/integrations/google/callback", h.HandleGoogleOAuthCallback) // No auth - state validation
+	mux.Handle("/v1/integrations/google/save-property", auth.AuthMiddleware(http.HandlerFunc(h.SaveGoogleProperty)))
 
 	// Notification endpoints
 	mux.Handle("/v1/notifications", auth.AuthMiddleware(http.HandlerFunc(h.NotificationsHandler)))

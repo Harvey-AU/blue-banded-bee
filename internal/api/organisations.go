@@ -190,3 +190,84 @@ func (h *Handler) switchOrganisation(w http.ResponseWriter, r *http.Request) {
 		},
 	}, "Organisation switched successfully")
 }
+
+// UsageHandler handles GET /v1/usage
+// Returns current usage statistics for the user's active organisation
+func (h *Handler) UsageHandler(w http.ResponseWriter, r *http.Request) {
+	logger := loggerWithRequest(r)
+
+	if r.Method != http.MethodGet {
+		MethodNotAllowed(w, r)
+		return
+	}
+
+	// Get user's active organisation using the helper
+	orgID := h.GetActiveOrganisation(w, r)
+	if orgID == "" {
+		return // Error already written by helper
+	}
+
+	// Get usage stats from database
+	stats, err := h.DB.GetOrganisationUsageStats(r.Context(), orgID)
+	if err != nil {
+		InternalError(w, r, err)
+		return
+	}
+
+	logger.Info().
+		Str("organisation_id", orgID).
+		Int("daily_used", stats.DailyUsed).
+		Int("daily_limit", stats.DailyLimit).
+		Msg("Usage statistics retrieved")
+
+	WriteSuccess(w, r, map[string]interface{}{
+		"usage": stats,
+	}, "Usage statistics retrieved successfully")
+}
+
+// PublicPlan is a DTO for the public /v1/plans endpoint
+// Excludes internal metadata fields (is_active, sort_order, created_at)
+type PublicPlan struct {
+	ID                string `json:"id"`
+	Name              string `json:"name"`
+	DisplayName       string `json:"display_name"`
+	DailyPageLimit    int    `json:"daily_page_limit"`
+	MonthlyPriceCents int    `json:"monthly_price_cents"`
+}
+
+// PlansHandler handles GET /v1/plans
+// Returns available subscription plans (public endpoint for pricing page)
+func (h *Handler) PlansHandler(w http.ResponseWriter, r *http.Request) {
+	logger := loggerWithRequest(r)
+
+	if r.Method != http.MethodGet {
+		MethodNotAllowed(w, r)
+		return
+	}
+
+	plans, err := h.DB.GetActivePlans(r.Context())
+	if err != nil {
+		InternalError(w, r, err)
+		return
+	}
+
+	// Transform to public DTOs (filter out internal metadata)
+	publicPlans := make([]PublicPlan, len(plans))
+	for i, p := range plans {
+		publicPlans[i] = PublicPlan{
+			ID:                p.ID,
+			Name:              p.Name,
+			DisplayName:       p.DisplayName,
+			DailyPageLimit:    p.DailyPageLimit,
+			MonthlyPriceCents: p.MonthlyPriceCents,
+		}
+	}
+
+	logger.Info().
+		Int("plan_count", len(publicPlans)).
+		Msg("Plans retrieved")
+
+	WriteSuccess(w, r, map[string]interface{}{
+		"plans": publicPlans,
+	}, "Plans retrieved successfully")
+}

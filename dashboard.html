@@ -125,6 +125,56 @@
         font-size: 14px;
       }
 
+      /* Quota Display */
+      .bb-quota-display {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 12px;
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 6px;
+        font-size: 13px;
+        color: #475569;
+      }
+
+      .bb-quota-plan {
+        font-weight: 600;
+        color: #3b82f6;
+      }
+
+      .bb-quota-usage {
+        color: #64748b;
+      }
+
+      .bb-quota-usage-count {
+        font-weight: 600;
+        color: #1e293b;
+      }
+
+      .bb-quota-reset {
+        color: #94a3b8;
+        font-size: 12px;
+      }
+
+      .bb-quota-display.quota-warning {
+        background: #fef3c7;
+        border-color: #fcd34d;
+      }
+
+      .bb-quota-display.quota-warning .bb-quota-usage-count {
+        color: #b45309;
+      }
+
+      .bb-quota-display.quota-exhausted {
+        background: #fee2e2;
+        border-color: #fca5a5;
+      }
+
+      .bb-quota-display.quota-exhausted .bb-quota-usage-count {
+        color: #dc2626;
+      }
+
       .bb-button {
         padding: 8px 16px;
         border-radius: 6px;
@@ -1652,6 +1702,20 @@
                 </div>
               </div>
             </div>
+
+            <!-- Quota Display -->
+            <div
+              class="bb-quota-display"
+              id="quotaDisplay"
+              style="display: none"
+            >
+              <span class="bb-quota-plan" id="quotaPlan">Free</span>
+              <span class="bb-quota-usage">
+                <span class="bb-quota-usage-count" id="quotaUsage">0/1000</span>
+              </span>
+              <span class="bb-quota-reset" id="quotaReset">Resets in 12h</span>
+            </div>
+
             <span class="bb-org-divider">|</span>
             <span id="userEmail">Loading...</span>
             <div class="user-avatar" id="userAvatar">?</div>
@@ -2848,6 +2912,237 @@
             <span id="webflowErrorText"></span>
           </div>
         </div>
+
+        <!-- Google Analytics Connection Section -->
+        <div
+          class="bb-modal-section"
+          style="
+            border-top: 1px solid #e5e7eb;
+            padding-top: 24px;
+            margin-top: 24px;
+          "
+        >
+          <h3
+            class="bb-modal-section-title"
+            style="display: flex; align-items: center; gap: 8px"
+          >
+            <span style="font-size: 20px">📊</span>
+            Google Analytics Integration
+          </h3>
+          <p style="color: #6b7280; font-size: 14px; margin-bottom: 16px">
+            Connect your Google Analytics 4 property to track cache warming
+            performance metrics.
+          </p>
+
+          <!-- Connect Button (always visible) -->
+          <button
+            class="bb-button bb-button-primary"
+            bbb-action="google-connect"
+            style="
+              display: inline-flex;
+              align-items: center;
+              gap: 8px;
+              margin-bottom: 16px;
+            "
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+              <path
+                d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+              />
+              <path
+                d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+              />
+              <path
+                d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+              />
+              <path
+                d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+              />
+            </svg>
+            Connect Google Analytics
+          </button>
+
+          <!-- Google Connections List -->
+          <div
+            id="googleConnectionsList"
+            bbb-list="google-connections"
+            style="margin-bottom: 16px"
+          >
+            <!-- Template for each connection -->
+            <div
+              class="bb-job-card"
+              bbb-template="google-connection"
+              style="
+                display: none;
+                background: #f8f9fa;
+                border: 1px solid #e9ecef;
+                border-radius: 8px;
+                padding: 16px;
+                margin-bottom: 12px;
+              "
+            >
+              <div
+                style="
+                  display: flex;
+                  justify-content: space-between;
+                  align-items: center;
+                "
+              >
+                <div>
+                  <strong class="google-name" style="font-size: 16px"
+                    >Google Analytics Connection</strong
+                  >
+                  <span
+                    class="google-email"
+                    style="color: #6b7280; font-size: 13px; margin-left: 8px"
+                  ></span>
+                  <span
+                    class="google-connected-date"
+                    style="
+                      color: #6b7280;
+                      font-size: 13px;
+                      display: block;
+                      margin-top: 4px;
+                    "
+                  ></span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 12px">
+                  <!-- Toggle Switch -->
+                  <label
+                    class="google-toggle-container"
+                    style="
+                      display: inline-flex;
+                      align-items: center;
+                      cursor: pointer;
+                      user-select: none;
+                    "
+                  >
+                    <input
+                      type="checkbox"
+                      class="google-status-toggle"
+                      style="display: none"
+                    />
+                    <div
+                      class="google-toggle-track"
+                      style="
+                        position: relative;
+                        width: 44px;
+                        height: 24px;
+                        background-color: #d1d5db;
+                        border-radius: 12px;
+                        transition: background-color 0.2s;
+                      "
+                    >
+                      <div
+                        class="google-toggle-thumb"
+                        style="
+                          position: absolute;
+                          top: 2px;
+                          left: 2px;
+                          width: 20px;
+                          height: 20px;
+                          background-color: white;
+                          border-radius: 10px;
+                          transition: transform 0.2s;
+                          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+                        "
+                      ></div>
+                    </div>
+                  </label>
+                  <button
+                    class="bb-button bb-button-outline"
+                    bbb-action="google-disconnect"
+                    bbb-id=""
+                    style="
+                      font-size: 13px;
+                      padding: 6px 12px;
+                      color: #dc2626;
+                      border-color: #dc2626;
+                    "
+                  >
+                    Disconnect
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Property Selection UI (shown when multiple properties available) -->
+          <div
+            id="googlePropertySelection"
+            style="
+              display: none;
+              background: #f9fafb;
+              border-radius: 8px;
+              border: 1px solid #e5e7eb;
+              padding: 16px;
+              margin-bottom: 16px;
+            "
+          >
+            <h4 style="margin: 0 0 12px 0; font-size: 14px; color: #374151">
+              Select a GA4 Property
+            </h4>
+            <p style="color: #6b7280; font-size: 13px; margin-bottom: 12px">
+              Multiple properties found. Please select which one to connect:
+            </p>
+            <div id="googlePropertyList"></div>
+            <button
+              class="bb-button bb-button-outline"
+              bbb-action="google-cancel-selection"
+              style="margin-top: 8px; font-size: 13px"
+            >
+              Cancel
+            </button>
+          </div>
+
+          <!-- Empty state message (shown when no connections) -->
+          <div
+            id="googleEmptyState"
+            style="
+              display: none;
+              text-align: center;
+              padding: 16px 24px;
+              background: #f9fafb;
+              border-radius: 8px;
+              border: 2px dashed #e5e7eb;
+              margin-bottom: 16px;
+            "
+          >
+            <p style="color: #6b7280; margin: 0">
+              No connections yet. Click above to connect your first property.
+            </p>
+          </div>
+
+          <!-- Success/Error Messages -->
+          <div
+            class="bb-notification-success"
+            id="googleSuccessMessage"
+            style="
+              display: none;
+              margin-top: 16px;
+              background: #dcfce7;
+              color: #166534;
+              padding: 12px;
+              border-radius: 8px;
+            "
+          >
+            <span id="googleSuccessText"></span>
+          </div>
+          <div
+            class="bb-notification-error"
+            id="googleErrorMessage"
+            style="
+              display: none;
+              margin-top: 16px;
+              background: #fee2e2;
+              color: #dc2626;
+              padding: 12px;
+              border-radius: 8px;
+            "
+          >
+            <span id="googleErrorText"></span>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -2917,6 +3212,7 @@
     <script src="/js/bb-dashboard-actions.js" defer></script>
     <script src="/js/bb-slack.js" defer></script>
     <script src="/js/bb-webflow.js" defer></script>
+    <script src="/js/bb-google.js" defer></script>
 
     <script>
       // Initialize dashboard with unified authentication system
@@ -2928,7 +3224,7 @@
           // Initialize the complete dashboard with auth integration
           await initializeDashboard({
             debug: false,
-            refreshInterval: 60,
+            refreshInterval: 1,
             apiBaseUrl: "",
             autoRefresh: true,
             networkMonitoring: true,
@@ -3016,6 +3312,14 @@
           }
           if (window.handleWebflowOAuthCallback) {
             window.handleWebflowOAuthCallback();
+          }
+
+          // Initialize Google Analytics integration
+          if (window.setupGoogleIntegration) {
+            window.setupGoogleIntegration();
+          }
+          if (window.handleGoogleOAuthCallback) {
+            window.handleGoogleOAuthCallback();
           }
 
           console.log(
@@ -3240,6 +3544,15 @@
                       await window.loadSlackConnections();
                     } catch (err) {
                       console.warn("Failed to load Slack connections:", err);
+                    }
+                  }
+
+                  // Refresh quota display for new organisation
+                  if (typeof fetchAndDisplayQuota === "function") {
+                    try {
+                      await fetchAndDisplayQuota();
+                    } catch (err) {
+                      console.warn("Failed to refresh quota display:", err);
                     }
                   }
 
@@ -3525,6 +3838,13 @@
               }
             } catch (err) {
               console.error("Failed to load Webflow connections:", err);
+            }
+            try {
+              if (window.loadGoogleConnections) {
+                await window.loadGoogleConnections();
+              }
+            } catch (err) {
+              console.error("Failed to load Google connections:", err);
             }
           });
         }
@@ -3873,6 +4193,118 @@
         window.showIntegrationFeedback("webflow", "success", msg);
       window.showWebflowError = (msg) =>
         window.showIntegrationFeedback("webflow", "error", msg);
+
+      // ========================================
+      // Quota Display
+      // ========================================
+
+      // Format time remaining until reset
+      function formatTimeUntilReset(resetTime) {
+        const now = new Date();
+        const reset = new Date(resetTime);
+        const diffMs = reset - now;
+
+        if (diffMs <= 0) return "Resets soon";
+
+        const hours = Math.floor(diffMs / (1000 * 60 * 60));
+        const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+
+        if (hours > 0) {
+          return `Resets in ${hours}h ${minutes}m`;
+        }
+        return `Resets in ${minutes}m`;
+      }
+
+      // Fetch and display quota information
+      async function fetchAndDisplayQuota() {
+        const quotaDisplay = document.getElementById("quotaDisplay");
+        const quotaPlan = document.getElementById("quotaPlan");
+        const quotaUsage = document.getElementById("quotaUsage");
+        const quotaReset = document.getElementById("quotaReset");
+
+        if (!quotaDisplay || !window.supabase) return;
+
+        try {
+          // Get auth token from Supabase session
+          const session = await window.supabase.auth.getSession();
+          const token = session?.data?.session?.access_token;
+
+          if (!token) {
+            return;
+          }
+
+          const response = await fetch("/v1/usage", {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          });
+
+          if (!response.ok) {
+            console.warn("Failed to fetch quota:", response.status);
+            return;
+          }
+
+          const data = await response.json();
+          const usage = data.data?.usage;
+
+          if (!usage) return;
+
+          // Update display
+          quotaPlan.textContent = usage.plan_display_name || "Free";
+          quotaUsage.textContent = `${usage.daily_used.toLocaleString()}/${usage.daily_limit.toLocaleString()}`;
+          quotaReset.textContent = formatTimeUntilReset(usage.resets_at);
+
+          // Update styling based on usage percentage
+          quotaDisplay.classList.remove("quota-warning", "quota-exhausted");
+          if (usage.usage_percentage >= 100) {
+            quotaDisplay.classList.add("quota-exhausted");
+          } else if (usage.usage_percentage >= 80) {
+            quotaDisplay.classList.add("quota-warning");
+          }
+
+          // Show the display
+          quotaDisplay.style.display = "flex";
+        } catch (err) {
+          console.warn("Error fetching quota:", err);
+        }
+      }
+
+      // Update quota display every 0.5s for real-time feel
+      let quotaResetInterval;
+      function startQuotaResetCountdown() {
+        if (quotaResetInterval) clearInterval(quotaResetInterval);
+        quotaResetInterval = setInterval(fetchAndDisplayQuota, 500);
+      }
+
+      // Clean up interval on page unload to prevent memory leaks
+      window.addEventListener("beforeunload", () => {
+        if (quotaResetInterval) clearInterval(quotaResetInterval);
+      });
+
+      // Listen for Supabase auth state change
+      if (window.supabase) {
+        window.supabase.auth.onAuthStateChange((event, session) => {
+          if (session) {
+            fetchAndDisplayQuota();
+            startQuotaResetCountdown();
+          } else {
+            const quotaDisplay = document.getElementById("quotaDisplay");
+            if (quotaDisplay) quotaDisplay.style.display = "none";
+            if (quotaResetInterval) clearInterval(quotaResetInterval);
+          }
+        });
+      }
+
+      // Also try after a delay to catch already-logged-in users
+      setTimeout(async () => {
+        if (window.supabase) {
+          const session = await window.supabase.auth.getSession();
+          if (session?.data?.session) {
+            fetchAndDisplayQuota();
+            startQuotaResetCountdown();
+          }
+        }
+      }, 1000);
     </script>
   </body>
 </html>

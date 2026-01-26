@@ -1,6 +1,7 @@
 package db
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"strings"
@@ -583,4 +584,91 @@ func (db *DB) GetEffectiveOrganisationID(user *User) string {
 		return *user.OrganisationID
 	}
 	return ""
+}
+
+// GetOrganisationUsageStats returns current usage statistics for an organisation
+func (db *DB) GetOrganisationUsageStats(ctx context.Context, orgID string) (*UsageStats, error) {
+	query := `SELECT daily_limit, daily_used, daily_remaining, plan_name, plan_display_name, reset_time
+	          FROM get_organisation_usage_stats($1)`
+
+	var stats UsageStats
+	err := db.client.QueryRowContext(ctx, query, orgID).Scan(
+		&stats.DailyLimit,
+		&stats.DailyUsed,
+		&stats.DailyRemaining,
+		&stats.PlanName,
+		&stats.PlanDisplayName,
+		&stats.ResetsAt,
+	)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("organisation not found or has no plan: %s", orgID)
+		}
+		return nil, fmt.Errorf("failed to get organisation usage stats: %w", err)
+	}
+
+	// Calculate percentage
+	if stats.DailyLimit > 0 {
+		stats.UsagePercentage = float64(stats.DailyUsed) / float64(stats.DailyLimit) * 100
+	}
+
+	return &stats, nil
+}
+
+// UsageStats represents current usage statistics for an organisation
+type UsageStats struct {
+	DailyLimit      int       `json:"daily_limit"`
+	DailyUsed       int       `json:"daily_used"`
+	DailyRemaining  int       `json:"daily_remaining"`
+	UsagePercentage float64   `json:"usage_percentage"`
+	PlanName        string    `json:"plan_name"`
+	PlanDisplayName string    `json:"plan_display_name"`
+	ResetsAt        time.Time `json:"resets_at"`
+}
+
+// Plan represents a subscription tier
+type Plan struct {
+	ID                string    `json:"id"`
+	Name              string    `json:"name"`
+	DisplayName       string    `json:"display_name"`
+	DailyPageLimit    int       `json:"daily_page_limit"`
+	MonthlyPriceCents int       `json:"monthly_price_cents"`
+	IsActive          bool      `json:"is_active"`
+	SortOrder         int       `json:"sort_order"`
+	CreatedAt         time.Time `json:"created_at"`
+}
+
+// GetActivePlans returns all active subscription plans
+func (db *DB) GetActivePlans(ctx context.Context) ([]Plan, error) {
+	query := `
+		SELECT id, name, display_name, daily_page_limit, monthly_price_cents,
+		       is_active, sort_order, created_at
+		FROM plans
+		WHERE is_active = true
+		ORDER BY sort_order
+	`
+
+	rows, err := db.client.QueryContext(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get active plans: %w", err)
+	}
+	defer rows.Close()
+
+	var plans []Plan
+	for rows.Next() {
+		var p Plan
+		if err := rows.Scan(
+			&p.ID, &p.Name, &p.DisplayName, &p.DailyPageLimit, &p.MonthlyPriceCents,
+			&p.IsActive, &p.SortOrder, &p.CreatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("failed to scan plan: %w", err)
+		}
+		plans = append(plans, p)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to iterate plan rows: %w", err)
+	}
+
+	return plans, nil
 }
