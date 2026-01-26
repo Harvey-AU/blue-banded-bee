@@ -284,7 +284,7 @@ Organisation model implemented:
   - [x] Advanced filtering and search capabilities
 - [ ] **User Experience Features**
   - [ ] Account settings and profile management templates
-  - [ ] Notification system integration
+  - [x] Notification system integration
   - [ ] Performance analytics and trend visualisation
   - [ ] Responsive design compatibility testing
 
@@ -299,7 +299,6 @@ Organisation model implemented:
   - [x] Implement link priority ordering for header links (1st: 1.000, 2nd:
         0.990, etc.)
   - [x] Apply priority ordering logic to all discovered page links
-  - [ ] Job-level task prioritisation options
 
 - [x] **Robots.txt Compliance**
   - [x] Parse and honour robots.txt crawl-delay directives
