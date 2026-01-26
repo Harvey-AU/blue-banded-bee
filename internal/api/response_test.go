@@ -9,61 +9,118 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// TestWriteJSON verifies basic JSON response writing
-func TestWriteJSON(t *testing.T) {
-	w := httptest.NewRecorder()
-	r := httptest.NewRequest(http.MethodGet, "/test", nil)
-	data := map[string]string{"message": "test"}
+// TestResponseHelpers verifies all response helper functions using table-driven tests
+func TestResponseHelpers(t *testing.T) {
+	tests := []struct {
+		name         string
+		testFunc     func(*httptest.ResponseRecorder, *http.Request)
+		validateFunc func(*testing.T, *httptest.ResponseRecorder)
+	}{
+		{
+			name: "write_json_with_data",
+			testFunc: func(w *httptest.ResponseRecorder, r *http.Request) {
+				data := map[string]string{"message": "test"}
+				WriteJSON(w, r, data, http.StatusOK)
+			},
+			validateFunc: func(t *testing.T, w *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusOK, w.Code)
+				assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
 
-	WriteJSON(w, r, data, http.StatusOK)
+				var result map[string]string
+				err := json.Unmarshal(w.Body.Bytes(), &result)
+				assert.NoError(t, err)
+				assert.Equal(t, "test", result["message"])
+			},
+		},
+		{
+			name: "write_json_with_nil",
+			testFunc: func(w *httptest.ResponseRecorder, r *http.Request) {
+				WriteJSON(w, r, nil, http.StatusOK)
+			},
+			validateFunc: func(t *testing.T, w *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusOK, w.Code)
+				assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
+			},
+		},
+		{
+			name: "write_success_with_data",
+			testFunc: func(w *httptest.ResponseRecorder, r *http.Request) {
+				data := map[string]string{"result": "ok"}
+				WriteSuccess(w, r, data, "operation completed")
+			},
+			validateFunc: func(t *testing.T, w *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusOK, w.Code)
 
-	assert.Equal(t, http.StatusOK, w.Code)
-	assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
+				var response SuccessResponse
+				err := json.Unmarshal(w.Body.Bytes(), &response)
+				assert.NoError(t, err)
 
-	var result map[string]string
-	err := json.Unmarshal(w.Body.Bytes(), &result)
-	assert.NoError(t, err)
-	assert.Equal(t, "test", result["message"])
-}
+				assert.Equal(t, "success", response.Status)
+				assert.Equal(t, "operation completed", response.Message)
 
-// TestSuccessResponseStructure verifies success response format
-func TestSuccessResponseStructure(t *testing.T) {
-	w := httptest.NewRecorder()
-	r := httptest.NewRequest(http.MethodGet, "/test", nil)
-	data := map[string]string{"result": "ok"}
+				dataMap := response.Data.(map[string]any)
+				assert.Equal(t, "ok", dataMap["result"])
+			},
+		},
+		{
+			name: "write_success_with_empty_message",
+			testFunc: func(w *httptest.ResponseRecorder, r *http.Request) {
+				WriteSuccess(w, r, map[string]string{"key": "value"}, "")
+			},
+			validateFunc: func(t *testing.T, w *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusOK, w.Code)
 
-	WriteSuccess(w, r, data, "operation completed")
+				var response SuccessResponse
+				err := json.Unmarshal(w.Body.Bytes(), &response)
+				assert.NoError(t, err)
 
-	assert.Equal(t, http.StatusOK, w.Code)
+				assert.Equal(t, "success", response.Status)
+				assert.Equal(t, "", response.Message)
+			},
+		},
+		{
+			name: "write_healthy",
+			testFunc: func(w *httptest.ResponseRecorder, r *http.Request) {
+				WriteHealthy(w, r, "blue-banded-bee", "1.0.0")
+			},
+			validateFunc: func(t *testing.T, w *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusOK, w.Code)
 
-	var response SuccessResponse
-	err := json.Unmarshal(w.Body.Bytes(), &response)
-	assert.NoError(t, err)
+				var response HealthResponse
+				err := json.Unmarshal(w.Body.Bytes(), &response)
+				assert.NoError(t, err)
 
-	// Verify response structure
-	assert.Equal(t, "success", response.Status)
-	assert.Equal(t, "operation completed", response.Message)
+				assert.Equal(t, "healthy", response.Status)
+				assert.Equal(t, "blue-banded-bee", response.Service)
+				assert.Equal(t, "1.0.0", response.Version)
+				assert.NotEmpty(t, response.Timestamp)
+			},
+		},
+		{
+			name: "write_healthy_with_empty_service",
+			testFunc: func(w *httptest.ResponseRecorder, r *http.Request) {
+				WriteHealthy(w, r, "", "2.0.0")
+			},
+			validateFunc: func(t *testing.T, w *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusOK, w.Code)
 
-	// Verify data is present
-	dataMap := response.Data.(map[string]any)
-	assert.Equal(t, "ok", dataMap["result"])
-}
+				var response HealthResponse
+				err := json.Unmarshal(w.Body.Bytes(), &response)
+				assert.NoError(t, err)
 
-// TestHealthResponseStructure verifies health check response format
-func TestHealthResponseStructure(t *testing.T) {
-	w := httptest.NewRecorder()
-	r := httptest.NewRequest(http.MethodGet, "/health", nil)
+				assert.Equal(t, "", response.Service)
+				assert.Equal(t, "2.0.0", response.Version)
+			},
+		},
+	}
 
-	WriteHealthy(w, r, "blue-banded-bee", "1.0.0")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			r := httptest.NewRequest(http.MethodGet, "/test", nil)
 
-	assert.Equal(t, http.StatusOK, w.Code)
-
-	var response HealthResponse
-	err := json.Unmarshal(w.Body.Bytes(), &response)
-	assert.NoError(t, err)
-
-	assert.Equal(t, "healthy", response.Status)
-	assert.Equal(t, "blue-banded-bee", response.Service)
-	assert.Equal(t, "1.0.0", response.Version)
-	assert.NotEmpty(t, response.Timestamp)
+			tt.testFunc(w, r)
+			tt.validateFunc(t, w)
+		})
+	}
 }

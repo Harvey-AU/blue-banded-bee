@@ -31,8 +31,8 @@ On merge, CI will:
 
 ### Changed
 
-- **Test Suite Simplification**: Reduced test suite by 71% (23,000→6,778 LOC,
-  78→22 files)
+- **Test Suite Simplification**: Reduced test suite by 72% (23,000→6,369 LOC,
+  78→20 files)
   - Removed: Mock-heavy database tests, CRUD validation tests, manager/worker
     unit tests with extensive mocking
   - Kept: Security tests (JWT validation, webhook signatures, SSRF protection),

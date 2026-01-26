@@ -342,7 +342,7 @@ Organisation model implemented:
   - [x] OAuth flow with HMAC-signed state for CSRF protection
   - [x] Token storage in Supabase Vault with automatic cleanup
   - [x] User identity display via `authorized_user:read` scope
-  - [x] Dashboard UI showing connection status and user name
+  - [x] Dashboard UI showing connection status and username
   - [x] Shared OAuth utilities extracted from Slack integration
 - [x] **Webflow Site Selection**
   - [x] List user's accessible Webflow sites via `/v2/sites` endpoint

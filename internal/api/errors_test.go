@@ -10,22 +10,71 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// TestWriteError verifies error response structure
-func TestWriteError(t *testing.T) {
-	w := httptest.NewRecorder()
-	r := httptest.NewRequest(http.MethodGet, "/test", nil)
+// TestErrors verifies all error response types using table-driven tests
+func TestErrors(t *testing.T) {
+	tests := []struct {
+		name           string
+		testFunc       func(*httptest.ResponseRecorder, *http.Request)
+		expectedStatus int
+		expectedCode   string
+		expectedMsg    string
+	}{
+		{
+			name: "bad_request",
+			testFunc: func(w *httptest.ResponseRecorder, r *http.Request) {
+				BadRequest(w, r, "validation failed")
+			},
+			expectedStatus: http.StatusBadRequest,
+			expectedCode:   "BAD_REQUEST",
+			expectedMsg:    "validation failed",
+		},
+		{
+			name: "unauthorised",
+			testFunc: func(w *httptest.ResponseRecorder, r *http.Request) {
+				Unauthorised(w, r, "invalid token")
+			},
+			expectedStatus: http.StatusUnauthorized,
+			expectedCode:   "UNAUTHORISED",
+			expectedMsg:    "invalid token",
+		},
+		{
+			name: "internal_error",
+			testFunc: func(w *httptest.ResponseRecorder, r *http.Request) {
+				WriteError(w, r, errors.New("database connection failed"), http.StatusInternalServerError, ErrCodeInternal)
+			},
+			expectedStatus: http.StatusInternalServerError,
+			expectedCode:   "INTERNAL_ERROR",
+			expectedMsg:    "database connection failed",
+		},
+		{
+			name: "write_error_with_custom_code",
+			testFunc: func(w *httptest.ResponseRecorder, r *http.Request) {
+				WriteError(w, r, errors.New("invalid input"), http.StatusBadRequest, ErrCodeBadRequest)
+			},
+			expectedStatus: http.StatusBadRequest,
+			expectedCode:   "BAD_REQUEST",
+			expectedMsg:    "invalid input",
+		},
+	}
 
-	WriteError(w, r, errors.New("invalid input"), http.StatusBadRequest, ErrCodeBadRequest)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			r := httptest.NewRequest(http.MethodGet, "/test", nil)
 
-	assert.Equal(t, http.StatusBadRequest, w.Code)
+			tt.testFunc(w, r)
 
-	var response ErrorResponse
-	err := json.Unmarshal(w.Body.Bytes(), &response)
-	assert.NoError(t, err)
+			assert.Equal(t, tt.expectedStatus, w.Code)
 
-	assert.Equal(t, "BAD_REQUEST", response.Code)
-	assert.Equal(t, "invalid input", response.Message)
-	assert.Equal(t, http.StatusBadRequest, response.Status)
+			var response ErrorResponse
+			err := json.Unmarshal(w.Body.Bytes(), &response)
+			assert.NoError(t, err)
+
+			assert.Equal(t, tt.expectedCode, response.Code)
+			assert.Equal(t, tt.expectedMsg, response.Message)
+			assert.Equal(t, tt.expectedStatus, response.Status)
+		})
+	}
 }
 
 // TestErrorCodesConstants verifies error code constants are correctly defined
@@ -35,38 +84,4 @@ func TestErrorCodesConstants(t *testing.T) {
 	assert.Equal(t, ErrorCode("FORBIDDEN"), ErrCodeForbidden)
 	assert.Equal(t, ErrorCode("NOT_FOUND"), ErrCodeNotFound)
 	assert.Equal(t, ErrorCode("INTERNAL_ERROR"), ErrCodeInternal)
-}
-
-// TestBadRequest verifies BadRequest helper
-func TestBadRequest(t *testing.T) {
-	w := httptest.NewRecorder()
-	r := httptest.NewRequest(http.MethodGet, "/test", nil)
-
-	BadRequest(w, r, "validation failed")
-
-	assert.Equal(t, http.StatusBadRequest, w.Code)
-
-	var response ErrorResponse
-	err := json.Unmarshal(w.Body.Bytes(), &response)
-	assert.NoError(t, err)
-
-	assert.Equal(t, "BAD_REQUEST", response.Code)
-	assert.Equal(t, "validation failed", response.Message)
-}
-
-// TestUnauthorised verifies Unauthorised helper
-func TestUnauthorised(t *testing.T) {
-	w := httptest.NewRecorder()
-	r := httptest.NewRequest(http.MethodGet, "/test", nil)
-
-	Unauthorised(w, r, "invalid token")
-
-	assert.Equal(t, http.StatusUnauthorized, w.Code)
-
-	var response ErrorResponse
-	err := json.Unmarshal(w.Body.Bytes(), &response)
-	assert.NoError(t, err)
-
-	assert.Equal(t, "UNAUTHORISED", response.Code)
-	assert.Equal(t, "invalid token", response.Message)
 }
