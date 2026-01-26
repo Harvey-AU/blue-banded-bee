@@ -439,7 +439,7 @@ func (h *Handler) updateSiteSchedule(w http.ResponseWriter, r *http.Request, sit
 	}
 
 	// Trigger immediate job when creating or updating a schedule
-	if req.ScheduleIntervalHours != nil && *req.ScheduleIntervalHours > 0 {
+	if req.ScheduleIntervalHours != nil {
 		logger.Info().
 			Str("site_id", siteID).
 			Str("domain", primaryDomain).
@@ -462,7 +462,10 @@ func (h *Handler) updateSiteSchedule(w http.ResponseWriter, r *http.Request, sit
 				"scheduler_id":   schedulerID,
 				"enabled_at":     time.Now().UTC().Format(time.RFC3339),
 			}
-			sourceInfoBytes, _ := json.Marshal(sourceInfoMap)
+			sourceInfoBytes, err := json.Marshal(sourceInfoMap)
+			if err != nil {
+				logger.Warn().Err(err).Msg("Failed to marshal source info for immediate job")
+			}
 			sourceInfo := string(sourceInfoBytes)
 
 			jobReq := CreateJobRequest{
@@ -472,7 +475,7 @@ func (h *Handler) updateSiteSchedule(w http.ResponseWriter, r *http.Request, sit
 				SourceInfo:   &sourceInfo,
 			}
 
-			_, err := h.createJobFromRequest(r.Context(), user, jobReq)
+			_, err = h.createJobFromRequest(ctx, user, jobReq)
 			if err != nil {
 				logger.Warn().Err(err).Msg("Failed to create immediate job, user can trigger manually")
 				// Don't fail the entire request - scheduler is configured successfully
@@ -610,7 +613,7 @@ func (h *Handler) toggleSiteAutoPublish(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 
-	// Trigger immediate job when enabling auto-publish for the first time
+	// Trigger immediate job when enabling auto-publish
 	if req.Enabled && webhookID != "" {
 		logger.Info().
 			Str("site_id", siteID).
@@ -631,7 +634,10 @@ func (h *Handler) toggleSiteAutoPublish(w http.ResponseWriter, r *http.Request, 
 				"site_name":  siteInfo.DisplayName,
 				"enabled_at": time.Now().UTC().Format(time.RFC3339),
 			}
-			sourceInfoBytes, _ := json.Marshal(sourceInfoMap)
+			sourceInfoBytes, err := json.Marshal(sourceInfoMap)
+			if err != nil {
+				logger.Warn().Err(err).Msg("Failed to marshal source info for immediate job")
+			}
 			sourceInfo := string(sourceInfoBytes)
 
 			jobReq := CreateJobRequest{
@@ -641,7 +647,7 @@ func (h *Handler) toggleSiteAutoPublish(w http.ResponseWriter, r *http.Request, 
 				SourceInfo:   &sourceInfo,
 			}
 
-			_, err = h.createJobFromRequest(r.Context(), user, jobReq)
+			_, err = h.createJobFromRequest(ctx, user, jobReq)
 			if err != nil {
 				logger.Warn().Err(err).Msg("Failed to create immediate job, user can trigger manually")
 				// Don't fail the entire request - webhook is registered successfully
