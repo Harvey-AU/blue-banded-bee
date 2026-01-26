@@ -113,8 +113,10 @@ func TestResponseHelpers(t *testing.T) {
 				err := json.Unmarshal(w.Body.Bytes(), &response)
 				assert.NoError(t, err)
 
+				assert.Equal(t, "healthy", response.Status)
 				assert.Equal(t, "", response.Service)
 				assert.Equal(t, "2.0.0", response.Version)
+				assert.NotEmpty(t, response.Timestamp)
 			},
 		},
 	}
