@@ -29,6 +29,19 @@ On merge, CI will:
 
 ## [Unreleased]
 
+## [0.24.2] – 2026-01-26
+
+### Added
+
+- **Immediate Job Triggering**: Jobs now automatically triggered when enabling
+  schedules or auto-publish webhooks for Webflow sites
+  - Schedule enable/update creates immediate job with
+    `source_type="schedule_setup"`
+  - Auto-publish enable creates immediate job with
+    `source_type="auto_publish_setup"`
+  - Provides instant user feedback that automation features are working
+  - Graceful error handling - feature enable succeeds even if job creation fails
+
 ## [0.24.1] – 2026-01-26
 
 ### Changed

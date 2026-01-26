@@ -438,6 +438,53 @@ func (h *Handler) updateSiteSchedule(w http.ResponseWriter, r *http.Request, sit
 		return
 	}
 
+	// Trigger immediate job when creating or updating a schedule
+	if req.ScheduleIntervalHours != nil {
+		logger.Info().
+			Str("site_id", siteID).
+			Str("domain", primaryDomain).
+			Int("interval_hours", *req.ScheduleIntervalHours).
+			Msg("Creating immediate job for schedule setup")
+
+		// Get user from context (already validated by auth middleware)
+		user, _, ok := h.GetActiveOrganisationWithUser(w, r)
+		if !ok {
+			// Auth already handled, but safety check
+			logger.Warn().Msg("Could not get user for immediate job creation")
+		} else {
+			sourceType := "schedule_setup"
+			sourceDetail := fmt.Sprintf("Schedule enabled (%dh)", *req.ScheduleIntervalHours)
+			sourceInfoMap := map[string]interface{}{
+				"trigger":        "schedule_enabled",
+				"site_id":        siteID,
+				"site_name":      siteInfo.DisplayName,
+				"interval_hours": *req.ScheduleIntervalHours,
+				"scheduler_id":   schedulerID,
+				"enabled_at":     time.Now().UTC().Format(time.RFC3339),
+			}
+			sourceInfoBytes, err := json.Marshal(sourceInfoMap)
+			if err != nil {
+				logger.Warn().Err(err).Msg("Failed to marshal source info for immediate job")
+			}
+			sourceInfo := string(sourceInfoBytes)
+
+			jobReq := CreateJobRequest{
+				Domain:       primaryDomain,
+				SourceType:   &sourceType,
+				SourceDetail: &sourceDetail,
+				SourceInfo:   &sourceInfo,
+			}
+
+			_, err = h.createJobFromRequest(ctx, user, jobReq)
+			if err != nil {
+				logger.Warn().Err(err).Msg("Failed to create immediate job, user can trigger manually")
+				// Don't fail the entire request - scheduler is configured successfully
+			} else {
+				logger.Info().Str("domain", primaryDomain).Str("scheduler_id", schedulerID).Msg("Immediate job created successfully")
+			}
+		}
+	}
+
 	// Build response
 	response := WebflowSiteSettingResponse{
 		WebflowSiteID:         siteID,
@@ -564,6 +611,50 @@ func (h *Handler) toggleSiteAutoPublish(w http.ResponseWriter, r *http.Request, 
 		logger.Error().Err(err).Str("site_id", siteID).Msg("Failed to save site setting")
 		InternalError(w, r, err)
 		return
+	}
+
+	// Trigger immediate job when enabling auto-publish
+	if req.Enabled && webhookID != "" {
+		logger.Info().
+			Str("site_id", siteID).
+			Str("domain", primaryDomain).
+			Msg("Creating immediate job for newly enabled auto-publish")
+
+		// Get user from context (already validated by auth middleware)
+		user, _, ok := h.GetActiveOrganisationWithUser(w, r)
+		if !ok {
+			// Auth already handled, but safety check
+			logger.Warn().Msg("Could not get user for immediate job creation")
+		} else {
+			sourceType := "auto_publish_setup"
+			sourceDetail := "Auto-publish enabled"
+			sourceInfoMap := map[string]interface{}{
+				"trigger":    "auto_publish_enabled",
+				"site_id":    siteID,
+				"site_name":  siteInfo.DisplayName,
+				"enabled_at": time.Now().UTC().Format(time.RFC3339),
+			}
+			sourceInfoBytes, err := json.Marshal(sourceInfoMap)
+			if err != nil {
+				logger.Warn().Err(err).Msg("Failed to marshal source info for immediate job")
+			}
+			sourceInfo := string(sourceInfoBytes)
+
+			jobReq := CreateJobRequest{
+				Domain:       primaryDomain,
+				SourceType:   &sourceType,
+				SourceDetail: &sourceDetail,
+				SourceInfo:   &sourceInfo,
+			}
+
+			_, err = h.createJobFromRequest(ctx, user, jobReq)
+			if err != nil {
+				logger.Warn().Err(err).Msg("Failed to create immediate job, user can trigger manually")
+				// Don't fail the entire request - webhook is registered successfully
+			} else {
+				logger.Info().Str("domain", primaryDomain).Msg("Immediate job created successfully")
+			}
+		}
 	}
 
 	// Build response
