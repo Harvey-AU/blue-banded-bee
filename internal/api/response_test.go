@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// TestResponseHelpers verifies all response helper functions using table-driven tests
+// TestResponseHelpers verifies core response helper functions (WriteJSON, WriteSuccess, WriteHealthy) using table-driven tests
 func TestResponseHelpers(t *testing.T) {
 	tests := []struct {
 		name         string
@@ -40,6 +40,21 @@ func TestResponseHelpers(t *testing.T) {
 			validateFunc: func(t *testing.T, w *httptest.ResponseRecorder) {
 				assert.Equal(t, http.StatusOK, w.Code)
 				assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
+			},
+		},
+		{
+			name: "write_json_with_unserializable_data",
+			testFunc: func(w *httptest.ResponseRecorder, r *http.Request) {
+				WriteJSON(w, r, make(chan int), http.StatusOK)
+			},
+			validateFunc: func(t *testing.T, w *httptest.ResponseRecorder) {
+				assert.Equal(t, http.StatusOK, w.Code)
+				assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
+
+				// Verify json encoding failed - body should not be valid JSON or empty
+				var result map[string]interface{}
+				err := json.Unmarshal(w.Body.Bytes(), &result)
+				assert.Error(t, err, "unserializable data should fail JSON decoding")
 			},
 		},
 		{
