@@ -1,6 +1,7 @@
 # Trivy ignore rules
 # https://aquasecurity.github.io/trivy/latest/docs/configuration/filtering/
-
 # Supabase anon key is a publishable key (like Stripe pk_*), not a secret
 # It's intentionally embedded as a fallback for CLI tools
-scripts/auth/config.py
+
+# Ignore JWT token detection in config.py (anon key, not a secret)
+jwt-token
