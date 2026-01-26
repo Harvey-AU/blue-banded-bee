@@ -596,6 +596,11 @@ for complete technical architecture and Go implementation details.
         alerts
   - [ ] Incident runbook and escalation checklist
   - [ ] Minimal status page for alpha
+- [ ] **Frontend Architecture Consideration**
+  - [ ] Evaluate Vue/Svelte framework migration if dashboard exceeds 8000 LOC or
+        team scaling requires modern framework (current: 4000 LOC vanilla JS
+        with custom data binding, no build process - consider migration only if
+        actual pain points emerge)
 
 ## ⚪ Stage 7: Feature Refinement & Launch Preparation
 
