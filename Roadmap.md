@@ -223,7 +223,8 @@
 - [x] Implement comprehensive auth error handling
 - [x] Create user registration with auto-organisation creation
 - [x] Configure custom domain authentication (auth.bluebandedbee.co)
-- [x] Implement account linking for multiple auth providers per user
+- [x] Implement account linking for multiple auth providers per user (handled by
+      Supabase Auth via auth.identities table)
 
 ### ✅ Connect user data to PostgreSQL
 
@@ -335,34 +336,40 @@ Organisation model implemented:
   - [x] Comprehensive error handling with structured logging
   - [x] Input validation and rollback logic for failed operations
 
-### 🟡 Webflow App Integration
+### ✅ Webflow App Integration (Completed v0.23.0)
 
-- [x] **Webflow OAuth Connection** (PR #210)
+- [x] **Webflow OAuth Connection**
   - [x] Register as Webflow developer and create App
   - [x] OAuth flow with HMAC-signed state for CSRF protection
   - [x] Token storage in Supabase Vault with automatic cleanup
   - [x] User identity display via `authorized_user:read` scope
   - [x] Dashboard UI showing connection status and user name
   - [x] Shared OAuth utilities extracted from Slack integration
-- [ ] **Webflow Site Selection**
+- [x] **Webflow Site Selection**
   - [x] List user's accessible Webflow sites via `/v2/sites` endpoint
-  - [x] Site picker UI in dashboard connections panel
-  - [x] Store selected site ID with connection for job targeting
-  - [x] Add list/delete endpoints for connection management
-- [ ] **Manual Job Triggering**
-  - [x] "Crawl Now" button triggers job for selected Webflow site
-  - [ ] Show last crawl status and results for connected site
-  - [ ] Link Webflow connection to existing job creation flow
-- [ ] **Scheduling Configuration**
+  - [x] Site picker UI in dashboard connections panel with search/pagination
+  - [x] Per-site settings stored in `webflow_site_settings` table
+  - [x] Connection management endpoints (list/get/delete)
+- [ ] **Manual Job Triggering** (Partially complete)
+  - [ ] Explicit "Crawl Now" button for selected Webflow site (NOT YET
+        IMPLEMENTED)
+  - [x] Jobs can be triggered via scheduler or webhooks
+  - [x] Show last crawl status (via general job list)
+- [x] **Scheduling Configuration**
   - [x] Connect Webflow sites to existing scheduler system
-  - [x] Schedule dropdown for recurring cache warming (6/12/24/48h)
+  - [x] Schedule dropdown for recurring cache warming (None/6h/12h/24h/48h)
   - [x] Per-site schedule management in dashboard
-- [ ] **Run on Publish (Webhooks)**
-  - [x] "Auto-crawl on publish" toggle in connection settings
-  - [x] Register `site_publish` webhook with Webflow API
-  - [ ] Webhook endpoint to receive publish events
-  - [ ] Verify webhook signatures using `x-webflow-signature` headers
-  - [ ] Trigger cache warming job on verified publish events
+  - [x] Automatic scheduler creation/update/deletion based on interval selection
+- [x] **Run on Publish (Webhooks)**
+  - [x] "Auto-crawl on publish" toggle in site configuration
+  - [x] Register `site_publish` webhook with Webflow API (per-site control)
+  - [x] Webhook endpoint to receive publish events (org-scoped and legacy
+        token-based)
+  - [x] Webhook signature verification (NOTE: Webflow v2 doesn't provide
+        signatures yet)
+  - [x] Trigger cache warming job on verified publish events with auto_publish
+        validation
+  - [x] Platform-org mapping for workspace-based webhook resolution
 
 ### ✅ Slack Integration (Completed v0.20.0)
 
@@ -379,6 +386,47 @@ Organisation model implemented:
   - [ ] Slash commands (`/crawl sitedomain.com`)
   - [ ] Threading with progress updates
   - [ ] Interactive message actions
+
+### 🟡 Google Analytics 4 Integration
+
+- [x] **OAuth Connection Setup** (Steps 1-3 COMPLETE)
+  - [x] Google OAuth 2.0 configuration and credentials
+  - [x] OAuth flow implementation with state token CSRF protection
+  - [x] Account and property selection functionality
+  - [x] Token storage in Supabase Vault with refresh logic
+  - [x] Database schema for `user_ga_connections` table
+  - [x] Dashboard UI for connecting/disconnecting GA4 properties
+- [ ] **Analytics Data Retrieval** (Step 4)
+  - [ ] Implement GA4 Data API client (`analyticsdata/v1beta`)
+  - [ ] Fetch recent visitor/view data for each page path
+  - [ ] Query metric: `screenPageViews` only
+  - [ ] Support for 7, 28, 180, and 365-day lookback periods
+  - [ ] Scheduled background sync service (opt-in per domain, no sync by
+        default)
+  - [ ] Token refresh mechanism for expired access tokens
+- [ ] **Pages Table Integration** (Step 5)
+  - [ ] Add analytics columns to `pages` table:
+    - [ ] `page_views_7d` - Page views (last 7 days)
+    - [ ] `page_views_28d` - Page views (last 28 days)
+    - [ ] `page_views_180d` - Page views (last 180 days)
+    - [ ] `page_views_365d` - Page views (last 365 days)
+    - [ ] `last_analytics_sync_at` - Timestamp of last GA sync
+  - [ ] Atomic upsert logic to merge GA data with existing page records
+- [ ] **Task Prioritisation Enhancement** (Step 6)
+  - [ ] Incorporate page view data into task priority calculation
+  - [ ] Prioritise high-traffic pages for earlier cache warming
+  - [ ] Configurable weighting: GA traffic vs structural priority (header links,
+        etc.)
+  - [ ] Automatically enabled when domain has linked GA account
+- [ ] **Data Export Integration** (Step 7)
+  - [ ] Include page view metrics in CSV exports
+  - [ ] Add columns: Page Views (7d), Page Views (28d), Page Views (180d), Page
+        Views (365d)
+  - [ ] Dashboard displays page view metrics alongside performance data
+
+**Implementation Plan:** See
+[plans/google-analytics-integration.md](plans/google-analytics-integration.md)
+for complete technical architecture and Go implementation details.
 
 ## ⚪ Stage 4.5: Platform Integration Foundation
 
@@ -415,15 +463,26 @@ Organisation model implemented:
 
 ## ⚪ Stage 5: Subscriptions & Monetisation
 
-### ✅ Testing & Quality
+### ✅ Security & Compliance Testing - **COMPLETED**
 
-- [x] **Comprehensive Test Coverage** - ✅ **COMPLETED**
-  - [x] Achieved 45.8% total coverage (exceeded expectations)
-  - [x] API endpoints: 33.2% coverage with all major endpoints tested
-  - [x] Implement critical integration tests
-  - [x] Fix critical test issues (P0/P1 from expert review)
-  - [x] Comprehensive testing infrastructure with interface-based and sqlmock
-        patterns
+- [x] **Security-Critical Tests**
+  - [x] JWT validation and authentication flows
+  - [x] Webhook signature validation and SSRF protection
+  - [x] OAuth state token validation
+  - [x] Row Level Security (RLS) policy enforcement
+- [x] **Compliance Tests**
+  - [x] Robots.txt parsing and enforcement
+  - [x] Crawl-delay honoring
+  - [x] User-agent specific rules
+- [x] **Algorithm Tests**
+  - [x] Sitemap parsing (gzip, XML, URL filtering)
+  - [x] Error classification and retry logic
+  - [x] Job progress calculation
+- [x] **CI/CD Quality Gates**
+  - [x] golangci-lint with cyclomatic complexity limits
+  - [x] Go Report Card: A grade
+  - [x] Automated formatting (gofmt, prettier)
+  - [x] Security scanning (govulncheck, trivy, eslint-security)
   - [ ] Add performance benchmarks
 
 ### 🔴 Security & Alpha Guardrails
@@ -446,26 +505,30 @@ Organisation model implemented:
   - [ ] Link subscriptions to organisations
   - [ ] Handle subscription updates and plan changes
   - [ ] Add subscription status checks
-- [x] **Usage Tracking & Quotas** (Completed PR #225)
-  - [x] Implement usage counters and basic limits
-  - [x] Set up usage reporting functionality
-  - [x] Implement organisation-level usage quotas
+- [ ] **Usage Tracking & Quotas**
+  - [ ] Implement usage counters and basic limits
+  - [ ] Set up usage reporting functionality
+  - [ ] Implement organisation-level usage quotas
 
 ## ⚪ Stage 6: Platform Optimisation & Advanced Features
 
 ### 🔴 Supabase Platform Integration
 
 - [ ] **Real-time Features** (See
-      [SUPABASE-REALTIME.md](docs/development/SUPABASE-REALTIME.md))
+      [SUPABASE-REALTIME.md](docs/development/SUPABASE-REALTIME.md)) - **60%
+      COMPLETE**
   - [x] Real-time notification badge updates via Postgres Changes subscription
-  - [ ] Live job progress via Postgres Changes (replace polling)
-  - [ ] Real-time dashboard stats without page refresh
+        (v0.20.1)
+  - [x] Real-time dashboard job list updates via WebSocket subscriptions
+        (v0.20.1)
+  - [x] Real-time job detail progress updates with per-job subscriptions
+        (v0.20.1)
+  - [ ] Real-time dashboard stats without page refresh (requires API endpoint
+        changes)
   - [ ] Live presence indicators for multi-user organisations
 - [ ] **Database Optimisation**
   - [x] Move CPU-intensive analytics queries to PostgreSQL functions
   - [ ] Optimise task acquisition with database-side logic
-  - [ ] Batch worker task promotions (replace one-by-one
-        `promoteWaitingTasksWithQuota` with bulk UPDATE)
   - [x] Enhance Row Level Security policies for multi-tenant usage
   - [x] Consolidate database connection settings into single configuration
         location and make them configurable via environment variables
@@ -587,7 +650,7 @@ Organisation model implemented:
   - [ ] Implement HTML parsing and canonical content extraction in Go worker
   - [ ] Store HTML in Supabase Storage only when semantic hash changes
 
-### 🔴 Code Quality & Maintenance
+### ✅ Code Quality & Maintenance (Completed)
 
 - [x] **Increase Test Coverage** -
       [Implementation Plan](./docs/plans/increase-test-coverage.md)
