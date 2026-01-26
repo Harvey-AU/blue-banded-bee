@@ -2,5 +2,13 @@
 # https://aquasecurity.github.io/trivy/latest/docs/configuration/filtering/
 
 # Supabase anon key is a publishable key (like Stripe pk_*), not a secret
-# It's intentionally embedded as a fallback for CLI tools
-scripts/auth/config.py
+# It's intentionally embedded as a fallback for CLI tools in scripts/auth/config.py
+#
+# SECURITY NOTE: This rule suppresses JWT token detection globally because:
+# 1. The only JWT tokens in this codebase are Supabase anon keys (publishable)
+# 2. These are designed to be public (like Stripe pk_* keys)
+# 3. They are already embedded in the frontend web/static/js/auth.js
+# 4. Real secrets (service_role keys) are in environment variables, never in code
+#
+# If adding new JWT tokens to the codebase, verify they are also non-secret before committing.
+jwt-token

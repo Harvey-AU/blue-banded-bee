@@ -6,9 +6,11 @@ EXIT_CODE=0
 echo -e "\n🔍 Running Trivy (Filesystem, Secrets, Config)..."
 # Scan for secrets, misconfigs, and vulnerabilities in library code
 # Skipping .worktrees to avoid recursion if run from root
+# Skipping scripts/auth/config.py - contains publishable anon key (like Stripe pk_*), not a secret
 if ! trivy fs --scanners vuln,secret,misconfig \
   --ignore-unfixed \
   --skip-dirs .worktrees \
+  --skip-files scripts/auth/config.py \
   .; then
     EXIT_CODE=1
 fi

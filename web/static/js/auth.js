@@ -456,7 +456,12 @@ function showAuthForm(formType) {
 
   const authModalTitle = document.getElementById("authModalTitle");
   if (authModalTitle) {
-    authModalTitle.textContent = titles[formType];
+    if (Object.hasOwn(titles, formType)) {
+      authModalTitle.textContent = titles[formType];
+    } else {
+      console.warn("Unknown form type:", formType);
+      authModalTitle.textContent = "Authentication";
+    }
   }
 
   const targetForm = document.getElementById(`${formType}Form`);
