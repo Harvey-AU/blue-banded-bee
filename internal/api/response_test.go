@@ -43,7 +43,7 @@ func TestResponseHelpers(t *testing.T) {
 			},
 		},
 		{
-			name: "write_json_with_unserializable_data",
+			name: "write_json_with_unserialisable_data",
 			testFunc: func(w *httptest.ResponseRecorder, r *http.Request) {
 				WriteJSON(w, r, make(chan int), http.StatusOK)
 			},
@@ -51,10 +51,10 @@ func TestResponseHelpers(t *testing.T) {
 				assert.Equal(t, http.StatusOK, w.Code)
 				assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
 
-				// Verify json encoding failed - body should not be valid JSON or empty
+				// Verify JSON encoding failed - body should not be valid JSON or empty
 				var result map[string]interface{}
 				err := json.Unmarshal(w.Body.Bytes(), &result)
-				assert.Error(t, err, "unserializable data should fail JSON decoding")
+				assert.Error(t, err, "unserialisable data should fail JSON decoding")
 			},
 		},
 		{
