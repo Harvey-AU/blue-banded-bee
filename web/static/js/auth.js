@@ -307,8 +307,13 @@ function updateAuthState(isAuthenticated) {
 
   requiredElements.forEach((el) => {
     if (!isAuthenticated) {
-      // Store original inline display value (if any)
-      if (el.style.display) {
+      // Store original inline display value (if any), but never store "none"
+      // and don't overwrite an already-stored value
+      if (
+        el.style.display &&
+        el.style.display !== "none" &&
+        !el.dataset.originalDisplay
+      ) {
         el.dataset.originalDisplay = el.style.display;
       }
     }
