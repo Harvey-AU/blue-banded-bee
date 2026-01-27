@@ -158,6 +158,11 @@ type DBClient interface {
 	UpdateGoogleConnectionStatus(ctx context.Context, connectionID, organisationID, status string) error
 	StoreGoogleToken(ctx context.Context, connectionID, refreshToken string) error
 	GetGoogleToken(ctx context.Context, connectionID string) (string, error)
+	GetActiveGAConnectionForOrganisation(ctx context.Context, orgID string) (*db.GoogleAnalyticsConnection, error)
+	UpdateConnectionLastSync(ctx context.Context, connectionID string) error
+	MarkConnectionInactive(ctx context.Context, connectionID, reason string) error
+	UpsertPageWithAnalytics(ctx context.Context, domainID int, path string, pageViews map[string]int64) (int, error)
+	GetOrCreateDomainID(ctx context.Context, domain string) (int, error)
 	// Platform integration mappings
 	UpsertPlatformOrgMapping(ctx context.Context, mapping *db.PlatformOrgMapping) error
 	GetPlatformOrgMapping(ctx context.Context, platform, platformID string) (*db.PlatformOrgMapping, error)
@@ -179,15 +184,19 @@ type DBClient interface {
 
 // Handler holds dependencies for API handlers
 type Handler struct {
-	DB          DBClient
-	JobsManager jobs.JobManagerInterface
+	DB                 DBClient
+	JobsManager        jobs.JobManagerInterface
+	GoogleClientID     string
+	GoogleClientSecret string
 }
 
 // NewHandler creates a new API handler with dependencies
-func NewHandler(pgDB DBClient, jobsManager jobs.JobManagerInterface) *Handler {
+func NewHandler(pgDB DBClient, jobsManager jobs.JobManagerInterface, googleClientID, googleClientSecret string) *Handler {
 	return &Handler{
-		DB:          pgDB,
-		JobsManager: jobsManager,
+		DB:                 pgDB,
+		JobsManager:        jobsManager,
+		GoogleClientID:     googleClientID,
+		GoogleClientSecret: googleClientSecret,
 	}
 }
 

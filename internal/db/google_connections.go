@@ -289,3 +289,128 @@ func (db *DB) UpdateGoogleConnectionStatus(ctx context.Context, connectionID, or
 
 	return nil
 }
+
+// GetActiveGAConnectionForOrganisation retrieves the active GA4 connection for an organisation
+// Returns nil if no active connection (not an error)
+func (db *DB) GetActiveGAConnectionForOrganisation(ctx context.Context, orgID string) (*GoogleAnalyticsConnection, error) {
+	conn := &GoogleAnalyticsConnection{}
+	var installingUserID, vaultSecretName, ga4PropertyID, ga4PropertyName, googleAccountID, googleUserID, googleEmail, status sql.NullString
+	var lastSyncedAt sql.NullTime
+
+	query := `
+		SELECT id, organisation_id, ga4_property_id, ga4_property_name, google_account_id,
+		       google_user_id, google_email, vault_secret_name, installing_user_id, status,
+		       last_synced_at, created_at, updated_at
+		FROM google_analytics_connections
+		WHERE organisation_id = $1 AND status = 'active'
+		LIMIT 1
+	`
+
+	err := db.client.QueryRowContext(ctx, query, orgID).Scan(
+		&conn.ID, &conn.OrganisationID, &ga4PropertyID, &ga4PropertyName, &googleAccountID,
+		&googleUserID, &googleEmail, &vaultSecretName, &installingUserID, &status,
+		&lastSyncedAt, &conn.CreatedAt, &conn.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			// No active connection is not an error - just means no GA4 integration
+			log.Debug().Str("organisation_id", orgID).Msg("No active GA4 connection found for organisation")
+			return nil, nil
+		}
+		log.Error().Err(err).Str("organisation_id", orgID).Msg("Failed to get active Google Analytics connection")
+		return nil, fmt.Errorf("failed to get active Google Analytics connection: %w", err)
+	}
+
+	// Map nullable fields
+	if ga4PropertyID.Valid {
+		conn.GA4PropertyID = ga4PropertyID.String
+	}
+	if ga4PropertyName.Valid {
+		conn.GA4PropertyName = ga4PropertyName.String
+	}
+	if googleAccountID.Valid {
+		conn.GoogleAccountID = googleAccountID.String
+	}
+	if googleUserID.Valid {
+		conn.GoogleUserID = googleUserID.String
+	}
+	if googleEmail.Valid {
+		conn.GoogleEmail = googleEmail.String
+	}
+	if vaultSecretName.Valid {
+		conn.VaultSecretName = vaultSecretName.String
+	}
+	if installingUserID.Valid {
+		conn.InstallingUserID = installingUserID.String
+	}
+	if status.Valid {
+		conn.Status = status.String
+	}
+	if lastSyncedAt.Valid {
+		conn.LastSyncedAt = lastSyncedAt.Time
+	}
+
+	return conn, nil
+}
+
+// UpdateConnectionLastSync updates the last_synced_at timestamp for a connection
+func (db *DB) UpdateConnectionLastSync(ctx context.Context, connectionID string) error {
+	query := `
+		UPDATE google_analytics_connections
+		SET last_synced_at = NOW(), updated_at = NOW()
+		WHERE id = $1
+	`
+
+	result, err := db.client.ExecContext(ctx, query, connectionID)
+	if err != nil {
+		log.Error().Err(err).Str("connection_id", connectionID).Msg("Failed to update connection last sync timestamp")
+		return fmt.Errorf("failed to update connection last sync: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		return ErrGoogleConnectionNotFound
+	}
+
+	log.Debug().Str("connection_id", connectionID).Msg("Updated connection last sync timestamp")
+	return nil
+}
+
+// MarkConnectionInactive sets a connection status to inactive with a reason logged
+func (db *DB) MarkConnectionInactive(ctx context.Context, connectionID, reason string) error {
+	query := `
+		UPDATE google_analytics_connections
+		SET status = 'inactive', updated_at = NOW()
+		WHERE id = $1
+	`
+
+	result, err := db.client.ExecContext(ctx, query, connectionID)
+	if err != nil {
+		log.Error().
+			Err(err).
+			Str("connection_id", connectionID).
+			Str("reason", reason).
+			Msg("Failed to mark connection as inactive")
+		return fmt.Errorf("failed to mark connection inactive: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		return ErrGoogleConnectionNotFound
+	}
+
+	log.Warn().
+		Str("connection_id", connectionID).
+		Str("reason", reason).
+		Msg("Marked Google Analytics connection as inactive")
+
+	return nil
+}
