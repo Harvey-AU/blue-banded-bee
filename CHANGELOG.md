@@ -29,6 +29,19 @@ On merge, CI will:
 
 ## [Unreleased]
 
+## [0.24.3] – 2026-01-27
+
+### Fixed
+
+- **Dashboard Authentication Display**: Fixed bug where elements with
+  CSS-defined `display` properties (e.g., `display: flex`) were incorrectly
+  forced to `display: block` after authentication state changes
+  - Auth elements now properly preserve CSS cascade by removing inline styles
+    instead of applying default values
+  - Fixes layout breakage in header elements (user info, auth buttons)
+  - Resolves quota display not updating after organisation switch
+  - Prevents capturing "none" as original display value
+
 ## [0.24.2] – 2026-01-26
 
 ### Added

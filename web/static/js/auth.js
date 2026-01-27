@@ -285,19 +285,49 @@ function updateAuthState(isAuthenticated) {
     }
   });
 
+  // Authentication state display management
+  // Strategy: Remove inline styles when showing elements (let CSS cascade work)
+  // Only preserve inline styles that were explicitly set before we modified them
   guestElements.forEach((el) => {
-    el.style.display = isAuthenticated
-      ? "none"
-      : el.dataset.originalDisplay || "block";
+    if (isAuthenticated) {
+      // Store original inline display before hiding
+      if (el.style.display && el.style.display !== "none") {
+        el.dataset.originalDisplay = el.style.display;
+      }
+      el.style.display = "none";
+    } else {
+      // Restore: either use stored value or remove inline style
+      if (el.dataset.originalDisplay) {
+        el.style.display = el.dataset.originalDisplay;
+      } else {
+        el.style.removeProperty("display"); // Let CSS control it
+      }
+    }
   });
 
   requiredElements.forEach((el) => {
     if (!isAuthenticated) {
-      el.dataset.originalDisplay = el.style.display || "block";
+      // Store original inline display value (if any), but never store "none"
+      // and don't overwrite an already-stored value
+      if (
+        el.style.display &&
+        el.style.display !== "none" &&
+        !el.dataset.originalDisplay
+      ) {
+        el.dataset.originalDisplay = el.style.display;
+      }
     }
-    el.style.display = isAuthenticated
-      ? el.dataset.originalDisplay || "block"
-      : "none";
+
+    if (isAuthenticated) {
+      // Restore: either use stored value or remove inline style
+      if (el.dataset.originalDisplay) {
+        el.style.display = el.dataset.originalDisplay;
+      } else {
+        el.style.removeProperty("display"); // Let CSS control it
+      }
+    } else {
+      el.style.display = "none";
+    }
   });
 
   // If user just authenticated and dataBinder exists, load dashboard data (debounced)
