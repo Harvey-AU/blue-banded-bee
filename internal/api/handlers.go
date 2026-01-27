@@ -159,6 +159,8 @@ type DBClient interface {
 	StoreGoogleToken(ctx context.Context, connectionID, refreshToken string) error
 	GetGoogleToken(ctx context.Context, connectionID string) (string, error)
 	GetActiveGAConnectionForOrganisation(ctx context.Context, orgID string) (*db.GoogleAnalyticsConnection, error)
+	GetActiveGAConnectionForDomain(ctx context.Context, organisationID string, domainID int) (*db.GoogleAnalyticsConnection, error)
+	GetDomainsForOrganisation(ctx context.Context, organisationID string) ([]db.OrganisationDomain, error)
 	UpdateConnectionLastSync(ctx context.Context, connectionID string) error
 	MarkConnectionInactive(ctx context.Context, connectionID, reason string) error
 	UpsertPageWithAnalytics(ctx context.Context, domainID int, path string, pageViews map[string]int64) (int, error)

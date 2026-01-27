@@ -308,7 +308,7 @@ func isUnauthorisedError(err error) bool {
 
 // DBInterfaceGA4 defines the database operations needed by the progressive fetcher
 type DBInterfaceGA4 interface {
-	GetActiveGAConnectionForOrganisation(ctx context.Context, orgID string) (*db.GoogleAnalyticsConnection, error)
+	GetActiveGAConnectionForDomain(ctx context.Context, organisationID string, domainID int) (*db.GoogleAnalyticsConnection, error)
 	GetGoogleToken(ctx context.Context, connectionID string) (string, error)
 	UpdateConnectionLastSync(ctx context.Context, connectionID string) error
 	MarkConnectionInactive(ctx context.Context, connectionID, reason string) error
@@ -336,10 +336,10 @@ func NewProgressiveFetcher(database DBInterfaceGA4, clientID, clientSecret strin
 func (pf *ProgressiveFetcher) FetchAndUpdatePages(ctx context.Context, organisationID string, domainID int) error {
 	start := time.Now()
 
-	// 1. Get active GA4 connection for this org
-	conn, err := pf.db.GetActiveGAConnectionForOrganisation(ctx, organisationID)
+	// 1. Get active GA4 connection for this domain
+	conn, err := pf.db.GetActiveGAConnectionForDomain(ctx, organisationID, domainID)
 	if err != nil {
-		return fmt.Errorf("failed to get GA4 connection: %w", err)
+		return fmt.Errorf("failed to get GA4 connection for domain: %w", err)
 	}
 
 	// No active connection is not an error - just skip GA4 integration

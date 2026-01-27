@@ -759,3 +759,46 @@ func (db *DB) GetOrCreateDomainID(ctx context.Context, domain string) (int, erro
 
 	return domainID, nil
 }
+
+// OrganisationDomain represents a domain belonging to an organisation
+type OrganisationDomain struct {
+	ID   int    `json:"id"`
+	Name string `json:"name"`
+}
+
+// GetDomainsForOrganisation returns all domains that belong to the organisation
+// This includes domains from jobs created by any user in the organisation
+func (db *DB) GetDomainsForOrganisation(ctx context.Context, organisationID string) ([]OrganisationDomain, error) {
+	query := `
+		SELECT DISTINCT d.id, d.name
+		FROM domains d
+		JOIN jobs j ON j.domain_id = d.id
+		WHERE j.organisation_id = $1
+		ORDER BY d.name ASC
+	`
+
+	rows, err := db.client.QueryContext(ctx, query, organisationID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query organisation domains: %w", err)
+	}
+	defer func() {
+		if closeErr := rows.Close(); closeErr != nil {
+			log.Error().Err(closeErr).Str("organisation_id", organisationID).Msg("Failed to close rows")
+		}
+	}()
+
+	var domains []OrganisationDomain
+	for rows.Next() {
+		var domain OrganisationDomain
+		if err := rows.Scan(&domain.ID, &domain.Name); err != nil {
+			return nil, fmt.Errorf("failed to scan domain: %w", err)
+		}
+		domains = append(domains, domain)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating domains: %w", err)
+	}
+
+	return domains, nil
+}

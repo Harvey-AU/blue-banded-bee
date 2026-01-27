@@ -410,9 +410,10 @@ func (h *Handler) SaveGoogleProperties(w http.ResponseWriter, r *http.Request) {
 
 	// Parse request body
 	var req struct {
-		SessionID         string   `json:"session_id"`
-		AccountID         string   `json:"account_id"`
-		ActivePropertyIDs []string `json:"active_property_ids"` // Which properties should be active
+		SessionID         string           `json:"session_id"`
+		AccountID         string           `json:"account_id"`
+		ActivePropertyIDs []string         `json:"active_property_ids"` // Which properties should be active
+		PropertyDomainMap map[string][]int `json:"property_domain_map"` // property_id -> domain_ids
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		BadRequest(w, r, "Invalid request body")
@@ -451,6 +452,12 @@ func (h *Handler) SaveGoogleProperties(w http.ResponseWriter, r *http.Request) {
 			status = "active"
 		}
 
+		// Get domain IDs for this property (default to empty array if not provided)
+		domainIDs := req.PropertyDomainMap[prop.PropertyID]
+		if domainIDs == nil {
+			domainIDs = []int{}
+		}
+
 		conn := &db.GoogleAnalyticsConnection{
 			ID:               uuid.New().String(),
 			OrganisationID:   orgID,
@@ -461,6 +468,7 @@ func (h *Handler) SaveGoogleProperties(w http.ResponseWriter, r *http.Request) {
 			GoogleEmail:      session.Email,
 			InstallingUserID: userClaims.UserID,
 			Status:           status,
+			DomainIDs:        domainIDs,
 			CreatedAt:        now,
 			UpdatedAt:        now,
 		}
@@ -716,6 +724,7 @@ type GoogleConnectionResponse struct {
 	GA4PropertyName string `json:"ga4_property_name,omitempty"`
 	GoogleEmail     string `json:"google_email,omitempty"`
 	Status          string `json:"status"`
+	DomainIDs       []int  `json:"domain_ids,omitempty"`
 	CreatedAt       string `json:"created_at"`
 }
 
@@ -763,6 +772,16 @@ func (h *Handler) GoogleConnectionHandler(w http.ResponseWriter, r *http.Request
 	if path == "save-properties" {
 		if r.Method == http.MethodPost {
 			h.SaveGoogleProperties(w, r)
+			return
+		}
+		MethodNotAllowed(w, r)
+		return
+	}
+
+	// Handle domains endpoint (get organisation domains for property mapping)
+	if path == "domains" {
+		if r.Method == http.MethodGet {
+			h.getOrganisationDomains(w, r)
 			return
 		}
 		MethodNotAllowed(w, r)
@@ -997,11 +1016,45 @@ func (h *Handler) listGoogleConnections(w http.ResponseWriter, r *http.Request) 
 			GA4PropertyName: conn.GA4PropertyName,
 			GoogleEmail:     conn.GoogleEmail,
 			Status:          conn.Status,
+			DomainIDs:       conn.DomainIDs,
 			CreatedAt:       conn.CreatedAt.Format(time.RFC3339),
 		})
 	}
 
 	WriteSuccess(w, r, response, "")
+}
+
+// getOrganisationDomains returns all domains for the authenticated user's organisation
+func (h *Handler) getOrganisationDomains(w http.ResponseWriter, r *http.Request) {
+	logger := loggerWithRequest(r)
+
+	userClaims, ok := auth.GetUserFromContext(r.Context())
+	if !ok {
+		Unauthorised(w, r, "User information not found")
+		return
+	}
+
+	user, err := h.DB.GetOrCreateUser(userClaims.UserID, userClaims.Email, nil)
+	if err != nil {
+		logger.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get or create user")
+		InternalError(w, r, err)
+		return
+	}
+
+	orgID := h.DB.GetEffectiveOrganisationID(user)
+	if orgID == "" {
+		WriteSuccess(w, r, map[string]interface{}{"domains": []db.OrganisationDomain{}}, "No organisation")
+		return
+	}
+
+	domains, err := h.DB.GetDomainsForOrganisation(r.Context(), orgID)
+	if err != nil {
+		logger.Error().Err(err).Str("organisation_id", orgID).Msg("Failed to get organisation domains")
+		InternalError(w, r, err)
+		return
+	}
+
+	WriteSuccess(w, r, map[string]interface{}{"domains": domains}, "")
 }
 
 // deleteGoogleConnection deletes a Google Analytics connection
