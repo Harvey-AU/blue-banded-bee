@@ -29,6 +29,8 @@ On merge, CI will:
 
 ## [Unreleased]
 
+## [0.24.2] – 2026-01-26
+
 ### Added
 
 - **Immediate Job Triggering**: Jobs now automatically triggered when enabling
