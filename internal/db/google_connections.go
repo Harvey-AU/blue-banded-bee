@@ -21,16 +21,16 @@ var ErrGoogleTokenNotFound = errors.New("google analytics token not found")
 type GoogleAnalyticsConnection struct {
 	ID               string
 	OrganisationID   string
-	GA4PropertyID    string    // GA4 property ID (e.g., "123456789")
-	GA4PropertyName  string    // Display name of the property
-	GoogleAccountID  string    // GA account ID (e.g., "accounts/123456")
-	GoogleUserID     string    // Google user ID who authorised
-	GoogleEmail      string    // Google email for display
-	VaultSecretName  string    // Name of the secret in Supabase Vault
-	InstallingUserID string    // Our user who installed
-	Status           string    // "active" or "inactive"
-	DomainIDs        []int     // Array of domain IDs associated with this property
-	LastSyncedAt     time.Time // When analytics data was last synced
+	GA4PropertyID    string        // GA4 property ID (e.g., "123456789")
+	GA4PropertyName  string        // Display name of the property
+	GoogleAccountID  string        // GA account ID (e.g., "accounts/123456")
+	GoogleUserID     string        // Google user ID who authorised
+	GoogleEmail      string        // Google email for display
+	VaultSecretName  string        // Name of the secret in Supabase Vault
+	InstallingUserID string        // Our user who installed
+	Status           string        // "active" or "inactive"
+	DomainIDs        pq.Int64Array // Array of domain IDs associated with this property
+	LastSyncedAt     time.Time     // When analytics data was last synced
 	CreatedAt        time.Time
 	UpdatedAt        time.Time
 }
@@ -41,11 +41,6 @@ func (db *DB) CreateGoogleConnection(ctx context.Context, conn *GoogleAnalyticsC
 	// Default status to inactive if not set
 	if conn.Status == "" {
 		conn.Status = "inactive"
-	}
-
-	// Default to empty array if nil
-	if conn.DomainIDs == nil {
-		conn.DomainIDs = []int{}
 	}
 
 	query := `
@@ -112,9 +107,7 @@ func (db *DB) GetGoogleToken(ctx context.Context, connectionID string) (string, 
 
 // GetGoogleConnection retrieves a Google Analytics connection by ID
 func (db *DB) GetGoogleConnection(ctx context.Context, connectionID string) (*GoogleAnalyticsConnection, error) {
-	conn := &GoogleAnalyticsConnection{
-		DomainIDs: []int{}, // Initialize to empty slice to handle NULL arrays
-	}
+	conn := &GoogleAnalyticsConnection{}
 	var installingUserID, vaultSecretName, ga4PropertyID, ga4PropertyName, googleAccountID, googleUserID, googleEmail, status sql.NullString
 	var lastSyncedAt sql.NullTime
 
@@ -129,7 +122,7 @@ func (db *DB) GetGoogleConnection(ctx context.Context, connectionID string) (*Go
 	err := db.client.QueryRowContext(ctx, query, connectionID).Scan(
 		&conn.ID, &conn.OrganisationID, &ga4PropertyID, &ga4PropertyName, &googleAccountID,
 		&googleUserID, &googleEmail, &vaultSecretName, &installingUserID, &status,
-		pq.Array(&conn.DomainIDs), &lastSyncedAt, &conn.CreatedAt, &conn.UpdatedAt,
+		&conn.DomainIDs, &lastSyncedAt, &conn.CreatedAt, &conn.UpdatedAt,
 	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -194,16 +187,14 @@ func (db *DB) ListGoogleConnections(ctx context.Context, organisationID string) 
 
 	var connections []*GoogleAnalyticsConnection
 	for rows.Next() {
-		conn := &GoogleAnalyticsConnection{
-			DomainIDs: []int{}, // Initialize to empty slice to handle NULL arrays
-		}
+		conn := &GoogleAnalyticsConnection{}
 		var installingUserID, vaultSecretName, ga4PropertyID, ga4PropertyName, googleAccountID, googleUserID, googleEmail, status sql.NullString
 		var lastSyncedAt sql.NullTime
 
 		err := rows.Scan(
 			&conn.ID, &conn.OrganisationID, &ga4PropertyID, &ga4PropertyName, &googleAccountID,
 			&googleUserID, &googleEmail, &vaultSecretName, &installingUserID, &status,
-			pq.Array(&conn.DomainIDs), &lastSyncedAt, &conn.CreatedAt, &conn.UpdatedAt,
+			&conn.DomainIDs, &lastSyncedAt, &conn.CreatedAt, &conn.UpdatedAt,
 		)
 		if err != nil {
 			log.Error().Err(err).Str("organisation_id", organisationID).Msg("Failed to scan Google Analytics connection row")
@@ -307,9 +298,7 @@ func (db *DB) UpdateGoogleConnectionStatus(ctx context.Context, connectionID, or
 // Returns nil if no active connection (not an error)
 // Deprecated: Use GetActiveGAConnectionForDomain for domain-specific lookups
 func (db *DB) GetActiveGAConnectionForOrganisation(ctx context.Context, orgID string) (*GoogleAnalyticsConnection, error) {
-	conn := &GoogleAnalyticsConnection{
-		DomainIDs: []int{}, // Initialize to empty slice to handle NULL arrays
-	}
+	conn := &GoogleAnalyticsConnection{}
 	var installingUserID, vaultSecretName, ga4PropertyID, ga4PropertyName, googleAccountID, googleUserID, googleEmail, status sql.NullString
 	var lastSyncedAt sql.NullTime
 
@@ -325,7 +314,7 @@ func (db *DB) GetActiveGAConnectionForOrganisation(ctx context.Context, orgID st
 	err := db.client.QueryRowContext(ctx, query, orgID).Scan(
 		&conn.ID, &conn.OrganisationID, &ga4PropertyID, &ga4PropertyName, &googleAccountID,
 		&googleUserID, &googleEmail, &vaultSecretName, &installingUserID, &status,
-		pq.Array(&conn.DomainIDs), &lastSyncedAt, &conn.CreatedAt, &conn.UpdatedAt,
+		&conn.DomainIDs, &lastSyncedAt, &conn.CreatedAt, &conn.UpdatedAt,
 	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -372,9 +361,7 @@ func (db *DB) GetActiveGAConnectionForOrganisation(ctx context.Context, orgID st
 // GetActiveGAConnectionForDomain retrieves the active GA4 connection for a specific domain
 // Returns nil if no active connection for this domain (not an error)
 func (db *DB) GetActiveGAConnectionForDomain(ctx context.Context, organisationID string, domainID int) (*GoogleAnalyticsConnection, error) {
-	conn := &GoogleAnalyticsConnection{
-		DomainIDs: []int{}, // Initialize to empty slice to handle NULL arrays
-	}
+	conn := &GoogleAnalyticsConnection{}
 	var installingUserID, vaultSecretName, ga4PropertyID, ga4PropertyName, googleAccountID, googleUserID, googleEmail, status sql.NullString
 	var lastSyncedAt sql.NullTime
 
@@ -392,7 +379,7 @@ func (db *DB) GetActiveGAConnectionForDomain(ctx context.Context, organisationID
 	err := db.client.QueryRowContext(ctx, query, organisationID, domainID).Scan(
 		&conn.ID, &conn.OrganisationID, &ga4PropertyID, &ga4PropertyName, &googleAccountID,
 		&googleUserID, &googleEmail, &vaultSecretName, &installingUserID, &status,
-		pq.Array(&conn.DomainIDs), &lastSyncedAt, &conn.CreatedAt, &conn.UpdatedAt,
+		&conn.DomainIDs, &lastSyncedAt, &conn.CreatedAt, &conn.UpdatedAt,
 	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {

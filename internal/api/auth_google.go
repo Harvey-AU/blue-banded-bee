@@ -16,6 +16,7 @@ import (
 	"github.com/Harvey-AU/blue-banded-bee/internal/auth"
 	"github.com/Harvey-AU/blue-banded-bee/internal/db"
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 	"github.com/rs/zerolog/log"
 )
 
@@ -454,8 +455,14 @@ func (h *Handler) SaveGoogleProperties(w http.ResponseWriter, r *http.Request) {
 
 		// Get domain IDs for this property (default to empty array if not provided)
 		domainIDs := req.PropertyDomainMap[prop.PropertyID]
-		if domainIDs == nil {
-			domainIDs = []int{}
+
+		// Convert []int to pq.Int64Array
+		var domainIDsArray pq.Int64Array
+		if domainIDs != nil {
+			domainIDsArray = make(pq.Int64Array, len(domainIDs))
+			for i, id := range domainIDs {
+				domainIDsArray[i] = int64(id)
+			}
 		}
 
 		conn := &db.GoogleAnalyticsConnection{
@@ -468,7 +475,7 @@ func (h *Handler) SaveGoogleProperties(w http.ResponseWriter, r *http.Request) {
 			GoogleEmail:      session.Email,
 			InstallingUserID: userClaims.UserID,
 			Status:           status,
-			DomainIDs:        domainIDs,
+			DomainIDs:        domainIDsArray,
 			CreatedAt:        now,
 			UpdatedAt:        now,
 		}
@@ -719,13 +726,13 @@ func (h *Handler) fetchPropertiesForAccount(ctx context.Context, client *http.Cl
 
 // GoogleConnectionResponse represents a Google Analytics connection in API responses
 type GoogleConnectionResponse struct {
-	ID              string `json:"id"`
-	GA4PropertyID   string `json:"ga4_property_id,omitempty"`
-	GA4PropertyName string `json:"ga4_property_name,omitempty"`
-	GoogleEmail     string `json:"google_email,omitempty"`
-	Status          string `json:"status"`
-	DomainIDs       []int  `json:"domain_ids,omitempty"`
-	CreatedAt       string `json:"created_at"`
+	ID              string        `json:"id"`
+	GA4PropertyID   string        `json:"ga4_property_id,omitempty"`
+	GA4PropertyName string        `json:"ga4_property_name,omitempty"`
+	GoogleEmail     string        `json:"google_email,omitempty"`
+	Status          string        `json:"status"`
+	DomainIDs       pq.Int64Array `json:"domain_ids,omitempty"`
+	CreatedAt       string        `json:"created_at"`
 }
 
 // GoogleConnectionsHandler handles requests to /v1/integrations/google
