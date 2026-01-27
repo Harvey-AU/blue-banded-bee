@@ -372,6 +372,27 @@ async function selectGoogleAccount(accountId) {
     pendingGASessionData.selected_account_id = accountId;
     pendingGASessionData.properties = properties;
 
+    // Fetch organisation's domains for domain selection
+    try {
+      const domainsResponse = await fetch("/v1/integrations/google/domains", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (domainsResponse.ok) {
+        const domainsData = await domainsResponse.json();
+        organisationDomains = domainsData.data?.domains || [];
+        console.log("[GA Debug] Fetched domains:", organisationDomains);
+      } else {
+        console.warn(
+          "[GA Debug] Failed to fetch domains, continuing without them"
+        );
+        organisationDomains = [];
+      }
+    } catch (error) {
+      console.error("Failed to fetch organisation domains:", error);
+      organisationDomains = [];
+    }
+
     // Hide account selection, show property selection
     hideAccountSelection();
     showPropertySelection(properties);
@@ -407,6 +428,35 @@ async function saveGoogleProperties() {
       item.getAttribute("data-property-id")
     );
 
+    // Build property -> domain_ids mapping
+    const propertyDomainMap = {};
+    allGoogleProperties.forEach((property) => {
+      const isActive = activePropertyIds.includes(property.property_id);
+      if (!isActive) {
+        propertyDomainMap[property.property_id] = [];
+        return;
+      }
+
+      // Get selected domains for this property
+      const domainSection = document.querySelector(
+        `.domain-selection-section[data-property-id="${property.property_id}"]`
+      );
+
+      if (domainSection) {
+        const selectedDomains = domainSection.querySelectorAll(
+          'input[type="checkbox"]:checked'
+        );
+        const domainIds = Array.from(selectedDomains).map((cb) =>
+          parseInt(cb.getAttribute("data-domain-id"), 10)
+        );
+        propertyDomainMap[property.property_id] = domainIds;
+      } else {
+        propertyDomainMap[property.property_id] = [];
+      }
+    });
+
+    console.log("[GA Debug] Property domain mapping:", propertyDomainMap);
+
     // Show saving state
     const saveBtn = document.querySelector(
       '[bbb-action="google-save-properties"]'
@@ -428,6 +478,7 @@ async function saveGoogleProperties() {
           pendingGASessionData.selected_account_id ||
           pendingGASessionData.accounts?.[0]?.account_id,
         active_property_ids: activePropertyIds,
+        property_domain_map: propertyDomainMap,
       }),
     });
 
@@ -514,6 +565,7 @@ async function toggleConnectionStatus(connectionId, active) {
 
 // Store all properties for filtering
 let allGoogleProperties = [];
+let organisationDomains = [];
 const MAX_VISIBLE_PROPERTIES = 10;
 
 /**
@@ -610,7 +662,73 @@ function renderPropertyList(properties, totalCount) {
         thumb.style.transform = "translateX(0)";
         item.classList.remove("selected");
       }
+
+      // Show/hide domain selection based on active state
+      const domainSection = item.querySelector(".domain-selection-section");
+      if (domainSection) {
+        domainSection.style.display = newActive ? "block" : "none";
+      }
     });
+
+    // Create domain selection section
+    const domainSection = document.createElement("div");
+    domainSection.className = "domain-selection-section";
+    domainSection.style.cssText =
+      "display: none; margin-top: 12px; padding: 12px; background-color: #f9fafb; border-radius: 6px; border: 1px solid #e5e7eb;";
+    domainSection.setAttribute("data-property-id", prop.property_id);
+
+    const domainHeader = document.createElement("div");
+    domainHeader.style.cssText =
+      "font-size: 14px; font-weight: 500; color: #374151; margin-bottom: 8px;";
+    domainHeader.textContent = "Select domains tracked by this property:";
+    domainSection.appendChild(domainHeader);
+
+    const domainList = document.createElement("div");
+    domainList.className = "domain-checkbox-list";
+    domainList.style.cssText =
+      "display: flex; flex-direction: column; gap: 6px;";
+
+    // Create checkbox for each domain
+    if (organisationDomains && organisationDomains.length > 0) {
+      organisationDomains.forEach((domain) => {
+        const label = document.createElement("label");
+        label.className = "domain-checkbox-label";
+        label.style.cssText =
+          "display: flex; align-items: center; gap: 8px; font-size: 14px; color: #6b7280; cursor: pointer;";
+
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.value = domain.id;
+        checkbox.style.cssText = "width: 16px; height: 16px; cursor: pointer;";
+        checkbox.setAttribute("data-domain-id", domain.id);
+        checkbox.setAttribute("data-property-id", prop.property_id);
+
+        const text = document.createTextNode(domain.name);
+
+        label.appendChild(checkbox);
+        label.appendChild(text);
+
+        // Hover effect
+        label.addEventListener("mouseenter", () => {
+          label.style.color = "#111827";
+        });
+        label.addEventListener("mouseleave", () => {
+          label.style.color = "#6b7280";
+        });
+
+        domainList.appendChild(label);
+      });
+    } else {
+      const noDomains = document.createElement("div");
+      noDomains.style.cssText =
+        "font-size: 13px; color: #9ca3af; font-style: italic;";
+      noDomains.textContent =
+        "No domains found. Create a job first to see domains here.";
+      domainList.appendChild(noDomains);
+    }
+
+    domainSection.appendChild(domainList);
+    item.appendChild(domainSection);
 
     list.appendChild(item);
   }
