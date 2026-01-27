@@ -1,0 +1,56 @@
+name: Cleanup Orphaned Preview Apps
+
+on:
+  schedule:
+    - cron: "0 * * * *" # Every hour
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  cleanup:
+    name: Cleanup Orphaned Apps
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Setup Fly.io CLI
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Find and destroy orphaned preview apps
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          echo "Listing all preview apps..."
+          APPS=$(flyctl apps list --json | jq -r '.[] | select(.Name | startswith("blue-banded-bee-pr-")) | .Name')
+
+          if [ -z "$APPS" ]; then
+            echo "No preview apps found"
+            exit 0
+          fi
+
+          echo "Found preview apps:"
+          echo "$APPS"
+          echo ""
+
+          for APP in $APPS; do
+            # Extract PR number from app name (blue-banded-bee-pr-123 -> 123)
+            PR_NUMBER=$(echo "$APP" | sed 's/blue-banded-bee-pr-//')
+
+            echo "Checking PR #$PR_NUMBER for app $APP..."
+
+            # Check if PR exists and get its state
+            PR_STATE=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json state --jq '.state' 2>/dev/null || echo "NOT_FOUND")
+
+            echo "  PR state: $PR_STATE"
+
+            if [ "$PR_STATE" = "OPEN" ]; then
+              echo "  PR is open, keeping app"
+            else
+              echo "  PR is closed/merged/missing, destroying app..."
+              flyctl apps destroy "$APP" --yes || echo "  Failed to destroy $APP"
+            fi
+
+            echo ""
+          done
+
+          echo "Cleanup complete"
