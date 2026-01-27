@@ -112,7 +112,9 @@ func (db *DB) GetGoogleToken(ctx context.Context, connectionID string) (string, 
 
 // GetGoogleConnection retrieves a Google Analytics connection by ID
 func (db *DB) GetGoogleConnection(ctx context.Context, connectionID string) (*GoogleAnalyticsConnection, error) {
-	conn := &GoogleAnalyticsConnection{}
+	conn := &GoogleAnalyticsConnection{
+		DomainIDs: []int{}, // Initialize to empty slice to handle NULL arrays
+	}
 	var installingUserID, vaultSecretName, ga4PropertyID, ga4PropertyName, googleAccountID, googleUserID, googleEmail, status sql.NullString
 	var lastSyncedAt sql.NullTime
 
@@ -192,7 +194,9 @@ func (db *DB) ListGoogleConnections(ctx context.Context, organisationID string) 
 
 	var connections []*GoogleAnalyticsConnection
 	for rows.Next() {
-		conn := &GoogleAnalyticsConnection{}
+		conn := &GoogleAnalyticsConnection{
+			DomainIDs: []int{}, // Initialize to empty slice to handle NULL arrays
+		}
 		var installingUserID, vaultSecretName, ga4PropertyID, ga4PropertyName, googleAccountID, googleUserID, googleEmail, status sql.NullString
 		var lastSyncedAt sql.NullTime
 
@@ -303,7 +307,9 @@ func (db *DB) UpdateGoogleConnectionStatus(ctx context.Context, connectionID, or
 // Returns nil if no active connection (not an error)
 // Deprecated: Use GetActiveGAConnectionForDomain for domain-specific lookups
 func (db *DB) GetActiveGAConnectionForOrganisation(ctx context.Context, orgID string) (*GoogleAnalyticsConnection, error) {
-	conn := &GoogleAnalyticsConnection{}
+	conn := &GoogleAnalyticsConnection{
+		DomainIDs: []int{}, // Initialize to empty slice to handle NULL arrays
+	}
 	var installingUserID, vaultSecretName, ga4PropertyID, ga4PropertyName, googleAccountID, googleUserID, googleEmail, status sql.NullString
 	var lastSyncedAt sql.NullTime
 
@@ -366,7 +372,9 @@ func (db *DB) GetActiveGAConnectionForOrganisation(ctx context.Context, orgID st
 // GetActiveGAConnectionForDomain retrieves the active GA4 connection for a specific domain
 // Returns nil if no active connection for this domain (not an error)
 func (db *DB) GetActiveGAConnectionForDomain(ctx context.Context, organisationID string, domainID int) (*GoogleAnalyticsConnection, error) {
-	conn := &GoogleAnalyticsConnection{}
+	conn := &GoogleAnalyticsConnection{
+		DomainIDs: []int{}, // Initialize to empty slice to handle NULL arrays
+	}
 	var installingUserID, vaultSecretName, ga4PropertyID, ga4PropertyName, googleAccountID, googleUserID, googleEmail, status sql.NullString
 	var lastSyncedAt sql.NullTime
 
