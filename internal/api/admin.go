@@ -1,5 +1,7 @@
 package api
 
+// Test comment for cleanup workflow verification - safe to delete
+
 import (
 	"net/http"
 	"os"
