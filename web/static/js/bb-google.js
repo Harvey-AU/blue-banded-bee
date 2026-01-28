@@ -497,7 +497,7 @@ async function saveGoogleProperties() {
       item.getAttribute("data-property-id")
     );
 
-    // Build property -> domain_ids mapping
+    // Build property -> domain_ids mapping from temp storage
     const propertyDomainMap = {};
     allGoogleProperties.forEach((property) => {
       const isActive = activePropertyIds.includes(property.property_id);
@@ -506,22 +506,10 @@ async function saveGoogleProperties() {
         return;
       }
 
-      // Get selected domains for this property
-      const domainSection = document.querySelector(
-        `.domain-selection-section[data-property-id="${property.property_id}"]`
-      );
-
-      if (domainSection) {
-        const selectedDomains = domainSection.querySelectorAll(
-          'input[type="checkbox"]:checked'
-        );
-        const domainIds = Array.from(selectedDomains).map((cb) =>
-          parseInt(cb.getAttribute("data-domain-id"), 10)
-        );
-        propertyDomainMap[property.property_id] = domainIds;
-      } else {
-        propertyDomainMap[property.property_id] = [];
-      }
+      // Get selected domains from temporary storage
+      const domainIds =
+        window.tempPropertyDomains?.[property.property_id] || [];
+      propertyDomainMap[property.property_id] = domainIds;
     });
 
     console.log("[GA Debug] Property domain mapping:", propertyDomainMap);
@@ -562,6 +550,9 @@ async function saveGoogleProperties() {
     hidePropertySelection();
     const activeCount = activePropertyIds.length;
     const totalCount = allGoogleProperties.length;
+
+    // Clear temporary domain selections
+    window.tempPropertyDomains = {};
 
     showGoogleSuccess(
       `Saved ${totalCount} properties (${activeCount} active, ${totalCount - activeCount} inactive)`
@@ -753,51 +744,203 @@ function renderPropertyList(properties, totalCount) {
     domainHeader.textContent = "Select domains tracked by this property:";
     domainSection.appendChild(domainHeader);
 
-    const domainList = document.createElement("div");
-    domainList.className = "domain-checkbox-list";
-    domainList.style.cssText =
-      "display: flex; flex-direction: column; gap: 6px;";
+    // Search input container
+    const inputContainer = document.createElement("div");
+    inputContainer.style.cssText = "position: relative; margin-bottom: 8px;";
 
-    // Create checkbox for each domain
-    if (organisationDomains && organisationDomains.length > 0) {
-      organisationDomains.forEach((domain) => {
-        const label = document.createElement("label");
-        label.className = "domain-checkbox-label";
-        label.style.cssText =
-          "display: flex; align-items: center; gap: 8px; font-size: 14px; color: #6b7280; cursor: pointer;";
+    const searchInput = document.createElement("input");
+    searchInput.type = "text";
+    searchInput.placeholder = "Search or add new domain...";
+    searchInput.style.cssText =
+      "width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; box-sizing: border-box;";
+    searchInput.setAttribute("data-property-id", prop.property_id);
 
-        const checkbox = document.createElement("input");
-        checkbox.type = "checkbox";
-        checkbox.value = domain.id;
-        checkbox.style.cssText = "width: 16px; height: 16px; cursor: pointer;";
-        checkbox.setAttribute("data-domain-id", domain.id);
-        checkbox.setAttribute("data-property-id", prop.property_id);
+    // Dropdown list
+    const dropdown = document.createElement("div");
+    dropdown.style.cssText =
+      "display: none; position: absolute; top: 100%; left: 0; right: 0; max-height: 200px; overflow-y: auto; background: white; border: 1px solid #d1d5db; border-radius: 6px; margin-top: 4px; z-index: 1000; box-shadow: 0 2px 8px rgba(0,0,0,0.1);";
 
-        const text = document.createTextNode(domain.name);
+    // Selected domains display
+    const selectedContainer = document.createElement("div");
+    selectedContainer.style.cssText =
+      "display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; min-height: 24px;";
+    selectedContainer.id = `domains-for-${prop.property_id}`;
 
-        label.appendChild(checkbox);
-        label.appendChild(text);
+    // Initialize temp storage for this property
+    if (!window.tempPropertyDomains) window.tempPropertyDomains = {};
+    let selectedDomainIds = window.tempPropertyDomains[prop.property_id] || [];
 
-        // Hover effect
-        label.addEventListener("mouseenter", () => {
-          label.style.color = "#111827";
-        });
-        label.addEventListener("mouseleave", () => {
-          label.style.color = "#6b7280";
-        });
+    // Function to render selected tags
+    const renderSelectedTags = () => {
+      while (selectedContainer.firstChild) {
+        selectedContainer.removeChild(selectedContainer.firstChild);
+      }
 
-        domainList.appendChild(label);
+      selectedDomainIds.forEach((domainId) => {
+        const domain = organisationDomains.find((d) => d.id === domainId);
+        if (!domain) return;
+
+        const tag = document.createElement("span");
+        tag.style.cssText =
+          "display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; background: #e0e7ff; color: #3730a3; border-radius: 4px; font-size: 13px;";
+        tag.textContent = domain.name;
+
+        const removeBtn = document.createElement("button");
+        removeBtn.textContent = "×";
+        removeBtn.style.cssText =
+          "background: none; border: none; color: #6366f1; font-size: 16px; cursor: pointer; padding: 0; margin-left: 2px;";
+        removeBtn.onclick = () => {
+          selectedDomainIds = selectedDomainIds.filter((id) => id !== domainId);
+          window.tempPropertyDomains[prop.property_id] = selectedDomainIds;
+          renderSelectedTags();
+        };
+
+        tag.appendChild(removeBtn);
+        selectedContainer.appendChild(tag);
       });
-    } else {
-      const noDomains = document.createElement("div");
-      noDomains.style.cssText =
-        "font-size: 13px; color: #9ca3af; font-style: italic;";
-      noDomains.textContent =
-        "No domains found. Create a job first to see domains here.";
-      domainList.appendChild(noDomains);
-    }
+    };
 
-    domainSection.appendChild(domainList);
+    // Function to filter and render dropdown options
+    const renderDropdown = (query) => {
+      while (dropdown.firstChild) {
+        dropdown.removeChild(dropdown.firstChild);
+      }
+
+      const lowerQuery = query.toLowerCase().trim();
+
+      // Filter domains that aren't already selected
+      const availableDomains = organisationDomains.filter(
+        (d) => !selectedDomainIds.includes(d.id)
+      );
+
+      // Filter by search query
+      const filtered = lowerQuery
+        ? availableDomains.filter((d) =>
+            d.name.toLowerCase().includes(lowerQuery)
+          )
+        : availableDomains;
+
+      // Show options
+      if (filtered.length > 0) {
+        filtered.forEach((domain) => {
+          const option = document.createElement("div");
+          option.textContent = domain.name;
+          option.style.cssText =
+            "padding: 10px 16px; cursor: pointer; font-size: 14px; border-bottom: 1px solid #f3f4f6;";
+          option.onmouseover = () => {
+            option.style.background = "#f9fafb";
+          };
+          option.onmouseout = () => {
+            option.style.background = "white";
+          };
+          option.onclick = () => {
+            if (!selectedDomainIds.includes(domain.id)) {
+              selectedDomainIds.push(domain.id);
+              window.tempPropertyDomains[prop.property_id] = selectedDomainIds;
+              renderSelectedTags();
+            }
+            searchInput.value = "";
+            dropdown.style.display = "none";
+          };
+          dropdown.appendChild(option);
+        });
+        dropdown.style.display = "block";
+      } else if (lowerQuery) {
+        // Show "Add new domain" option
+        const addOption = document.createElement("div");
+        addOption.textContent = `Add new domain: ${lowerQuery}`;
+        addOption.style.cssText =
+          "padding: 10px 16px; cursor: pointer; font-size: 14px; color: #6366f1; font-weight: 500;";
+        addOption.onmouseover = () => {
+          addOption.style.background = "#f9fafb";
+        };
+        addOption.onmouseout = () => {
+          addOption.style.background = "white";
+        };
+        addOption.onclick = async () => {
+          await createDomainInline(lowerQuery, prop.property_id);
+          searchInput.value = "";
+          dropdown.style.display = "none";
+        };
+        dropdown.appendChild(addOption);
+        dropdown.style.display = "block";
+      } else {
+        dropdown.style.display = "none";
+      }
+    };
+
+    // Create domain function
+    const createDomainInline = async (domainName, propertyId) => {
+      try {
+        const { data: { session } = {} } =
+          await window.supabase.auth.getSession();
+        const token = session?.access_token;
+
+        if (!token) {
+          showGoogleError("Please sign in to create domains");
+          return;
+        }
+
+        const response = await fetch("/v1/jobs", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            domain: domainName,
+            source_type: "sitemap",
+            concurrency: 1,
+            max_pages: 10,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error("Failed to create domain");
+        }
+
+        const result = await response.json();
+        const newDomainId = result.domain_id;
+
+        organisationDomains.push({ id: newDomainId, name: domainName });
+
+        if (!selectedDomainIds.includes(newDomainId)) {
+          selectedDomainIds.push(newDomainId);
+          window.tempPropertyDomains[propertyId] = selectedDomainIds;
+          renderSelectedTags();
+        }
+      } catch (error) {
+        console.error("Failed to create domain:", error);
+        showGoogleError("Failed to create domain. Please try again.");
+      }
+    };
+
+    // Event listeners
+    searchInput.addEventListener("focus", () => {
+      renderDropdown(searchInput.value);
+    });
+
+    searchInput.addEventListener("input", () => {
+      renderDropdown(searchInput.value);
+    });
+
+    searchInput.addEventListener("click", (e) => {
+      e.stopPropagation();
+    });
+
+    document.addEventListener("click", (e) => {
+      if (!inputContainer.contains(e.target)) {
+        dropdown.style.display = "none";
+      }
+    });
+
+    inputContainer.appendChild(searchInput);
+    inputContainer.appendChild(dropdown);
+    domainSection.appendChild(inputContainer);
+    domainSection.appendChild(selectedContainer);
+
+    // Render initial tags
+    renderSelectedTags();
 
     item.appendChild(domainSection);
 
