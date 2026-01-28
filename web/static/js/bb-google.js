@@ -1688,30 +1688,34 @@ async function showDomainSelectorForProperty(propertyId, currentDomainIds) {
         return;
       }
 
-      // Create domain via API
-      const response = await fetch("/v1/domains", {
+      // Create domain via job creation endpoint (reusing existing logic)
+      const response = await fetch("/v1/jobs", {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ name: domainName }),
+        body: JSON.stringify({
+          domain: domainName,
+          source_type: "sitemap", // Default values just to create domain
+          concurrency: 1,
+          max_pages: 10,
+        }),
       });
 
       if (!response.ok) {
-        throw new Error(`Failed to create domain: ${response.status}`);
+        throw new Error("Failed to create domain");
       }
 
-      const newDomain = await response.json();
+      const result = await response.json();
+      const newDomainId = result.domain_id;
 
-      // Add to organisation domains cache
-      if (!organisationDomains.some((d) => d.id === newDomain.id)) {
-        organisationDomains.push(newDomain);
-      }
+      // Add to organisationDomains array
+      organisationDomains.push({ id: newDomainId, name: domainName });
 
       // Add to selection
-      if (!selectedDomainIds.includes(newDomain.id)) {
-        selectedDomainIds.push(newDomain.id);
+      if (!selectedDomainIds.includes(newDomainId)) {
+        selectedDomainIds.push(newDomainId);
         renderSelectedTags();
       }
     } catch (error) {
@@ -1730,15 +1734,11 @@ async function showDomainSelectorForProperty(propertyId, currentDomainIds) {
   });
 
   // Close dropdown when clicking outside
-  document.addEventListener(
-    "click",
-    (e) => {
-      if (!inputContainer.contains(e.target)) {
-        dropdown.style.display = "none";
-      }
-    },
-    { once: true }
-  );
+  document.addEventListener("click", (e) => {
+    if (!inputContainer.contains(e.target)) {
+      dropdown.style.display = "none";
+    }
+  });
 
   // Buttons
   const buttonContainer = document.createElement("div");
