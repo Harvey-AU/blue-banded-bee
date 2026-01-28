@@ -1403,6 +1403,11 @@ async function showDomainSelector(connectionId, currentDomainIds) {
     renderDropdown(searchInput.value);
   });
 
+  // Prevent click inside input from closing dropdown
+  searchInput.addEventListener("click", (e) => {
+    e.stopPropagation();
+  });
+
   // Close dropdown when clicking outside
   document.addEventListener("click", (e) => {
     if (!inputContainer.contains(e.target)) {
@@ -1731,6 +1736,11 @@ async function showDomainSelectorForProperty(propertyId, currentDomainIds) {
 
   searchInput.addEventListener("focus", () => {
     renderDropdown(searchInput.value);
+  });
+
+  // Prevent click inside input from closing dropdown
+  searchInput.addEventListener("click", (e) => {
+    e.stopPropagation();
   });
 
   // Close dropdown when clicking outside
