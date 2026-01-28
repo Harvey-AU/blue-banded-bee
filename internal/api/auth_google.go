@@ -1154,6 +1154,11 @@ func (h *Handler) getOrganisationDomains(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	logger.Info().
+		Str("organisation_id", orgID).
+		Int("domain_count", len(domains)).
+		Msg("Returning domains for organisation")
+
 	WriteSuccess(w, r, map[string]interface{}{"domains": domains}, "")
 }
 
