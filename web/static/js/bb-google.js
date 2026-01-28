@@ -1211,25 +1211,20 @@ async function removeDomainFromConnection(connectionId, domainId) {
       (id) => id !== domainId
     );
 
-    // Update the connection via save-properties endpoint
-    const response = await fetch("/v1/integrations/google/save-properties", {
-      method: "POST",
+    // Use dedicated PATCH endpoint to update domains
+    const response = await fetch(`/v1/integrations/google/${connectionId}`, {
+      method: "PATCH",
       headers: {
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        session_id: connection.id, // Using connection ID as session ID
-        account_id: connection.google_account_id,
-        active_property_ids: [connection.ga4_property_id],
-        property_domain_map: {
-          [connection.ga4_property_id]: updatedDomainIds,
-        },
+        domain_ids: updatedDomainIds, // Send updated array
       }),
     });
 
     if (!response.ok) {
-      throw new Error("Failed to update connection");
+      throw new Error(`Failed to update connection: ${response.status}`);
     }
 
     // Reload connections to show updated list
@@ -1503,36 +1498,20 @@ async function saveDomainSelection(connectionId, domainIds) {
       return;
     }
 
-    // Get current connection
-    const connections = await window.dataBinder.fetchData(
-      "/v1/integrations/google/connections"
-    );
-    const connection = connections.find((c) => c.id === connectionId);
-
-    if (!connection) {
-      showGoogleError("Connection not found");
-      return;
-    }
-
-    // Update via save-properties endpoint
-    const response = await fetch("/v1/integrations/google/save-properties", {
-      method: "POST",
+    // Use dedicated PATCH endpoint to update domains
+    const response = await fetch(`/v1/integrations/google/${connectionId}`, {
+      method: "PATCH",
       headers: {
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        session_id: connection.id,
-        account_id: connection.google_account_id,
-        active_property_ids: [connection.ga4_property_id],
-        property_domain_map: {
-          [connection.ga4_property_id]: domainIds,
-        },
+        domain_ids: domainIds, // Send array directly
       }),
     });
 
     if (!response.ok) {
-      throw new Error("Failed to update connection");
+      throw new Error(`Failed to update connection: ${response.status}`);
     }
 
     // Reload connections

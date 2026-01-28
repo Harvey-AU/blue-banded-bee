@@ -457,6 +457,32 @@ func (db *DB) UpdateConnectionLastSync(ctx context.Context, connectionID string)
 	return nil
 }
 
+// UpdateConnectionDomains updates the domain_ids for an existing connection
+func (db *DB) UpdateConnectionDomains(ctx context.Context, connectionID string, domainIDs []int) error {
+	// Convert []int to pq.Int64Array
+	var domainIDsArray pq.Int64Array
+	if domainIDs != nil {
+		domainIDsArray = make(pq.Int64Array, len(domainIDs))
+		for i, id := range domainIDs {
+			domainIDsArray[i] = int64(id)
+		}
+	}
+
+	query := `
+		UPDATE google_analytics_connections
+		SET domain_ids = $1,
+		    updated_at = NOW()
+		WHERE id = $2
+	`
+
+	_, err := db.client.ExecContext(ctx, query, pq.Array(domainIDsArray), connectionID)
+	if err != nil {
+		return fmt.Errorf("failed to update connection domains: %w", err)
+	}
+
+	return nil
+}
+
 // MarkConnectionInactive sets a connection status to inactive with a reason logged
 func (db *DB) MarkConnectionInactive(ctx context.Context, connectionID, reason string) error {
 	query := `

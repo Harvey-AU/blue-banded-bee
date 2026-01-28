@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -575,6 +576,81 @@ func (h *Handler) UpdateGooglePropertyStatus(w http.ResponseWriter, r *http.Requ
 	}, "Status updated successfully")
 }
 
+// UpdateGoogleConnection updates domain mappings for an existing connection
+// PATCH /v1/integrations/google/{id}
+func (h *Handler) UpdateGoogleConnection(w http.ResponseWriter, r *http.Request, connectionID string) {
+	logger := loggerWithRequest(r)
+
+	// Get authenticated user
+	userClaims, ok := auth.GetUserFromContext(r.Context())
+	if !ok {
+		Unauthorised(w, r, "User information not found")
+		return
+	}
+
+	user, err := h.DB.GetOrCreateUser(userClaims.UserID, userClaims.Email, nil)
+	if err != nil {
+		logger.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get or create user")
+		InternalError(w, r, err)
+		return
+	}
+
+	orgID := h.DB.GetEffectiveOrganisationID(user)
+	if orgID == "" {
+		BadRequest(w, r, "User must belong to an organisation")
+		return
+	}
+
+	// Parse request body
+	type UpdateRequest struct {
+		DomainIDs []int `json:"domain_ids"`
+	}
+
+	var req UpdateRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		BadRequest(w, r, "Invalid request body")
+		return
+	}
+
+	// Get existing connection to verify ownership
+	conn, err := h.DB.GetGoogleConnection(r.Context(), connectionID)
+	if err != nil {
+		logger.Error().Err(err).Str("connection_id", connectionID).Msg("Failed to get connection")
+		http.Error(w, "Connection not found", http.StatusNotFound)
+		return
+	}
+
+	// Verify connection belongs to user's organisation
+	if conn.OrganisationID != orgID {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+
+	// Update domain_ids
+	if err := h.DB.UpdateConnectionDomains(r.Context(), connectionID, req.DomainIDs); err != nil {
+		logger.Error().Err(err).Str("connection_id", connectionID).Msg("Failed to update connection domains")
+		http.Error(w, "Failed to update connection", http.StatusInternalServerError)
+		return
+	}
+
+	logger.Info().
+		Str("connection_id", connectionID).
+		Ints("domain_ids", req.DomainIDs).
+		Msg("Updated connection domain mappings")
+
+	// Return updated connection
+	updatedConn, err := h.DB.GetGoogleConnection(r.Context(), connectionID)
+	if err != nil {
+		http.Error(w, "Failed to retrieve updated connection", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(updatedConn); err != nil {
+		logger.Error().Err(err).Msg("Failed to encode response")
+	}
+}
+
 func (h *Handler) exchangeGoogleCode(code string) (*GoogleTokenResponse, error) {
 	values := url.Values{}
 	values.Set("client_id", getGoogleClientID())
@@ -892,7 +968,24 @@ func (h *Handler) GoogleConnectionHandler(w http.ResponseWriter, r *http.Request
 	case http.MethodDelete:
 		h.deleteGoogleConnection(w, r, connectionID)
 	case http.MethodPatch:
-		h.UpdateGooglePropertyStatus(w, r, connectionID)
+		// Check request body to determine which PATCH operation
+		// If body contains "domain_ids", update domains
+		// If body contains "status", update status
+		var bodyCheck map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&bodyCheck); err != nil {
+			BadRequest(w, r, "Invalid request body")
+			return
+		}
+
+		// Restore body for handler to read
+		bodyBytes, _ := json.Marshal(bodyCheck)
+		r.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+
+		if _, hasDomainIDs := bodyCheck["domain_ids"]; hasDomainIDs {
+			h.UpdateGoogleConnection(w, r, connectionID)
+		} else {
+			h.UpdateGooglePropertyStatus(w, r, connectionID)
+		}
 	default:
 		MethodNotAllowed(w, r)
 	}
