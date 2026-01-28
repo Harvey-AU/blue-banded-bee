@@ -772,7 +772,8 @@ func (db *DB) GetDomainsForOrganisation(ctx context.Context, organisationID stri
 	query := `
 		SELECT DISTINCT d.id, d.name
 		FROM domains d
-		WHERE d.organisation_id = $1
+		JOIN jobs j ON j.domain_id = d.id
+		WHERE j.organisation_id = $1
 		ORDER BY d.name ASC
 	`
 
