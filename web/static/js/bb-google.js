@@ -449,7 +449,7 @@ async function selectGoogleAccount(accountId) {
 
       if (domainsResponse.ok) {
         const domainsData = await domainsResponse.json();
-        organisationDomains = domainsData.data?.domains || [];
+        organisationDomains = domainsData.domains || [];
         console.log("[GA Debug] Fetched domains:", organisationDomains);
       } else {
         console.warn(
@@ -1167,7 +1167,7 @@ async function removeDomainFromConnection(connectionId, domainId) {
 
     // Get current connection to find existing domain_ids
     const connections = await window.dataBinder.fetchData(
-      "/v1/integrations/google/connections"
+      "/v1/integrations/google"
     );
     const connection = connections.find((c) => c.id === connectionId);
 
