@@ -497,7 +497,7 @@ async function saveGoogleProperties() {
       item.getAttribute("data-property-id")
     );
 
-    // Build property -> domain_ids mapping from temp storage
+    // Build property -> domain_ids mapping
     const propertyDomainMap = {};
     allGoogleProperties.forEach((property) => {
       const isActive = activePropertyIds.includes(property.property_id);
@@ -506,10 +506,22 @@ async function saveGoogleProperties() {
         return;
       }
 
-      // Get selected domains from temporary storage
-      const domainIds =
-        window.tempPropertyDomains?.[property.property_id] || [];
-      propertyDomainMap[property.property_id] = domainIds;
+      // Get selected domains for this property
+      const domainSection = document.querySelector(
+        `.domain-selection-section[data-property-id="${property.property_id}"]`
+      );
+
+      if (domainSection) {
+        const selectedDomains = domainSection.querySelectorAll(
+          'input[type="checkbox"]:checked'
+        );
+        const domainIds = Array.from(selectedDomains).map((cb) =>
+          parseInt(cb.getAttribute("data-domain-id"), 10)
+        );
+        propertyDomainMap[property.property_id] = domainIds;
+      } else {
+        propertyDomainMap[property.property_id] = [];
+      }
     });
 
     console.log("[GA Debug] Property domain mapping:", propertyDomainMap);
@@ -550,9 +562,6 @@ async function saveGoogleProperties() {
     hidePropertySelection();
     const activeCount = activePropertyIds.length;
     const totalCount = allGoogleProperties.length;
-
-    // Clear temporary domain selections after successful save
-    window.tempPropertyDomains = {};
 
     showGoogleSuccess(
       `Saved ${totalCount} properties (${activeCount} active, ${totalCount - activeCount} inactive)`
@@ -744,28 +753,51 @@ function renderPropertyList(properties, totalCount) {
     domainHeader.textContent = "Select domains tracked by this property:";
     domainSection.appendChild(domainHeader);
 
-    // "Select domains" button
-    const selectDomainsBtn = document.createElement("button");
-    selectDomainsBtn.className = "select-domains-btn";
-    selectDomainsBtn.textContent = "Select domains";
-    selectDomainsBtn.style.cssText =
-      "padding: 8px 16px; background: #f3f4f6; color: #374151; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; cursor: pointer; margin-bottom: 8px;";
-    selectDomainsBtn.onclick = () => {
-      const currentSelection =
-        window.tempPropertyDomains?.[prop.property_id] || [];
-      showDomainSelectorForProperty(prop.property_id, currentSelection);
-    };
-    domainSection.appendChild(selectDomainsBtn);
+    const domainList = document.createElement("div");
+    domainList.className = "domain-checkbox-list";
+    domainList.style.cssText =
+      "display: flex; flex-direction: column; gap: 6px;";
 
-    // Container for selected domain tags
-    const selectedDomainsContainer = document.createElement("div");
-    selectedDomainsContainer.id = `domains-for-${prop.property_id}`;
-    selectedDomainsContainer.style.cssText =
-      "display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; min-height: 24px;";
-    domainSection.appendChild(selectedDomainsContainer);
+    // Create checkbox for each domain
+    if (organisationDomains && organisationDomains.length > 0) {
+      organisationDomains.forEach((domain) => {
+        const label = document.createElement("label");
+        label.className = "domain-checkbox-label";
+        label.style.cssText =
+          "display: flex; align-items: center; gap: 8px; font-size: 14px; color: #6b7280; cursor: pointer;";
 
-    // Render any existing selections
-    updateDomainTags(prop.property_id);
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.value = domain.id;
+        checkbox.style.cssText = "width: 16px; height: 16px; cursor: pointer;";
+        checkbox.setAttribute("data-domain-id", domain.id);
+        checkbox.setAttribute("data-property-id", prop.property_id);
+
+        const text = document.createTextNode(domain.name);
+
+        label.appendChild(checkbox);
+        label.appendChild(text);
+
+        // Hover effect
+        label.addEventListener("mouseenter", () => {
+          label.style.color = "#111827";
+        });
+        label.addEventListener("mouseleave", () => {
+          label.style.color = "#6b7280";
+        });
+
+        domainList.appendChild(label);
+      });
+    } else {
+      const noDomains = document.createElement("div");
+      noDomains.style.cssText =
+        "font-size: 13px; color: #9ca3af; font-style: italic;";
+      noDomains.textContent =
+        "No domains found. Create a job first to see domains here.";
+      domainList.appendChild(noDomains);
+    }
+
+    domainSection.appendChild(domainList);
 
     item.appendChild(domainSection);
 
