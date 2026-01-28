@@ -109,6 +109,32 @@ async function loadGoogleConnections() {
       );
       return;
     }
+
+    // Fetch organisation domains first (needed for domain tags)
+    try {
+      const { data: { session } = {} } =
+        await window.supabase.auth.getSession();
+      const token = session?.access_token;
+
+      if (token) {
+        const domainsResponse = await fetch("/v1/integrations/google/domains", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        if (domainsResponse.ok) {
+          const domainsData = await domainsResponse.json();
+          organisationDomains = domainsData.domains || [];
+          console.log(
+            "[GA Debug] Loaded domains for connections:",
+            organisationDomains
+          );
+        }
+      }
+    } catch (error) {
+      console.error("Failed to fetch organisation domains:", error);
+      organisationDomains = [];
+    }
+
     const connections = await window.dataBinder.fetchData(
       "/v1/integrations/google"
     );
