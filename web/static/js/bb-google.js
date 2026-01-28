@@ -808,6 +808,14 @@ function renderPropertyList(properties, totalCount) {
 
       const lowerQuery = query.toLowerCase().trim();
 
+      console.log(
+        "[GA Debug] renderDropdown called:",
+        "query=",
+        query,
+        "organisationDomains=",
+        organisationDomains
+      );
+
       // Filter domains that aren't already selected
       const availableDomains = organisationDomains.filter(
         (d) => !selectedDomainIds.includes(d.id)
