@@ -709,3 +709,96 @@ func Serialise(v interface{}) string {
 	}
 	return string(data)
 }
+
+// UpsertPageWithAnalytics creates or updates a page with GA4 analytics data
+// This is a stub for Step 5 - currently logs data but doesn't persist analytics columns
+func (db *DB) UpsertPageWithAnalytics(ctx context.Context, domainID int, path string, pageViews map[string]int64) (int, error) {
+	// Step 4: Create/get page_id
+	query := `
+		INSERT INTO pages (domain_id, path, created_at)
+		VALUES ($1, $2, NOW())
+		ON CONFLICT (domain_id, path)
+		DO UPDATE SET domain_id = EXCLUDED.domain_id
+		RETURNING id
+	`
+
+	var pageID int
+	err := db.client.QueryRowContext(ctx, query, domainID, path).Scan(&pageID)
+	if err != nil {
+		return 0, fmt.Errorf("failed to upsert page: %w", err)
+	}
+
+	// Step 5 (future): Update analytics columns
+	// For now, just log the data we fetched
+	log.Debug().
+		Int("page_id", pageID).
+		Int("domain_id", domainID).
+		Str("path", path).
+		Interface("page_views", pageViews).
+		Msg("GA4 data fetched (not persisted yet - Step 5)")
+
+	return pageID, nil
+}
+
+// GetOrCreateDomainID retrieves or creates a domain ID for a given domain name
+// Uses INSERT ... ON CONFLICT to handle concurrent creation atomically
+func (db *DB) GetOrCreateDomainID(ctx context.Context, domain string) (int, error) {
+	var domainID int
+
+	// Use upsert to handle concurrent creation atomically
+	query := `
+		INSERT INTO domains (name, created_at)
+		VALUES ($1, NOW())
+		ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
+		RETURNING id
+	`
+	err := db.client.QueryRowContext(ctx, query, domain).Scan(&domainID)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get or create domain: %w", err)
+	}
+
+	return domainID, nil
+}
+
+// OrganisationDomain represents a domain belonging to an organisation
+type OrganisationDomain struct {
+	ID   int    `json:"id"`
+	Name string `json:"name"`
+}
+
+// GetDomainsForOrganisation returns all domains that belong to the organisation
+// This includes domains from jobs created by any user in the organisation
+func (db *DB) GetDomainsForOrganisation(ctx context.Context, organisationID string) ([]OrganisationDomain, error) {
+	query := `
+		SELECT DISTINCT d.id, d.name
+		FROM domains d
+		JOIN jobs j ON j.domain_id = d.id
+		WHERE j.organisation_id = $1
+		ORDER BY d.name ASC
+	`
+
+	rows, err := db.client.QueryContext(ctx, query, organisationID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query organisation domains: %w", err)
+	}
+	defer func() {
+		if closeErr := rows.Close(); closeErr != nil {
+			log.Error().Err(closeErr).Str("organisation_id", organisationID).Msg("Failed to close rows")
+		}
+	}()
+
+	var domains []OrganisationDomain
+	for rows.Next() {
+		var domain OrganisationDomain
+		if err := rows.Scan(&domain.ID, &domain.Name); err != nil {
+			return nil, fmt.Errorf("failed to scan domain: %w", err)
+		}
+		domains = append(domains, domain)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating domains: %w", err)
+	}
+
+	return domains, nil
+}

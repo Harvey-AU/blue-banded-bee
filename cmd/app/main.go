@@ -627,7 +627,12 @@ func main() {
 	limiter := newRateLimiter()
 
 	// Create API handler with dependencies
-	apiHandler := api.NewHandler(pgDB, jobsManager)
+	apiHandler := api.NewHandler(
+		pgDB,
+		jobsManager,
+		os.Getenv("GOOGLE_CLIENT_ID"),
+		os.Getenv("GOOGLE_CLIENT_SECRET"),
+	)
 
 	// Create HTTP multiplexer
 	mux := http.NewServeMux()

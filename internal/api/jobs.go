@@ -14,6 +14,8 @@ import (
 
 	"github.com/Harvey-AU/blue-banded-bee/internal/db"
 	"github.com/Harvey-AU/blue-banded-bee/internal/jobs"
+	"github.com/Harvey-AU/blue-banded-bee/internal/util"
+	"github.com/rs/zerolog/log"
 )
 
 // JobsHandler handles requests to /v1/jobs
@@ -256,6 +258,12 @@ func (h *Handler) createJobFromRequest(ctx context.Context, user *db.User, req C
 		SourceType:     req.SourceType,
 		SourceDetail:   req.SourceDetail,
 		SourceInfo:     req.SourceInfo,
+	}
+
+	// Trigger GA4 data fetch if findLinks is enabled and organisation has GA4 connection
+	// This must happen BEFORE job creation so GA4 data is available for task prioritisation
+	if findLinks && effectiveOrgID != "" && h.GoogleClientID != "" && h.GoogleClientSecret != "" {
+		h.fetchGA4DataBeforeJob(ctx, effectiveOrgID, req.Domain)
 	}
 
 	return h.JobsManager.CreateJob(ctx, opts)
@@ -1103,4 +1111,36 @@ func (h *Handler) serveJobExport(w http.ResponseWriter, r *http.Request, jobID s
 	}
 
 	WriteSuccess(w, r, response, fmt.Sprintf("Exported %d tasks for job %s", len(tasks), jobID))
+}
+
+// fetchGA4DataBeforeJob fetches GA4 analytics data before job creation
+// This runs in the foreground (blocking) for phase 1, with phases 2-3 in background
+func (h *Handler) fetchGA4DataBeforeJob(ctx context.Context, organisationID, domain string) {
+	// Normalise domain to match database format
+	normalisedDomain := util.NormaliseDomain(domain)
+
+	// Get domain ID from database
+	domainID, err := h.DB.GetOrCreateDomainID(ctx, normalisedDomain)
+	if err != nil {
+		log.Warn().
+			Err(err).
+			Str("organisation_id", organisationID).
+			Str("domain", normalisedDomain).
+			Msg("Failed to get domain ID for GA4 fetch, skipping analytics")
+		return
+	}
+
+	// Create progressive fetcher
+	fetcher := NewProgressiveFetcher(h.DB, h.GoogleClientID, h.GoogleClientSecret)
+
+	// Fetch GA4 data (phase 1 blocks, phases 2-3 run in background)
+	if err := fetcher.FetchAndUpdatePages(ctx, organisationID, domainID); err != nil {
+		// Log error but don't fail job creation
+		log.Warn().
+			Err(err).
+			Str("organisation_id", organisationID).
+			Str("domain", normalisedDomain).
+			Int("domain_id", domainID).
+			Msg("Failed to fetch GA4 data, continuing without analytics")
+	}
 }

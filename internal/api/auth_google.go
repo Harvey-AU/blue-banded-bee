@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -16,6 +17,7 @@ import (
 	"github.com/Harvey-AU/blue-banded-bee/internal/auth"
 	"github.com/Harvey-AU/blue-banded-bee/internal/db"
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 	"github.com/rs/zerolog/log"
 )
 
@@ -410,9 +412,10 @@ func (h *Handler) SaveGoogleProperties(w http.ResponseWriter, r *http.Request) {
 
 	// Parse request body
 	var req struct {
-		SessionID         string   `json:"session_id"`
-		AccountID         string   `json:"account_id"`
-		ActivePropertyIDs []string `json:"active_property_ids"` // Which properties should be active
+		SessionID         string           `json:"session_id"`
+		AccountID         string           `json:"account_id"`
+		ActivePropertyIDs []string         `json:"active_property_ids"` // Which properties should be active
+		PropertyDomainMap map[string][]int `json:"property_domain_map"` // property_id -> domain_ids
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		BadRequest(w, r, "Invalid request body")
@@ -451,6 +454,18 @@ func (h *Handler) SaveGoogleProperties(w http.ResponseWriter, r *http.Request) {
 			status = "active"
 		}
 
+		// Get domain IDs for this property (default to empty array if not provided)
+		domainIDs := req.PropertyDomainMap[prop.PropertyID]
+
+		// Convert []int to pq.Int64Array
+		var domainIDsArray pq.Int64Array
+		if domainIDs != nil {
+			domainIDsArray = make(pq.Int64Array, len(domainIDs))
+			for i, id := range domainIDs {
+				domainIDsArray[i] = int64(id)
+			}
+		}
+
 		conn := &db.GoogleAnalyticsConnection{
 			ID:               uuid.New().String(),
 			OrganisationID:   orgID,
@@ -461,6 +476,7 @@ func (h *Handler) SaveGoogleProperties(w http.ResponseWriter, r *http.Request) {
 			GoogleEmail:      session.Email,
 			InstallingUserID: userClaims.UserID,
 			Status:           status,
+			DomainIDs:        domainIDsArray,
 			CreatedAt:        now,
 			UpdatedAt:        now,
 		}
@@ -558,6 +574,81 @@ func (h *Handler) UpdateGooglePropertyStatus(w http.ResponseWriter, r *http.Requ
 		"connection_id": connectionID,
 		"status":        req.Status,
 	}, "Status updated successfully")
+}
+
+// UpdateGoogleConnection updates domain mappings for an existing connection
+// PATCH /v1/integrations/google/{id}
+func (h *Handler) UpdateGoogleConnection(w http.ResponseWriter, r *http.Request, connectionID string) {
+	logger := loggerWithRequest(r)
+
+	// Get authenticated user
+	userClaims, ok := auth.GetUserFromContext(r.Context())
+	if !ok {
+		Unauthorised(w, r, "User information not found")
+		return
+	}
+
+	user, err := h.DB.GetOrCreateUser(userClaims.UserID, userClaims.Email, nil)
+	if err != nil {
+		logger.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get or create user")
+		InternalError(w, r, err)
+		return
+	}
+
+	orgID := h.DB.GetEffectiveOrganisationID(user)
+	if orgID == "" {
+		BadRequest(w, r, "User must belong to an organisation")
+		return
+	}
+
+	// Parse request body
+	type UpdateRequest struct {
+		DomainIDs []int `json:"domain_ids"`
+	}
+
+	var req UpdateRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		BadRequest(w, r, "Invalid request body")
+		return
+	}
+
+	// Get existing connection to verify ownership
+	conn, err := h.DB.GetGoogleConnection(r.Context(), connectionID)
+	if err != nil {
+		logger.Error().Err(err).Str("connection_id", connectionID).Msg("Failed to get connection")
+		http.Error(w, "Connection not found", http.StatusNotFound)
+		return
+	}
+
+	// Verify connection belongs to user's organisation
+	if conn.OrganisationID != orgID {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+
+	// Update domain_ids
+	if err := h.DB.UpdateConnectionDomains(r.Context(), connectionID, req.DomainIDs); err != nil {
+		logger.Error().Err(err).Str("connection_id", connectionID).Msg("Failed to update connection domains")
+		http.Error(w, "Failed to update connection", http.StatusInternalServerError)
+		return
+	}
+
+	logger.Info().
+		Str("connection_id", connectionID).
+		Ints("domain_ids", req.DomainIDs).
+		Msg("Updated connection domain mappings")
+
+	// Return updated connection
+	updatedConn, err := h.DB.GetGoogleConnection(r.Context(), connectionID)
+	if err != nil {
+		http.Error(w, "Failed to retrieve updated connection", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(updatedConn); err != nil {
+		logger.Error().Err(err).Msg("Failed to encode response")
+	}
 }
 
 func (h *Handler) exchangeGoogleCode(code string) (*GoogleTokenResponse, error) {
@@ -711,12 +802,13 @@ func (h *Handler) fetchPropertiesForAccount(ctx context.Context, client *http.Cl
 
 // GoogleConnectionResponse represents a Google Analytics connection in API responses
 type GoogleConnectionResponse struct {
-	ID              string `json:"id"`
-	GA4PropertyID   string `json:"ga4_property_id,omitempty"`
-	GA4PropertyName string `json:"ga4_property_name,omitempty"`
-	GoogleEmail     string `json:"google_email,omitempty"`
-	Status          string `json:"status"`
-	CreatedAt       string `json:"created_at"`
+	ID              string        `json:"id"`
+	GA4PropertyID   string        `json:"ga4_property_id,omitempty"`
+	GA4PropertyName string        `json:"ga4_property_name,omitempty"`
+	GoogleEmail     string        `json:"google_email,omitempty"`
+	Status          string        `json:"status"`
+	DomainIDs       pq.Int64Array `json:"domain_ids,omitempty"`
+	CreatedAt       string        `json:"created_at"`
 }
 
 // GoogleConnectionsHandler handles requests to /v1/integrations/google
@@ -763,6 +855,16 @@ func (h *Handler) GoogleConnectionHandler(w http.ResponseWriter, r *http.Request
 	if path == "save-properties" {
 		if r.Method == http.MethodPost {
 			h.SaveGoogleProperties(w, r)
+			return
+		}
+		MethodNotAllowed(w, r)
+		return
+	}
+
+	// Handle domains endpoint (get organisation domains for property mapping)
+	if path == "domains" {
+		if r.Method == http.MethodGet {
+			h.getOrganisationDomains(w, r)
 			return
 		}
 		MethodNotAllowed(w, r)
@@ -866,7 +968,24 @@ func (h *Handler) GoogleConnectionHandler(w http.ResponseWriter, r *http.Request
 	case http.MethodDelete:
 		h.deleteGoogleConnection(w, r, connectionID)
 	case http.MethodPatch:
-		h.UpdateGooglePropertyStatus(w, r, connectionID)
+		// Check request body to determine which PATCH operation
+		// If body contains "domain_ids", update domains
+		// If body contains "status", update status
+		var bodyCheck map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&bodyCheck); err != nil {
+			BadRequest(w, r, "Invalid request body")
+			return
+		}
+
+		// Restore body for handler to read
+		bodyBytes, _ := json.Marshal(bodyCheck)
+		r.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+
+		if _, hasDomainIDs := bodyCheck["domain_ids"]; hasDomainIDs {
+			h.UpdateGoogleConnection(w, r, connectionID)
+		} else {
+			h.UpdateGooglePropertyStatus(w, r, connectionID)
+		}
 	default:
 		MethodNotAllowed(w, r)
 	}
@@ -997,11 +1116,50 @@ func (h *Handler) listGoogleConnections(w http.ResponseWriter, r *http.Request) 
 			GA4PropertyName: conn.GA4PropertyName,
 			GoogleEmail:     conn.GoogleEmail,
 			Status:          conn.Status,
+			DomainIDs:       conn.DomainIDs,
 			CreatedAt:       conn.CreatedAt.Format(time.RFC3339),
 		})
 	}
 
 	WriteSuccess(w, r, response, "")
+}
+
+// getOrganisationDomains returns all domains for the authenticated user's organisation
+func (h *Handler) getOrganisationDomains(w http.ResponseWriter, r *http.Request) {
+	logger := loggerWithRequest(r)
+
+	userClaims, ok := auth.GetUserFromContext(r.Context())
+	if !ok {
+		Unauthorised(w, r, "User information not found")
+		return
+	}
+
+	user, err := h.DB.GetOrCreateUser(userClaims.UserID, userClaims.Email, nil)
+	if err != nil {
+		logger.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get or create user")
+		InternalError(w, r, err)
+		return
+	}
+
+	orgID := h.DB.GetEffectiveOrganisationID(user)
+	if orgID == "" {
+		WriteSuccess(w, r, map[string]interface{}{"domains": []db.OrganisationDomain{}}, "No organisation")
+		return
+	}
+
+	domains, err := h.DB.GetDomainsForOrganisation(r.Context(), orgID)
+	if err != nil {
+		logger.Error().Err(err).Str("organisation_id", orgID).Msg("Failed to get organisation domains")
+		InternalError(w, r, err)
+		return
+	}
+
+	logger.Info().
+		Str("organisation_id", orgID).
+		Int("domain_count", len(domains)).
+		Msg("Returning domains for organisation")
+
+	WriteSuccess(w, r, map[string]interface{}{"domains": domains}, "")
 }
 
 // deleteGoogleConnection deletes a Google Analytics connection
