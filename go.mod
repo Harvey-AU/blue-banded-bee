@@ -1,6 +1,6 @@
 module github.com/Harvey-AU/blue-banded-bee
 
-go 1.25.5
+go 1.25.6
 
 require (
 	github.com/AfterShip/email-verifier v1.4.1
