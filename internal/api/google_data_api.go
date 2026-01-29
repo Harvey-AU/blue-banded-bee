@@ -19,12 +19,6 @@ import (
 
 // GA4 API limits and constraints
 const (
-	// GA4MaxRowsPerRequest is the maximum number of rows the GA4 Data API can return per request
-	GA4MaxRowsPerRequest = 250000
-
-	// GA4TokensPerRequest is the approximate number of quota tokens consumed per runReport call
-	GA4TokensPerRequest = 10
-
 	// GA4Phase1Limit is the number of top pages fetched immediately (blocking)
 	// These pages are available before job processing starts
 	GA4Phase1Limit = 100
@@ -41,7 +35,6 @@ const (
 	GA4Lookback7Days   = 7
 	GA4Lookback28Days  = 28
 	GA4Lookback180Days = 180
-	GA4Lookback365Days = 365
 )
 
 // GA4Client is an HTTP client for the Google Analytics 4 Data API
@@ -462,11 +455,7 @@ func (pf *ProgressiveFetcher) FetchAndUpdatePages(ctx context.Context, organisat
 	}
 
 	// Log sample of top pages for verification
-	sampleSize := 5
-	if len(phase1Data) < sampleSize {
-		sampleSize = len(phase1Data)
-	}
-	for i := 0; i < sampleSize; i++ {
+	for i := range min(5, len(phase1Data)) {
 		log.Info().
 			Str("path", phase1Data[i].PagePath).
 			Int64("page_views_7d", phase1Data[i].PageViews7d).

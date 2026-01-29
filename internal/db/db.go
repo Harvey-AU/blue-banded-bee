@@ -720,7 +720,7 @@ func (db *DB) UpsertPageWithAnalytics(
 	pageViews map[string]int64,
 	connectionID string,
 ) (int, error) {
-	// Step 4: Create/get page_id in pages table
+	// Create/get page_id in pages table
 	pageQuery := `
 		INSERT INTO pages (domain_id, path, created_at)
 		VALUES ($1, $2, NOW())
@@ -735,8 +735,7 @@ func (db *DB) UpsertPageWithAnalytics(
 		return 0, fmt.Errorf("failed to upsert page: %w", err)
 	}
 
-	// Step 5: Upsert analytics data to page_analytics table
-	// This table is org-scoped to prevent data leaking across organisations
+	// Upsert analytics data to page_analytics table (org-scoped to prevent data leaking)
 	analyticsQuery := `
 		INSERT INTO page_analytics (
 			organisation_id, domain_id, path,
