@@ -30,7 +30,7 @@ const (
 	GA4LargeBatchSize = 100000
 
 	// GA4MediumBatchThreshold is the offset at which we switch from medium to large batches
-	GA4MediumBatchThreshold = 1000
+	GA4MediumBatchThreshold = 10000
 
 	// Date range lookback periods for analytics queries
 	GA4Lookback7Days   = 7
