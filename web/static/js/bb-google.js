@@ -1097,72 +1097,36 @@ function hidePropertySelection() {
 
 /**
  * Show account selection UI when multiple accounts are available
+ * Uses the searchable dropdown pattern
  * @param {Array} accounts - Array of GA accounts to choose from
  */
 function showAccountSelection(accounts) {
-  // Create or get the account selection UI
-  let accountUI = document.getElementById("googleAccountSelection");
-  if (!accountUI) {
-    // Create the UI dynamically
-    const propertySelection = document.getElementById(
-      "googlePropertySelection"
-    );
-    if (propertySelection) {
-      accountUI = document.createElement("div");
-      accountUI.id = "googleAccountSelection";
-      accountUI.style.cssText = "padding: 16px;";
-      propertySelection.parentNode.insertBefore(accountUI, propertySelection);
-    } else {
-      console.error("Cannot find googlePropertySelection to insert account UI");
-      return;
-    }
+  // Convert pending session accounts to the format used by storedGA4Accounts
+  storedGA4Accounts = accounts.map((acc) => ({
+    id: acc.account_id, // Use account_id as the ID for now
+    google_account_id: acc.account_id,
+    google_account_name: acc.display_name || acc.account_id,
+    google_email: pendingGASessionData?.email || "",
+  }));
+
+  // Hide the old-style account selection UI if it exists
+  const oldAccountUI = document.getElementById("googleAccountSelection");
+  if (oldAccountUI) {
+    oldAccountUI.style.display = "none";
   }
 
-  // Build the account list
-  accountUI.innerHTML = `
-    <h3 style="margin: 0 0 8px 0; font-size: 16px; font-weight: 600;">Select Google Analytics Account</h3>
-    <p style="color: #6b7280; font-size: 14px; margin: 0 0 16px 0;">
-      You have access to ${accounts.length} accounts. Select one to view its properties.
-    </p>
-    <div id="googleAccountList"></div>
-  `;
-
-  const list = document.getElementById("googleAccountList");
-  for (const account of accounts) {
-    const item = document.createElement("button");
-    item.type = "button";
-    item.className = "bb-button";
-    item.style.cssText =
-      "display: block; width: 100%; text-align: left; margin-bottom: 8px; padding: 12px 16px; cursor: pointer;";
-    item.setAttribute("bbb-action", "google-select-account");
-    item.setAttribute("data-account-id", account.account_id);
-
-    const strongEl = document.createElement("strong");
-    strongEl.textContent = account.display_name || account.account_id;
-    item.appendChild(strongEl);
-
-    const detailSpan = document.createElement("span");
-    detailSpan.style.cssText =
-      "color: #6b7280; font-size: 13px; display: block;";
-    detailSpan.textContent = `Account ID: ${account.account_id.replace("accounts/", "")}`;
-    item.appendChild(detailSpan);
-
-    list.appendChild(item);
-  }
-
-  // Add cancel button
-  const cancelBtn = document.createElement("button");
-  cancelBtn.className = "bb-button";
-  cancelBtn.setAttribute("bbb-action", "google-cancel-selection");
-  cancelBtn.style.cssText =
-    "width: 100%; padding: 12px; margin-top: 8px; background: transparent;";
-  cancelBtn.textContent = "Cancel";
-  list.appendChild(cancelBtn);
-
-  // Hide empty state and show account selection
+  // Hide empty state
   const emptyState = document.getElementById("googleEmptyState");
   if (emptyState) emptyState.style.display = "none";
-  accountUI.style.display = "block";
+
+  // Show the searchable account selector
+  renderAccountSelector();
+
+  console.log(
+    "[GA Debug] Showing account selection with",
+    accounts.length,
+    "accounts"
+  );
 }
 
 /**
@@ -1400,7 +1364,14 @@ async function onAccountSelected(account) {
     account.google_account_id
   );
 
-  // Load properties for this account
+  // If we have a pending session (OAuth flow in progress), use the original selectGoogleAccount
+  if (pendingGASessionData && pendingGASessionData.session_id) {
+    // Use the existing flow that works
+    selectGoogleAccount(account.google_account_id);
+    return;
+  }
+
+  // Otherwise load properties from stored data
   await loadPropertiesForAccount(account);
 }
 
