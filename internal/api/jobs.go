@@ -118,6 +118,7 @@ type CreateJobRequest struct {
 // JobResponse represents a job in API responses
 type JobResponse struct {
 	ID             string  `json:"id"`
+	DomainID       int     `json:"domain_id"`
 	Domain         string  `json:"domain"`
 	Status         string  `json:"status"`
 	TotalTasks     int     `json:"total_tasks"`
@@ -324,8 +325,17 @@ func (h *Handler) createJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Look up the domain ID for the response
+	domainID, err := h.DB.GetOrCreateDomainID(r.Context(), job.Domain)
+	if err != nil {
+		logger.Error().Err(err).Str("domain", job.Domain).Msg("Failed to get domain ID")
+		// Continue without domain_id rather than failing the whole request
+		domainID = 0
+	}
+
 	response := JobResponse{
 		ID:             job.ID,
+		DomainID:       domainID,
 		Domain:         job.Domain,
 		Status:         string(job.Status),
 		TotalTasks:     job.TotalTasks,

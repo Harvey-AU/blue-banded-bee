@@ -908,7 +908,7 @@ function renderPropertyList(properties, totalCount) {
         }
 
         const result = await response.json();
-        const newDomainId = result.domain_id;
+        const newDomainId = result.data.domain_id;
 
         organisationDomains.push({ id: newDomainId, name: domainName });
 
