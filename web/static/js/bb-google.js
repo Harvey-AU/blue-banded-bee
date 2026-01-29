@@ -940,6 +940,37 @@ function renderPropertyList(properties, totalCount) {
       e.stopPropagation();
     });
 
+    searchInput.addEventListener("keydown", async (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        const query = searchInput.value.toLowerCase().trim();
+        if (!query) return;
+
+        // Check if there's an exact match in available domains
+        const availableDomains = organisationDomains.filter(
+          (d) => !selectedDomainIds.includes(d.id)
+        );
+        const exactMatch = availableDomains.find(
+          (d) => d.name.toLowerCase() === query
+        );
+
+        if (exactMatch) {
+          // Select the exact match
+          if (!selectedDomainIds.includes(exactMatch.id)) {
+            selectedDomainIds.push(exactMatch.id);
+            window.tempPropertyDomains[prop.property_id] = selectedDomainIds;
+            renderSelectedTags();
+          }
+        } else {
+          // Create new domain
+          await createDomainInline(query, prop.property_id);
+        }
+
+        searchInput.value = "";
+        dropdown.style.display = "none";
+      }
+    });
+
     document.addEventListener("click", (e) => {
       if (!inputContainer.contains(e.target)) {
         dropdown.style.display = "none";
