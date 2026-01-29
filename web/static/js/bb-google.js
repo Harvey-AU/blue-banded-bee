@@ -841,7 +841,8 @@ function renderPropertyList(properties, totalCount) {
           option.onmouseout = () => {
             option.style.background = "white";
           };
-          option.onclick = () => {
+          option.onmousedown = (e) => {
+            e.preventDefault();
             if (!selectedDomainIds.includes(domain.id)) {
               selectedDomainIds.push(domain.id);
               window.tempPropertyDomains[prop.property_id] = selectedDomainIds;
@@ -865,9 +866,10 @@ function renderPropertyList(properties, totalCount) {
         addOption.onmouseout = () => {
           addOption.style.background = "white";
         };
-        addOption.onclick = async (e) => {
-          console.log("[GA Debug] Add new domain clicked:", lowerQuery);
+        addOption.onmousedown = async (e) => {
+          e.preventDefault();
           e.stopPropagation();
+          console.log("[GA Debug] Add new domain clicked:", lowerQuery);
           await createDomainInline(lowerQuery, prop.property_id);
           searchInput.value = "";
           dropdown.style.display = "none";
