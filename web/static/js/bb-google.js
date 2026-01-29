@@ -744,8 +744,8 @@ function renderPropertyList(properties, totalCount) {
     domainHeader.textContent = "Select domains tracked by this property:";
     domainSection.appendChild(domainHeader);
 
-    // Search input container
-    const inputContainer = document.createElement("div");
+    // Search input container (using form for proper Enter key handling)
+    const inputContainer = document.createElement("form");
     inputContainer.style.cssText = "position: relative; margin-bottom: 8px;";
 
     const searchInput = document.createElement("input");
@@ -940,35 +940,34 @@ function renderPropertyList(properties, totalCount) {
       e.stopPropagation();
     });
 
-    searchInput.addEventListener("keydown", async (e) => {
-      if (e.key === "Enter") {
-        e.preventDefault();
-        const query = searchInput.value.toLowerCase().trim();
-        if (!query) return;
+    // Handle form submission (Enter key)
+    inputContainer.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const query = searchInput.value.toLowerCase().trim();
+      if (!query) return;
 
-        // Check if there's an exact match in available domains
-        const availableDomains = organisationDomains.filter(
-          (d) => !selectedDomainIds.includes(d.id)
-        );
-        const exactMatch = availableDomains.find(
-          (d) => d.name.toLowerCase() === query
-        );
+      // Check if there's an exact match in available domains
+      const availableDomains = organisationDomains.filter(
+        (d) => !selectedDomainIds.includes(d.id)
+      );
+      const exactMatch = availableDomains.find(
+        (d) => d.name.toLowerCase() === query
+      );
 
-        if (exactMatch) {
-          // Select the exact match
-          if (!selectedDomainIds.includes(exactMatch.id)) {
-            selectedDomainIds.push(exactMatch.id);
-            window.tempPropertyDomains[prop.property_id] = selectedDomainIds;
-            renderSelectedTags();
-          }
-        } else {
-          // Create new domain
-          await createDomainInline(query, prop.property_id);
+      if (exactMatch) {
+        // Select the exact match
+        if (!selectedDomainIds.includes(exactMatch.id)) {
+          selectedDomainIds.push(exactMatch.id);
+          window.tempPropertyDomains[prop.property_id] = selectedDomainIds;
+          renderSelectedTags();
         }
-
-        searchInput.value = "";
-        dropdown.style.display = "none";
+      } else {
+        // Create new domain
+        await createDomainInline(query, prop.property_id);
       }
+
+      searchInput.value = "";
+      dropdown.style.display = "none";
     });
 
     document.addEventListener("click", (e) => {
