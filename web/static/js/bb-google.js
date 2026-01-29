@@ -1597,7 +1597,7 @@ async function showDomainSelector(connectionId, currentDomainIds) {
       }
 
       const result = await response.json();
-      const newDomainId = result.domain_id;
+      const newDomainId = result.data.domain_id;
 
       // Add to organisationDomains array
       organisationDomains.push({ id: newDomainId, name: domainName });
@@ -1959,7 +1959,7 @@ async function showDomainSelectorForProperty(propertyId, currentDomainIds) {
       }
 
       const result = await response.json();
-      const newDomainId = result.domain_id;
+      const newDomainId = result.data.domain_id;
 
       // Add to organisationDomains array
       organisationDomains.push({ id: newDomainId, name: domainName });
