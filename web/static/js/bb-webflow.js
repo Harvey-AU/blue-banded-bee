@@ -70,8 +70,6 @@ function setupWebflowIntegration() {
       debounceTimer = setTimeout(() => handleSiteSearch(event), 200);
     });
   }
-
-  console.log("Webflow integration handlers initialised");
 }
 
 /**

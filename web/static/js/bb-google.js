@@ -1022,18 +1022,8 @@ function filterGoogleProperties(query) {
  * @param {Array} properties - Array of GA4 properties to choose from
  */
 function showPropertySelection(properties) {
-  console.log(
-    "[GA OAuth] showPropertySelection called with",
-    properties?.length,
-    "properties"
-  );
   const selectionUI = document.getElementById("googlePropertySelection");
   const list = document.getElementById("googlePropertyList");
-
-  console.log("[GA OAuth] DOM elements found:", {
-    selectionUI: !!selectionUI,
-    list: !!list,
-  });
 
   if (!selectionUI || !list) {
     console.error("Property selection UI not found");
@@ -1103,12 +1093,6 @@ function hidePropertySelection() {
  * @param {Array} accounts - Array of GA accounts to choose from
  */
 function showAccountSelection(accounts) {
-  console.log(
-    "[GA OAuth] showAccountSelection called with",
-    accounts?.length,
-    "accounts"
-  );
-
   // Create or get the account selection UI
   let accountUI = document.getElementById("googleAccountSelection");
   if (!accountUI) {
@@ -1242,12 +1226,6 @@ async function handleGoogleOAuthCallback() {
   const googleError = params.get("google_error");
   const gaSession = params.get("ga_session");
 
-  console.log("[GA OAuth] Checking URL params:", {
-    googleConnected,
-    googleError,
-    gaSession,
-  });
-
   if (googleConnected) {
     // Clean up URL
     const url = new URL(window.location.href);
@@ -1258,17 +1236,13 @@ async function handleGoogleOAuthCallback() {
     loadGoogleConnections();
   } else if (gaSession) {
     // Fetch session data from server
-    console.log("[GA OAuth] Found ga_session, fetching from server...");
     try {
       const session = await window.supabase.auth.getSession();
       const token = session?.data?.session?.access_token;
-      console.log("[GA OAuth] Supabase token:", token ? "present" : "missing");
       if (!token) {
         showGoogleError("Not authenticated. Please sign in.");
         return;
       }
-
-      console.log("[GA OAuth] Fetching pending session:", gaSession);
       const response = await fetch(
         `/v1/integrations/google/pending-session/${gaSession}`,
         {
@@ -1276,7 +1250,6 @@ async function handleGoogleOAuthCallback() {
         }
       );
 
-      console.log("[GA OAuth] Response status:", response.status);
       if (!response.ok) {
         const text = await response.text();
         throw new Error(text || `HTTP ${response.status}`);
@@ -1284,13 +1257,6 @@ async function handleGoogleOAuthCallback() {
 
       const result = await response.json();
       const sessionData = result.data;
-      console.log("[GA OAuth] Session data received:", {
-        hasAccounts: !!sessionData?.accounts,
-        accountCount: sessionData?.accounts?.length,
-        hasProperties: !!sessionData?.properties,
-        propertyCount: sessionData?.properties?.length,
-        email: sessionData?.email,
-      });
 
       // Store session ID for subsequent requests
       sessionData.session_id = gaSession;
@@ -1298,7 +1264,6 @@ async function handleGoogleOAuthCallback() {
 
       // Open notifications modal (contains Google Analytics section)
       const notificationsModal = document.getElementById("notificationsModal");
-      console.log("[GA OAuth] Opening modal:", !!notificationsModal);
       if (notificationsModal) {
         notificationsModal.classList.add("show");
       }
@@ -1309,19 +1274,12 @@ async function handleGoogleOAuthCallback() {
 
       if (accounts.length > 1 && properties.length === 0) {
         // Multiple accounts, no properties yet - show account picker
-        console.log("[GA OAuth] Multiple accounts, showing account picker");
         showAccountSelection(accounts);
       } else if (properties.length > 0) {
         // Single account with properties already fetched, or properties from selected account
-        console.log(
-          "[GA OAuth] Showing property selection with",
-          properties.length,
-          "properties"
-        );
         showPropertySelection(properties);
       } else if (accounts.length === 1) {
-        // Single account but no properties - should not happen normally
-        console.log("[GA OAuth] Single account, no properties - fetching...");
+        // Single account but no properties - fetch them
         selectGoogleAccount(accounts[0].account_id);
       } else {
         throw new Error("No accounts or properties found");

@@ -555,8 +555,6 @@ async function initializeDashboard(config = {}) {
     networkMonitoring = true,
   } = config;
 
-  console.log("Enhanced dashboard initialising...");
-
   // Load the shared authentication modal
   await window.BBAuth.loadAuthModal();
 
@@ -608,8 +606,6 @@ async function initializeDashboard(config = {}) {
     await subscribeToJobUpdates();
     await dataBinder.refresh();
   }
-
-  console.log("Enhanced dashboard initialised");
 
   return dataBinder;
 }

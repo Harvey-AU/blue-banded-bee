@@ -48,8 +48,6 @@ function setupSlackIntegration() {
     event.preventDefault();
     handleSlackAction(action, element);
   });
-
-  console.log("Slack integration handlers initialised");
 }
 
 /**
