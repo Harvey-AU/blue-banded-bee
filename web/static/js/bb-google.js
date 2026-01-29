@@ -75,6 +75,10 @@ function handleGoogleAction(action, element) {
       loadGoogleConnections();
       break;
 
+    case "google-refresh-accounts":
+      refreshGA4Accounts();
+      break;
+
     case "google-select-account": {
       const accountId = element.getAttribute("data-account-id");
       if (accountId) {
@@ -1217,6 +1221,115 @@ function showGoogleError(message) {
 // Store pending session data for property selection
 let pendingGASessionData = null;
 
+// Store GA4 accounts loaded from DB
+let storedGA4Accounts = [];
+
+/**
+ * Load GA4 accounts from the database (not from Google API)
+ * These are persisted accounts that can be displayed immediately on page load
+ */
+async function loadGA4AccountsFromDB() {
+  try {
+    const session = await window.supabase.auth.getSession();
+    const token = session?.data?.session?.access_token;
+
+    if (!token) {
+      console.log("[GA Debug] No auth token, skipping accounts load");
+      return [];
+    }
+
+    const response = await fetch("/v1/integrations/google/accounts", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    if (!response.ok) {
+      console.error("[GA Debug] Failed to load accounts:", response.status);
+      return [];
+    }
+
+    const result = await response.json();
+    storedGA4Accounts = result.data?.accounts || [];
+    console.log(
+      "[GA Debug] Loaded accounts from DB:",
+      storedGA4Accounts.length
+    );
+    return storedGA4Accounts;
+  } catch (error) {
+    console.error("[GA Debug] Error loading accounts from DB:", error);
+    return [];
+  }
+}
+
+/**
+ * Refresh GA4 accounts by fetching fresh data from Google API
+ * This syncs the database with the current state of the user's GA accounts
+ */
+async function refreshGA4Accounts() {
+  try {
+    const session = await window.supabase.auth.getSession();
+    const token = session?.data?.session?.access_token;
+
+    if (!token) {
+      showGoogleError("Not authenticated. Please sign in.");
+      return;
+    }
+
+    // Show loading state
+    const refreshBtn = document.querySelector(
+      '[bbb-action="google-refresh-accounts"]'
+    );
+    if (refreshBtn) {
+      refreshBtn.disabled = true;
+      refreshBtn.textContent = "Refreshing...";
+    }
+
+    const response = await fetch("/v1/integrations/google/accounts/refresh", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(text || `HTTP ${response.status}`);
+    }
+
+    const result = await response.json();
+
+    if (result.data?.needs_reauth) {
+      // Token expired or invalid - need to re-authenticate
+      showGoogleError(
+        result.data.message || "Please reconnect to Google Analytics."
+      );
+      // Optionally trigger OAuth flow
+      // connectGoogle();
+      return;
+    }
+
+    // Update stored accounts
+    storedGA4Accounts = result.data?.accounts || [];
+    console.log(
+      "[GA Debug] Refreshed accounts from Google:",
+      storedGA4Accounts.length
+    );
+
+    showGoogleSuccess("Accounts refreshed successfully");
+
+    // Reload connections to reflect any changes
+    await loadGoogleConnections();
+  } catch (error) {
+    console.error("[GA Debug] Error refreshing accounts:", error);
+    showGoogleError("Failed to refresh accounts. Please try again.");
+  } finally {
+    const refreshBtn = document.querySelector(
+      '[bbb-action="google-refresh-accounts"]'
+    );
+    if (refreshBtn) {
+      refreshBtn.disabled = false;
+      refreshBtn.textContent = "Refresh";
+    }
+  }
+}
+
 /**
  * Handle OAuth callback result checks
  */
@@ -2010,4 +2123,6 @@ if (typeof window !== "undefined") {
   window.setupGoogleIntegration = setupGoogleIntegration;
   window.loadGoogleConnections = loadGoogleConnections;
   window.handleGoogleOAuthCallback = handleGoogleOAuthCallback;
+  window.loadGA4AccountsFromDB = loadGA4AccountsFromDB;
+  window.refreshGA4Accounts = refreshGA4Accounts;
 }

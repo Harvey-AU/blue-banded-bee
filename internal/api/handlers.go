@@ -167,6 +167,14 @@ type DBClient interface {
 	UpsertPageWithAnalytics(ctx context.Context, organisationID string, domainID int, path string, pageViews map[string]int64, connectionID string) (int, error)
 	CalculateTrafficScores(ctx context.Context, organisationID string, domainID int) error
 	GetOrCreateDomainID(ctx context.Context, domain string) (int, error)
+	// Google Analytics accounts methods (for persistent account storage)
+	UpsertGA4Account(ctx context.Context, account *db.GoogleAnalyticsAccount) error
+	ListGA4Accounts(ctx context.Context, organisationID string) ([]*db.GoogleAnalyticsAccount, error)
+	GetGA4Account(ctx context.Context, accountID string) (*db.GoogleAnalyticsAccount, error)
+	GetGA4AccountByGoogleID(ctx context.Context, organisationID, googleAccountID string) (*db.GoogleAnalyticsAccount, error)
+	StoreGA4AccountToken(ctx context.Context, accountID, refreshToken string) error
+	GetGA4AccountToken(ctx context.Context, accountID string) (string, error)
+	GetGA4AccountWithToken(ctx context.Context, organisationID string) (*db.GoogleAnalyticsAccount, error)
 	// Platform integration mappings
 	UpsertPlatformOrgMapping(ctx context.Context, mapping *db.PlatformOrgMapping) error
 	GetPlatformOrgMapping(ctx context.Context, platform, platformID string) (*db.PlatformOrgMapping, error)

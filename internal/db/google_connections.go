@@ -17,6 +17,24 @@ var ErrGoogleConnectionNotFound = errors.New("google analytics connection not fo
 // ErrGoogleTokenNotFound is returned when a Google Analytics token is not found in vault
 var ErrGoogleTokenNotFound = errors.New("google analytics token not found")
 
+// ErrGoogleAccountNotFound is returned when a Google Analytics account is not found
+var ErrGoogleAccountNotFound = errors.New("google analytics account not found")
+
+// GoogleAnalyticsAccount represents an organisation's linked Google Analytics account
+// Accounts are synced from Google API and stored in DB for persistent display.
+type GoogleAnalyticsAccount struct {
+	ID                string // UUID
+	OrganisationID    string // Organisation this account belongs to
+	GoogleAccountID   string // GA account ID (e.g., "accounts/123456")
+	GoogleAccountName string // Display name of the account
+	GoogleUserID      string // Google user ID who authorised
+	GoogleEmail       string // Google email for display
+	VaultSecretName   string // Token stored in Vault
+	InstallingUserID  string // Our user who installed
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+}
+
 // GoogleAnalyticsConnection represents an organisation's connection to a GA4 property
 type GoogleAnalyticsConnection struct {
 	ID               string
@@ -518,4 +536,277 @@ func (db *DB) MarkConnectionInactive(ctx context.Context, connectionID, reason s
 		Msg("Marked Google Analytics connection as inactive")
 
 	return nil
+}
+
+// ============================================================================
+// Google Analytics Accounts (for persistent account storage)
+// ============================================================================
+
+// UpsertGA4Account creates or updates a Google Analytics account record
+func (db *DB) UpsertGA4Account(ctx context.Context, account *GoogleAnalyticsAccount) error {
+	query := `
+		INSERT INTO google_analytics_accounts (
+			id, organisation_id, google_account_id, google_account_name,
+			google_user_id, google_email, installing_user_id, created_at, updated_at
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		ON CONFLICT (organisation_id, google_account_id)
+		DO UPDATE SET
+			google_account_name = EXCLUDED.google_account_name,
+			google_user_id = EXCLUDED.google_user_id,
+			google_email = EXCLUDED.google_email,
+			updated_at = EXCLUDED.updated_at
+		RETURNING id
+	`
+
+	err := db.client.QueryRowContext(ctx, query,
+		account.ID, account.OrganisationID, account.GoogleAccountID, account.GoogleAccountName,
+		account.GoogleUserID, account.GoogleEmail, account.InstallingUserID,
+		account.CreatedAt, account.UpdatedAt,
+	).Scan(&account.ID)
+	if err != nil {
+		log.Error().Err(err).
+			Str("organisation_id", account.OrganisationID).
+			Str("google_account_id", account.GoogleAccountID).
+			Msg("Failed to upsert Google Analytics account")
+		return fmt.Errorf("failed to upsert Google Analytics account: %w", err)
+	}
+
+	return nil
+}
+
+// ListGA4Accounts lists all Google Analytics accounts for an organisation
+func (db *DB) ListGA4Accounts(ctx context.Context, organisationID string) ([]*GoogleAnalyticsAccount, error) {
+	query := `
+		SELECT id, organisation_id, google_account_id, google_account_name,
+		       google_user_id, google_email, vault_secret_name, installing_user_id,
+		       created_at, updated_at
+		FROM google_analytics_accounts
+		WHERE organisation_id = $1
+		ORDER BY google_account_name ASC
+	`
+
+	rows, err := db.client.QueryContext(ctx, query, organisationID)
+	if err != nil {
+		log.Error().Err(err).Str("organisation_id", organisationID).Msg("Failed to list Google Analytics accounts")
+		return nil, fmt.Errorf("failed to list Google Analytics accounts: %w", err)
+	}
+	defer func() {
+		if closeErr := rows.Close(); closeErr != nil {
+			log.Error().Err(closeErr).Str("organisation_id", organisationID).Msg("Failed to close rows")
+		}
+	}()
+
+	var accounts []*GoogleAnalyticsAccount
+	for rows.Next() {
+		acc := &GoogleAnalyticsAccount{}
+		var googleAccountName, googleUserID, googleEmail, vaultSecretName, installingUserID sql.NullString
+
+		err := rows.Scan(
+			&acc.ID, &acc.OrganisationID, &acc.GoogleAccountID, &googleAccountName,
+			&googleUserID, &googleEmail, &vaultSecretName, &installingUserID,
+			&acc.CreatedAt, &acc.UpdatedAt,
+		)
+		if err != nil {
+			log.Error().Err(err).Str("organisation_id", organisationID).Msg("Failed to scan Google Analytics account row")
+			return nil, fmt.Errorf("failed to scan Google Analytics account: %w", err)
+		}
+
+		if googleAccountName.Valid {
+			acc.GoogleAccountName = googleAccountName.String
+		}
+		if googleUserID.Valid {
+			acc.GoogleUserID = googleUserID.String
+		}
+		if googleEmail.Valid {
+			acc.GoogleEmail = googleEmail.String
+		}
+		if vaultSecretName.Valid {
+			acc.VaultSecretName = vaultSecretName.String
+		}
+		if installingUserID.Valid {
+			acc.InstallingUserID = installingUserID.String
+		}
+
+		accounts = append(accounts, acc)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating Google Analytics accounts: %w", err)
+	}
+
+	return accounts, nil
+}
+
+// GetGA4Account retrieves a Google Analytics account by ID
+func (db *DB) GetGA4Account(ctx context.Context, accountID string) (*GoogleAnalyticsAccount, error) {
+	acc := &GoogleAnalyticsAccount{}
+	var googleAccountName, googleUserID, googleEmail, vaultSecretName, installingUserID sql.NullString
+
+	query := `
+		SELECT id, organisation_id, google_account_id, google_account_name,
+		       google_user_id, google_email, vault_secret_name, installing_user_id,
+		       created_at, updated_at
+		FROM google_analytics_accounts
+		WHERE id = $1
+	`
+
+	err := db.client.QueryRowContext(ctx, query, accountID).Scan(
+		&acc.ID, &acc.OrganisationID, &acc.GoogleAccountID, &googleAccountName,
+		&googleUserID, &googleEmail, &vaultSecretName, &installingUserID,
+		&acc.CreatedAt, &acc.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrGoogleAccountNotFound
+		}
+		log.Error().Err(err).Str("account_id", accountID).Msg("Failed to get Google Analytics account")
+		return nil, fmt.Errorf("failed to get Google Analytics account: %w", err)
+	}
+
+	if googleAccountName.Valid {
+		acc.GoogleAccountName = googleAccountName.String
+	}
+	if googleUserID.Valid {
+		acc.GoogleUserID = googleUserID.String
+	}
+	if googleEmail.Valid {
+		acc.GoogleEmail = googleEmail.String
+	}
+	if vaultSecretName.Valid {
+		acc.VaultSecretName = vaultSecretName.String
+	}
+	if installingUserID.Valid {
+		acc.InstallingUserID = installingUserID.String
+	}
+
+	return acc, nil
+}
+
+// GetGA4AccountByGoogleID retrieves a Google Analytics account by its Google account ID
+func (db *DB) GetGA4AccountByGoogleID(ctx context.Context, organisationID, googleAccountID string) (*GoogleAnalyticsAccount, error) {
+	acc := &GoogleAnalyticsAccount{}
+	var googleAccountName, googleUserID, googleEmail, vaultSecretName, installingUserID sql.NullString
+
+	query := `
+		SELECT id, organisation_id, google_account_id, google_account_name,
+		       google_user_id, google_email, vault_secret_name, installing_user_id,
+		       created_at, updated_at
+		FROM google_analytics_accounts
+		WHERE organisation_id = $1 AND google_account_id = $2
+	`
+
+	err := db.client.QueryRowContext(ctx, query, organisationID, googleAccountID).Scan(
+		&acc.ID, &acc.OrganisationID, &acc.GoogleAccountID, &googleAccountName,
+		&googleUserID, &googleEmail, &vaultSecretName, &installingUserID,
+		&acc.CreatedAt, &acc.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrGoogleAccountNotFound
+		}
+		log.Error().Err(err).
+			Str("organisation_id", organisationID).
+			Str("google_account_id", googleAccountID).
+			Msg("Failed to get Google Analytics account by Google ID")
+		return nil, fmt.Errorf("failed to get Google Analytics account: %w", err)
+	}
+
+	if googleAccountName.Valid {
+		acc.GoogleAccountName = googleAccountName.String
+	}
+	if googleUserID.Valid {
+		acc.GoogleUserID = googleUserID.String
+	}
+	if googleEmail.Valid {
+		acc.GoogleEmail = googleEmail.String
+	}
+	if vaultSecretName.Valid {
+		acc.VaultSecretName = vaultSecretName.String
+	}
+	if installingUserID.Valid {
+		acc.InstallingUserID = installingUserID.String
+	}
+
+	return acc, nil
+}
+
+// StoreGA4AccountToken stores a Google Analytics refresh token for an account in Supabase Vault
+func (db *DB) StoreGA4AccountToken(ctx context.Context, accountID, refreshToken string) error {
+	// Use a dedicated vault function for accounts (similar to store_ga_token for connections)
+	// For now, we store it in the same vault with account-specific prefix
+	query := `SELECT store_ga_account_token($1::uuid, $2)`
+
+	if err := db.client.QueryRowContext(ctx, query, accountID, refreshToken).Scan(new(string)); err != nil {
+		log.Error().Err(err).Str("account_id", accountID).Msg("Failed to store GA account token in vault")
+		return fmt.Errorf("failed to store GA account token: %w", err)
+	}
+
+	return nil
+}
+
+// GetGA4AccountToken retrieves a Google Analytics refresh token for an account from Supabase Vault
+func (db *DB) GetGA4AccountToken(ctx context.Context, accountID string) (string, error) {
+	query := `SELECT get_ga_account_token($1::uuid)`
+
+	var token sql.NullString
+	err := db.client.QueryRowContext(ctx, query, accountID).Scan(&token)
+	if err != nil {
+		log.Error().Err(err).Str("account_id", accountID).Msg("Failed to get GA account token from vault")
+		return "", fmt.Errorf("failed to get GA account token: %w", err)
+	}
+
+	if !token.Valid {
+		return "", ErrGoogleTokenNotFound
+	}
+
+	return token.String, nil
+}
+
+// GetGA4AccountWithToken retrieves a GA4 account that has a valid token stored
+// Returns the first account found with a token for the organisation
+func (db *DB) GetGA4AccountWithToken(ctx context.Context, organisationID string) (*GoogleAnalyticsAccount, error) {
+	query := `
+		SELECT a.id, a.organisation_id, a.google_account_id, a.google_account_name,
+		       a.google_user_id, a.google_email, a.vault_secret_name, a.installing_user_id,
+		       a.created_at, a.updated_at
+		FROM google_analytics_accounts a
+		WHERE a.organisation_id = $1
+		  AND a.vault_secret_name IS NOT NULL
+		ORDER BY a.updated_at DESC
+		LIMIT 1
+	`
+
+	acc := &GoogleAnalyticsAccount{}
+	var googleAccountName, googleUserID, googleEmail, vaultSecretName, installingUserID sql.NullString
+
+	err := db.client.QueryRowContext(ctx, query, organisationID).Scan(
+		&acc.ID, &acc.OrganisationID, &acc.GoogleAccountID, &googleAccountName,
+		&googleUserID, &googleEmail, &vaultSecretName, &installingUserID,
+		&acc.CreatedAt, &acc.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrGoogleAccountNotFound
+		}
+		log.Error().Err(err).Str("organisation_id", organisationID).Msg("Failed to get GA4 account with token")
+		return nil, fmt.Errorf("failed to get GA4 account with token: %w", err)
+	}
+
+	if googleAccountName.Valid {
+		acc.GoogleAccountName = googleAccountName.String
+	}
+	if googleUserID.Valid {
+		acc.GoogleUserID = googleUserID.String
+	}
+	if googleEmail.Valid {
+		acc.GoogleEmail = googleEmail.String
+	}
+	if vaultSecretName.Valid {
+		acc.VaultSecretName = vaultSecretName.String
+	}
+	if installingUserID.Valid {
+		acc.InstallingUserID = installingUserID.String
+	}
+
+	return acc, nil
 }

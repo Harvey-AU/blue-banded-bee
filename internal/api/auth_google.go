@@ -260,7 +260,46 @@ func (h *Handler) HandleGoogleOAuthCallback(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	// Store session with accounts and tokens
+	// SYNC: Store accounts to DB for persistent display
+	now := time.Now().UTC()
+	var firstAccountID string
+	for _, acc := range accounts {
+		dbAccount := &db.GoogleAnalyticsAccount{
+			ID:                uuid.New().String(),
+			OrganisationID:    state.OrgID,
+			GoogleAccountID:   acc.AccountID,
+			GoogleAccountName: acc.DisplayName,
+			InstallingUserID:  state.UserID,
+			CreatedAt:         now,
+			UpdatedAt:         now,
+		}
+		if userInfo != nil {
+			dbAccount.GoogleUserID = userInfo.ID
+			dbAccount.GoogleEmail = userInfo.Email
+		}
+
+		if err := h.DB.UpsertGA4Account(r.Context(), dbAccount); err != nil {
+			logger.Warn().Err(err).Str("account_id", acc.AccountID).Msg("Failed to upsert GA4 account to DB")
+			// Continue anyway - the pending session flow will still work
+		} else if firstAccountID == "" {
+			firstAccountID = dbAccount.ID
+		}
+	}
+
+	// Store token against the first account for future refresh operations
+	if firstAccountID != "" && tokenResp.RefreshToken != "" {
+		if err := h.DB.StoreGA4AccountToken(r.Context(), firstAccountID, tokenResp.RefreshToken); err != nil {
+			logger.Warn().Err(err).Str("account_id", firstAccountID).Msg("Failed to store GA4 account token")
+			// Non-fatal - user can still complete the flow
+		}
+	}
+
+	logger.Info().
+		Str("organisation_id", state.OrgID).
+		Int("account_count", len(accounts)).
+		Msg("Synced GA4 accounts to database")
+
+	// Store session with accounts and tokens (for property selection flow)
 	session := &PendingGASession{
 		Accounts:     accounts,
 		RefreshToken: tokenResp.RefreshToken,
@@ -877,6 +916,18 @@ func (h *Handler) GoogleConnectionHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	// Handle accounts endpoint (persistent storage of GA accounts)
+	if path == "accounts" {
+		h.ListGA4Accounts(w, r)
+		return
+	}
+
+	// Handle accounts/refresh endpoint (sync from Google API)
+	if path == "accounts/refresh" {
+		h.RefreshGA4Accounts(w, r)
+		return
+	}
+
 	// Handle pending-session endpoint (get accounts/properties from server-side session)
 	if strings.HasPrefix(path, "pending-session/") {
 		sessionPath := strings.TrimPrefix(path, "pending-session/")
@@ -1157,4 +1208,227 @@ func (h *Handler) deleteGoogleConnection(w http.ResponseWriter, r *http.Request,
 
 	logger.Info().Str("connection_id", connectionID).Msg("Google Analytics connection deleted")
 	WriteNoContent(w, r)
+}
+
+// GA4AccountResponse represents a Google Analytics account in API responses
+type GA4AccountResponse struct {
+	ID                string `json:"id"`
+	GoogleAccountID   string `json:"google_account_id"`
+	GoogleAccountName string `json:"google_account_name,omitempty"`
+	GoogleEmail       string `json:"google_email,omitempty"`
+	HasToken          bool   `json:"has_token"`
+	CreatedAt         string `json:"created_at"`
+}
+
+// ListGA4Accounts returns stored GA4 accounts from the database
+// GET /v1/integrations/google/accounts
+func (h *Handler) ListGA4Accounts(w http.ResponseWriter, r *http.Request) {
+	logger := loggerWithRequest(r)
+
+	if r.Method != http.MethodGet {
+		MethodNotAllowed(w, r)
+		return
+	}
+
+	userClaims, ok := auth.GetUserFromContext(r.Context())
+	if !ok {
+		Unauthorised(w, r, "User information not found")
+		return
+	}
+
+	user, err := h.DB.GetOrCreateUser(userClaims.UserID, userClaims.Email, nil)
+	if err != nil {
+		logger.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get or create user")
+		InternalError(w, r, err)
+		return
+	}
+
+	orgID := h.DB.GetEffectiveOrganisationID(user)
+	if orgID == "" {
+		WriteSuccess(w, r, map[string]any{"accounts": []GA4AccountResponse{}}, "No organisation")
+		return
+	}
+
+	accounts, err := h.DB.ListGA4Accounts(r.Context(), orgID)
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to list Google Analytics accounts")
+		InternalError(w, r, err)
+		return
+	}
+
+	response := make([]GA4AccountResponse, 0, len(accounts))
+	for _, acc := range accounts {
+		response = append(response, GA4AccountResponse{
+			ID:                acc.ID,
+			GoogleAccountID:   acc.GoogleAccountID,
+			GoogleAccountName: acc.GoogleAccountName,
+			GoogleEmail:       acc.GoogleEmail,
+			HasToken:          acc.VaultSecretName != "",
+			CreatedAt:         acc.CreatedAt.Format(time.RFC3339),
+		})
+	}
+
+	WriteSuccess(w, r, map[string]any{"accounts": response}, "")
+}
+
+// RefreshGA4Accounts syncs accounts from Google API and updates the database
+// POST /v1/integrations/google/accounts/refresh
+func (h *Handler) RefreshGA4Accounts(w http.ResponseWriter, r *http.Request) {
+	logger := loggerWithRequest(r)
+
+	if r.Method != http.MethodPost {
+		MethodNotAllowed(w, r)
+		return
+	}
+
+	userClaims, ok := auth.GetUserFromContext(r.Context())
+	if !ok {
+		Unauthorised(w, r, "User information not found")
+		return
+	}
+
+	user, err := h.DB.GetOrCreateUser(userClaims.UserID, userClaims.Email, nil)
+	if err != nil {
+		logger.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get or create user")
+		InternalError(w, r, err)
+		return
+	}
+
+	orgID := h.DB.GetEffectiveOrganisationID(user)
+	if orgID == "" {
+		BadRequest(w, r, "User must belong to an organisation")
+		return
+	}
+
+	// Find an account with a stored token
+	accountWithToken, err := h.DB.GetGA4AccountWithToken(r.Context(), orgID)
+	if err != nil {
+		if errors.Is(err, db.ErrGoogleAccountNotFound) {
+			// No account with token - user needs to re-authenticate
+			WriteSuccess(w, r, map[string]any{
+				"needs_reauth": true,
+				"message":      "No valid Google token found. Please reconnect to Google Analytics.",
+			}, "")
+			return
+		}
+		logger.Error().Err(err).Msg("Failed to find GA4 account with token")
+		InternalError(w, r, err)
+		return
+	}
+
+	// Get the refresh token from vault
+	refreshToken, err := h.DB.GetGA4AccountToken(r.Context(), accountWithToken.ID)
+	if err != nil {
+		if errors.Is(err, db.ErrGoogleTokenNotFound) {
+			WriteSuccess(w, r, map[string]any{
+				"needs_reauth": true,
+				"message":      "Token expired or invalid. Please reconnect to Google Analytics.",
+			}, "")
+			return
+		}
+		logger.Error().Err(err).Msg("Failed to get GA4 account token")
+		InternalError(w, r, err)
+		return
+	}
+
+	// Refresh the access token using the refresh token
+	accessToken, err := h.refreshGoogleAccessToken(refreshToken)
+	if err != nil {
+		logger.Warn().Err(err).Msg("Failed to refresh Google access token")
+		// Token might be revoked
+		WriteSuccess(w, r, map[string]any{
+			"needs_reauth": true,
+			"message":      "Unable to refresh token. Please reconnect to Google Analytics.",
+		}, "")
+		return
+	}
+
+	// Fetch accounts from Google API
+	accounts, err := h.fetchGA4Accounts(r.Context(), accessToken)
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to fetch GA4 accounts from Google")
+		InternalError(w, r, fmt.Errorf("failed to fetch accounts from Google: %w", err))
+		return
+	}
+
+	// Sync accounts to database
+	now := time.Now().UTC()
+	for _, acc := range accounts {
+		dbAccount := &db.GoogleAnalyticsAccount{
+			ID:                uuid.New().String(),
+			OrganisationID:    orgID,
+			GoogleAccountID:   acc.AccountID,
+			GoogleAccountName: acc.DisplayName,
+			GoogleUserID:      accountWithToken.GoogleUserID,
+			GoogleEmail:       accountWithToken.GoogleEmail,
+			InstallingUserID:  userClaims.UserID,
+			CreatedAt:         now,
+			UpdatedAt:         now,
+		}
+
+		if err := h.DB.UpsertGA4Account(r.Context(), dbAccount); err != nil {
+			logger.Warn().Err(err).Str("account_id", acc.AccountID).Msg("Failed to upsert GA4 account")
+		}
+	}
+
+	logger.Info().
+		Str("organisation_id", orgID).
+		Int("account_count", len(accounts)).
+		Msg("Refreshed GA4 accounts from Google API")
+
+	// Return fresh list from DB
+	dbAccounts, err := h.DB.ListGA4Accounts(r.Context(), orgID)
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to list refreshed GA4 accounts")
+		InternalError(w, r, err)
+		return
+	}
+
+	response := make([]GA4AccountResponse, 0, len(dbAccounts))
+	for _, acc := range dbAccounts {
+		response = append(response, GA4AccountResponse{
+			ID:                acc.ID,
+			GoogleAccountID:   acc.GoogleAccountID,
+			GoogleAccountName: acc.GoogleAccountName,
+			GoogleEmail:       acc.GoogleEmail,
+			HasToken:          acc.VaultSecretName != "",
+			CreatedAt:         acc.CreatedAt.Format(time.RFC3339),
+		})
+	}
+
+	WriteSuccess(w, r, map[string]any{
+		"accounts":     response,
+		"needs_reauth": false,
+	}, "Accounts refreshed successfully")
+}
+
+// refreshGoogleAccessToken exchanges a refresh token for a new access token
+func (h *Handler) refreshGoogleAccessToken(refreshToken string) (string, error) {
+	values := url.Values{}
+	values.Set("client_id", getGoogleClientID())
+	values.Set("client_secret", getGoogleClientSecret())
+	values.Set("grant_type", "refresh_token")
+	values.Set("refresh_token", refreshToken)
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.PostForm("https://oauth2.googleapis.com/token", values)
+	if err != nil {
+		return "", fmt.Errorf("failed to refresh token: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("token refresh returned status: %d", resp.StatusCode)
+	}
+
+	var tokenResp struct {
+		AccessToken string `json:"access_token"`
+		ExpiresIn   int    `json:"expires_in"`
+		TokenType   string `json:"token_type"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&tokenResp); err != nil {
+		return "", fmt.Errorf("failed to decode token response: %w", err)
+	}
+
+	return tokenResp.AccessToken, nil
 }
