@@ -168,16 +168,76 @@ func (c *GA4Client) RefreshAccessToken(ctx context.Context, refreshToken string)
 
 // FetchTopPages fetches top N pages ordered by screenPageViews descending
 // Returns page data for 7-day, 28-day, and 180-day lookback periods
+// Makes 3 separate API calls and merges results by path
 func (c *GA4Client) FetchTopPages(ctx context.Context, propertyID string, limit, offset int) ([]PageViewData, error) {
 	start := time.Now()
 
-	// GA4 supports multiple date ranges in a single request
-	// Metric values are returned in the same order as date ranges
+	// Fetch 7-day data (primary - determines page ordering)
+	pages7d, err := c.fetchSingleDateRange(ctx, propertyID, "7daysAgo", limit, offset)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch 7d data: %w", err)
+	}
+
+	// Build lookup map for merging additional date ranges
+	pageMap := make(map[string]*PageViewData)
+	pages := make([]PageViewData, 0, len(pages7d))
+
+	for _, p := range pages7d {
+		page := PageViewData{
+			HostName:    p.HostName,
+			PagePath:    p.PagePath,
+			PageViews7d: p.PageViews,
+		}
+		pages = append(pages, page)
+		pageMap[p.PagePath] = &pages[len(pages)-1]
+	}
+
+	// Fetch 28-day data and merge
+	pages28d, err := c.fetchSingleDateRange(ctx, propertyID, "28daysAgo", limit, offset)
+	if err != nil {
+		log.Warn().Err(err).Msg("Failed to fetch 28d data, continuing with 7d only")
+	} else {
+		for _, p := range pages28d {
+			if existing, ok := pageMap[p.PagePath]; ok {
+				existing.PageViews28d = p.PageViews
+			}
+		}
+	}
+
+	// Fetch 180-day data and merge
+	pages180d, err := c.fetchSingleDateRange(ctx, propertyID, "180daysAgo", limit, offset)
+	if err != nil {
+		log.Warn().Err(err).Msg("Failed to fetch 180d data, continuing without it")
+	} else {
+		for _, p := range pages180d {
+			if existing, ok := pageMap[p.PagePath]; ok {
+				existing.PageViews180d = p.PageViews
+			}
+		}
+	}
+
+	elapsed := time.Since(start)
+	log.Info().
+		Str("property_id", propertyID).
+		Int("pages_count", len(pages)).
+		Dur("duration", elapsed).
+		Msg("GA4 data fetch completed (3 date ranges)")
+
+	return pages, nil
+}
+
+// singleDateRangeResult holds page view data for a single date range
+type singleDateRangeResult struct {
+	HostName  string
+	PagePath  string
+	PageViews int64
+}
+
+// fetchSingleDateRange fetches page view data for a single date range
+func (c *GA4Client) fetchSingleDateRange(ctx context.Context, propertyID, startDate string, limit, offset int) ([]singleDateRangeResult, error) {
 	req := ga4RunReportRequest{
 		DateRanges: []dateRange{
-			{StartDate: "7daysAgo", EndDate: "today"},
-			{StartDate: "28daysAgo", EndDate: "today"},
-			{StartDate: "180daysAgo", EndDate: "today"},
+			{StartDate: startDate, EndDate: "today"},
 		},
 		Dimensions: []dimension{
 			{Name: "hostName"},
@@ -216,9 +276,10 @@ func (c *GA4Client) FetchTopPages(ctx context.Context, propertyID string, limit,
 
 	log.Debug().
 		Str("property_id", propertyID).
+		Str("start_date", startDate).
 		Int("limit", limit).
 		Int("offset", offset).
-		Msg("Fetching GA4 report")
+		Msg("Fetching GA4 report for date range")
 
 	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
@@ -237,63 +298,26 @@ func (c *GA4Client) FetchTopPages(ctx context.Context, propertyID string, limit,
 		return nil, fmt.Errorf("failed to decode runReport response: %w", err)
 	}
 
-	// Parse response into PageViewData structs
-	// Each row contains metric values for each date range in order: 7d, 28d, 180d
-	pages := make([]PageViewData, 0, len(reportResp.Rows))
+	// Parse response
+	results := make([]singleDateRangeResult, 0, len(reportResp.Rows))
 	for _, row := range reportResp.Rows {
-		if len(row.DimensionValues) < 2 || len(row.MetricValues) < 3 {
-			log.Warn().
-				Int("dimensions", len(row.DimensionValues)).
-				Int("metrics", len(row.MetricValues)).
-				Msg("Skipping malformed GA4 row with insufficient dimensions or metrics")
+		if len(row.DimensionValues) < 2 || len(row.MetricValues) < 1 {
 			continue
 		}
 
-		pageViews7d, err := strconv.ParseInt(row.MetricValues[0].Value, 10, 64)
+		pageViews, err := strconv.ParseInt(row.MetricValues[0].Value, 10, 64)
 		if err != nil {
-			log.Warn().
-				Str("value", row.MetricValues[0].Value).
-				Err(err).
-				Msg("Failed to parse 7d page views as integer")
-			pageViews7d = 0
+			pageViews = 0
 		}
 
-		pageViews28d, err := strconv.ParseInt(row.MetricValues[1].Value, 10, 64)
-		if err != nil {
-			log.Warn().
-				Str("value", row.MetricValues[1].Value).
-				Err(err).
-				Msg("Failed to parse 28d page views as integer")
-			pageViews28d = 0
-		}
-
-		pageViews180d, err := strconv.ParseInt(row.MetricValues[2].Value, 10, 64)
-		if err != nil {
-			log.Warn().
-				Str("value", row.MetricValues[2].Value).
-				Err(err).
-				Msg("Failed to parse 180d page views as integer")
-			pageViews180d = 0
-		}
-
-		pages = append(pages, PageViewData{
-			HostName:      row.DimensionValues[0].Value,
-			PagePath:      row.DimensionValues[1].Value,
-			PageViews7d:   pageViews7d,
-			PageViews28d:  pageViews28d,
-			PageViews180d: pageViews180d,
+		results = append(results, singleDateRangeResult{
+			HostName:  row.DimensionValues[0].Value,
+			PagePath:  row.DimensionValues[1].Value,
+			PageViews: pageViews,
 		})
 	}
 
-	elapsed := time.Since(start)
-	log.Info().
-		Str("property_id", propertyID).
-		Int("pages_count", len(pages)).
-		Int("total_rows", reportResp.RowCount).
-		Dur("duration", elapsed).
-		Msg("GA4 data fetch completed")
-
-	return pages, nil
+	return results, nil
 }
 
 // FetchTopPagesWithRetry fetches top pages with automatic token refresh on 401
