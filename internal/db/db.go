@@ -782,6 +782,49 @@ func (db *DB) UpsertPageWithAnalytics(
 	return pageID, nil
 }
 
+// CalculateTrafficScores calculates and stores traffic scores for all pages in a domain
+// based on page view percentiles. Uses 28-day page views as the primary signal.
+// Scores: 0.95 (top 5%), 0.90 (top 10%), 0.75 (top 25%), 0.50 (top 50%), 0 (bottom 50%)
+func (db *DB) CalculateTrafficScores(ctx context.Context, organisationID string, domainID int) error {
+	// Calculate percentile thresholds and update scores in a single query
+	// Using PERCENT_RANK() to determine each page's position in the distribution
+	query := `
+		WITH percentiles AS (
+			SELECT
+				id,
+				page_views_28d,
+				PERCENT_RANK() OVER (ORDER BY page_views_28d DESC) as pct_rank
+			FROM page_analytics
+			WHERE organisation_id = $1 AND domain_id = $2
+		)
+		UPDATE page_analytics pa
+		SET traffic_score = CASE
+			WHEN p.pct_rank <= 0.05 THEN 0.95  -- Top 5%
+			WHEN p.pct_rank <= 0.10 THEN 0.90  -- Top 10%
+			WHEN p.pct_rank <= 0.25 THEN 0.75  -- Top 25%
+			WHEN p.pct_rank <= 0.50 THEN 0.50  -- Top 50%
+			ELSE 0                              -- Bottom 50%
+		END,
+		updated_at = NOW()
+		FROM percentiles p
+		WHERE pa.id = p.id
+	`
+
+	result, err := db.client.ExecContext(ctx, query, organisationID, domainID)
+	if err != nil {
+		return fmt.Errorf("failed to calculate traffic scores: %w", err)
+	}
+
+	rowsAffected, _ := result.RowsAffected()
+	log.Info().
+		Str("organisation_id", organisationID).
+		Int("domain_id", domainID).
+		Int64("pages_updated", rowsAffected).
+		Msg("Calculated traffic scores for domain")
+
+	return nil
+}
+
 // GetOrCreateDomainID retrieves or creates a domain ID for a given domain name
 // Uses INSERT ... ON CONFLICT to handle concurrent creation atomically
 func (db *DB) GetOrCreateDomainID(ctx context.Context, domain string) (int, error) {

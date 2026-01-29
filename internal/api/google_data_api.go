@@ -361,6 +361,7 @@ type DBInterfaceGA4 interface {
 	UpdateConnectionLastSync(ctx context.Context, connectionID string) error
 	MarkConnectionInactive(ctx context.Context, connectionID, reason string) error
 	UpsertPageWithAnalytics(ctx context.Context, organisationID string, domainID int, path string, pageViews map[string]int64, connectionID string) (int, error)
+	CalculateTrafficScores(ctx context.Context, organisationID string, domainID int) error
 }
 
 // ProgressiveFetcher orchestrates GA4 data fetching in multiple phases
@@ -469,11 +470,20 @@ func (pf *ProgressiveFetcher) FetchAndUpdatePages(ctx context.Context, organisat
 		Dur("duration", time.Since(start)).
 		Msg("Initial GA4 fetch completed")
 
-	// 6. Fetch remaining pages in background (loops until all fetched)
+	// 6. Calculate initial traffic scores based on top pages
+	if err := pf.db.CalculateTrafficScores(ctx, organisationID, domainID); err != nil {
+		log.Warn().
+			Err(err).
+			Str("organisation_id", organisationID).
+			Int("domain_id", domainID).
+			Msg("Failed to calculate initial traffic scores")
+	}
+
+	// 7. Fetch remaining pages in background (loops until all fetched)
 	// Use context.Background() so it completes even during shutdown
 	go pf.fetchRemainingPagesBackground(context.Background(), organisationID, conn.GA4PropertyID, domainID, conn.ID, client, refreshToken)
 
-	// 7. Update last sync timestamp
+	// 8. Update last sync timestamp
 	if err := pf.db.UpdateConnectionLastSync(ctx, conn.ID); err != nil {
 		// Log but don't fail - this is not critical
 		log.Warn().
@@ -620,4 +630,13 @@ func (pf *ProgressiveFetcher) fetchRemainingPagesBackground(ctx context.Context,
 		Int("total_pages", totalPages).
 		Dur("duration", time.Since(start)).
 		Msg("Background GA4 fetch completed")
+
+	// Calculate traffic scores based on page view percentiles
+	if err := pf.db.CalculateTrafficScores(ctx, organisationID, domainID); err != nil {
+		log.Error().
+			Err(err).
+			Str("organisation_id", organisationID).
+			Int("domain_id", domainID).
+			Msg("Failed to calculate traffic scores after GA4 fetch")
+	}
 }
