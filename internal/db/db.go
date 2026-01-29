@@ -710,11 +710,18 @@ func Serialise(v interface{}) string {
 	return string(data)
 }
 
-// UpsertPageWithAnalytics creates or updates a page with GA4 analytics data
-// This is a stub for Step 5 - currently logs data but doesn't persist analytics columns
-func (db *DB) UpsertPageWithAnalytics(ctx context.Context, domainID int, path string, pageViews map[string]int64) (int, error) {
-	// Step 4: Create/get page_id
-	query := `
+// UpsertPageWithAnalytics creates or updates a page and its org-scoped analytics data
+// Stores GA4 page view data in the page_analytics table tied to the organisation
+func (db *DB) UpsertPageWithAnalytics(
+	ctx context.Context,
+	organisationID string,
+	domainID int,
+	path string,
+	pageViews map[string]int64,
+	connectionID string,
+) (int, error) {
+	// Step 4: Create/get page_id in pages table
+	pageQuery := `
 		INSERT INTO pages (domain_id, path, created_at)
 		VALUES ($1, $2, NOW())
 		ON CONFLICT (domain_id, path)
@@ -723,13 +730,55 @@ func (db *DB) UpsertPageWithAnalytics(ctx context.Context, domainID int, path st
 	`
 
 	var pageID int
-	err := db.client.QueryRowContext(ctx, query, domainID, path).Scan(&pageID)
+	err := db.client.QueryRowContext(ctx, pageQuery, domainID, path).Scan(&pageID)
 	if err != nil {
 		return 0, fmt.Errorf("failed to upsert page: %w", err)
 	}
 
-	// Step 5 (future): Update analytics columns
-	// Analytics data (pageViews) is available but not yet persisted to columns
+	// Step 5: Upsert analytics data to page_analytics table
+	// This table is org-scoped to prevent data leaking across organisations
+	analyticsQuery := `
+		INSERT INTO page_analytics (
+			organisation_id, domain_id, path,
+			page_views_7d, page_views_28d, page_views_180d,
+			ga_connection_id, fetched_at
+		)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+		ON CONFLICT (organisation_id, domain_id, path)
+		DO UPDATE SET
+			page_views_7d = EXCLUDED.page_views_7d,
+			page_views_28d = EXCLUDED.page_views_28d,
+			page_views_180d = EXCLUDED.page_views_180d,
+			ga_connection_id = EXCLUDED.ga_connection_id,
+			fetched_at = NOW(),
+			updated_at = NOW()
+	`
+
+	// Extract page view values with defaults
+	pageViews7d := pageViews["7d"]
+	pageViews28d := pageViews["28d"]
+	pageViews180d := pageViews["180d"]
+
+	// Handle nullable connection ID
+	var connID any
+	if connectionID != "" {
+		connID = connectionID
+	}
+
+	_, err = db.client.ExecContext(ctx, analyticsQuery,
+		organisationID, domainID, path,
+		pageViews7d, pageViews28d, pageViews180d,
+		connID,
+	)
+	if err != nil {
+		// Log but don't fail - page was created successfully
+		log.Warn().
+			Err(err).
+			Str("organisation_id", organisationID).
+			Int("domain_id", domainID).
+			Str("path", path).
+			Msg("Failed to upsert page analytics data")
+	}
 
 	return pageID, nil
 }

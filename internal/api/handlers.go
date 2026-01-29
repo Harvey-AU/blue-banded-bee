@@ -164,7 +164,7 @@ type DBClient interface {
 	UpdateConnectionLastSync(ctx context.Context, connectionID string) error
 	UpdateConnectionDomains(ctx context.Context, connectionID string, domainIDs []int) error
 	MarkConnectionInactive(ctx context.Context, connectionID, reason string) error
-	UpsertPageWithAnalytics(ctx context.Context, domainID int, path string, pageViews map[string]int64) (int, error)
+	UpsertPageWithAnalytics(ctx context.Context, organisationID string, domainID int, path string, pageViews map[string]int64, connectionID string) (int, error)
 	GetOrCreateDomainID(ctx context.Context, domain string) (int, error)
 	// Platform integration mappings
 	UpsertPlatformOrgMapping(ctx context.Context, mapping *db.PlatformOrgMapping) error

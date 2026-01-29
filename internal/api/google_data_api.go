@@ -312,7 +312,7 @@ type DBInterfaceGA4 interface {
 	GetGoogleToken(ctx context.Context, connectionID string) (string, error)
 	UpdateConnectionLastSync(ctx context.Context, connectionID string) error
 	MarkConnectionInactive(ctx context.Context, connectionID, reason string) error
-	UpsertPageWithAnalytics(ctx context.Context, domainID int, path string, pageViews map[string]int64) (int, error)
+	UpsertPageWithAnalytics(ctx context.Context, organisationID string, domainID int, path string, pageViews map[string]int64, connectionID string) (int, error)
 }
 
 // ProgressiveFetcher orchestrates GA4 data fetching in multiple phases
@@ -398,7 +398,7 @@ func (pf *ProgressiveFetcher) FetchAndUpdatePages(ctx context.Context, organisat
 	}
 
 	// 5. Upsert phase 1 data immediately
-	if err := pf.upsertPageData(ctx, domainID, phase1Data); err != nil {
+	if err := pf.upsertPageData(ctx, organisationID, domainID, conn.ID, phase1Data); err != nil {
 		log.Error().
 			Err(err).
 			Int("domain_id", domainID).
@@ -429,8 +429,8 @@ func (pf *ProgressiveFetcher) FetchAndUpdatePages(ctx context.Context, organisat
 	// 6. PHASE 2 & 3: Fetch remaining pages in background goroutines
 	// Use context.Background() so they complete even during shutdown
 	// (analytics data is best-effort and shouldn't block graceful shutdown)
-	go pf.fetchPhase2Background(context.Background(), conn.GA4PropertyID, domainID, client, refreshToken)
-	go pf.fetchPhase3Background(context.Background(), conn.GA4PropertyID, domainID, client, refreshToken)
+	go pf.fetchPhase2Background(context.Background(), organisationID, conn.GA4PropertyID, domainID, conn.ID, client, refreshToken)
+	go pf.fetchPhase3Background(context.Background(), organisationID, conn.GA4PropertyID, domainID, conn.ID, client, refreshToken)
 
 	// 7. Update last sync timestamp
 	if err := pf.db.UpdateConnectionLastSync(ctx, conn.ID); err != nil {
@@ -444,18 +444,19 @@ func (pf *ProgressiveFetcher) FetchAndUpdatePages(ctx context.Context, organisat
 	return nil
 }
 
-// upsertPageData upserts page analytics data into the pages table
-func (pf *ProgressiveFetcher) upsertPageData(ctx context.Context, domainID int, pages []PageViewData) error {
+// upsertPageData upserts page analytics data into the page_analytics table
+func (pf *ProgressiveFetcher) upsertPageData(ctx context.Context, organisationID string, domainID int, connectionID string, pages []PageViewData) error {
 	for _, page := range pages {
 		pageViews := map[string]int64{
 			"7d": page.PageViews7d,
 		}
 
-		_, err := pf.db.UpsertPageWithAnalytics(ctx, domainID, page.PagePath, pageViews)
+		_, err := pf.db.UpsertPageWithAnalytics(ctx, organisationID, domainID, page.PagePath, pageViews, connectionID)
 		if err != nil {
 			// Log error but continue with other pages
 			log.Error().
 				Err(err).
+				Str("organisation_id", organisationID).
 				Int("domain_id", domainID).
 				Str("path", page.PagePath).
 				Msg("Failed to upsert page with analytics")
@@ -466,7 +467,7 @@ func (pf *ProgressiveFetcher) upsertPageData(ctx context.Context, domainID int, 
 }
 
 // fetchPhase2Background fetches pages 101-1000 in a background goroutine
-func (pf *ProgressiveFetcher) fetchPhase2Background(ctx context.Context, propertyID string, domainID int, client *GA4Client, refreshToken string) {
+func (pf *ProgressiveFetcher) fetchPhase2Background(ctx context.Context, organisationID, propertyID string, domainID int, connectionID string, client *GA4Client, refreshToken string) {
 	start := time.Now()
 
 	log.Info().
@@ -484,7 +485,7 @@ func (pf *ProgressiveFetcher) fetchPhase2Background(ctx context.Context, propert
 		return
 	}
 
-	if err := pf.upsertPageData(ctx, domainID, pages); err != nil {
+	if err := pf.upsertPageData(ctx, organisationID, domainID, connectionID, pages); err != nil {
 		log.Error().
 			Err(err).
 			Int("domain_id", domainID).
@@ -502,7 +503,7 @@ func (pf *ProgressiveFetcher) fetchPhase2Background(ctx context.Context, propert
 }
 
 // fetchPhase3Background fetches pages 1001-2000 in a background goroutine
-func (pf *ProgressiveFetcher) fetchPhase3Background(ctx context.Context, propertyID string, domainID int, client *GA4Client, refreshToken string) {
+func (pf *ProgressiveFetcher) fetchPhase3Background(ctx context.Context, organisationID, propertyID string, domainID int, connectionID string, client *GA4Client, refreshToken string) {
 	start := time.Now()
 
 	log.Info().
@@ -521,7 +522,7 @@ func (pf *ProgressiveFetcher) fetchPhase3Background(ctx context.Context, propert
 		return
 	}
 
-	if err := pf.upsertPageData(ctx, domainID, pages); err != nil {
+	if err := pf.upsertPageData(ctx, organisationID, domainID, connectionID, pages); err != nil {
 		log.Error().
 			Err(err).
 			Int("domain_id", domainID).
