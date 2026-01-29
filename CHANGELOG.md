@@ -34,7 +34,7 @@ On merge, CI will:
 - **GA4 Analytics Integration**: Full Google Analytics 4 Data API integration
   for page view analytics
   - Progressive fetching: initial 100 pages, then background loops of 1000-page
-    batches, then 10000-page batches until all pages fetched
+    batches (until 10k), then 50000-page batches until all pages fetched
   - OAuth token refresh with RFC 6749 compliant form-urlencoded requests
   - Thread-safe token management with automatic refresh on 401 responses
   - Triggered automatically when job created with `findLinks: true`
@@ -50,6 +50,15 @@ On merge, CI will:
     mappings
   - `domain_ids` array column on `google_analytics_connections` table
 - **Job Response Enhancement**: Job creation response now includes `domain_id`
+- **Traffic-Based Task Prioritisation**: High-traffic pages now get prioritised
+  in the crawl queue
+  - Pages ranked by percentile: top 5% (0.95), top 10% (0.90), top 25% (0.75),
+    top 50% (0.50)
+  - Uses `GREATEST(structural_priority, traffic_score)` so traffic and structure
+    both contribute
+  - Traffic scores calculated after GA4 fetch completes, applied to pending
+    tasks
+  - Link discovery also applies traffic scores via `GREATEST`
 
 ### Changed
 
