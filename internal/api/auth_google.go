@@ -638,17 +638,23 @@ func (h *Handler) UpdateGoogleConnection(w http.ResponseWriter, r *http.Request,
 		Ints("domain_ids", req.DomainIDs).
 		Msg("Updated connection domain mappings")
 
-	// Return updated connection
+	// Return updated connection (sanitised to avoid exposing internal fields)
 	updatedConn, err := h.DB.GetGoogleConnection(r.Context(), connectionID)
 	if err != nil {
 		InternalError(w, r, err)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(updatedConn); err != nil {
-		logger.Error().Err(err).Msg("Failed to encode response")
+	response := GoogleConnectionResponse{
+		ID:              updatedConn.ID,
+		GA4PropertyID:   updatedConn.GA4PropertyID,
+		GA4PropertyName: updatedConn.GA4PropertyName,
+		GoogleEmail:     updatedConn.GoogleEmail,
+		Status:          updatedConn.Status,
+		DomainIDs:       updatedConn.DomainIDs,
+		CreatedAt:       updatedConn.CreatedAt.Format(time.RFC3339),
 	}
+	WriteSuccess(w, r, response, "Connection updated")
 }
 
 func (h *Handler) exchangeGoogleCode(code string) (*GoogleTokenResponse, error) {
