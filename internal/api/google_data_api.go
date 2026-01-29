@@ -407,6 +407,19 @@ func (pf *ProgressiveFetcher) FetchAndUpdatePages(ctx context.Context, organisat
 		return fmt.Errorf("failed to upsert phase 1 data: %w", err)
 	}
 
+	// Log sample of top pages for verification
+	sampleSize := 5
+	if len(phase1Data) < sampleSize {
+		sampleSize = len(phase1Data)
+	}
+	for i := 0; i < sampleSize; i++ {
+		log.Info().
+			Str("path", phase1Data[i].PagePath).
+			Int64("page_views_7d", phase1Data[i].PageViews7d).
+			Str("hostname", phase1Data[i].HostName).
+			Msgf("GA4 top page #%d", i+1)
+	}
+
 	log.Info().
 		Str("organisation_id", organisationID).
 		Int("pages_count", len(phase1Data)).
