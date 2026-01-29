@@ -264,7 +264,18 @@ func (h *Handler) createJobFromRequest(ctx context.Context, user *db.User, req C
 	// Trigger GA4 data fetch if findLinks is enabled and organisation has GA4 connection
 	// This must happen BEFORE job creation so GA4 data is available for task prioritisation
 	if findLinks && effectiveOrgID != "" && h.GoogleClientID != "" && h.GoogleClientSecret != "" {
+		log.Info().
+			Str("organisation_id", effectiveOrgID).
+			Str("domain", req.Domain).
+			Msg("Triggering GA4 data fetch before job creation")
 		h.fetchGA4DataBeforeJob(ctx, effectiveOrgID, req.Domain)
+	} else {
+		log.Debug().
+			Bool("find_links", findLinks).
+			Str("org_id", effectiveOrgID).
+			Bool("has_client_id", h.GoogleClientID != "").
+			Bool("has_client_secret", h.GoogleClientSecret != "").
+			Msg("Skipping GA4 fetch - conditions not met")
 	}
 
 	return h.JobsManager.CreateJob(ctx, opts)
