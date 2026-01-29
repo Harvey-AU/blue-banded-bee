@@ -114,6 +114,9 @@ async function loadGoogleConnections() {
       return;
     }
 
+    // Load GA4 accounts from DB (for the account selector)
+    await loadGA4AccountsFromDB();
+
     // Fetch organisation domains first (needed for domain tags)
     try {
       const session = await window.supabase.auth.getSession();
@@ -1253,11 +1256,165 @@ async function loadGA4AccountsFromDB() {
       "[GA Debug] Loaded accounts from DB:",
       storedGA4Accounts.length
     );
+
+    // Update the account selector UI
+    renderAccountSelector();
+
     return storedGA4Accounts;
   } catch (error) {
     console.error("[GA Debug] Error loading accounts from DB:", error);
     return [];
   }
+}
+
+// Currently selected GA4 account ID
+let selectedGA4AccountId = null;
+
+/**
+ * Render the GA4 account selector dropdown
+ */
+function renderAccountSelector() {
+  const selectorContainer = document.getElementById("googleAccountSelector");
+  const searchInput = document.getElementById("googleAccountSearch");
+  const dropdown = document.getElementById("googleAccountDropdown");
+  const selectedContainer = document.getElementById("googleSelectedAccount");
+
+  if (!selectorContainer || !searchInput || !dropdown || !selectedContainer) {
+    console.log("[GA Debug] Account selector elements not found");
+    return;
+  }
+
+  // Show selector if we have accounts
+  if (storedGA4Accounts.length > 0) {
+    selectorContainer.style.display = "block";
+  } else {
+    selectorContainer.style.display = "none";
+    return;
+  }
+
+  // Function to render dropdown options
+  const renderDropdownOptions = (query) => {
+    // Clear existing options
+    while (dropdown.firstChild) {
+      dropdown.removeChild(dropdown.firstChild);
+    }
+
+    const lowerQuery = (query || "").toLowerCase().trim();
+
+    // Filter accounts
+    const filtered = lowerQuery
+      ? storedGA4Accounts.filter(
+          (acc) =>
+            acc.google_account_name?.toLowerCase().includes(lowerQuery) ||
+            acc.google_email?.toLowerCase().includes(lowerQuery)
+        )
+      : storedGA4Accounts;
+
+    if (filtered.length === 0) {
+      const noResults = document.createElement("div");
+      noResults.textContent = "No accounts found";
+      noResults.style.cssText =
+        "padding: 10px 16px; color: #6b7280; font-size: 14px;";
+      dropdown.appendChild(noResults);
+      dropdown.style.display = "block";
+      return;
+    }
+
+    filtered.forEach((account) => {
+      const option = document.createElement("div");
+      option.style.cssText =
+        "padding: 10px 16px; cursor: pointer; font-size: 14px; border-bottom: 1px solid #f3f4f6;";
+      option.onmouseover = () => {
+        option.style.background = "#f9fafb";
+      };
+      option.onmouseout = () => {
+        option.style.background = "white";
+      };
+
+      const nameSpan = document.createElement("strong");
+      nameSpan.textContent = account.google_account_name || "Unnamed Account";
+      option.appendChild(nameSpan);
+
+      if (account.google_email) {
+        const emailSpan = document.createElement("span");
+        emailSpan.textContent = ` (${account.google_email})`;
+        emailSpan.style.color = "#6b7280";
+        option.appendChild(emailSpan);
+      }
+
+      option.onmousedown = (e) => {
+        e.preventDefault();
+        selectGA4Account(account);
+        searchInput.value = "";
+        dropdown.style.display = "none";
+      };
+
+      dropdown.appendChild(option);
+    });
+
+    dropdown.style.display = "block";
+  };
+
+  // Event listeners for search input
+  searchInput.onfocus = () => renderDropdownOptions(searchInput.value);
+  searchInput.oninput = () => renderDropdownOptions(searchInput.value);
+  searchInput.onclick = (e) => e.stopPropagation();
+
+  // Close dropdown when clicking outside
+  document.addEventListener("click", (e) => {
+    if (!selectorContainer.contains(e.target)) {
+      dropdown.style.display = "none";
+    }
+  });
+
+  // Render currently selected account
+  renderSelectedAccount();
+}
+
+/**
+ * Select a GA4 account and display it as a tag
+ */
+function selectGA4Account(account) {
+  selectedGA4AccountId = account.id;
+  renderSelectedAccount();
+  console.log("[GA Debug] Selected account:", account.google_account_name);
+}
+
+/**
+ * Render the selected GA4 account as a tag
+ */
+function renderSelectedAccount() {
+  const selectedContainer = document.getElementById("googleSelectedAccount");
+  if (!selectedContainer) return;
+
+  // Clear existing
+  while (selectedContainer.firstChild) {
+    selectedContainer.removeChild(selectedContainer.firstChild);
+  }
+
+  if (!selectedGA4AccountId) return;
+
+  const account = storedGA4Accounts.find(
+    (acc) => acc.id === selectedGA4AccountId
+  );
+  if (!account) return;
+
+  const tag = document.createElement("span");
+  tag.style.cssText =
+    "display: inline-flex; align-items: center; gap: 4px; padding: 6px 10px; background: #e0e7ff; color: #3730a3; border-radius: 4px; font-size: 14px;";
+  tag.textContent = account.google_account_name || "Unnamed Account";
+
+  const removeBtn = document.createElement("button");
+  removeBtn.textContent = "×";
+  removeBtn.style.cssText =
+    "background: none; border: none; color: #6366f1; font-size: 18px; cursor: pointer; padding: 0; margin-left: 4px; line-height: 1;";
+  removeBtn.onclick = () => {
+    selectedGA4AccountId = null;
+    renderSelectedAccount();
+  };
+
+  tag.appendChild(removeBtn);
+  selectedContainer.appendChild(tag);
 }
 
 /**
@@ -2125,4 +2282,5 @@ if (typeof window !== "undefined") {
   window.handleGoogleOAuthCallback = handleGoogleOAuthCallback;
   window.loadGA4AccountsFromDB = loadGA4AccountsFromDB;
   window.refreshGA4Accounts = refreshGA4Accounts;
+  window.renderAccountSelector = renderAccountSelector;
 }
