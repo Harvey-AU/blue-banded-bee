@@ -123,7 +123,7 @@ async function loadGoogleConnections() {
 
         if (domainsResponse.ok) {
           const domainsData = await domainsResponse.json();
-          organisationDomains = domainsData.domains || [];
+          organisationDomains = domainsData.data.domains || [];
           console.log(
             "[GA Debug] Loaded domains for connections:",
             organisationDomains
