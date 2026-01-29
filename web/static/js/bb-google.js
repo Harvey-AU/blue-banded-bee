@@ -1443,8 +1443,8 @@ async function showDomainSelector(connectionId, currentDomainIds) {
   header.textContent = "Add Domains to Property";
   header.style.cssText = "margin: 0 0 16px; font-size: 18px; font-weight: 600;";
 
-  // Search input container
-  const inputContainer = document.createElement("div");
+  // Search input container (using form for proper Enter key handling)
+  const inputContainer = document.createElement("form");
   inputContainer.style.cssText = "position: relative; margin-bottom: 16px;";
 
   const searchInput = document.createElement("input");
@@ -1625,6 +1625,35 @@ async function showDomainSelector(connectionId, currentDomainIds) {
     e.stopPropagation();
   });
 
+  // Handle form submission (Enter key)
+  inputContainer.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const query = searchInput.value.toLowerCase().trim();
+    if (!query) return;
+
+    // Check if there's an exact match in available domains
+    const availableDomains = organisationDomains.filter(
+      (d) => !selectedDomainIds.includes(d.id)
+    );
+    const exactMatch = availableDomains.find(
+      (d) => d.name.toLowerCase() === query
+    );
+
+    if (exactMatch) {
+      // Select the exact match
+      if (!selectedDomainIds.includes(exactMatch.id)) {
+        selectedDomainIds.push(exactMatch.id);
+        renderSelectedTags();
+      }
+    } else {
+      // Create new domain
+      await createAndSelectDomain(query);
+    }
+
+    searchInput.value = "";
+    dropdown.style.display = "none";
+  });
+
   // Close dropdown when clicking outside
   document.addEventListener("click", (e) => {
     if (!inputContainer.contains(e.target)) {
@@ -1776,8 +1805,8 @@ async function showDomainSelectorForProperty(propertyId, currentDomainIds) {
   header.textContent = "Select Domains for Property";
   header.style.cssText = "margin: 0 0 16px; font-size: 18px; font-weight: 600;";
 
-  // Search input container
-  const inputContainer = document.createElement("div");
+  // Search input container (using form for proper Enter key handling)
+  const inputContainer = document.createElement("form");
   inputContainer.style.cssText = "position: relative; margin-bottom: 16px;";
 
   const searchInput = document.createElement("input");
@@ -1958,6 +1987,35 @@ async function showDomainSelectorForProperty(propertyId, currentDomainIds) {
   // Prevent click inside input from closing dropdown
   searchInput.addEventListener("click", (e) => {
     e.stopPropagation();
+  });
+
+  // Handle form submission (Enter key)
+  inputContainer.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const query = searchInput.value.toLowerCase().trim();
+    if (!query) return;
+
+    // Check if there's an exact match in available domains
+    const availableDomains = organisationDomains.filter(
+      (d) => !selectedDomainIds.includes(d.id)
+    );
+    const exactMatch = availableDomains.find(
+      (d) => d.name.toLowerCase() === query
+    );
+
+    if (exactMatch) {
+      // Select the exact match
+      if (!selectedDomainIds.includes(exactMatch.id)) {
+        selectedDomainIds.push(exactMatch.id);
+        renderSelectedTags();
+      }
+    } else {
+      // Create new domain
+      await createAndSelectDomain(query);
+    }
+
+    searchInput.value = "";
+    dropdown.style.display = "none";
   });
 
   // Close dropdown when clicking outside
