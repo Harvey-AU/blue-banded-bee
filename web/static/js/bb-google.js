@@ -865,7 +865,9 @@ function renderPropertyList(properties, totalCount) {
         addOption.onmouseout = () => {
           addOption.style.background = "white";
         };
-        addOption.onclick = async () => {
+        addOption.onclick = async (e) => {
+          console.log("[GA Debug] Add new domain clicked:", lowerQuery);
+          e.stopPropagation();
           await createDomainInline(lowerQuery, prop.property_id);
           searchInput.value = "";
           dropdown.style.display = "none";
