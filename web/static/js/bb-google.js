@@ -1406,27 +1406,9 @@ async function loadPropertiesForAccount(account) {
       return;
     }
 
-    // Check if we have a pending session with properties already
-    if (
-      pendingGASessionData &&
-      pendingGASessionData.selected_account_id === account.google_account_id
-    ) {
-      renderAccountProperties(pendingGASessionData.properties || []);
-      return;
-    }
-
-    // Need to fetch properties - check if we have a pending session
-    if (!pendingGASessionData || !pendingGASessionData.session_id) {
-      loadingDiv.textContent =
-        "Complete OAuth flow to view properties for this account.";
-      return;
-    }
-
-    // Fetch properties for this account using the pending session
+    // Fetch properties for this account using stored refresh token
     const fetchUrl =
-      "/v1/integrations/google/pending-session/" +
-      pendingGASessionData.session_id +
-      "/accounts/" +
+      "/v1/integrations/google/accounts/" +
       encodeURIComponent(account.google_account_id) +
       "/properties";
 
@@ -1439,11 +1421,15 @@ async function loadPropertiesForAccount(account) {
     }
 
     const result = await response.json();
-    const properties = result.data?.properties || [];
 
-    // Store for later use
-    pendingGASessionData.selected_account_id = account.google_account_id;
-    pendingGASessionData.properties = properties;
+    // Check if re-auth is needed
+    if (result.data?.needs_reauth) {
+      loadingDiv.textContent =
+        result.data.message || "Please reconnect to Google Analytics.";
+      return;
+    }
+
+    const properties = result.data?.properties || [];
 
     renderAccountProperties(properties);
   } catch (error) {

@@ -21,6 +21,21 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+// extractGoogleAccountIDFromPath extracts Google account ID from path like "accounts/accounts/123456/properties"
+// Returns empty string if path doesn't match the expected pattern
+func extractGoogleAccountIDFromPath(path string) string {
+	if !strings.HasPrefix(path, "accounts/") || !strings.HasSuffix(path, "/properties") {
+		return ""
+	}
+	// Path format: accounts/accounts/123456/properties -> accounts/123456
+	trimmed := strings.TrimPrefix(path, "accounts/")
+	trimmed = strings.TrimSuffix(trimmed, "/properties")
+	if trimmed == "" {
+		return ""
+	}
+	return trimmed
+}
+
 // Pending OAuth sessions - stores properties and tokens temporarily after OAuth callback.
 // Key is session ID, value is PendingGASession.
 //
@@ -928,6 +943,12 @@ func (h *Handler) GoogleConnectionHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	// Handle accounts/{googleAccountId}/properties endpoint (fetch properties using stored token)
+	if googleAccountID := extractGoogleAccountIDFromPath(path); googleAccountID != "" {
+		h.GetAccountProperties(w, r, googleAccountID)
+		return
+	}
+
 	// Handle pending-session endpoint (get accounts/properties from server-side session)
 	if strings.HasPrefix(path, "pending-session/") {
 		sessionPath := strings.TrimPrefix(path, "pending-session/")
@@ -1431,4 +1452,93 @@ func (h *Handler) refreshGoogleAccessToken(refreshToken string) (string, error) 
 	}
 
 	return tokenResp.AccessToken, nil
+}
+
+// GetAccountProperties fetches properties for a Google account using stored refresh token
+// GET /v1/integrations/google/accounts/{googleAccountId}/properties
+func (h *Handler) GetAccountProperties(w http.ResponseWriter, r *http.Request, googleAccountID string) {
+	logger := loggerWithRequest(r)
+
+	if r.Method != http.MethodGet {
+		MethodNotAllowed(w, r)
+		return
+	}
+
+	userClaims, ok := auth.GetUserFromContext(r.Context())
+	if !ok {
+		Unauthorised(w, r, "User information not found")
+		return
+	}
+
+	user, err := h.DB.GetOrCreateUser(userClaims.UserID, userClaims.Email, nil)
+	if err != nil {
+		logger.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get or create user")
+		InternalError(w, r, err)
+		return
+	}
+
+	orgID := h.DB.GetEffectiveOrganisationID(user)
+	if orgID == "" {
+		BadRequest(w, r, "User must belong to an organisation")
+		return
+	}
+
+	// Find an account with a stored token
+	accountWithToken, err := h.DB.GetGA4AccountWithToken(r.Context(), orgID)
+	if err != nil {
+		if errors.Is(err, db.ErrGoogleAccountNotFound) {
+			WriteSuccess(w, r, map[string]any{
+				"needs_reauth": true,
+				"message":      "No valid Google token found. Please reconnect to Google Analytics.",
+			}, "")
+			return
+		}
+		logger.Error().Err(err).Msg("Failed to find GA4 account with token")
+		InternalError(w, r, err)
+		return
+	}
+
+	// Get the refresh token from vault
+	refreshToken, err := h.DB.GetGA4AccountToken(r.Context(), accountWithToken.ID)
+	if err != nil {
+		if errors.Is(err, db.ErrGoogleTokenNotFound) {
+			WriteSuccess(w, r, map[string]any{
+				"needs_reauth": true,
+				"message":      "Token expired or invalid. Please reconnect to Google Analytics.",
+			}, "")
+			return
+		}
+		logger.Error().Err(err).Msg("Failed to get GA4 account token")
+		InternalError(w, r, err)
+		return
+	}
+
+	// Refresh the access token
+	accessToken, err := h.refreshGoogleAccessToken(refreshToken)
+	if err != nil {
+		logger.Warn().Err(err).Msg("Failed to refresh Google access token")
+		WriteSuccess(w, r, map[string]any{
+			"needs_reauth": true,
+			"message":      "Unable to refresh token. Please reconnect to Google Analytics.",
+		}, "")
+		return
+	}
+
+	// Fetch properties for this account from Google API
+	client := &http.Client{Timeout: 30 * time.Second}
+	properties, err := h.fetchPropertiesForAccount(r.Context(), client, accessToken, googleAccountID)
+	if err != nil {
+		logger.Error().Err(err).Str("google_account_id", googleAccountID).Msg("Failed to fetch GA4 properties")
+		InternalError(w, r, fmt.Errorf("failed to fetch properties: %w", err))
+		return
+	}
+
+	logger.Info().
+		Str("google_account_id", googleAccountID).
+		Int("property_count", len(properties)).
+		Msg("Fetched GA4 properties for account")
+
+	WriteSuccess(w, r, map[string]any{
+		"properties": properties,
+	}, "")
 }
