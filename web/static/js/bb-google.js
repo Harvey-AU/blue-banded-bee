@@ -1267,8 +1267,8 @@ async function loadGA4AccountsFromDB() {
   }
 }
 
-// Currently selected GA4 account ID
-let selectedGA4AccountId = null;
+// Currently selected GA4 account
+let selectedGA4Account = null;
 
 /**
  * Render the GA4 account selector dropdown
@@ -1277,9 +1277,8 @@ function renderAccountSelector() {
   const selectorContainer = document.getElementById("googleAccountSelector");
   const searchInput = document.getElementById("googleAccountSearch");
   const dropdown = document.getElementById("googleAccountDropdown");
-  const selectedContainer = document.getElementById("googleSelectedAccount");
 
-  if (!selectorContainer || !searchInput || !dropdown || !selectedContainer) {
+  if (!selectorContainer || !searchInput || !dropdown) {
     console.log("[GA Debug] Account selector elements not found");
     return;
   }
@@ -1290,6 +1289,12 @@ function renderAccountSelector() {
   } else {
     selectorContainer.style.display = "none";
     return;
+  }
+
+  // If we have a selected account, show it in the input
+  if (selectedGA4Account) {
+    searchInput.value =
+      selectedGA4Account.google_account_name || "Unnamed Account";
   }
 
   // Function to render dropdown options
@@ -1337,15 +1342,14 @@ function renderAccountSelector() {
 
       if (account.google_email) {
         const emailSpan = document.createElement("span");
-        emailSpan.textContent = ` (${account.google_email})`;
+        emailSpan.textContent = " (" + account.google_email + ")";
         emailSpan.style.color = "#6b7280";
         option.appendChild(emailSpan);
       }
 
       option.onmousedown = (e) => {
         e.preventDefault();
-        selectGA4Account(account);
-        searchInput.value = "";
+        onAccountSelected(account);
         dropdown.style.display = "none";
       };
 
@@ -1356,7 +1360,10 @@ function renderAccountSelector() {
   };
 
   // Event listeners for search input
-  searchInput.onfocus = () => renderDropdownOptions(searchInput.value);
+  searchInput.onfocus = () => {
+    searchInput.select();
+    renderDropdownOptions(searchInput.value);
+  };
   searchInput.oninput = () => renderDropdownOptions(searchInput.value);
   searchInput.onclick = (e) => e.stopPropagation();
 
@@ -1364,57 +1371,157 @@ function renderAccountSelector() {
   document.addEventListener("click", (e) => {
     if (!selectorContainer.contains(e.target)) {
       dropdown.style.display = "none";
+      if (selectedGA4Account) {
+        searchInput.value =
+          selectedGA4Account.google_account_name || "Unnamed Account";
+      }
     }
   });
 
-  // Render currently selected account
-  renderSelectedAccount();
+  // Auto-select first account if only one and none selected
+  if (storedGA4Accounts.length === 1 && !selectedGA4Account) {
+    onAccountSelected(storedGA4Accounts[0]);
+  }
 }
 
 /**
- * Select a GA4 account and display it as a tag
+ * Handle account selection - update input and load properties
  */
-function selectGA4Account(account) {
-  selectedGA4AccountId = account.id;
-  renderSelectedAccount();
-  console.log("[GA Debug] Selected account:", account.google_account_name);
-}
-
-/**
- * Render the selected GA4 account as a tag
- */
-function renderSelectedAccount() {
-  const selectedContainer = document.getElementById("googleSelectedAccount");
-  if (!selectedContainer) return;
-
-  // Clear existing
-  while (selectedContainer.firstChild) {
-    selectedContainer.removeChild(selectedContainer.firstChild);
+async function onAccountSelected(account) {
+  selectedGA4Account = account;
+  const searchInput = document.getElementById("googleAccountSearch");
+  if (searchInput) {
+    searchInput.value = account.google_account_name || "Unnamed Account";
   }
 
-  if (!selectedGA4AccountId) return;
-
-  const account = storedGA4Accounts.find(
-    (acc) => acc.id === selectedGA4AccountId
+  console.log(
+    "[GA Debug] Selected account:",
+    account.google_account_name,
+    account.google_account_id
   );
-  if (!account) return;
 
-  const tag = document.createElement("span");
-  tag.style.cssText =
-    "display: inline-flex; align-items: center; gap: 4px; padding: 6px 10px; background: #e0e7ff; color: #3730a3; border-radius: 4px; font-size: 14px;";
-  tag.textContent = account.google_account_name || "Unnamed Account";
+  // Load properties for this account
+  await loadPropertiesForAccount(account);
+}
 
-  const removeBtn = document.createElement("button");
-  removeBtn.textContent = "×";
-  removeBtn.style.cssText =
-    "background: none; border: none; color: #6366f1; font-size: 18px; cursor: pointer; padding: 0; margin-left: 4px; line-height: 1;";
-  removeBtn.onclick = () => {
-    selectedGA4AccountId = null;
-    renderSelectedAccount();
-  };
+/**
+ * Load and display properties for the selected account
+ */
+async function loadPropertiesForAccount(account) {
+  const propertiesContainer = document.getElementById(
+    "googleAccountProperties"
+  );
+  if (!propertiesContainer) return;
 
-  tag.appendChild(removeBtn);
-  selectedContainer.appendChild(tag);
+  // Clear and show loading state
+  while (propertiesContainer.firstChild) {
+    propertiesContainer.removeChild(propertiesContainer.firstChild);
+  }
+  propertiesContainer.style.display = "block";
+
+  const loadingDiv = document.createElement("div");
+  loadingDiv.style.cssText =
+    "color: #6b7280; font-size: 14px; padding: 12px 0;";
+  loadingDiv.textContent = "Loading properties...";
+  propertiesContainer.appendChild(loadingDiv);
+
+  try {
+    const session = await window.supabase.auth.getSession();
+    const token = session?.data?.session?.access_token;
+
+    if (!token) {
+      loadingDiv.style.color = "#dc2626";
+      loadingDiv.textContent = "Not authenticated";
+      return;
+    }
+
+    // Check if we have a pending session with properties already
+    if (
+      pendingGASessionData &&
+      pendingGASessionData.selected_account_id === account.google_account_id
+    ) {
+      renderAccountProperties(pendingGASessionData.properties || []);
+      return;
+    }
+
+    // Need to fetch properties - check if we have a pending session
+    if (!pendingGASessionData || !pendingGASessionData.session_id) {
+      loadingDiv.textContent =
+        "Complete OAuth flow to view properties for this account.";
+      return;
+    }
+
+    // Fetch properties for this account using the pending session
+    const fetchUrl =
+      "/v1/integrations/google/pending-session/" +
+      pendingGASessionData.session_id +
+      "/accounts/" +
+      encodeURIComponent(account.google_account_id) +
+      "/properties";
+
+    const response = await fetch(fetchUrl, {
+      headers: { Authorization: "Bearer " + token },
+    });
+
+    if (!response.ok) {
+      throw new Error("HTTP " + response.status);
+    }
+
+    const result = await response.json();
+    const properties = result.data?.properties || [];
+
+    // Store for later use
+    pendingGASessionData.selected_account_id = account.google_account_id;
+    pendingGASessionData.properties = properties;
+
+    renderAccountProperties(properties);
+  } catch (error) {
+    console.error("[GA Debug] Failed to load properties:", error);
+    loadingDiv.style.color = "#dc2626";
+    loadingDiv.textContent = "Failed to load properties. Try refreshing.";
+  }
+}
+
+/**
+ * Render properties list for an account
+ */
+function renderAccountProperties(properties) {
+  const propertiesContainer = document.getElementById(
+    "googleAccountProperties"
+  );
+  if (!propertiesContainer) return;
+
+  // Clear container
+  while (propertiesContainer.firstChild) {
+    propertiesContainer.removeChild(propertiesContainer.firstChild);
+  }
+
+  if (properties.length === 0) {
+    const emptyDiv = document.createElement("div");
+    emptyDiv.style.cssText =
+      "color: #6b7280; font-size: 14px; padding: 12px 0;";
+    emptyDiv.textContent = "No properties found for this account.";
+    propertiesContainer.appendChild(emptyDiv);
+    return;
+  }
+
+  // Store for filtering and saving
+  allGoogleProperties = properties;
+
+  // Create label
+  const label = document.createElement("label");
+  label.style.cssText =
+    "display: block; font-weight: 500; font-size: 14px; color: #374151; margin-bottom: 8px;";
+  label.textContent = "Properties (" + properties.length + ")";
+  propertiesContainer.appendChild(label);
+
+  // Create list container
+  const listDiv = document.createElement("div");
+  listDiv.id = "googlePropertyList";
+  propertiesContainer.appendChild(listDiv);
+
+  // Render the property list using existing function
+  renderPropertyList(properties, properties.length);
 }
 
 /**
