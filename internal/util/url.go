@@ -1,6 +1,7 @@
 package util
 
 import (
+	"fmt"
 	"net/url"
 	"strings"
 
@@ -20,6 +21,63 @@ func NormaliseDomain(domain string) string {
 	domain = strings.TrimSuffix(domain, "/")
 
 	return domain
+}
+
+// ValidateDomain checks if a domain string is a valid domain format.
+// Returns an error describing why the domain is invalid, or nil if valid.
+func ValidateDomain(domain string) error {
+	// Normalise first
+	domain = NormaliseDomain(domain)
+
+	if domain == "" {
+		return fmt.Errorf("domain cannot be empty")
+	}
+
+	// Must contain at least one dot (for TLD)
+	if !strings.Contains(domain, ".") {
+		return fmt.Errorf("domain must contain a TLD (e.g., .com, .co.uk)")
+	}
+
+	// Split into parts and validate each
+	parts := strings.Split(domain, ".")
+	for _, part := range parts {
+		if part == "" {
+			return fmt.Errorf("domain contains empty segment")
+		}
+
+		// Check for valid characters (alphanumeric and hyphens)
+		for _, c := range part {
+			isLower := c >= 'a' && c <= 'z'
+			isUpper := c >= 'A' && c <= 'Z'
+			isDigit := c >= '0' && c <= '9'
+			isHyphen := c == '-'
+			if !isLower && !isUpper && !isDigit && !isHyphen {
+				return fmt.Errorf("domain contains invalid character: %c", c)
+			}
+		}
+
+		// Cannot start or end with hyphen
+		if strings.HasPrefix(part, "-") || strings.HasSuffix(part, "-") {
+			return fmt.Errorf("domain segment cannot start or end with hyphen")
+		}
+	}
+
+	// TLD must be at least 2 characters
+	tld := parts[len(parts)-1]
+	if len(tld) < 2 {
+		return fmt.Errorf("TLD must be at least 2 characters")
+	}
+
+	// Block localhost and common internal hostnames
+	lowerDomain := strings.ToLower(domain)
+	blockedDomains := []string{"localhost", "localhost.localdomain", "local", "internal"}
+	for _, blocked := range blockedDomains {
+		if lowerDomain == blocked || strings.HasSuffix(lowerDomain, "."+blocked) {
+			return fmt.Errorf("domain %q is not allowed", domain)
+		}
+	}
+
+	return nil
 }
 
 // NormaliseURL ensures a URL has proper https:// scheme and validates format

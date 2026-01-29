@@ -72,6 +72,53 @@ func TestNormaliseDomain(t *testing.T) {
 	}
 }
 
+func TestValidateDomain(t *testing.T) {
+	tests := []struct {
+		name      string
+		input     string
+		wantError bool
+		errorMsg  string
+	}{
+		// Valid domains
+		{name: "simple_domain", input: "example.com", wantError: false},
+		{name: "subdomain", input: "www.example.com", wantError: false},
+		{name: "deep_subdomain", input: "api.v1.example.com", wantError: false},
+		{name: "with_https", input: "https://example.com", wantError: false},
+		{name: "with_http", input: "http://example.com", wantError: false},
+		{name: "co_uk_tld", input: "example.co.uk", wantError: false},
+		{name: "hyphen_in_domain", input: "my-site.example.com", wantError: false},
+		{name: "numbers_in_domain", input: "site123.example.com", wantError: false},
+
+		// Invalid domains
+		{name: "no_tld", input: "asdfasdf", wantError: true, errorMsg: "must contain a TLD"},
+		{name: "empty", input: "", wantError: true, errorMsg: "cannot be empty"},
+		{name: "just_tld", input: ".com", wantError: true, errorMsg: "empty segment"},
+		{name: "double_dot", input: "example..com", wantError: true, errorMsg: "empty segment"},
+		{name: "single_char_tld", input: "example.c", wantError: true, errorMsg: "TLD must be at least 2"},
+		{name: "hyphen_start", input: "-example.com", wantError: true, errorMsg: "cannot start or end with hyphen"},
+		{name: "hyphen_end", input: "example-.com", wantError: true, errorMsg: "cannot start or end with hyphen"},
+		{name: "invalid_char_underscore", input: "my_site.example.com", wantError: true, errorMsg: "invalid character"},
+		{name: "invalid_char_space", input: "my site.example.com", wantError: true, errorMsg: "invalid character"},
+		{name: "localhost", input: "localhost", wantError: true, errorMsg: "must contain a TLD"},
+		{name: "localhost_with_subdomain", input: "api.localhost", wantError: true, errorMsg: "not allowed"},
+		{name: "internal", input: "internal", wantError: true, errorMsg: "must contain a TLD"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateDomain(tt.input)
+			if tt.wantError {
+				assert.Error(t, err)
+				if tt.errorMsg != "" {
+					assert.Contains(t, err.Error(), tt.errorMsg)
+				}
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
 func TestNormaliseURL(t *testing.T) {
 	tests := []struct {
 		name     string

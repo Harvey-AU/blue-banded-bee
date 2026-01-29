@@ -306,6 +306,12 @@ func (h *Handler) createJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Validate domain format
+	if err := util.ValidateDomain(req.Domain); err != nil {
+		BadRequest(w, r, fmt.Sprintf("Invalid domain: %s", err.Error()))
+		return
+	}
+
 	// Set source information if not provided (dashboard creation)
 	if req.SourceType == nil {
 		sourceType := "dashboard"
