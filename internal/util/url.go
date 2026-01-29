@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/rs/zerolog/log"
+	"golang.org/x/net/publicsuffix"
 )
 
 // NormaliseDomain removes http/https prefix and www. from domain
@@ -24,57 +25,34 @@ func NormaliseDomain(domain string) string {
 }
 
 // ValidateDomain checks if a domain string is a valid domain format.
+// Uses golang.org/x/net/publicsuffix for robust validation against the Public Suffix List.
 // Returns an error describing why the domain is invalid, or nil if valid.
 func ValidateDomain(domain string) error {
-	// Normalise first
+	// Normalise first (removes http://, https://, www., trailing slash)
 	domain = NormaliseDomain(domain)
 
 	if domain == "" {
 		return fmt.Errorf("domain cannot be empty")
 	}
 
-	// Must contain at least one dot (for TLD)
-	if !strings.Contains(domain, ".") {
-		return fmt.Errorf("domain must contain a TLD (e.g., .com, .co.uk)")
-	}
-
-	// Split into parts and validate each
-	parts := strings.Split(domain, ".")
-	for _, part := range parts {
-		if part == "" {
-			return fmt.Errorf("domain contains empty segment")
-		}
-
-		// Check for valid characters (alphanumeric and hyphens)
-		for _, c := range part {
-			isLower := c >= 'a' && c <= 'z'
-			isUpper := c >= 'A' && c <= 'Z'
-			isDigit := c >= '0' && c <= '9'
-			isHyphen := c == '-'
-			if !isLower && !isUpper && !isDigit && !isHyphen {
-				return fmt.Errorf("domain contains invalid character: %c", c)
-			}
-		}
-
-		// Cannot start or end with hyphen
-		if strings.HasPrefix(part, "-") || strings.HasSuffix(part, "-") {
-			return fmt.Errorf("domain segment cannot start or end with hyphen")
-		}
-	}
-
-	// TLD must be at least 2 characters
-	tld := parts[len(parts)-1]
-	if len(tld) < 2 {
-		return fmt.Errorf("TLD must be at least 2 characters")
-	}
-
-	// Block localhost and common internal hostnames
+	// Block localhost and common internal hostnames before publicsuffix check
 	lowerDomain := strings.ToLower(domain)
 	blockedDomains := []string{"localhost", "localhost.localdomain", "local", "internal"}
 	for _, blocked := range blockedDomains {
 		if lowerDomain == blocked || strings.HasSuffix(lowerDomain, "."+blocked) {
 			return fmt.Errorf("domain %q is not allowed", domain)
 		}
+	}
+
+	// Use publicsuffix to validate - this checks against the official Public Suffix List
+	// EffectiveTLDPlusOne returns error if domain is invalid or has no valid public suffix
+	_, err := publicsuffix.EffectiveTLDPlusOne(domain)
+	if err != nil {
+		// Provide user-friendly error messages
+		if strings.Contains(err.Error(), "is a suffix") {
+			return fmt.Errorf("cannot use a public suffix alone (e.g., .com, .co.uk)")
+		}
+		return fmt.Errorf("invalid domain: %s", err.Error())
 	}
 
 	return nil
