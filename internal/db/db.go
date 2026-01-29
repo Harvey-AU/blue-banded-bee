@@ -729,13 +729,7 @@ func (db *DB) UpsertPageWithAnalytics(ctx context.Context, domainID int, path st
 	}
 
 	// Step 5 (future): Update analytics columns
-	// For now, just log the data we fetched
-	log.Debug().
-		Int("page_id", pageID).
-		Int("domain_id", domainID).
-		Str("path", path).
-		Interface("page_views", pageViews).
-		Msg("GA4 data fetched (not persisted yet - Step 5)")
+	// Analytics data (pageViews) is available but not yet persisted to columns
 
 	return pageID, nil
 }

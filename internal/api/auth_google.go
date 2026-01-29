@@ -616,20 +616,20 @@ func (h *Handler) UpdateGoogleConnection(w http.ResponseWriter, r *http.Request,
 	conn, err := h.DB.GetGoogleConnection(r.Context(), connectionID)
 	if err != nil {
 		logger.Error().Err(err).Str("connection_id", connectionID).Msg("Failed to get connection")
-		http.Error(w, "Connection not found", http.StatusNotFound)
+		NotFound(w, r, "Connection not found")
 		return
 	}
 
 	// Verify connection belongs to user's organisation
 	if conn.OrganisationID != orgID {
-		http.Error(w, "Forbidden", http.StatusForbidden)
+		Forbidden(w, r, "Access denied")
 		return
 	}
 
 	// Update domain_ids
 	if err := h.DB.UpdateConnectionDomains(r.Context(), connectionID, req.DomainIDs); err != nil {
 		logger.Error().Err(err).Str("connection_id", connectionID).Msg("Failed to update connection domains")
-		http.Error(w, "Failed to update connection", http.StatusInternalServerError)
+		InternalError(w, r, err)
 		return
 	}
 
@@ -641,7 +641,7 @@ func (h *Handler) UpdateGoogleConnection(w http.ResponseWriter, r *http.Request,
 	// Return updated connection
 	updatedConn, err := h.DB.GetGoogleConnection(r.Context(), connectionID)
 	if err != nil {
-		http.Error(w, "Failed to retrieve updated connection", http.StatusInternalServerError)
+		InternalError(w, r, err)
 		return
 	}
 

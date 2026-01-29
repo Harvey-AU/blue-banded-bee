@@ -308,6 +308,7 @@ func (db *DB) GetActiveGAConnectionForOrganisation(ctx context.Context, orgID st
 		       domain_ids, last_synced_at, created_at, updated_at
 		FROM google_analytics_connections
 		WHERE organisation_id = $1 AND status = 'active'
+		ORDER BY created_at DESC
 		LIMIT 1
 	`
 
@@ -373,6 +374,7 @@ func (db *DB) GetActiveGAConnectionForDomain(ctx context.Context, organisationID
 		WHERE organisation_id = $1
 		  AND status = 'active'
 		  AND $2 = ANY(domain_ids)
+		ORDER BY created_at DESC
 		LIMIT 1
 	`
 

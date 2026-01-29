@@ -112,9 +112,8 @@ async function loadGoogleConnections() {
 
     // Fetch organisation domains first (needed for domain tags)
     try {
-      const { data: { session } = {} } =
-        await window.supabase.auth.getSession();
-      const token = session?.access_token;
+      const session = await window.supabase.auth.getSession();
+      const token = session?.data?.session?.access_token;
 
       if (token) {
         const domainsResponse = await fetch("/v1/integrations/google/domains", {
@@ -354,8 +353,8 @@ async function disconnectGoogle(connectionId) {
   }
 
   try {
-    const { data: { session } = {} } = await window.supabase.auth.getSession();
-    const token = session?.access_token;
+    const session = await window.supabase.auth.getSession();
+    const token = session?.data?.session?.access_token;
     if (!token) {
       showGoogleError("Not authenticated. Please sign in.");
       return;
@@ -390,8 +389,8 @@ async function disconnectGoogle(connectionId) {
 async function selectGoogleAccount(accountId) {
   console.log("[GA Debug] selectGoogleAccount called with:", accountId);
   try {
-    const { data: { session } = {} } = await window.supabase.auth.getSession();
-    const token = session?.access_token;
+    const session = await window.supabase.auth.getSession();
+    const token = session?.data?.session?.access_token;
     if (!token) {
       showGoogleError("Not authenticated. Please sign in.");
       return;
@@ -476,8 +475,8 @@ async function selectGoogleAccount(accountId) {
  */
 async function saveGoogleProperties() {
   try {
-    const { data: { session } = {} } = await window.supabase.auth.getSession();
-    const token = session?.access_token;
+    const session = await window.supabase.auth.getSession();
+    const token = session?.data?.session?.access_token;
     if (!token) {
       showGoogleError("Not authenticated. Please sign in.");
       return;
@@ -583,8 +582,8 @@ async function toggleConnectionStatus(connectionId, active) {
   );
 
   try {
-    const { data: { session } = {} } = await window.supabase.auth.getSession();
-    const token = session?.access_token;
+    const session = await window.supabase.auth.getSession();
+    const token = session?.data?.session?.access_token;
     if (!token) {
       console.error("[GA Toggle] No auth token available");
       showGoogleError("Not authenticated. Please sign in.");
@@ -884,9 +883,8 @@ function renderPropertyList(properties, totalCount) {
     // Create domain function
     const createDomainInline = async (domainName, propertyId) => {
       try {
-        const { data: { session } = {} } =
-          await window.supabase.auth.getSession();
-        const token = session?.access_token;
+        const session = await window.supabase.auth.getSession();
+        const token = session?.data?.session?.access_token;
 
         if (!token) {
           showGoogleError("Please sign in to create domains");
@@ -1279,9 +1277,8 @@ async function handleGoogleOAuthCallback() {
     // Fetch session data from server
     console.log("[GA OAuth] Found ga_session, fetching from server...");
     try {
-      const { data: { session } = {} } =
-        await window.supabase.auth.getSession();
-      const token = session?.access_token;
+      const session = await window.supabase.auth.getSession();
+      const token = session?.data?.session?.access_token;
       console.log("[GA OAuth] Supabase token:", token ? "present" : "missing");
       if (!token) {
         showGoogleError("Not authenticated. Please sign in.");
@@ -1374,8 +1371,8 @@ async function handleGoogleOAuthCallback() {
  */
 async function removeDomainFromConnection(connectionId, domainId) {
   try {
-    const { data: { session } = {} } = await window.supabase.auth.getSession();
-    const token = session?.access_token;
+    const session = await window.supabase.auth.getSession();
+    const token = session?.data?.session?.access_token;
 
     if (!token) {
       showGoogleError("Please sign in to update connections");
@@ -1568,9 +1565,8 @@ async function showDomainSelector(connectionId, currentDomainIds) {
   // Function to create a new domain and add it to selection
   const createAndSelectDomain = async (domainName) => {
     try {
-      const { data: { session } = {} } =
-        await window.supabase.auth.getSession();
-      const token = session?.access_token;
+      const session = await window.supabase.auth.getSession();
+      const token = session?.data?.session?.access_token;
 
       if (!token) {
         showGoogleError("Please sign in to create domains");
@@ -1711,8 +1707,8 @@ async function showDomainSelector(connectionId, currentDomainIds) {
  */
 async function saveDomainSelection(connectionId, domainIds) {
   try {
-    const { data: { session } = {} } = await window.supabase.auth.getSession();
-    const token = session?.access_token;
+    const session = await window.supabase.auth.getSession();
+    const token = session?.data?.session?.access_token;
 
     if (!token) {
       showGoogleError("Please sign in to update connections");
@@ -1930,9 +1926,8 @@ async function showDomainSelectorForProperty(propertyId, currentDomainIds) {
   // Function to create a new domain and add it to selection
   const createAndSelectDomainTemp = async (domainName) => {
     try {
-      const { data: { session } = {} } =
-        await window.supabase.auth.getSession();
-      const token = session?.access_token;
+      const session = await window.supabase.auth.getSession();
+      const token = session?.data?.session?.access_token;
 
       if (!token) {
         showGoogleError("Please sign in to create domains");
