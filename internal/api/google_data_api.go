@@ -55,9 +55,11 @@ type GA4Client struct {
 
 // PageViewData represents analytics data for a single page
 type PageViewData struct {
-	HostName    string
-	PagePath    string
-	PageViews7d int64
+	HostName      string
+	PagePath      string
+	PageViews7d   int64
+	PageViews28d  int64
+	PageViews180d int64
 }
 
 // ga4RunReportRequest is the request structure for the GA4 runReport API
@@ -165,13 +167,17 @@ func (c *GA4Client) RefreshAccessToken(ctx context.Context, refreshToken string)
 }
 
 // FetchTopPages fetches top N pages ordered by screenPageViews descending
-// Returns page data for the 7-day lookback period only (Step 4 implementation)
+// Returns page data for 7-day, 28-day, and 180-day lookback periods
 func (c *GA4Client) FetchTopPages(ctx context.Context, propertyID string, limit, offset int) ([]PageViewData, error) {
 	start := time.Now()
 
+	// GA4 supports multiple date ranges in a single request
+	// Metric values are returned in the same order as date ranges
 	req := ga4RunReportRequest{
 		DateRanges: []dateRange{
 			{StartDate: "7daysAgo", EndDate: "today"},
+			{StartDate: "28daysAgo", EndDate: "today"},
+			{StartDate: "180daysAgo", EndDate: "today"},
 		},
 		Dimensions: []dimension{
 			{Name: "hostName"},
@@ -232,26 +238,50 @@ func (c *GA4Client) FetchTopPages(ctx context.Context, propertyID string, limit,
 	}
 
 	// Parse response into PageViewData structs
+	// Each row contains metric values for each date range in order: 7d, 28d, 180d
 	pages := make([]PageViewData, 0, len(reportResp.Rows))
 	for _, row := range reportResp.Rows {
-		if len(row.DimensionValues) < 2 || len(row.MetricValues) < 1 {
-			log.Warn().Msg("Skipping malformed GA4 row with insufficient dimensions or metrics")
+		if len(row.DimensionValues) < 2 || len(row.MetricValues) < 3 {
+			log.Warn().
+				Int("dimensions", len(row.DimensionValues)).
+				Int("metrics", len(row.MetricValues)).
+				Msg("Skipping malformed GA4 row with insufficient dimensions or metrics")
 			continue
 		}
 
-		pageViews, err := strconv.ParseInt(row.MetricValues[0].Value, 10, 64)
+		pageViews7d, err := strconv.ParseInt(row.MetricValues[0].Value, 10, 64)
 		if err != nil {
 			log.Warn().
 				Str("value", row.MetricValues[0].Value).
 				Err(err).
-				Msg("Failed to parse page views as integer")
-			continue
+				Msg("Failed to parse 7d page views as integer")
+			pageViews7d = 0
+		}
+
+		pageViews28d, err := strconv.ParseInt(row.MetricValues[1].Value, 10, 64)
+		if err != nil {
+			log.Warn().
+				Str("value", row.MetricValues[1].Value).
+				Err(err).
+				Msg("Failed to parse 28d page views as integer")
+			pageViews28d = 0
+		}
+
+		pageViews180d, err := strconv.ParseInt(row.MetricValues[2].Value, 10, 64)
+		if err != nil {
+			log.Warn().
+				Str("value", row.MetricValues[2].Value).
+				Err(err).
+				Msg("Failed to parse 180d page views as integer")
+			pageViews180d = 0
 		}
 
 		pages = append(pages, PageViewData{
-			HostName:    row.DimensionValues[0].Value,
-			PagePath:    row.DimensionValues[1].Value,
-			PageViews7d: pageViews,
+			HostName:      row.DimensionValues[0].Value,
+			PagePath:      row.DimensionValues[1].Value,
+			PageViews7d:   pageViews7d,
+			PageViews28d:  pageViews28d,
+			PageViews180d: pageViews180d,
 		})
 	}
 
@@ -448,7 +478,9 @@ func (pf *ProgressiveFetcher) FetchAndUpdatePages(ctx context.Context, organisat
 func (pf *ProgressiveFetcher) upsertPageData(ctx context.Context, organisationID string, domainID int, connectionID string, pages []PageViewData) error {
 	for _, page := range pages {
 		pageViews := map[string]int64{
-			"7d": page.PageViews7d,
+			"7d":   page.PageViews7d,
+			"28d":  page.PageViews28d,
+			"180d": page.PageViews180d,
 		}
 
 		_, err := pf.db.UpsertPageWithAnalytics(ctx, organisationID, domainID, page.PagePath, pageViews, connectionID)
