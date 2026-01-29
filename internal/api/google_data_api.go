@@ -173,6 +173,7 @@ func (c *GA4Client) FetchTopPages(ctx context.Context, propertyID string, limit,
 	}
 
 	// Build lookup map for merging additional date ranges
+	// Key by hostname:path to avoid collisions when GA4 property tracks multiple hostnames
 	pageMap := make(map[string]*PageViewData)
 	pages := make([]PageViewData, 0, len(pages7d))
 
@@ -183,7 +184,8 @@ func (c *GA4Client) FetchTopPages(ctx context.Context, propertyID string, limit,
 			PageViews7d: p.PageViews,
 		}
 		pages = append(pages, page)
-		pageMap[p.PagePath] = &pages[len(pages)-1]
+		mapKey := p.HostName + ":" + p.PagePath
+		pageMap[mapKey] = &pages[len(pages)-1]
 	}
 
 	// Fetch 28-day data and merge
@@ -192,7 +194,8 @@ func (c *GA4Client) FetchTopPages(ctx context.Context, propertyID string, limit,
 		log.Warn().Err(err).Msg("Failed to fetch 28d data, continuing with 7d only")
 	} else {
 		for _, p := range pages28d {
-			if existing, ok := pageMap[p.PagePath]; ok {
+			mapKey := p.HostName + ":" + p.PagePath
+			if existing, ok := pageMap[mapKey]; ok {
 				existing.PageViews28d = p.PageViews
 			}
 		}
@@ -204,7 +207,8 @@ func (c *GA4Client) FetchTopPages(ctx context.Context, propertyID string, limit,
 		log.Warn().Err(err).Msg("Failed to fetch 180d data, continuing without it")
 	} else {
 		for _, p := range pages180d {
-			if existing, ok := pageMap[p.PagePath]; ok {
+			mapKey := p.HostName + ":" + p.PagePath
+			if existing, ok := pageMap[mapKey]; ok {
 				existing.PageViews180d = p.PageViews
 			}
 		}
@@ -320,7 +324,7 @@ func (c *GA4Client) FetchTopPagesWithRetry(ctx context.Context, propertyID, refr
 	if err != nil {
 		// Check if error is 401 Unauthorised (token expired)
 		if isUnauthorisedError(err) {
-			log.Info().Msg("Access token expired, refreshing and retrying")
+			log.Info().Str("property_id", propertyID).Msg("Access token expired, refreshing and retrying")
 
 			// Refresh access token
 			newAccessToken, refreshErr := c.RefreshAccessToken(ctx, refreshToken)
@@ -520,7 +524,7 @@ func (pf *ProgressiveFetcher) upsertPageData(ctx context.Context, organisationID
 }
 
 // fetchRemainingPagesBackground fetches all remaining pages after the initial batch
-// Uses medium batches (1000) until threshold, then large batches (10000) until done
+// Uses medium batches (1000) until 10k threshold, then large batches (50000) until done
 func (pf *ProgressiveFetcher) fetchRemainingPagesBackground(ctx context.Context, organisationID, propertyID string, domainID int, connectionID string, client *GA4Client, refreshToken string) {
 	start := time.Now()
 	offset := GA4InitialBatchSize
