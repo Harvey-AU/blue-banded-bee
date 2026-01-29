@@ -19,17 +19,18 @@ import (
 
 // GA4 API limits and constraints
 const (
-	// GA4Phase1Limit is the number of top pages fetched immediately (blocking)
-	// These pages are available before job processing starts
-	GA4Phase1Limit = 100
+	// GA4InitialBatchSize is the first batch of pages fetched
+	GA4InitialBatchSize = 100
 
-	// GA4Phase2Limit is the number of pages fetched in the second phase (background)
-	// Fetches pages ranked 101-1000 by page views
-	GA4Phase2Limit = 900
+	// GA4MediumBatchSize is used for subsequent fetches after the initial batch
+	GA4MediumBatchSize = 1000
 
-	// GA4Phase3Limit is the number of pages fetched in the third phase (background)
-	// Fetches pages ranked 1001-2000 by page views
-	GA4Phase3Limit = 1000
+	// GA4LargeBatchSize is the maximum batch size for bulk fetching
+	// GA4 API supports up to 250,000 rows per request
+	GA4LargeBatchSize = 10000
+
+	// GA4MediumBatchThreshold is the offset at which we switch from medium to large batches
+	GA4MediumBatchThreshold = 1000
 
 	// Date range lookback periods for analytics queries
 	GA4Lookback7Days   = 7
@@ -427,53 +428,50 @@ func (pf *ProgressiveFetcher) FetchAndUpdatePages(ctx context.Context, organisat
 	client.accessToken = accessToken
 	client.mu.Unlock()
 
-	// 4. PHASE 1: Fetch top 100 pages (BLOCKING)
+	// 4. Fetch initial batch of top pages
 	log.Info().
 		Str("organisation_id", organisationID).
 		Str("property_id", conn.GA4PropertyID).
-		Int("phase", 1).
-		Msg("Fetching top 100 pages from GA4")
+		Int("batch_size", GA4InitialBatchSize).
+		Msg("Fetching initial batch of pages from GA4")
 
-	phase1Data, err := client.FetchTopPagesWithRetry(ctx, conn.GA4PropertyID, refreshToken, GA4Phase1Limit, 0)
+	initialData, err := client.FetchTopPagesWithRetry(ctx, conn.GA4PropertyID, refreshToken, GA4InitialBatchSize, 0)
 	if err != nil {
 		log.Error().
 			Err(err).
 			Str("property_id", conn.GA4PropertyID).
-			Int("phase", 1).
-			Msg("Failed to fetch GA4 data for phase 1")
-		return fmt.Errorf("failed to fetch phase 1 data: %w", err)
+			Msg("Failed to fetch initial GA4 data")
+		return fmt.Errorf("failed to fetch initial data: %w", err)
 	}
 
-	// 5. Upsert phase 1 data immediately
-	if err := pf.upsertPageData(ctx, organisationID, domainID, conn.ID, phase1Data); err != nil {
+	// 5. Upsert initial data
+	if err := pf.upsertPageData(ctx, organisationID, domainID, conn.ID, initialData); err != nil {
 		log.Error().
 			Err(err).
 			Int("domain_id", domainID).
-			Int("pages_count", len(phase1Data)).
-			Msg("Failed to upsert phase 1 page data")
-		return fmt.Errorf("failed to upsert phase 1 data: %w", err)
+			Int("pages_count", len(initialData)).
+			Msg("Failed to upsert initial page data")
+		return fmt.Errorf("failed to upsert initial data: %w", err)
 	}
 
 	// Log sample of top pages for verification
-	for i := range min(5, len(phase1Data)) {
+	for i := range min(5, len(initialData)) {
 		log.Info().
-			Str("path", phase1Data[i].PagePath).
-			Int64("page_views_7d", phase1Data[i].PageViews7d).
-			Str("hostname", phase1Data[i].HostName).
+			Str("path", initialData[i].PagePath).
+			Int64("page_views_7d", initialData[i].PageViews7d).
+			Str("hostname", initialData[i].HostName).
 			Msgf("GA4 top page #%d", i+1)
 	}
 
 	log.Info().
 		Str("organisation_id", organisationID).
-		Int("pages_count", len(phase1Data)).
+		Int("pages_count", len(initialData)).
 		Dur("duration", time.Since(start)).
-		Msg("Phase 1 GA4 fetch completed")
+		Msg("Initial GA4 fetch completed")
 
-	// 6. PHASE 2 & 3: Fetch remaining pages in background goroutines
-	// Use context.Background() so they complete even during shutdown
-	// (analytics data is best-effort and shouldn't block graceful shutdown)
-	go pf.fetchPhase2Background(context.Background(), organisationID, conn.GA4PropertyID, domainID, conn.ID, client, refreshToken)
-	go pf.fetchPhase3Background(context.Background(), organisationID, conn.GA4PropertyID, domainID, conn.ID, client, refreshToken)
+	// 6. Fetch remaining pages in background (loops until all fetched)
+	// Use context.Background() so it completes even during shutdown
+	go pf.fetchRemainingPagesBackground(context.Background(), organisationID, conn.GA4PropertyID, domainID, conn.ID, client, refreshToken)
 
 	// 7. Update last sync timestamp
 	if err := pf.db.UpdateConnectionLastSync(ctx, conn.ID); err != nil {
@@ -511,75 +509,115 @@ func (pf *ProgressiveFetcher) upsertPageData(ctx context.Context, organisationID
 	return nil
 }
 
-// fetchPhase2Background fetches pages 101-1000 in a background goroutine
-func (pf *ProgressiveFetcher) fetchPhase2Background(ctx context.Context, organisationID, propertyID string, domainID int, connectionID string, client *GA4Client, refreshToken string) {
+// fetchRemainingPagesBackground fetches all remaining pages after the initial batch
+// Uses medium batches (1000) until threshold, then large batches (10000) until done
+func (pf *ProgressiveFetcher) fetchRemainingPagesBackground(ctx context.Context, organisationID, propertyID string, domainID int, connectionID string, client *GA4Client, refreshToken string) {
 	start := time.Now()
+	offset := GA4InitialBatchSize
+	totalPages := 0
 
 	log.Info().
 		Str("property_id", propertyID).
-		Int("phase", 2).
-		Msg("Starting phase 2 background fetch")
+		Int("offset", offset).
+		Msg("Starting background fetch of remaining pages")
 
-	pages, err := client.FetchTopPagesWithRetry(ctx, propertyID, refreshToken, GA4Phase2Limit, GA4Phase1Limit)
-	if err != nil {
-		log.Error().
-			Err(err).
+	// Phase 2: Medium batches (1000) until threshold
+	for offset < GA4MediumBatchThreshold {
+		batchSize := min(GA4MediumBatchSize, GA4MediumBatchThreshold-offset)
+
+		pages, err := client.FetchTopPagesWithRetry(ctx, propertyID, refreshToken, batchSize, offset)
+		if err != nil {
+			log.Error().
+				Err(err).
+				Str("property_id", propertyID).
+				Int("offset", offset).
+				Msg("Failed to fetch GA4 data batch")
+			return
+		}
+
+		if len(pages) == 0 {
+			log.Info().
+				Str("property_id", propertyID).
+				Int("total_pages", totalPages).
+				Dur("duration", time.Since(start)).
+				Msg("Background GA4 fetch completed (no more pages)")
+			return
+		}
+
+		if err := pf.upsertPageData(ctx, organisationID, domainID, connectionID, pages); err != nil {
+			log.Error().
+				Err(err).
+				Int("domain_id", domainID).
+				Int("pages_count", len(pages)).
+				Msg("Failed to upsert page data batch")
+			return
+		}
+
+		totalPages += len(pages)
+		offset += len(pages)
+
+		log.Info().
 			Str("property_id", propertyID).
-			Int("phase", 2).
-			Msg("Failed to fetch GA4 data for phase 2")
-		return
+			Int("batch_pages", len(pages)).
+			Int("total_pages", totalPages).
+			Int("offset", offset).
+			Msg("Fetched medium batch")
+
+		// If we got fewer than requested, we've fetched all pages
+		if len(pages) < batchSize {
+			log.Info().
+				Str("property_id", propertyID).
+				Int("total_pages", totalPages).
+				Dur("duration", time.Since(start)).
+				Msg("Background GA4 fetch completed (all pages fetched)")
+			return
+		}
 	}
 
-	if err := pf.upsertPageData(ctx, organisationID, domainID, connectionID, pages); err != nil {
-		log.Error().
-			Err(err).
-			Int("domain_id", domainID).
-			Int("pages_count", len(pages)).
-			Msg("Failed to upsert phase 2 page data")
-		return
-	}
+	// Phase 3: Large batches (10000) until all pages fetched
+	for {
+		pages, err := client.FetchTopPagesWithRetry(ctx, propertyID, refreshToken, GA4LargeBatchSize, offset)
+		if err != nil {
+			log.Error().
+				Err(err).
+				Str("property_id", propertyID).
+				Int("offset", offset).
+				Msg("Failed to fetch GA4 data batch")
+			return
+		}
 
-	log.Info().
-		Str("property_id", propertyID).
-		Int("phase", 2).
-		Int("pages_count", len(pages)).
-		Dur("duration", time.Since(start)).
-		Msg("Phase 2 GA4 fetch completed")
-}
+		if len(pages) == 0 {
+			break
+		}
 
-// fetchPhase3Background fetches pages 1001-2000 in a background goroutine
-func (pf *ProgressiveFetcher) fetchPhase3Background(ctx context.Context, organisationID, propertyID string, domainID int, connectionID string, client *GA4Client, refreshToken string) {
-	start := time.Now()
+		if err := pf.upsertPageData(ctx, organisationID, domainID, connectionID, pages); err != nil {
+			log.Error().
+				Err(err).
+				Int("domain_id", domainID).
+				Int("pages_count", len(pages)).
+				Msg("Failed to upsert page data batch")
+			return
+		}
 
-	log.Info().
-		Str("property_id", propertyID).
-		Int("phase", 3).
-		Msg("Starting phase 3 background fetch")
+		totalPages += len(pages)
+		offset += len(pages)
 
-	offset := GA4Phase1Limit + GA4Phase2Limit
-	pages, err := client.FetchTopPagesWithRetry(ctx, propertyID, refreshToken, GA4Phase3Limit, offset)
-	if err != nil {
-		log.Error().
-			Err(err).
+		log.Info().
 			Str("property_id", propertyID).
-			Int("phase", 3).
-			Msg("Failed to fetch GA4 data for phase 3")
-		return
-	}
+			Int("batch_pages", len(pages)).
+			Int("total_pages", totalPages).
+			Int("offset", offset).
+			Msg("Fetched large batch")
 
-	if err := pf.upsertPageData(ctx, organisationID, domainID, connectionID, pages); err != nil {
-		log.Error().
-			Err(err).
-			Int("domain_id", domainID).
-			Int("pages_count", len(pages)).
-			Msg("Failed to upsert phase 3 page data")
-		return
+		// If we got fewer than requested, we've fetched all pages
+		if len(pages) < GA4LargeBatchSize {
+			break
+		}
 	}
 
 	log.Info().
 		Str("property_id", propertyID).
-		Int("phase", 3).
-		Int("pages_count", len(pages)).
+		Int("total_pages", totalPages).
 		Dur("duration", time.Since(start)).
-		Msg("Phase 3 GA4 fetch completed")
+		Msg("Background GA4 fetch completed")
 }

@@ -33,8 +33,8 @@ On merge, CI will:
 
 - **GA4 Analytics Integration**: Full Google Analytics 4 Data API integration
   for page view analytics
-  - Progressive 3-phase fetching: Phase 1 (100 pages, blocking), Phases 2-3
-    (900+1000 pages, background)
+  - Progressive fetching: initial 100 pages, then background loops of 1000-page
+    batches, then 10000-page batches until all pages fetched
   - OAuth token refresh with RFC 6749 compliant form-urlencoded requests
   - Thread-safe token management with automatic refresh on 401 responses
   - Triggered automatically when job created with `findLinks: true`
