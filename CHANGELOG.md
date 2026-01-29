@@ -27,7 +27,40 @@ On merge, CI will:
 4. Create a git tag and GitHub release
 5. Commit the updated changelog
 
-## [Unreleased]
+## [Unreleased:minor]
+
+### Added
+
+- **GA4 Analytics Integration**: Full Google Analytics 4 Data API integration
+  for page view analytics
+  - Progressive 3-phase fetching: Phase 1 (100 pages, blocking), Phases 2-3
+    (900+1000 pages, background)
+  - OAuth token refresh with RFC 6749 compliant form-urlencoded requests
+  - Thread-safe token management with automatic refresh on 401 responses
+  - Triggered automatically when job created with `findLinks: true`
+- **Org-Scoped Page Analytics Storage**: GA4 data persisted per organisation
+  - New `page_analytics` table stores 7-day, 28-day, and 180-day page view
+    counts
+  - Data tied to organisation that fetched it, preventing cross-org data leakage
+  - RLS policies enforce organisation membership for all CRUD operations
+- **GA4 Domain Mapping**: Connect GA4 properties to specific domains
+  - Domain tags UI on GA4 connections in integrations modal
+  - Inline search input for domain selection with Enter key support
+  - PATCH endpoint (`/v1/integrations/google/analytics/{id}/domains`) to update
+    mappings
+  - `domain_ids` array column on `google_analytics_connections` table
+- **Job Response Enhancement**: Job creation response now includes `domain_id`
+
+### Changed
+
+- **Go Version**: Updated to Go 1.25.6 for security fixes
+
+### Fixed
+
+- **Domain Creation Race**: Fixed TOCTOU race with atomic
+  `INSERT ... ON CONFLICT` pattern in `GetOrCreateDomainID`
+- **Console Noise**: Removed verbose debug logging from GA4 integration and page
+  load
 
 ## [0.24.3] – 2026-01-27
 
