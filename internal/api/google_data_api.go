@@ -27,7 +27,7 @@ const (
 
 	// GA4LargeBatchSize is the maximum batch size for bulk fetching
 	// GA4 API supports up to 250,000 rows per request
-	GA4LargeBatchSize = 100000
+	GA4LargeBatchSize = 50000
 
 	// GA4MediumBatchThreshold is the offset at which we switch from medium to large batches
 	GA4MediumBatchThreshold = 10000
