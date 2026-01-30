@@ -389,16 +389,88 @@ async function disconnectGoogle(connectionId) {
   }
 }
 
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function getSessionWithTimeout(timeoutMs) {
+  return Promise.race([
+    window.supabase.auth.getSession(),
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("Session timeout")), timeoutMs)
+    ),
+  ]);
+}
+
+async function getGoogleAuthToken() {
+  if (!window.supabase?.auth) {
+    return {
+      token: "",
+      message: "Auth not ready. Please refresh the page.",
+      retryable: true,
+    };
+  }
+
+  const attempts = 4;
+  const baseDelayMs = 300;
+  const timeoutMs = 800;
+  let lastError;
+
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      const sessionResult = await getSessionWithTimeout(timeoutMs);
+      const token = sessionResult?.data?.session?.access_token;
+      if (token) {
+        return { token };
+      }
+    } catch (error) {
+      lastError = error;
+    }
+
+    try {
+      const userResult = await window.supabase.auth.getUser();
+      const user = userResult?.data?.user;
+      if (user) {
+        return {
+          token: "",
+          message: "Session still initialising. Please try again.",
+          retryable: true,
+        };
+      }
+    } catch (error) {
+      lastError = error;
+    }
+
+    await wait(baseDelayMs * (attempt + 1));
+  }
+
+  return {
+    token: "",
+    message: "Not authenticated. Please refresh and sign in.",
+    retryable: true,
+    error: lastError,
+  };
+}
+
 /**
  * Select a Google Analytics account and fetch its properties
  * @param {string} accountId - The GA account ID
  */
 async function selectGoogleAccount(accountId) {
   try {
-    const session = await window.supabase.auth.getSession();
-    const token = session?.data?.session?.access_token;
+    const authResult = await getGoogleAuthToken();
+    const token = authResult.token;
     if (!token) {
-      showGoogleError("Not authenticated. Please sign in.");
+      const accountList = document.getElementById("googleAccountList");
+      if (accountList) {
+        accountList.innerHTML =
+          '<div style="text-align: center; padding: 20px; color: #dc2626;">' +
+          (authResult.message || "Not authenticated. Please sign in.") +
+          "</div>";
+      }
+      showGoogleError(
+        authResult.message || "Not authenticated. Please sign in."
+      );
       return;
     }
 
@@ -1396,13 +1468,54 @@ async function loadPropertiesForAccount(account) {
   loadingDiv.textContent = "Loading properties...";
   propertiesContainer.appendChild(loadingDiv);
 
+  const renderPropertiesError = (message, options = {}) => {
+    while (propertiesContainer.firstChild) {
+      propertiesContainer.removeChild(propertiesContainer.firstChild);
+    }
+
+    const errorDiv = document.createElement("div");
+    errorDiv.style.cssText =
+      "color: #dc2626; font-size: 14px; padding: 12px 0;";
+    errorDiv.textContent = message;
+    propertiesContainer.appendChild(errorDiv);
+
+    const actions = document.createElement("div");
+    actions.style.cssText = "display: flex; gap: 8px; margin-top: 8px;";
+
+    if (options.retryable) {
+      const retryBtn = document.createElement("button");
+      retryBtn.type = "button";
+      retryBtn.textContent = "Retry";
+      retryBtn.style.cssText =
+        "background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 6px; padding: 6px 10px; cursor: pointer;";
+      retryBtn.onclick = () => loadPropertiesForAccount(account);
+      actions.appendChild(retryBtn);
+    }
+
+    if (options.reconnect) {
+      const reconnectBtn = document.createElement("button");
+      reconnectBtn.type = "button";
+      reconnectBtn.textContent = "Reconnect Google Analytics";
+      reconnectBtn.style.cssText =
+        "background: #2563eb; border: 1px solid #1d4ed8; border-radius: 6px; padding: 6px 10px; color: white; cursor: pointer;";
+      reconnectBtn.onclick = () => connectGoogle();
+      actions.appendChild(reconnectBtn);
+    }
+
+    if (actions.childNodes.length > 0) {
+      propertiesContainer.appendChild(actions);
+    }
+  };
+
   try {
-    const session = await window.supabase.auth.getSession();
-    const token = session?.data?.session?.access_token;
+    const authResult = await getGoogleAuthToken();
+    const token = authResult.token;
 
     if (!token) {
-      loadingDiv.style.color = "#dc2626";
-      loadingDiv.textContent = "Not authenticated";
+      renderPropertiesError(
+        authResult.message || "Not authenticated. Please sign in.",
+        { retryable: authResult.retryable }
+      );
       return;
     }
 
@@ -1424,8 +1537,10 @@ async function loadPropertiesForAccount(account) {
 
     // Check if re-auth is needed
     if (result.data?.needs_reauth) {
-      loadingDiv.textContent =
-        result.data.message || "Please reconnect to Google Analytics.";
+      renderPropertiesError(
+        result.data.message || "Please reconnect to Google Analytics.",
+        { reconnect: true }
+      );
       return;
     }
 
@@ -1434,8 +1549,9 @@ async function loadPropertiesForAccount(account) {
     renderAccountProperties(properties);
   } catch (error) {
     console.error("[GA Debug] Failed to load properties:", error);
-    loadingDiv.style.color = "#dc2626";
-    loadingDiv.textContent = "Failed to load properties. Try refreshing.";
+    renderPropertiesError("Failed to load properties. Please try again.", {
+      retryable: true,
+    });
   }
 }
 
