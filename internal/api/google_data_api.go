@@ -366,6 +366,7 @@ type DBInterfaceGA4 interface {
 	MarkConnectionInactive(ctx context.Context, connectionID, reason string) error
 	UpsertPageWithAnalytics(ctx context.Context, organisationID string, domainID int, path string, pageViews map[string]int64, connectionID string) (int, error)
 	CalculateTrafficScores(ctx context.Context, organisationID string, domainID int) error
+	ApplyTrafficScoresToTasks(ctx context.Context, organisationID string, domainID int) error
 }
 
 // ProgressiveFetcher orchestrates GA4 data fetching in multiple phases
@@ -481,6 +482,13 @@ func (pf *ProgressiveFetcher) FetchAndUpdatePages(ctx context.Context, organisat
 			Str("organisation_id", organisationID).
 			Int("domain_id", domainID).
 			Msg("Failed to calculate initial traffic scores")
+	}
+	if err := pf.db.ApplyTrafficScoresToTasks(ctx, organisationID, domainID); err != nil {
+		log.Warn().
+			Err(err).
+			Str("organisation_id", organisationID).
+			Int("domain_id", domainID).
+			Msg("Failed to apply traffic scores to pending tasks")
 	}
 
 	// 7. Fetch remaining pages in background (loops until all fetched)
@@ -642,5 +650,12 @@ func (pf *ProgressiveFetcher) fetchRemainingPagesBackground(ctx context.Context,
 			Str("organisation_id", organisationID).
 			Int("domain_id", domainID).
 			Msg("Failed to calculate traffic scores after GA4 fetch")
+	}
+	if err := pf.db.ApplyTrafficScoresToTasks(ctx, organisationID, domainID); err != nil {
+		log.Warn().
+			Err(err).
+			Str("organisation_id", organisationID).
+			Int("domain_id", domainID).
+			Msg("Failed to apply traffic scores to pending tasks after GA4 fetch")
 	}
 }

@@ -783,11 +783,11 @@ func (db *DB) UpsertPageWithAnalytics(
 }
 
 // CalculateTrafficScores calculates and stores traffic scores for all pages in a domain
-// based on page view percentiles. Uses 28-day page views as the primary signal.
-// Scores: 0.95 (top 5%), 0.90 (top 10%), 0.75 (top 25%), 0.50 (top 50%), 0 (bottom 50%)
+// based on page-view rank percentiles. Uses 28-day page views as the primary signal.
+// Scores: 0.99 (top 1%), 0.97 (top 2.5%), 0.95 (top 5%), 0.90 (top 10%),
+// 0.80 (top 25%), 0.60 (top 50%), 0 (bottom 50%)
 func (db *DB) CalculateTrafficScores(ctx context.Context, organisationID string, domainID int) error {
-	// Calculate percentile thresholds and update scores in a single query
-	// Using PERCENT_RANK() to determine each page's position in the distribution
+	// Calculate percentile thresholds and update scores in a single query.
 	query := `
 		WITH percentiles AS (
 			SELECT
@@ -799,10 +799,12 @@ func (db *DB) CalculateTrafficScores(ctx context.Context, organisationID string,
 		)
 		UPDATE page_analytics pa
 		SET traffic_score = CASE
+			WHEN p.pct_rank <= 0.01 THEN 0.99  -- Top 1%
+			WHEN p.pct_rank <= 0.025 THEN 0.97 -- Top 2.5%
 			WHEN p.pct_rank <= 0.05 THEN 0.95  -- Top 5%
 			WHEN p.pct_rank <= 0.10 THEN 0.90  -- Top 10%
-			WHEN p.pct_rank <= 0.25 THEN 0.75  -- Top 25%
-			WHEN p.pct_rank <= 0.50 THEN 0.50  -- Top 50%
+			WHEN p.pct_rank <= 0.25 THEN 0.80  -- Top 25%
+			WHEN p.pct_rank <= 0.50 THEN 0.60  -- Top 50%
 			ELSE 0                              -- Bottom 50%
 		END,
 		updated_at = NOW()
@@ -821,6 +823,39 @@ func (db *DB) CalculateTrafficScores(ctx context.Context, organisationID string,
 		Int("domain_id", domainID).
 		Int64("pages_updated", rowsAffected).
 		Msg("Calculated traffic scores for domain")
+
+	return nil
+}
+
+// ApplyTrafficScoresToTasks updates pending tasks using traffic scores for a domain.
+// This ensures existing tasks are reprioritised once analytics are available.
+func (db *DB) ApplyTrafficScoresToTasks(ctx context.Context, organisationID string, domainID int) error {
+	query := `
+		UPDATE tasks t
+		SET priority_score = GREATEST(t.priority_score, COALESCE(pa.traffic_score, 0))
+		FROM pages p
+		JOIN jobs j ON t.job_id = j.id
+		LEFT JOIN page_analytics pa ON pa.organisation_id = j.organisation_id
+			AND pa.domain_id = p.domain_id
+			AND pa.path = p.path
+		WHERE j.organisation_id = $1
+		AND p.domain_id = $2
+		AND t.page_id = p.id
+		AND t.status IN ('pending', 'waiting')
+		AND COALESCE(pa.traffic_score, 0) > t.priority_score
+	`
+
+	result, err := db.client.ExecContext(ctx, query, organisationID, domainID)
+	if err != nil {
+		return fmt.Errorf("failed to apply traffic scores to tasks: %w", err)
+	}
+
+	rowsAffected, _ := result.RowsAffected()
+	log.Info().
+		Str("organisation_id", organisationID).
+		Int("domain_id", domainID).
+		Int64("tasks_updated", rowsAffected).
+		Msg("Applied traffic scores to pending tasks")
 
 	return nil
 }
