@@ -277,7 +277,6 @@ func (h *Handler) HandleGoogleOAuthCallback(w http.ResponseWriter, r *http.Reque
 
 	// SYNC: Store accounts to DB for persistent display
 	now := time.Now().UTC()
-	var firstAccountID string
 	for _, acc := range accounts {
 		dbAccount := &db.GoogleAnalyticsAccount{
 			ID:                uuid.New().String(),
@@ -296,16 +295,14 @@ func (h *Handler) HandleGoogleOAuthCallback(w http.ResponseWriter, r *http.Reque
 		if err := h.DB.UpsertGA4Account(r.Context(), dbAccount); err != nil {
 			logger.Warn().Err(err).Str("account_id", acc.AccountID).Msg("Failed to upsert GA4 account to DB")
 			// Continue anyway - the pending session flow will still work
-		} else if firstAccountID == "" {
-			firstAccountID = dbAccount.ID
+			continue
 		}
-	}
 
-	// Store token against the first account for future refresh operations
-	if firstAccountID != "" && tokenResp.RefreshToken != "" {
-		if err := h.DB.StoreGA4AccountToken(r.Context(), firstAccountID, tokenResp.RefreshToken); err != nil {
-			logger.Warn().Err(err).Str("account_id", firstAccountID).Msg("Failed to store GA4 account token")
-			// Non-fatal - user can still complete the flow
+		// Store token against each account for future refresh operations
+		if tokenResp.RefreshToken != "" {
+			if err := h.DB.StoreGA4AccountToken(r.Context(), dbAccount.ID, tokenResp.RefreshToken); err != nil {
+				logger.Warn().Err(err).Str("account_id", acc.AccountID).Msg("Failed to store GA4 account token")
+			}
 		}
 	}
 
