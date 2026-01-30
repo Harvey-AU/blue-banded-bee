@@ -1446,6 +1446,10 @@ func (h *Handler) getGARefreshToken(ctx context.Context, organisationID string) 
 		if !errors.Is(tokenErr, db.ErrGoogleTokenNotFound) {
 			return nil, "", tokenErr
 		}
+		log.Warn().
+			Str("organisation_id", organisationID).
+			Str("account_id", accountWithToken.ID).
+			Msg("GA account token missing in vault, falling back to connection token")
 	} else if !errors.Is(err, db.ErrGoogleAccountNotFound) {
 		return nil, "", err
 	}
@@ -1463,6 +1467,10 @@ func (h *Handler) getGARefreshToken(ctx context.Context, organisationID string) 
 		if !errors.Is(tokenErr, db.ErrGoogleTokenNotFound) {
 			return nil, "", tokenErr
 		}
+		log.Warn().
+			Str("organisation_id", organisationID).
+			Str("connection_id", connectionWithToken.ID).
+			Msg("GA connection token missing in vault")
 	} else if !errors.Is(err, db.ErrGoogleConnectionNotFound) {
 		return nil, "", err
 	}

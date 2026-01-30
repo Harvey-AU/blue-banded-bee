@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/Harvey-AU/blue-banded-bee/internal/db"
+	"github.com/Harvey-AU/blue-banded-bee/internal/util"
 	"github.com/rs/zerolog/log"
 )
 
@@ -510,20 +511,21 @@ func (pf *ProgressiveFetcher) FetchAndUpdatePages(ctx context.Context, organisat
 // upsertPageData upserts page analytics data into the page_analytics table
 func (pf *ProgressiveFetcher) upsertPageData(ctx context.Context, organisationID string, domainID int, connectionID string, pages []PageViewData) error {
 	for _, page := range pages {
+		path := util.ExtractPathFromURL(page.PagePath)
 		pageViews := map[string]int64{
 			"7d":   page.PageViews7d,
 			"28d":  page.PageViews28d,
 			"180d": page.PageViews180d,
 		}
 
-		_, err := pf.db.UpsertPageWithAnalytics(ctx, organisationID, domainID, page.PagePath, pageViews, connectionID)
+		_, err := pf.db.UpsertPageWithAnalytics(ctx, organisationID, domainID, path, pageViews, connectionID)
 		if err != nil {
 			// Log error but continue with other pages
 			log.Error().
 				Err(err).
 				Str("organisation_id", organisationID).
 				Int("domain_id", domainID).
-				Str("path", page.PagePath).
+				Str("path", path).
 				Msg("Failed to upsert page with analytics")
 		}
 	}

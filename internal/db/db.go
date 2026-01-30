@@ -851,11 +851,15 @@ func (db *DB) ApplyTrafficScoresToTasks(ctx context.Context, organisationID stri
 	}
 
 	rowsAffected, _ := result.RowsAffected()
-	log.Info().
+	logEvent := log.Debug().
 		Str("organisation_id", organisationID).
 		Int("domain_id", domainID).
-		Int64("tasks_updated", rowsAffected).
-		Msg("Applied traffic scores to pending tasks")
+		Int64("tasks_updated", rowsAffected)
+	if rowsAffected > 0 {
+		logEvent.Msg("Applied traffic scores to pending tasks")
+	} else {
+		logEvent.Msg("No pending tasks to reprioritise")
+	}
 
 	return nil
 }

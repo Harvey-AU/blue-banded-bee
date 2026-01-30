@@ -76,6 +76,10 @@ On merge, CI will:
   load
 - **GA Account Reuse**: Stored GA4 accounts now retry auth initialisation and
   fall back to connection tokens when account tokens are unavailable
+- **GA4 Path Normalisation**: Analytics upserts now normalise GA4 page paths so
+  traffic scores match task paths more reliably
+- **Task Reprioritisation Logs**: Reduced noise when no tasks are updated after
+  traffic scoring
 
 ## [0.24.3] – 2026-01-27
 
