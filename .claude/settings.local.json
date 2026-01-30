@@ -112,7 +112,9 @@
       "mcp__plugin_sentry_sentry__whoami",
       "mcp__plugin_sentry_sentry__find_organizations",
       "Bash(xargs:*)",
-      "Bash(coderabbit review:*)"
+      "Bash(coderabbit review:*)",
+      "Bash(go version:*)",
+      "Bash(go mod edit:*)"
     ],
     "deny": []
   },

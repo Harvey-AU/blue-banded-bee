@@ -296,6 +296,9 @@ func (h *Handler) SetupRoutes(mux *http.ServeMux) {
 	mux.Handle("/v1/organisations", auth.AuthMiddleware(http.HandlerFunc(h.OrganisationsHandler)))
 	mux.Handle("/v1/organisations/switch", auth.AuthMiddleware(http.HandlerFunc(h.SwitchOrganisationHandler)))
 
+	// Domain routes (require auth)
+	mux.Handle("/v1/domains", auth.AuthMiddleware(http.HandlerFunc(h.DomainsHandler)))
+
 	// Usage routes (require auth)
 	mux.Handle("/v1/usage", auth.AuthMiddleware(http.HandlerFunc(h.UsageHandler)))
 

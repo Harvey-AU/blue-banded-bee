@@ -2209,30 +2209,26 @@ async function showDomainSelectorForProperty(propertyId, currentDomainIds) {
         return;
       }
 
-      // Create domain via job creation endpoint (reusing existing logic)
-      const response = await fetch("/v1/jobs", {
+      // Use dedicated domain endpoint (no job side effects)
+      const response = await fetch("/v1/domains", {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          domain: domainName,
-          source_type: "sitemap", // Default values just to create domain
-          concurrency: 1,
-          max_pages: 10,
-        }),
+        body: JSON.stringify({ domain: domainName }),
       });
 
       if (!response.ok) {
-        throw new Error("Failed to create domain");
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Failed to create domain");
       }
 
       const result = await response.json();
       const newDomainId = result.data.domain_id;
 
       // Add to organisationDomains array
-      organisationDomains.push({ id: newDomainId, name: domainName });
+      organisationDomains.push({ id: newDomainId, name: result.data.domain });
 
       // Add to selection
       if (!selectedDomainIds.includes(newDomainId)) {
@@ -2241,7 +2237,9 @@ async function showDomainSelectorForProperty(propertyId, currentDomainIds) {
       }
     } catch (error) {
       console.error("Failed to create domain:", error);
-      showGoogleError("Failed to create domain. Please try again.");
+      showGoogleError(
+        error.message || "Failed to create domain. Please try again."
+      );
     }
   };
 
