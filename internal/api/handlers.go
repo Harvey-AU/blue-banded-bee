@@ -175,6 +175,7 @@ type DBClient interface {
 	StoreGA4AccountToken(ctx context.Context, accountID, refreshToken string) error
 	GetGA4AccountToken(ctx context.Context, accountID string) (string, error)
 	GetGA4AccountWithToken(ctx context.Context, organisationID string) (*db.GoogleAnalyticsAccount, error)
+	GetGAConnectionWithToken(ctx context.Context, organisationID string) (*db.GoogleAnalyticsConnection, error)
 	// Platform integration mappings
 	UpsertPlatformOrgMapping(ctx context.Context, mapping *db.PlatformOrgMapping) error
 	GetPlatformOrgMapping(ctx context.Context, platform, platformID string) (*db.PlatformOrgMapping, error)

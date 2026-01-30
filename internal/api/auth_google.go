@@ -1318,33 +1318,16 @@ func (h *Handler) RefreshGA4Accounts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Find an account with a stored token
-	accountWithToken, err := h.DB.GetGA4AccountWithToken(r.Context(), orgID)
+	accountWithToken, refreshToken, err := h.getGARefreshToken(r.Context(), orgID)
 	if err != nil {
-		if errors.Is(err, db.ErrGoogleAccountNotFound) {
-			// No account with token - user needs to re-authenticate
+		if errors.Is(err, db.ErrGoogleTokenNotFound) || errors.Is(err, db.ErrGoogleAccountNotFound) || errors.Is(err, db.ErrGoogleConnectionNotFound) {
 			WriteSuccess(w, r, map[string]any{
 				"needs_reauth": true,
 				"message":      "No valid Google token found. Please reconnect to Google Analytics.",
 			}, "")
 			return
 		}
-		logger.Error().Err(err).Msg("Failed to find GA4 account with token")
-		InternalError(w, r, err)
-		return
-	}
-
-	// Get the refresh token from vault
-	refreshToken, err := h.DB.GetGA4AccountToken(r.Context(), accountWithToken.ID)
-	if err != nil {
-		if errors.Is(err, db.ErrGoogleTokenNotFound) {
-			WriteSuccess(w, r, map[string]any{
-				"needs_reauth": true,
-				"message":      "Token expired or invalid. Please reconnect to Google Analytics.",
-			}, "")
-			return
-		}
-		logger.Error().Err(err).Msg("Failed to get GA4 account token")
+		logger.Error().Err(err).Msg("Failed to resolve GA refresh token")
 		InternalError(w, r, err)
 		return
 	}
@@ -1451,6 +1434,42 @@ func (h *Handler) refreshGoogleAccessToken(refreshToken string) (string, error) 
 	return tokenResp.AccessToken, nil
 }
 
+// getGARefreshToken resolves a usable refresh token for the organisation.
+// It prefers account-level tokens, then falls back to any connection-level token.
+func (h *Handler) getGARefreshToken(ctx context.Context, organisationID string) (*db.GoogleAnalyticsAccount, string, error) {
+	accountWithToken, err := h.DB.GetGA4AccountWithToken(ctx, organisationID)
+	if err == nil {
+		refreshToken, tokenErr := h.DB.GetGA4AccountToken(ctx, accountWithToken.ID)
+		if tokenErr == nil {
+			return accountWithToken, refreshToken, nil
+		}
+		if !errors.Is(tokenErr, db.ErrGoogleTokenNotFound) {
+			return nil, "", tokenErr
+		}
+	} else if !errors.Is(err, db.ErrGoogleAccountNotFound) {
+		return nil, "", err
+	}
+
+	connectionWithToken, err := h.DB.GetGAConnectionWithToken(ctx, organisationID)
+	if err == nil {
+		refreshToken, tokenErr := h.DB.GetGoogleToken(ctx, connectionWithToken.ID)
+		if tokenErr == nil {
+			account := &db.GoogleAnalyticsAccount{
+				GoogleUserID: connectionWithToken.GoogleUserID,
+				GoogleEmail:  connectionWithToken.GoogleEmail,
+			}
+			return account, refreshToken, nil
+		}
+		if !errors.Is(tokenErr, db.ErrGoogleTokenNotFound) {
+			return nil, "", tokenErr
+		}
+	} else if !errors.Is(err, db.ErrGoogleConnectionNotFound) {
+		return nil, "", err
+	}
+
+	return nil, "", db.ErrGoogleTokenNotFound
+}
+
 // GetAccountProperties fetches properties for a Google account using stored refresh token
 // GET /v1/integrations/google/accounts/{googleAccountId}/properties
 func (h *Handler) GetAccountProperties(w http.ResponseWriter, r *http.Request, googleAccountID string) {
@@ -1480,32 +1499,16 @@ func (h *Handler) GetAccountProperties(w http.ResponseWriter, r *http.Request, g
 		return
 	}
 
-	// Find an account with a stored token
-	accountWithToken, err := h.DB.GetGA4AccountWithToken(r.Context(), orgID)
+	_, refreshToken, err := h.getGARefreshToken(r.Context(), orgID)
 	if err != nil {
-		if errors.Is(err, db.ErrGoogleAccountNotFound) {
+		if errors.Is(err, db.ErrGoogleTokenNotFound) || errors.Is(err, db.ErrGoogleAccountNotFound) || errors.Is(err, db.ErrGoogleConnectionNotFound) {
 			WriteSuccess(w, r, map[string]any{
 				"needs_reauth": true,
 				"message":      "No valid Google token found. Please reconnect to Google Analytics.",
 			}, "")
 			return
 		}
-		logger.Error().Err(err).Msg("Failed to find GA4 account with token")
-		InternalError(w, r, err)
-		return
-	}
-
-	// Get the refresh token from vault
-	refreshToken, err := h.DB.GetGA4AccountToken(r.Context(), accountWithToken.ID)
-	if err != nil {
-		if errors.Is(err, db.ErrGoogleTokenNotFound) {
-			WriteSuccess(w, r, map[string]any{
-				"needs_reauth": true,
-				"message":      "Token expired or invalid. Please reconnect to Google Analytics.",
-			}, "")
-			return
-		}
-		logger.Error().Err(err).Msg("Failed to get GA4 account token")
+		logger.Error().Err(err).Msg("Failed to resolve GA refresh token")
 		InternalError(w, r, err)
 		return
 	}

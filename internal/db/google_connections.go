@@ -810,3 +810,65 @@ func (db *DB) GetGA4AccountWithToken(ctx context.Context, organisationID string)
 
 	return acc, nil
 }
+
+// GetGAConnectionWithToken retrieves a GA4 connection that has a valid token stored
+// Returns the most recently updated connection with a token for the organisation
+func (db *DB) GetGAConnectionWithToken(ctx context.Context, organisationID string) (*GoogleAnalyticsConnection, error) {
+	query := `
+		SELECT id, organisation_id, ga4_property_id, ga4_property_name, google_account_id,
+		       google_user_id, google_email, vault_secret_name, installing_user_id, status,
+		       domain_ids, last_synced_at, created_at, updated_at
+		FROM google_analytics_connections
+		WHERE organisation_id = $1
+		  AND vault_secret_name IS NOT NULL
+		ORDER BY updated_at DESC
+		LIMIT 1
+	`
+
+	conn := &GoogleAnalyticsConnection{}
+	var installingUserID, vaultSecretName, ga4PropertyID, ga4PropertyName, googleAccountID, googleUserID, googleEmail, status sql.NullString
+	var lastSyncedAt sql.NullTime
+
+	err := db.client.QueryRowContext(ctx, query, organisationID).Scan(
+		&conn.ID, &conn.OrganisationID, &ga4PropertyID, &ga4PropertyName, &googleAccountID,
+		&googleUserID, &googleEmail, &vaultSecretName, &installingUserID, &status,
+		&conn.DomainIDs, &lastSyncedAt, &conn.CreatedAt, &conn.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrGoogleConnectionNotFound
+		}
+		log.Error().Err(err).Str("organisation_id", organisationID).Msg("Failed to get GA4 connection with token")
+		return nil, fmt.Errorf("failed to get GA4 connection with token: %w", err)
+	}
+
+	if ga4PropertyID.Valid {
+		conn.GA4PropertyID = ga4PropertyID.String
+	}
+	if ga4PropertyName.Valid {
+		conn.GA4PropertyName = ga4PropertyName.String
+	}
+	if googleAccountID.Valid {
+		conn.GoogleAccountID = googleAccountID.String
+	}
+	if googleUserID.Valid {
+		conn.GoogleUserID = googleUserID.String
+	}
+	if googleEmail.Valid {
+		conn.GoogleEmail = googleEmail.String
+	}
+	if vaultSecretName.Valid {
+		conn.VaultSecretName = vaultSecretName.String
+	}
+	if installingUserID.Valid {
+		conn.InstallingUserID = installingUserID.String
+	}
+	if status.Valid {
+		conn.Status = status.String
+	}
+	if lastSyncedAt.Valid {
+		conn.LastSyncedAt = lastSyncedAt.Time
+	}
+
+	return conn, nil
+}
