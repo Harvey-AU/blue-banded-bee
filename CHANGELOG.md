@@ -49,20 +49,24 @@ On merge, CI will:
   - PATCH endpoint (`/v1/integrations/google/analytics/{id}/domains`) to update
     mappings
   - `domain_ids` array column on `google_analytics_connections` table
+- **Domain Creation Endpoint**: Dedicated `/v1/domains` endpoint for creating
+  domains without job side effects
 - **Job Response Enhancement**: Job creation response now includes `domain_id`
 - **Traffic-Based Task Prioritisation**: High-traffic pages now get prioritised
   in the crawl queue
-  - Pages ranked by percentile: top 5% (0.95), top 10% (0.90), top 25% (0.75),
-    top 50% (0.50)
+  - Pages ranked by percentile: top 1% (0.99), top 2.5% (0.97), top 5% (0.95),
+    top 10% (0.90), top 25% (0.80), top 50% (0.60)
   - Uses `GREATEST(structural_priority, traffic_score)` so traffic and structure
     both contribute
   - Traffic scores calculated after GA4 fetch completes, applied to pending
-    tasks
+    tasks for reprioritisation
   - Link discovery also applies traffic scores via `GREATEST`
 
 ### Changed
 
 - **Go Version**: Updated to Go 1.25.6 for security fixes
+- **Sitemap Baseline Priority**: Default sitemap task priority lowered to 0.1 to
+  let GA4 traffic scores surface high-traffic pages
 
 ### Fixed
 
@@ -70,6 +74,8 @@ On merge, CI will:
   `INSERT ... ON CONFLICT` pattern in `GetOrCreateDomainID`
 - **Console Noise**: Removed verbose debug logging from GA4 integration and page
   load
+- **GA Account Reuse**: Stored GA4 accounts now retry auth initialisation and
+  fall back to connection tokens when account tokens are unavailable
 
 ## [0.24.3] – 2026-01-27
 
