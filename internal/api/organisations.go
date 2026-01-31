@@ -757,7 +757,7 @@ func sendSupabaseInviteEmail(ctx context.Context, email, redirectTo string, data
 		}
 	}
 	if authURL == "" {
-		return fmt.Errorf("Supabase auth URL is not configured")
+		return fmt.Errorf("supabase auth URL is not configured")
 	}
 	if !strings.Contains(authURL, "/auth/") {
 		authURL = authURL + "/auth/v1"
@@ -765,7 +765,7 @@ func sendSupabaseInviteEmail(ctx context.Context, email, redirectTo string, data
 
 	serviceKey := os.Getenv("SUPABASE_SERVICE_ROLE_KEY")
 	if serviceKey == "" {
-		return fmt.Errorf("Supabase service role key is not configured")
+		return fmt.Errorf("supabase service role key is not configured")
 	}
 
 	payload, err := json.Marshal(supabaseInviteRequest{
@@ -794,7 +794,7 @@ func sendSupabaseInviteEmail(ctx context.Context, email, redirectTo string, data
 
 	if resp.StatusCode >= http.StatusMultipleChoices {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("Supabase invite failed: %s", strings.TrimSpace(string(body)))
+		return fmt.Errorf("supabase invite failed: %s", strings.TrimSpace(string(body)))
 	}
 
 	return nil

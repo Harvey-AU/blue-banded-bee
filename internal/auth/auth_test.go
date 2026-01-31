@@ -432,7 +432,8 @@ func newJWKSHTTPServer(tb testing.TB, payload []byte) *httptest.Server {
 	server := &httptest.Server{
 		Listener: listener,
 		Config: &http.Server{
-			Handler: handler,
+			Handler:           handler,
+			ReadHeaderTimeout: 5 * time.Second,
 		},
 	}
 	server.Start()
