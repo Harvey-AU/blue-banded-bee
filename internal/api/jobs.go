@@ -564,29 +564,11 @@ func (h *Handler) updateJob(w http.ResponseWriter, r *http.Request, jobID string
 		return
 	}
 
-	// Get updated job status
-	job, err := h.JobsManager.GetJobStatus(r.Context(), resultJobID)
+	response, err := h.fetchJobResponse(r.Context(), resultJobID, &activeOrgID)
 	if err != nil {
-		logger.Error().Err(err).Str("job_id", resultJobID).Msg("Failed to get job status after action")
+		logger.Error().Err(err).Str("job_id", resultJobID).Msg("Failed to fetch job after action")
 		InternalError(w, r, err)
 		return
-	}
-
-	response := JobResponse{
-		ID:             job.ID,
-		Domain:         job.Domain,
-		Status:         string(job.Status),
-		TotalTasks:     job.TotalTasks,
-		CompletedTasks: job.CompletedTasks,
-		FailedTasks:    job.FailedTasks,
-		SkippedTasks:   job.SkippedTasks,
-		Progress:       job.Progress,
-		CreatedAt:      job.CreatedAt.Format(time.RFC3339),
-	}
-
-	if !job.CompletedAt.IsZero() {
-		completedAt := job.CompletedAt.Format(time.RFC3339)
-		response.CompletedAt = &completedAt
 	}
 
 	WriteSuccess(w, r, response, "Job cancelled successfully")
