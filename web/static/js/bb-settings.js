@@ -488,7 +488,7 @@
     const list = document.getElementById("usageHistoryList");
     if (!list) return;
 
-    list.innerHTML = "";
+    list.textContent = "";
     try {
       const response = await window.dataBinder.fetchData(
         "/v1/usage/history?days=30"
@@ -496,24 +496,33 @@
       const entries = response.usage || [];
 
       if (entries.length === 0) {
-        list.innerHTML =
-          '<div class="settings-muted">No usage history yet.</div>';
+        const empty = document.createElement("div");
+        empty.className = "settings-muted";
+        empty.textContent = "No usage history yet.";
+        list.appendChild(empty);
         return;
       }
 
       entries.forEach((entry) => {
         const row = document.createElement("div");
         row.className = "settings-usage-row";
-        row.innerHTML = `
-          <span>${entry.usage_date}</span>
-          <span>${entry.pages_processed.toLocaleString()} pages</span>
-        `;
+        const dateSpan = document.createElement("span");
+        dateSpan.textContent = entry.usage_date;
+        const pagesSpan = document.createElement("span");
+        const pagesProcessed = Number.isFinite(entry.pages_processed)
+          ? entry.pages_processed
+          : 0;
+        pagesSpan.textContent = `${pagesProcessed.toLocaleString()} pages`;
+        row.appendChild(dateSpan);
+        row.appendChild(pagesSpan);
         list.appendChild(row);
       });
     } catch (err) {
       console.error("Failed to load usage history:", err);
-      list.innerHTML =
-        '<div class="settings-muted">Failed to load usage history.</div>';
+      const error = document.createElement("div");
+      error.className = "settings-muted";
+      error.textContent = "Failed to load usage history.";
+      list.appendChild(error);
     }
   }
 
@@ -615,8 +624,14 @@
 
       if (!usage) return;
 
+      const dailyLimit = Number.isFinite(usage.daily_limit)
+        ? usage.daily_limit
+        : 0;
+      const dailyUsed = Number.isFinite(usage.daily_used)
+        ? usage.daily_used
+        : 0;
       quotaPlan.textContent = usage.plan_display_name || "Free";
-      quotaUsage.textContent = `${usage.daily_used.toLocaleString()}/${usage.daily_limit.toLocaleString()}`;
+      quotaUsage.textContent = `${dailyUsed.toLocaleString()}/${dailyLimit.toLocaleString()}`;
       quotaReset.textContent = formatTimeUntilReset(usage.resets_at);
 
       quotaDisplay.classList.remove("quota-warning", "quota-exhausted");
@@ -633,9 +648,28 @@
   }
 
   let quotaResetInterval;
+  let quotaVisibilityListener;
   function startQuotaResetCountdown() {
     if (quotaResetInterval) clearInterval(quotaResetInterval);
-    quotaResetInterval = setInterval(fetchAndDisplayQuota, 500);
+    quotaResetInterval = null;
+    if (quotaVisibilityListener) {
+      document.removeEventListener("visibilitychange", quotaVisibilityListener);
+    }
+
+    quotaVisibilityListener = () => {
+      if (document.visibilityState === "visible") {
+        fetchAndDisplayQuota();
+        if (!quotaResetInterval) {
+          quotaResetInterval = setInterval(fetchAndDisplayQuota, 30000);
+        }
+      } else if (quotaResetInterval) {
+        clearInterval(quotaResetInterval);
+        quotaResetInterval = null;
+      }
+    };
+
+    document.addEventListener("visibilitychange", quotaVisibilityListener);
+    quotaVisibilityListener();
   }
 
   function setupNotificationsDropdown() {
@@ -849,7 +883,10 @@
       if (link.startsWith("/")) {
         window.location.href = link;
       } else {
-        window.open(link, "_blank");
+        const newWindow = window.open(link, "_blank", "noopener,noreferrer");
+        if (newWindow) {
+          newWindow.opener = null;
+        }
       }
     }
   }

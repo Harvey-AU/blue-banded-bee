@@ -308,7 +308,7 @@ func (h *Handler) handleSlackOAuthCallback(w http.ResponseWriter, r *http.Reques
 		Str("organisation_id", state.OrgID).
 		Msg("Slack workspace connected")
 
-	// Redirect to dashboard with success (includes connection ID for auto-linking)
+	// Redirect to settings with success (includes connection ID for auto-linking)
 	h.redirectToSettingsWithSuccess(w, r, "Slack", resp.Team.Name, conn.ID, "notifications", "slack")
 }
 

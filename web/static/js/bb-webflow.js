@@ -348,8 +348,8 @@ function handleWebflowOAuthCallback() {
       showWebflowSuccess("Webflow connected! Configure your sites below.");
     }
 
-    // Open the settings modal to show site configuration
-    openSettingsModalForWebflow();
+    // Focus the settings page and Webflow section
+    focusWebflowSettings();
 
     // Load connections (which will also load sites)
     loadWebflowConnections();
@@ -362,9 +362,9 @@ function handleWebflowOAuthCallback() {
 }
 
 /**
- * Open settings and focus the Webflow section
+ * Focus settings and the Webflow section
  */
-function openSettingsModalForWebflow() {
+function focusWebflowSettings() {
   const targetPath = "/settings/auto-crawl";
   const targetHash = "#webflow";
 
