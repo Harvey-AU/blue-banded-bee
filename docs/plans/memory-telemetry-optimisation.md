@@ -1,6 +1,6 @@
 # Optimisations
 
-A few key optimisations to infra
+Here are a few key optimisations to the infrastructure.
 
 ## Memory leaks:
 
