@@ -674,6 +674,12 @@ func parseTaskQueryParams(r *http.Request) TaskQueryParams {
 			orderBy = "t.second_response_time " + direction + " NULLS LAST"
 		case "status_code":
 			orderBy = "t.status_code " + direction + " NULLS LAST"
+		case "page_views_7d":
+			orderBy = "pa.page_views_7d " + direction + " NULLS LAST"
+		case "page_views_28d":
+			orderBy = "pa.page_views_28d " + direction + " NULLS LAST"
+		case "page_views_180d":
+			orderBy = "pa.page_views_180d " + direction + " NULLS LAST"
 		case "created_at":
 			orderBy = "t.created_at " + direction
 		default:
