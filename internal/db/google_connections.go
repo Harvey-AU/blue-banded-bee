@@ -177,6 +177,9 @@ func (db *DB) GetGoogleConnection(ctx context.Context, connectionID string) (*Go
 	if lastSyncedAt.Valid {
 		conn.LastSyncedAt = lastSyncedAt.Time
 	}
+	if conn.DomainIDs == nil {
+		conn.DomainIDs = pq.Int64Array{}
+	}
 
 	return conn, nil
 }
@@ -245,6 +248,9 @@ func (db *DB) ListGoogleConnections(ctx context.Context, organisationID string) 
 		}
 		if lastSyncedAt.Valid {
 			conn.LastSyncedAt = lastSyncedAt.Time
+		}
+		if conn.DomainIDs == nil {
+			conn.DomainIDs = pq.Int64Array{}
 		}
 
 		connections = append(connections, conn)
@@ -326,7 +332,7 @@ func (db *DB) GetActiveGAConnectionForOrganisation(ctx context.Context, orgID st
 		       domain_ids, last_synced_at, created_at, updated_at
 		FROM google_analytics_connections
 		WHERE organisation_id = $1 AND status = 'active'
-		ORDER BY created_at DESC
+		ORDER BY last_synced_at DESC NULLS LAST, updated_at DESC, created_at DESC, id ASC
 		LIMIT 1
 	`
 
@@ -373,6 +379,9 @@ func (db *DB) GetActiveGAConnectionForOrganisation(ctx context.Context, orgID st
 	if lastSyncedAt.Valid {
 		conn.LastSyncedAt = lastSyncedAt.Time
 	}
+	if conn.DomainIDs == nil {
+		conn.DomainIDs = pq.Int64Array{}
+	}
 
 	return conn, nil
 }
@@ -392,7 +401,7 @@ func (db *DB) GetActiveGAConnectionForDomain(ctx context.Context, organisationID
 		WHERE organisation_id = $1
 		  AND status = 'active'
 		  AND $2 = ANY(domain_ids)
-		ORDER BY created_at DESC
+		ORDER BY last_synced_at DESC NULLS LAST, updated_at DESC, created_at DESC, id ASC
 		LIMIT 1
 	`
 
@@ -446,6 +455,9 @@ func (db *DB) GetActiveGAConnectionForDomain(ctx context.Context, organisationID
 	if lastSyncedAt.Valid {
 		conn.LastSyncedAt = lastSyncedAt.Time
 	}
+	if conn.DomainIDs == nil {
+		conn.DomainIDs = pq.Int64Array{}
+	}
 
 	return conn, nil
 }
@@ -495,9 +507,17 @@ func (db *DB) UpdateConnectionDomains(ctx context.Context, connectionID string, 
 		WHERE id = $2
 	`
 
-	_, err := db.client.ExecContext(ctx, query, pq.Array(domainIDsArray), connectionID)
+	result, err := db.client.ExecContext(ctx, query, pq.Array(domainIDsArray), connectionID)
 	if err != nil {
 		return fmt.Errorf("failed to update connection domains: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+	if rowsAffected == 0 {
+		return ErrGoogleConnectionNotFound
 	}
 
 	return nil
@@ -507,11 +527,11 @@ func (db *DB) UpdateConnectionDomains(ctx context.Context, connectionID string, 
 func (db *DB) MarkConnectionInactive(ctx context.Context, connectionID, reason string) error {
 	query := `
 		UPDATE google_analytics_connections
-		SET status = 'inactive', updated_at = NOW()
+		SET status = 'inactive', inactive_reason = $2, updated_at = NOW()
 		WHERE id = $1
 	`
 
-	result, err := db.client.ExecContext(ctx, query, connectionID)
+	result, err := db.client.ExecContext(ctx, query, connectionID, reason)
 	if err != nil {
 		log.Error().
 			Err(err).
@@ -533,6 +553,7 @@ func (db *DB) MarkConnectionInactive(ctx context.Context, connectionID, reason s
 	log.Warn().
 		Str("connection_id", connectionID).
 		Str("reason", reason).
+		Str("next_action", "reauthorise_google_connection").
 		Msg("Marked Google Analytics connection as inactive")
 
 	return nil

@@ -1379,7 +1379,8 @@ func (q *DbQueue) EnqueueURLs(ctx context.Context, jobID string, pages []Page, s
 				log.Warn().
 					Err(err).
 					Str("job_id", jobID).
-					Msg("Failed to apply traffic scores to new tasks")
+					Str("next_action", "continuing_without_traffic_scores").
+					Msg("Failed to apply traffic scores to new tasks; continuing without scores")
 			}
 		}
 
