@@ -800,6 +800,7 @@ func (db *DB) CalculateTrafficScores(ctx context.Context, organisationID string,
 		)
 		UPDATE page_analytics pa
 		SET traffic_score = CASE
+			WHEN s.page_views_28d <= 1 THEN 0
 			WHEN s.max_views = 0 THEN 0.10
 			WHEN s.max_views = s.min_views THEN 0.10
 			ELSE 0.10 + 0.89 * (

@@ -56,6 +56,7 @@ On merge, CI will:
   in the crawl queue
   - Log-scaled view curve assigns scores from 0.10 to 0.99 based on 28-day page
     views
+  - Pages with 0-1 views are excluded from analytics scoring
   - Uses `GREATEST(structural_priority, traffic_score)` so traffic and structure
     both contribute
   - Traffic scores calculated after GA4 fetch completes, applied to pending
