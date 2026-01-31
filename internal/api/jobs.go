@@ -930,33 +930,43 @@ type ExportColumn struct {
 	Label string `json:"label"`
 }
 
-func taskExportColumns(exportType string) []ExportColumn {
+func taskExportColumns(exportType string, includeAnalytics bool) []ExportColumn {
 	switch exportType {
 	case "broken-links":
-		return []ExportColumn{
+		columns := []ExportColumn{
 			{Key: "source_url", Label: "Found on"},
 			{Key: "url", Label: "Broken link"},
 			{Key: "status", Label: "Status"},
-			{Key: "page_views_7d", Label: "Views (7d)"},
-			{Key: "page_views_28d", Label: "Views (28d)"},
-			{Key: "page_views_180d", Label: "Views (180d)"},
 			{Key: "created_at", Label: "Date"},
 			{Key: "source_type", Label: "Source Type"},
 		}
+		if includeAnalytics {
+			columns = append(columns,
+				ExportColumn{Key: "page_views_7d", Label: "Views (7d)"},
+				ExportColumn{Key: "page_views_28d", Label: "Views (28d)"},
+				ExportColumn{Key: "page_views_180d", Label: "Views (180d)"},
+			)
+		}
+		return columns
 	case "slow-pages":
-		return []ExportColumn{
+		columns := []ExportColumn{
 			{Key: "url", Label: "Page"},
 			{Key: "content_type", Label: "Content Type"},
 			{Key: "cache_status", Label: "Cache Status"},
 			{Key: "response_time", Label: "Load Time (ms)"},
 			{Key: "second_response_time", Label: "Load Time 2nd try (ms)"},
-			{Key: "page_views_7d", Label: "Views (7d)"},
-			{Key: "page_views_28d", Label: "Views (28d)"},
-			{Key: "page_views_180d", Label: "Views (180d)"},
 			{Key: "created_at", Label: "Date"},
 		}
+		if includeAnalytics {
+			columns = append(columns,
+				ExportColumn{Key: "page_views_7d", Label: "Views (7d)"},
+				ExportColumn{Key: "page_views_28d", Label: "Views (28d)"},
+				ExportColumn{Key: "page_views_180d", Label: "Views (180d)"},
+			)
+		}
+		return columns
 	default: // "job" (all tasks)
-		return []ExportColumn{
+		columns := []ExportColumn{
 			{Key: "id", Label: "Task ID"},
 			{Key: "job_id", Label: "Job ID"},
 			{Key: "path", Label: "Page path"},
@@ -972,13 +982,18 @@ func taskExportColumns(exportType string) []ExportColumn {
 			{Key: "error", Label: "Error"},
 			{Key: "source_type", Label: "Source"},
 			{Key: "source_url", Label: "Source page"},
-			{Key: "page_views_7d", Label: "Views (7d)"},
-			{Key: "page_views_28d", Label: "Views (28d)"},
-			{Key: "page_views_180d", Label: "Views (180d)"},
 			{Key: "created_at", Label: "Created At"},
 			{Key: "started_at", Label: "Started At"},
 			{Key: "completed_at", Label: "Completed At"},
 		}
+		if includeAnalytics {
+			columns = append(columns,
+				ExportColumn{Key: "page_views_7d", Label: "Views (7d)"},
+				ExportColumn{Key: "page_views_28d", Label: "Views (28d)"},
+				ExportColumn{Key: "page_views_180d", Label: "Views (180d)"},
+			)
+		}
+		return columns
 	}
 }
 
@@ -1139,6 +1154,14 @@ func (h *Handler) serveJobExport(w http.ResponseWriter, r *http.Request, jobID s
 		return
 	}
 
+	includeAnalytics := false
+	for _, task := range tasks {
+		if task.PageViews7d != nil || task.PageViews28d != nil || task.PageViews180d != nil {
+			includeAnalytics = true
+			break
+		}
+	}
+
 	// Prepare export response
 	response := map[string]interface{}{
 		"job_id":      jobID,
@@ -1148,7 +1171,7 @@ func (h *Handler) serveJobExport(w http.ResponseWriter, r *http.Request, jobID s
 		"export_type": exportType,
 		"export_time": time.Now().UTC().Format(time.RFC3339),
 		"total_tasks": len(tasks),
-		"columns":     taskExportColumns(exportType),
+		"columns":     taskExportColumns(exportType, includeAnalytics),
 		"tasks":       tasks,
 	}
 	if completedAt.Valid {
