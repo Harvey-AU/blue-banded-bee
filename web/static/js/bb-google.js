@@ -216,7 +216,7 @@ async function loadGoogleConnections() {
             removeBtn.title = "Remove domain";
             removeBtn.onclick = (e) => {
               e.stopPropagation();
-              removeDomainFromConnection(conn.id, domainId);
+              removeDomainFromConnection(conn.id, domainId, conn.domain_ids);
             };
 
             tag.appendChild(removeBtn);
@@ -224,17 +224,7 @@ async function loadGoogleConnections() {
           });
         }
 
-        // Add "Add domain" button
-        const addBtn = document.createElement("button");
-        addBtn.className = "add-domain-btn";
-        addBtn.style.cssText =
-          "padding: 4px 8px; background: #f3f4f6; color: #6b7280; border: 1px dashed #d1d5db; border-radius: 4px; font-size: 13px; cursor: pointer;";
-        addBtn.textContent = "+ Add domain";
-        addBtn.type = "button";
-        addBtn.setAttribute("aria-label", "Add domain");
-        addBtn.onclick = () =>
-          showDomainSelector(conn.id, conn.domain_ids || []);
-        dateEl.appendChild(addBtn);
+        renderInlineDomainAdder(dateEl, conn);
       }
 
       // Set status indicator
@@ -1803,7 +1793,11 @@ async function handleGoogleOAuthCallback() {
  * @param {string} connectionId - The connection ID
  * @param {number} domainId - The domain ID to remove
  */
-async function removeDomainFromConnection(connectionId, domainId) {
+async function removeDomainFromConnection(
+  connectionId,
+  domainId,
+  currentDomainIds = null
+) {
   try {
     const session = await window.supabase.auth.getSession();
     const token = session?.data?.session?.access_token;
@@ -1814,20 +1808,25 @@ async function removeDomainFromConnection(connectionId, domainId) {
     }
 
     // Get current connection to find existing domain_ids
-    const connections = await window.dataBinder.fetchData(
-      "/v1/integrations/google"
-    );
-    const connection = connections.find((c) => c.id === connectionId);
+    let updatedDomainIds;
+    if (Array.isArray(currentDomainIds)) {
+      updatedDomainIds = currentDomainIds.filter((id) => id !== domainId);
+    } else {
+      const connections = await window.dataBinder.fetchData(
+        "/v1/integrations/google"
+      );
+      const connection = connections.find((c) => c.id === connectionId);
 
-    if (!connection) {
-      showGoogleError("Connection not found");
-      return;
+      if (!connection) {
+        showGoogleError("Connection not found");
+        return;
+      }
+
+      // Remove the domain from the array
+      updatedDomainIds = (connection.domain_ids || []).filter(
+        (id) => id !== domainId
+      );
     }
-
-    // Remove the domain from the array
-    const updatedDomainIds = (connection.domain_ids || []).filter(
-      (id) => id !== domainId
-    );
 
     // Use dedicated PATCH endpoint to update domains
     const response = await fetch(`/v1/integrations/google/${connectionId}`, {
@@ -1851,6 +1850,236 @@ async function removeDomainFromConnection(connectionId, domainId) {
     console.error("Failed to remove domain:", error);
     showGoogleError("Failed to remove domain. Please try again.");
   }
+}
+
+async function addDomainToConnection(connectionId, currentDomainIds, domainId) {
+  try {
+    const session = await window.supabase.auth.getSession();
+    const token = session?.data?.session?.access_token;
+
+    if (!token) {
+      showGoogleError("Please sign in to update connections");
+      return;
+    }
+
+    const updatedDomainIds = Array.from(
+      new Set([...(currentDomainIds || []), domainId])
+    );
+
+    const response = await fetch(`/v1/integrations/google/${connectionId}`, {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ domain_ids: updatedDomainIds }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to update connection: ${response.status}`);
+    }
+
+    await loadGoogleConnections();
+  } catch (error) {
+    console.error("Failed to add domain:", error);
+    showGoogleError("Failed to add domain. Please try again.");
+  }
+}
+
+async function createDomainInline(domainName) {
+  const session = await window.supabase.auth.getSession();
+  const token = session?.data?.session?.access_token;
+
+  if (!token) {
+    showGoogleError("Please sign in to create domains");
+    return null;
+  }
+
+  const response = await fetch("/v1/domains", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ domain: domainName }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.message || "Failed to create domain");
+  }
+
+  const result = await response.json();
+  const rawDomainId = result?.data?.domain_id ?? result?.domain_id ?? null;
+  const newDomainId = Number(rawDomainId);
+  const newDomainName = result?.data?.domain ?? result?.domain ?? domainName;
+
+  if (!Number.isFinite(newDomainId)) {
+    throw new Error("Invalid domain ID in response");
+  }
+
+  organisationDomains.push({ id: newDomainId, name: newDomainName });
+  return newDomainId;
+}
+
+function renderInlineDomainAdder(container, connection) {
+  const form = document.createElement("form");
+  form.style.cssText = "position: relative; margin-top: 8px;";
+
+  const input = document.createElement("input");
+  input.type = "text";
+  input.placeholder = "Search or add domain...";
+  input.setAttribute("aria-label", "Search or add domain");
+  input.style.cssText =
+    "width: 100%; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px; box-sizing: border-box;";
+
+  const dropdown = document.createElement("div");
+  dropdown.style.cssText =
+    "display: none; position: absolute; top: 100%; left: 0; right: 0; max-height: 200px; overflow-y: auto; background: white; border: 1px solid #d1d5db; border-radius: 6px; margin-top: 4px; z-index: 1000; box-shadow: 0 2px 8px rgba(0,0,0,0.1);";
+
+  let documentListenerActive = false;
+  const onDocumentClick = (event) => {
+    if (!form.contains(event.target)) {
+      dropdown.style.display = "none";
+      if (documentListenerActive) {
+        document.removeEventListener("click", onDocumentClick);
+        documentListenerActive = false;
+      }
+    }
+  };
+
+  const ensureDocumentListener = () => {
+    if (documentListenerActive) {
+      return;
+    }
+    documentListenerActive = true;
+    document.addEventListener("click", onDocumentClick);
+  };
+
+  const renderDropdown = (query) => {
+    while (dropdown.firstChild) {
+      dropdown.removeChild(dropdown.firstChild);
+    }
+
+    const lowerQuery = query.toLowerCase().trim();
+    const currentIds = connection.domain_ids || [];
+    const availableDomains = organisationDomains.filter(
+      (domain) => !currentIds.includes(domain.id)
+    );
+
+    const filtered = lowerQuery
+      ? availableDomains.filter((domain) =>
+          domain.name.toLowerCase().includes(lowerQuery)
+        )
+      : availableDomains;
+
+    if (filtered.length > 0) {
+      filtered.forEach((domain) => {
+        const option = document.createElement("div");
+        option.textContent = domain.name;
+        option.style.cssText =
+          "padding: 10px 16px; cursor: pointer; font-size: 14px; border-bottom: 1px solid #f3f4f6;";
+        option.onmouseover = () => {
+          option.style.background = "#f9fafb";
+        };
+        option.onmouseout = () => {
+          option.style.background = "white";
+        };
+        option.onclick = async () => {
+          await addDomainToConnection(connection.id, currentIds, domain.id);
+          input.value = "";
+          dropdown.style.display = "none";
+          onDocumentClick({ target: document.body });
+        };
+        dropdown.appendChild(option);
+      });
+      dropdown.style.display = "block";
+      ensureDocumentListener();
+    } else if (lowerQuery) {
+      const addOption = document.createElement("div");
+      addOption.textContent = `Add new domain: ${lowerQuery}`;
+      addOption.style.cssText =
+        "padding: 10px 16px; cursor: pointer; font-size: 14px; color: #6366f1; font-weight: 500;";
+      addOption.onmouseover = () => {
+        addOption.style.background = "#f9fafb";
+      };
+      addOption.onmouseout = () => {
+        addOption.style.background = "white";
+      };
+      addOption.onclick = async () => {
+        try {
+          const newDomainId = await createDomainInline(lowerQuery);
+          if (Number.isFinite(newDomainId)) {
+            await addDomainToConnection(connection.id, currentIds, newDomainId);
+          }
+        } catch (error) {
+          console.error("Failed to create domain:", error);
+          showGoogleError(
+            error.message || "Failed to create domain. Please try again."
+          );
+        }
+        input.value = "";
+        dropdown.style.display = "none";
+        onDocumentClick({ target: document.body });
+      };
+      dropdown.appendChild(addOption);
+      dropdown.style.display = "block";
+      ensureDocumentListener();
+    } else {
+      dropdown.style.display = "none";
+      onDocumentClick({ target: document.body });
+    }
+  };
+
+  input.addEventListener("input", (event) => {
+    renderDropdown(event.target.value);
+  });
+
+  input.addEventListener("focus", () => {
+    renderDropdown(input.value);
+  });
+
+  input.addEventListener("click", (event) => {
+    event.stopPropagation();
+  });
+
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const query = input.value.toLowerCase().trim();
+    if (!query) return;
+
+    const currentIds = connection.domain_ids || [];
+    const availableDomains = organisationDomains.filter(
+      (domain) => !currentIds.includes(domain.id)
+    );
+    const exactMatch = availableDomains.find(
+      (domain) => domain.name.toLowerCase() === query
+    );
+
+    if (exactMatch) {
+      await addDomainToConnection(connection.id, currentIds, exactMatch.id);
+    } else {
+      try {
+        const newDomainId = await createDomainInline(query);
+        if (Number.isFinite(newDomainId)) {
+          await addDomainToConnection(connection.id, currentIds, newDomainId);
+        }
+      } catch (error) {
+        console.error("Failed to create domain:", error);
+        showGoogleError(
+          error.message || "Failed to create domain. Please try again."
+        );
+      }
+    }
+
+    input.value = "";
+    dropdown.style.display = "none";
+    onDocumentClick({ target: document.body });
+  });
+
+  form.appendChild(input);
+  form.appendChild(dropdown);
+  container.appendChild(form);
 }
 
 /**
