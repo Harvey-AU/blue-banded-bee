@@ -181,9 +181,12 @@
     }
 
     try {
-      const { error } = await window.supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: window.location.origin + "/settings/account#security",
-      });
+      const { error } = await window.supabase.auth.resetPasswordForEmail(
+        email,
+        {
+          redirectTo: window.location.origin + "/settings/account#security",
+        }
+      );
       if (error) {
         throw error;
       }
@@ -255,9 +258,12 @@
     if (!confirm("Remove this member from the organisation?")) return;
 
     try {
-      await window.dataBinder.fetchData(`/v1/organisations/members/${memberId}`, {
-        method: "DELETE",
-      });
+      await window.dataBinder.fetchData(
+        `/v1/organisations/members/${memberId}`,
+        {
+          method: "DELETE",
+        }
+      );
       showSettingsToast("success", "Member removed");
       loadOrganisationMembers();
     } catch (err) {
@@ -360,9 +366,12 @@
     if (!confirm("Revoke this invite?")) return;
 
     try {
-      await window.dataBinder.fetchData(`/v1/organisations/invites/${inviteId}`, {
-        method: "DELETE",
-      });
+      await window.dataBinder.fetchData(
+        `/v1/organisations/invites/${inviteId}`,
+        {
+          method: "DELETE",
+        }
+      );
       showSettingsToast("success", "Invite revoked");
       loadOrganisationInvites();
     } catch (err) {
@@ -487,7 +496,8 @@
       const entries = response.usage || [];
 
       if (entries.length === 0) {
-        list.innerHTML = "<div class=\"settings-muted\">No usage history yet.</div>";
+        list.innerHTML =
+          '<div class="settings-muted">No usage history yet.</div>';
         return;
       }
 
@@ -502,7 +512,8 @@
       });
     } catch (err) {
       console.error("Failed to load usage history:", err);
-      list.innerHTML = "<div class=\"settings-muted\">Failed to load usage history.</div>";
+      list.innerHTML =
+        '<div class="settings-muted">Failed to load usage history.</div>';
     }
   }
 
@@ -698,9 +709,11 @@
           () => {
             setTimeout(() => {
               loadNotificationCount();
-              if (document
-                .getElementById("notificationsContainer")
-                ?.classList.contains("open")) {
+              if (
+                document
+                  .getElementById("notificationsContainer")
+                  ?.classList.contains("open")
+              ) {
                 loadNotifications();
               }
             }, 200);
@@ -830,7 +843,9 @@
     }
 
     if (link) {
-      document.getElementById("notificationsContainer")?.classList.remove("open");
+      document
+        .getElementById("notificationsContainer")
+        ?.classList.remove("open");
       if (link.startsWith("/")) {
         window.location.href = link;
       } else {
@@ -898,7 +913,9 @@
     const orgList = document.getElementById("orgList");
     const currentOrgName = document.getElementById("currentOrgName");
     const settingsOrgName = document.getElementById("settingsOrgName");
-    const settingsSwitcherBtn = document.getElementById("settingsOrgSwitcherBtn");
+    const settingsSwitcherBtn = document.getElementById(
+      "settingsOrgSwitcherBtn"
+    );
     const divider = document.querySelector(".bb-org-divider");
 
     if (!switcher || !btn || !divider) return;
@@ -919,7 +936,10 @@
 
     if (settingsSwitcherBtn?.parentNode) {
       const newSettingsBtn = settingsSwitcherBtn.cloneNode(true);
-      settingsSwitcherBtn.parentNode.replaceChild(newSettingsBtn, settingsSwitcherBtn);
+      settingsSwitcherBtn.parentNode.replaceChild(
+        newSettingsBtn,
+        settingsSwitcherBtn
+      );
       settingsBtnRef = newSettingsBtn;
     }
 
@@ -957,13 +977,18 @@
         (org) => org.id === window.BB_ACTIVE_ORG?.id
       );
       const activeName = activeOrg?.name || organisations[0]?.name || "";
-      if (currentOrgName) currentOrgName.textContent = activeName || "Loading...";
-      if (settingsOrgName) settingsOrgName.textContent = activeName || "Organisation";
+      if (currentOrgName)
+        currentOrgName.textContent = activeName || "Loading...";
+      if (settingsOrgName)
+        settingsOrgName.textContent = activeName || "Organisation";
 
       btnRef.addEventListener("click", (e) => {
         e.stopPropagation();
         switcher.classList.toggle("open");
-        btnRef.setAttribute("aria-expanded", switcher.classList.contains("open"));
+        btnRef.setAttribute(
+          "aria-expanded",
+          switcher.classList.contains("open")
+        );
       });
 
       if (settingsBtnRef) {
@@ -1032,7 +1057,8 @@
           } catch (err) {
             console.error("Error switching organisation:", err);
             if (currentOrgName) {
-              currentOrgName.textContent = window.BB_ACTIVE_ORG?.name || "Unknown";
+              currentOrgName.textContent =
+                window.BB_ACTIVE_ORG?.name || "Unknown";
             }
             if (settingsOrgName) {
               settingsOrgName.textContent =

@@ -855,7 +855,9 @@
         <aside class="settings-nav">
           <div class="settings-group">
             <div class="settings-group-title">Account settings</div>
-            <a class="settings-link" href="/settings/account#profile">Account</a>
+            <a class="settings-link" href="/settings/account#profile"
+              >Account</a
+            >
           </div>
 
           <div class="settings-group">
@@ -892,13 +894,17 @@
               <div class="settings-row">
                 <div>
                   <strong>Name</strong>
-                  <div class="settings-muted" id="settingsUserName">Loading...</div>
+                  <div class="settings-muted" id="settingsUserName">
+                    Loading...
+                  </div>
                 </div>
               </div>
               <div class="settings-row">
                 <div>
                   <strong>Email</strong>
-                  <div class="settings-muted" id="settingsUserEmail">Loading...</div>
+                  <div class="settings-muted" id="settingsUserEmail">
+                    Loading...
+                  </div>
                 </div>
               </div>
             </div>
@@ -928,7 +934,11 @@
 
             <div class="settings-card">
               <div id="teamMembersList"></div>
-              <div class="settings-muted" id="teamMembersEmpty" style="display: none">
+              <div
+                class="settings-muted"
+                id="teamMembersEmpty"
+                style="display: none"
+              >
                 No members found.
               </div>
             </div>
@@ -943,9 +953,18 @@
                 </div>
               </div>
               <form id="teamInviteForm" style="margin-top: 12px">
-                <div style="display: grid; grid-template-columns: 1fr 140px auto; gap: 12px; align-items: end">
+                <div
+                  style="
+                    display: grid;
+                    grid-template-columns: 1fr 140px auto;
+                    gap: 12px;
+                    align-items: end;
+                  "
+                >
                   <div>
-                    <label class="settings-muted" for="teamInviteEmail">Email</label>
+                    <label class="settings-muted" for="teamInviteEmail"
+                      >Email</label
+                    >
                     <input
                       class="settings-input"
                       id="teamInviteEmail"
@@ -955,7 +974,9 @@
                     />
                   </div>
                   <div>
-                    <label class="settings-muted" for="teamInviteRole">Role</label>
+                    <label class="settings-muted" for="teamInviteRole"
+                      >Role</label
+                    >
                     <select class="settings-input" id="teamInviteRole">
                       <option value="member">Member</option>
                       <option value="admin">Admin</option>
@@ -970,7 +991,11 @@
               <div style="margin-top: 16px">
                 <strong>Pending invites</strong>
                 <div id="teamInvitesList" style="margin-top: 12px"></div>
-                <div class="settings-muted" id="teamInvitesEmpty" style="display: none">
+                <div
+                  class="settings-muted"
+                  id="teamInvitesEmpty"
+                  style="display: none"
+                >
                   No pending invites.
                 </div>
               </div>
@@ -988,7 +1013,9 @@
               <div class="settings-row">
                 <div>
                   <strong>Current plan</strong>
-                  <div class="settings-muted" id="planCurrentName">Loading...</div>
+                  <div class="settings-muted" id="planCurrentName">
+                    Loading...
+                  </div>
                 </div>
                 <div class="settings-muted" id="planCurrentLimit"></div>
               </div>
@@ -1045,7 +1072,14 @@
             </p>
 
             <div class="settings-card">
-              <h3 style="margin-top: 0; display: flex; gap: 8px; align-items: center">
+              <h3
+                style="
+                  margin-top: 0;
+                  display: flex;
+                  gap: 8px;
+                  align-items: center;
+                "
+              >
                 <svg
                   width="20"
                   height="20"
@@ -1123,13 +1157,22 @@
           </section>
 
           <section class="settings-section" id="analytics">
-            <h2 class="settings-section-title" id="google-analytics">Analytics</h2>
+            <h2 class="settings-section-title" id="google-analytics">
+              Analytics
+            </h2>
             <p class="settings-section-subtitle">
               Connect Google Analytics 4 to enrich prioritisation.
             </p>
 
             <div class="settings-card" id="googleAnalyticsSection">
-              <h3 style="margin-top: 0; display: flex; gap: 8px; align-items: center">
+              <h3
+                style="
+                  margin-top: 0;
+                  display: flex;
+                  gap: 8px;
+                  align-items: center;
+                "
+              >
                 <span style="font-size: 20px">📊</span>
                 Google Analytics integration
               </h3>
@@ -1150,7 +1193,10 @@
                 Connect Google Analytics
               </button>
 
-              <div id="googleConnectionsList" bbb-list="google-connections"></div>
+              <div
+                id="googleConnectionsList"
+                bbb-list="google-connections"
+              ></div>
 
               <div
                 id="googlePropertySelection"
@@ -1192,7 +1238,8 @@
                 "
               >
                 <p style="color: #6b7280; margin: 0">
-                  No connections yet. Click above to connect your first property.
+                  No connections yet. Click above to connect your first
+                  property.
                 </p>
               </div>
 
@@ -1234,7 +1281,14 @@
             </p>
 
             <div class="settings-card">
-              <h3 style="margin-top: 0; display: flex; gap: 8px; align-items: center">
+              <h3
+                style="
+                  margin-top: 0;
+                  display: flex;
+                  gap: 8px;
+                  align-items: center;
+                "
+              >
                 <span style="font-size: 20px">⚡</span>
                 Webflow integration
               </h3>
@@ -1243,7 +1297,10 @@
                 schedules.
               </p>
 
-              <div id="webflowConnectionsList" bbb-list="webflow-connections"></div>
+              <div
+                id="webflowConnectionsList"
+                bbb-list="webflow-connections"
+              ></div>
 
               <div
                 id="webflowSitesConfig"
@@ -1279,7 +1336,10 @@
                   </button>
                 </div>
 
-                <div id="webflowSitesSearchBox" style="display: none; margin-bottom: 12px">
+                <div
+                  id="webflowSitesSearchBox"
+                  style="display: none; margin-bottom: 12px"
+                >
                   <input
                     type="text"
                     id="webflowSiteSearch"
@@ -1324,7 +1384,11 @@
                         ></span>
                         <span
                           class="site-domain"
-                          style="color: #6b7280; font-size: 12px; margin-left: 8px"
+                          style="
+                            color: #6b7280;
+                            font-size: 12px;
+                            margin-left: 8px;
+                          "
                         ></span>
                       </div>
                       <div
@@ -1335,8 +1399,12 @@
                           flex-wrap: wrap;
                         "
                       >
-                        <div style="display: flex; align-items: center; gap: 6px">
-                          <label style="font-size: 12px; color: #6b7280">Schedule:</label>
+                        <div
+                          style="display: flex; align-items: center; gap: 6px"
+                        >
+                          <label style="font-size: 12px; color: #6b7280"
+                            >Schedule:</label
+                          >
                           <select
                             class="site-schedule"
                             bbb-action="site-schedule-change"
@@ -1357,8 +1425,12 @@
                             <option value="48">Every 48 hours</option>
                           </select>
                         </div>
-                        <div style="display: flex; align-items: center; gap: 6px">
-                          <label style="font-size: 12px; color: #6b7280">Run on Publish:</label>
+                        <div
+                          style="display: flex; align-items: center; gap: 6px"
+                        >
+                          <label style="font-size: 12px; color: #6b7280"
+                            >Run on Publish:</label
+                          >
                           <label
                             class="bb-toggle"
                             style="
@@ -1407,12 +1479,20 @@
                     ></div>
                   </div>
 
-                  <div id="webflowSitesLoading" style="text-align: center; padding: 20px; color: #6b7280">
+                  <div
+                    id="webflowSitesLoading"
+                    style="text-align: center; padding: 20px; color: #6b7280"
+                  >
                     Loading sites...
                   </div>
                   <div
                     id="webflowSitesEmpty"
-                    style="display: none; text-align: center; padding: 20px; color: #6b7280"
+                    style="
+                      display: none;
+                      text-align: center;
+                      padding: 20px;
+                      color: #6b7280;
+                    "
                   >
                     No sites found in this Webflow workspace.
                   </div>
@@ -1432,7 +1512,11 @@
                     id="webflowSitesPrevPage"
                     class="bb-button bb-button-outline"
                     bbb-action="webflow-sites-prev"
-                    style="font-size: 12px; padding: 4px 12px; margin-right: 8px"
+                    style="
+                      font-size: 12px;
+                      padding: 4px 12px;
+                      margin-right: 8px;
+                    "
                     aria-label="Previous page of Webflow sites"
                     disabled
                   >
@@ -1599,7 +1683,11 @@
             </button>
           </div>
         </form>
-        <div id="createOrgError" class="bb-auth-error" style="display: none"></div>
+        <div
+          id="createOrgError"
+          class="bb-auth-error"
+          style="display: none"
+        ></div>
       </div>
     </div>
 

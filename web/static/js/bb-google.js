@@ -952,7 +952,9 @@ async function handleGoogleOAuthCallback() {
       pendingGASessionData = sessionData;
 
       // Ensure analytics section is visible
-      const analyticsSection = document.getElementById("googleAnalyticsSection");
+      const analyticsSection = document.getElementById(
+        "googleAnalyticsSection"
+      );
       if (analyticsSection) {
         analyticsSection.scrollIntoView({ behavior: "smooth", block: "start" });
       }
