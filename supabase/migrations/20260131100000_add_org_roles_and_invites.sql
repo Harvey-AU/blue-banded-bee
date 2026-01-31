@@ -66,11 +66,13 @@ ON organisation_invites(organisation_id, lower(email))
 WHERE accepted_at IS NULL AND revoked_at IS NULL;
 
 -- =============================================================================
--- STEP 3: Row-level security (select only)
+-- STEP 3: Row-level security (admin only)
 -- =============================================================================
 ALTER TABLE organisation_invites ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "Users can view org invites" ON organisation_invites;
+
+DROP POLICY IF EXISTS "Admins can manage org invites" ON organisation_invites;
 
 CREATE POLICY "Users can view org invites"
 ON organisation_invites FOR SELECT
@@ -79,5 +81,26 @@ USING (
         SELECT om.organisation_id
         FROM organisation_members om
         WHERE om.user_id = (SELECT auth.uid())
+          AND om.role = 'admin'
+    )
+);
+
+CREATE POLICY "Admins can manage org invites"
+ON organisation_invites
+FOR ALL
+USING (
+    organisation_id IN (
+        SELECT om.organisation_id
+        FROM organisation_members om
+        WHERE om.user_id = (SELECT auth.uid())
+          AND om.role = 'admin'
+    )
+)
+WITH CHECK (
+    organisation_id IN (
+        SELECT om.organisation_id
+        FROM organisation_members om
+        WHERE om.user_id = (SELECT auth.uid())
+          AND om.role = 'admin'
     )
 );
