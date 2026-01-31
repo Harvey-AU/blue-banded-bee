@@ -307,10 +307,11 @@ func (db *DB) GetOrganisation(organisationID string) (*Organisation, error) {
 
 func (db *DB) GetOrganisationMembers(organisationID string) ([]*User, error) {
 	query := `
-		SELECT id, email, full_name, organisation_id, active_organisation_id, slack_user_id, created_at, updated_at
-		FROM users
-		WHERE organisation_id = $1
-		ORDER BY created_at ASC
+		SELECT u.id, u.email, u.full_name, u.organisation_id, u.active_organisation_id, u.slack_user_id, u.created_at, u.updated_at
+		FROM organisation_members om
+		JOIN users u ON u.id = om.user_id
+		WHERE om.organisation_id = $1
+		ORDER BY om.created_at ASC
 	`
 
 	rows, err := db.client.Query(query, organisationID)
@@ -376,6 +377,7 @@ func (db *DB) CreateUser(userID, email string, fullName *string, orgName string)
 
 	// For business emails, check if organisation already exists
 	var org *Organisation
+	createdNewOrg := false
 	if isBusinessEmail(email) {
 		existingOrg, err := db.GetOrganisationByName(orgName)
 		if err == nil {
@@ -391,6 +393,7 @@ func (db *DB) CreateUser(userID, email string, fullName *string, orgName string)
 
 	// If no existing organisation found (or personal email), create new one
 	if org == nil {
+		createdNewOrg = true
 		org = &Organisation{
 			ID:   uuid.New().String(),
 			Name: orgName,
@@ -432,14 +435,20 @@ func (db *DB) CreateUser(userID, email string, fullName *string, orgName string)
 		return nil, nil, fmt.Errorf("failed to create user: %w", err)
 	}
 
+	memberRole := "member"
+	if createdNewOrg {
+		memberRole = "admin"
+	}
+
 	// Add user to organisation_members table
 	memberQuery := `
-		INSERT INTO organisation_members (user_id, organisation_id, created_at)
-		VALUES ($1, $2, NOW())
-		ON CONFLICT (user_id, organisation_id) DO NOTHING
+		INSERT INTO organisation_members (user_id, organisation_id, role, created_at)
+		VALUES ($1, $2, $3, NOW())
+		ON CONFLICT (user_id, organisation_id) DO UPDATE
+		SET role = EXCLUDED.role
 	`
 
-	_, err = tx.Exec(memberQuery, user.ID, org.ID)
+	_, err = tx.Exec(memberQuery, user.ID, org.ID, memberRole)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to add organisation membership: %w", err)
 	}
@@ -554,14 +563,19 @@ func (db *DB) SetActiveOrganisation(userID, organisationID string) error {
 }
 
 // AddOrganisationMember adds a user as a member of an organisation
-func (db *DB) AddOrganisationMember(userID, organisationID string) error {
+func (db *DB) AddOrganisationMember(userID, organisationID, role string) error {
+	if role == "" {
+		role = "member"
+	}
+
 	query := `
-		INSERT INTO organisation_members (user_id, organisation_id, created_at)
-		VALUES ($1, $2, NOW())
-		ON CONFLICT (user_id, organisation_id) DO NOTHING
+		INSERT INTO organisation_members (user_id, organisation_id, role, created_at)
+		VALUES ($1, $2, $3, NOW())
+		ON CONFLICT (user_id, organisation_id) DO UPDATE
+		SET role = EXCLUDED.role
 	`
 
-	_, err := db.client.Exec(query, userID, organisationID)
+	_, err := db.client.Exec(query, userID, organisationID, role)
 	if err != nil {
 		return fmt.Errorf("failed to add organisation member: %w", err)
 	}
@@ -607,6 +621,14 @@ func (db *DB) GetOrganisationUsageStats(ctx context.Context, orgID string) (*Usa
 		return nil, fmt.Errorf("failed to get organisation usage stats: %w", err)
 	}
 
+	planQuery := `SELECT plan_id FROM organisations WHERE id = $1`
+	if err := db.client.QueryRowContext(ctx, planQuery, orgID).Scan(&stats.PlanID); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("organisation not found: %s", orgID)
+		}
+		return nil, fmt.Errorf("failed to get organisation plan: %w", err)
+	}
+
 	// Calculate percentage
 	if stats.DailyLimit > 0 {
 		stats.UsagePercentage = float64(stats.DailyUsed) / float64(stats.DailyLimit) * 100
@@ -621,6 +643,7 @@ type UsageStats struct {
 	DailyUsed       int       `json:"daily_used"`
 	DailyRemaining  int       `json:"daily_remaining"`
 	UsagePercentage float64   `json:"usage_percentage"`
+	PlanID          string    `json:"plan_id"`
 	PlanName        string    `json:"plan_name"`
 	PlanDisplayName string    `json:"plan_display_name"`
 	ResetsAt        time.Time `json:"resets_at"`
