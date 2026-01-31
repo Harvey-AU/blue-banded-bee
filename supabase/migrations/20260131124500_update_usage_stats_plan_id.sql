@@ -1,6 +1,8 @@
 -- =============================================================================
 -- Update get_organisation_usage_stats to include plan_id
 -- =============================================================================
+DROP FUNCTION IF EXISTS get_organisation_usage_stats(UUID);
+
 CREATE OR REPLACE FUNCTION get_organisation_usage_stats(p_org_id UUID)
 RETURNS TABLE(
     daily_limit INTEGER,
