@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/mail"
 	"net/url"
 	"os"
 	"strconv"
@@ -658,7 +659,11 @@ func (h *Handler) createOrganisationInvite(w http.ResponseWriter, r *http.Reques
 	}
 
 	email := strings.TrimSpace(strings.ToLower(req.Email))
-	if email == "" || !strings.Contains(email, "@") {
+	if email == "" {
+		BadRequest(w, r, "Valid email is required")
+		return
+	}
+	if _, err := mail.ParseAddress(email); err != nil {
 		BadRequest(w, r, "Valid email is required")
 		return
 	}
@@ -786,7 +791,8 @@ func sendSupabaseInviteEmail(ctx context.Context, email, redirectTo string, data
 	req.Header.Set("apikey", serviceKey)
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := http.DefaultClient.Do(req)
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to send invite request: %w", err)
 	}
