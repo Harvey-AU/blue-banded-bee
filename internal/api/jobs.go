@@ -746,13 +746,17 @@ type TaskQueryBuilder struct {
 // buildTaskQuery constructs SQL queries for task retrieval with filters and pagination
 func buildTaskQuery(jobID string, params TaskQueryParams) TaskQueryBuilder {
 	baseQuery := `
-		SELECT t.id, t.job_id, p.path, d.name as domain, t.status, t.status_code, t.response_time, 
+		SELECT t.id, t.job_id, p.path, d.name as domain, t.status, t.status_code, t.response_time,
 		       t.cache_status, t.second_response_time, t.second_cache_status, t.content_type, t.error, t.source_type, t.source_url,
-		       t.created_at, t.started_at, t.completed_at, t.retry_count
+		       t.created_at, t.started_at, t.completed_at, t.retry_count,
+		       pa.page_views_7d, pa.page_views_28d, pa.page_views_180d
 		FROM tasks t
 		JOIN pages p ON t.page_id = p.id
 		JOIN jobs j ON t.job_id = j.id
 		JOIN domains d ON j.domain_id = d.id
+		LEFT JOIN page_analytics pa ON pa.organisation_id = j.organisation_id
+			AND pa.domain_id = p.domain_id
+			AND pa.path = p.path
 		WHERE t.job_id = $1`
 
 	countQuery := `
@@ -808,12 +812,14 @@ func formatTasksFromRows(rows *sql.Rows) ([]TaskResponse, error) {
 		var domain string
 		var startedAt, completedAt, createdAt sql.NullTime
 		var statusCode, responseTime, secondResponseTime sql.NullInt32
+		var pageViews7d, pageViews28d, pageViews180d sql.NullInt64
 		var cacheStatus, secondCacheStatus, contentType, errorMsg, sourceType, sourceURL sql.NullString
 
 		err := rows.Scan(
 			&task.ID, &task.JobID, &task.Path, &domain, &task.Status,
 			&statusCode, &responseTime, &cacheStatus, &secondResponseTime, &secondCacheStatus, &contentType, &errorMsg, &sourceType, &sourceURL,
 			&createdAt, &startedAt, &completedAt, &task.RetryCount,
+			&pageViews7d, &pageViews28d, &pageViews180d,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan task row: %w", err)
@@ -860,6 +866,18 @@ func formatTasksFromRows(rows *sql.Rows) ([]TaskResponse, error) {
 		if completedAt.Valid {
 			ca := completedAt.Time.Format(time.RFC3339)
 			task.CompletedAt = &ca
+		}
+		if pageViews7d.Valid {
+			pv := int(pageViews7d.Int64)
+			task.PageViews7d = &pv
+		}
+		if pageViews28d.Valid {
+			pv := int(pageViews28d.Int64)
+			task.PageViews28d = &pv
+		}
+		if pageViews180d.Valid {
+			pv := int(pageViews180d.Int64)
+			task.PageViews180d = &pv
 		}
 
 		// Format created_at
@@ -918,6 +936,9 @@ type TaskResponse struct {
 	StartedAt          *string `json:"started_at,omitempty"`
 	CompletedAt        *string `json:"completed_at,omitempty"`
 	RetryCount         int     `json:"retry_count"`
+	PageViews7d        *int    `json:"page_views_7d,omitempty"`
+	PageViews28d       *int    `json:"page_views_28d,omitempty"`
+	PageViews180d      *int    `json:"page_views_180d,omitempty"`
 }
 
 // ExportColumn describes a column in exported task datasets
@@ -933,6 +954,9 @@ func taskExportColumns(exportType string) []ExportColumn {
 			{Key: "source_url", Label: "Found on"},
 			{Key: "url", Label: "Broken link"},
 			{Key: "status", Label: "Status"},
+			{Key: "page_views_7d", Label: "Views (7d)"},
+			{Key: "page_views_28d", Label: "Views (28d)"},
+			{Key: "page_views_180d", Label: "Views (180d)"},
 			{Key: "created_at", Label: "Date"},
 			{Key: "source_type", Label: "Source Type"},
 		}
@@ -943,6 +967,9 @@ func taskExportColumns(exportType string) []ExportColumn {
 			{Key: "cache_status", Label: "Cache Status"},
 			{Key: "response_time", Label: "Load Time (ms)"},
 			{Key: "second_response_time", Label: "Load Time 2nd try (ms)"},
+			{Key: "page_views_7d", Label: "Views (7d)"},
+			{Key: "page_views_28d", Label: "Views (28d)"},
+			{Key: "page_views_180d", Label: "Views (180d)"},
 			{Key: "created_at", Label: "Date"},
 		}
 	default: // "job" (all tasks)
@@ -962,6 +989,9 @@ func taskExportColumns(exportType string) []ExportColumn {
 			{Key: "error", Label: "Error"},
 			{Key: "source_type", Label: "Source"},
 			{Key: "source_url", Label: "Source page"},
+			{Key: "page_views_7d", Label: "Views (7d)"},
+			{Key: "page_views_28d", Label: "Views (28d)"},
+			{Key: "page_views_180d", Label: "Views (180d)"},
 			{Key: "created_at", Label: "Created At"},
 			{Key: "started_at", Label: "Started At"},
 			{Key: "completed_at", Label: "Completed At"},
@@ -1079,10 +1109,15 @@ func (h *Handler) serveJobExport(w http.ResponseWriter, r *http.Request, jobID s
 			t.status, t.status_code, t.response_time, t.cache_status,
 			t.second_response_time, t.second_cache_status,
 			t.content_type, t.error, t.source_type, t.source_url,
-			t.created_at, t.started_at, t.completed_at, t.retry_count
+			t.created_at, t.started_at, t.completed_at, t.retry_count,
+			pa.page_views_7d, pa.page_views_28d, pa.page_views_180d
 		FROM tasks t
 		JOIN pages p ON t.page_id = p.id
 		JOIN domains d ON p.domain_id = d.id
+		JOIN jobs j ON t.job_id = j.id
+		LEFT JOIN page_analytics pa ON pa.organisation_id = j.organisation_id
+			AND pa.domain_id = p.domain_id
+			AND pa.path = p.path
 		WHERE t.job_id = $1%s
 		ORDER BY t.created_at DESC
 		LIMIT 10000

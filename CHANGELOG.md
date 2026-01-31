@@ -62,6 +62,8 @@ On merge, CI will:
   - Traffic scores calculated after GA4 fetch completes, applied to pending
     tasks for reprioritisation
   - Link discovery also applies traffic scores via `GREATEST`
+- **Job Detail Analytics**: Job tasks and exports now include GA4 page views
+  (7d, 28d, 180d)
 
 ### Changed
 

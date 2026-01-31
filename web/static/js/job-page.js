@@ -44,6 +44,13 @@ function formatCount(value) {
   return integerFormatter.format(numeric);
 }
 
+function formatOptionalCount(value, empty = "—") {
+  if (value === null || value === undefined) {
+    return empty;
+  }
+  return formatCount(value);
+}
+
 function formatDecimal(value) {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) {
@@ -450,6 +457,9 @@ function formatTasksForBinding(tasks, defaultDomain) {
         empty: "—",
       }),
       status_code: task.status_code != null ? String(task.status_code) : "—",
+      page_views_7d: formatOptionalCount(task.page_views_7d),
+      page_views_28d: formatOptionalCount(task.page_views_28d),
+      page_views_180d: formatOptionalCount(task.page_views_180d),
     };
   });
 }
@@ -491,6 +501,9 @@ function renderTasksTable(tasks) {
           <td>${escapeHTML(task.cache_status)}</td>
           <td>${escapeHTML(task.second_response_time)}</td>
           <td>${escapeHTML(task.status_code)}</td>
+          <td>${escapeHTML(task.page_views_7d)}</td>
+          <td>${escapeHTML(task.page_views_28d)}</td>
+          <td>${escapeHTML(task.page_views_180d)}</td>
         </tr>
       `
     )
@@ -517,6 +530,9 @@ function renderTaskHeader(state) {
     { key: "cache_status", label: "Cache Status" },
     { key: "second_response_time", label: "2nd Response (ms)" },
     { key: "status_code", label: "Status Code" },
+    { key: "page_views_7d", label: "Views (7d)" },
+    { key: "page_views_28d", label: "Views (28d)" },
+    { key: "page_views_180d", label: "Views (180d)" },
   ];
 
   const headerHtml = headers
