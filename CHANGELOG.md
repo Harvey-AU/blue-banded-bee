@@ -54,8 +54,8 @@ On merge, CI will:
 - **Job Response Enhancement**: Job creation response now includes `domain_id`
 - **Traffic-Based Task Prioritisation**: High-traffic pages now get prioritised
   in the crawl queue
-  - Pages ranked by percentile: top 1% (0.99), top 2.5% (0.97), top 5% (0.95),
-    top 10% (0.90), top 25% (0.80), top 50% (0.60)
+  - Log-scaled view curve assigns scores from 0.10 to 0.99 based on 28-day page
+    views
   - Uses `GREATEST(structural_priority, traffic_score)` so traffic and structure
     both contribute
   - Traffic scores calculated after GA4 fetch completes, applied to pending

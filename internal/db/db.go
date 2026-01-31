@@ -783,33 +783,35 @@ func (db *DB) UpsertPageWithAnalytics(
 }
 
 // CalculateTrafficScores calculates and stores traffic scores for all pages in a domain
-// based on page-view rank percentiles. Uses 28-day page views as the primary signal.
-// Scores: 0.99 (top 1%), 0.97 (top 2.5%), 0.95 (top 5%), 0.90 (top 10%),
-// 0.80 (top 25%), 0.60 (top 50%), 0 (bottom 50%)
+// using a log-scaled view curve (28-day). This emphasises high-traffic pages while
+// keeping the long tail near the floor.
+// Score range: 0.10 (floor) to 0.99 (ceiling).
 func (db *DB) CalculateTrafficScores(ctx context.Context, organisationID string, domainID int) error {
-	// Calculate percentile thresholds and update scores in a single query.
+	// Calculate log-scaled scores in a single query.
 	query := `
-		WITH percentiles AS (
+		WITH stats AS (
 			SELECT
 				id,
-				page_views_28d,
-				PERCENT_RANK() OVER (ORDER BY page_views_28d DESC) as pct_rank
+				COALESCE(page_views_28d, 0) AS page_views_28d,
+				MIN(COALESCE(page_views_28d, 0)) OVER () AS min_views,
+				MAX(COALESCE(page_views_28d, 0)) OVER () AS max_views
 			FROM page_analytics
 			WHERE organisation_id = $1 AND domain_id = $2
 		)
 		UPDATE page_analytics pa
 		SET traffic_score = CASE
-			WHEN p.pct_rank <= 0.01 THEN 0.99  -- Top 1%
-			WHEN p.pct_rank <= 0.025 THEN 0.97 -- Top 2.5%
-			WHEN p.pct_rank <= 0.05 THEN 0.95  -- Top 5%
-			WHEN p.pct_rank <= 0.10 THEN 0.90  -- Top 10%
-			WHEN p.pct_rank <= 0.25 THEN 0.80  -- Top 25%
-			WHEN p.pct_rank <= 0.50 THEN 0.60  -- Top 50%
-			ELSE 0                              -- Bottom 50%
+			WHEN s.max_views = 0 THEN 0.10
+			WHEN s.max_views = s.min_views THEN 0.10
+			ELSE 0.10 + 0.89 * (
+				LN(s.page_views_28d + 1) - LN(s.min_views + 1)
+			) / NULLIF(
+				LN(s.max_views + 1) - LN(s.min_views + 1),
+				0
+			)
 		END,
 		updated_at = NOW()
-		FROM percentiles p
-		WHERE pa.id = p.id
+		FROM stats s
+		WHERE pa.id = s.id
 	`
 
 	result, err := db.client.ExecContext(ctx, query, organisationID, domainID)
