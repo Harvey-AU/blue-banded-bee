@@ -602,7 +602,7 @@ func (db *DB) GetEffectiveOrganisationID(user *User) string {
 
 // GetOrganisationUsageStats returns current usage statistics for an organisation
 func (db *DB) GetOrganisationUsageStats(ctx context.Context, orgID string) (*UsageStats, error) {
-	query := `SELECT daily_limit, daily_used, daily_remaining, plan_name, plan_display_name, reset_time
+	query := `SELECT daily_limit, daily_used, daily_remaining, plan_id, plan_name, plan_display_name, reset_time
 	          FROM get_organisation_usage_stats($1)`
 
 	var stats UsageStats
@@ -610,6 +610,7 @@ func (db *DB) GetOrganisationUsageStats(ctx context.Context, orgID string) (*Usa
 		&stats.DailyLimit,
 		&stats.DailyUsed,
 		&stats.DailyRemaining,
+		&stats.PlanID,
 		&stats.PlanName,
 		&stats.PlanDisplayName,
 		&stats.ResetsAt,
@@ -619,14 +620,6 @@ func (db *DB) GetOrganisationUsageStats(ctx context.Context, orgID string) (*Usa
 			return nil, fmt.Errorf("organisation not found or has no plan: %s", orgID)
 		}
 		return nil, fmt.Errorf("failed to get organisation usage stats: %w", err)
-	}
-
-	planQuery := `SELECT plan_id FROM organisations WHERE id = $1`
-	if err := db.client.QueryRowContext(ctx, planQuery, orgID).Scan(&stats.PlanID); err != nil {
-		if err == sql.ErrNoRows {
-			return nil, fmt.Errorf("organisation not found: %s", orgID)
-		}
-		return nil, fmt.Errorf("failed to get organisation plan: %w", err)
 	}
 
 	// Calculate percentage
