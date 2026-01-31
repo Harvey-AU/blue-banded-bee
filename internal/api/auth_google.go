@@ -293,7 +293,10 @@ func (h *Handler) HandleGoogleOAuthCallback(w http.ResponseWriter, r *http.Reque
 		}
 
 		if err := h.DB.UpsertGA4Account(r.Context(), dbAccount); err != nil {
-			logger.Warn().Err(err).Str("account_id", acc.AccountID).Msg("Failed to upsert GA4 account to DB")
+			logger.Warn().Err(err).
+				Str("account_id", acc.AccountID).
+				Str("next_action", "retry_upsert_or_check_db_connectivity").
+				Msg("Failed to upsert GA4 account to DB")
 			// Continue anyway - the pending session flow will still work
 			continue
 		}
@@ -301,7 +304,10 @@ func (h *Handler) HandleGoogleOAuthCallback(w http.ResponseWriter, r *http.Reque
 		// Store token against each account for future refresh operations
 		if tokenResp.RefreshToken != "" {
 			if err := h.DB.StoreGA4AccountToken(r.Context(), dbAccount.ID, tokenResp.RefreshToken); err != nil {
-				logger.Warn().Err(err).Str("account_id", acc.AccountID).Msg("Failed to store GA4 account token")
+				logger.Warn().Err(err).
+					Str("account_id", acc.AccountID).
+					Str("next_action", "retry_store_token_or_check_vault_permissions").
+					Msg("Failed to store GA4 account token")
 			}
 		}
 	}

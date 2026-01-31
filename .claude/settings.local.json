@@ -110,9 +110,6 @@
       "Bash(golangci-lint run:*)",
       "mcp__plugin_serena_serena__read_file",
       "mcp__plugin_sentry_sentry__whoami",
-      "mcp__plugin_sentry_sentry__find_organizations",
-      "Bash(xargs:*)",
-      "Bash(coderabbit review:*)",
       "Bash(go version:*)",
       "Bash(go mod edit:*)"
     ],
