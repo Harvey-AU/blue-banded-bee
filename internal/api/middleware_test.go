@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -188,8 +189,12 @@ func TestLoggingMiddleware(t *testing.T) {
 			// Verify response
 			assert.Equal(t, tt.responseCode, rec.Code)
 
-			// Verify duration was recorded (should be > 0)
-			assert.Greater(t, duration.Nanoseconds(), int64(0))
+			// Verify duration was recorded (timer granularity can yield 0 on Windows)
+			if runtime.GOOS == "windows" {
+				assert.GreaterOrEqual(t, duration.Nanoseconds(), int64(0))
+			} else {
+				assert.Greater(t, duration.Nanoseconds(), int64(0))
+			}
 		})
 	}
 }

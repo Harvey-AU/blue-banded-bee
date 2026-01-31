@@ -10,9 +10,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -262,17 +264,7 @@ func startTestJWKS(tb testing.TB) (*rsa.PrivateKey, string, string, func()) {
 	payload, err := json.Marshal(jwksPayload)
 	require.NoError(tb, err)
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/auth/v1/.well-known/jwks.json" {
-			http.NotFound(w, r)
-			return
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		if _, writeErr := w.Write(payload); writeErr != nil {
-			tb.Logf("failed to write JWKS payload: %v", writeErr)
-		}
-	}))
+	server := newJWKSHTTPServer(tb, payload)
 
 	supabaseURL := strings.TrimSuffix(server.URL, "/")
 
@@ -360,17 +352,7 @@ func startTestJWKSWithES256(tb testing.TB) (*ecdsa.PrivateKey, string, string, f
 	payload, err := json.Marshal(jwksPayload)
 	require.NoError(tb, err)
 
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/auth/v1/.well-known/jwks.json" {
-			http.NotFound(w, r)
-			return
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		if _, writeErr := w.Write(payload); writeErr != nil {
-			tb.Logf("failed to write JWKS payload: %v", writeErr)
-		}
-	}))
+	server := newJWKSHTTPServer(tb, payload)
 
 	supabaseURL := strings.TrimSuffix(server.URL, "/")
 
@@ -422,4 +404,38 @@ func signTestTokenES256(tb testing.TB, privateKey *ecdsa.PrivateKey, kid, supaba
 	require.NoError(tb, err)
 
 	return signed
+}
+
+func newJWKSHTTPServer(tb testing.TB, payload []byte) *httptest.Server {
+	tb.Helper()
+
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/auth/v1/.well-known/jwks.json" {
+			http.NotFound(w, r)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		if _, writeErr := w.Write(payload); writeErr != nil {
+			tb.Logf("failed to write JWKS payload: %v", writeErr)
+		}
+	})
+
+	listener, err := net.Listen("tcp4", "127.0.0.1:0")
+	if err != nil {
+		if runtime.GOOS == "windows" {
+			tb.Skipf("skipping JWKS server on Windows: %v", err)
+		}
+		require.NoError(tb, err)
+	}
+
+	server := &httptest.Server{
+		Listener: listener,
+		Config: &http.Server{
+			Handler: handler,
+		},
+	}
+	server.Start()
+
+	return server
 }
