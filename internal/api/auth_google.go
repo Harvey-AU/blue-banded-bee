@@ -18,6 +18,7 @@ import (
 	"github.com/Harvey-AU/blue-banded-bee/internal/db"
 	"github.com/google/uuid"
 	"github.com/lib/pq"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
 
@@ -332,7 +333,7 @@ func (h *Handler) HandleGoogleOAuthCallback(w http.ResponseWriter, r *http.Reque
 
 	// If single account, auto-fetch properties for it
 	if len(accounts) == 1 {
-		properties, err := h.fetchPropertiesForAccount(r.Context(), &http.Client{Timeout: 30 * time.Second}, tokenResp.AccessToken, accounts[0].AccountID)
+		properties, err := h.fetchPropertiesForAccount(r.Context(), logger, &http.Client{Timeout: 30 * time.Second}, tokenResp.AccessToken, accounts[0].AccountID)
 		if err != nil {
 			logger.Error().Err(err).Msg("Failed to fetch properties for single account")
 			h.redirectToDashboardWithError(w, r, "Google", "Failed to fetch properties for account")
@@ -502,6 +503,18 @@ func (h *Handler) SaveGoogleProperties(w http.ResponseWriter, r *http.Request) {
 		activeSet[pid] = true
 	}
 
+	organisationDomains, err := h.DB.GetDomainsForOrganisation(r.Context(), orgID)
+	if err != nil {
+		logger.Error().Err(err).Str("organisation_id", orgID).Msg("Failed to fetch organisation domains")
+		InternalError(w, r, err)
+		return
+	}
+
+	allowedDomainIDs := make(map[int]struct{}, len(organisationDomains))
+	for _, domain := range organisationDomains {
+		allowedDomainIDs[domain.ID] = struct{}{}
+	}
+
 	// Save all properties as connections
 	now := time.Now().UTC()
 	var savedCount int
@@ -513,14 +526,17 @@ func (h *Handler) SaveGoogleProperties(w http.ResponseWriter, r *http.Request) {
 
 		// Get domain IDs for this property (default to empty array if not provided)
 		domainIDs := req.PropertyDomainMap[prop.PropertyID]
+		for _, id := range domainIDs {
+			if _, ok := allowedDomainIDs[id]; !ok {
+				BadRequest(w, r, "Domain does not belong to organisation")
+				return
+			}
+		}
 
 		// Convert []int to pq.Int64Array
-		var domainIDsArray pq.Int64Array
-		if domainIDs != nil {
-			domainIDsArray = make(pq.Int64Array, len(domainIDs))
-			for i, id := range domainIDs {
-				domainIDsArray[i] = int64(id)
-			}
+		domainIDsArray := make(pq.Int64Array, len(domainIDs))
+		for i, id := range domainIDs {
+			domainIDsArray[i] = int64(id)
 		}
 
 		conn := &db.GoogleAnalyticsConnection{
@@ -673,7 +689,11 @@ func (h *Handler) UpdateGoogleConnection(w http.ResponseWriter, r *http.Request,
 	conn, err := h.DB.GetGoogleConnection(r.Context(), connectionID)
 	if err != nil {
 		logger.Error().Err(err).Str("connection_id", connectionID).Msg("Failed to get connection")
-		NotFound(w, r, "Connection not found")
+		if errors.Is(err, db.ErrGoogleConnectionNotFound) {
+			NotFound(w, r, "Connection not found")
+			return
+		}
+		InternalError(w, r, err)
 		return
 	}
 
@@ -681,6 +701,25 @@ func (h *Handler) UpdateGoogleConnection(w http.ResponseWriter, r *http.Request,
 	if conn.OrganisationID != orgID {
 		Forbidden(w, r, "Access denied")
 		return
+	}
+
+	organisationDomains, err := h.DB.GetDomainsForOrganisation(r.Context(), orgID)
+	if err != nil {
+		logger.Error().Err(err).Str("organisation_id", orgID).Msg("Failed to fetch organisation domains")
+		InternalError(w, r, err)
+		return
+	}
+
+	allowedDomainIDs := make(map[int]struct{}, len(organisationDomains))
+	for _, domain := range organisationDomains {
+		allowedDomainIDs[domain.ID] = struct{}{}
+	}
+
+	for _, id := range req.DomainIDs {
+		if _, ok := allowedDomainIDs[id]; !ok {
+			Forbidden(w, r, "Domain does not belong to organisation")
+			return
+		}
 	}
 
 	// Update domain_ids
@@ -812,11 +851,11 @@ func (h *Handler) fetchGA4Accounts(ctx context.Context, accessToken string) ([]G
 	return accounts, nil
 }
 
-func (h *Handler) fetchPropertiesForAccount(ctx context.Context, client *http.Client, accessToken, accountName string) ([]GA4Property, error) {
+func (h *Handler) fetchPropertiesForAccount(ctx context.Context, logger zerolog.Logger, client *http.Client, accessToken, accountName string) ([]GA4Property, error) {
 	// URL-encode the filter value (accountName contains slash like "accounts/123456")
 	apiURL := fmt.Sprintf("https://analyticsadmin.googleapis.com/v1beta/properties?filter=parent:%s", url.QueryEscape(accountName))
 
-	log.Debug().Str("account_name", accountName).Msg("Fetching GA4 properties from API")
+	logger.Debug().Str("account_id", accountName).Msg("Fetching GA4 properties from API")
 
 	req, err := http.NewRequestWithContext(ctx, "GET", apiURL, nil)
 	if err != nil {
@@ -832,7 +871,7 @@ func (h *Handler) fetchPropertiesForAccount(ctx context.Context, client *http.Cl
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		log.Error().Int("status", resp.StatusCode).Str("body", string(body)).Msg("Google API properties request failed")
+		logger.Error().Int("status", resp.StatusCode).Str("body", string(body)).Msg("Google API properties request failed")
 		return nil, fmt.Errorf("properties endpoint returned status: %d", resp.StatusCode)
 	}
 
@@ -858,7 +897,7 @@ func (h *Handler) fetchPropertiesForAccount(ctx context.Context, client *http.Cl
 		})
 	}
 
-	log.Debug().Str("account_name", accountName).Int("property_count", len(properties)).Msg("Fetched GA4 properties")
+	logger.Debug().Str("account_id", accountName).Int("property_count", len(properties)).Msg("Fetched GA4 properties")
 
 	return properties, nil
 }
@@ -893,110 +932,7 @@ func (h *Handler) GoogleConnectionHandler(w http.ResponseWriter, r *http.Request
 		BadRequest(w, r, "Connection ID is required")
 		return
 	}
-
-	// Handle callback separately (no auth required)
-	if path == "callback" {
-		if r.Method == http.MethodGet {
-			h.HandleGoogleOAuthCallback(w, r)
-			return
-		}
-		MethodNotAllowed(w, r)
-		return
-	}
-
-	// Handle save-property endpoint (single property - legacy)
-	if path == "save-property" {
-		if r.Method == http.MethodPost {
-			h.SaveGoogleProperty(w, r)
-			return
-		}
-		MethodNotAllowed(w, r)
-		return
-	}
-
-	// Handle save-properties endpoint (bulk save all properties from session)
-	if path == "save-properties" {
-		if r.Method == http.MethodPost {
-			h.SaveGoogleProperties(w, r)
-			return
-		}
-		MethodNotAllowed(w, r)
-		return
-	}
-
-	// Handle domains endpoint (get organisation domains for property mapping)
-	if path == "domains" {
-		if r.Method == http.MethodGet {
-			h.getOrganisationDomains(w, r)
-			return
-		}
-		MethodNotAllowed(w, r)
-		return
-	}
-
-	// Handle accounts endpoint (persistent storage of GA accounts)
-	if path == "accounts" {
-		h.ListGA4Accounts(w, r)
-		return
-	}
-
-	// Handle accounts/refresh endpoint (sync from Google API)
-	if path == "accounts/refresh" {
-		h.RefreshGA4Accounts(w, r)
-		return
-	}
-
-	// Handle accounts/{googleAccountId}/properties endpoint (fetch properties using stored token)
-	if googleAccountID := extractGoogleAccountIDFromPath(path); googleAccountID != "" {
-		h.GetAccountProperties(w, r, googleAccountID)
-		return
-	}
-
-	// Handle pending-session endpoint (get accounts/properties from server-side session)
-	if strings.HasPrefix(path, "pending-session/") {
-		sessionPath := strings.TrimPrefix(path, "pending-session/")
-		parts := strings.Split(sessionPath, "/")
-		sessionID := parts[0]
-
-		// Check if this is a request for a specific account's properties
-		// Format: pending-session/{sessionID}/accounts/{accountID}/properties
-		// Note: URL path segments are automatically decoded by the HTTP router,
-		// so "accounts%2F123456" becomes ["accounts", "123456"] in the parts array
-		isPropertiesRequest := false
-		var accountID string
-
-		// Check for two patterns:
-		// 1. parts = [sessionID, "accounts", "accounts", "123456", "properties"] (URL-decoded, 5 parts)
-		// 2. parts = [sessionID, "accounts", "accounts/123456", "properties"] (not decoded, 4 parts)
-		if len(parts) == 5 && parts[1] == "accounts" && parts[2] == "accounts" && parts[4] == "properties" {
-			// URL-decoded pattern: reconstruct account ID from parts[2] and parts[3]
-			accountID = parts[2] + "/" + parts[3]
-			isPropertiesRequest = true
-		} else if len(parts) == 4 && parts[1] == "accounts" && parts[3] == "properties" {
-			// Not decoded pattern (legacy or different router behaviour)
-			accountID = parts[2]
-			// URL-decode if needed
-			if decoded, err := url.PathUnescape(accountID); err == nil && decoded != accountID {
-				accountID = decoded
-			}
-			isPropertiesRequest = true
-		}
-
-		if isPropertiesRequest {
-			if r.Method == http.MethodGet {
-				h.fetchAccountProperties(w, r, sessionID, accountID)
-				return
-			}
-			MethodNotAllowed(w, r)
-			return
-		}
-
-		// Default: return session data
-		if r.Method == http.MethodGet {
-			h.getPendingSession(w, r, sessionID)
-			return
-		}
-		MethodNotAllowed(w, r)
+	if h.handleGoogleSpecialPaths(w, r, path) {
 		return
 	}
 
@@ -1031,10 +967,20 @@ func (h *Handler) GoogleConnectionHandler(w http.ResponseWriter, r *http.Request
 		}
 
 		// Restore body for handler to read
-		bodyBytes, _ := json.Marshal(bodyCheck)
+		bodyBytes, err := json.Marshal(bodyCheck)
+		if err != nil {
+			InternalError(w, r, err)
+			return
+		}
 		r.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 
-		if _, hasDomainIDs := bodyCheck["domain_ids"]; hasDomainIDs {
+		_, hasDomainIDs := bodyCheck["domain_ids"]
+		_, hasStatus := bodyCheck["status"]
+		if hasDomainIDs && hasStatus {
+			BadRequest(w, r, "Specify either domain_ids or status, not both")
+			return
+		}
+		if hasDomainIDs {
 			h.UpdateGoogleConnection(w, r, connectionID)
 		} else {
 			h.UpdateGooglePropertyStatus(w, r, connectionID)
@@ -1042,6 +988,120 @@ func (h *Handler) GoogleConnectionHandler(w http.ResponseWriter, r *http.Request
 	default:
 		MethodNotAllowed(w, r)
 	}
+}
+
+func (h *Handler) handleGoogleSpecialPaths(w http.ResponseWriter, r *http.Request, path string) bool {
+	// Handle callback separately (no auth required)
+	if path == "callback" {
+		if r.Method == http.MethodGet {
+			h.HandleGoogleOAuthCallback(w, r)
+			return true
+		}
+		MethodNotAllowed(w, r)
+		return true
+	}
+
+	// Handle save-property endpoint (single property - legacy)
+	if path == "save-property" {
+		if r.Method == http.MethodPost {
+			h.SaveGoogleProperty(w, r)
+			return true
+		}
+		MethodNotAllowed(w, r)
+		return true
+	}
+
+	// Handle save-properties endpoint (bulk save all properties from session)
+	if path == "save-properties" {
+		if r.Method == http.MethodPost {
+			h.SaveGoogleProperties(w, r)
+			return true
+		}
+		MethodNotAllowed(w, r)
+		return true
+	}
+
+	// Handle domains endpoint (get organisation domains for property mapping)
+	if path == "domains" {
+		if r.Method == http.MethodGet {
+			h.getOrganisationDomains(w, r)
+			return true
+		}
+		MethodNotAllowed(w, r)
+		return true
+	}
+
+	// Handle accounts endpoint (persistent storage of GA accounts)
+	if path == "accounts" {
+		h.ListGA4Accounts(w, r)
+		return true
+	}
+
+	// Handle accounts/refresh endpoint (sync from Google API)
+	if path == "accounts/refresh" {
+		h.RefreshGA4Accounts(w, r)
+		return true
+	}
+
+	// Handle accounts/{googleAccountId}/properties endpoint (fetch properties using stored token)
+	if googleAccountID := extractGoogleAccountIDFromPath(path); googleAccountID != "" {
+		h.GetAccountProperties(w, r, googleAccountID)
+		return true
+	}
+
+	// Handle pending-session endpoint (get accounts/properties from server-side session)
+	if strings.HasPrefix(path, "pending-session/") {
+		h.handlePendingSession(w, r, path)
+		return true
+	}
+
+	return false
+}
+
+func (h *Handler) handlePendingSession(w http.ResponseWriter, r *http.Request, path string) {
+	sessionPath := strings.TrimPrefix(path, "pending-session/")
+	parts := strings.Split(sessionPath, "/")
+	sessionID := parts[0]
+
+	// Check if this is a request for a specific account's properties
+	// Format: pending-session/{sessionID}/accounts/{accountID}/properties
+	// Note: URL path segments are automatically decoded by the HTTP router,
+	// so "accounts%2F123456" becomes ["accounts", "123456"] in the parts array
+	isPropertiesRequest := false
+	var accountID string
+
+	// Check for two patterns:
+	// 1. parts = [sessionID, "accounts", "accounts", "123456", "properties"] (URL-decoded, 5 parts)
+	// 2. parts = [sessionID, "accounts", "accounts/123456", "properties"] (not decoded, 4 parts)
+	if len(parts) == 5 && parts[1] == "accounts" && parts[2] == "accounts" && parts[4] == "properties" {
+		// URL-decoded pattern: reconstruct account ID from parts[2] and parts[3]
+		accountID = parts[2] + "/" + parts[3]
+		isPropertiesRequest = true
+	} else if len(parts) == 4 && parts[1] == "accounts" && parts[3] == "properties" {
+		// Not decoded pattern (legacy or different router behaviour)
+		accountID = parts[2]
+		// URL-decode if needed
+		if decoded, err := url.PathUnescape(accountID); err == nil && decoded != accountID {
+			accountID = decoded
+		}
+		isPropertiesRequest = true
+	}
+
+	if isPropertiesRequest {
+		if r.Method == http.MethodGet {
+			h.fetchAccountProperties(w, r, sessionID, accountID)
+			return
+		}
+		MethodNotAllowed(w, r)
+		return
+	}
+
+	// Default: return session data
+	if r.Method == http.MethodGet {
+		h.getPendingSession(w, r, sessionID)
+		return
+	}
+	MethodNotAllowed(w, r)
 }
 
 // getPendingSession returns the pending OAuth session data (accounts, properties, tokens)
@@ -1090,7 +1150,7 @@ func (h *Handler) fetchAccountProperties(w http.ResponseWriter, r *http.Request,
 	logger.Info().Str("account_id", accountID).Msg("Fetching GA4 properties")
 
 	client := &http.Client{Timeout: 30 * time.Second}
-	properties, err := h.fetchPropertiesForAccount(r.Context(), client, session.AccessToken, accountID)
+	properties, err := h.fetchPropertiesForAccount(r.Context(), logger, client, session.AccessToken, accountID)
 	if err != nil {
 		logger.Error().Err(err).Str("account_id", accountID).Msg("Failed to fetch properties for account")
 		InternalError(w, r, fmt.Errorf("failed to fetch properties: %w", err))
@@ -1540,7 +1600,7 @@ func (h *Handler) GetAccountProperties(w http.ResponseWriter, r *http.Request, g
 
 	// Fetch properties for this account from Google API
 	client := &http.Client{Timeout: 30 * time.Second}
-	properties, err := h.fetchPropertiesForAccount(r.Context(), client, accessToken, googleAccountID)
+	properties, err := h.fetchPropertiesForAccount(r.Context(), loggerWithRequest(r), client, accessToken, googleAccountID)
 	if err != nil {
 		logger.Error().Err(err).Str("google_account_id", googleAccountID).Msg("Failed to fetch GA4 properties")
 		InternalError(w, r, fmt.Errorf("failed to fetch properties: %w", err))

@@ -88,6 +88,7 @@ func TestValidateDomain(t *testing.T) {
 		{name: "co_uk_tld", input: "example.co.uk", wantError: false},
 		{name: "hyphen_in_domain", input: "my-site.example.com", wantError: false},
 		{name: "numbers_in_domain", input: "site123.example.com", wantError: false},
+		{name: "punycode_domain", input: "xn--nxasmq5b.com", wantError: false},
 
 		// Invalid domains - using publicsuffix error messages
 		{name: "no_tld", input: "asdfasdf", wantError: true, errorMsg: "invalid domain"},
@@ -97,6 +98,9 @@ func TestValidateDomain(t *testing.T) {
 		{name: "localhost", input: "localhost", wantError: true, errorMsg: "not allowed"},
 		{name: "localhost_with_subdomain", input: "api.localhost", wantError: true, errorMsg: "not allowed"},
 		{name: "internal", input: "internal", wantError: true, errorMsg: "not allowed"},
+		{name: "ip_address", input: "192.168.1.1", wantError: true, errorMsg: "not allowed"},
+		{name: "ipv6_address", input: "[2001:db8::1]", wantError: true, errorMsg: "port"},
+		{name: "domain_with_port", input: "example.com:8080", wantError: true, errorMsg: "port"},
 		{name: "just_suffix", input: "com", wantError: true, errorMsg: "invalid domain"},
 	}
 

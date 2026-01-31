@@ -2,6 +2,7 @@ package util
 
 import (
 	"fmt"
+	"net"
 	"net/url"
 	"strings"
 
@@ -35,9 +36,25 @@ func ValidateDomain(domain string) error {
 		return fmt.Errorf("domain cannot be empty")
 	}
 
+	if strings.Contains(domain, ":") {
+		return fmt.Errorf("domain must not include a port")
+	}
+
+	if net.ParseIP(domain) != nil {
+		return fmt.Errorf("domain %q is not allowed", domain)
+	}
+
 	// Block localhost and common internal hostnames before publicsuffix check
 	lowerDomain := strings.ToLower(domain)
-	blockedDomains := []string{"localhost", "localhost.localdomain", "local", "internal"}
+	blockedDomains := []string{
+		"localhost",
+		"localhost.localdomain",
+		"local",
+		"internal",
+		"test",
+		"example",
+		"invalid",
+	}
 	for _, blocked := range blockedDomains {
 		if lowerDomain == blocked || strings.HasSuffix(lowerDomain, "."+blocked) {
 			return fmt.Errorf("domain %q is not allowed", domain)

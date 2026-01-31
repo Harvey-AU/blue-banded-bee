@@ -989,7 +989,7 @@ func (h *Handler) WebflowWebhook(w http.ResponseWriter, r *http.Request) {
 		userForJob.ActiveOrganisationID = &orgID
 		userForJob.OrganisationID = &orgID
 	}
-	job, err := h.createJobFromRequest(r.Context(), &userForJob, req)
+	job, err := h.createJobFromRequest(r.Context(), &userForJob, req, logger)
 	if err != nil {
 		logger.Error().Err(err).
 			Str("user_id", user.ID).
