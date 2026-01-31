@@ -210,7 +210,7 @@ func (h *Handler) HandleGoogleOAuthCallback(w http.ResponseWriter, r *http.Reque
 
 	if errParam != "" {
 		logger.Warn().Str("error", errParam).Msg("Google OAuth denied")
-		h.redirectToDashboardWithError(w, r, "Google", "Google connection was cancelled")
+		h.redirectToSettingsWithError(w, r, "Google", "Google connection was cancelled", "analytics", "google-analytics")
 		return
 	}
 
@@ -223,7 +223,7 @@ func (h *Handler) HandleGoogleOAuthCallback(w http.ResponseWriter, r *http.Reque
 	state, err := h.validateOAuthState(stateParam)
 	if err != nil {
 		logger.Warn().Err(err).Msg("Invalid OAuth state")
-		h.redirectToDashboardWithError(w, r, "Google", "Invalid or expired state")
+		h.redirectToSettingsWithError(w, r, "Google", "Invalid or expired state", "analytics", "google-analytics")
 		return
 	}
 
@@ -231,7 +231,7 @@ func (h *Handler) HandleGoogleOAuthCallback(w http.ResponseWriter, r *http.Reque
 	tokenResp, err := h.exchangeGoogleCode(code)
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to exchange Google OAuth code")
-		h.redirectToDashboardWithError(w, r, "Google", "Failed to connect to Google")
+		h.redirectToSettingsWithError(w, r, "Google", "Failed to connect to Google", "analytics", "google-analytics")
 		return
 	}
 
@@ -249,12 +249,12 @@ func (h *Handler) HandleGoogleOAuthCallback(w http.ResponseWriter, r *http.Reque
 	accounts, err := h.fetchGA4Accounts(r.Context(), tokenResp.AccessToken)
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to fetch GA4 accounts")
-		h.redirectToDashboardWithError(w, r, "Google", "Failed to fetch Google Analytics accounts. Ensure GA4 is set up.")
+		h.redirectToSettingsWithError(w, r, "Google", "Failed to fetch Google Analytics accounts. Ensure GA4 is set up.", "analytics", "google-analytics")
 		return
 	}
 
 	if len(accounts) == 0 {
-		h.redirectToDashboardWithError(w, r, "Google", "No Google Analytics accounts found. Please set up GA4 first.")
+		h.redirectToSettingsWithError(w, r, "Google", "No Google Analytics accounts found. Please set up GA4 first.", "analytics", "google-analytics")
 		return
 	}
 
@@ -276,7 +276,7 @@ func (h *Handler) HandleGoogleOAuthCallback(w http.ResponseWriter, r *http.Reque
 		properties, err := h.fetchPropertiesForAccount(r.Context(), &http.Client{Timeout: 30 * time.Second}, tokenResp.AccessToken, accounts[0].AccountID)
 		if err != nil {
 			logger.Error().Err(err).Msg("Failed to fetch properties for single account")
-			h.redirectToDashboardWithError(w, r, "Google", "Failed to fetch properties for account")
+			h.redirectToSettingsWithError(w, r, "Google", "Failed to fetch properties for account", "analytics", "google-analytics")
 			return
 		}
 		session.Properties = properties
@@ -291,7 +291,10 @@ func (h *Handler) HandleGoogleOAuthCallback(w http.ResponseWriter, r *http.Reque
 		Msg("Stored GA4 session")
 
 	// Redirect with session ID
-	http.Redirect(w, r, getDashboardURL()+"?ga_session="+sessionID, http.StatusSeeOther)
+	params := url.Values{}
+	params.Set("ga_session", sessionID)
+	redirectURL := buildSettingsURL("analytics", params, "google-analytics")
+	http.Redirect(w, r, redirectURL, http.StatusSeeOther)
 }
 
 // SaveGoogleProperty saves the selected GA4 property

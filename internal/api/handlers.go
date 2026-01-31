@@ -124,9 +124,22 @@ type DBClient interface {
 	ValidateOrganisationMembership(userID, organisationID string) (bool, error)
 	SetActiveOrganisation(userID, organisationID string) error
 	GetEffectiveOrganisationID(user *db.User) string
+	GetOrganisationMemberRole(ctx context.Context, userID, organisationID string) (string, error)
+	ListOrganisationMembers(ctx context.Context, organisationID string) ([]db.OrganisationMember, error)
+	IsOrganisationMemberEmail(ctx context.Context, organisationID, email string) (bool, error)
+	RemoveOrganisationMember(ctx context.Context, userID, organisationID string) error
+	CountOrganisationAdmins(ctx context.Context, organisationID string) (int, error)
 	// Organisation management methods
 	CreateOrganisation(name string) (*db.Organisation, error)
-	AddOrganisationMember(userID, organisationID string) error
+	AddOrganisationMember(userID, organisationID, role string) error
+	CreateOrganisationInvite(ctx context.Context, invite *db.OrganisationInvite) (*db.OrganisationInvite, error)
+	ListOrganisationInvites(ctx context.Context, organisationID string) ([]db.OrganisationInvite, error)
+	RevokeOrganisationInvite(ctx context.Context, inviteID, organisationID string) error
+	GetOrganisationInviteByToken(ctx context.Context, token string) (*db.OrganisationInvite, error)
+	AcceptOrganisationInvite(ctx context.Context, token, userID string) (*db.OrganisationInvite, error)
+	SetOrganisationPlan(ctx context.Context, organisationID, planID string) error
+	GetOrganisationPlanID(ctx context.Context, organisationID string) (string, error)
+	ListDailyUsage(ctx context.Context, organisationID string, startDate, endDate time.Time) ([]db.DailyUsageEntry, error)
 	// Slack integration methods
 	CreateSlackConnection(ctx context.Context, conn *db.SlackConnection) error
 	GetSlackConnection(ctx context.Context, connectionID string) (*db.SlackConnection, error)
@@ -274,9 +287,16 @@ func (h *Handler) SetupRoutes(mux *http.ServeMux) {
 	// Organisation routes (require auth)
 	mux.Handle("/v1/organisations", auth.AuthMiddleware(http.HandlerFunc(h.OrganisationsHandler)))
 	mux.Handle("/v1/organisations/switch", auth.AuthMiddleware(http.HandlerFunc(h.SwitchOrganisationHandler)))
+	mux.Handle("/v1/organisations/members", auth.AuthMiddleware(http.HandlerFunc(h.OrganisationMembersHandler)))
+	mux.Handle("/v1/organisations/members/", auth.AuthMiddleware(http.HandlerFunc(h.OrganisationMemberHandler)))
+	mux.Handle("/v1/organisations/invites/accept", auth.AuthMiddleware(http.HandlerFunc(h.OrganisationInviteAcceptHandler)))
+	mux.Handle("/v1/organisations/invites", auth.AuthMiddleware(http.HandlerFunc(h.OrganisationInvitesHandler)))
+	mux.Handle("/v1/organisations/invites/", auth.AuthMiddleware(http.HandlerFunc(h.OrganisationInviteHandler)))
+	mux.Handle("/v1/organisations/plan", auth.AuthMiddleware(http.HandlerFunc(h.OrganisationPlanHandler)))
 
 	// Usage routes (require auth)
 	mux.Handle("/v1/usage", auth.AuthMiddleware(http.HandlerFunc(h.UsageHandler)))
+	mux.Handle("/v1/usage/history", auth.AuthMiddleware(http.HandlerFunc(h.UsageHistoryHandler)))
 
 	// Plans route (public - for pricing page)
 	mux.Handle("/v1/plans", http.HandlerFunc(h.PlansHandler))
@@ -352,6 +372,8 @@ func (h *Handler) SetupRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/test-data-components.html", h.ServeTestDataComponents)
 	mux.HandleFunc("/dashboard", h.ServeDashboard)
 	mux.HandleFunc("/dashboard-new", h.ServeNewDashboard)
+	mux.HandleFunc("/settings", h.ServeSettings)
+	mux.HandleFunc("/settings/", h.ServeSettings)
 	mux.HandleFunc("/auth-modal.html", h.ServeAuthModal)
 	mux.HandleFunc("/cli-login.html", h.ServeCliLogin)
 	mux.HandleFunc("/debug-auth.html", h.ServeDebugAuth)
@@ -430,6 +452,16 @@ func (h *Handler) ServeTestDataComponents(w http.ResponseWriter, r *http.Request
 // ServeDashboard serves the dashboard page
 func (h *Handler) ServeDashboard(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, "dashboard.html")
+}
+
+// ServeSettings serves the settings page
+func (h *Handler) ServeSettings(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		MethodNotAllowed(w, r)
+		return
+	}
+
+	http.ServeFile(w, r, "settings.html")
 }
 
 // ServeNewDashboard serves the new Web Components dashboard page

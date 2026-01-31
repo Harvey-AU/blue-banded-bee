@@ -241,7 +241,7 @@ func (h *Handler) handleSlackOAuthCallback(w http.ResponseWriter, r *http.Reques
 	// Check for error from Slack
 	if errParam := r.URL.Query().Get("error"); errParam != "" {
 		logger.Warn().Str("error", errParam).Msg("Slack OAuth denied")
-		h.redirectToDashboardWithError(w, r, "Slack", "Slack connection was cancelled")
+		h.redirectToSettingsWithError(w, r, "Slack", "Slack connection was cancelled", "notifications", "slack")
 		return
 	}
 
@@ -257,7 +257,7 @@ func (h *Handler) handleSlackOAuthCallback(w http.ResponseWriter, r *http.Reques
 	state, err := h.validateOAuthState(stateParam)
 	if err != nil {
 		logger.Warn().Err(err).Msg("Invalid OAuth state")
-		h.redirectToDashboardWithError(w, r, "Slack", "Invalid or expired state")
+		h.redirectToSettingsWithError(w, r, "Slack", "Invalid or expired state", "notifications", "slack")
 		return
 	}
 
@@ -272,7 +272,7 @@ func (h *Handler) handleSlackOAuthCallback(w http.ResponseWriter, r *http.Reques
 	)
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to exchange OAuth code")
-		h.redirectToDashboardWithError(w, r, "Slack", "Failed to connect to Slack")
+		h.redirectToSettingsWithError(w, r, "Slack", "Failed to connect to Slack", "notifications", "slack")
 		return
 	}
 
@@ -291,14 +291,14 @@ func (h *Handler) handleSlackOAuthCallback(w http.ResponseWriter, r *http.Reques
 
 	if err := h.DB.CreateSlackConnection(r.Context(), conn); err != nil {
 		logger.Error().Err(err).Msg("Failed to save Slack connection")
-		h.redirectToDashboardWithError(w, r, "Slack", "Failed to save connection")
+		h.redirectToSettingsWithError(w, r, "Slack", "Failed to save connection", "notifications", "slack")
 		return
 	}
 
 	// Store access token in Supabase Vault
 	if err := h.DB.StoreSlackToken(r.Context(), conn.ID, resp.AccessToken); err != nil {
 		logger.Error().Err(err).Msg("Failed to store access token in vault")
-		h.redirectToDashboardWithError(w, r, "Slack", "Failed to secure connection")
+		h.redirectToSettingsWithError(w, r, "Slack", "Failed to secure connection", "notifications", "slack")
 		return
 	}
 
@@ -308,8 +308,8 @@ func (h *Handler) handleSlackOAuthCallback(w http.ResponseWriter, r *http.Reques
 		Str("organisation_id", state.OrgID).
 		Msg("Slack workspace connected")
 
-	// Redirect to dashboard with success (includes connection ID for auto-linking)
-	h.redirectToDashboardWithSuccess(w, r, "Slack", resp.Team.Name, conn.ID)
+	// Redirect to settings with success (includes connection ID for auto-linking)
+	h.redirectToSettingsWithSuccess(w, r, "Slack", resp.Team.Name, conn.ID, "notifications", "slack")
 }
 
 // listSlackConnections lists all Slack connections for the user's organisation
