@@ -1,0 +1,1613 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Settings - Blue Banded Bee</title>
+    <link rel="stylesheet" href="/styles/app.css" />
+
+    <!-- Sentry Error Monitoring & Performance -->
+    <script
+      src="https://browser.sentry-cdn.com/8.45.0/bundle.tracing.replay.min.js"
+      crossorigin="anonymous"
+    ></script>
+    <script>
+      Sentry.init({
+        dsn: "https://04f57d1dedc67f307cef525b1b1551a6@o4509113950928896.ingest.us.sentry.io/4509113952370688",
+        environment:
+          window.location.hostname === "app.bluebandedbee.co"
+            ? "production"
+            : "development",
+
+        tracesSampleRate: 0.1,
+        replaysSessionSampleRate: 0,
+        replaysOnErrorSampleRate: 1.0,
+
+        beforeSend(event) {
+          return event;
+        },
+
+        ignoreErrors: [
+          "ResizeObserver loop limit exceeded",
+          "Non-Error promise rejection captured",
+          /Failed to fetch/,
+          /NetworkError/,
+          /Load failed/,
+        ],
+      });
+    </script>
+
+    <script src="/js/core.js" defer></script>
+
+    <style>
+      body {
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        margin: 0;
+        padding: 0;
+        background: #f5f7fa;
+        min-height: 100vh;
+      }
+
+      .page-header {
+        background: white;
+        border-bottom: 1px solid #e5e7eb;
+        padding: 24px 0;
+        position: sticky;
+        top: 0;
+        z-index: 100;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      }
+
+      .page-header .container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 0 24px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .page-title {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin: 0;
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: #1a1a1a;
+      }
+
+      .bee-icon {
+        font-size: 1.8rem;
+      }
+
+      .user-menu {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .user-info {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        font-size: 14px;
+      }
+
+      .bb-button {
+        padding: 8px 16px;
+        border-radius: 6px;
+        border: none;
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s ease;
+      }
+
+      .bb-button-primary {
+        background: #3b82f6;
+        color: white;
+      }
+
+      .bb-button-primary:hover {
+        background: #2563eb;
+      }
+
+      .bb-button-outline {
+        background: transparent;
+        color: #6b7280;
+        border: 1px solid #d1d5db;
+      }
+
+      .bb-button-outline:hover {
+        border-color: #9ca3af;
+        color: #374151;
+      }
+
+      .bb-button[disabled] {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+
+      .bb-org-switcher {
+        position: relative;
+        display: inline-flex;
+      }
+
+      .bb-org-button {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 6px;
+        padding: 6px 12px;
+        font-size: 13px;
+        color: #374151;
+        cursor: pointer;
+      }
+
+      .bb-org-button:hover {
+        border-color: #cbd5f5;
+        color: #1d4ed8;
+      }
+
+      .bb-org-dropdown {
+        position: absolute;
+        top: 100%;
+        right: 0;
+        background: white;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        box-shadow:
+          0 10px 15px -3px rgba(0, 0, 0, 0.1),
+          0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        min-width: 220px;
+        display: none;
+        z-index: 200;
+      }
+
+      .bb-org-switcher.open .bb-org-dropdown {
+        display: block;
+      }
+
+      .bb-org-dropdown-header {
+        padding: 10px 12px;
+        font-size: 12px;
+        color: #6b7280;
+        border-bottom: 1px solid #e5e7eb;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+
+      .bb-org-list {
+        padding: 8px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+
+      .bb-org-item {
+        text-align: left;
+        padding: 8px 10px;
+        border-radius: 6px;
+        border: 1px solid transparent;
+        background: transparent;
+        cursor: pointer;
+        font-size: 13px;
+        color: #374151;
+      }
+
+      .bb-org-item:hover {
+        background: #f8fafc;
+        border-color: #e5e7eb;
+      }
+
+      .bb-org-item.active {
+        background: #eff6ff;
+        border-color: #bfdbfe;
+        color: #1d4ed8;
+      }
+
+      .bb-org-dropdown-footer {
+        border-top: 1px solid #e5e7eb;
+        padding: 8px;
+      }
+
+      .bb-org-create-btn {
+        width: 100%;
+        background: #f3f4f6;
+        border: 1px dashed #d1d5db;
+        color: #374151;
+        padding: 8px;
+        border-radius: 6px;
+        font-size: 13px;
+        cursor: pointer;
+      }
+
+      .bb-org-divider {
+        color: #cbd5e1;
+      }
+
+      .bb-quota-display {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 12px;
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 6px;
+        font-size: 13px;
+        color: #475569;
+      }
+
+      .bb-quota-plan {
+        font-weight: 600;
+        color: #3b82f6;
+      }
+
+      .bb-quota-usage-count {
+        font-weight: 600;
+        color: #1e293b;
+      }
+
+      .bb-quota-reset {
+        color: #94a3b8;
+        font-size: 12px;
+      }
+
+      .bb-quota-display.quota-warning {
+        background: #fef3c7;
+        border-color: #fcd34d;
+      }
+
+      .bb-quota-display.quota-warning .bb-quota-usage-count {
+        color: #b45309;
+      }
+
+      .bb-quota-display.quota-exhausted {
+        background: #fee2e2;
+        border-color: #fca5a5;
+      }
+
+      .bb-quota-display.quota-exhausted .bb-quota-usage-count {
+        color: #dc2626;
+      }
+
+      .bb-notifications-container {
+        position: relative;
+      }
+
+      .bb-notifications-btn {
+        font-size: 16px;
+        position: relative;
+      }
+
+      .bb-notifications-badge {
+        position: absolute;
+        top: -6px;
+        right: -6px;
+        background: #dc2626;
+        color: white;
+        font-size: 11px;
+        padding: 2px 6px;
+        border-radius: 999px;
+        min-width: 16px;
+        text-align: center;
+      }
+
+      .bb-notifications-badge:empty,
+      .bb-notifications-badge[data-count="0"] {
+        display: none;
+      }
+
+      .bb-notifications-dropdown {
+        position: absolute;
+        top: 100%;
+        right: 0;
+        width: 360px;
+        background: white;
+        border: 1px solid #e5e7eb;
+        border-radius: 12px;
+        box-shadow:
+          0 10px 15px -3px rgba(0, 0, 0, 0.1),
+          0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        display: none;
+        z-index: 200;
+        overflow: hidden;
+      }
+
+      .bb-notifications-container.open .bb-notifications-dropdown {
+        display: block;
+      }
+
+      .bb-notifications-header {
+        padding: 12px 16px;
+        border-bottom: 1px solid #e5e7eb;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .bb-notifications-title {
+        font-weight: 600;
+        font-size: 14px;
+        color: #1f2937;
+      }
+
+      .bb-notifications-mark-read {
+        font-size: 12px;
+        background: none;
+        border: none;
+        color: #3b82f6;
+        cursor: pointer;
+      }
+
+      .bb-notifications-list {
+        max-height: 320px;
+        overflow-y: auto;
+      }
+
+      .bb-notifications-empty {
+        text-align: center;
+        padding: 24px;
+        color: #6b7280;
+        font-size: 13px;
+      }
+
+      .bb-notifications-empty-icon {
+        font-size: 24px;
+        margin-bottom: 8px;
+      }
+
+      .bb-notifications-footer {
+        border-top: 1px solid #e5e7eb;
+        padding: 10px 16px;
+        background: #f9fafb;
+      }
+
+      .bb-notifications-footer-btn {
+        width: 100%;
+        background: #f3f4f6;
+        border: 1px solid #e5e7eb;
+        border-radius: 6px;
+        padding: 8px 12px;
+        font-size: 13px;
+        color: #374151;
+        cursor: pointer;
+        text-align: center;
+        text-decoration: none;
+        display: block;
+      }
+
+      .bb-notification-item {
+        display: flex;
+        gap: 12px;
+        padding: 12px 16px;
+        border-bottom: 1px solid #f3f4f6;
+        cursor: pointer;
+      }
+
+      .bb-notification-item.unread {
+        background: #eff6ff;
+      }
+
+      .bb-notification-item-icon {
+        font-size: 18px;
+      }
+
+      .bb-notification-item-subject {
+        font-weight: 600;
+        font-size: 13px;
+        color: #1f2937;
+      }
+
+      .bb-notification-item-preview {
+        font-size: 12px;
+        color: #6b7280;
+      }
+
+      .bb-notification-item-time {
+        font-size: 11px;
+        color: #9ca3af;
+      }
+
+      .settings-main {
+        padding: 32px 0 48px;
+      }
+
+      .settings-container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 0 24px;
+        display: grid;
+        grid-template-columns: 260px 1fr;
+        gap: 24px;
+      }
+
+      .settings-nav {
+        background: white;
+        border: 1px solid #e5e7eb;
+        border-radius: 12px;
+        padding: 20px;
+        height: fit-content;
+        position: sticky;
+        top: 120px;
+      }
+
+      .settings-group {
+        margin-bottom: 24px;
+      }
+
+      .settings-group-title {
+        font-size: 12px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: #6b7280;
+        margin-bottom: 12px;
+      }
+
+      .settings-org-switcher {
+        width: 100%;
+        text-align: left;
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        padding: 10px 12px;
+        font-size: 14px;
+        font-weight: 600;
+        color: #1f2937;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        cursor: pointer;
+        margin-bottom: 12px;
+      }
+
+      .settings-link {
+        display: block;
+        padding: 8px 12px;
+        border-radius: 8px;
+        color: #374151;
+        text-decoration: none;
+        font-size: 14px;
+        margin-bottom: 4px;
+      }
+
+      .settings-link:hover,
+      .settings-link.active {
+        background: #eff6ff;
+        color: #1d4ed8;
+      }
+
+      .settings-content {
+        display: flex;
+        flex-direction: column;
+        gap: 32px;
+      }
+
+      .settings-section {
+        background: white;
+        border: 1px solid #e5e7eb;
+        border-radius: 12px;
+        padding: 24px;
+      }
+
+      .settings-section-title {
+        margin: 0 0 6px 0;
+        font-size: 20px;
+        color: #1f2937;
+      }
+
+      .settings-section-subtitle {
+        margin: 0 0 20px 0;
+        color: #6b7280;
+        font-size: 14px;
+      }
+
+      .settings-card {
+        border: 1px solid #e5e7eb;
+        border-radius: 10px;
+        padding: 16px;
+        margin-bottom: 16px;
+        background: #f9fafb;
+      }
+
+      .settings-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        padding: 8px 0;
+        border-bottom: 1px solid #e5e7eb;
+      }
+
+      .settings-row:last-child {
+        border-bottom: none;
+      }
+
+      .settings-muted {
+        color: #6b7280;
+        font-size: 13px;
+      }
+
+      .settings-member-row,
+      .settings-invite-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 10px 0;
+        border-bottom: 1px solid #e5e7eb;
+      }
+
+      .settings-member-row:last-child,
+      .settings-invite-row:last-child {
+        border-bottom: none;
+      }
+
+      .settings-member-details,
+      .settings-invite-details {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+
+      .settings-member-name,
+      .settings-invite-email {
+        font-weight: 600;
+        color: #1f2937;
+      }
+
+      .settings-member-email,
+      .settings-invite-date {
+        font-size: 12px;
+        color: #6b7280;
+      }
+
+      .settings-member-role,
+      .settings-invite-role {
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: #1d4ed8;
+      }
+
+      .settings-plan-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 16px;
+      }
+
+      .settings-plan-card {
+        border: 1px solid #e5e7eb;
+        border-radius: 12px;
+        padding: 16px;
+        background: #ffffff;
+      }
+
+      .settings-plan-card.current {
+        border-color: #93c5fd;
+        box-shadow: 0 6px 16px rgba(59, 130, 246, 0.15);
+      }
+
+      .settings-plan-name {
+        font-weight: 600;
+        font-size: 16px;
+        margin-bottom: 4px;
+      }
+
+      .settings-plan-price {
+        font-size: 14px;
+        color: #2563eb;
+        margin-bottom: 8px;
+      }
+
+      .settings-plan-limit {
+        font-size: 13px;
+        color: #6b7280;
+        margin-bottom: 12px;
+      }
+
+      .settings-usage-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 8px 0;
+        border-bottom: 1px solid #e5e7eb;
+        font-size: 13px;
+        color: #374151;
+      }
+
+      .settings-usage-row:last-child {
+        border-bottom: none;
+      }
+
+      .bb-modal {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 1000;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+      }
+
+      .bb-modal.show {
+        display: flex;
+      }
+
+      .bb-modal-content {
+        background: white;
+        border-radius: 12px;
+        width: 100%;
+        max-width: 480px;
+        max-height: 90vh;
+        overflow-y: auto;
+      }
+
+      .bb-modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 20px 24px;
+        border-bottom: 1px solid #e5e7eb;
+      }
+
+      .bb-modal-title {
+        margin: 0;
+        font-size: 18px;
+        font-weight: 600;
+        color: #1f2937;
+      }
+
+      .bb-modal-close {
+        background: none;
+        border: none;
+        font-size: 24px;
+        color: #6b7280;
+        cursor: pointer;
+      }
+
+      .bb-form-group {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding: 16px 24px 0;
+      }
+
+      .bb-form-input,
+      .settings-input {
+        padding: 10px 12px;
+        border: 1px solid #d1d5db;
+        border-radius: 6px;
+        font-size: 14px;
+      }
+
+      .bb-auth-error {
+        margin: 12px 24px 20px;
+        color: #dc2626;
+        font-size: 13px;
+      }
+
+      .bb-toggle input:checked + .bb-toggle-slider {
+        background-color: #3b82f6;
+      }
+
+      .bb-toggle input:checked + .bb-toggle-slider:before {
+        transform: translateX(18px);
+      }
+
+      .bb-toggle-slider:before {
+        position: absolute;
+        content: "";
+        height: 16px;
+        width: 16px;
+        left: 3px;
+        bottom: 3px;
+        background-color: white;
+        transition: 0.3s;
+        border-radius: 50%;
+      }
+
+      @media (max-width: 960px) {
+        .settings-container {
+          grid-template-columns: 1fr;
+        }
+
+        .settings-nav {
+          position: static;
+        }
+
+        .page-header .container {
+          flex-direction: column;
+          gap: 16px;
+          align-items: flex-start;
+        }
+
+        .user-menu {
+          flex-wrap: wrap;
+          gap: 8px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="page-header">
+      <div class="container">
+        <h1 class="page-title"><span class="bee-icon">🐝</span> Settings</h1>
+
+        <div class="user-menu">
+          <div class="user-info" id="userInfo" style="display: none">
+            <div class="bb-org-switcher" id="orgSwitcher">
+              <button
+                class="bb-org-button"
+                id="orgSwitcherBtn"
+                aria-label="Switch organisation"
+                aria-expanded="false"
+                aria-haspopup="true"
+              >
+                <span class="bb-org-name" id="currentOrgName">Loading...</span>
+                <span class="bb-org-chevron">▼</span>
+              </button>
+              <div class="bb-org-dropdown" id="orgDropdown">
+                <div class="bb-org-dropdown-header">Switch Organisation</div>
+                <div class="bb-org-list" id="orgList"></div>
+                <div class="bb-org-dropdown-footer">
+                  <button
+                    class="bb-org-create-btn"
+                    id="createOrgBtn"
+                    aria-label="Create a new organisation"
+                  >
+                    + Create Organisation
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div
+              class="bb-quota-display"
+              id="quotaDisplay"
+              style="display: none"
+            >
+              <span class="bb-quota-plan" id="quotaPlan">Free</span>
+              <span class="bb-quota-usage">
+                <span class="bb-quota-usage-count" id="quotaUsage">0/1000</span>
+              </span>
+              <span class="bb-quota-reset" id="quotaReset">Resets in 12h</span>
+            </div>
+
+            <span class="bb-org-divider">|</span>
+            <span id="userEmail">Loading...</span>
+            <div class="user-avatar" id="userAvatar">?</div>
+
+            <div class="bb-notifications-container" id="notificationsContainer">
+              <button
+                id="notificationsBtn"
+                class="bb-button bb-button-outline bb-notifications-btn"
+                style="margin-right: 8px"
+                aria-label="View notifications"
+              >
+                🔔
+                <span
+                  class="bb-notifications-badge"
+                  id="notificationsBadge"
+                ></span>
+              </button>
+              <div class="bb-notifications-dropdown" id="notificationsDropdown">
+                <div class="bb-notifications-header">
+                  <span class="bb-notifications-title">Notifications</span>
+                  <button
+                    class="bb-notifications-mark-read"
+                    id="markAllReadBtn"
+                  >
+                    Mark all read
+                  </button>
+                </div>
+                <div class="bb-notifications-list" id="notificationsList">
+                  <div class="bb-notifications-empty">
+                    <div class="bb-notifications-empty-icon">🔔</div>
+                    <div>No notifications yet</div>
+                  </div>
+                </div>
+                <div class="bb-notifications-footer">
+                  <a
+                    class="bb-notifications-footer-btn bb-notifications-settings-btn"
+                    id="notificationsSettingsBtn"
+                    href="/settings/notifications#slack"
+                  >
+                    ⚙️ Notification Settings
+                  </a>
+                </div>
+              </div>
+            </div>
+
+            <button
+              id="resetDbBtn"
+              class="bb-button bb-button-outline"
+              style="
+                margin-right: 8px;
+                background-color: #dc2626;
+                color: white;
+                display: none;
+              "
+              title="Delete all jobs and tasks - USE WITH CAUTION"
+              aria-label="Reset database - delete all jobs and tasks"
+            >
+              Reset DB
+            </button>
+            <button
+              id="logoutBtn"
+              class="bb-button bb-button-outline"
+              aria-label="Sign out of your account"
+            >
+              Sign Out
+            </button>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main class="settings-main">
+      <div class="settings-container">
+        <aside class="settings-nav">
+          <div class="settings-group">
+            <div class="settings-group-title">Account settings</div>
+            <a class="settings-link" href="/settings/account#profile">Account</a>
+          </div>
+
+          <div class="settings-group">
+            <button class="settings-org-switcher" id="settingsOrgSwitcherBtn">
+              <span id="settingsOrgName">Organisation</span>
+              <span>▼</span>
+            </button>
+            <a class="settings-link" href="/settings/team#members">Team</a>
+            <a class="settings-link" href="/settings/plans#current">Plans</a>
+            <a class="settings-link" href="/settings/billing#payment-methods"
+              >Billing</a
+            >
+            <a class="settings-link" href="/settings/notifications#slack"
+              >Notifications</a
+            >
+            <a class="settings-link" href="/settings/analytics#google-analytics"
+              >Analytics</a
+            >
+            <a class="settings-link" href="/settings/auto-crawl#webflow"
+              >Auto-crawl</a
+            >
+          </div>
+        </aside>
+
+        <section class="settings-content">
+          <section class="settings-section" id="account">
+            <h2 class="settings-section-title">Account</h2>
+            <p class="settings-section-subtitle">
+              Personal details stay with your login, even when you switch
+              organisations.
+            </p>
+
+            <div class="settings-card" id="profile">
+              <div class="settings-row">
+                <div>
+                  <strong>Name</strong>
+                  <div class="settings-muted" id="settingsUserName">Loading...</div>
+                </div>
+              </div>
+              <div class="settings-row">
+                <div>
+                  <strong>Email</strong>
+                  <div class="settings-muted" id="settingsUserEmail">Loading...</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="settings-card" id="security">
+              <div class="settings-row">
+                <div>
+                  <strong>Password</strong>
+                  <div class="settings-muted">Reset via email.</div>
+                </div>
+                <button
+                  class="bb-button bb-button-outline"
+                  id="settingsResetPassword"
+                >
+                  Send reset email
+                </button>
+              </div>
+            </div>
+          </section>
+
+          <section class="settings-section" id="team">
+            <h2 class="settings-section-title" id="members">Team</h2>
+            <p class="settings-section-subtitle">
+              Manage who has access to this organisation. Admins can add or
+              remove members.
+            </p>
+
+            <div class="settings-card">
+              <div id="teamMembersList"></div>
+              <div class="settings-muted" id="teamMembersEmpty" style="display: none">
+                No members found.
+              </div>
+            </div>
+
+            <div class="settings-card" id="invites">
+              <div class="settings-row" style="border-bottom: none">
+                <div>
+                  <strong>Invite someone</strong>
+                  <div class="settings-muted">
+                    Sends a Supabase invite email with access details.
+                  </div>
+                </div>
+              </div>
+              <form id="teamInviteForm" style="margin-top: 12px">
+                <div style="display: grid; grid-template-columns: 1fr 140px auto; gap: 12px; align-items: end">
+                  <div>
+                    <label class="settings-muted" for="teamInviteEmail">Email</label>
+                    <input
+                      class="settings-input"
+                      id="teamInviteEmail"
+                      type="email"
+                      placeholder="name@company.com"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label class="settings-muted" for="teamInviteRole">Role</label>
+                    <select class="settings-input" id="teamInviteRole">
+                      <option value="member">Member</option>
+                      <option value="admin">Admin</option>
+                    </select>
+                  </div>
+                  <button class="bb-button bb-button-primary" data-admin-only>
+                    Send invite
+                  </button>
+                </div>
+              </form>
+
+              <div style="margin-top: 16px">
+                <strong>Pending invites</strong>
+                <div id="teamInvitesList" style="margin-top: 12px"></div>
+                <div class="settings-muted" id="teamInvitesEmpty" style="display: none">
+                  No pending invites.
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section class="settings-section" id="plans">
+            <h2 class="settings-section-title" id="current">Plans</h2>
+            <p class="settings-section-subtitle">
+              Choose a plan that matches your daily usage needs. Admins can
+              switch plans.
+            </p>
+
+            <div class="settings-card">
+              <div class="settings-row">
+                <div>
+                  <strong>Current plan</strong>
+                  <div class="settings-muted" id="planCurrentName">Loading...</div>
+                </div>
+                <div class="settings-muted" id="planCurrentLimit"></div>
+              </div>
+              <div class="settings-row">
+                <div class="settings-muted" id="planCurrentUsage"></div>
+                <div class="settings-muted" id="planCurrentReset"></div>
+              </div>
+            </div>
+
+            <div class="settings-card" id="compare">
+              <div class="settings-plan-grid" id="planCards"></div>
+            </div>
+
+            <div class="settings-card">
+              <strong>Usage history (30 days)</strong>
+              <div id="usageHistoryList" style="margin-top: 12px"></div>
+            </div>
+          </section>
+
+          <section class="settings-section" id="billing">
+            <h2 class="settings-section-title" id="payment-methods">Billing</h2>
+            <p class="settings-section-subtitle">
+              Update payment methods and view invoices. Admin-only.
+            </p>
+
+            <div class="settings-card">
+              <div class="settings-row">
+                <div>
+                  <strong>Payment methods</strong>
+                  <div class="settings-muted">
+                    Paddle connection is required to manage billing.
+                  </div>
+                </div>
+                <button class="bb-button bb-button-outline" disabled>
+                  Manage billing
+                </button>
+              </div>
+            </div>
+
+            <div class="settings-card" id="invoices">
+              <div class="settings-row">
+                <div>
+                  <strong>Invoices</strong>
+                  <div class="settings-muted">No invoices available yet.</div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section class="settings-section" id="notifications">
+            <h2 class="settings-section-title" id="slack">Notifications</h2>
+            <p class="settings-section-subtitle">
+              Connect Slack to receive job notifications.
+            </p>
+
+            <div class="settings-card">
+              <h3 style="margin-top: 0; display: flex; gap: 8px; align-items: center">
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.528 2.528 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52v2.52zM6.313 15.165a2.527 2.527 0 0 1 2.521-2.52 2.527 2.527 0 0 1 2.521 2.52v6.313A2.528 2.528 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522v-6.313zM8.834 5.042a2.528 2.528 0 0 1-2.521-2.52A2.528 2.528 0 0 1 8.834 0a2.528 2.528 0 0 1 2.521 2.522v2.52H8.834zM8.834 6.313a2.528 2.528 0 0 1 2.521 2.521 2.528 2.528 0 0 1-2.521 2.521H2.522A2.528 2.528 0 0 1 0 8.834a2.528 2.528 0 0 1 2.522-2.521h6.312zM18.956 8.834a2.528 2.528 0 0 1 2.522-2.521A2.528 2.528 0 0 1 24 8.834a2.528 2.528 0 0 1-2.522 2.521h-2.522V8.834zM17.688 8.834a2.528 2.528 0 0 1-2.523 2.521 2.527 2.527 0 0 1-2.52-2.521V2.522A2.527 2.527 0 0 1 15.165 0a2.528 2.528 0 0 1 2.523 2.522v6.312zM15.165 18.956a2.528 2.528 0 0 1 2.523 2.522A2.528 2.528 0 0 1 15.165 24a2.527 2.527 0 0 1-2.52-2.522v-2.522h2.52zM15.165 17.688a2.527 2.527 0 0 1-2.52-2.523 2.526 2.526 0 0 1 2.52-2.52h6.313A2.527 2.527 0 0 1 24 15.165a2.528 2.528 0 0 1-2.522 2.523h-6.313z"
+                    fill="#E01E5A"
+                  />
+                </svg>
+                Slack integration
+              </h3>
+              <p class="settings-muted">
+                Connect your Slack workspace to receive job completion and
+                failure notifications.
+              </p>
+
+              <div id="slackConnectionsList" bbb-list="slack-connections"></div>
+
+              <div
+                id="slackEmptyState"
+                style="
+                  text-align: center;
+                  padding: 24px;
+                  background: #f9fafb;
+                  border-radius: 8px;
+                  border: 2px dashed #e5e7eb;
+                "
+              >
+                <p style="color: #6b7280; margin-bottom: 16px">
+                  No Slack workspace connected yet.
+                </p>
+                <button
+                  class="bb-button bb-button-primary"
+                  bbb-action="slack-connect"
+                  style="display: inline-flex; align-items: center; gap: 8px"
+                >
+                  Connect Slack Workspace
+                </button>
+              </div>
+
+              <div
+                id="slackSuccessMessage"
+                class="bb-notification-success"
+                style="
+                  display: none;
+                  margin-top: 16px;
+                  padding: 12px 16px;
+                  border-radius: 8px;
+                  background: #dcfce7;
+                  color: #16a34a;
+                  border: 1px solid #bbf7d0;
+                "
+              >
+                <span id="slackSuccessText"></span>
+              </div>
+              <div
+                id="slackErrorMessage"
+                class="bb-notification-error"
+                style="
+                  display: none;
+                  margin-top: 16px;
+                  padding: 12px 16px;
+                  border-radius: 8px;
+                  background: #fee2e2;
+                  color: #dc2626;
+                  border: 1px solid #fecaca;
+                "
+              >
+                <span id="slackErrorText"></span>
+              </div>
+            </div>
+          </section>
+
+          <section class="settings-section" id="analytics">
+            <h2 class="settings-section-title" id="google-analytics">Analytics</h2>
+            <p class="settings-section-subtitle">
+              Connect Google Analytics 4 to enrich prioritisation.
+            </p>
+
+            <div class="settings-card" id="googleAnalyticsSection">
+              <h3 style="margin-top: 0; display: flex; gap: 8px; align-items: center">
+                <span style="font-size: 20px">📊</span>
+                Google Analytics integration
+              </h3>
+              <p class="settings-muted">
+                Connect your GA4 property to track cache warming performance.
+              </p>
+
+              <button
+                class="bb-button bb-button-primary"
+                bbb-action="google-connect"
+                style="
+                  display: inline-flex;
+                  align-items: center;
+                  gap: 8px;
+                  margin-bottom: 16px;
+                "
+              >
+                Connect Google Analytics
+              </button>
+
+              <div id="googleConnectionsList" bbb-list="google-connections"></div>
+
+              <div
+                id="googlePropertySelection"
+                style="
+                  display: none;
+                  background: #f9fafb;
+                  border-radius: 8px;
+                  border: 1px solid #e5e7eb;
+                  padding: 16px;
+                  margin-bottom: 16px;
+                "
+              >
+                <h4 style="margin: 0 0 12px 0; font-size: 14px; color: #374151">
+                  Select a GA4 Property
+                </h4>
+                <p style="color: #6b7280; font-size: 13px; margin-bottom: 12px">
+                  Multiple properties found. Please select which one to connect:
+                </p>
+                <div id="googlePropertyList"></div>
+                <button
+                  class="bb-button bb-button-outline"
+                  bbb-action="google-cancel-selection"
+                  style="margin-top: 8px; font-size: 13px"
+                >
+                  Cancel
+                </button>
+              </div>
+
+              <div
+                id="googleEmptyState"
+                style="
+                  display: none;
+                  text-align: center;
+                  padding: 16px 24px;
+                  background: #f9fafb;
+                  border-radius: 8px;
+                  border: 2px dashed #e5e7eb;
+                  margin-bottom: 16px;
+                "
+              >
+                <p style="color: #6b7280; margin: 0">
+                  No connections yet. Click above to connect your first property.
+                </p>
+              </div>
+
+              <div
+                class="bb-notification-success"
+                id="googleSuccessMessage"
+                style="
+                  display: none;
+                  margin-top: 16px;
+                  background: #dcfce7;
+                  color: #166534;
+                  padding: 12px;
+                  border-radius: 8px;
+                "
+              >
+                <span id="googleSuccessText"></span>
+              </div>
+              <div
+                class="bb-notification-error"
+                id="googleErrorMessage"
+                style="
+                  display: none;
+                  margin-top: 16px;
+                  background: #fee2e2;
+                  color: #dc2626;
+                  padding: 12px;
+                  border-radius: 8px;
+                "
+              >
+                <span id="googleErrorText"></span>
+              </div>
+            </div>
+          </section>
+
+          <section class="settings-section" id="auto-crawl">
+            <h2 class="settings-section-title" id="webflow">Auto-crawl</h2>
+            <p class="settings-section-subtitle">
+              Configure Webflow automation and run-on-publish behaviour.
+            </p>
+
+            <div class="settings-card">
+              <h3 style="margin-top: 0; display: flex; gap: 8px; align-items: center">
+                <span style="font-size: 20px">⚡</span>
+                Webflow integration
+              </h3>
+              <p class="settings-muted">
+                Connect your Webflow sites to enable "Run on Publish" and manage
+                schedules.
+              </p>
+
+              <div id="webflowConnectionsList" bbb-list="webflow-connections"></div>
+
+              <div
+                id="webflowSitesConfig"
+                style="
+                  display: none;
+                  margin-top: 20px;
+                  background: #f9fafb;
+                  border: 1px solid #e5e7eb;
+                  border-radius: 8px;
+                  padding: 16px;
+                "
+              >
+                <div
+                  style="
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    margin-bottom: 12px;
+                  "
+                >
+                  <h4 style="margin: 0; font-size: 15px; color: #374151">
+                    Configure Sites
+                  </h4>
+                  <button
+                    id="webflowSitesRefresh"
+                    class="bb-button bb-button-outline"
+                    bbb-action="webflow-sites-refresh"
+                    style="font-size: 12px; padding: 4px 10px"
+                    title="Refresh sites list"
+                    aria-label="Refresh sites list"
+                  >
+                    Refresh
+                  </button>
+                </div>
+
+                <div id="webflowSitesSearchBox" style="display: none; margin-bottom: 12px">
+                  <input
+                    type="text"
+                    id="webflowSiteSearch"
+                    placeholder="Search sites..."
+                    aria-label="Search Webflow sites"
+                    style="
+                      width: 100%;
+                      padding: 8px 12px;
+                      border: 1px solid #d1d5db;
+                      border-radius: 6px;
+                      font-size: 14px;
+                    "
+                  />
+                </div>
+
+                <div id="webflowSitesList">
+                  <div
+                    class="webflow-site-row"
+                    bbb-template="webflow-site"
+                    style="
+                      display: none;
+                      background: white;
+                      border: 1px solid #e5e7eb;
+                      border-radius: 6px;
+                      padding: 12px;
+                      margin-bottom: 8px;
+                    "
+                  >
+                    <div
+                      style="
+                        display: flex;
+                        justify-content: space-between;
+                        align-items: center;
+                        flex-wrap: wrap;
+                        gap: 8px;
+                      "
+                    >
+                      <div style="flex: 1; min-width: 150px">
+                        <span
+                          class="site-name"
+                          style="font-weight: 500; font-size: 14px"
+                        ></span>
+                        <span
+                          class="site-domain"
+                          style="color: #6b7280; font-size: 12px; margin-left: 8px"
+                        ></span>
+                      </div>
+                      <div
+                        style="
+                          display: flex;
+                          align-items: center;
+                          gap: 12px;
+                          flex-wrap: wrap;
+                        "
+                      >
+                        <div style="display: flex; align-items: center; gap: 6px">
+                          <label style="font-size: 12px; color: #6b7280">Schedule:</label>
+                          <select
+                            class="site-schedule"
+                            bbb-action="site-schedule-change"
+                            aria-label="Schedule frequency for site"
+                            style="
+                              padding: 4px 8px;
+                              border: 1px solid #d1d5db;
+                              border-radius: 4px;
+                              font-size: 13px;
+                              background: white;
+                              cursor: pointer;
+                            "
+                          >
+                            <option value="">None</option>
+                            <option value="6">Every 6 hours</option>
+                            <option value="12">Every 12 hours</option>
+                            <option value="24">Every 24 hours</option>
+                            <option value="48">Every 48 hours</option>
+                          </select>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 6px">
+                          <label style="font-size: 12px; color: #6b7280">Run on Publish:</label>
+                          <label
+                            class="bb-toggle"
+                            style="
+                              position: relative;
+                              display: inline-block;
+                              width: 40px;
+                              height: 22px;
+                            "
+                          >
+                            <input
+                              type="checkbox"
+                              class="site-autopublish"
+                              style="
+                                position: absolute;
+                                opacity: 0;
+                                width: 0;
+                                height: 0;
+                              "
+                            />
+                            <span
+                              class="bb-toggle-slider"
+                              style="
+                                position: absolute;
+                                cursor: pointer;
+                                top: 0;
+                                left: 0;
+                                right: 0;
+                                bottom: 0;
+                                background-color: #ccc;
+                                transition: 0.3s;
+                                border-radius: 22px;
+                              "
+                            ></span>
+                          </label>
+                        </div>
+                      </div>
+                    </div>
+                    <div
+                      class="site-status"
+                      style="
+                        display: none;
+                        margin-top: 8px;
+                        font-size: 12px;
+                        color: #6b7280;
+                      "
+                    ></div>
+                  </div>
+
+                  <div id="webflowSitesLoading" style="text-align: center; padding: 20px; color: #6b7280">
+                    Loading sites...
+                  </div>
+                  <div
+                    id="webflowSitesEmpty"
+                    style="display: none; text-align: center; padding: 20px; color: #6b7280"
+                  >
+                    No sites found in this Webflow workspace.
+                  </div>
+                </div>
+
+                <div
+                  id="webflowSitesPagination"
+                  style="
+                    display: none;
+                    margin-top: 12px;
+                    padding-top: 12px;
+                    border-top: 1px solid #e5e7eb;
+                    text-align: center;
+                  "
+                >
+                  <button
+                    id="webflowSitesPrevPage"
+                    class="bb-button bb-button-outline"
+                    bbb-action="webflow-sites-prev"
+                    style="font-size: 12px; padding: 4px 12px; margin-right: 8px"
+                    aria-label="Previous page of Webflow sites"
+                    disabled
+                  >
+                    Previous
+                  </button>
+                  <span
+                    id="webflowSitesPageInfo"
+                    style="font-size: 13px; color: #6b7280; margin: 0 8px"
+                  ></span>
+                  <button
+                    id="webflowSitesNextPage"
+                    class="bb-button bb-button-outline"
+                    bbb-action="webflow-sites-next"
+                    style="font-size: 12px; padding: 4px 12px; margin-left: 8px"
+                    aria-label="Next page of Webflow sites"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+
+              <div
+                id="webflowEmptyState"
+                style="
+                  text-align: center;
+                  padding: 24px;
+                  background: #f9fafb;
+                  border-radius: 8px;
+                  border: 2px dashed #e5e7eb;
+                "
+              >
+                <p style="color: #6b7280; margin-bottom: 16px">
+                  No Webflow connection yet.
+                </p>
+                <button
+                  class="bb-button bb-button-primary"
+                  bbb-action="webflow-connect"
+                  style="display: inline-flex; align-items: center; gap: 8px"
+                >
+                  Connect Webflow
+                </button>
+              </div>
+
+              <div
+                class="bb-notification-success"
+                id="webflowSuccessMessage"
+                style="
+                  display: none;
+                  margin-top: 16px;
+                  background: #dcfce7;
+                  color: #166534;
+                  padding: 12px;
+                  border-radius: 8px;
+                "
+              >
+                <span id="webflowSuccessText"></span>
+              </div>
+              <div
+                class="bb-notification-error"
+                id="webflowErrorMessage"
+                style="
+                  display: none;
+                  margin-top: 16px;
+                  background: #fee2e2;
+                  color: #dc2626;
+                  padding: 12px;
+                  border-radius: 8px;
+                "
+              >
+                <span id="webflowErrorText"></span>
+              </div>
+            </div>
+          </section>
+        </section>
+      </div>
+    </main>
+
+    <template id="teamMemberTemplate">
+      <div class="settings-member-row settings-member-row">
+        <div class="settings-member-details">
+          <span class="settings-member-name"></span>
+          <span class="settings-member-email"></span>
+        </div>
+        <span class="settings-member-role"></span>
+        <button class="bb-button bb-button-outline settings-member-remove">
+          Remove
+        </button>
+      </div>
+    </template>
+
+    <template id="teamInviteTemplate">
+      <div class="settings-invite-row">
+        <div class="settings-invite-details">
+          <span class="settings-invite-email"></span>
+          <span class="settings-invite-date"></span>
+        </div>
+        <span class="settings-invite-role"></span>
+        <button class="bb-button bb-button-outline settings-invite-revoke">
+          Revoke
+        </button>
+      </div>
+    </template>
+
+    <template id="planCardTemplate">
+      <div class="settings-plan-card">
+        <div class="settings-plan-name"></div>
+        <div class="settings-plan-price"></div>
+        <div class="settings-plan-limit"></div>
+        <button class="bb-button bb-button-outline settings-plan-action">
+          Switch plan
+        </button>
+      </div>
+    </template>
+
+    <!-- Create Organisation Modal -->
+    <div id="createOrgModal" class="bb-modal">
+      <div class="bb-modal-content" style="max-width: 440px">
+        <div class="bb-modal-header">
+          <h2 class="bb-modal-title">Create Organisation</h2>
+          <button
+            class="bb-modal-close"
+            id="closeCreateOrgModal"
+            aria-label="Close create organisation modal"
+          >
+            ×
+          </button>
+        </div>
+        <form id="createOrgForm">
+          <div class="bb-form-group">
+            <label for="newOrgName">Organisation Name</label>
+            <input
+              type="text"
+              id="newOrgName"
+              name="name"
+              required
+              maxlength="100"
+              placeholder="Enter organisation name"
+              class="bb-form-input"
+              aria-describedby="createOrgError"
+            />
+          </div>
+          <div
+            style="
+              display: flex;
+              gap: 12px;
+              justify-content: flex-end;
+              margin-top: 24px;
+              padding: 0 24px 20px;
+            "
+          >
+            <button
+              type="button"
+              class="bb-button bb-button-outline"
+              id="cancelCreateOrg"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              class="bb-button bb-button-primary"
+              id="submitCreateOrg"
+            >
+              Create
+            </button>
+          </div>
+        </form>
+        <div id="createOrgError" class="bb-auth-error" style="display: none"></div>
+      </div>
+    </div>
+
+    <script src="/js/bb-data-binder.js" defer></script>
+    <script src="/js/bb-auth-extension.js" defer></script>
+    <script src="/js/bb-slack.js" defer></script>
+    <script src="/js/bb-webflow.js" defer></script>
+    <script src="/js/bb-google.js" defer></script>
+    <script src="/js/bb-settings.js" defer></script>
+  </body>
+</html>

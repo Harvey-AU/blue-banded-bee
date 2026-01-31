@@ -886,6 +886,15 @@ async function handleGoogleOAuthCallback() {
   const googleConnected = params.get("google_connected");
   const googleError = params.get("google_error");
   const gaSession = params.get("ga_session");
+  const isSettingsPage = window.location.pathname.startsWith("/settings");
+
+  if (gaSession && !isSettingsPage) {
+    const redirectUrl = new URL("/settings/analytics", window.location.origin);
+    redirectUrl.search = window.location.search;
+    redirectUrl.hash = "google-analytics";
+    window.location.replace(redirectUrl.toString());
+    return;
+  }
 
   console.log("[GA OAuth] Checking URL params:", {
     googleConnected,
@@ -942,11 +951,10 @@ async function handleGoogleOAuthCallback() {
       sessionData.session_id = gaSession;
       pendingGASessionData = sessionData;
 
-      // Open notifications modal (contains Google Analytics section)
-      const notificationsModal = document.getElementById("notificationsModal");
-      console.log("[GA OAuth] Opening modal:", !!notificationsModal);
-      if (notificationsModal) {
-        notificationsModal.classList.add("show");
+      // Ensure analytics section is visible
+      const analyticsSection = document.getElementById("googleAnalyticsSection");
+      if (analyticsSection) {
+        analyticsSection.scrollIntoView({ behavior: "smooth", block: "start" });
       }
 
       // Determine which UI to show based on session data

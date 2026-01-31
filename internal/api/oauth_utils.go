@@ -119,6 +119,38 @@ func getDashboardURL() string {
 	return getAppURL() + "/dashboard"
 }
 
+// getSettingsURL returns the settings URL
+func getSettingsURL() string {
+	if settingsURL := os.Getenv("SETTINGS_URL"); settingsURL != "" {
+		return settingsURL
+	}
+	return getAppURL() + "/settings"
+}
+
+func buildSettingsURL(path string, params url.Values, fragment string) string {
+	base := strings.TrimSuffix(getSettingsURL(), "/")
+	if path != "" {
+		if !strings.HasPrefix(path, "/") {
+			path = "/" + path
+		}
+		base = base + path
+	}
+
+	settingsURL, err := url.Parse(base)
+	if err != nil {
+		return base
+	}
+
+	if len(params) > 0 {
+		settingsURL.RawQuery = params.Encode()
+	}
+	if fragment != "" {
+		settingsURL.Fragment = fragment
+	}
+
+	return settingsURL.String()
+}
+
 func (h *Handler) redirectToDashboardWithError(w http.ResponseWriter, r *http.Request, integration, errMsg string) {
 	paramName := fmt.Sprintf("%s_error", strings.ToLower(integration))
 	params := url.Values{}
@@ -150,4 +182,38 @@ func (h *Handler) redirectToDashboardWithSetup(w http.ResponseWriter, r *http.Re
 	setupParamName := fmt.Sprintf("%s_setup", strings.ToLower(integration))
 	params.Set(setupParamName, "true")
 	http.Redirect(w, r, getDashboardURL()+"?"+params.Encode(), http.StatusSeeOther)
+}
+
+func (h *Handler) redirectToSettingsWithError(w http.ResponseWriter, r *http.Request, integration, errMsg, path, fragment string) {
+	paramName := fmt.Sprintf("%s_error", strings.ToLower(integration))
+	params := url.Values{}
+	params.Set(paramName, errMsg)
+	redirectURL := buildSettingsURL(path, params, fragment)
+	http.Redirect(w, r, redirectURL, http.StatusSeeOther)
+}
+
+func (h *Handler) redirectToSettingsWithSuccess(w http.ResponseWriter, r *http.Request, integration, label, connectionID, path, fragment string) {
+	paramName := fmt.Sprintf("%s_connected", strings.ToLower(integration))
+	params := url.Values{}
+	params.Set(paramName, label)
+	if connectionID != "" {
+		idParamName := fmt.Sprintf("%s_connection_id", strings.ToLower(integration))
+		params.Set(idParamName, connectionID)
+	}
+	redirectURL := buildSettingsURL(path, params, fragment)
+	http.Redirect(w, r, redirectURL, http.StatusSeeOther)
+}
+
+func (h *Handler) redirectToSettingsWithSetup(w http.ResponseWriter, r *http.Request, integration, label, connectionID, path, fragment string) {
+	paramName := fmt.Sprintf("%s_connected", strings.ToLower(integration))
+	params := url.Values{}
+	params.Set(paramName, label)
+	if connectionID != "" {
+		idParamName := fmt.Sprintf("%s_connection_id", strings.ToLower(integration))
+		params.Set(idParamName, connectionID)
+	}
+	setupParamName := fmt.Sprintf("%s_setup", strings.ToLower(integration))
+	params.Set(setupParamName, "true")
+	redirectURL := buildSettingsURL(path, params, fragment)
+	http.Redirect(w, r, redirectURL, http.StatusSeeOther)
 }
