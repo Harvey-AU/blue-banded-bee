@@ -775,7 +775,6 @@ func (db *DB) UpsertPageWithAnalytics(
 			Err(err).
 			Str("organisation_id", organisationID).
 			Int("domain_id", domainID).
-			Str("path", path).
 			Msg("Failed to upsert page analytics data")
 	}
 
