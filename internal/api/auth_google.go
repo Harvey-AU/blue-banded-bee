@@ -1673,15 +1673,25 @@ func (h *Handler) SaveGA4AccountProperties(w http.ResponseWriter, r *http.Reques
 	refreshToken, err := h.DB.GetGA4AccountToken(r.Context(), account.ID)
 	if err != nil {
 		if errors.Is(err, db.ErrGoogleTokenNotFound) {
-			WriteSuccess(w, r, map[string]any{
-				"needs_reauth": true,
-				"message":      "No valid Google token found. Please reconnect to Google Analytics.",
-			}, "")
+			_, fallbackToken, fallbackErr := h.getGARefreshToken(r.Context(), logger, orgID)
+			if fallbackErr != nil {
+				if errors.Is(fallbackErr, db.ErrGoogleTokenNotFound) || errors.Is(fallbackErr, db.ErrGoogleAccountNotFound) || errors.Is(fallbackErr, db.ErrGoogleConnectionNotFound) {
+					WriteSuccess(w, r, map[string]any{
+						"needs_reauth": true,
+						"message":      "No valid Google token found. Please reconnect to Google Analytics.",
+					}, "")
+					return
+				}
+				logger.Error().Err(fallbackErr).Str("organisation_id", orgID).Msg("Failed to resolve fallback GA refresh token")
+				InternalError(w, r, fallbackErr)
+				return
+			}
+			refreshToken = fallbackToken
+		} else {
+			logger.Error().Err(err).Str("account_id", account.ID).Msg("Failed to resolve GA refresh token")
+			InternalError(w, r, err)
 			return
 		}
-		logger.Error().Err(err).Str("account_id", account.ID).Msg("Failed to resolve GA refresh token")
-		InternalError(w, r, err)
-		return
 	}
 
 	accessToken, err := h.refreshGoogleAccessToken(refreshToken)
