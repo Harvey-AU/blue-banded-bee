@@ -226,6 +226,18 @@ func (m *MockDB) GetDomainNameByID(ctx context.Context, domainID int) (string, e
 	return args.String(0), args.Error(1)
 }
 
+// GetOrCreateDomainID mocks the GetOrCreateDomainID method
+func (m *MockDB) GetOrCreateDomainID(ctx context.Context, domain string) (int, error) {
+	args := m.Called(ctx, domain)
+	return args.Int(0), args.Error(1)
+}
+
+// UpsertOrganisationDomain mocks the UpsertOrganisationDomain method
+func (m *MockDB) UpsertOrganisationDomain(ctx context.Context, organisationID string, domainID int) error {
+	args := m.Called(ctx, organisationID, domainID)
+	return args.Error(0)
+}
+
 // GetDomainNames mocks the GetDomainNames method
 func (m *MockDB) GetDomainNames(ctx context.Context, domainIDs []int) (map[int]string, error) {
 	args := m.Called(ctx, domainIDs)
@@ -233,6 +245,15 @@ func (m *MockDB) GetDomainNames(ctx context.Context, domainIDs []int) (map[int]s
 		return nil, args.Error(1)
 	}
 	return args.Get(0).(map[int]string), args.Error(1)
+}
+
+// GetDomainsForOrganisation mocks the GetDomainsForOrganisation method
+func (m *MockDB) GetDomainsForOrganisation(ctx context.Context, organisationID string) ([]db.OrganisationDomain, error) {
+	args := m.Called(ctx, organisationID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]db.OrganisationDomain), args.Error(1)
 }
 
 // GetLastJobStartTimeForScheduler mocks the GetLastJobStartTimeForScheduler method

@@ -475,7 +475,7 @@ func (h *Handler) updateSiteSchedule(w http.ResponseWriter, r *http.Request, sit
 				SourceInfo:   &sourceInfo,
 			}
 
-			_, err = h.createJobFromRequest(ctx, user, jobReq)
+			_, err = h.createJobFromRequest(ctx, user, jobReq, loggerWithRequest(r))
 			if err != nil {
 				logger.Warn().Err(err).Msg("Failed to create immediate job, user can trigger manually")
 				// Don't fail the entire request - scheduler is configured successfully
@@ -647,7 +647,7 @@ func (h *Handler) toggleSiteAutoPublish(w http.ResponseWriter, r *http.Request, 
 				SourceInfo:   &sourceInfo,
 			}
 
-			_, err = h.createJobFromRequest(ctx, user, jobReq)
+			_, err = h.createJobFromRequest(ctx, user, jobReq, loggerWithRequest(r))
 			if err != nil {
 				logger.Warn().Err(err).Msg("Failed to create immediate job, user can trigger manually")
 				// Don't fail the entire request - webhook is registered successfully

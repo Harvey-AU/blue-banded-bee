@@ -44,6 +44,13 @@ function formatCount(value) {
   return integerFormatter.format(numeric);
 }
 
+function formatOptionalCount(value, empty = "—") {
+  if (value === null || value === undefined) {
+    return empty;
+  }
+  return formatCount(value);
+}
+
 function formatDecimal(value) {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) {
@@ -450,11 +457,14 @@ function formatTasksForBinding(tasks, defaultDomain) {
         empty: "—",
       }),
       status_code: task.status_code != null ? String(task.status_code) : "—",
+      page_views_7d: formatOptionalCount(task.page_views_7d),
+      page_views_28d: formatOptionalCount(task.page_views_28d),
+      page_views_180d: formatOptionalCount(task.page_views_180d),
     };
   });
 }
 
-function renderTasksTable(tasks) {
+function renderTasksTable(tasks, showAnalytics) {
   const table = document.getElementById("tasksTable");
   const tbody = document.getElementById("tasksTableBody");
   const emptyEl = document.getElementById("tasksEmpty");
@@ -478,8 +488,15 @@ function renderTasksTable(tasks) {
   }
 
   const rowsHtml = tasks
-    .map(
-      (task) => `
+    .map((task) => {
+      const analyticsCells = showAnalytics
+        ? `
+          <td>${escapeHTML(task.page_views_7d)}</td>
+          <td>${escapeHTML(task.page_views_28d)}</td>
+          <td>${escapeHTML(task.page_views_180d)}</td>
+        `
+        : "";
+      return `
         <tr>
           <td>
             <a href="${escapeHTML(task.url)}" target="_blank" rel="noopener noreferrer">
@@ -491,15 +508,16 @@ function renderTasksTable(tasks) {
           <td>${escapeHTML(task.cache_status)}</td>
           <td>${escapeHTML(task.second_response_time)}</td>
           <td>${escapeHTML(task.status_code)}</td>
+          ${analyticsCells}
         </tr>
-      `
-    )
+      `;
+    })
     .join("");
 
   tbody.innerHTML = rowsHtml;
 }
 
-function renderTaskHeader(state) {
+function renderTaskHeader(state, showAnalytics) {
   const table = document.getElementById("tasksTable");
   if (!table) {
     return;
@@ -518,6 +536,14 @@ function renderTaskHeader(state) {
     { key: "second_response_time", label: "2nd Response (ms)" },
     { key: "status_code", label: "Status Code" },
   ];
+
+  if (showAnalytics) {
+    headers.push(
+      { key: "page_views_7d", label: "Views (7d)" },
+      { key: "page_views_28d", label: "Views (28d)" },
+      { key: "page_views_180d", label: "Views (180d)" }
+    );
+  }
 
   const headerHtml = headers
     .map((header) => {
@@ -1200,10 +1226,17 @@ async function loadTasks(state) {
   const tasks = Array.isArray(data?.tasks) ? data.tasks : [];
   const pagination = data?.pagination || {};
 
-  renderTaskHeader(state);
+  const showAnalytics = tasks.some(
+    (task) =>
+      task.page_views_7d !== undefined ||
+      task.page_views_28d !== undefined ||
+      task.page_views_180d !== undefined
+  );
+
+  renderTaskHeader(state, showAnalytics);
 
   const formattedTasks = formatTasksForBinding(tasks, state.domain);
-  renderTasksTable(formattedTasks);
+  renderTasksTable(formattedTasks, showAnalytics);
 
   updateTasksTableVisibility(formattedTasks.length);
   updatePagination(pagination, state);

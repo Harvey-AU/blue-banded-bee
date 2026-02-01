@@ -1,10 +1,13 @@
 package util
 
 import (
+	"fmt"
+	"net"
 	"net/url"
 	"strings"
 
 	"github.com/rs/zerolog/log"
+	"golang.org/x/net/publicsuffix"
 )
 
 // NormaliseDomain removes http/https prefix and www. from domain
@@ -20,6 +23,56 @@ func NormaliseDomain(domain string) string {
 	domain = strings.TrimSuffix(domain, "/")
 
 	return domain
+}
+
+// ValidateDomain checks if a domain string is a valid domain format.
+// Uses golang.org/x/net/publicsuffix for robust validation against the Public Suffix List.
+// Returns an error describing why the domain is invalid, or nil if valid.
+func ValidateDomain(domain string) error {
+	// Normalise first (removes http://, https://, www., trailing slash)
+	domain = NormaliseDomain(domain)
+
+	if domain == "" {
+		return fmt.Errorf("domain cannot be empty")
+	}
+
+	if strings.Contains(domain, ":") {
+		return fmt.Errorf("domain must not include a port")
+	}
+
+	if net.ParseIP(domain) != nil {
+		return fmt.Errorf("domain %q is not allowed", domain)
+	}
+
+	// Block localhost and common internal hostnames before publicsuffix check
+	lowerDomain := strings.ToLower(domain)
+	blockedDomains := []string{
+		"localhost",
+		"localhost.localdomain",
+		"local",
+		"internal",
+		"test",
+		"example",
+		"invalid",
+	}
+	for _, blocked := range blockedDomains {
+		if lowerDomain == blocked || strings.HasSuffix(lowerDomain, "."+blocked) {
+			return fmt.Errorf("domain %q is not allowed", domain)
+		}
+	}
+
+	// Use publicsuffix to validate - this checks against the official Public Suffix List
+	// EffectiveTLDPlusOne returns error if domain is invalid or has no valid public suffix
+	_, err := publicsuffix.EffectiveTLDPlusOne(domain)
+	if err != nil {
+		// Provide user-friendly error messages
+		if strings.Contains(err.Error(), "is a suffix") {
+			return fmt.Errorf("cannot use a public suffix alone (e.g., .com, .co.uk)")
+		}
+		return fmt.Errorf("invalid domain: %s", err.Error())
+	}
+
+	return nil
 }
 
 // NormaliseURL ensures a URL has proper https:// scheme and validates format

@@ -1,3 +1,4 @@
+/*
 /**
  * Google Analytics Integration Handler
  * Handles GA4 property connections with two-step account/property selection.
@@ -29,7 +30,6 @@ function formatGoogleDate(timestamp) {
     });
   }
 }
-
 /**
  * Initialise Google Analytics integration UI handlers
  */
@@ -75,6 +75,10 @@ function handleGoogleAction(action, element) {
       loadGoogleConnections();
       break;
 
+    case "google-refresh-accounts":
+      refreshGA4Accounts();
+      break;
+
     case "google-select-account": {
       const accountId = element.getAttribute("data-account-id");
       if (accountId) {
@@ -109,6 +113,13 @@ async function loadGoogleConnections() {
       );
       return;
     }
+
+    // Load GA4 accounts from DB (for the account selector)
+    await loadGA4AccountsFromDB();
+
+    // Fetch organisation domains first (needed for domain tags)
+    await loadOrganisationDomains();
+
     const connections = await window.dataBinder.fetchData(
       "/v1/integrations/google"
     );
@@ -173,10 +184,47 @@ async function loadGoogleConnections() {
         emailEl.textContent = conn.google_email;
       }
 
-      // Set connected date
+      // Display domain tags instead of connected date
       const dateEl = clone.querySelector(".google-connected-date");
       if (dateEl) {
-        dateEl.textContent = `Connected ${formatGoogleDate(conn.created_at)}`;
+        // Clear existing content safely
+        while (dateEl.firstChild) {
+          dateEl.removeChild(dateEl.firstChild);
+        }
+        dateEl.style.cssText =
+          "display: flex; flex-wrap: wrap; gap: 6px; align-items: center;";
+
+        // Add domain tags
+        if (conn.domain_ids && conn.domain_ids.length > 0) {
+          conn.domain_ids.forEach((domainId) => {
+            // Find domain name from organisationDomains
+            const domain = organisationDomains.find((d) => d.id === domainId);
+            const domainName = domain ? domain.name : `Domain #${domainId}`;
+
+            const tag = document.createElement("span");
+            tag.className = "domain-tag";
+            tag.style.cssText =
+              "display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; background: #e0e7ff; color: #3730a3; border-radius: 4px; font-size: 13px;";
+            tag.textContent = domainName;
+
+            const removeBtn = document.createElement("button");
+            removeBtn.textContent = "×";
+            removeBtn.style.cssText =
+              "background: none; border: none; color: #6366f1; font-size: 16px; cursor: pointer; padding: 0; margin-left: 2px; line-height: 1;";
+            removeBtn.type = "button";
+            removeBtn.setAttribute("aria-label", `Remove ${domainName}`);
+            removeBtn.title = "Remove domain";
+            removeBtn.onclick = (e) => {
+              e.stopPropagation();
+              removeDomainFromConnection(conn.id, domainId, conn.domain_ids);
+            };
+
+            tag.appendChild(removeBtn);
+            dateEl.appendChild(tag);
+          });
+        }
+
+        renderInlineDomainAdder(dateEl, conn);
       }
 
       // Set status indicator
@@ -285,8 +333,8 @@ async function disconnectGoogle(connectionId) {
   }
 
   try {
-    const { data: { session } = {} } = await window.supabase.auth.getSession();
-    const token = session?.access_token;
+    const session = await window.supabase.auth.getSession();
+    const token = session?.data?.session?.access_token;
     if (!token) {
       showGoogleError("Not authenticated. Please sign in.");
       return;
@@ -314,32 +362,106 @@ async function disconnectGoogle(connectionId) {
   }
 }
 
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function getSessionWithTimeout(timeoutMs) {
+  return Promise.race([
+    window.supabase.auth.getSession(),
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("Session timeout")), timeoutMs)
+    ),
+  ]);
+}
+
+async function getGoogleAuthToken() {
+  if (!window.supabase?.auth) {
+    return {
+      token: "",
+      message: "Auth not ready. Please refresh the page.",
+      retryable: true,
+    };
+  }
+
+  const attempts = 4;
+  const baseDelayMs = 300;
+  const timeoutMs = 800;
+  let lastError;
+
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      const sessionResult = await getSessionWithTimeout(timeoutMs);
+      const token = sessionResult?.data?.session?.access_token;
+      if (token) {
+        return { token };
+      }
+    } catch (error) {
+      lastError = error;
+    }
+
+    try {
+      const userResult = await window.supabase.auth.getUser();
+      const user = userResult?.data?.user;
+      if (user) {
+        return {
+          token: "",
+          message: "Session still initialising. Please try again.",
+          retryable: true,
+        };
+      }
+    } catch (error) {
+      lastError = error;
+    }
+
+    await wait(baseDelayMs * (attempt + 1));
+  }
+
+  return {
+    token: "",
+    message: "Not authenticated. Please refresh and sign in.",
+    retryable: true,
+    error: lastError,
+  };
+}
+
+async function loadOrganisationDomains() {
+  if (!window.BBDomainSearch) {
+    organisationDomains = [];
+    return [];
+  }
+
+  organisationDomains = window.BBDomainSearch.getDomains();
+  return window.BBDomainSearch.loadOrganisationDomains();
+}
+
 /**
  * Select a Google Analytics account and fetch its properties
  * @param {string} accountId - The GA account ID
  */
 async function selectGoogleAccount(accountId) {
-  console.log("[GA Debug] selectGoogleAccount called with:", accountId);
   try {
-    const { data: { session } = {} } = await window.supabase.auth.getSession();
-    const token = session?.access_token;
+    const authResult = await getGoogleAuthToken();
+    const token = authResult.token;
     if (!token) {
-      showGoogleError("Not authenticated. Please sign in.");
+      const accountList = document.getElementById("googleAccountList");
+      if (accountList) {
+        accountList.innerHTML =
+          '<div style="text-align: center; padding: 20px; color: #dc2626;">' +
+          (authResult.message || "Not authenticated. Please sign in.") +
+          "</div>";
+      }
+      showGoogleError(
+        authResult.message || "Not authenticated. Please sign in."
+      );
       return;
     }
 
     if (!pendingGASessionData || !pendingGASessionData.session_id) {
-      console.log("[GA Debug] No pending session data:", pendingGASessionData);
       showGoogleError("OAuth session expired. Please reconnect.");
       hideAccountSelection();
       return;
     }
-
-    console.log("[GA Debug] Session ID:", pendingGASessionData.session_id);
-    console.log(
-      "[GA Debug] Available accounts:",
-      pendingGASessionData.accounts
-    );
 
     // Show loading state
     const accountList = document.getElementById("googleAccountList");
@@ -350,27 +472,25 @@ async function selectGoogleAccount(accountId) {
 
     // Fetch properties for this account
     const fetchUrl = `/v1/integrations/google/pending-session/${pendingGASessionData.session_id}/accounts/${encodeURIComponent(accountId)}/properties`;
-    console.log("[GA Debug] Fetching URL:", fetchUrl);
 
     const response = await fetch(fetchUrl, {
       headers: { Authorization: `Bearer ${token}` },
     });
 
-    console.log("[GA Debug] Response status:", response.status);
-
     if (!response.ok) {
       const text = await response.text();
-      console.log("[GA Debug] Error response:", text);
       throw new Error(text || `HTTP ${response.status}`);
     }
 
     const result = await response.json();
-    console.log("[GA Debug] Full response:", JSON.stringify(result, null, 2));
     const properties = result.data?.properties || [];
 
     // Store selected account and properties
     pendingGASessionData.selected_account_id = accountId;
     pendingGASessionData.properties = properties;
+
+    // Fetch organisation's domains for domain selection
+    await loadOrganisationDomains();
 
     // Hide account selection, show property selection
     hideAccountSelection();
@@ -386,8 +506,8 @@ async function selectGoogleAccount(accountId) {
  */
 async function saveGoogleProperties() {
   try {
-    const { data: { session } = {} } = await window.supabase.auth.getSession();
-    const token = session?.access_token;
+    const session = await window.supabase.auth.getSession();
+    const token = session?.data?.session?.access_token;
     if (!token) {
       showGoogleError("Not authenticated. Please sign in.");
       return;
@@ -406,6 +526,24 @@ async function saveGoogleProperties() {
     const activePropertyIds = Array.from(selectedItems).map((item) =>
       item.getAttribute("data-property-id")
     );
+
+    // Build property -> domain_ids mapping from temp storage
+    const propertyDomainMap = {};
+    allGoogleProperties.forEach((property) => {
+      const isActive = activePropertyIds.includes(property.property_id);
+      if (!isActive) {
+        propertyDomainMap[property.property_id] = [];
+        return;
+      }
+
+      // Get selected domains from temporary storage
+      const domainIds = (
+        window.tempPropertyDomains?.[property.property_id] || []
+      )
+        .map((id) => Number(id))
+        .filter((id) => Number.isFinite(id));
+      propertyDomainMap[property.property_id] = domainIds;
+    });
 
     // Show saving state
     const saveBtn = document.querySelector(
@@ -428,6 +566,7 @@ async function saveGoogleProperties() {
           pendingGASessionData.selected_account_id ||
           pendingGASessionData.accounts?.[0]?.account_id,
         active_property_ids: activePropertyIds,
+        property_domain_map: propertyDomainMap,
       }),
     });
 
@@ -442,6 +581,10 @@ async function saveGoogleProperties() {
     hidePropertySelection();
     const activeCount = activePropertyIds.length;
     const totalCount = allGoogleProperties.length;
+
+    // Clear temporary domain selections
+    window.tempPropertyDomains = {};
+
     showGoogleSuccess(
       `Saved ${totalCount} properties (${activeCount} active, ${totalCount - activeCount} inactive)`
     );
@@ -471,8 +614,8 @@ async function toggleConnectionStatus(connectionId, active) {
   );
 
   try {
-    const { data: { session } = {} } = await window.supabase.auth.getSession();
-    const token = session?.access_token;
+    const session = await window.supabase.auth.getSession();
+    const token = session?.data?.session?.access_token;
     if (!token) {
       console.error("[GA Toggle] No auth token available");
       showGoogleError("Not authenticated. Please sign in.");
@@ -514,6 +657,9 @@ async function toggleConnectionStatus(connectionId, active) {
 
 // Store all properties for filtering
 let allGoogleProperties = [];
+let organisationDomains = window.BBDomainSearch
+  ? window.BBDomainSearch.getDomains()
+  : [];
 const MAX_VISIBLE_PROPERTIES = 10;
 
 /**
@@ -610,7 +756,126 @@ function renderPropertyList(properties, totalCount) {
         thumb.style.transform = "translateX(0)";
         item.classList.remove("selected");
       }
+
+      // Show/hide domain selection based on active state
+      const domainSection = item.querySelector(".domain-selection-section");
+      if (domainSection) {
+        domainSection.style.display = newActive ? "block" : "none";
+      }
     });
+
+    // Create domain selection section
+    const domainSection = document.createElement("div");
+    domainSection.className = "domain-selection-section";
+    domainSection.style.cssText =
+      "display: none; margin-top: 12px; padding: 12px; background-color: #f9fafb; border-radius: 6px; border: 1px solid #e5e7eb;";
+    domainSection.setAttribute("data-property-id", prop.property_id);
+
+    const domainHeader = document.createElement("div");
+    domainHeader.style.cssText =
+      "font-size: 14px; font-weight: 500; color: #374151; margin-bottom: 8px;";
+    domainHeader.textContent = "Select domains tracked by this property:";
+    domainSection.appendChild(domainHeader);
+
+    // Search input container (using form for proper Enter key handling)
+    const inputContainer = document.createElement("form");
+    inputContainer.style.cssText = "position: relative; margin-bottom: 8px;";
+
+    const searchInput = document.createElement("input");
+    searchInput.type = "text";
+    searchInput.placeholder = "Search or add new domain...";
+    searchInput.setAttribute("bbb-domain-create", "option");
+    searchInput.style.cssText =
+      "width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; box-sizing: border-box;";
+    searchInput.setAttribute("data-property-id", prop.property_id);
+
+    // Dropdown list
+    const dropdown = window.BBDomainSearch
+      ? window.BBDomainSearch.createDropdownElement()
+      : document.createElement("div");
+
+    // Selected domains display
+    const selectedContainer = document.createElement("div");
+    selectedContainer.style.cssText =
+      "display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; min-height: 24px;";
+    selectedContainer.id = `domains-for-${prop.property_id}`;
+
+    // Initialise temp storage for this property
+    if (!window.tempPropertyDomains) window.tempPropertyDomains = {};
+    let selectedDomainIds = window.tempPropertyDomains[prop.property_id] || [];
+
+    // Function to render selected tags
+    const renderSelectedTags = () => {
+      while (selectedContainer.firstChild) {
+        selectedContainer.removeChild(selectedContainer.firstChild);
+      }
+
+      selectedDomainIds.forEach((domainId) => {
+        const domain = organisationDomains.find((d) => d.id === domainId);
+        if (!domain) return;
+
+        const tag = document.createElement("span");
+        tag.style.cssText =
+          "display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; background: #e0e7ff; color: #3730a3; border-radius: 4px; font-size: 13px;";
+        tag.textContent = domain.name;
+
+        const removeBtn = document.createElement("button");
+        removeBtn.textContent = "×";
+        removeBtn.style.cssText =
+          "background: none; border: none; color: #6366f1; font-size: 16px; cursor: pointer; padding: 0; margin-left: 2px;";
+        removeBtn.type = "button";
+        removeBtn.setAttribute("aria-label", `Remove ${domain.name}`);
+        removeBtn.onclick = () => {
+          selectedDomainIds = selectedDomainIds.filter((id) => id !== domainId);
+          window.tempPropertyDomains[prop.property_id] = selectedDomainIds;
+          renderSelectedTags();
+        };
+
+        tag.appendChild(removeBtn);
+        selectedContainer.appendChild(tag);
+      });
+    };
+
+    if (!dropdown.style.cssText) {
+      dropdown.style.cssText =
+        "display: none; position: absolute; top: 100%; left: 0; right: 0; max-height: 200px; overflow-y: auto; background: white; border: 1px solid #d1d5db; border-radius: 6px; margin-top: 4px; z-index: 1000; box-shadow: 0 2px 8px rgba(0,0,0,0.1);";
+    }
+
+    const selectDomain = (domain) => {
+      if (!selectedDomainIds.includes(domain.id)) {
+        selectedDomainIds.push(domain.id);
+        window.tempPropertyDomains[prop.property_id] = selectedDomainIds;
+        renderSelectedTags();
+      }
+    };
+
+    if (window.BBDomainSearch) {
+      window.BBDomainSearch.setupDomainSearchInput({
+        input: searchInput,
+        dropdown,
+        container: inputContainer,
+        form: inputContainer,
+        getExcludedDomainIds: () => selectedDomainIds,
+        onSelectDomain: selectDomain,
+        onCreateDomain: selectDomain,
+        clearOnSelect: true,
+        onError: (message) => {
+          showGoogleError(
+            message || "Failed to create domain. Please try again."
+          );
+        },
+      });
+    }
+
+    inputContainer.appendChild(searchInput);
+    inputContainer.appendChild(dropdown);
+    domainSection.appendChild(inputContainer);
+    domainSection.appendChild(selectedContainer);
+
+    // Render initial tags
+    renderSelectedTags();
+
+    item.appendChild(domainSection);
 
     list.appendChild(item);
   }
@@ -667,18 +932,8 @@ function filterGoogleProperties(query) {
  * @param {Array} properties - Array of GA4 properties to choose from
  */
 function showPropertySelection(properties) {
-  console.log(
-    "[GA OAuth] showPropertySelection called with",
-    properties?.length,
-    "properties"
-  );
   const selectionUI = document.getElementById("googlePropertySelection");
   const list = document.getElementById("googlePropertyList");
-
-  console.log("[GA OAuth] DOM elements found:", {
-    selectionUI: !!selectionUI,
-    list: !!list,
-  });
 
   if (!selectionUI || !list) {
     console.error("Property selection UI not found");
@@ -741,82 +996,41 @@ function hidePropertySelection() {
   }
   // Clear stored properties
   allGoogleProperties = [];
+  organisationDomains = [];
 }
 
 /**
  * Show account selection UI when multiple accounts are available
+ * Uses the searchable dropdown pattern
  * @param {Array} accounts - Array of GA accounts to choose from
  */
 function showAccountSelection(accounts) {
-  console.log(
-    "[GA OAuth] showAccountSelection called with",
-    accounts?.length,
-    "accounts"
-  );
+  // Convert pending session accounts to the format used by storedGA4Accounts
+  storedGA4Accounts = accounts.map((acc) => ({
+    id: acc.account_id, // Use account_id as the ID for now
+    google_account_id: acc.account_id,
+    google_account_name: acc.display_name || acc.account_id,
+    google_email: pendingGASessionData?.email || "",
+  }));
 
-  // Create or get the account selection UI
-  let accountUI = document.getElementById("googleAccountSelection");
-  if (!accountUI) {
-    // Create the UI dynamically
-    const propertySelection = document.getElementById(
-      "googlePropertySelection"
-    );
-    if (propertySelection) {
-      accountUI = document.createElement("div");
-      accountUI.id = "googleAccountSelection";
-      accountUI.style.cssText = "padding: 16px;";
-      propertySelection.parentNode.insertBefore(accountUI, propertySelection);
-    } else {
-      console.error("Cannot find googlePropertySelection to insert account UI");
-      return;
-    }
+  // Hide the old-style account selection UI if it exists
+  const oldAccountUI = document.getElementById("googleAccountSelection");
+  if (oldAccountUI) {
+    oldAccountUI.style.display = "none";
   }
 
-  // Build the account list
-  accountUI.innerHTML = `
-    <h3 style="margin: 0 0 8px 0; font-size: 16px; font-weight: 600;">Select Google Analytics Account</h3>
-    <p style="color: #6b7280; font-size: 14px; margin: 0 0 16px 0;">
-      You have access to ${accounts.length} accounts. Select one to view its properties.
-    </p>
-    <div id="googleAccountList"></div>
-  `;
-
-  const list = document.getElementById("googleAccountList");
-  for (const account of accounts) {
-    const item = document.createElement("button");
-    item.type = "button";
-    item.className = "bb-button";
-    item.style.cssText =
-      "display: block; width: 100%; text-align: left; margin-bottom: 8px; padding: 12px 16px; cursor: pointer;";
-    item.setAttribute("bbb-action", "google-select-account");
-    item.setAttribute("data-account-id", account.account_id);
-
-    const strongEl = document.createElement("strong");
-    strongEl.textContent = account.display_name || account.account_id;
-    item.appendChild(strongEl);
-
-    const detailSpan = document.createElement("span");
-    detailSpan.style.cssText =
-      "color: #6b7280; font-size: 13px; display: block;";
-    detailSpan.textContent = `Account ID: ${account.account_id.replace("accounts/", "")}`;
-    item.appendChild(detailSpan);
-
-    list.appendChild(item);
-  }
-
-  // Add cancel button
-  const cancelBtn = document.createElement("button");
-  cancelBtn.className = "bb-button";
-  cancelBtn.setAttribute("bbb-action", "google-cancel-selection");
-  cancelBtn.style.cssText =
-    "width: 100%; padding: 12px; margin-top: 8px; background: transparent;";
-  cancelBtn.textContent = "Cancel";
-  list.appendChild(cancelBtn);
-
-  // Hide empty state and show account selection
+  // Hide empty state
   const emptyState = document.getElementById("googleEmptyState");
   if (emptyState) emptyState.style.display = "none";
-  accountUI.style.display = "block";
+
+  // Show the searchable account selector
+  renderAccountSelector();
+
+  console.log(
+    "[GA Debug] Showing account selection with",
+    accounts.length,
+    "accounts"
+  );
 }
 
 /**
@@ -878,6 +1092,428 @@ function showGoogleError(message) {
 // Store pending session data for property selection
 let pendingGASessionData = null;
 
+// Store GA4 accounts loaded from DB
+let storedGA4Accounts = [];
+
+/**
+ * Load GA4 accounts from the database (not from Google API)
+ * These are persisted accounts that can be displayed immediately on page load
+ */
+async function loadGA4AccountsFromDB() {
+  try {
+    const session = await window.supabase.auth.getSession();
+    const token = session?.data?.session?.access_token;
+
+    if (!token) {
+      console.log("[GA Debug] No auth token, skipping accounts load");
+      return [];
+    }
+
+    const response = await fetch("/v1/integrations/google/accounts", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    if (!response.ok) {
+      console.error("[GA Debug] Failed to load accounts:", response.status);
+      return [];
+    }
+
+    const result = await response.json();
+    storedGA4Accounts = result.data?.accounts || [];
+    console.log(
+      "[GA Debug] Loaded accounts from DB:",
+      storedGA4Accounts.length
+    );
+
+    // Update the account selector UI
+    renderAccountSelector();
+
+    return storedGA4Accounts;
+  } catch (error) {
+    console.error("[GA Debug] Error loading accounts from DB:", error);
+    return [];
+  }
+}
+
+// Currently selected GA4 account
+let selectedGA4Account = null;
+
+/**
+ * Render the GA4 account selector dropdown
+ */
+function renderAccountSelector() {
+  const selectorContainer = document.getElementById("googleAccountSelector");
+  const searchInput = document.getElementById("googleAccountSearch");
+  const dropdown = document.getElementById("googleAccountDropdown");
+
+  if (!selectorContainer || !searchInput || !dropdown) {
+    console.log("[GA Debug] Account selector elements not found");
+    return;
+  }
+
+  // Show selector if we have accounts
+  if (storedGA4Accounts.length > 0) {
+    selectorContainer.style.display = "block";
+  } else {
+    selectorContainer.style.display = "none";
+    return;
+  }
+
+  // If we have a selected account, show it in the input
+  if (selectedGA4Account) {
+    searchInput.value =
+      selectedGA4Account.google_account_name || "Unnamed Account";
+  }
+
+  // Function to render dropdown options
+  const renderDropdownOptions = (query) => {
+    // Clear existing options
+    while (dropdown.firstChild) {
+      dropdown.removeChild(dropdown.firstChild);
+    }
+
+    const lowerQuery = (query || "").toLowerCase().trim();
+
+    // Filter accounts
+    const filtered = lowerQuery
+      ? storedGA4Accounts.filter(
+          (acc) =>
+            acc.google_account_name?.toLowerCase().includes(lowerQuery) ||
+            acc.google_email?.toLowerCase().includes(lowerQuery)
+        )
+      : storedGA4Accounts;
+
+    if (filtered.length === 0) {
+      const noResults = document.createElement("div");
+      noResults.textContent = "No accounts found";
+      noResults.style.cssText =
+        "padding: 10px 16px; color: #6b7280; font-size: 14px;";
+      dropdown.appendChild(noResults);
+      dropdown.style.display = "block";
+      return;
+    }
+
+    filtered.forEach((account) => {
+      const option = document.createElement("div");
+      option.style.cssText =
+        "padding: 10px 16px; cursor: pointer; font-size: 14px; border-bottom: 1px solid #f3f4f6;";
+      option.onmouseover = () => {
+        option.style.background = "#f9fafb";
+      };
+      option.onmouseout = () => {
+        option.style.background = "white";
+      };
+
+      const nameSpan = document.createElement("strong");
+      nameSpan.textContent = account.google_account_name || "Unnamed Account";
+      option.appendChild(nameSpan);
+
+      if (account.google_email) {
+        const emailSpan = document.createElement("span");
+        emailSpan.textContent = " (" + account.google_email + ")";
+        emailSpan.style.color = "#6b7280";
+        option.appendChild(emailSpan);
+      }
+
+      option.onmousedown = (e) => {
+        e.preventDefault();
+        onAccountSelected(account);
+        dropdown.style.display = "none";
+        onDocumentClick({ target: document.body });
+      };
+
+      dropdown.appendChild(option);
+    });
+
+    dropdown.style.display = "block";
+    ensureDocumentListener();
+  };
+
+  // Event listeners for search input
+  let documentListenerActive = false;
+  const onDocumentClick = (event) => {
+    if (!selectorContainer.contains(event.target)) {
+      dropdown.style.display = "none";
+      if (selectedGA4Account) {
+        searchInput.value =
+          selectedGA4Account.google_account_name || "Unnamed Account";
+      }
+      if (documentListenerActive) {
+        document.removeEventListener("click", onDocumentClick);
+        documentListenerActive = false;
+      }
+    }
+  };
+
+  const ensureDocumentListener = () => {
+    if (documentListenerActive) {
+      return;
+    }
+    documentListenerActive = true;
+    document.addEventListener("click", onDocumentClick);
+  };
+
+  searchInput.onfocus = () => {
+    searchInput.select();
+    renderDropdownOptions(searchInput.value);
+    ensureDocumentListener();
+  };
+  searchInput.oninput = () => renderDropdownOptions(searchInput.value);
+  searchInput.onclick = (e) => e.stopPropagation();
+
+  // Auto-select first account if only one and none selected
+  if (storedGA4Accounts.length === 1 && !selectedGA4Account) {
+    onAccountSelected(storedGA4Accounts[0]);
+  }
+}
+
+/**
+ * Handle account selection - update input and load properties
+ */
+async function onAccountSelected(account) {
+  selectedGA4Account = account;
+  const searchInput = document.getElementById("googleAccountSearch");
+  if (searchInput) {
+    searchInput.value = account.google_account_name || "Unnamed Account";
+  }
+
+  console.log(
+    "[GA Debug] Selected account:",
+    account.google_account_name,
+    account.google_account_id
+  );
+
+  // If we have a pending session (OAuth flow in progress), use the original selectGoogleAccount
+  if (pendingGASessionData && pendingGASessionData.session_id) {
+    // Use the existing flow that works
+    selectGoogleAccount(account.google_account_id);
+    return;
+  }
+
+  // Otherwise load properties from stored data
+  await loadPropertiesForAccount(account);
+}
+
+/**
+ * Load and display properties for the selected account
+ */
+async function loadPropertiesForAccount(account) {
+  const propertiesContainer = document.getElementById(
+    "googleAccountProperties"
+  );
+  if (!propertiesContainer) return;
+
+  // Clear and show loading state
+  while (propertiesContainer.firstChild) {
+    propertiesContainer.removeChild(propertiesContainer.firstChild);
+  }
+  propertiesContainer.style.display = "block";
+
+  const loadingDiv = document.createElement("div");
+  loadingDiv.style.cssText =
+    "color: #6b7280; font-size: 14px; padding: 12px 0;";
+  loadingDiv.textContent = "Loading properties...";
+  propertiesContainer.appendChild(loadingDiv);
+
+  const renderPropertiesError = (message, options = {}) => {
+    while (propertiesContainer.firstChild) {
+      propertiesContainer.removeChild(propertiesContainer.firstChild);
+    }
+
+    const errorDiv = document.createElement("div");
+    errorDiv.style.cssText =
+      "color: #dc2626; font-size: 14px; padding: 12px 0;";
+    errorDiv.textContent = message;
+    propertiesContainer.appendChild(errorDiv);
+
+    const actions = document.createElement("div");
+    actions.style.cssText = "display: flex; gap: 8px; margin-top: 8px;";
+
+    if (options.retryable) {
+      const retryBtn = document.createElement("button");
+      retryBtn.type = "button";
+      retryBtn.textContent = "Retry";
+      retryBtn.style.cssText =
+        "background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 6px; padding: 6px 10px; cursor: pointer;";
+      retryBtn.onclick = () => loadPropertiesForAccount(account);
+      actions.appendChild(retryBtn);
+    }
+
+    if (options.reconnect) {
+      const reconnectBtn = document.createElement("button");
+      reconnectBtn.type = "button";
+      reconnectBtn.textContent = "Reconnect Google Analytics";
+      reconnectBtn.style.cssText =
+        "background: #2563eb; border: 1px solid #1d4ed8; border-radius: 6px; padding: 6px 10px; color: white; cursor: pointer;";
+      reconnectBtn.onclick = () => connectGoogle();
+      actions.appendChild(reconnectBtn);
+    }
+
+    if (actions.childNodes.length > 0) {
+      propertiesContainer.appendChild(actions);
+    }
+  };
+
+  try {
+    const authResult = await getGoogleAuthToken();
+    const token = authResult.token;
+
+    if (!token) {
+      renderPropertiesError(
+        authResult.message || "Not authenticated. Please sign in.",
+        { retryable: authResult.retryable }
+      );
+      return;
+    }
+
+    // Fetch properties for this account using stored refresh token
+    const fetchUrl =
+      "/v1/integrations/google/accounts/" +
+      encodeURIComponent(account.google_account_id) +
+      "/properties";
+
+    const response = await fetch(fetchUrl, {
+      headers: { Authorization: "Bearer " + token },
+    });
+
+    if (!response.ok) {
+      throw new Error("HTTP " + response.status);
+    }
+
+    const result = await response.json();
+
+    // Check if re-auth is needed
+    if (result.data?.needs_reauth) {
+      renderPropertiesError(
+        result.data.message || "Please reconnect to Google Analytics.",
+        { reconnect: true }
+      );
+      return;
+    }
+
+    const properties = result.data?.properties || [];
+
+    renderAccountProperties(properties);
+  } catch (error) {
+    console.error("[GA Debug] Failed to load properties:", error);
+    renderPropertiesError("Failed to load properties. Please try again.", {
+      retryable: true,
+    });
+  }
+}
+
+/**
+ * Render properties list for an account
+ */
+function renderAccountProperties(properties) {
+  const propertiesContainer = document.getElementById(
+    "googleAccountProperties"
+  );
+  if (!propertiesContainer) return;
+
+  // Clear container
+  while (propertiesContainer.firstChild) {
+    propertiesContainer.removeChild(propertiesContainer.firstChild);
+  }
+
+  if (properties.length === 0) {
+    const emptyDiv = document.createElement("div");
+    emptyDiv.style.cssText =
+      "color: #6b7280; font-size: 14px; padding: 12px 0;";
+    emptyDiv.textContent = "No properties found for this account.";
+    propertiesContainer.appendChild(emptyDiv);
+    return;
+  }
+
+  // Store for filtering and saving
+  allGoogleProperties = properties;
+
+  // Create label
+  const label = document.createElement("label");
+  label.style.cssText =
+    "display: block; font-weight: 500; font-size: 14px; color: #374151; margin-bottom: 8px;";
+  label.textContent = "Properties (" + properties.length + ")";
+  propertiesContainer.appendChild(label);
+
+  // Create list container
+  const listDiv = document.createElement("div");
+  listDiv.id = "googlePropertyList";
+  propertiesContainer.appendChild(listDiv);
+
+  // Render the property list using existing function
+  renderPropertyList(properties, properties.length);
+}
+
+/**
+ * Refresh GA4 accounts by fetching fresh data from Google API
+ * This syncs the database with the current state of the user's GA accounts
+ */
+async function refreshGA4Accounts() {
+  try {
+    const session = await window.supabase.auth.getSession();
+    const token = session?.data?.session?.access_token;
+
+    if (!token) {
+      showGoogleError("Not authenticated. Please sign in.");
+      return;
+    }
+
+    // Show loading state
+    const refreshBtn = document.querySelector(
+      '[bbb-action="google-refresh-accounts"]'
+    );
+    if (refreshBtn) {
+      refreshBtn.disabled = true;
+      refreshBtn.textContent = "Refreshing...";
+    }
+
+    const response = await fetch("/v1/integrations/google/accounts/refresh", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(text || `HTTP ${response.status}`);
+    }
+
+    const result = await response.json();
+
+    if (result.data?.needs_reauth) {
+      // Token expired or invalid - need to re-authenticate
+      showGoogleError(
+        result.data.message || "Please reconnect to Google Analytics."
+      );
+      // Optionally trigger OAuth flow
+      // connectGoogle();
+      return;
+    }
+
+    // Update stored accounts
+    storedGA4Accounts = result.data?.accounts || [];
+    console.log(
+      "[GA Debug] Refreshed accounts from Google:",
+      storedGA4Accounts.length
+    );
+
+    showGoogleSuccess("Accounts refreshed successfully");
+
+    // Reload connections to reflect any changes
+    await loadGoogleConnections();
+  } catch (error) {
+    console.error("[GA Debug] Error refreshing accounts:", error);
+    showGoogleError("Failed to refresh accounts. Please try again.");
+  } finally {
+    const refreshBtn = document.querySelector(
+      '[bbb-action="google-refresh-accounts"]'
+    );
+    if (refreshBtn) {
+      refreshBtn.disabled = false;
+      refreshBtn.textContent = "Refresh";
+    }
+  }
+}
+
 /**
  * Handle OAuth callback result checks
  */
@@ -886,12 +1522,6 @@ async function handleGoogleOAuthCallback() {
   const googleConnected = params.get("google_connected");
   const googleError = params.get("google_error");
   const gaSession = params.get("ga_session");
-
-  console.log("[GA OAuth] Checking URL params:", {
-    googleConnected,
-    googleError,
-    gaSession,
-  });
 
   if (googleConnected) {
     // Clean up URL
@@ -903,18 +1533,13 @@ async function handleGoogleOAuthCallback() {
     loadGoogleConnections();
   } else if (gaSession) {
     // Fetch session data from server
-    console.log("[GA OAuth] Found ga_session, fetching from server...");
     try {
-      const { data: { session } = {} } =
-        await window.supabase.auth.getSession();
-      const token = session?.access_token;
-      console.log("[GA OAuth] Supabase token:", token ? "present" : "missing");
+      const session = await window.supabase.auth.getSession();
+      const token = session?.data?.session?.access_token;
       if (!token) {
         showGoogleError("Not authenticated. Please sign in.");
         return;
       }
-
-      console.log("[GA OAuth] Fetching pending session:", gaSession);
       const response = await fetch(
         `/v1/integrations/google/pending-session/${gaSession}`,
         {
@@ -922,7 +1547,6 @@ async function handleGoogleOAuthCallback() {
         }
       );
 
-      console.log("[GA OAuth] Response status:", response.status);
       if (!response.ok) {
         const text = await response.text();
         throw new Error(text || `HTTP ${response.status}`);
@@ -930,13 +1554,6 @@ async function handleGoogleOAuthCallback() {
 
       const result = await response.json();
       const sessionData = result.data;
-      console.log("[GA OAuth] Session data received:", {
-        hasAccounts: !!sessionData?.accounts,
-        accountCount: sessionData?.accounts?.length,
-        hasProperties: !!sessionData?.properties,
-        propertyCount: sessionData?.properties?.length,
-        email: sessionData?.email,
-      });
 
       // Store session ID for subsequent requests
       sessionData.session_id = gaSession;
@@ -944,7 +1561,6 @@ async function handleGoogleOAuthCallback() {
 
       // Open notifications modal (contains Google Analytics section)
       const notificationsModal = document.getElementById("notificationsModal");
-      console.log("[GA OAuth] Opening modal:", !!notificationsModal);
       if (notificationsModal) {
         notificationsModal.classList.add("show");
       }
@@ -955,19 +1571,12 @@ async function handleGoogleOAuthCallback() {
 
       if (accounts.length > 1 && properties.length === 0) {
         // Multiple accounts, no properties yet - show account picker
-        console.log("[GA OAuth] Multiple accounts, showing account picker");
         showAccountSelection(accounts);
       } else if (properties.length > 0) {
         // Single account with properties already fetched, or properties from selected account
-        console.log(
-          "[GA OAuth] Showing property selection with",
-          properties.length,
-          "properties"
-        );
         showPropertySelection(properties);
       } else if (accounts.length === 1) {
-        // Single account but no properties - should not happen normally
-        console.log("[GA OAuth] Single account, no properties - fetching...");
+        // Single account but no properties - fetch them
         selectGoogleAccount(accounts[0].account_id);
       } else {
         throw new Error("No accounts or properties found");
@@ -993,9 +1602,431 @@ async function handleGoogleOAuthCallback() {
   }
 }
 
+/**
+ * Remove a domain from a GA4 connection
+ * @param {string} connectionId - The connection ID
+ * @param {number} domainId - The domain ID to remove
+ */
+async function removeDomainFromConnection(
+  connectionId,
+  domainId,
+  currentDomainIds = null
+) {
+  try {
+    const session = await window.supabase.auth.getSession();
+    const token = session?.data?.session?.access_token;
+
+    if (!token) {
+      showGoogleError("Please sign in to update connections");
+      return;
+    }
+
+    // Get current connection to find existing domain_ids
+    let updatedDomainIds;
+    if (Array.isArray(currentDomainIds)) {
+      updatedDomainIds = currentDomainIds.filter((id) => id !== domainId);
+    } else {
+      const connections = await window.dataBinder.fetchData(
+        "/v1/integrations/google"
+      );
+      const connection = connections.find((c) => c.id === connectionId);
+
+      if (!connection) {
+        showGoogleError("Connection not found");
+        return;
+      }
+
+      // Remove the domain from the array
+      updatedDomainIds = (connection.domain_ids || []).filter(
+        (id) => id !== domainId
+      );
+    }
+
+    // Use dedicated PATCH endpoint to update domains
+    const response = await fetch(`/v1/integrations/google/${connectionId}`, {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        domain_ids: updatedDomainIds, // Send updated array
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to update connection: ${response.status}`);
+    }
+
+    // Reload connections to show updated list
+    await loadGoogleConnections();
+  } catch (error) {
+    console.error("Failed to remove domain:", error);
+    showGoogleError("Failed to remove domain. Please try again.");
+  }
+}
+
+async function addDomainToConnection(connectionId, currentDomainIds, domainId) {
+  try {
+    const session = await window.supabase.auth.getSession();
+    const token = session?.data?.session?.access_token;
+
+    if (!token) {
+      showGoogleError("Please sign in to update connections");
+      return;
+    }
+
+    const updatedDomainIds = Array.from(
+      new Set([...(currentDomainIds || []), domainId])
+    );
+
+    const response = await fetch(`/v1/integrations/google/${connectionId}`, {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ domain_ids: updatedDomainIds }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to update connection: ${response.status}`);
+    }
+
+    await loadGoogleConnections();
+  } catch (error) {
+    console.error("Failed to add domain:", error);
+    showGoogleError("Failed to add domain. Please try again.");
+  }
+}
+
+async function createDomainInline(domainName) {
+  const session = await window.supabase.auth.getSession();
+  const token = session?.data?.session?.access_token;
+
+  if (!token) {
+    showGoogleError("Please sign in to create domains");
+    return null;
+  }
+
+  const response = await fetch("/v1/domains", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ domain: domainName }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.message || "Failed to create domain");
+  }
+
+  const result = await response.json();
+  const rawDomainId = result?.data?.domain_id ?? result?.domain_id ?? null;
+  const newDomainId = Number(rawDomainId);
+  const newDomainName = result?.data?.domain ?? result?.domain ?? domainName;
+
+  if (!Number.isFinite(newDomainId)) {
+    throw new Error("Invalid domain ID in response");
+  }
+
+  organisationDomains.push({ id: newDomainId, name: newDomainName });
+  return newDomainId;
+}
+
+function renderInlineDomainAdder(container, connection) {
+  const form = document.createElement("form");
+  form.style.cssText = "position: relative; margin-top: 8px;";
+
+  const input = document.createElement("input");
+  input.type = "text";
+  input.placeholder = "Search or add domain...";
+  input.setAttribute("aria-label", "Search or add domain");
+  input.setAttribute("bbb-domain-create", "option");
+  input.style.cssText =
+    "width: 100%; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px; box-sizing: border-box;";
+
+  const dropdown = window.BBDomainSearch
+    ? window.BBDomainSearch.createDropdownElement()
+    : document.createElement("div");
+  if (!dropdown.style.cssText) {
+    dropdown.style.cssText =
+      "display: none; position: absolute; top: 100%; left: 0; right: 0; max-height: 200px; overflow-y: auto; background: white; border: 1px solid #d1d5db; border-radius: 6px; margin-top: 4px; z-index: 1000; box-shadow: 0 2px 8px rgba(0,0,0,0.1);";
+  }
+
+  const selectDomain = async (domain) => {
+    const currentIds = connection.domain_ids || [];
+    await addDomainToConnection(connection.id, currentIds, domain.id);
+  };
+
+  if (window.BBDomainSearch) {
+    window.BBDomainSearch.setupDomainSearchInput({
+      input,
+      dropdown,
+      container: form,
+      form,
+      getExcludedDomainIds: () => connection.domain_ids || [],
+      onSelectDomain: selectDomain,
+      onCreateDomain: selectDomain,
+      clearOnSelect: true,
+      onError: (message) => {
+        showGoogleError(
+          message || "Failed to create domain. Please try again."
+        );
+      },
+    });
+  }
+
+  form.appendChild(input);
+  form.appendChild(dropdown);
+  container.appendChild(form);
+}
+
+/**
+ * Save domain selection for a connection
+ * @param {string} connectionId - The connection ID
+ * @param {Array<number>} domainIds - Selected domain IDs
+ */
+async function saveDomainSelection(connectionId, domainIds) {
+  try {
+    const session = await window.supabase.auth.getSession();
+    const token = session?.data?.session?.access_token;
+
+    if (!token) {
+      showGoogleError("Please sign in to update connections");
+      return;
+    }
+
+    // Use dedicated PATCH endpoint to update domains
+    const response = await fetch(`/v1/integrations/google/${connectionId}`, {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        domain_ids: domainIds, // Send array directly
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to update connection: ${response.status}`);
+    }
+
+    // Reload connections
+    await loadGoogleConnections();
+  } catch (error) {
+    console.error("Failed to save domain selection:", error);
+    showGoogleError("Failed to save domains. Please try again.");
+  }
+}
+
+/**
+ * Update domain tags display for a property during initial setup
+ * @param {string} propertyId - GA4 property ID
+ */
+function updateDomainTags(propertyId) {
+  const container = document.getElementById(`domains-for-${propertyId}`);
+  if (!container) return;
+
+  // Clear existing tags
+  while (container.firstChild) {
+    container.removeChild(container.firstChild);
+  }
+
+  const domainIds = window.tempPropertyDomains?.[propertyId] || [];
+  domainIds.forEach((domainId) => {
+    const domain = organisationDomains.find((d) => d.id === domainId);
+    if (!domain) return;
+
+    const tag = document.createElement("span");
+    tag.style.cssText =
+      "display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; background: #e0e7ff; color: #3730a3; border-radius: 4px; font-size: 13px;";
+    tag.textContent = domain.name;
+
+    const removeBtn = document.createElement("button");
+    removeBtn.textContent = "×";
+    removeBtn.style.cssText =
+      "background: none; border: none; color: #6366f1; font-size: 16px; cursor: pointer; padding: 0; margin-left: 2px;";
+    removeBtn.type = "button";
+    removeBtn.setAttribute("aria-label", `Remove ${domain.name}`);
+    removeBtn.onclick = () => {
+      // Remove from temp storage
+      if (!window.tempPropertyDomains) window.tempPropertyDomains = {};
+      window.tempPropertyDomains[propertyId] = (
+        window.tempPropertyDomains[propertyId] || []
+      ).filter((id) => id !== domainId);
+      updateDomainTags(propertyId);
+    };
+
+    tag.appendChild(removeBtn);
+    container.appendChild(tag);
+  });
+}
+
+/**
+ * Show domain selector modal for a property during initial setup
+ * @param {string} propertyId - GA4 property ID
+ * @param {Array<number>} currentDomainIds - Currently selected domain IDs
+ */
+async function showDomainSelectorForProperty(propertyId, currentDomainIds) {
+  if (!organisationDomains || organisationDomains.length === 0) {
+    await loadOrganisationDomains();
+  }
+  // Create modal overlay
+  const overlay = document.createElement("div");
+  overlay.style.cssText =
+    "position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 10000;";
+
+  // Create modal container
+  const modal = document.createElement("div");
+  modal.style.cssText =
+    "background: white; border-radius: 8px; padding: 24px; width: 90%; max-width: 500px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);";
+
+  // Header
+  const header = document.createElement("h3");
+  header.textContent = "Select Domains for Property";
+  header.style.cssText = "margin: 0 0 16px; font-size: 18px; font-weight: 600;";
+
+  // Search input container (using form for proper Enter key handling)
+  const inputContainer = document.createElement("form");
+  inputContainer.style.cssText = "position: relative; margin-bottom: 16px;";
+
+  const searchInput = document.createElement("input");
+  searchInput.type = "text";
+  searchInput.placeholder = "Search or add new domain...";
+  searchInput.setAttribute("bbb-domain-create", "option");
+  searchInput.style.cssText =
+    "width: 100%; padding: 12px 16px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; box-sizing: border-box;";
+
+  // Dropdown list
+  const dropdown = window.BBDomainSearch
+    ? window.BBDomainSearch.createDropdownElement()
+    : document.createElement("div");
+  if (!dropdown.style.cssText) {
+    dropdown.style.cssText =
+      "display: none; position: absolute; top: 100%; left: 0; right: 0; max-height: 200px; overflow-y: auto; background: white; border: 1px solid #d1d5db; border-radius: 6px; margin-top: 4px; z-index: 1000; box-shadow: 0 2px 8px rgba(0,0,0,0.1);";
+  }
+
+  // Selected domains display
+  const selectedContainer = document.createElement("div");
+  selectedContainer.style.cssText =
+    "display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; min-height: 32px;";
+
+  // Track selected domain IDs
+  let selectedDomainIds = [...currentDomainIds];
+
+  // Function to render selected tags
+  const renderSelectedTags = () => {
+    // Clear existing tags
+    while (selectedContainer.firstChild) {
+      selectedContainer.removeChild(selectedContainer.firstChild);
+    }
+
+    selectedDomainIds.forEach((domainId) => {
+      const domain = organisationDomains.find((d) => d.id === domainId);
+      if (!domain) return;
+
+      const tag = document.createElement("span");
+      tag.style.cssText =
+        "display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; background: #e0e7ff; color: #3730a3; border-radius: 4px; font-size: 13px;";
+      tag.textContent = domain.name;
+
+      const removeBtn = document.createElement("button");
+      removeBtn.textContent = "×";
+      removeBtn.style.cssText =
+        "background: none; border: none; color: #6366f1; font-size: 16px; cursor: pointer; padding: 0; margin-left: 2px;";
+      removeBtn.type = "button";
+      removeBtn.setAttribute("aria-label", `Remove ${domain.name}`);
+      removeBtn.onclick = () => {
+        selectedDomainIds = selectedDomainIds.filter((id) => id !== domainId);
+        renderSelectedTags();
+      };
+
+      tag.appendChild(removeBtn);
+      selectedContainer.appendChild(tag);
+    });
+  };
+
+  const selectDomain = (domain) => {
+    if (!selectedDomainIds.includes(domain.id)) {
+      selectedDomainIds.push(domain.id);
+      renderSelectedTags();
+    }
+  };
+
+  if (window.BBDomainSearch) {
+    window.BBDomainSearch.setupDomainSearchInput({
+      input: searchInput,
+      dropdown,
+      container: inputContainer,
+      form: inputContainer,
+      getExcludedDomainIds: () => selectedDomainIds,
+      onSelectDomain: selectDomain,
+      onCreateDomain: selectDomain,
+      clearOnSelect: true,
+      onError: (message) => {
+        showGoogleError(
+          message || "Failed to create domain. Please try again."
+        );
+      },
+    });
+  }
+
+  // Buttons
+  const buttonContainer = document.createElement("div");
+  buttonContainer.style.cssText =
+    "display: flex; gap: 8px; justify-content: flex-end;";
+
+  const cancelBtn = document.createElement("button");
+  cancelBtn.textContent = "Cancel";
+  cancelBtn.style.cssText =
+    "padding: 8px 16px; background: #f3f4f6; color: #374151; border: 1px solid #d1d5db; border-radius: 6px; cursor: pointer;";
+  cancelBtn.type = "button";
+  cancelBtn.onclick = () => {
+    closeModal();
+  };
+
+  const saveBtn = document.createElement("button");
+  saveBtn.textContent = "Save";
+  saveBtn.style.cssText =
+    "padding: 8px 16px; background: #6366f1; color: white; border: none; border-radius: 6px; cursor: pointer;";
+  saveBtn.type = "button";
+  saveBtn.onclick = () => {
+    // Save to temporary storage
+    if (!window.tempPropertyDomains) window.tempPropertyDomains = {};
+    window.tempPropertyDomains[propertyId] = [...selectedDomainIds];
+    updateDomainTags(propertyId);
+    closeModal();
+  };
+
+  buttonContainer.appendChild(cancelBtn);
+  buttonContainer.appendChild(saveBtn);
+
+  // Assemble modal
+  inputContainer.appendChild(searchInput);
+  inputContainer.appendChild(dropdown);
+  modal.appendChild(header);
+  modal.appendChild(selectedContainer);
+  modal.appendChild(inputContainer);
+  modal.appendChild(buttonContainer);
+  overlay.appendChild(modal);
+
+  // Render initial state
+  renderSelectedTags();
+
+  // Show modal
+  document.body.appendChild(overlay);
+}
+
 // Export functions
 if (typeof window !== "undefined") {
   window.setupGoogleIntegration = setupGoogleIntegration;
   window.loadGoogleConnections = loadGoogleConnections;
   window.handleGoogleOAuthCallback = handleGoogleOAuthCallback;
+  window.loadGA4AccountsFromDB = loadGA4AccountsFromDB;
+  window.refreshGA4Accounts = refreshGA4Accounts;
+  window.renderAccountSelector = renderAccountSelector;
 }

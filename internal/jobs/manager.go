@@ -813,7 +813,7 @@ func (jm *JobManager) enqueueURLsForJob(ctx context.Context, jobID, domain strin
 		pagesWithPriority[i] = db.Page{
 			ID:       pageID,
 			Path:     paths[i],
-			Priority: 0.5, // Default sitemap priority
+			Priority: 0.1, // Default sitemap priority
 		}
 		// Set homepage priority to 1.000
 		if paths[i] == "/" {
