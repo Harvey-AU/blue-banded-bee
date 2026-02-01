@@ -30,6 +30,7 @@ func NormaliseDomain(domain string) string {
 // Returns an error describing why the domain is invalid, or nil if valid.
 func ValidateDomain(domain string) error {
 	// Normalise first (removes http://, https://, www., trailing slash)
+	domain = strings.TrimSpace(domain)
 	domain = NormaliseDomain(domain)
 
 	if domain == "" {
