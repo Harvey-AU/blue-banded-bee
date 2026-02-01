@@ -163,7 +163,7 @@ async function loadGoogleConnections() {
       }
 
       // Set Google account name
-      const emailEl = clone.querySelector(".google-email");
+      const emailEl = clone.querySelector(".google-account-name");
       const accountName = conn.google_account_name || conn.google_email;
       if (emailEl && accountName) {
         emailEl.textContent = accountName;
