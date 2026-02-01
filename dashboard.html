@@ -2265,15 +2265,18 @@
         <form id="createJobForm" class="bb-auth-form">
           <div class="bb-form-group">
             <label for="jobDomain">Domain</label>
-            <input
-              type="text"
-              id="jobDomain"
-              name="domain"
-              required
-              placeholder="example.com"
-              class="bb-form-input"
-              aria-label="Domain to crawl"
-            />
+            <div class="bb-domain-search" style="position: relative">
+              <input
+                type="text"
+                id="jobDomain"
+                name="domain"
+                bbb-domain-create="auto"
+                required
+                placeholder="example.com"
+                class="bb-form-input"
+                aria-label="Domain to crawl"
+              />
+            </div>
             <div
               class="bb-field-error"
               id="domainError"
@@ -2962,6 +2965,78 @@
             Connect Google Analytics
           </button>
 
+          <!-- Google Accounts Selector (persistent from DB) -->
+          <div
+            id="googleAccountSelector"
+            style="display: none; margin-bottom: 16px"
+          >
+            <label
+              for="googleAccountSearch"
+              style="
+                display: block;
+                font-weight: 500;
+                font-size: 14px;
+                color: #374151;
+                margin-bottom: 6px;
+              "
+              >Account</label
+            >
+            <div style="display: flex; gap: 8px">
+              <div style="position: relative; flex: 1">
+                <input
+                  type="text"
+                  id="googleAccountSearch"
+                  placeholder="Select an account..."
+                  aria-label="Search Google accounts"
+                  style="
+                    width: 100%;
+                    padding: 10px 12px;
+                    border: 1px solid #d1d5db;
+                    border-radius: 6px;
+                    font-size: 14px;
+                    box-sizing: border-box;
+                  "
+                />
+                <div
+                  id="googleAccountDropdown"
+                  style="
+                    display: none;
+                    position: absolute;
+                    top: 100%;
+                    left: 0;
+                    right: 0;
+                    max-height: 200px;
+                    overflow-y: auto;
+                    background: white;
+                    border: 1px solid #d1d5db;
+                    border-radius: 6px;
+                    margin-top: 4px;
+                    z-index: 1000;
+                    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+                  "
+                ></div>
+              </div>
+              <button
+                type="button"
+                bbb-action="google-refresh-accounts"
+                title="Refresh accounts from Google"
+                aria-label="Refresh accounts from Google"
+                style="
+                  background: #f3f4f6;
+                  border: 1px solid #d1d5db;
+                  border-radius: 6px;
+                  cursor: pointer;
+                  padding: 10px 12px;
+                  color: #374151;
+                  font-size: 16px;
+                  flex-shrink: 0;
+                "
+              >
+                ↻
+              </button>
+            </div>
+          </div>
+
           <!-- Google Connections List -->
           <div
             id="googleConnectionsList"
@@ -2993,7 +3068,7 @@
                     >Google Analytics Connection</strong
                   >
                   <span
-                    class="google-email"
+                    class="google-account-name"
                     style="color: #6b7280; font-size: 13px; margin-left: 8px"
                   ></span>
                   <span
@@ -3065,34 +3140,6 @@
                 </div>
               </div>
             </div>
-          </div>
-
-          <!-- Property Selection UI (shown when multiple properties available) -->
-          <div
-            id="googlePropertySelection"
-            style="
-              display: none;
-              background: #f9fafb;
-              border-radius: 8px;
-              border: 1px solid #e5e7eb;
-              padding: 16px;
-              margin-bottom: 16px;
-            "
-          >
-            <h4 style="margin: 0 0 12px 0; font-size: 14px; color: #374151">
-              Select a GA4 Property
-            </h4>
-            <p style="color: #6b7280; font-size: 13px; margin-bottom: 12px">
-              Multiple properties found. Please select which one to connect:
-            </p>
-            <div id="googlePropertyList"></div>
-            <button
-              class="bb-button bb-button-outline"
-              bbb-action="google-cancel-selection"
-              style="margin-top: 8px; font-size: 13px"
-            >
-              Cancel
-            </button>
           </div>
 
           <!-- Empty state message (shown when no connections) -->
@@ -3207,6 +3254,7 @@
 
     <!-- Include the data binding and dashboard logic -->
     <script src="/js/bb-data-binder.js" defer></script>
+    <script src="/js/bb-domain-search.js" defer></script>
     <script src="/js/bb-auth-extension.js" defer></script>
     <script src="/js/bb-metadata.js" defer></script>
     <script src="/js/bb-dashboard-actions.js" defer></script>
@@ -3242,6 +3290,9 @@
               "submit",
               window.handleDashboardJobCreation
             );
+          }
+          if (window.setupJobDomainSearch) {
+            window.setupJobDomainSearch();
           }
 
           // Check for system-admin role and load schedules

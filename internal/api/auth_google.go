@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -8,7 +9,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"os"
 	"strings"
 	"sync"
 	"time"
@@ -16,8 +16,27 @@ import (
 	"github.com/Harvey-AU/blue-banded-bee/internal/auth"
 	"github.com/Harvey-AU/blue-banded-bee/internal/db"
 	"github.com/google/uuid"
-	"github.com/rs/zerolog/log"
+	"github.com/lib/pq"
+	"github.com/rs/zerolog"
 )
+
+// extractGoogleAccountIDFromPath extracts Google account ID from path like "accounts/accounts/123456/properties"
+// Returns empty string if path doesn't match the expected pattern
+func extractGoogleAccountIDFromPath(path string) string {
+	if !strings.HasPrefix(path, "accounts/") || !strings.HasSuffix(path, "/properties") {
+		return ""
+	}
+	// Path format: accounts/accounts/123456/properties -> accounts/123456
+	trimmed := strings.TrimPrefix(path, "accounts/")
+	trimmed = strings.TrimSuffix(trimmed, "/properties")
+	if trimmed == "" {
+		return ""
+	}
+	if decoded, err := url.PathUnescape(trimmed); err == nil && decoded != "" {
+		return decoded
+	}
+	return trimmed
+}
 
 // Pending OAuth sessions - stores properties and tokens temporarily after OAuth callback.
 // Key is session ID, value is PendingGASession.
@@ -87,15 +106,6 @@ func cleanupExpiredGASessions() {
 	}
 }
 
-// Google OAuth credentials loaded from environment variables
-func getGoogleClientID() string {
-	return os.Getenv("GOOGLE_CLIENT_ID")
-}
-
-func getGoogleClientSecret() string {
-	return os.Getenv("GOOGLE_CLIENT_SECRET")
-}
-
 func getGoogleRedirectURI() string {
 	return getAppURL() + "/v1/integrations/google/callback"
 }
@@ -157,7 +167,7 @@ func (h *Handler) InitiateGoogleOAuth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if getGoogleClientID() == "" {
+	if h.GoogleClientID == "" {
 		logger.Error().Msg("GOOGLE_CLIENT_ID not configured")
 		InternalError(w, r, fmt.Errorf("google integration not configured"))
 		return
@@ -185,7 +195,7 @@ func (h *Handler) InitiateGoogleOAuth(w http.ResponseWriter, r *http.Request) {
 	// Build Google OAuth URL
 	authURL := fmt.Sprintf(
 		"https://accounts.google.com/o/oauth2/v2/auth?client_id=%s&redirect_uri=%s&response_type=code&scope=%s&access_type=offline&prompt=consent&state=%s",
-		url.QueryEscape(getGoogleClientID()),
+		url.QueryEscape(h.GoogleClientID),
 		url.QueryEscape(getGoogleRedirectURI()),
 		url.QueryEscape(scopes),
 		url.QueryEscape(state),
@@ -258,7 +268,49 @@ func (h *Handler) HandleGoogleOAuthCallback(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	// Store session with accounts and tokens
+	// SYNC: Store accounts to DB for persistent display
+	now := time.Now().UTC()
+	for _, acc := range accounts {
+		dbAccount := &db.GoogleAnalyticsAccount{
+			ID:                uuid.New().String(),
+			OrganisationID:    state.OrgID,
+			GoogleAccountID:   acc.AccountID,
+			GoogleAccountName: acc.DisplayName,
+			InstallingUserID:  state.UserID,
+			CreatedAt:         now,
+			UpdatedAt:         now,
+		}
+		if userInfo != nil {
+			dbAccount.GoogleUserID = userInfo.ID
+			dbAccount.GoogleEmail = userInfo.Email
+		}
+
+		if err := h.DB.UpsertGA4Account(r.Context(), dbAccount); err != nil {
+			logger.Warn().Err(err).
+				Str("account_id", acc.AccountID).
+				Str("next_action", "retry_upsert_or_check_db_connectivity").
+				Msg("Failed to upsert GA4 account to DB")
+			// Continue anyway - the pending session flow will still work
+			continue
+		}
+
+		// Store token against each account for future refresh operations
+		if tokenResp.RefreshToken != "" {
+			if err := h.DB.StoreGA4AccountToken(r.Context(), dbAccount.ID, tokenResp.RefreshToken); err != nil {
+				logger.Warn().Err(err).
+					Str("account_id", acc.AccountID).
+					Str("next_action", "retry_store_token_or_check_vault_permissions").
+					Msg("Failed to store GA4 account token")
+			}
+		}
+	}
+
+	logger.Info().
+		Str("organisation_id", state.OrgID).
+		Int("account_count", len(accounts)).
+		Msg("Synced GA4 accounts to database")
+
+	// Store session with accounts and tokens (for property selection flow)
 	session := &PendingGASession{
 		Accounts:     accounts,
 		RefreshToken: tokenResp.RefreshToken,
@@ -273,7 +325,7 @@ func (h *Handler) HandleGoogleOAuthCallback(w http.ResponseWriter, r *http.Reque
 
 	// If single account, auto-fetch properties for it
 	if len(accounts) == 1 {
-		properties, err := h.fetchPropertiesForAccount(r.Context(), &http.Client{Timeout: 30 * time.Second}, tokenResp.AccessToken, accounts[0].AccountID)
+		properties, err := h.fetchPropertiesForAccount(r.Context(), logger, &http.Client{Timeout: 30 * time.Second}, tokenResp.AccessToken, accounts[0].AccountID)
 		if err != nil {
 			logger.Error().Err(err).Msg("Failed to fetch properties for single account")
 			h.redirectToDashboardWithError(w, r, "Google", "Failed to fetch properties for account")
@@ -410,9 +462,10 @@ func (h *Handler) SaveGoogleProperties(w http.ResponseWriter, r *http.Request) {
 
 	// Parse request body
 	var req struct {
-		SessionID         string   `json:"session_id"`
-		AccountID         string   `json:"account_id"`
-		ActivePropertyIDs []string `json:"active_property_ids"` // Which properties should be active
+		SessionID         string           `json:"session_id"`
+		AccountID         string           `json:"account_id"`
+		ActivePropertyIDs []string         `json:"active_property_ids"` // Which properties should be active
+		PropertyDomainMap map[string][]int `json:"property_domain_map"` // property_id -> domain_ids
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		BadRequest(w, r, "Invalid request body")
@@ -442,6 +495,27 @@ func (h *Handler) SaveGoogleProperties(w http.ResponseWriter, r *http.Request) {
 		activeSet[pid] = true
 	}
 
+	organisationDomains, err := h.DB.GetDomainsForOrganisation(r.Context(), orgID)
+	if err != nil {
+		logger.Error().Err(err).Str("organisation_id", orgID).Msg("Failed to fetch organisation domains")
+		InternalError(w, r, err)
+		return
+	}
+
+	allowedDomainIDs := make(map[int]struct{}, len(organisationDomains))
+	for _, domain := range organisationDomains {
+		allowedDomainIDs[domain.ID] = struct{}{}
+	}
+
+	for propertyID, domainIDs := range req.PropertyDomainMap {
+		for _, id := range domainIDs {
+			if _, ok := allowedDomainIDs[id]; !ok {
+				BadRequest(w, r, fmt.Sprintf("Domain ID %d does not belong to organisation for property %s", id, propertyID))
+				return
+			}
+		}
+	}
+
 	// Save all properties as connections
 	now := time.Now().UTC()
 	var savedCount int
@@ -449,6 +523,21 @@ func (h *Handler) SaveGoogleProperties(w http.ResponseWriter, r *http.Request) {
 		status := "inactive"
 		if activeSet[prop.PropertyID] {
 			status = "active"
+		}
+
+		// Get domain IDs for this property (default to empty array if not provided)
+		domainIDs := req.PropertyDomainMap[prop.PropertyID]
+		for _, id := range domainIDs {
+			if _, ok := allowedDomainIDs[id]; !ok {
+				BadRequest(w, r, "Domain does not belong to organisation")
+				return
+			}
+		}
+
+		// Convert []int to pq.Int64Array
+		domainIDsArray := make(pq.Int64Array, len(domainIDs))
+		for i, id := range domainIDs {
+			domainIDsArray[i] = int64(id)
 		}
 
 		conn := &db.GoogleAnalyticsConnection{
@@ -461,12 +550,16 @@ func (h *Handler) SaveGoogleProperties(w http.ResponseWriter, r *http.Request) {
 			GoogleEmail:      session.Email,
 			InstallingUserID: userClaims.UserID,
 			Status:           status,
+			DomainIDs:        domainIDsArray,
 			CreatedAt:        now,
 			UpdatedAt:        now,
 		}
 
 		if err := h.DB.CreateGoogleConnection(r.Context(), conn); err != nil {
-			logger.Warn().Err(err).Str("property_id", prop.PropertyID).Msg("Failed to save property connection")
+			logger.Warn().Err(err).
+				Str("property_id", prop.PropertyID).
+				Str("next_action", "retry_connection_create_or_check_db_connectivity").
+				Msg("Failed to save property connection")
 			continue
 		}
 
@@ -560,10 +653,114 @@ func (h *Handler) UpdateGooglePropertyStatus(w http.ResponseWriter, r *http.Requ
 	}, "Status updated successfully")
 }
 
+// UpdateGoogleConnection updates domain mappings for an existing connection
+// PATCH /v1/integrations/google/{id}
+func (h *Handler) UpdateGoogleConnection(w http.ResponseWriter, r *http.Request, connectionID string) {
+	logger := loggerWithRequest(r)
+
+	// Get authenticated user
+	userClaims, ok := auth.GetUserFromContext(r.Context())
+	if !ok {
+		Unauthorised(w, r, "User information not found")
+		return
+	}
+
+	user, err := h.DB.GetOrCreateUser(userClaims.UserID, userClaims.Email, nil)
+	if err != nil {
+		logger.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get or create user")
+		InternalError(w, r, err)
+		return
+	}
+
+	orgID := h.DB.GetEffectiveOrganisationID(user)
+	if orgID == "" {
+		BadRequest(w, r, "User must belong to an organisation")
+		return
+	}
+
+	// Parse request body
+	type UpdateRequest struct {
+		DomainIDs []int `json:"domain_ids"`
+	}
+
+	var req UpdateRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		BadRequest(w, r, "Invalid request body")
+		return
+	}
+
+	// Get existing connection to verify ownership
+	conn, err := h.DB.GetGoogleConnection(r.Context(), connectionID)
+	if err != nil {
+		logger.Error().Err(err).Str("connection_id", connectionID).Msg("Failed to get connection")
+		if errors.Is(err, db.ErrGoogleConnectionNotFound) {
+			NotFound(w, r, "Connection not found")
+			return
+		}
+		InternalError(w, r, err)
+		return
+	}
+
+	// Verify connection belongs to user's organisation
+	if conn.OrganisationID != orgID {
+		Forbidden(w, r, "Access denied")
+		return
+	}
+
+	organisationDomains, err := h.DB.GetDomainsForOrganisation(r.Context(), orgID)
+	if err != nil {
+		logger.Error().Err(err).Str("organisation_id", orgID).Msg("Failed to fetch organisation domains")
+		InternalError(w, r, err)
+		return
+	}
+
+	allowedDomainIDs := make(map[int]struct{}, len(organisationDomains))
+	for _, domain := range organisationDomains {
+		allowedDomainIDs[domain.ID] = struct{}{}
+	}
+
+	for _, id := range req.DomainIDs {
+		if _, ok := allowedDomainIDs[id]; !ok {
+			Forbidden(w, r, "Domain does not belong to organisation")
+			return
+		}
+	}
+
+	// Update domain_ids
+	if err := h.DB.UpdateConnectionDomains(r.Context(), connectionID, req.DomainIDs); err != nil {
+		logger.Error().Err(err).Str("connection_id", connectionID).Msg("Failed to update connection domains")
+		InternalError(w, r, err)
+		return
+	}
+
+	logger.Info().
+		Str("connection_id", connectionID).
+		Ints("domain_ids", req.DomainIDs).
+		Msg("Updated connection domain mappings")
+
+	// Return updated connection (sanitised to avoid exposing internal fields)
+	updatedConn, err := h.DB.GetGoogleConnection(r.Context(), connectionID)
+	if err != nil {
+		InternalError(w, r, err)
+		return
+	}
+
+	response := GoogleConnectionResponse{
+		ID:              updatedConn.ID,
+		GA4PropertyID:   updatedConn.GA4PropertyID,
+		GA4PropertyName: updatedConn.GA4PropertyName,
+		GoogleEmail:     updatedConn.GoogleEmail,
+		Status:          updatedConn.Status,
+		DomainIDs:       updatedConn.DomainIDs,
+		CreatedAt:       updatedConn.CreatedAt.Format(time.RFC3339),
+	}
+	WriteSuccess(w, r, response, "Connection updated")
+}
+
 func (h *Handler) exchangeGoogleCode(code string) (*GoogleTokenResponse, error) {
 	values := url.Values{}
-	values.Set("client_id", getGoogleClientID())
-	values.Set("client_secret", getGoogleClientSecret())
+	values.Set("client_id", h.GoogleClientID)
+	values.Set("client_secret", h.GoogleClientSecret)
 	values.Set("grant_type", "authorization_code")
 	values.Set("code", code)
 	values.Set("redirect_uri", getGoogleRedirectURI())
@@ -658,11 +855,11 @@ func (h *Handler) fetchGA4Accounts(ctx context.Context, accessToken string) ([]G
 	return accounts, nil
 }
 
-func (h *Handler) fetchPropertiesForAccount(ctx context.Context, client *http.Client, accessToken, accountName string) ([]GA4Property, error) {
+func (h *Handler) fetchPropertiesForAccount(ctx context.Context, logger zerolog.Logger, client *http.Client, accessToken, accountName string) ([]GA4Property, error) {
 	// URL-encode the filter value (accountName contains slash like "accounts/123456")
 	apiURL := fmt.Sprintf("https://analyticsadmin.googleapis.com/v1beta/properties?filter=parent:%s", url.QueryEscape(accountName))
 
-	log.Info().Str("account_name", accountName).Str("api_url", apiURL).Msg("Fetching GA4 properties for account")
+	logger.Debug().Str("account_id", accountName).Msg("Fetching GA4 properties from API")
 
 	req, err := http.NewRequestWithContext(ctx, "GET", apiURL, nil)
 	if err != nil {
@@ -677,8 +874,6 @@ func (h *Handler) fetchPropertiesForAccount(ctx context.Context, client *http.Cl
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		log.Error().Int("status", resp.StatusCode).Str("body", string(body)).Msg("Google API properties request failed")
 		return nil, fmt.Errorf("properties endpoint returned status: %d", resp.StatusCode)
 	}
 
@@ -704,19 +899,21 @@ func (h *Handler) fetchPropertiesForAccount(ctx context.Context, client *http.Cl
 		})
 	}
 
-	log.Info().Str("account_name", accountName).Int("property_count", len(properties)).Msg("Fetched GA4 properties")
+	logger.Debug().Str("account_id", accountName).Int("property_count", len(properties)).Msg("Fetched GA4 properties")
 
 	return properties, nil
 }
 
 // GoogleConnectionResponse represents a Google Analytics connection in API responses
 type GoogleConnectionResponse struct {
-	ID              string `json:"id"`
-	GA4PropertyID   string `json:"ga4_property_id,omitempty"`
-	GA4PropertyName string `json:"ga4_property_name,omitempty"`
-	GoogleEmail     string `json:"google_email,omitempty"`
-	Status          string `json:"status"`
-	CreatedAt       string `json:"created_at"`
+	ID                string        `json:"id"`
+	GA4PropertyID     string        `json:"ga4_property_id,omitempty"`
+	GA4PropertyName   string        `json:"ga4_property_name,omitempty"`
+	GoogleAccountName string        `json:"google_account_name,omitempty"`
+	GoogleEmail       string        `json:"google_email,omitempty"`
+	Status            string        `json:"status"`
+	DomainIDs         pq.Int64Array `json:"domain_ids,omitempty"`
+	CreatedAt         string        `json:"created_at"`
 }
 
 // GoogleConnectionsHandler handles requests to /v1/integrations/google
@@ -738,110 +935,7 @@ func (h *Handler) GoogleConnectionHandler(w http.ResponseWriter, r *http.Request
 		BadRequest(w, r, "Connection ID is required")
 		return
 	}
-
-	// Handle callback separately (no auth required)
-	if path == "callback" {
-		if r.Method == http.MethodGet {
-			h.HandleGoogleOAuthCallback(w, r)
-			return
-		}
-		MethodNotAllowed(w, r)
-		return
-	}
-
-	// Handle save-property endpoint (single property - legacy)
-	if path == "save-property" {
-		if r.Method == http.MethodPost {
-			h.SaveGoogleProperty(w, r)
-			return
-		}
-		MethodNotAllowed(w, r)
-		return
-	}
-
-	// Handle save-properties endpoint (bulk save all properties from session)
-	if path == "save-properties" {
-		if r.Method == http.MethodPost {
-			h.SaveGoogleProperties(w, r)
-			return
-		}
-		MethodNotAllowed(w, r)
-		return
-	}
-
-	// Handle pending-session endpoint (get accounts/properties from server-side session)
-	if strings.HasPrefix(path, "pending-session/") {
-		sessionPath := strings.TrimPrefix(path, "pending-session/")
-		parts := strings.Split(sessionPath, "/")
-		sessionID := parts[0]
-
-		log.Info().
-			Str("raw_path", path).
-			Str("session_path", sessionPath).
-			Strs("parts", parts).
-			Int("parts_len", len(parts)).
-			Msg("[GA Debug] Parsing pending-session path")
-
-		// Check if this is a request for a specific account's properties
-		// Format: pending-session/{sessionID}/accounts/{accountID}/properties
-		// Note: URL path segments are automatically decoded by the HTTP router,
-		// so "accounts%2F123456" becomes ["accounts", "123456"] in the parts array
-		log.Info().
-			Bool("len_check_4", len(parts) >= 4).
-			Bool("len_check_5", len(parts) >= 5).
-			Bool("parts1_check", len(parts) > 1 && parts[1] == "accounts").
-			Str("method", r.Method).
-			Msg("[GA Debug] Checking routing condition")
-
-		// Check for two patterns:
-		// 1. parts = [sessionID, "accounts", "accounts", "123456", "properties"] (URL-decoded, 5 parts)
-		// 2. parts = [sessionID, "accounts", "accounts/123456", "properties"] (not decoded, 4 parts)
-		isPropertiesRequest := false
-		var accountID string
-
-		if len(parts) == 5 && parts[1] == "accounts" && parts[2] == "accounts" && parts[4] == "properties" {
-			// URL-decoded pattern: reconstruct account ID from parts[2] and parts[3]
-			accountID = parts[2] + "/" + parts[3]
-			isPropertiesRequest = true
-			log.Info().
-				Str("pattern", "decoded").
-				Str("account_id", accountID).
-				Msg("[GA Debug] Matched URL-decoded pattern")
-		} else if len(parts) == 4 && parts[1] == "accounts" && parts[3] == "properties" {
-			// Not decoded pattern (legacy or different router behaviour)
-			accountID = parts[2]
-			// URL-decode if needed
-			if decoded, err := url.PathUnescape(accountID); err == nil && decoded != accountID {
-				accountID = decoded
-			}
-			isPropertiesRequest = true
-			log.Info().
-				Str("pattern", "encoded").
-				Str("account_id", accountID).
-				Msg("[GA Debug] Matched URL-encoded pattern")
-		}
-
-		if isPropertiesRequest {
-			log.Info().
-				Str("account_id", accountID).
-				Msg("[GA Debug] Routing to fetchAccountProperties")
-
-			if r.Method == http.MethodGet {
-				h.fetchAccountProperties(w, r, sessionID, accountID)
-				return
-			}
-			MethodNotAllowed(w, r)
-			return
-		}
-
-		log.Info().Msg("[GA Debug] Condition NOT matched - calling getPendingSession")
-
-		// Default: return session data
-		if r.Method == http.MethodGet {
-			h.getPendingSession(w, r, sessionID)
-			return
-		}
-		MethodNotAllowed(w, r)
+	if h.handleGoogleSpecialPaths(w, r, path) {
 		return
 	}
 
@@ -866,10 +960,155 @@ func (h *Handler) GoogleConnectionHandler(w http.ResponseWriter, r *http.Request
 	case http.MethodDelete:
 		h.deleteGoogleConnection(w, r, connectionID)
 	case http.MethodPatch:
-		h.UpdateGooglePropertyStatus(w, r, connectionID)
+		// Check request body to determine which PATCH operation
+		// If body contains "domain_ids", update domains
+		// If body contains "status", update status
+		var bodyCheck map[string]interface{}
+		if err := json.NewDecoder(r.Body).Decode(&bodyCheck); err != nil {
+			BadRequest(w, r, "Invalid request body")
+			return
+		}
+
+		// Restore body for handler to read
+		bodyBytes, err := json.Marshal(bodyCheck)
+		if err != nil {
+			InternalError(w, r, err)
+			return
+		}
+		r.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+
+		_, hasDomainIDs := bodyCheck["domain_ids"]
+		_, hasStatus := bodyCheck["status"]
+		if hasDomainIDs && hasStatus {
+			BadRequest(w, r, "Specify either domain_ids or status, not both")
+			return
+		}
+		if hasDomainIDs {
+			h.UpdateGoogleConnection(w, r, connectionID)
+		} else {
+			h.UpdateGooglePropertyStatus(w, r, connectionID)
+		}
 	default:
 		MethodNotAllowed(w, r)
 	}
+}
+
+func (h *Handler) handleGoogleSpecialPaths(w http.ResponseWriter, r *http.Request, path string) bool {
+	// Handle callback separately (no auth required)
+	if path == "callback" {
+		if r.Method == http.MethodGet {
+			h.HandleGoogleOAuthCallback(w, r)
+			return true
+		}
+		MethodNotAllowed(w, r)
+		return true
+	}
+
+	// Handle save-property endpoint (single property - legacy)
+	if path == "save-property" {
+		if r.Method == http.MethodPost {
+			h.SaveGoogleProperty(w, r)
+			return true
+		}
+		MethodNotAllowed(w, r)
+		return true
+	}
+
+	// Handle save-properties endpoint (bulk save all properties from session)
+	if path == "save-properties" {
+		if r.Method == http.MethodPost {
+			h.SaveGoogleProperties(w, r)
+			return true
+		}
+		MethodNotAllowed(w, r)
+		return true
+	}
+
+	// Handle domains endpoint (get organisation domains for property mapping)
+	if path == "domains" {
+		if r.Method == http.MethodGet {
+			h.getOrganisationDomains(w, r)
+			return true
+		}
+		MethodNotAllowed(w, r)
+		return true
+	}
+
+	// Handle accounts endpoint (persistent storage of GA accounts)
+	if path == "accounts" {
+		h.ListGA4Accounts(w, r)
+		return true
+	}
+
+	// Handle accounts/refresh endpoint (sync from Google API)
+	if path == "accounts/refresh" {
+		h.RefreshGA4Accounts(w, r)
+		return true
+	}
+
+	// Handle accounts/{googleAccountId}/save-properties endpoint (bulk save from stored account)
+	if strings.HasPrefix(path, "accounts/") && strings.HasSuffix(path, "/save-properties") {
+		accountPath := strings.TrimPrefix(path, "accounts/")
+		accountID := strings.TrimSuffix(accountPath, "/save-properties")
+		if decoded, err := url.PathUnescape(accountID); err == nil && decoded != "" {
+			accountID = decoded
+		}
+		if accountID != "" {
+			h.SaveGA4AccountProperties(w, r, accountID)
+			return true
+		}
+	}
+
+	// Handle accounts/{googleAccountId}/properties endpoint (fetch properties using stored token)
+	if googleAccountID := extractGoogleAccountIDFromPath(path); googleAccountID != "" {
+		h.GetAccountProperties(w, r, googleAccountID)
+		return true
+	}
+
+	// Handle pending-session endpoint (get accounts/properties from server-side session)
+	if strings.HasPrefix(path, "pending-session/") {
+		h.handlePendingSession(w, r, path)
+		return true
+	}
+
+	return false
+}
+
+func (h *Handler) handlePendingSession(w http.ResponseWriter, r *http.Request, path string) {
+	sessionPath := strings.TrimPrefix(path, "pending-session/")
+	if decodedPath, err := url.PathUnescape(sessionPath); err == nil {
+		sessionPath = decodedPath
+	}
+	parts := strings.Split(sessionPath, "/")
+	sessionID := parts[0]
+
+	// Check if this is a request for a specific account's properties
+	// Format: pending-session/{sessionID}/accounts/{accountID}/properties
+	// Note: URL path segments are automatically decoded by the HTTP router,
+	// so "accounts%2F123456" becomes ["accounts", "123456"] in the parts array
+	isPropertiesRequest := false
+	var accountID string
+
+	if len(parts) >= 4 && parts[1] == "accounts" && parts[len(parts)-1] == "properties" {
+		accountID = strings.Join(parts[2:len(parts)-1], "/")
+		isPropertiesRequest = true
+	}
+
+	if isPropertiesRequest {
+		if r.Method == http.MethodGet {
+			h.fetchAccountProperties(w, r, sessionID, accountID)
+			return
+		}
+		MethodNotAllowed(w, r)
+		return
+	}
+
+	// Default: return session data
+	if r.Method == http.MethodGet {
+		h.getPendingSession(w, r, sessionID)
+		return
+	}
+	MethodNotAllowed(w, r)
 }
 
 // getPendingSession returns the pending OAuth session data (accounts, properties, tokens)
@@ -895,49 +1134,30 @@ func (h *Handler) getPendingSession(w http.ResponseWriter, r *http.Request, sess
 func (h *Handler) fetchAccountProperties(w http.ResponseWriter, r *http.Request, sessionID, accountID string) {
 	logger := loggerWithRequest(r)
 
-	log.Info().
-		Str("session_id", sessionID).
-		Str("account_id", accountID).
-		Msg("[GA Debug] fetchAccountProperties called")
-
 	session := getPendingGASession(sessionID)
 	if session == nil {
-		log.Info().Str("session_id", sessionID).Msg("[GA Debug] Session not found")
 		BadRequest(w, r, "Session expired or not found. Please reconnect to Google Analytics.")
 		return
 	}
 
-	log.Info().
-		Int("num_accounts", len(session.Accounts)).
-		Msg("[GA Debug] Session found")
-
 	// Verify the account is in the session
 	validAccount := false
-	for i, acc := range session.Accounts {
-		log.Info().
-			Int("index", i).
-			Str("session_account_id", acc.AccountID).
-			Str("requested_account_id", accountID).
-			Bool("match", acc.AccountID == accountID).
-			Msg("[GA Debug] Comparing account IDs")
+	for _, acc := range session.Accounts {
 		if acc.AccountID == accountID {
 			validAccount = true
 			break
 		}
 	}
 	if !validAccount {
-		log.Info().
-			Str("requested_account_id", accountID).
-			Msg("[GA Debug] Account not found in session")
 		BadRequest(w, r, "Account not found in session")
 		return
 	}
 
 	// Fetch properties for this account
-	logger.Info().Str("account_id", accountID).Str("session_id", sessionID).Msg("Fetching properties for account")
+	logger.Info().Str("account_id", accountID).Msg("Fetching GA4 properties")
 
 	client := &http.Client{Timeout: 30 * time.Second}
-	properties, err := h.fetchPropertiesForAccount(r.Context(), client, session.AccessToken, accountID)
+	properties, err := h.fetchPropertiesForAccount(r.Context(), logger, client, session.AccessToken, accountID)
 	if err != nil {
 		logger.Error().Err(err).Str("account_id", accountID).Msg("Failed to fetch properties for account")
 		InternalError(w, r, fmt.Errorf("failed to fetch properties: %w", err))
@@ -992,16 +1212,56 @@ func (h *Handler) listGoogleConnections(w http.ResponseWriter, r *http.Request) 
 	response := make([]GoogleConnectionResponse, 0, len(connections))
 	for _, conn := range connections {
 		response = append(response, GoogleConnectionResponse{
-			ID:              conn.ID,
-			GA4PropertyID:   conn.GA4PropertyID,
-			GA4PropertyName: conn.GA4PropertyName,
-			GoogleEmail:     conn.GoogleEmail,
-			Status:          conn.Status,
-			CreatedAt:       conn.CreatedAt.Format(time.RFC3339),
+			ID:                conn.ID,
+			GA4PropertyID:     conn.GA4PropertyID,
+			GA4PropertyName:   conn.GA4PropertyName,
+			GoogleAccountName: conn.GoogleAccountName,
+			GoogleEmail:       conn.GoogleEmail,
+			Status:            conn.Status,
+			DomainIDs:         conn.DomainIDs,
+			CreatedAt:         conn.CreatedAt.Format(time.RFC3339),
 		})
 	}
 
 	WriteSuccess(w, r, response, "")
+}
+
+// getOrganisationDomains returns all domains for the authenticated user's organisation
+func (h *Handler) getOrganisationDomains(w http.ResponseWriter, r *http.Request) {
+	logger := loggerWithRequest(r)
+
+	userClaims, ok := auth.GetUserFromContext(r.Context())
+	if !ok {
+		Unauthorised(w, r, "User information not found")
+		return
+	}
+
+	user, err := h.DB.GetOrCreateUser(userClaims.UserID, userClaims.Email, nil)
+	if err != nil {
+		logger.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get or create user")
+		InternalError(w, r, err)
+		return
+	}
+
+	orgID := h.DB.GetEffectiveOrganisationID(user)
+	if orgID == "" {
+		WriteSuccess(w, r, map[string]interface{}{"domains": []db.OrganisationDomain{}}, "No organisation")
+		return
+	}
+
+	domains, err := h.DB.GetDomainsForOrganisation(r.Context(), orgID)
+	if err != nil {
+		logger.Error().Err(err).Str("organisation_id", orgID).Msg("Failed to get organisation domains")
+		InternalError(w, r, err)
+		return
+	}
+
+	logger.Debug().
+		Str("organisation_id", orgID).
+		Int("domain_count", len(domains)).
+		Msg("Returning domains for organisation")
+
+	WriteSuccess(w, r, map[string]interface{}{"domains": domains}, "")
 }
 
 // deleteGoogleConnection deletes a Google Analytics connection
@@ -1040,4 +1300,485 @@ func (h *Handler) deleteGoogleConnection(w http.ResponseWriter, r *http.Request,
 
 	logger.Info().Str("connection_id", connectionID).Msg("Google Analytics connection deleted")
 	WriteNoContent(w, r)
+}
+
+// GA4AccountResponse represents a Google Analytics account in API responses
+type GA4AccountResponse struct {
+	ID                string `json:"id"`
+	GoogleAccountID   string `json:"google_account_id"`
+	GoogleAccountName string `json:"google_account_name,omitempty"`
+	GoogleEmail       string `json:"google_email,omitempty"`
+	HasToken          bool   `json:"has_token"`
+	CreatedAt         string `json:"created_at"`
+}
+
+// ListGA4Accounts returns stored GA4 accounts from the database
+// GET /v1/integrations/google/accounts
+func (h *Handler) ListGA4Accounts(w http.ResponseWriter, r *http.Request) {
+	logger := loggerWithRequest(r)
+
+	if r.Method != http.MethodGet {
+		MethodNotAllowed(w, r)
+		return
+	}
+
+	userClaims, ok := auth.GetUserFromContext(r.Context())
+	if !ok {
+		Unauthorised(w, r, "User information not found")
+		return
+	}
+
+	user, err := h.DB.GetOrCreateUser(userClaims.UserID, userClaims.Email, nil)
+	if err != nil {
+		logger.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get or create user")
+		InternalError(w, r, err)
+		return
+	}
+
+	orgID := h.DB.GetEffectiveOrganisationID(user)
+	if orgID == "" {
+		WriteSuccess(w, r, map[string]any{"accounts": []GA4AccountResponse{}}, "No organisation")
+		return
+	}
+
+	accounts, err := h.DB.ListGA4Accounts(r.Context(), orgID)
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to list Google Analytics accounts")
+		InternalError(w, r, err)
+		return
+	}
+
+	response := make([]GA4AccountResponse, 0, len(accounts))
+	for _, acc := range accounts {
+		response = append(response, GA4AccountResponse{
+			ID:                acc.ID,
+			GoogleAccountID:   acc.GoogleAccountID,
+			GoogleAccountName: acc.GoogleAccountName,
+			GoogleEmail:       acc.GoogleEmail,
+			HasToken:          acc.VaultSecretName != "",
+			CreatedAt:         acc.CreatedAt.Format(time.RFC3339),
+		})
+	}
+
+	WriteSuccess(w, r, map[string]any{"accounts": response}, "")
+}
+
+// RefreshGA4Accounts syncs accounts from Google API and updates the database
+// POST /v1/integrations/google/accounts/refresh
+func (h *Handler) RefreshGA4Accounts(w http.ResponseWriter, r *http.Request) {
+	logger := loggerWithRequest(r)
+
+	if r.Method != http.MethodPost {
+		MethodNotAllowed(w, r)
+		return
+	}
+
+	userClaims, ok := auth.GetUserFromContext(r.Context())
+	if !ok {
+		Unauthorised(w, r, "User information not found")
+		return
+	}
+
+	user, err := h.DB.GetOrCreateUser(userClaims.UserID, userClaims.Email, nil)
+	if err != nil {
+		logger.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get or create user")
+		InternalError(w, r, err)
+		return
+	}
+
+	orgID := h.DB.GetEffectiveOrganisationID(user)
+	if orgID == "" {
+		BadRequest(w, r, "User must belong to an organisation")
+		return
+	}
+
+	accountWithToken, refreshToken, err := h.getGARefreshToken(r.Context(), logger, orgID)
+	if err != nil {
+		if errors.Is(err, db.ErrGoogleTokenNotFound) || errors.Is(err, db.ErrGoogleAccountNotFound) || errors.Is(err, db.ErrGoogleConnectionNotFound) {
+			WriteSuccess(w, r, map[string]any{
+				"needs_reauth": true,
+				"message":      "No valid Google token found. Please reconnect to Google Analytics.",
+			}, "")
+			return
+		}
+		logger.Error().Err(err).Msg("Failed to resolve GA refresh token")
+		InternalError(w, r, err)
+		return
+	}
+
+	// Refresh the access token using the refresh token
+	accessToken, err := h.refreshGoogleAccessToken(refreshToken)
+	if err != nil {
+		logger.Warn().
+			Err(err).
+			Str("next_action", "reauth_required").
+			Msg("Failed to refresh Google access token")
+		// Token might be revoked
+		WriteSuccess(w, r, map[string]any{
+			"needs_reauth": true,
+			"message":      "Unable to refresh token. Please reconnect to Google Analytics.",
+		}, "")
+		return
+	}
+
+	// Fetch accounts from Google API
+	accounts, err := h.fetchGA4Accounts(r.Context(), accessToken)
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to fetch GA4 accounts from Google")
+		InternalError(w, r, fmt.Errorf("failed to fetch accounts from Google: %w", err))
+		return
+	}
+
+	// Sync accounts to database
+	now := time.Now().UTC()
+	for _, acc := range accounts {
+		dbAccount := &db.GoogleAnalyticsAccount{
+			ID:                uuid.New().String(),
+			OrganisationID:    orgID,
+			GoogleAccountID:   acc.AccountID,
+			GoogleAccountName: acc.DisplayName,
+			GoogleUserID:      accountWithToken.GoogleUserID,
+			GoogleEmail:       accountWithToken.GoogleEmail,
+			InstallingUserID:  userClaims.UserID,
+			CreatedAt:         now,
+			UpdatedAt:         now,
+		}
+
+		if err := h.DB.UpsertGA4Account(r.Context(), dbAccount); err != nil {
+			logger.Warn().Err(err).Str("account_id", acc.AccountID).Msg("Failed to upsert GA4 account")
+		}
+	}
+
+	logger.Info().
+		Str("organisation_id", orgID).
+		Int("account_count", len(accounts)).
+		Msg("Refreshed GA4 accounts from Google API")
+
+	// Return fresh list from DB
+	dbAccounts, err := h.DB.ListGA4Accounts(r.Context(), orgID)
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to list refreshed GA4 accounts")
+		InternalError(w, r, err)
+		return
+	}
+
+	response := make([]GA4AccountResponse, 0, len(dbAccounts))
+	for _, acc := range dbAccounts {
+		response = append(response, GA4AccountResponse{
+			ID:                acc.ID,
+			GoogleAccountID:   acc.GoogleAccountID,
+			GoogleAccountName: acc.GoogleAccountName,
+			GoogleEmail:       acc.GoogleEmail,
+			HasToken:          acc.VaultSecretName != "",
+			CreatedAt:         acc.CreatedAt.Format(time.RFC3339),
+		})
+	}
+
+	WriteSuccess(w, r, map[string]any{
+		"accounts":     response,
+		"needs_reauth": false,
+	}, "Accounts refreshed successfully")
+}
+
+// refreshGoogleAccessToken exchanges a refresh token for a new access token
+func (h *Handler) refreshGoogleAccessToken(refreshToken string) (string, error) {
+	values := url.Values{}
+	values.Set("client_id", h.GoogleClientID)
+	values.Set("client_secret", h.GoogleClientSecret)
+	values.Set("grant_type", "refresh_token")
+	values.Set("refresh_token", refreshToken)
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.PostForm("https://oauth2.googleapis.com/token", values)
+	if err != nil {
+		return "", fmt.Errorf("failed to refresh token: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("token refresh returned status: %d", resp.StatusCode)
+	}
+
+	var tokenResp struct {
+		AccessToken string `json:"access_token"`
+		ExpiresIn   int    `json:"expires_in"`
+		TokenType   string `json:"token_type"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&tokenResp); err != nil {
+		return "", fmt.Errorf("failed to decode token response: %w", err)
+	}
+
+	return tokenResp.AccessToken, nil
+}
+
+// getGARefreshToken resolves a usable refresh token for the organisation.
+// It prefers account-level tokens, then falls back to any connection-level token.
+func (h *Handler) getGARefreshToken(ctx context.Context, logger zerolog.Logger, organisationID string) (*db.GoogleAnalyticsAccount, string, error) {
+	accountWithToken, err := h.DB.GetGA4AccountWithToken(ctx, organisationID)
+	if err == nil {
+		refreshToken, tokenErr := h.DB.GetGA4AccountToken(ctx, accountWithToken.ID)
+		if tokenErr == nil {
+			return accountWithToken, refreshToken, nil
+		}
+		if !errors.Is(tokenErr, db.ErrGoogleTokenNotFound) {
+			return nil, "", tokenErr
+		}
+		logger.Warn().
+			Str("organisation_id", organisationID).
+			Str("account_id", accountWithToken.ID).
+			Str("next_action", "retry_token_fetch_or_reauth").
+			Msg("GA account token missing in vault, falling back to connection token")
+	} else if !errors.Is(err, db.ErrGoogleAccountNotFound) {
+		return nil, "", err
+	}
+
+	connectionWithToken, err := h.DB.GetGAConnectionWithToken(ctx, organisationID)
+	if err == nil {
+		refreshToken, tokenErr := h.DB.GetGoogleToken(ctx, connectionWithToken.ID)
+		if tokenErr == nil {
+			account := &db.GoogleAnalyticsAccount{
+				GoogleUserID: connectionWithToken.GoogleUserID,
+				GoogleEmail:  connectionWithToken.GoogleEmail,
+			}
+			return account, refreshToken, nil
+		}
+		if !errors.Is(tokenErr, db.ErrGoogleTokenNotFound) {
+			return nil, "", tokenErr
+		}
+		logger.Warn().
+			Str("organisation_id", organisationID).
+			Str("connection_id", connectionWithToken.ID).
+			Str("next_action", "reauth_required").
+			Msg("GA connection token missing in vault")
+	} else if !errors.Is(err, db.ErrGoogleConnectionNotFound) {
+		return nil, "", err
+	}
+
+	return nil, "", db.ErrGoogleTokenNotFound
+}
+
+// GetAccountProperties fetches properties for a Google account using stored refresh token
+// GET /v1/integrations/google/accounts/{googleAccountId}/properties
+func (h *Handler) GetAccountProperties(w http.ResponseWriter, r *http.Request, googleAccountID string) {
+	logger := loggerWithRequest(r)
+
+	if r.Method != http.MethodGet {
+		MethodNotAllowed(w, r)
+		return
+	}
+
+	userClaims, ok := auth.GetUserFromContext(r.Context())
+	if !ok {
+		Unauthorised(w, r, "User information not found")
+		return
+	}
+
+	user, err := h.DB.GetOrCreateUser(userClaims.UserID, userClaims.Email, nil)
+	if err != nil {
+		logger.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get or create user")
+		InternalError(w, r, err)
+		return
+	}
+
+	orgID := h.DB.GetEffectiveOrganisationID(user)
+	if orgID == "" {
+		BadRequest(w, r, "User must belong to an organisation")
+		return
+	}
+
+	_, err = h.DB.GetGA4AccountByGoogleID(r.Context(), orgID, googleAccountID)
+	if err != nil {
+		if errors.Is(err, db.ErrGoogleAccountNotFound) {
+			BadRequest(w, r, "Google account not found for organisation")
+			return
+		}
+		logger.Error().Err(err).Str("google_account_id", googleAccountID).Msg("Failed to resolve Google account")
+		InternalError(w, r, err)
+		return
+	}
+
+	_, refreshToken, err := h.getGARefreshToken(r.Context(), logger, orgID)
+	if err != nil {
+		if errors.Is(err, db.ErrGoogleTokenNotFound) || errors.Is(err, db.ErrGoogleAccountNotFound) || errors.Is(err, db.ErrGoogleConnectionNotFound) {
+			WriteSuccess(w, r, map[string]any{
+				"needs_reauth": true,
+				"message":      "No valid Google token found. Please reconnect to Google Analytics.",
+			}, "")
+			return
+		}
+		logger.Error().Err(err).Msg("Failed to resolve GA refresh token")
+		InternalError(w, r, err)
+		return
+	}
+
+	// Refresh the access token
+	accessToken, err := h.refreshGoogleAccessToken(refreshToken)
+	if err != nil {
+		logger.Warn().
+			Err(err).
+			Str("next_action", "reauth_required").
+			Msg("Failed to refresh Google access token")
+		WriteSuccess(w, r, map[string]any{
+			"needs_reauth": true,
+			"message":      "Unable to refresh token. Please reconnect to Google Analytics.",
+		}, "")
+		return
+	}
+
+	// Fetch properties for this account from Google API
+	client := &http.Client{Timeout: 30 * time.Second}
+	properties, err := h.fetchPropertiesForAccount(r.Context(), loggerWithRequest(r), client, accessToken, googleAccountID)
+	if err != nil {
+		logger.Error().Err(err).Str("google_account_id", googleAccountID).Msg("Failed to fetch GA4 properties")
+		InternalError(w, r, fmt.Errorf("failed to fetch properties: %w", err))
+		return
+	}
+
+	logger.Info().
+		Str("google_account_id", googleAccountID).
+		Int("property_count", len(properties)).
+		Msg("Fetched GA4 properties for account")
+
+	WriteSuccess(w, r, map[string]any{
+		"properties": properties,
+	}, "")
+}
+
+// SaveGA4AccountProperties saves all properties for a stored GA4 account as inactive
+// POST /v1/integrations/google/accounts/{googleAccountId}/save-properties
+func (h *Handler) SaveGA4AccountProperties(w http.ResponseWriter, r *http.Request, googleAccountID string) {
+	logger := loggerWithRequest(r)
+
+	if r.Method != http.MethodPost {
+		MethodNotAllowed(w, r)
+		return
+	}
+
+	userClaims, ok := auth.GetUserFromContext(r.Context())
+	if !ok {
+		Unauthorised(w, r, "User information not found")
+		return
+	}
+
+	user, err := h.DB.GetOrCreateUser(userClaims.UserID, userClaims.Email, nil)
+	if err != nil {
+		logger.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get or create user")
+		InternalError(w, r, err)
+		return
+	}
+
+	orgID := h.DB.GetEffectiveOrganisationID(user)
+	if orgID == "" {
+		BadRequest(w, r, "User must belong to an organisation")
+		return
+	}
+
+	account, err := h.DB.GetGA4AccountByGoogleID(r.Context(), orgID, googleAccountID)
+	if err != nil {
+		if errors.Is(err, db.ErrGoogleAccountNotFound) {
+			BadRequest(w, r, "Google account not found for organisation")
+			return
+		}
+		logger.Error().Err(err).Str("google_account_id", googleAccountID).Msg("Failed to resolve Google account")
+		InternalError(w, r, err)
+		return
+	}
+
+	refreshToken, err := h.DB.GetGA4AccountToken(r.Context(), account.ID)
+	if err != nil {
+		if errors.Is(err, db.ErrGoogleTokenNotFound) {
+			_, fallbackToken, fallbackErr := h.getGARefreshToken(r.Context(), logger, orgID)
+			if fallbackErr != nil {
+				if errors.Is(fallbackErr, db.ErrGoogleTokenNotFound) || errors.Is(fallbackErr, db.ErrGoogleAccountNotFound) || errors.Is(fallbackErr, db.ErrGoogleConnectionNotFound) {
+					WriteSuccess(w, r, map[string]any{
+						"needs_reauth": true,
+						"message":      "No valid Google token found. Please reconnect to Google Analytics.",
+					}, "")
+					return
+				}
+				logger.Error().Err(fallbackErr).Str("organisation_id", orgID).Msg("Failed to resolve fallback GA refresh token")
+				InternalError(w, r, fallbackErr)
+				return
+			}
+			refreshToken = fallbackToken
+		} else {
+			logger.Error().Err(err).Str("account_id", account.ID).Msg("Failed to resolve GA refresh token")
+			InternalError(w, r, err)
+			return
+		}
+	}
+
+	accessToken, err := h.refreshGoogleAccessToken(refreshToken)
+	if err != nil {
+		logger.Warn().
+			Err(err).
+			Str("next_action", "reauth_required").
+			Msg("Failed to refresh Google access token")
+		WriteSuccess(w, r, map[string]any{
+			"needs_reauth": true,
+			"message":      "Unable to refresh token. Please reconnect to Google Analytics.",
+		}, "")
+		return
+	}
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	properties, err := h.fetchPropertiesForAccount(r.Context(), logger, client, accessToken, googleAccountID)
+	if err != nil {
+		logger.Error().Err(err).Str("google_account_id", googleAccountID).Msg("Failed to fetch GA4 properties")
+		InternalError(w, r, fmt.Errorf("failed to fetch properties: %w", err))
+		return
+	}
+
+	if len(properties) == 0 {
+		BadRequest(w, r, "No properties found for this account")
+		return
+	}
+
+	now := time.Now().UTC()
+	savedCount := 0
+	for _, prop := range properties {
+		if prop.PropertyID == "" {
+			logger.Debug().
+				Str("display_name", prop.DisplayName).
+				Msg("Skipping property with empty ID")
+			continue
+		}
+
+		domainIDsArray := make(pq.Int64Array, 0)
+
+		conn := &db.GoogleAnalyticsConnection{
+			ID:               uuid.New().String(),
+			OrganisationID:   orgID,
+			GA4PropertyID:    prop.PropertyID,
+			GA4PropertyName:  prop.DisplayName,
+			GoogleAccountID:  googleAccountID,
+			GoogleUserID:     account.GoogleUserID,
+			GoogleEmail:      account.GoogleEmail,
+			InstallingUserID: userClaims.UserID,
+			Status:           "inactive",
+			DomainIDs:        domainIDsArray,
+			CreatedAt:        now,
+			UpdatedAt:        now,
+		}
+
+		if err := h.DB.CreateGoogleConnection(r.Context(), conn); err != nil {
+			logger.Warn().Err(err).
+				Str("property_id", prop.PropertyID).
+				Str("next_action", "retry_connection_create_or_check_db_connectivity").
+				Msg("Failed to save property connection")
+			continue
+		}
+
+		savedCount++
+	}
+
+	logger.Info().
+		Str("organisation_id", orgID).
+		Str("google_account_id", googleAccountID).
+		Int("saved_count", savedCount).
+		Msg("Google Analytics account properties saved")
+
+	WriteSuccess(w, r, map[string]any{
+		"saved_count": savedCount,
+	}, "Google Analytics properties saved successfully")
 }

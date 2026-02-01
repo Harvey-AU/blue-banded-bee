@@ -29,6 +29,66 @@ On merge, CI will:
 
 ## [Unreleased]
 
+## [0.25.0] – 2026-02-01
+
+### Added
+
+- **Domain Search Attributes**: Shared domain search input with
+  `bbb-domain-create` and `bbb-domain-search` attributes to control create
+  behaviour and dropdown visibility across dashboard and GA workflows
+- **GA4 Analytics Integration**: Full Google Analytics 4 Data API integration
+  for page view analytics
+  - Progressive fetching: initial 100 pages, then background loops of 1000-page
+    batches (until 10k), then 50000-page batches until all pages fetched
+  - OAuth token refresh with RFC 6749 compliant form-urlencoded requests
+  - Thread-safe token management with automatic refresh on 401 responses
+  - Triggered automatically when job created with `findLinks: true`
+- **Org-Scoped Page Analytics Storage**: GA4 data persisted per organisation
+  - New `page_analytics` table stores 7-day, 28-day, and 180-day page view
+    counts
+  - Data tied to organisation that fetched it, preventing cross-org data leakage
+  - RLS policies enforce organisation membership for all CRUD operations
+- **GA4 Domain Mapping**: Connect GA4 properties to specific domains
+  - Domain tags UI on GA4 connections in integrations modal
+  - Inline search input for domain selection with Enter key support
+  - PATCH endpoint (`/v1/integrations/google/analytics/{id}/domains`) to update
+    mappings
+  - `domain_ids` array column on `google_analytics_connections` table
+- **Domain Creation Endpoint**: Dedicated `/v1/domains` endpoint for creating
+  domains without job side effects
+- **Job Response Enhancement**: Job creation response now includes `domain_id`
+- **Traffic-Based Task Prioritisation**: High-traffic pages now get prioritised
+  in the crawl queue
+  - Log-scaled view curve assigns scores from 0.10 to 0.99 based on 28-day page
+    views
+  - Pages with 0-1 views are excluded from analytics scoring
+  - Uses `GREATEST(structural_priority, traffic_score)` so traffic and structure
+    both contribute
+  - Traffic scores calculated after GA4 fetch completes, applied to pending
+    tasks for reprioritisation
+  - Link discovery also applies traffic scores via `GREATEST`
+- **Job Detail Analytics**: Job tasks and exports now include GA4 page views
+  (7d, 28d, 180d)
+
+### Changed
+
+- **Go Version**: Updated to Go 1.25.6 for security fixes
+- **Sitemap Baseline Priority**: Default sitemap task priority lowered to 0.1 to
+  let GA4 traffic scores surface high-traffic pages
+
+### Fixed
+
+- **Domain Creation Race**: Fixed TOCTOU race with atomic
+  `INSERT ... ON CONFLICT` pattern in `GetOrCreateDomainID`
+- **Console Noise**: Removed verbose debug logging from GA4 integration and page
+  load
+- **GA Account Reuse**: Stored GA4 accounts now retry auth initialisation and
+  fall back to connection tokens when account tokens are unavailable
+- **GA4 Path Normalisation**: Analytics upserts now normalise GA4 page paths so
+  traffic scores match task paths more reliably
+- **Task Reprioritisation Logs**: Reduced noise when no tasks are updated after
+  traffic scoring
+
 ## [0.24.3] – 2026-01-27
 
 ### Fixed

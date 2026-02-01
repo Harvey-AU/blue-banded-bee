@@ -63,7 +63,6 @@ function initialiseSupabase() {
   if (window.supabase && window.supabase.createClient) {
     supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     window.supabase = supabase; // Ensure it's globally available
-    console.log("Supabase client created successfully");
     return true;
   }
   return false;
@@ -74,7 +73,6 @@ function initialiseSupabase() {
  */
 async function loadAuthModal() {
   try {
-    console.log("Loading auth modal...");
     const response = await fetch("/auth-modal.html");
 
     if (!response.ok) {
@@ -84,13 +82,7 @@ async function loadAuthModal() {
     }
 
     const modalHTML = await response.text();
-    console.log("Auth modal HTML loaded, length:", modalHTML.length);
-
     document.getElementById("authModalContainer").innerHTML = modalHTML;
-
-    // Verify the modal was inserted
-    const authModal = document.getElementById("authModal");
-    console.log("Auth modal element after insertion:", authModal);
 
     // Set default to login form for dashboard
     setTimeout(() => {
@@ -186,7 +178,6 @@ async function handleAuthCallback() {
         data: { session },
       } = await supabase.auth.getSession();
       if (session) {
-        console.log("User already authenticated:", session.user.id);
         return true;
       }
     }
@@ -237,7 +228,6 @@ async function registerUserWithBackend(user) {
     if (!response.ok) {
       // If user already exists (409 Conflict), that's fine
       if (response.status === 409) {
-        console.log("User already registered in backend");
         return true;
       }
       const errorData = await response.json();
@@ -245,8 +235,7 @@ async function registerUserWithBackend(user) {
       return false;
     }
 
-    const data = await response.json();
-    console.log("User registered with backend:", data);
+    await response.json();
     return true;
   } catch (error) {
     console.error("Failed to register user with backend:", error);
@@ -265,8 +254,6 @@ async function registerUserWithBackend(user) {
  * @param {boolean} isAuthenticated - Whether user is authenticated
  */
 function updateAuthState(isAuthenticated) {
-  console.log("Updating auth state:", isAuthenticated);
-
   // Show/hide elements based on authentication (support both old and new attributes)
   const allAuthElements = document.querySelectorAll(
     "[data-bb-auth], [bbb-auth]"
@@ -366,7 +353,6 @@ function updateAuthState(isAuthenticated) {
           }
         });
         logoutBtn.setAttribute("data-logout-handler-attached", "true");
-        console.log("Logout handler attached to visible button");
       }
     }, 150);
   }
@@ -396,8 +382,6 @@ async function updateUserInfo() {
       // Update avatar with user initials
       const initials = getInitials(email);
       userAvatarElement.textContent = initials;
-
-      console.log("User info updated");
     } else {
       // No session, reset to defaults
       userEmailElement.textContent = "Loading...";
@@ -604,8 +588,6 @@ async function handleEmailLogin(event) {
 
     if (error) throw error;
 
-    console.log("Email login successful:", data.user.id);
-
     const handler =
       typeof window.handleAuthSuccess === "function"
         ? window.handleAuthSuccess
@@ -683,7 +665,6 @@ async function executeEmailSignup() {
 
     if (error) throw error;
 
-    console.log("Email signup successful:", data.user?.id);
     recordTurnstileEvent("signup_success", { userId: data.user?.id || null });
 
     pendingSignupSubmission = null;
@@ -1086,8 +1067,6 @@ function setupPasswordStrength() {
  * Setup authentication event handlers
  */
 function setupAuthHandlers() {
-  console.log("Setting up auth handlers...");
-
   // Use event delegation for main auth buttons that might not exist initially
   document.addEventListener("click", (e) => {
     const target = e.target;
@@ -1095,7 +1074,6 @@ function setupAuthHandlers() {
     // Handle login button clicks (various IDs)
     if (target.id === "loginBtn" || target.id === "showLoginBtn") {
       e.preventDefault();
-      console.log("Login button clicked via delegation");
       showAuthModal();
       showAuthForm("login");
     }
@@ -1103,7 +1081,6 @@ function setupAuthHandlers() {
     // Handle signup button clicks
     if (target.id === "showSignupBtn") {
       e.preventDefault();
-      console.log("Signup button clicked via delegation");
       showAuthModal();
       showAuthForm("signup");
     }
@@ -1111,7 +1088,6 @@ function setupAuthHandlers() {
     // Handle logout button clicks
     if (target.id === "logoutBtn") {
       e.preventDefault();
-      console.log("Logout button clicked via delegation");
       handleLogout();
     }
   });
@@ -1133,7 +1109,6 @@ async function handleLogout() {
       console.error("Logout error:", error);
       alert("Logout failed. Please try again.");
     } else {
-      console.log("Logout successful");
       window.location.reload();
     }
   } catch (error) {
@@ -1191,7 +1166,6 @@ function setupAuthModalHandlers() {
 function setupLoginPageHandlers() {
   // This is now handled by event delegation in setupAuthHandlers()
   // No need for direct element handlers since they're covered by delegation
-  console.log("Login page handlers setup - using event delegation");
 }
 
 function isLoopbackCallback(url) {

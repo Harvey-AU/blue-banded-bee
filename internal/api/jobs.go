@@ -14,6 +14,8 @@ import (
 
 	"github.com/Harvey-AU/blue-banded-bee/internal/db"
 	"github.com/Harvey-AU/blue-banded-bee/internal/jobs"
+	"github.com/Harvey-AU/blue-banded-bee/internal/util"
+	"github.com/rs/zerolog"
 )
 
 // JobsHandler handles requests to /v1/jobs
@@ -116,6 +118,7 @@ type CreateJobRequest struct {
 // JobResponse represents a job in API responses
 type JobResponse struct {
 	ID             string  `json:"id"`
+	DomainID       int     `json:"domain_id"`
 	Domain         string  `json:"domain"`
 	Status         string  `json:"status"`
 	TotalTasks     int     `json:"total_tasks"`
@@ -213,7 +216,7 @@ func (h *Handler) listJobs(w http.ResponseWriter, r *http.Request) {
 }
 
 // createJobFromRequest creates a job from a CreateJobRequest with user context
-func (h *Handler) createJobFromRequest(ctx context.Context, user *db.User, req CreateJobRequest) (*jobs.Job, error) {
+func (h *Handler) createJobFromRequest(ctx context.Context, user *db.User, req CreateJobRequest, logger zerolog.Logger) (*jobs.Job, error) {
 	// Set defaults
 	useSitemap := true
 	if req.UseSitemap != nil {
@@ -258,6 +261,26 @@ func (h *Handler) createJobFromRequest(ctx context.Context, user *db.User, req C
 		SourceInfo:     req.SourceInfo,
 	}
 
+	// Trigger GA4 data fetch in background if findLinks is enabled and organisation has GA4 connection
+	// GA4 data will be fetched and pages table updated, then tasks will be reprioritised
+	if findLinks && effectiveOrgID != "" && h.GoogleClientID != "" && h.GoogleClientSecret != "" {
+		go func() {
+			logger.Info().
+				Str("organisation_id", effectiveOrgID).
+				Msg("Triggering GA4 data fetch in background")
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+			defer cancel()
+			h.fetchGA4DataBeforeJob(ctx, logger, effectiveOrgID, req.Domain)
+		}()
+	} else {
+		logger.Debug().
+			Bool("find_links", findLinks).
+			Str("organisation_id", effectiveOrgID).
+			Bool("has_client_id", h.GoogleClientID != "").
+			Bool("has_client_secret", h.GoogleClientSecret != "").
+			Msg("Skipping GA4 fetch - conditions not met")
+	}
+
 	return h.JobsManager.CreateJob(ctx, opts)
 }
 
@@ -284,6 +307,12 @@ func (h *Handler) createJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Validate domain format
+	if err := util.ValidateDomain(req.Domain); err != nil {
+		BadRequest(w, r, fmt.Sprintf("Invalid domain: %s", err.Error()))
+		return
+	}
+
 	// Set source information if not provided (dashboard creation)
 	if req.SourceType == nil {
 		sourceType := "dashboard"
@@ -306,18 +335,31 @@ func (h *Handler) createJob(w http.ResponseWriter, r *http.Request) {
 		req.SourceInfo = &sourceInfo
 	}
 
-	job, err := h.createJobFromRequest(r.Context(), user, req)
+	job, err := h.createJobFromRequest(r.Context(), user, req, logger)
 	if err != nil {
 		if HandlePoolSaturation(w, r, err) {
 			return
 		}
-		logger.Error().Err(err).Str("domain", req.Domain).Msg("Failed to create job")
+		logger.Error().Err(err).Msg("Failed to create job")
 		InternalError(w, r, err)
 		return
 	}
 
+	// Look up the domain ID for the response
+	domainID, err := h.DB.GetOrCreateDomainID(r.Context(), job.Domain)
+	if err != nil {
+		logger.Error().
+			Err(err).
+			Str("job_id", job.ID).
+			Int("domain_id", domainID).
+			Msg("Failed to get domain ID")
+		// Continue without domain_id rather than failing the whole request
+		domainID = 0
+	}
+
 	response := JobResponse{
 		ID:             job.ID,
+		DomainID:       domainID,
 		Domain:         job.Domain,
 		Status:         string(job.Status),
 		TotalTasks:     job.TotalTasks,
@@ -364,6 +406,7 @@ func (h *Handler) getJob(w http.ResponseWriter, r *http.Request, jobID string) {
 func (h *Handler) fetchJobResponse(ctx context.Context, jobID string, organisationID *string) (JobResponse, error) {
 	var total, completed, failed, skipped int
 	var status, domain string
+	var domainID int
 	var createdAt, startedAt, completedAt sql.NullTime
 	var durationSeconds sql.NullInt64
 	var avgTimePerTaskSeconds sql.NullFloat64
@@ -375,7 +418,7 @@ func (h *Handler) fetchJobResponse(ctx context.Context, jobID string, organisati
 
 	query := `
 		SELECT j.total_tasks, j.completed_tasks, j.failed_tasks, j.skipped_tasks, j.status,
-		       d.name as domain, j.created_at, j.started_at, j.completed_at,
+		       d.id as domain_id, d.name as domain, j.created_at, j.started_at, j.completed_at,
 		       EXTRACT(EPOCH FROM (j.completed_at - j.started_at))::INTEGER as duration_seconds,
 		       CASE WHEN j.completed_tasks > 0 THEN
 		           EXTRACT(EPOCH FROM (j.completed_at - j.started_at)) / j.completed_tasks
@@ -398,7 +441,7 @@ func (h *Handler) fetchJobResponse(ctx context.Context, jobID string, organisati
 		// Task counts
 		&total, &completed, &failed, &skipped,
 		// Job info
-		&status, &domain, &createdAt, &startedAt, &completedAt,
+		&status, &domainID, &domain, &createdAt, &startedAt, &completedAt,
 		// Computed metrics
 		&durationSeconds, &avgTimePerTaskSeconds, &statsJSON, &schedulerID,
 		// Job config
@@ -417,6 +460,7 @@ func (h *Handler) fetchJobResponse(ctx context.Context, jobID string, organisati
 
 	response := JobResponse{
 		ID:                   jobID,
+		DomainID:             domainID,
 		Domain:               domain,
 		Status:               status,
 		TotalTasks:           total,
@@ -526,29 +570,11 @@ func (h *Handler) updateJob(w http.ResponseWriter, r *http.Request, jobID string
 		return
 	}
 
-	// Get updated job status
-	job, err := h.JobsManager.GetJobStatus(r.Context(), resultJobID)
+	response, err := h.fetchJobResponse(r.Context(), resultJobID, &activeOrgID)
 	if err != nil {
-		logger.Error().Err(err).Str("job_id", resultJobID).Msg("Failed to get job status after action")
+		logger.Error().Err(err).Str("job_id", resultJobID).Msg("Failed to fetch job after action")
 		InternalError(w, r, err)
 		return
-	}
-
-	response := JobResponse{
-		ID:             job.ID,
-		Domain:         job.Domain,
-		Status:         string(job.Status),
-		TotalTasks:     job.TotalTasks,
-		CompletedTasks: job.CompletedTasks,
-		FailedTasks:    job.FailedTasks,
-		SkippedTasks:   job.SkippedTasks,
-		Progress:       job.Progress,
-		CreatedAt:      job.CreatedAt.Format(time.RFC3339),
-	}
-
-	if !job.CompletedAt.IsZero() {
-		completedAt := job.CompletedAt.Format(time.RFC3339)
-		response.CompletedAt = &completedAt
 	}
 
 	WriteSuccess(w, r, response, "Job cancelled successfully")
@@ -654,6 +680,12 @@ func parseTaskQueryParams(r *http.Request) TaskQueryParams {
 			orderBy = "t.second_response_time " + direction + " NULLS LAST"
 		case "status_code":
 			orderBy = "t.status_code " + direction + " NULLS LAST"
+		case "page_views_7d":
+			orderBy = "pa.page_views_7d " + direction + " NULLS LAST"
+		case "page_views_28d":
+			orderBy = "pa.page_views_28d " + direction + " NULLS LAST"
+		case "page_views_180d":
+			orderBy = "pa.page_views_180d " + direction + " NULLS LAST"
 		case "created_at":
 			orderBy = "t.created_at " + direction
 		default:
@@ -709,13 +741,17 @@ type TaskQueryBuilder struct {
 // buildTaskQuery constructs SQL queries for task retrieval with filters and pagination
 func buildTaskQuery(jobID string, params TaskQueryParams) TaskQueryBuilder {
 	baseQuery := `
-		SELECT t.id, t.job_id, p.path, d.name as domain, t.status, t.status_code, t.response_time, 
+		SELECT t.id, t.job_id, p.path, d.name as domain, t.status, t.status_code, t.response_time,
 		       t.cache_status, t.second_response_time, t.second_cache_status, t.content_type, t.error, t.source_type, t.source_url,
-		       t.created_at, t.started_at, t.completed_at, t.retry_count
+		       t.created_at, t.started_at, t.completed_at, t.retry_count,
+		       pa.page_views_7d, pa.page_views_28d, pa.page_views_180d
 		FROM tasks t
 		JOIN pages p ON t.page_id = p.id
 		JOIN jobs j ON t.job_id = j.id
 		JOIN domains d ON j.domain_id = d.id
+		LEFT JOIN page_analytics pa ON pa.organisation_id = j.organisation_id
+			AND pa.domain_id = p.domain_id
+			AND pa.path = p.path
 		WHERE t.job_id = $1`
 
 	countQuery := `
@@ -771,12 +807,14 @@ func formatTasksFromRows(rows *sql.Rows) ([]TaskResponse, error) {
 		var domain string
 		var startedAt, completedAt, createdAt sql.NullTime
 		var statusCode, responseTime, secondResponseTime sql.NullInt32
+		var pageViews7d, pageViews28d, pageViews180d sql.NullInt64
 		var cacheStatus, secondCacheStatus, contentType, errorMsg, sourceType, sourceURL sql.NullString
 
 		err := rows.Scan(
 			&task.ID, &task.JobID, &task.Path, &domain, &task.Status,
 			&statusCode, &responseTime, &cacheStatus, &secondResponseTime, &secondCacheStatus, &contentType, &errorMsg, &sourceType, &sourceURL,
 			&createdAt, &startedAt, &completedAt, &task.RetryCount,
+			&pageViews7d, &pageViews28d, &pageViews180d,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan task row: %w", err)
@@ -823,6 +861,18 @@ func formatTasksFromRows(rows *sql.Rows) ([]TaskResponse, error) {
 		if completedAt.Valid {
 			ca := completedAt.Time.Format(time.RFC3339)
 			task.CompletedAt = &ca
+		}
+		if pageViews7d.Valid {
+			pv := int(pageViews7d.Int64)
+			task.PageViews7d = &pv
+		}
+		if pageViews28d.Valid {
+			pv := int(pageViews28d.Int64)
+			task.PageViews28d = &pv
+		}
+		if pageViews180d.Valid {
+			pv := int(pageViews180d.Int64)
+			task.PageViews180d = &pv
 		}
 
 		// Format created_at
@@ -881,6 +931,9 @@ type TaskResponse struct {
 	StartedAt          *string `json:"started_at,omitempty"`
 	CompletedAt        *string `json:"completed_at,omitempty"`
 	RetryCount         int     `json:"retry_count"`
+	PageViews7d        *int    `json:"page_views_7d,omitempty"`
+	PageViews28d       *int    `json:"page_views_28d,omitempty"`
+	PageViews180d      *int    `json:"page_views_180d,omitempty"`
 }
 
 // ExportColumn describes a column in exported task datasets
@@ -889,18 +942,26 @@ type ExportColumn struct {
 	Label string `json:"label"`
 }
 
-func taskExportColumns(exportType string) []ExportColumn {
+func taskExportColumns(exportType string, includeAnalytics bool) []ExportColumn {
 	switch exportType {
 	case "broken-links":
-		return []ExportColumn{
+		columns := []ExportColumn{
 			{Key: "source_url", Label: "Found on"},
 			{Key: "url", Label: "Broken link"},
 			{Key: "status", Label: "Status"},
 			{Key: "created_at", Label: "Date"},
 			{Key: "source_type", Label: "Source Type"},
 		}
+		if includeAnalytics {
+			columns = append(columns,
+				ExportColumn{Key: "page_views_7d", Label: "Views (7d)"},
+				ExportColumn{Key: "page_views_28d", Label: "Views (28d)"},
+				ExportColumn{Key: "page_views_180d", Label: "Views (180d)"},
+			)
+		}
+		return columns
 	case "slow-pages":
-		return []ExportColumn{
+		columns := []ExportColumn{
 			{Key: "url", Label: "Page"},
 			{Key: "content_type", Label: "Content Type"},
 			{Key: "cache_status", Label: "Cache Status"},
@@ -908,8 +969,16 @@ func taskExportColumns(exportType string) []ExportColumn {
 			{Key: "second_response_time", Label: "Load Time 2nd try (ms)"},
 			{Key: "created_at", Label: "Date"},
 		}
+		if includeAnalytics {
+			columns = append(columns,
+				ExportColumn{Key: "page_views_7d", Label: "Views (7d)"},
+				ExportColumn{Key: "page_views_28d", Label: "Views (28d)"},
+				ExportColumn{Key: "page_views_180d", Label: "Views (180d)"},
+			)
+		}
+		return columns
 	default: // "job" (all tasks)
-		return []ExportColumn{
+		columns := []ExportColumn{
 			{Key: "id", Label: "Task ID"},
 			{Key: "job_id", Label: "Job ID"},
 			{Key: "path", Label: "Page path"},
@@ -929,6 +998,14 @@ func taskExportColumns(exportType string) []ExportColumn {
 			{Key: "started_at", Label: "Started At"},
 			{Key: "completed_at", Label: "Completed At"},
 		}
+		if includeAnalytics {
+			columns = append(columns,
+				ExportColumn{Key: "page_views_7d", Label: "Views (7d)"},
+				ExportColumn{Key: "page_views_28d", Label: "Views (28d)"},
+				ExportColumn{Key: "page_views_180d", Label: "Views (180d)"},
+			)
+		}
+		return columns
 	}
 }
 
@@ -1042,10 +1119,15 @@ func (h *Handler) serveJobExport(w http.ResponseWriter, r *http.Request, jobID s
 			t.status, t.status_code, t.response_time, t.cache_status,
 			t.second_response_time, t.second_cache_status,
 			t.content_type, t.error, t.source_type, t.source_url,
-			t.created_at, t.started_at, t.completed_at, t.retry_count
+			t.created_at, t.started_at, t.completed_at, t.retry_count,
+			pa.page_views_7d, pa.page_views_28d, pa.page_views_180d
 		FROM tasks t
 		JOIN pages p ON t.page_id = p.id
 		JOIN domains d ON p.domain_id = d.id
+		JOIN jobs j ON t.job_id = j.id
+		LEFT JOIN page_analytics pa ON pa.organisation_id = j.organisation_id
+			AND pa.domain_id = p.domain_id
+			AND pa.path = p.path
 		WHERE t.job_id = $1%s
 		ORDER BY t.created_at DESC
 		LIMIT 10000
@@ -1084,6 +1166,14 @@ func (h *Handler) serveJobExport(w http.ResponseWriter, r *http.Request, jobID s
 		return
 	}
 
+	includeAnalytics := false
+	for _, task := range tasks {
+		if task.PageViews7d != nil || task.PageViews28d != nil || task.PageViews180d != nil {
+			includeAnalytics = true
+			break
+		}
+	}
+
 	// Prepare export response
 	response := map[string]interface{}{
 		"job_id":      jobID,
@@ -1093,7 +1183,7 @@ func (h *Handler) serveJobExport(w http.ResponseWriter, r *http.Request, jobID s
 		"export_type": exportType,
 		"export_time": time.Now().UTC().Format(time.RFC3339),
 		"total_tasks": len(tasks),
-		"columns":     taskExportColumns(exportType),
+		"columns":     taskExportColumns(exportType, includeAnalytics),
 		"tasks":       tasks,
 	}
 	if completedAt.Valid {
@@ -1103,4 +1193,36 @@ func (h *Handler) serveJobExport(w http.ResponseWriter, r *http.Request, jobID s
 	}
 
 	WriteSuccess(w, r, response, fmt.Sprintf("Exported %d tasks for job %s", len(tasks), jobID))
+}
+
+// fetchGA4DataBeforeJob fetches GA4 analytics data before job creation
+// This runs in the foreground (blocking) for phase 1, with phases 2-3 in background
+func (h *Handler) fetchGA4DataBeforeJob(ctx context.Context, logger zerolog.Logger, organisationID, domain string) {
+	// Normalise domain to match database format
+	normalisedDomain := util.NormaliseDomain(domain)
+
+	// Get domain ID from database
+	domainID, err := h.DB.GetOrCreateDomainID(ctx, normalisedDomain)
+	if err != nil {
+		logger.Warn().
+			Err(err).
+			Str("organisation_id", organisationID).
+			Str("next_action", "analytics_skipped").
+			Msg("Failed to get domain ID for GA4 fetch, skipping analytics")
+		return
+	}
+
+	// Create progressive fetcher
+	fetcher := NewProgressiveFetcher(h.DB, h.GoogleClientID, h.GoogleClientSecret)
+
+	// Fetch GA4 data (phase 1 blocks, phases 2-3 run in background)
+	if err := fetcher.FetchAndUpdatePages(ctx, organisationID, domainID); err != nil {
+		// Log error but don't fail job creation
+		logger.Warn().
+			Err(err).
+			Str("organisation_id", organisationID).
+			Int("domain_id", domainID).
+			Str("next_action", "job_continues_without_ga4").
+			Msg("Failed to fetch GA4 data, continuing without analytics")
+	}
 }

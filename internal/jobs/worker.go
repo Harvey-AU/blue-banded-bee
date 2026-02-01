@@ -3999,40 +3999,28 @@ func (wp *WorkerPool) updateTaskPriorities(ctx context.Context, jobID string, do
 
 	var rowsAffected int64
 	err := wp.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
-		var needsUpdate bool
-		checkErr := tx.QueryRowContext(ctx, `
-			SELECT EXISTS (
-				SELECT 1
-				FROM tasks t
-				JOIN pages p ON t.page_id = p.id
-				WHERE t.job_id = $1
-				  AND p.domain_id = $2
-				  AND p.path = ANY($3)
-				  AND t.priority_score < $4
-			)
-		`, jobID, domainID, pq.Array(uniquePaths), newPriority).Scan(&needsUpdate)
-		if checkErr != nil {
-			return checkErr
-		}
-		if !needsUpdate {
-			log.Debug().
-				Str("job_id", jobID).
-				Float64("priority", newPriority).
-				Int("paths", len(uniquePaths)).
-				Msg("Skipped priority update (already at or above target)")
-			return nil
-		}
-
-		// Update all task priorities in a single query
+		// Update priorities using GREATEST of structural priority and traffic score
+		// Join through jobs to get organisation_id for page_analytics lookup
 		result, err := tx.ExecContext(ctx, `
 			UPDATE tasks t
-			SET priority_score = $1
+			SET priority_score = GREATEST(
+				t.priority_score,
+				$1,
+				COALESCE(pa.traffic_score, 0)
+			)
 			FROM pages p
+			JOIN jobs j ON t.job_id = j.id
+			LEFT JOIN page_analytics pa ON pa.organisation_id = j.organisation_id
+				AND pa.domain_id = p.domain_id
+				AND pa.path = p.path
 			WHERE t.page_id = p.id
 			AND t.job_id = $2
 			AND p.domain_id = $3
 			AND p.path = ANY($4)
-			AND t.priority_score < $1
+			AND (
+				t.priority_score < $1
+				OR t.priority_score < COALESCE(pa.traffic_score, 0)
+			)
 		`, newPriority, jobID, domainID, pq.Array(uniquePaths))
 
 		if err != nil {
