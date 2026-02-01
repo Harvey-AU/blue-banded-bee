@@ -1033,6 +1033,19 @@ func (h *Handler) handleGoogleSpecialPaths(w http.ResponseWriter, r *http.Reques
 		return true
 	}
 
+	// Handle accounts/{googleAccountId}/save-properties endpoint (bulk save from stored account)
+	if strings.HasPrefix(path, "accounts/") && strings.HasSuffix(path, "/save-properties") {
+		accountPath := strings.TrimPrefix(path, "accounts/")
+		accountID := strings.TrimSuffix(accountPath, "/save-properties")
+		if decoded, err := url.PathUnescape(accountID); err == nil && decoded != "" {
+			accountID = decoded
+		}
+		if accountID != "" {
+			h.SaveGA4AccountProperties(w, r, accountID)
+			return true
+		}
+	}
+
 	// Handle accounts/{googleAccountId}/properties endpoint (fetch properties using stored token)
 	if googleAccountID := extractGoogleAccountIDFromPath(path); googleAccountID != "" {
 		h.GetAccountProperties(w, r, googleAccountID)
@@ -1615,4 +1628,127 @@ func (h *Handler) GetAccountProperties(w http.ResponseWriter, r *http.Request, g
 	WriteSuccess(w, r, map[string]any{
 		"properties": properties,
 	}, "")
+}
+
+// SaveGA4AccountProperties saves all properties for a stored GA4 account as inactive
+// POST /v1/integrations/google/accounts/{googleAccountId}/save-properties
+func (h *Handler) SaveGA4AccountProperties(w http.ResponseWriter, r *http.Request, googleAccountID string) {
+	logger := loggerWithRequest(r)
+
+	if r.Method != http.MethodPost {
+		MethodNotAllowed(w, r)
+		return
+	}
+
+	userClaims, ok := auth.GetUserFromContext(r.Context())
+	if !ok {
+		Unauthorised(w, r, "User information not found")
+		return
+	}
+
+	user, err := h.DB.GetOrCreateUser(userClaims.UserID, userClaims.Email, nil)
+	if err != nil {
+		logger.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get or create user")
+		InternalError(w, r, err)
+		return
+	}
+
+	orgID := h.DB.GetEffectiveOrganisationID(user)
+	if orgID == "" {
+		BadRequest(w, r, "User must belong to an organisation")
+		return
+	}
+
+	account, err := h.DB.GetGA4AccountByGoogleID(r.Context(), orgID, googleAccountID)
+	if err != nil {
+		if errors.Is(err, db.ErrGoogleAccountNotFound) {
+			BadRequest(w, r, "Google account not found for organisation")
+			return
+		}
+		logger.Error().Err(err).Str("google_account_id", googleAccountID).Msg("Failed to resolve Google account")
+		InternalError(w, r, err)
+		return
+	}
+
+	refreshToken, err := h.DB.GetGA4AccountToken(r.Context(), account.ID)
+	if err != nil {
+		if errors.Is(err, db.ErrGoogleTokenNotFound) {
+			WriteSuccess(w, r, map[string]any{
+				"needs_reauth": true,
+				"message":      "No valid Google token found. Please reconnect to Google Analytics.",
+			}, "")
+			return
+		}
+		logger.Error().Err(err).Str("account_id", account.ID).Msg("Failed to resolve GA refresh token")
+		InternalError(w, r, err)
+		return
+	}
+
+	accessToken, err := h.refreshGoogleAccessToken(refreshToken)
+	if err != nil {
+		logger.Warn().
+			Err(err).
+			Str("next_action", "reauth_required").
+			Msg("Failed to refresh Google access token")
+		WriteSuccess(w, r, map[string]any{
+			"needs_reauth": true,
+			"message":      "Unable to refresh token. Please reconnect to Google Analytics.",
+		}, "")
+		return
+	}
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	properties, err := h.fetchPropertiesForAccount(r.Context(), logger, client, accessToken, googleAccountID)
+	if err != nil {
+		logger.Error().Err(err).Str("google_account_id", googleAccountID).Msg("Failed to fetch GA4 properties")
+		InternalError(w, r, fmt.Errorf("failed to fetch properties: %w", err))
+		return
+	}
+
+	if len(properties) == 0 {
+		BadRequest(w, r, "No properties found for this account")
+		return
+	}
+
+	now := time.Now().UTC()
+	savedCount := 0
+	for _, prop := range properties {
+		if prop.PropertyID == "" {
+			continue
+		}
+
+		var domainIDsArray pq.Int64Array
+
+		conn := &db.GoogleAnalyticsConnection{
+			ID:               uuid.New().String(),
+			OrganisationID:   orgID,
+			GA4PropertyID:    prop.PropertyID,
+			GA4PropertyName:  prop.DisplayName,
+			GoogleAccountID:  googleAccountID,
+			GoogleUserID:     account.GoogleUserID,
+			GoogleEmail:      account.GoogleEmail,
+			InstallingUserID: userClaims.UserID,
+			Status:           "inactive",
+			DomainIDs:        domainIDsArray,
+			CreatedAt:        now,
+			UpdatedAt:        now,
+		}
+
+		if err := h.DB.CreateGoogleConnection(r.Context(), conn); err != nil {
+			logger.Warn().Err(err).Str("property_id", prop.PropertyID).Msg("Failed to save property connection")
+			continue
+		}
+
+		savedCount++
+	}
+
+	logger.Info().
+		Str("organisation_id", orgID).
+		Str("google_account_id", googleAccountID).
+		Int("saved_count", savedCount).
+		Msg("Google Analytics account properties saved")
+
+	WriteSuccess(w, r, map[string]any{
+		"saved_count": savedCount,
+	}, "Google Analytics properties saved successfully")
 }

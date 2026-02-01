@@ -892,7 +892,49 @@ async function onAccountSelected(account) {
     return;
   }
 
-  await loadGoogleConnections();
+  await saveAllPropertiesForStoredAccount(account);
+}
+
+async function saveAllPropertiesForStoredAccount(account) {
+  try {
+    const authResult = await getGoogleAuthToken();
+    const token = authResult.token;
+    if (!token) {
+      showGoogleError(
+        authResult.message || "Not authenticated. Please sign in."
+      );
+      return;
+    }
+
+    const response = await fetch(
+      `/v1/integrations/google/accounts/${encodeURIComponent(
+        account.google_account_id
+      )}/save-properties`,
+      {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      }
+    );
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(text || `HTTP ${response.status}`);
+    }
+
+    const result = await response.json();
+    if (result.data?.needs_reauth) {
+      showGoogleError(
+        result.data.message || "Please reconnect to Google Analytics."
+      );
+      return;
+    }
+
+    showGoogleSuccess("Google Analytics properties saved successfully!");
+    await loadGoogleConnections();
+  } catch (error) {
+    console.error("Failed to save account properties:", error);
+    showGoogleError("Failed to save properties. Please try again.");
+  }
 }
 
 /**
