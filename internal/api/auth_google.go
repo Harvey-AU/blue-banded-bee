@@ -9,7 +9,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"os"
 	"strings"
 	"sync"
 	"time"
@@ -105,15 +104,6 @@ func cleanupExpiredGASessions() {
 	}
 }
 
-// Google OAuth credentials loaded from environment variables
-func getGoogleClientID() string {
-	return os.Getenv("GOOGLE_CLIENT_ID")
-}
-
-func getGoogleClientSecret() string {
-	return os.Getenv("GOOGLE_CLIENT_SECRET")
-}
-
 func getGoogleRedirectURI() string {
 	return getAppURL() + "/v1/integrations/google/callback"
 }
@@ -175,7 +165,7 @@ func (h *Handler) InitiateGoogleOAuth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if getGoogleClientID() == "" {
+	if h.GoogleClientID == "" {
 		logger.Error().Msg("GOOGLE_CLIENT_ID not configured")
 		InternalError(w, r, fmt.Errorf("google integration not configured"))
 		return
@@ -203,7 +193,7 @@ func (h *Handler) InitiateGoogleOAuth(w http.ResponseWriter, r *http.Request) {
 	// Build Google OAuth URL
 	authURL := fmt.Sprintf(
 		"https://accounts.google.com/o/oauth2/v2/auth?client_id=%s&redirect_uri=%s&response_type=code&scope=%s&access_type=offline&prompt=consent&state=%s",
-		url.QueryEscape(getGoogleClientID()),
+		url.QueryEscape(h.GoogleClientID),
 		url.QueryEscape(getGoogleRedirectURI()),
 		url.QueryEscape(scopes),
 		url.QueryEscape(state),
@@ -755,8 +745,8 @@ func (h *Handler) UpdateGoogleConnection(w http.ResponseWriter, r *http.Request,
 
 func (h *Handler) exchangeGoogleCode(code string) (*GoogleTokenResponse, error) {
 	values := url.Values{}
-	values.Set("client_id", getGoogleClientID())
-	values.Set("client_secret", getGoogleClientSecret())
+	values.Set("client_id", h.GoogleClientID)
+	values.Set("client_secret", h.GoogleClientSecret)
 	values.Set("grant_type", "authorization_code")
 	values.Set("code", code)
 	values.Set("redirect_uri", getGoogleRedirectURI())
@@ -1472,8 +1462,8 @@ func (h *Handler) RefreshGA4Accounts(w http.ResponseWriter, r *http.Request) {
 // refreshGoogleAccessToken exchanges a refresh token for a new access token
 func (h *Handler) refreshGoogleAccessToken(refreshToken string) (string, error) {
 	values := url.Values{}
-	values.Set("client_id", getGoogleClientID())
-	values.Set("client_secret", getGoogleClientSecret())
+	values.Set("client_id", h.GoogleClientID)
+	values.Set("client_secret", h.GoogleClientSecret)
 	values.Set("grant_type", "refresh_token")
 	values.Set("refresh_token", refreshToken)
 

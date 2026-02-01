@@ -80,6 +80,8 @@ type ga4RunReportRequest struct {
 	OrderBys   []orderBy   `json:"orderBys"`
 	Limit      int         `json:"limit"`
 	Offset     int         `json:"offset"`
+	// DimensionFilter restricts report rows (used for host filtering)
+	DimensionFilter *filterExpression `json:"dimensionFilter,omitempty"`
 }
 
 type dateRange struct {
@@ -98,6 +100,20 @@ type metric struct {
 type orderBy struct {
 	Metric metricOrderBy `json:"metric"`
 	Desc   bool          `json:"desc"`
+}
+
+type filterExpression struct {
+	Filter *dimensionFilter `json:"filter,omitempty"`
+}
+
+type dimensionFilter struct {
+	FieldName    string        `json:"fieldName"`
+	InListFilter *inListFilter `json:"inListFilter,omitempty"`
+}
+
+type inListFilter struct {
+	Values        []string `json:"values"`
+	CaseSensitive bool     `json:"caseSensitive,omitempty"`
 }
 
 type metricOrderBy struct {
@@ -278,6 +294,22 @@ func (c *GA4Client) fetchSingleDateRange(ctx context.Context, propertyID, startD
 		Offset: offset,
 	}
 
+	if len(allowedHosts) > 0 {
+		hostValues := make([]string, 0, len(allowedHosts))
+		for host := range allowedHosts {
+			hostValues = append(hostValues, host)
+		}
+		req.DimensionFilter = &filterExpression{
+			Filter: &dimensionFilter{
+				FieldName: "hostName",
+				InListFilter: &inListFilter{
+					Values:        hostValues,
+					CaseSensitive: false,
+				},
+			},
+		}
+	}
+
 	reqBody, err := json.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal runReport request: %w", err)
@@ -331,11 +363,6 @@ func (c *GA4Client) fetchSingleDateRange(ctx context.Context, propertyID, startD
 		}
 
 		hostName := row.DimensionValues[0].Value
-		if len(allowedHosts) > 0 {
-			if _, ok := allowedHosts[strings.ToLower(hostName)]; !ok {
-				continue
-			}
-		}
 
 		pageViews, err := strconv.ParseInt(row.MetricValues[0].Value, 10, 64)
 		if err != nil {
@@ -722,11 +749,12 @@ func (pf *ProgressiveFetcher) fetchRemainingPagesBackground(ctx context.Context,
 
 	// Calculate traffic scores based on page view percentiles
 	if err := pf.db.CalculateTrafficScores(ctx, organisationID, domainID); err != nil {
-		log.Error().
+		log.Warn().
 			Err(err).
 			Str("organisation_id", organisationID).
 			Int("domain_id", domainID).
-			Msg("Failed to calculate traffic scores after GA4 fetch; continuing without updates")
+			Str("next_action", "continuing_without_score_updates").
+			Msg("Failed to calculate traffic scores after GA4 fetch")
 	}
 	if err := pf.db.ApplyTrafficScoresToTasks(ctx, organisationID, domainID); err != nil {
 		log.Warn().

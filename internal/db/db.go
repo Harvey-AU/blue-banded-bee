@@ -775,7 +775,8 @@ func (db *DB) UpsertPageWithAnalytics(
 			Err(err).
 			Str("organisation_id", organisationID).
 			Int("domain_id", domainID).
-			Msg("Failed to upsert page analytics data")
+			Str("next_action", "continuing_without_analytics").
+			Msg("Failed to upsert page analytics data; continuing without analytics")
 	}
 
 	return pageID, nil
@@ -853,14 +854,17 @@ func (db *DB) ApplyTrafficScoresToTasks(ctx context.Context, organisationID stri
 	}
 
 	rowsAffected, _ := result.RowsAffected()
-	logEvent := log.Debug().
-		Str("organisation_id", organisationID).
-		Int("domain_id", domainID).
-		Int64("tasks_updated", rowsAffected)
 	if rowsAffected > 0 {
-		logEvent.Msg("Applied traffic scores to pending tasks")
+		log.Info().
+			Str("organisation_id", organisationID).
+			Int("domain_id", domainID).
+			Int64("tasks_updated", rowsAffected).
+			Msg("Applied traffic scores to pending tasks")
 	} else {
-		logEvent.Msg("No pending tasks to reprioritise")
+		log.Debug().
+			Str("organisation_id", organisationID).
+			Int("domain_id", domainID).
+			Msg("No pending tasks to reprioritise")
 	}
 
 	return nil
@@ -886,6 +890,19 @@ func (db *DB) GetOrCreateDomainID(ctx context.Context, domain string) (int, erro
 	return domainID, nil
 }
 
+// UpsertOrganisationDomain ensures a domain is associated with an organisation.
+func (db *DB) UpsertOrganisationDomain(ctx context.Context, organisationID string, domainID int) error {
+	query := `
+		INSERT INTO organisation_domains (organisation_id, domain_id, created_at)
+		VALUES ($1, $2, NOW())
+		ON CONFLICT (organisation_id, domain_id) DO NOTHING
+	`
+	if _, err := db.client.ExecContext(ctx, query, organisationID, domainID); err != nil {
+		return fmt.Errorf("failed to upsert organisation domain: %w", err)
+	}
+	return nil
+}
+
 // OrganisationDomain represents a domain belonging to an organisation
 type OrganisationDomain struct {
 	ID   int    `json:"id"`
@@ -896,11 +913,19 @@ type OrganisationDomain struct {
 // This includes domains from jobs created by any user in the organisation
 func (db *DB) GetDomainsForOrganisation(ctx context.Context, organisationID string) ([]OrganisationDomain, error) {
 	query := `
-		SELECT DISTINCT d.id, d.name
-		FROM domains d
-		JOIN jobs j ON j.domain_id = d.id
-		WHERE j.organisation_id = $1
-		ORDER BY d.name ASC
+		SELECT DISTINCT id, name
+		FROM (
+			SELECT d.id, d.name
+			FROM domains d
+			JOIN organisation_domains od ON od.domain_id = d.id
+			WHERE od.organisation_id = $1
+			UNION
+			SELECT d.id, d.name
+			FROM domains d
+			JOIN jobs j ON j.domain_id = d.id
+			WHERE j.organisation_id = $1
+		) AS org_domains
+		ORDER BY name ASC
 	`
 
 	rows, err := db.client.QueryContext(ctx, query, organisationID)

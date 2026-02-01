@@ -9,7 +9,27 @@ DECLARE
   secret_name TEXT;
   secret_updated INT;
   account_updated INT;
+  account_org_id UUID;
+  caller_org_id UUID;
 BEGIN
+  SELECT organisation_id INTO account_org_id
+  FROM google_analytics_accounts
+  WHERE id = account_id;
+
+  IF account_org_id IS NULL THEN
+    RAISE EXCEPTION 'Account % not found', account_id;
+  END IF;
+
+  IF auth.role() <> 'service_role' THEN
+    SELECT organisation_id INTO caller_org_id
+    FROM users
+    WHERE id = auth.uid();
+
+    IF caller_org_id IS NULL OR caller_org_id <> account_org_id THEN
+      RAISE EXCEPTION 'Not authorised to access account %', account_id;
+    END IF;
+  END IF;
+
   secret_name := 'ga_account_token_' || account_id::TEXT;
 
   -- Try to update existing secret first (safe - no data loss if it fails)
@@ -57,11 +77,27 @@ RETURNS TEXT AS $$
 DECLARE
   secret_name TEXT;
   token TEXT;
+  account_org_id UUID;
+  caller_org_id UUID;
 BEGIN
   -- First get the secret name from the account
-  SELECT vault_secret_name INTO secret_name
+  SELECT organisation_id, vault_secret_name INTO account_org_id, secret_name
   FROM google_analytics_accounts
   WHERE id = account_id;
+
+  IF account_org_id IS NULL THEN
+    RAISE EXCEPTION 'Account % not found', account_id;
+  END IF;
+
+  IF auth.role() <> 'service_role' THEN
+    SELECT organisation_id INTO caller_org_id
+    FROM users
+    WHERE id = auth.uid();
+
+    IF caller_org_id IS NULL OR caller_org_id <> account_org_id THEN
+      RAISE EXCEPTION 'Not authorised to access account %', account_id;
+    END IF;
+  END IF;
 
   IF secret_name IS NULL THEN
     RETURN NULL;
@@ -81,8 +117,26 @@ CREATE OR REPLACE FUNCTION delete_ga_account_token(account_id UUID)
 RETURNS VOID AS $$
 DECLARE
   secret_name TEXT;
+  account_org_id UUID;
+  caller_org_id UUID;
 BEGIN
-  secret_name := 'ga_account_token_' || account_id::TEXT;
+  SELECT organisation_id, vault_secret_name INTO account_org_id, secret_name
+  FROM google_analytics_accounts
+  WHERE id = account_id;
+
+  IF account_org_id IS NULL THEN
+    RAISE EXCEPTION 'Account % not found', account_id;
+  END IF;
+
+  IF auth.role() <> 'service_role' THEN
+    SELECT organisation_id INTO caller_org_id
+    FROM users
+    WHERE id = auth.uid();
+
+    IF caller_org_id IS NULL OR caller_org_id <> account_org_id THEN
+      RAISE EXCEPTION 'Not authorised to access account %', account_id;
+    END IF;
+  END IF;
 
   -- Clear the reference in google_analytics_accounts first
   UPDATE google_analytics_accounts
@@ -90,7 +144,9 @@ BEGIN
   WHERE id = account_id;
 
   -- Then delete from vault
-  DELETE FROM vault.secrets WHERE name = secret_name;
+  IF secret_name IS NOT NULL THEN
+    DELETE FROM vault.secrets WHERE name = secret_name;
+  END IF;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, vault;
 

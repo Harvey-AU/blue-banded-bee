@@ -64,6 +64,12 @@ func (h *Handler) createDomain(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err := h.DB.UpsertOrganisationDomain(r.Context(), orgID, domainID); err != nil {
+		logger.Error().Err(err).Str("organisation_id", orgID).Int("domain_id", domainID).Msg("Failed to associate domain with organisation")
+		InternalError(w, r, err)
+		return
+	}
+
 	response := DomainResponse{
 		DomainID: domainID,
 		Domain:   normalisedDomain,

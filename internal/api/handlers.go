@@ -168,6 +168,7 @@ type DBClient interface {
 	CalculateTrafficScores(ctx context.Context, organisationID string, domainID int) error
 	ApplyTrafficScoresToTasks(ctx context.Context, organisationID string, domainID int) error
 	GetOrCreateDomainID(ctx context.Context, domain string) (int, error)
+	UpsertOrganisationDomain(ctx context.Context, organisationID string, domainID int) error
 	// Google Analytics accounts methods (for persistent account storage)
 	UpsertGA4Account(ctx context.Context, account *db.GoogleAnalyticsAccount) error
 	ListGA4Accounts(ctx context.Context, organisationID string) ([]*db.GoogleAnalyticsAccount, error)

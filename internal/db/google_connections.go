@@ -890,6 +890,9 @@ func (db *DB) GetGAConnectionWithToken(ctx context.Context, organisationID strin
 	if lastSyncedAt.Valid {
 		conn.LastSyncedAt = lastSyncedAt.Time
 	}
+	if conn.DomainIDs == nil {
+		conn.DomainIDs = pq.Int64Array{}
+	}
 
 	return conn, nil
 }
