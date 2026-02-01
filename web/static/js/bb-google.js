@@ -1880,6 +1880,12 @@ async function showDomainSelectorForProperty(propertyId, currentDomainIds) {
   overlay.style.cssText =
     "position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 10000;";
 
+  const closeModal = () => {
+    if (overlay.parentNode) {
+      overlay.parentNode.removeChild(overlay);
+    }
+  };
+
   // Create modal container
   const modal = document.createElement("div");
   modal.style.cssText =

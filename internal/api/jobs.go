@@ -268,12 +268,14 @@ func (h *Handler) createJobFromRequest(ctx context.Context, user *db.User, req C
 			logger.Info().
 				Str("organisation_id", effectiveOrgID).
 				Msg("Triggering GA4 data fetch in background")
-			h.fetchGA4DataBeforeJob(context.Background(), logger, effectiveOrgID, req.Domain)
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+			defer cancel()
+			h.fetchGA4DataBeforeJob(ctx, logger, effectiveOrgID, req.Domain)
 		}()
 	} else {
 		logger.Debug().
 			Bool("find_links", findLinks).
-			Str("org_id", effectiveOrgID).
+			Str("organisation_id", effectiveOrgID).
 			Bool("has_client_id", h.GoogleClientID != "").
 			Bool("has_client_secret", h.GoogleClientSecret != "").
 			Msg("Skipping GA4 fetch - conditions not met")
@@ -346,7 +348,11 @@ func (h *Handler) createJob(w http.ResponseWriter, r *http.Request) {
 	// Look up the domain ID for the response
 	domainID, err := h.DB.GetOrCreateDomainID(r.Context(), job.Domain)
 	if err != nil {
-		logger.Error().Err(err).Int("domain_id", domainID).Msg("Failed to get domain ID")
+		logger.Error().
+			Err(err).
+			Str("job_id", job.ID).
+			Int("domain_id", domainID).
+			Msg("Failed to get domain ID")
 		// Continue without domain_id rather than failing the whole request
 		domainID = 0
 	}
@@ -1201,6 +1207,7 @@ func (h *Handler) fetchGA4DataBeforeJob(ctx context.Context, logger zerolog.Logg
 		logger.Warn().
 			Err(err).
 			Str("organisation_id", organisationID).
+			Str("next_action", "analytics_skipped").
 			Msg("Failed to get domain ID for GA4 fetch, skipping analytics")
 		return
 	}
@@ -1215,6 +1222,7 @@ func (h *Handler) fetchGA4DataBeforeJob(ctx context.Context, logger zerolog.Logg
 			Err(err).
 			Str("organisation_id", organisationID).
 			Int("domain_id", domainID).
+			Str("next_action", "job_continues_without_ga4").
 			Msg("Failed to fetch GA4 data, continuing without analytics")
 	}
 }

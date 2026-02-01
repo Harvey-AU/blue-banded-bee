@@ -1,6 +1,7 @@
 (() => {
   const domains = [];
   let loadPromise = null;
+  let domainsLoaded = false;
 
   const getDomains = () => domains;
 
@@ -25,6 +26,7 @@
   const loadOrganisationDomains = async () => {
     if (!window.supabase?.auth) {
       domains.length = 0;
+      domainsLoaded = false;
       return [];
     }
 
@@ -32,6 +34,7 @@
       const token = await getAuthToken();
       if (!token) {
         domains.length = 0;
+        domainsLoaded = false;
         return [];
       }
 
@@ -44,6 +47,7 @@
           "[Domains] Failed to fetch domains, continuing without them"
         );
         domains.length = 0;
+        domainsLoaded = false;
         return [];
       }
 
@@ -60,16 +64,18 @@
         });
       }
 
+      domainsLoaded = true;
       return domains;
     } catch (error) {
       console.error("Failed to fetch organisation domains:", error);
       domains.length = 0;
+      domainsLoaded = false;
       return [];
     }
   };
 
   const ensureDomainsLoaded = async () => {
-    if (domains.length > 0) {
+    if (domainsLoaded) {
       return domains;
     }
     if (loadPromise) {
@@ -182,6 +188,11 @@
     if (!input) {
       return;
     }
+
+    if (input.dataset.domainSearchInitialised === "true") {
+      return;
+    }
+    input.dataset.domainSearchInitialised = "true";
 
     const resolvedSearchMode =
       searchMode || input.getAttribute("bbb-domain-search") || "on";

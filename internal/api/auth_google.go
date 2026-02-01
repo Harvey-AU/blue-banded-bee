@@ -18,7 +18,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/lib/pq"
 	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 )
 
 // extractGoogleAccountIDFromPath extracts Google account ID from path like "accounts/accounts/123456/properties"
@@ -860,8 +859,6 @@ func (h *Handler) fetchPropertiesForAccount(ctx context.Context, logger zerolog.
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		logger.Error().Int("status", resp.StatusCode).Str("body", string(body)).Msg("Google API properties request failed")
 		return nil, fmt.Errorf("properties endpoint returned status: %d", resp.StatusCode)
 	}
 
@@ -1374,7 +1371,7 @@ func (h *Handler) RefreshGA4Accounts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	accountWithToken, refreshToken, err := h.getGARefreshToken(r.Context(), orgID)
+	accountWithToken, refreshToken, err := h.getGARefreshToken(r.Context(), logger, orgID)
 	if err != nil {
 		if errors.Is(err, db.ErrGoogleTokenNotFound) || errors.Is(err, db.ErrGoogleAccountNotFound) || errors.Is(err, db.ErrGoogleConnectionNotFound) {
 			WriteSuccess(w, r, map[string]any{
@@ -1391,7 +1388,10 @@ func (h *Handler) RefreshGA4Accounts(w http.ResponseWriter, r *http.Request) {
 	// Refresh the access token using the refresh token
 	accessToken, err := h.refreshGoogleAccessToken(refreshToken)
 	if err != nil {
-		logger.Warn().Err(err).Msg("Failed to refresh Google access token")
+		logger.Warn().
+			Err(err).
+			Str("next_action", "reauth_required").
+			Msg("Failed to refresh Google access token")
 		// Token might be revoked
 		WriteSuccess(w, r, map[string]any{
 			"needs_reauth": true,
@@ -1492,7 +1492,7 @@ func (h *Handler) refreshGoogleAccessToken(refreshToken string) (string, error) 
 
 // getGARefreshToken resolves a usable refresh token for the organisation.
 // It prefers account-level tokens, then falls back to any connection-level token.
-func (h *Handler) getGARefreshToken(ctx context.Context, organisationID string) (*db.GoogleAnalyticsAccount, string, error) {
+func (h *Handler) getGARefreshToken(ctx context.Context, logger zerolog.Logger, organisationID string) (*db.GoogleAnalyticsAccount, string, error) {
 	accountWithToken, err := h.DB.GetGA4AccountWithToken(ctx, organisationID)
 	if err == nil {
 		refreshToken, tokenErr := h.DB.GetGA4AccountToken(ctx, accountWithToken.ID)
@@ -1502,7 +1502,7 @@ func (h *Handler) getGARefreshToken(ctx context.Context, organisationID string) 
 		if !errors.Is(tokenErr, db.ErrGoogleTokenNotFound) {
 			return nil, "", tokenErr
 		}
-		log.Warn().
+		logger.Warn().
 			Str("organisation_id", organisationID).
 			Str("account_id", accountWithToken.ID).
 			Msg("GA account token missing in vault, falling back to connection token")
@@ -1523,7 +1523,7 @@ func (h *Handler) getGARefreshToken(ctx context.Context, organisationID string) 
 		if !errors.Is(tokenErr, db.ErrGoogleTokenNotFound) {
 			return nil, "", tokenErr
 		}
-		log.Warn().
+		logger.Warn().
 			Str("organisation_id", organisationID).
 			Str("connection_id", connectionWithToken.ID).
 			Msg("GA connection token missing in vault")
@@ -1563,7 +1563,7 @@ func (h *Handler) GetAccountProperties(w http.ResponseWriter, r *http.Request, g
 		return
 	}
 
-	_, refreshToken, err := h.getGARefreshToken(r.Context(), orgID)
+	_, refreshToken, err := h.getGARefreshToken(r.Context(), logger, orgID)
 	if err != nil {
 		if errors.Is(err, db.ErrGoogleTokenNotFound) || errors.Is(err, db.ErrGoogleAccountNotFound) || errors.Is(err, db.ErrGoogleConnectionNotFound) {
 			WriteSuccess(w, r, map[string]any{
@@ -1580,7 +1580,10 @@ func (h *Handler) GetAccountProperties(w http.ResponseWriter, r *http.Request, g
 	// Refresh the access token
 	accessToken, err := h.refreshGoogleAccessToken(refreshToken)
 	if err != nil {
-		logger.Warn().Err(err).Msg("Failed to refresh Google access token")
+		logger.Warn().
+			Err(err).
+			Str("next_action", "reauth_required").
+			Msg("Failed to refresh Google access token")
 		WriteSuccess(w, r, map[string]any{
 			"needs_reauth": true,
 			"message":      "Unable to refresh token. Please reconnect to Google Analytics.",
