@@ -3,7 +3,7 @@
   let loadPromise = null;
   let domainsLoaded = false;
 
-  const getDomains = () => domains;
+  const getDomains = () => domains.slice();
 
   const getAuthToken = async () => {
     if (!window.supabase?.auth?.getSession) {
@@ -97,6 +97,16 @@
   };
 
   const createDomain = async (domainName) => {
+    let normalised = (domainName || "").toString().trim();
+    if (normalised === "") {
+      throw new Error("Domain cannot be empty");
+    }
+
+    normalised = normalised.replace(/^https?:\/\//i, "");
+    normalised = normalised.replace(/^www\./i, "");
+    normalised = normalised.replace(/\/$/, "");
+    normalised = normalised.toLowerCase();
+
     const token = await getAuthToken();
     if (!token) {
       throw new Error("Please sign in to create domains");
@@ -108,7 +118,7 @@
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ domain: domainName }),
+      body: JSON.stringify({ domain: normalised }),
     });
 
     if (!response.ok) {
@@ -125,7 +135,7 @@
     const result = await response.json();
     const rawDomainId = result?.data?.domain_id ?? result?.domain_id ?? null;
     const newDomainId = Number(rawDomainId);
-    const newDomainName = result?.data?.domain ?? result?.domain ?? domainName;
+    const newDomainName = result?.data?.domain ?? result?.domain ?? normalised;
 
     if (!Number.isFinite(newDomainId)) {
       throw new Error("Invalid domain ID in response");
@@ -292,13 +302,18 @@
       document.addEventListener("click", onDocumentClick);
     };
 
+    let renderToken = 0;
     const renderDropdown = async (query) => {
+      const currentToken = ++renderToken;
       while (dropdownEl.firstChild) {
         dropdownEl.removeChild(dropdownEl.firstChild);
       }
 
       const lowerQuery = query.toLowerCase().trim();
       await ensureDomainsLoaded();
+      if (currentToken !== renderToken) {
+        return;
+      }
       const excludedIds =
         typeof getExcludedDomainIds === "function"
           ? getExcludedDomainIds()
