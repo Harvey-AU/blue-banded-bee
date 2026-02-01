@@ -431,10 +431,16 @@ async function loadOrganisationDomains() {
     return [];
   }
 
-  const loadedDomains = await window.BBDomainSearch.loadOrganisationDomains();
-  organisationDomains = Array.isArray(loadedDomains)
-    ? loadedDomains
-    : window.BBDomainSearch.getDomains();
+  try {
+    const loadedDomains = await window.BBDomainSearch.loadOrganisationDomains();
+    organisationDomains = Array.isArray(loadedDomains)
+      ? loadedDomains
+      : window.BBDomainSearch.getDomains();
+  } catch (error) {
+    console.warn("Failed to load organisation domains:", error);
+    organisationDomains = window.BBDomainSearch.getDomains?.() || [];
+  }
+
   return organisationDomains;
 }
 
@@ -1956,6 +1962,10 @@ async function showDomainSelectorForProperty(propertyId, currentDomainIds) {
           message || "Failed to create domain. Please try again."
         );
       },
+    });
+  } else {
+    inputContainer.addEventListener("submit", (event) => {
+      event.preventDefault();
     });
   }
 
