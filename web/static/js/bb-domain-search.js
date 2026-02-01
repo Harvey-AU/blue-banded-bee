@@ -106,6 +106,9 @@
     normalised = normalised.replace(/^www\./i, "");
     normalised = normalised.replace(/\/$/, "");
     normalised = normalised.toLowerCase();
+    if (!normalised.includes(".") || !/^[a-z0-9.-]+$/.test(normalised)) {
+      throw new Error("Domain must be a valid hostname");
+    }
 
     const token = await getAuthToken();
     if (!token) {
@@ -225,6 +228,7 @@
     if (!dropdown && wrapper) {
       wrapper.appendChild(dropdownEl);
     }
+    dropdownEl.setAttribute("role", "listbox");
 
     const reportError = (message) => {
       if (typeof onError === "function") {
@@ -290,6 +294,7 @@
     const onDocumentClick = (event) => {
       if (!wrapper || !wrapper.contains(event.target)) {
         dropdownEl.style.display = "none";
+        focusedIndex = -1;
         if (documentListenerActive) {
           document.removeEventListener("click", onDocumentClick);
           documentListenerActive = false;
@@ -306,8 +311,66 @@
     };
 
     let renderToken = 0;
+    let optionItems = [];
+    let focusedIndex = -1;
+    const updateFocusedIndex = (nextIndex) => {
+      if (!optionItems.length) {
+        focusedIndex = -1;
+        return;
+      }
+      const clamped = Math.max(0, Math.min(nextIndex, optionItems.length - 1));
+      focusedIndex = clamped;
+      optionItems.forEach((item, index) => {
+        item.el.setAttribute(
+          "aria-selected",
+          index === focusedIndex ? "true" : "false"
+        );
+      });
+      optionItems[focusedIndex].el.focus();
+    };
+
+    const handleDropdownKey = async (event) => {
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        if (optionItems.length === 0) {
+          await renderDropdown(input.value);
+        }
+        updateFocusedIndex(
+          focusedIndex < 0
+            ? 0
+            : Math.min(focusedIndex + 1, optionItems.length - 1)
+        );
+        return;
+      }
+      if (event.key === "ArrowUp") {
+        event.preventDefault();
+        if (optionItems.length === 0) {
+          await renderDropdown(input.value);
+        }
+        updateFocusedIndex(
+          focusedIndex < 0
+            ? optionItems.length - 1
+            : Math.max(focusedIndex - 1, 0)
+        );
+        return;
+      }
+      if (event.key === "Enter" && focusedIndex >= 0) {
+        event.preventDefault();
+        await optionItems[focusedIndex].onSelect();
+        dropdownEl.style.display = "none";
+        onDocumentClick({ target: document.body });
+        return;
+      }
+      if (event.key === "Escape") {
+        event.preventDefault();
+        dropdownEl.style.display = "none";
+        onDocumentClick({ target: document.body });
+      }
+    };
     const renderDropdown = async (query) => {
       const currentToken = ++renderToken;
+      optionItems = [];
+      focusedIndex = -1;
       while (dropdownEl.firstChild) {
         dropdownEl.removeChild(dropdownEl.firstChild);
       }
@@ -336,6 +399,9 @@
         filtered.forEach((domain) => {
           const option = document.createElement("div");
           option.textContent = domain.name;
+          option.setAttribute("role", "option");
+          option.setAttribute("tabindex", "0");
+          option.setAttribute("aria-selected", "false");
           option.style.cssText =
             "padding: 10px 16px; cursor: pointer; font-size: 14px; border-bottom: 1px solid #f3f4f6;";
           option.onmouseover = () => {
@@ -344,9 +410,23 @@
           option.onmouseout = () => {
             option.style.background = "white";
           };
+          const optionIndex = optionItems.length;
+          optionItems.push({
+            el: option,
+            onSelect: async () => {
+              await handleSelect(domain);
+            },
+          });
+          option.addEventListener("focus", () => {
+            updateFocusedIndex(optionIndex);
+          });
+          option.addEventListener("keydown", handleDropdownKey);
           option.onmousedown = async (event) => {
             event.preventDefault();
             await handleSelect(domain);
+            if (currentToken !== renderToken) {
+              return;
+            }
             dropdownEl.style.display = "none";
             onDocumentClick({ target: document.body });
           };
@@ -364,6 +444,9 @@
             : `Add new domain: ${lowerQuery}`;
         const addOption = document.createElement("div");
         addOption.textContent = label;
+        addOption.setAttribute("role", "option");
+        addOption.setAttribute("tabindex", "0");
+        addOption.setAttribute("aria-selected", "false");
         addOption.style.cssText =
           "padding: 10px 16px; cursor: pointer; font-size: 14px; color: #6366f1; font-weight: 500;";
         addOption.onmouseover = () => {
@@ -372,9 +455,23 @@
         addOption.onmouseout = () => {
           addOption.style.background = "white";
         };
+        const optionIndex = optionItems.length;
+        optionItems.push({
+          el: addOption,
+          onSelect: async () => {
+            await handleCreate(lowerQuery);
+          },
+        });
+        addOption.addEventListener("focus", () => {
+          updateFocusedIndex(optionIndex);
+        });
+        addOption.addEventListener("keydown", handleDropdownKey);
         addOption.onmousedown = async (event) => {
           event.preventDefault();
           await handleCreate(lowerQuery);
+          if (currentToken !== renderToken) {
+            return;
+          }
           dropdownEl.style.display = "none";
           onDocumentClick({ target: document.body });
         };
@@ -402,6 +499,8 @@
     input.addEventListener("click", (event) => {
       event.stopPropagation();
     });
+
+    input.addEventListener("keydown", handleDropdownKey);
 
     let isSubmitting = false;
     if (form) {

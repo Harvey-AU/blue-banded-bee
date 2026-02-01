@@ -1,4 +1,3 @@
-/*
 /**
  * Google Analytics Integration Handler
  * Handles GA4 property connections with two-step account/property selection.
@@ -1223,6 +1222,10 @@ function renderInlineDomainAdder(container, connection) {
           message || "Failed to create domain. Please try again."
         );
       },
+    });
+  } else {
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
     });
   }
 
