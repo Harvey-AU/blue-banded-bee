@@ -37,20 +37,21 @@ type GoogleAnalyticsAccount struct {
 
 // GoogleAnalyticsConnection represents an organisation's connection to a GA4 property
 type GoogleAnalyticsConnection struct {
-	ID               string
-	OrganisationID   string
-	GA4PropertyID    string        // GA4 property ID (e.g., "123456789")
-	GA4PropertyName  string        // Display name of the property
-	GoogleAccountID  string        // GA account ID (e.g., "accounts/123456")
-	GoogleUserID     string        // Google user ID who authorised
-	GoogleEmail      string        // Google email for display
-	VaultSecretName  string        // Name of the secret in Supabase Vault
-	InstallingUserID string        // Our user who installed
-	Status           string        // "active" or "inactive"
-	DomainIDs        pq.Int64Array // Array of domain IDs associated with this property
-	LastSyncedAt     time.Time     // When analytics data was last synced
-	CreatedAt        time.Time
-	UpdatedAt        time.Time
+	ID                string
+	OrganisationID    string
+	GA4PropertyID     string        // GA4 property ID (e.g., "123456789")
+	GA4PropertyName   string        // Display name of the property
+	GoogleAccountID   string        // GA account ID (e.g., "accounts/123456")
+	GoogleAccountName string        // Display name of the account
+	GoogleUserID      string        // Google user ID who authorised
+	GoogleEmail       string        // Google email for display
+	VaultSecretName   string        // Name of the secret in Supabase Vault
+	InstallingUserID  string        // Our user who installed
+	Status            string        // "active" or "inactive"
+	DomainIDs         pq.Int64Array // Array of domain IDs associated with this property
+	LastSyncedAt      time.Time     // When analytics data was last synced
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
 }
 
 // CreateGoogleConnection creates a new Google Analytics connection for an organisation
@@ -187,12 +188,15 @@ func (db *DB) GetGoogleConnection(ctx context.Context, connectionID string) (*Go
 // ListGoogleConnections lists all Google Analytics connections for an organisation
 func (db *DB) ListGoogleConnections(ctx context.Context, organisationID string) ([]*GoogleAnalyticsConnection, error) {
 	query := `
-		SELECT id, organisation_id, ga4_property_id, ga4_property_name, google_account_id,
-		       google_user_id, google_email, vault_secret_name, installing_user_id, status,
-		       domain_ids, last_synced_at, created_at, updated_at
-		FROM google_analytics_connections
-		WHERE organisation_id = $1
-		ORDER BY status DESC, ga4_property_name ASC
+		SELECT c.id, c.organisation_id, c.ga4_property_id, c.ga4_property_name, c.google_account_id,
+		       a.google_account_name, c.google_user_id, c.google_email, c.vault_secret_name,
+		       c.installing_user_id, c.status, c.domain_ids, c.last_synced_at, c.created_at, c.updated_at
+		FROM google_analytics_connections c
+		LEFT JOIN google_analytics_accounts a
+		  ON a.organisation_id = c.organisation_id
+		 AND a.google_account_id = c.google_account_id
+		WHERE c.organisation_id = $1
+		ORDER BY c.status DESC, c.ga4_property_name ASC
 	`
 
 	rows, err := db.client.QueryContext(ctx, query, organisationID)
@@ -209,13 +213,13 @@ func (db *DB) ListGoogleConnections(ctx context.Context, organisationID string) 
 	var connections []*GoogleAnalyticsConnection
 	for rows.Next() {
 		conn := &GoogleAnalyticsConnection{}
-		var installingUserID, vaultSecretName, ga4PropertyID, ga4PropertyName, googleAccountID, googleUserID, googleEmail, status sql.NullString
+		var installingUserID, vaultSecretName, ga4PropertyID, ga4PropertyName, googleAccountID, googleAccountName, googleUserID, googleEmail, status sql.NullString
 		var lastSyncedAt sql.NullTime
 
 		err := rows.Scan(
 			&conn.ID, &conn.OrganisationID, &ga4PropertyID, &ga4PropertyName, &googleAccountID,
-			&googleUserID, &googleEmail, &vaultSecretName, &installingUserID, &status,
-			&conn.DomainIDs, &lastSyncedAt, &conn.CreatedAt, &conn.UpdatedAt,
+			&googleAccountName, &googleUserID, &googleEmail, &vaultSecretName, &installingUserID,
+			&status, &conn.DomainIDs, &lastSyncedAt, &conn.CreatedAt, &conn.UpdatedAt,
 		)
 		if err != nil {
 			log.Error().Err(err).Str("organisation_id", organisationID).Msg("Failed to scan Google Analytics connection row")
@@ -230,6 +234,9 @@ func (db *DB) ListGoogleConnections(ctx context.Context, organisationID string) 
 		}
 		if googleAccountID.Valid {
 			conn.GoogleAccountID = googleAccountID.String
+		}
+		if googleAccountName.Valid {
+			conn.GoogleAccountName = googleAccountName.String
 		}
 		if googleUserID.Valid {
 			conn.GoogleUserID = googleUserID.String

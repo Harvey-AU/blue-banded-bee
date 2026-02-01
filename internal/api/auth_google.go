@@ -906,13 +906,14 @@ func (h *Handler) fetchPropertiesForAccount(ctx context.Context, logger zerolog.
 
 // GoogleConnectionResponse represents a Google Analytics connection in API responses
 type GoogleConnectionResponse struct {
-	ID              string        `json:"id"`
-	GA4PropertyID   string        `json:"ga4_property_id,omitempty"`
-	GA4PropertyName string        `json:"ga4_property_name,omitempty"`
-	GoogleEmail     string        `json:"google_email,omitempty"`
-	Status          string        `json:"status"`
-	DomainIDs       pq.Int64Array `json:"domain_ids,omitempty"`
-	CreatedAt       string        `json:"created_at"`
+	ID                string        `json:"id"`
+	GA4PropertyID     string        `json:"ga4_property_id,omitempty"`
+	GA4PropertyName   string        `json:"ga4_property_name,omitempty"`
+	GoogleAccountName string        `json:"google_account_name,omitempty"`
+	GoogleEmail       string        `json:"google_email,omitempty"`
+	Status            string        `json:"status"`
+	DomainIDs         pq.Int64Array `json:"domain_ids,omitempty"`
+	CreatedAt         string        `json:"created_at"`
 }
 
 // GoogleConnectionsHandler handles requests to /v1/integrations/google
@@ -1211,13 +1212,14 @@ func (h *Handler) listGoogleConnections(w http.ResponseWriter, r *http.Request) 
 	response := make([]GoogleConnectionResponse, 0, len(connections))
 	for _, conn := range connections {
 		response = append(response, GoogleConnectionResponse{
-			ID:              conn.ID,
-			GA4PropertyID:   conn.GA4PropertyID,
-			GA4PropertyName: conn.GA4PropertyName,
-			GoogleEmail:     conn.GoogleEmail,
-			Status:          conn.Status,
-			DomainIDs:       conn.DomainIDs,
-			CreatedAt:       conn.CreatedAt.Format(time.RFC3339),
+			ID:                conn.ID,
+			GA4PropertyID:     conn.GA4PropertyID,
+			GA4PropertyName:   conn.GA4PropertyName,
+			GoogleAccountName: conn.GoogleAccountName,
+			GoogleEmail:       conn.GoogleEmail,
+			Status:            conn.Status,
+			DomainIDs:         conn.DomainIDs,
+			CreatedAt:         conn.CreatedAt.Format(time.RFC3339),
 		})
 	}
 
