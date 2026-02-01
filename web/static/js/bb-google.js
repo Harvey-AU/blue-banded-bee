@@ -318,10 +318,12 @@ async function disconnectGoogle(connectionId) {
   }
 
   try {
-    const session = await window.supabase.auth.getSession();
-    const token = session?.data?.session?.access_token;
+    const authResult = await getGoogleAuthToken();
+    const token = authResult.token;
     if (!token) {
-      showGoogleError("Not authenticated. Please sign in.");
+      showGoogleError(
+        authResult.message || "Not authenticated. Please sign in."
+      );
       return;
     }
     const response = await fetch(
@@ -575,11 +577,13 @@ async function saveAllPropertiesForAccount(accountId, properties = null) {
  */
 async function toggleConnectionStatus(connectionId, active) {
   try {
-    const session = await window.supabase.auth.getSession();
-    const token = session?.data?.session?.access_token;
+    const authResult = await getGoogleAuthToken();
+    const token = authResult.token;
     if (!token) {
       console.error("No auth token available");
-      showGoogleError("Not authenticated. Please sign in.");
+      showGoogleError(
+        authResult.message || "Not authenticated. Please sign in."
+      );
       return;
     }
 
@@ -714,8 +718,8 @@ let accountSelectorDocListener = null;
  */
 async function loadGA4AccountsFromDB() {
   try {
-    const session = await window.supabase.auth.getSession();
-    const token = session?.data?.session?.access_token;
+    const authResult = await getGoogleAuthToken();
+    const token = authResult.token;
 
     if (!token) {
       return [];
@@ -864,7 +868,7 @@ function renderAccountSelector() {
         e.preventDefault();
         onAccountSelected(account);
         setDropdownOpen(false);
-        onDocumentClick({ target: document.body });
+        cleanupDocumentListener();
       };
 
       dropdown.appendChild(option);
@@ -876,6 +880,14 @@ function renderAccountSelector() {
 
   // Event listeners for search input
   let documentListenerActive = false;
+  const cleanupDocumentListener = () => {
+    if (!documentListenerActive) {
+      return;
+    }
+    document.removeEventListener("click", onDocumentClick);
+    documentListenerActive = false;
+    accountSelectorDocListener = null;
+  };
   const onDocumentClick = (event) => {
     if (!selectorContainer.contains(event.target)) {
       setDropdownOpen(false);
@@ -883,11 +895,7 @@ function renderAccountSelector() {
         searchInput.value =
           selectedGA4Account.google_account_name || "Unnamed Account";
       }
-      if (documentListenerActive) {
-        document.removeEventListener("click", onDocumentClick);
-        documentListenerActive = false;
-        accountSelectorDocListener = null;
-      }
+      cleanupDocumentListener();
     }
   };
 
@@ -982,11 +990,13 @@ async function saveAllPropertiesForStoredAccount(account) {
  */
 async function refreshGA4Accounts() {
   try {
-    const session = await window.supabase.auth.getSession();
-    const token = session?.data?.session?.access_token;
+    const authResult = await getGoogleAuthToken();
+    const token = authResult.token;
 
     if (!token) {
-      showGoogleError("Not authenticated. Please sign in.");
+      showGoogleError(
+        authResult.message || "Not authenticated. Please sign in."
+      );
       return;
     }
 
@@ -1061,10 +1071,12 @@ async function handleGoogleOAuthCallback() {
   } else if (gaSession) {
     // Fetch session data from server
     try {
-      const session = await window.supabase.auth.getSession();
-      const token = session?.data?.session?.access_token;
+      const authResult = await getGoogleAuthToken();
+      const token = authResult.token;
       if (!token) {
-        showGoogleError("Not authenticated. Please sign in.");
+        showGoogleError(
+          authResult.message || "Not authenticated. Please sign in."
+        );
         return;
       }
       const response = await fetch(
@@ -1140,11 +1152,13 @@ async function removeDomainFromConnection(
   currentDomainIds = null
 ) {
   try {
-    const session = await window.supabase.auth.getSession();
-    const token = session?.data?.session?.access_token;
+    const authResult = await getGoogleAuthToken();
+    const token = authResult.token;
 
     if (!token) {
-      showGoogleError("Please sign in to update connections");
+      showGoogleError(
+        authResult.message || "Please sign in to update connections"
+      );
       return;
     }
 
@@ -1195,11 +1209,13 @@ async function removeDomainFromConnection(
 
 async function addDomainToConnection(connectionId, currentDomainIds, domainId) {
   try {
-    const session = await window.supabase.auth.getSession();
-    const token = session?.data?.session?.access_token;
+    const authResult = await getGoogleAuthToken();
+    const token = authResult.token;
 
     if (!token) {
-      showGoogleError("Please sign in to update connections");
+      showGoogleError(
+        authResult.message || "Please sign in to update connections"
+      );
       return;
     }
 
@@ -1228,11 +1244,11 @@ async function addDomainToConnection(connectionId, currentDomainIds, domainId) {
 }
 
 async function createDomainInline(domainName) {
-  const session = await window.supabase.auth.getSession();
-  const token = session?.data?.session?.access_token;
+  const authResult = await getGoogleAuthToken();
+  const token = authResult.token;
 
   if (!token) {
-    showGoogleError("Please sign in to create domains");
+    showGoogleError(authResult.message || "Please sign in to create domains");
     return null;
   }
 
