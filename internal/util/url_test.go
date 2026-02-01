@@ -92,15 +92,15 @@ func TestValidateDomain(t *testing.T) {
 
 		// Invalid domains - using publicsuffix error messages
 		{name: "no_tld", input: "asdfasdf", wantError: true, errorMsg: "invalid domain"},
-		{name: "empty", input: "", wantError: true, errorMsg: "cannot be empty"},
+		{name: "empty", input: "", wantError: true, errorMsg: "domain cannot be empty"},
 		{name: "just_tld", input: ".com", wantError: true, errorMsg: "invalid domain"},
 		{name: "double_dot", input: "example..com", wantError: true, errorMsg: "invalid domain"},
-		{name: "localhost", input: "localhost", wantError: true, errorMsg: "not allowed"},
-		{name: "localhost_with_subdomain", input: "api.localhost", wantError: true, errorMsg: "not allowed"},
-		{name: "internal", input: "internal", wantError: true, errorMsg: "not allowed"},
-		{name: "ip_address", input: "192.168.1.1", wantError: true, errorMsg: "not allowed"},
-		{name: "ipv6_address", input: "[2001:db8::1]", wantError: true, errorMsg: "port"},
-		{name: "domain_with_port", input: "example.com:8080", wantError: true, errorMsg: "port"},
+		{name: "localhost", input: "localhost", wantError: true, errorMsg: "domain"},
+		{name: "localhost_with_subdomain", input: "api.localhost", wantError: true, errorMsg: "domain"},
+		{name: "internal", input: "internal", wantError: true, errorMsg: "domain"},
+		{name: "ip_address", input: "192.168.1.1", wantError: true, errorMsg: "domain"},
+		{name: "ipv6_address", input: "[2001:db8::1]", wantError: true, errorMsg: "domain must not include a port"},
+		{name: "domain_with_port", input: "example.com:8080", wantError: true, errorMsg: "domain must not include a port"},
 		{name: "just_suffix", input: "com", wantError: true, errorMsg: "invalid domain"},
 	}
 
