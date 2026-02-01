@@ -1047,6 +1047,9 @@ func (h *Handler) handleGoogleSpecialPaths(w http.ResponseWriter, r *http.Reques
 
 func (h *Handler) handlePendingSession(w http.ResponseWriter, r *http.Request, path string) {
 	sessionPath := strings.TrimPrefix(path, "pending-session/")
+	if decodedPath, err := url.PathUnescape(sessionPath); err == nil {
+		sessionPath = decodedPath
+	}
 	parts := strings.Split(sessionPath, "/")
 	sessionID := parts[0]
 
@@ -1057,20 +1060,8 @@ func (h *Handler) handlePendingSession(w http.ResponseWriter, r *http.Request, p
 	isPropertiesRequest := false
 	var accountID string
 
-	// Check for two patterns:
-	// 1. parts = [sessionID, "accounts", "accounts", "123456", "properties"] (URL-decoded, 5 parts)
-	// 2. parts = [sessionID, "accounts", "accounts/123456", "properties"] (not decoded, 4 parts)
-	if len(parts) == 5 && parts[1] == "accounts" && parts[2] == "accounts" && parts[4] == "properties" {
-		// URL-decoded pattern: reconstruct account ID from parts[2] and parts[3]
-		accountID = parts[2] + "/" + parts[3]
-		isPropertiesRequest = true
-	} else if len(parts) == 4 && parts[1] == "accounts" && parts[3] == "properties" {
-		// Not decoded pattern (legacy or different router behaviour)
-		accountID = parts[2]
-		// URL-decode if needed
-		if decoded, err := url.PathUnescape(accountID); err == nil && decoded != accountID {
-			accountID = decoded
-		}
+	if len(parts) >= 4 && parts[1] == "accounts" && parts[len(parts)-1] == "properties" {
+		accountID = strings.Join(parts[2:len(parts)-1], "/")
 		isPropertiesRequest = true
 	}
 
@@ -1235,7 +1226,7 @@ func (h *Handler) getOrganisationDomains(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	logger.Info().
+	logger.Debug().
 		Str("organisation_id", orgID).
 		Int("domain_count", len(domains)).
 		Msg("Returning domains for organisation")
