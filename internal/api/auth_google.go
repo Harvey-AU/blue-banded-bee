@@ -32,6 +32,9 @@ func extractGoogleAccountIDFromPath(path string) string {
 	if trimmed == "" {
 		return ""
 	}
+	if decoded, err := url.PathUnescape(trimmed); err == nil && decoded != "" {
+		return decoded
+	}
 	return trimmed
 }
 
@@ -1553,6 +1556,17 @@ func (h *Handler) GetAccountProperties(w http.ResponseWriter, r *http.Request, g
 	orgID := h.DB.GetEffectiveOrganisationID(user)
 	if orgID == "" {
 		BadRequest(w, r, "User must belong to an organisation")
+		return
+	}
+
+	_, err = h.DB.GetGA4AccountByGoogleID(r.Context(), orgID, googleAccountID)
+	if err != nil {
+		if errors.Is(err, db.ErrGoogleAccountNotFound) {
+			BadRequest(w, r, "Google account not found for organisation")
+			return
+		}
+		logger.Error().Err(err).Str("google_account_id", googleAccountID).Msg("Failed to resolve Google account")
+		InternalError(w, r, err)
 		return
 	}
 

@@ -609,22 +609,15 @@ async function saveGoogleProperties() {
  * @param {boolean} active - Whether to set active
  */
 async function toggleConnectionStatus(connectionId, active) {
-  console.log(
-    `[GA Toggle] Toggling ${connectionId} to ${active ? "active" : "inactive"}`
-  );
-
   try {
     const session = await window.supabase.auth.getSession();
     const token = session?.data?.session?.access_token;
     if (!token) {
-      console.error("[GA Toggle] No auth token available");
+      console.error("No auth token available");
       showGoogleError("Not authenticated. Please sign in.");
       return;
     }
 
-    console.log(
-      `[GA Toggle] Making PATCH request to /v1/integrations/google/${connectionId}/status`
-    );
     const response = await fetch(
       `/v1/integrations/google/${encodeURIComponent(connectionId)}/status`,
       {
@@ -641,15 +634,13 @@ async function toggleConnectionStatus(connectionId, active) {
 
     if (!response.ok) {
       const text = await response.text();
-      console.error(`[GA Toggle] API error: ${response.status}`, text);
+      console.error(`GA toggle API error: ${response.status}`, text);
       throw new Error(text || `HTTP ${response.status}`);
     }
-
-    console.log("[GA Toggle] Status updated successfully");
     // Reload to update UI
     loadGoogleConnections();
   } catch (error) {
-    console.error("[GA Toggle] Failed to toggle connection status:", error);
+    console.error("Failed to toggle connection status:", error);
     showGoogleError("Failed to update status");
     loadGoogleConnections(); // Reload to reset toggle state
   }
@@ -1025,12 +1016,6 @@ function showAccountSelection(accounts) {
 
   // Show the searchable account selector
   renderAccountSelector();
-
-  console.log(
-    "[GA Debug] Showing account selection with",
-    accounts.length,
-    "accounts"
-  );
 }
 
 /**
@@ -1105,7 +1090,6 @@ async function loadGA4AccountsFromDB() {
     const token = session?.data?.session?.access_token;
 
     if (!token) {
-      console.log("[GA Debug] No auth token, skipping accounts load");
       return [];
     }
 
@@ -1114,23 +1098,19 @@ async function loadGA4AccountsFromDB() {
     });
 
     if (!response.ok) {
-      console.error("[GA Debug] Failed to load accounts:", response.status);
+      console.error("Failed to load accounts:", response.status);
       return [];
     }
 
     const result = await response.json();
     storedGA4Accounts = result.data?.accounts || [];
-    console.log(
-      "[GA Debug] Loaded accounts from DB:",
-      storedGA4Accounts.length
-    );
 
     // Update the account selector UI
     renderAccountSelector();
 
     return storedGA4Accounts;
   } catch (error) {
-    console.error("[GA Debug] Error loading accounts from DB:", error);
+    console.error("Error loading accounts from DB:", error);
     return [];
   }
 }
@@ -1147,7 +1127,6 @@ function renderAccountSelector() {
   const dropdown = document.getElementById("googleAccountDropdown");
 
   if (!selectorContainer || !searchInput || !dropdown) {
-    console.log("[GA Debug] Account selector elements not found");
     return;
   }
 
@@ -1277,12 +1256,6 @@ async function onAccountSelected(account) {
     searchInput.value = account.google_account_name || "Unnamed Account";
   }
 
-  console.log(
-    "[GA Debug] Selected account:",
-    account.google_account_name,
-    account.google_account_id
-  );
-
   // If we have a pending session (OAuth flow in progress), use the original selectGoogleAccount
   if (pendingGASessionData && pendingGASessionData.session_id) {
     // Use the existing flow that works
@@ -1395,7 +1368,7 @@ async function loadPropertiesForAccount(account) {
 
     renderAccountProperties(properties);
   } catch (error) {
-    console.error("[GA Debug] Failed to load properties:", error);
+    console.error("Failed to load properties:", error);
     renderPropertiesError("Failed to load properties. Please try again.", {
       retryable: true,
     });
@@ -1491,17 +1464,12 @@ async function refreshGA4Accounts() {
 
     // Update stored accounts
     storedGA4Accounts = result.data?.accounts || [];
-    console.log(
-      "[GA Debug] Refreshed accounts from Google:",
-      storedGA4Accounts.length
-    );
-
     showGoogleSuccess("Accounts refreshed successfully");
 
     // Reload connections to reflect any changes
     await loadGoogleConnections();
   } catch (error) {
-    console.error("[GA Debug] Error refreshing accounts:", error);
+    console.error("Error refreshing accounts:", error);
     showGoogleError("Failed to refresh accounts. Please try again.");
   } finally {
     const refreshBtn = document.querySelector(

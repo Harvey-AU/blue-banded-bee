@@ -582,8 +582,11 @@ func (pf *ProgressiveFetcher) FetchAndUpdatePages(ctx context.Context, organisat
 	}
 
 	// 7. Fetch remaining pages in background (loops until all fetched)
-	// Use context.Background() so it completes even during shutdown.
-	go pf.fetchRemainingPagesBackground(context.Background(), organisationID, conn.GA4PropertyID, domainID, conn.ID, client, refreshToken, allowedHosts)
+	go func() {
+		bgCtx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+		defer cancel()
+		pf.fetchRemainingPagesBackground(bgCtx, organisationID, conn.GA4PropertyID, domainID, conn.ID, client, refreshToken, allowedHosts)
+	}()
 
 	// 8. Update last sync timestamp
 	if err := pf.db.UpdateConnectionLastSync(ctx, conn.ID); err != nil {
