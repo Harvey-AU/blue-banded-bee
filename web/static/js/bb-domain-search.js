@@ -156,7 +156,7 @@
       return null;
     }
 
-    if (domains.length === 0) {
+    if (!domainsLoaded) {
       await ensureDomainsLoaded();
     }
 
