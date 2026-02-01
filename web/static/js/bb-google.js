@@ -1742,8 +1742,8 @@ function renderInlineDomainAdder(container, connection) {
 
   const input = document.createElement("input");
   input.type = "text";
-  input.placeholder = "Search or add domain...";
-  input.setAttribute("aria-label", "Search or add domain");
+  input.placeholder = "Add domain...";
+  input.setAttribute("aria-label", "Add domain");
   input.setAttribute("bbb-domain-create", "option");
   input.style.cssText =
     "width: 100%; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px; box-sizing: border-box;";
@@ -1771,6 +1771,7 @@ function renderInlineDomainAdder(container, connection) {
       onSelectDomain: selectDomain,
       onCreateDomain: selectDomain,
       clearOnSelect: true,
+      autoCreateOnSubmit: true,
       onError: (message) => {
         showGoogleError(
           message || "Failed to create domain. Please try again."
