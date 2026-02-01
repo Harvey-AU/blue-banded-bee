@@ -785,7 +785,7 @@ func (db *DB) UpsertPageWithAnalytics(
 // CalculateTrafficScores calculates and stores traffic scores for all pages in a domain
 // using a log-scaled view curve (28-day). This emphasises high-traffic pages while
 // keeping the long tail near the floor.
-// Score range: 0.10 (floor) to 0.99 (ceiling).
+// Score range: 0 (0-1 views) then 0.10 (floor) to 0.99 (ceiling).
 func (db *DB) CalculateTrafficScores(ctx context.Context, organisationID string, domainID int) error {
 	// Calculate log-scaled scores in a single query.
 	query := `

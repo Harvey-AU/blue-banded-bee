@@ -1505,6 +1505,7 @@ func (h *Handler) getGARefreshToken(ctx context.Context, logger zerolog.Logger, 
 		logger.Warn().
 			Str("organisation_id", organisationID).
 			Str("account_id", accountWithToken.ID).
+			Str("next_action", "retry_token_fetch_or_reauth").
 			Msg("GA account token missing in vault, falling back to connection token")
 	} else if !errors.Is(err, db.ErrGoogleAccountNotFound) {
 		return nil, "", err
@@ -1526,6 +1527,7 @@ func (h *Handler) getGARefreshToken(ctx context.Context, logger zerolog.Logger, 
 		logger.Warn().
 			Str("organisation_id", organisationID).
 			Str("connection_id", connectionWithToken.ID).
+			Str("next_action", "reauth_required").
 			Msg("GA connection token missing in vault")
 	} else if !errors.Is(err, db.ErrGoogleConnectionNotFound) {
 		return nil, "", err

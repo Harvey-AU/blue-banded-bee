@@ -513,7 +513,10 @@ func (pf *ProgressiveFetcher) FetchAndUpdatePages(ctx context.Context, organisat
 			Msg("Failed to refresh access token")
 
 		if markErr := pf.db.MarkConnectionInactive(ctx, conn.ID, "token refresh failed"); markErr != nil {
-			log.Error().Err(markErr).Msg("Failed to mark connection inactive after token refresh failure")
+			log.Error().
+				Err(markErr).
+				Str("connection_id", conn.ID).
+				Msg("Failed to mark connection inactive after token refresh failure")
 		}
 
 		return fmt.Errorf("failed to refresh access token: %w", err)
@@ -608,12 +611,6 @@ func (pf *ProgressiveFetcher) upsertPageData(ctx context.Context, organisationID
 
 		_, err := pf.db.UpsertPageWithAnalytics(ctx, organisationID, domainID, path, pageViews, connectionID)
 		if err != nil {
-			// Log error but continue with other pages
-			log.Error().
-				Err(err).
-				Str("organisation_id", organisationID).
-				Int("domain_id", domainID).
-				Msg("Failed to upsert page with analytics")
 			failedCount++
 			if firstErr == nil {
 				firstErr = err
@@ -629,6 +626,13 @@ func (pf *ProgressiveFetcher) upsertPageData(ctx context.Context, organisationID
 		Msg("Processed GA4 page analytics batch")
 
 	if failedCount > 0 {
+		log.Error().
+			Err(firstErr).
+			Str("organisation_id", organisationID).
+			Int("domain_id", domainID).
+			Int("pages_failed", failedCount).
+			Int("pages_total", len(pages)).
+			Msg("Failed to upsert some GA4 page analytics rows")
 		return fmt.Errorf("failed to upsert %d pages: %w", failedCount, firstErr)
 	}
 
