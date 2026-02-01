@@ -431,8 +431,11 @@ async function loadOrganisationDomains() {
     return [];
   }
 
-  organisationDomains = window.BBDomainSearch.getDomains();
-  return window.BBDomainSearch.loadOrganisationDomains();
+  const loadedDomains = await window.BBDomainSearch.loadOrganisationDomains();
+  organisationDomains = Array.isArray(loadedDomains)
+    ? loadedDomains
+    : window.BBDomainSearch.getDomains();
+  return organisationDomains;
 }
 
 /**
@@ -1099,6 +1102,9 @@ async function loadGA4AccountsFromDB() {
 
     if (!response.ok) {
       console.error("Failed to load accounts:", response.status);
+      storedGA4Accounts = [];
+      selectedGA4Account = null;
+      renderAccountSelector();
       return [];
     }
 
@@ -1111,6 +1117,9 @@ async function loadGA4AccountsFromDB() {
     return storedGA4Accounts;
   } catch (error) {
     console.error("Error loading accounts from DB:", error);
+    storedGA4Accounts = [];
+    selectedGA4Account = null;
+    renderAccountSelector();
     return [];
   }
 }
