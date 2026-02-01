@@ -280,6 +280,34 @@ function setupDashboardFormHandler() {
   }
 }
 
+function setupJobDomainSearch() {
+  const domainInput = document.getElementById("jobDomain");
+  if (!domainInput || !window.BBDomainSearch) {
+    return;
+  }
+
+  const container = domainInput.closest(".bb-domain-search");
+
+  window.BBDomainSearch.setupDomainSearchInput({
+    input: domainInput,
+    container: container || domainInput.parentElement,
+    clearOnSelect: false,
+    onSelectDomain: (domain) => {
+      domainInput.value = domain.name;
+    },
+    onCreateDomain: (domain) => {
+      domainInput.value = domain.name;
+    },
+    onError: (message) => {
+      if (window.showDashboardError) {
+        window.showDashboardError(
+          message || "Failed to create domain. Please try again."
+        );
+      }
+    },
+  });
+}
+
 /**
  * Handle dashboard job creation form
  * @param {Event} event - Form submit event
@@ -288,7 +316,7 @@ async function handleDashboardJobCreation(event) {
   event.preventDefault();
   const formData = new FormData(event.target);
 
-  const domain = formData.get("domain");
+  let domain = formData.get("domain");
   const maxPages = parseInt(formData.get("max_pages"));
   const concurrencyValue = formData.get("concurrency");
   const scheduleInterval = formData.get("schedule_interval_hours");
@@ -299,6 +327,30 @@ async function handleDashboardJobCreation(event) {
       window.showDashboardError("Domain is required");
     }
     return;
+  }
+
+  if (window.BBDomainSearch) {
+    try {
+      const ensuredDomain = await window.BBDomainSearch.ensureDomainByName(
+        domain,
+        { allowCreate: true }
+      );
+      if (ensuredDomain?.name) {
+        domain = ensuredDomain.name;
+      }
+    } catch (error) {
+      if (window.showDashboardError) {
+        window.showDashboardError(
+          error.message || "Failed to create domain. Please try again."
+        );
+      }
+      return;
+    }
+  }
+
+  const domainField = document.getElementById("jobDomain");
+  if (domainField) {
+    domainField.value = domain;
   }
 
   if (maxPages < 0 || maxPages > 10000) {
@@ -858,6 +910,7 @@ if (typeof module !== "undefined" && module.exports) {
     initializeAuthWithDataBinder,
     setupDashboardRefresh,
     setupDashboardFormHandler,
+    setupJobDomainSearch,
     handleDashboardJobCreation,
     setupNetworkMonitoring,
     updateNetworkStatus,
@@ -873,6 +926,7 @@ if (typeof module !== "undefined" && module.exports) {
     initializeAuthWithDataBinder,
     setupDashboardRefresh,
     setupDashboardFormHandler,
+    setupJobDomainSearch,
     handleDashboardJobCreation,
     setupNetworkMonitoring,
     updateNetworkStatus,
@@ -888,6 +942,7 @@ if (typeof module !== "undefined" && module.exports) {
   window.initializeAuthWithDataBinder = initializeAuthWithDataBinder;
   window.setupDashboardRefresh = setupDashboardRefresh;
   window.setupDashboardFormHandler = setupDashboardFormHandler;
+  window.setupJobDomainSearch = setupJobDomainSearch;
   window.handleDashboardJobCreation = handleDashboardJobCreation;
   window.setupNetworkMonitoring = setupNetworkMonitoring;
   window.updateNetworkStatus = updateNetworkStatus;

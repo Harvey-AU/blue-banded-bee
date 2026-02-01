@@ -1,0 +1,403 @@
+(() => {
+  const domains = [];
+  let loadPromise = null;
+
+  const getDomains = () => domains;
+
+  const getAuthToken = async () => {
+    if (!window.supabase?.auth?.getSession) {
+      return "";
+    }
+
+    const session = await window.supabase.auth.getSession();
+    return session?.data?.session?.access_token || "";
+  };
+
+  const upsertDomain = (domain) => {
+    const index = domains.findIndex((item) => item.id === domain.id);
+    if (index >= 0) {
+      domains[index] = domain;
+      return;
+    }
+    domains.push(domain);
+  };
+
+  const loadOrganisationDomains = async () => {
+    if (!window.supabase?.auth) {
+      domains.length = 0;
+      return [];
+    }
+
+    try {
+      const token = await getAuthToken();
+      if (!token) {
+        domains.length = 0;
+        return [];
+      }
+
+      const domainsResponse = await fetch("/v1/integrations/google/domains", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!domainsResponse.ok) {
+        console.warn(
+          "[Domains] Failed to fetch domains, continuing without them"
+        );
+        domains.length = 0;
+        return [];
+      }
+
+      const domainsData = await domainsResponse.json();
+      const domainList =
+        domainsData?.data?.domains ?? domainsData?.domains ?? [];
+
+      domains.length = 0;
+      if (Array.isArray(domainList)) {
+        domainList.forEach((domain) => {
+          if (domain && Number.isFinite(domain.id) && domain.name) {
+            domains.push({ id: domain.id, name: domain.name });
+          }
+        });
+      }
+
+      return domains;
+    } catch (error) {
+      console.error("Failed to fetch organisation domains:", error);
+      domains.length = 0;
+      return [];
+    }
+  };
+
+  const ensureDomainsLoaded = async () => {
+    if (domains.length > 0) {
+      return domains;
+    }
+    if (loadPromise) {
+      return loadPromise;
+    }
+
+    loadPromise = loadOrganisationDomains().finally(() => {
+      loadPromise = null;
+    });
+    return loadPromise;
+  };
+
+  const findExactDomain = (query, domainList) => {
+    const normalised = query.toLowerCase().trim();
+    return (
+      domainList.find((domain) => domain.name.toLowerCase() === normalised) ||
+      null
+    );
+  };
+
+  const createDomain = async (domainName) => {
+    const token = await getAuthToken();
+    if (!token) {
+      throw new Error("Please sign in to create domains");
+    }
+
+    const response = await fetch("/v1/domains", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ domain: domainName }),
+    });
+
+    if (!response.ok) {
+      let errorMessage = "Failed to create domain";
+      try {
+        const errorData = await response.json();
+        errorMessage = errorData.message || errorMessage;
+      } catch (error) {
+        console.error("Failed to parse domain error:", error);
+      }
+      throw new Error(errorMessage);
+    }
+
+    const result = await response.json();
+    const rawDomainId = result?.data?.domain_id ?? result?.domain_id ?? null;
+    const newDomainId = Number(rawDomainId);
+    const newDomainName = result?.data?.domain ?? result?.domain ?? domainName;
+
+    if (!Number.isFinite(newDomainId)) {
+      throw new Error("Invalid domain ID in response");
+    }
+
+    const domain = { id: newDomainId, name: newDomainName };
+    upsertDomain(domain);
+    return domain;
+  };
+
+  const ensureDomainByName = async (domainName, options = {}) => {
+    const { allowCreate = true } = options;
+    const query = (domainName || "").toString().trim();
+    if (!query) {
+      return null;
+    }
+
+    if (domains.length === 0) {
+      await ensureDomainsLoaded();
+    }
+
+    const exactMatch = findExactDomain(query, domains);
+    if (exactMatch) {
+      return exactMatch;
+    }
+
+    if (!allowCreate) {
+      return null;
+    }
+
+    return createDomain(query);
+  };
+
+  const createDropdownElement = () => {
+    const dropdown = document.createElement("div");
+    dropdown.style.cssText =
+      "display: none; position: absolute; top: 100%; left: 0; right: 0; max-height: 200px; overflow-y: auto; background: white; border: 1px solid #d1d5db; border-radius: 6px; margin-top: 4px; z-index: 1000; box-shadow: 0 2px 8px rgba(0,0,0,0.1);";
+    return dropdown;
+  };
+
+  const setupDomainSearchInput = (options = {}) => {
+    const {
+      input,
+      dropdown,
+      container,
+      form,
+      getExcludedDomainIds,
+      onSelectDomain,
+      onCreateDomain,
+      createMode,
+      searchMode,
+      showCreateOption,
+      allowCreate,
+      clearOnSelect = false,
+      autoCreateOnSubmit,
+      createOptionText,
+      onError,
+    } = options;
+
+    if (!input) {
+      return;
+    }
+
+    const resolvedSearchMode =
+      searchMode || input.getAttribute("bbb-domain-search") || "on";
+    if (resolvedSearchMode === "off" || resolvedSearchMode === "disabled") {
+      return;
+    }
+
+    const wrapper = container || input.parentElement;
+    if (wrapper) {
+      const position = window.getComputedStyle(wrapper).position;
+      if (position === "static") {
+        wrapper.style.position = "relative";
+      }
+    }
+
+    const dropdownEl = dropdown || createDropdownElement();
+    if (!dropdown && wrapper) {
+      wrapper.appendChild(dropdownEl);
+    }
+
+    const reportError = (message) => {
+      if (typeof onError === "function") {
+        onError(message);
+        return;
+      }
+      console.error(message);
+    };
+
+    const resolvedMode =
+      createMode || input.getAttribute("bbb-domain-create") || "auto";
+    const resolvedAllowCreate =
+      allowCreate !== undefined ? allowCreate : resolvedMode !== "block";
+    const resolvedShowCreateOption =
+      showCreateOption !== undefined
+        ? showCreateOption
+        : resolvedMode === "option";
+    const resolvedAutoCreateOnSubmit =
+      autoCreateOnSubmit !== undefined
+        ? autoCreateOnSubmit
+        : resolvedMode === "auto";
+
+    const handleSelect = async (domain) => {
+      if (typeof onSelectDomain === "function") {
+        await onSelectDomain(domain);
+      }
+      if (clearOnSelect) {
+        input.value = "";
+      } else {
+        input.value = domain.name;
+      }
+    };
+
+    const handleCreate = async (query) => {
+      try {
+        const domain = await createDomain(query);
+        if (!domain) {
+          return;
+        }
+        if (typeof onCreateDomain === "function") {
+          await onCreateDomain(domain);
+        } else {
+          await handleSelect(domain);
+        }
+      } catch (error) {
+        reportError(
+          error.message || "Failed to create domain. Please try again."
+        );
+      }
+    };
+
+    let documentListenerActive = false;
+    const onDocumentClick = (event) => {
+      if (!wrapper || !wrapper.contains(event.target)) {
+        dropdownEl.style.display = "none";
+        if (documentListenerActive) {
+          document.removeEventListener("click", onDocumentClick);
+          documentListenerActive = false;
+        }
+      }
+    };
+
+    const ensureDocumentListener = () => {
+      if (documentListenerActive) {
+        return;
+      }
+      documentListenerActive = true;
+      document.addEventListener("click", onDocumentClick);
+    };
+
+    const renderDropdown = async (query) => {
+      while (dropdownEl.firstChild) {
+        dropdownEl.removeChild(dropdownEl.firstChild);
+      }
+
+      const lowerQuery = query.toLowerCase().trim();
+      await ensureDomainsLoaded();
+      const excludedIds =
+        typeof getExcludedDomainIds === "function"
+          ? getExcludedDomainIds()
+          : [];
+
+      const availableDomains = domains.filter(
+        (domain) => !excludedIds.includes(domain.id)
+      );
+
+      const filtered = lowerQuery
+        ? availableDomains.filter((domain) =>
+            domain.name.toLowerCase().includes(lowerQuery)
+          )
+        : availableDomains;
+
+      if (filtered.length > 0) {
+        filtered.forEach((domain) => {
+          const option = document.createElement("div");
+          option.textContent = domain.name;
+          option.style.cssText =
+            "padding: 10px 16px; cursor: pointer; font-size: 14px; border-bottom: 1px solid #f3f4f6;";
+          option.onmouseover = () => {
+            option.style.background = "#f9fafb";
+          };
+          option.onmouseout = () => {
+            option.style.background = "white";
+          };
+          option.onmousedown = async (event) => {
+            event.preventDefault();
+            await handleSelect(domain);
+            dropdownEl.style.display = "none";
+            onDocumentClick({ target: document.body });
+          };
+          dropdownEl.appendChild(option);
+        });
+        dropdownEl.style.display = "block";
+        ensureDocumentListener();
+        return;
+      }
+
+      if (lowerQuery && resolvedShowCreateOption && resolvedAllowCreate) {
+        const label =
+          typeof createOptionText === "function"
+            ? createOptionText(lowerQuery)
+            : `Add new domain: ${lowerQuery}`;
+        const addOption = document.createElement("div");
+        addOption.textContent = label;
+        addOption.style.cssText =
+          "padding: 10px 16px; cursor: pointer; font-size: 14px; color: #6366f1; font-weight: 500;";
+        addOption.onmouseover = () => {
+          addOption.style.background = "#f9fafb";
+        };
+        addOption.onmouseout = () => {
+          addOption.style.background = "white";
+        };
+        addOption.onmousedown = async (event) => {
+          event.preventDefault();
+          await handleCreate(lowerQuery);
+          dropdownEl.style.display = "none";
+          onDocumentClick({ target: document.body });
+        };
+        dropdownEl.appendChild(addOption);
+        dropdownEl.style.display = "block";
+        ensureDocumentListener();
+        return;
+      }
+
+      dropdownEl.style.display = "none";
+      onDocumentClick({ target: document.body });
+    };
+
+    input.addEventListener("focus", () => {
+      renderDropdown(input.value);
+    });
+
+    input.addEventListener("input", () => {
+      renderDropdown(input.value);
+    });
+
+    input.addEventListener("click", (event) => {
+      event.stopPropagation();
+    });
+
+    if (form) {
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const query = input.value.toLowerCase().trim();
+        if (!query) {
+          return;
+        }
+
+        await ensureDomainsLoaded();
+        const excludedIds =
+          typeof getExcludedDomainIds === "function"
+            ? getExcludedDomainIds()
+            : [];
+        const availableDomains = domains.filter(
+          (domain) => !excludedIds.includes(domain.id)
+        );
+        const exactMatch = findExactDomain(query, availableDomains);
+
+        if (exactMatch) {
+          await handleSelect(exactMatch);
+        } else if (resolvedAutoCreateOnSubmit && resolvedAllowCreate) {
+          await handleCreate(query);
+        }
+
+        dropdownEl.style.display = "none";
+        onDocumentClick({ target: document.body });
+      });
+    }
+  };
+
+  window.BBDomainSearch = {
+    getDomains,
+    loadOrganisationDomains,
+    ensureDomainsLoaded,
+    createDomain,
+    ensureDomainByName,
+    createDropdownElement,
+    setupDomainSearchInput,
+  };
+})();

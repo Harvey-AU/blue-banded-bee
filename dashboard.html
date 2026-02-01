@@ -2265,15 +2265,18 @@
         <form id="createJobForm" class="bb-auth-form">
           <div class="bb-form-group">
             <label for="jobDomain">Domain</label>
-            <input
-              type="text"
-              id="jobDomain"
-              name="domain"
-              required
-              placeholder="example.com"
-              class="bb-form-input"
-              aria-label="Domain to crawl"
-            />
+            <div class="bb-domain-search" style="position: relative">
+              <input
+                type="text"
+                id="jobDomain"
+                name="domain"
+                bbb-domain-create="auto"
+                required
+                placeholder="example.com"
+                class="bb-form-input"
+                aria-label="Domain to crawl"
+              />
+            </div>
             <div
               class="bb-field-error"
               id="domainError"
@@ -3284,6 +3287,7 @@
 
     <!-- Include the data binding and dashboard logic -->
     <script src="/js/bb-data-binder.js" defer></script>
+    <script src="/js/bb-domain-search.js" defer></script>
     <script src="/js/bb-auth-extension.js" defer></script>
     <script src="/js/bb-metadata.js" defer></script>
     <script src="/js/bb-dashboard-actions.js" defer></script>
@@ -3319,6 +3323,9 @@
               "submit",
               window.handleDashboardJobCreation
             );
+          }
+          if (window.setupJobDomainSearch) {
+            window.setupJobDomainSearch();
           }
 
           // Check for system-admin role and load schedules

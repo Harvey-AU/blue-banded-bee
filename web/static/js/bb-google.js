@@ -426,35 +426,13 @@ async function getGoogleAuthToken() {
 }
 
 async function loadOrganisationDomains() {
-  organisationDomains = [];
-  try {
-    const session = await window.supabase.auth.getSession();
-    const token = session?.data?.session?.access_token;
-
-    if (!token) {
-      return [];
-    }
-
-    const domainsResponse = await fetch("/v1/integrations/google/domains", {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-
-    if (!domainsResponse.ok) {
-      console.warn(
-        "[GA Debug] Failed to fetch domains, continuing without them"
-      );
-      return [];
-    }
-
-    const domainsData = await domainsResponse.json();
-    const domains = domainsData?.data?.domains ?? domainsData?.domains ?? [];
-    organisationDomains = Array.isArray(domains) ? domains : [];
-    return organisationDomains;
-  } catch (error) {
-    console.error("Failed to fetch organisation domains:", error);
+  if (!window.BBDomainSearch) {
     organisationDomains = [];
     return [];
   }
+
+  organisationDomains = window.BBDomainSearch.getDomains();
+  return window.BBDomainSearch.loadOrganisationDomains();
 }
 
 /**
@@ -679,7 +657,9 @@ async function toggleConnectionStatus(connectionId, active) {
 
 // Store all properties for filtering
 let allGoogleProperties = [];
-let organisationDomains = [];
+let organisationDomains = window.BBDomainSearch
+  ? window.BBDomainSearch.getDomains()
+  : [];
 const MAX_VISIBLE_PROPERTIES = 10;
 
 /**
@@ -804,14 +784,15 @@ function renderPropertyList(properties, totalCount) {
     const searchInput = document.createElement("input");
     searchInput.type = "text";
     searchInput.placeholder = "Search or add new domain...";
+    searchInput.setAttribute("bbb-domain-create", "option");
     searchInput.style.cssText =
       "width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; box-sizing: border-box;";
     searchInput.setAttribute("data-property-id", prop.property_id);
 
     // Dropdown list
-    const dropdown = document.createElement("div");
-    dropdown.style.cssText =
-      "display: none; position: absolute; top: 100%; left: 0; right: 0; max-height: 200px; overflow-y: auto; background: white; border: 1px solid #d1d5db; border-radius: 6px; margin-top: 4px; z-index: 1000; box-shadow: 0 2px 8px rgba(0,0,0,0.1);";
+    const dropdown = window.BBDomainSearch
+      ? window.BBDomainSearch.createDropdownElement()
+      : document.createElement("div");
 
     // Selected domains display
     const selectedContainer = document.createElement("div");
@@ -855,203 +836,36 @@ function renderPropertyList(properties, totalCount) {
       });
     };
 
-    let documentListenerActive = false;
-    const onDocumentClick = (event) => {
-      if (!inputContainer.contains(event.target)) {
-        dropdown.style.display = "none";
-        if (documentListenerActive) {
-          document.removeEventListener("click", onDocumentClick);
-          documentListenerActive = false;
-        }
+    if (!dropdown.style.cssText) {
+      dropdown.style.cssText =
+        "display: none; position: absolute; top: 100%; left: 0; right: 0; max-height: 200px; overflow-y: auto; background: white; border: 1px solid #d1d5db; border-radius: 6px; margin-top: 4px; z-index: 1000; box-shadow: 0 2px 8px rgba(0,0,0,0.1);";
+    }
+
+    const selectDomain = (domain) => {
+      if (!selectedDomainIds.includes(domain.id)) {
+        selectedDomainIds.push(domain.id);
+        window.tempPropertyDomains[prop.property_id] = selectedDomainIds;
+        renderSelectedTags();
       }
     };
 
-    const ensureDocumentListener = () => {
-      if (documentListenerActive) {
-        return;
-      }
-      documentListenerActive = true;
-      document.addEventListener("click", onDocumentClick);
-    };
-
-    // Function to filter and render dropdown options
-    const renderDropdown = (query) => {
-      while (dropdown.firstChild) {
-        dropdown.removeChild(dropdown.firstChild);
-      }
-
-      const lowerQuery = query.toLowerCase().trim();
-
-      console.log(
-        "[GA Debug] renderDropdown called:",
-        "query=",
-        query,
-        "organisationDomains=",
-        organisationDomains
-      );
-
-      // Filter domains that aren't already selected
-      const availableDomains = organisationDomains.filter(
-        (d) => !selectedDomainIds.includes(d.id)
-      );
-
-      // Filter by search query
-      const filtered = lowerQuery
-        ? availableDomains.filter((d) =>
-            d.name.toLowerCase().includes(lowerQuery)
-          )
-        : availableDomains;
-
-      // Show options
-      if (filtered.length > 0) {
-        filtered.forEach((domain) => {
-          const option = document.createElement("div");
-          option.textContent = domain.name;
-          option.style.cssText =
-            "padding: 10px 16px; cursor: pointer; font-size: 14px; border-bottom: 1px solid #f3f4f6;";
-          option.onmouseover = () => {
-            option.style.background = "#f9fafb";
-          };
-          option.onmouseout = () => {
-            option.style.background = "white";
-          };
-          option.onmousedown = (e) => {
-            e.preventDefault();
-            if (!selectedDomainIds.includes(domain.id)) {
-              selectedDomainIds.push(domain.id);
-              window.tempPropertyDomains[prop.property_id] = selectedDomainIds;
-              renderSelectedTags();
-            }
-            searchInput.value = "";
-            dropdown.style.display = "none";
-            onDocumentClick({ target: document.body });
-          };
-          dropdown.appendChild(option);
-        });
-        dropdown.style.display = "block";
-        ensureDocumentListener();
-      } else if (lowerQuery) {
-        // Show "Add new domain" option
-        const addOption = document.createElement("div");
-        addOption.textContent = `Add new domain: ${lowerQuery}`;
-        addOption.style.cssText =
-          "padding: 10px 16px; cursor: pointer; font-size: 14px; color: #6366f1; font-weight: 500;";
-        addOption.onmouseover = () => {
-          addOption.style.background = "#f9fafb";
-        };
-        addOption.onmouseout = () => {
-          addOption.style.background = "white";
-        };
-        addOption.onmousedown = async (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          await createDomainInline(lowerQuery, prop.property_id);
-          searchInput.value = "";
-          dropdown.style.display = "none";
-          onDocumentClick({ target: document.body });
-        };
-        dropdown.appendChild(addOption);
-        dropdown.style.display = "block";
-        ensureDocumentListener();
-      } else {
-        dropdown.style.display = "none";
-        onDocumentClick({ target: document.body });
-      }
-    };
-
-    // Create domain function
-    const createDomainInline = async (domainName, propertyId) => {
-      try {
-        const session = await window.supabase.auth.getSession();
-        const token = session?.data?.session?.access_token;
-
-        if (!token) {
-          showGoogleError("Please sign in to create domains");
-          return;
-        }
-
-        const response = await fetch("/v1/domains", {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ domain: domainName }),
-        });
-
-        if (!response.ok) {
-          throw new Error("Failed to create domain");
-        }
-
-        const result = await response.json();
-        const rawDomainId =
-          result?.data?.domain_id ?? result?.domain_id ?? null;
-        const newDomainId = Number(rawDomainId);
-        const newDomainName =
-          result?.data?.domain ?? result?.domain ?? domainName;
-
-        if (!Number.isFinite(newDomainId)) {
-          throw new Error("Invalid domain ID in response");
-        }
-
-        organisationDomains.push({ id: newDomainId, name: newDomainName });
-
-        if (!selectedDomainIds.includes(newDomainId)) {
-          selectedDomainIds.push(newDomainId);
-          window.tempPropertyDomains[propertyId] = selectedDomainIds;
-          renderSelectedTags();
-        }
-      } catch (error) {
-        console.error("Failed to create domain:", error);
-        showGoogleError("Failed to create domain. Please try again.");
-      }
-    };
-
-    // Event listeners
-    searchInput.addEventListener("focus", () => {
-      renderDropdown(searchInput.value);
-    });
-
-    searchInput.addEventListener("input", () => {
-      renderDropdown(searchInput.value);
-    });
-
-    searchInput.addEventListener("click", (e) => {
-      e.stopPropagation();
-    });
-
-    // Handle form submission (Enter key)
-    inputContainer.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const query = searchInput.value.toLowerCase().trim();
-      if (!query) return;
-
-      // Check if there's an exact match in available domains
-      const availableDomains = organisationDomains.filter(
-        (d) => !selectedDomainIds.includes(d.id)
-      );
-      const exactMatch = availableDomains.find(
-        (d) => d.name.toLowerCase() === query
-      );
-
-      if (exactMatch) {
-        // Select the exact match
-        if (!selectedDomainIds.includes(exactMatch.id)) {
-          selectedDomainIds.push(exactMatch.id);
-          window.tempPropertyDomains[prop.property_id] = selectedDomainIds;
-          renderSelectedTags();
-        }
-      } else {
-        // Create new domain
-        await createDomainInline(query, prop.property_id);
-      }
-
-      searchInput.value = "";
-      dropdown.style.display = "none";
-      onDocumentClick({ target: document.body });
-    });
-
-    // Document click listener managed via ensureDocumentListener/onDocumentClick
+    if (window.BBDomainSearch) {
+      window.BBDomainSearch.setupDomainSearchInput({
+        input: searchInput,
+        dropdown,
+        container: inputContainer,
+        form: inputContainer,
+        getExcludedDomainIds: () => selectedDomainIds,
+        onSelectDomain: selectDomain,
+        onCreateDomain: selectDomain,
+        clearOnSelect: true,
+        onError: (message) => {
+          showGoogleError(
+            message || "Failed to create domain. Please try again."
+          );
+        },
+      });
+    }
 
     inputContainer.appendChild(searchInput);
     inputContainer.appendChild(dropdown);
@@ -1930,152 +1744,40 @@ function renderInlineDomainAdder(container, connection) {
   input.type = "text";
   input.placeholder = "Search or add domain...";
   input.setAttribute("aria-label", "Search or add domain");
+  input.setAttribute("bbb-domain-create", "option");
   input.style.cssText =
     "width: 100%; padding: 6px 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px; box-sizing: border-box;";
 
-  const dropdown = document.createElement("div");
-  dropdown.style.cssText =
-    "display: none; position: absolute; top: 100%; left: 0; right: 0; max-height: 200px; overflow-y: auto; background: white; border: 1px solid #d1d5db; border-radius: 6px; margin-top: 4px; z-index: 1000; box-shadow: 0 2px 8px rgba(0,0,0,0.1);";
+  const dropdown = window.BBDomainSearch
+    ? window.BBDomainSearch.createDropdownElement()
+    : document.createElement("div");
+  if (!dropdown.style.cssText) {
+    dropdown.style.cssText =
+      "display: none; position: absolute; top: 100%; left: 0; right: 0; max-height: 200px; overflow-y: auto; background: white; border: 1px solid #d1d5db; border-radius: 6px; margin-top: 4px; z-index: 1000; box-shadow: 0 2px 8px rgba(0,0,0,0.1);";
+  }
 
-  let documentListenerActive = false;
-  const onDocumentClick = (event) => {
-    if (!form.contains(event.target)) {
-      dropdown.style.display = "none";
-      if (documentListenerActive) {
-        document.removeEventListener("click", onDocumentClick);
-        documentListenerActive = false;
-      }
-    }
-  };
-
-  const ensureDocumentListener = () => {
-    if (documentListenerActive) {
-      return;
-    }
-    documentListenerActive = true;
-    document.addEventListener("click", onDocumentClick);
-  };
-
-  const renderDropdown = (query) => {
-    while (dropdown.firstChild) {
-      dropdown.removeChild(dropdown.firstChild);
-    }
-
-    const lowerQuery = query.toLowerCase().trim();
+  const selectDomain = async (domain) => {
     const currentIds = connection.domain_ids || [];
-    const availableDomains = organisationDomains.filter(
-      (domain) => !currentIds.includes(domain.id)
-    );
-
-    const filtered = lowerQuery
-      ? availableDomains.filter((domain) =>
-          domain.name.toLowerCase().includes(lowerQuery)
-        )
-      : availableDomains;
-
-    if (filtered.length > 0) {
-      filtered.forEach((domain) => {
-        const option = document.createElement("div");
-        option.textContent = domain.name;
-        option.style.cssText =
-          "padding: 10px 16px; cursor: pointer; font-size: 14px; border-bottom: 1px solid #f3f4f6;";
-        option.onmouseover = () => {
-          option.style.background = "#f9fafb";
-        };
-        option.onmouseout = () => {
-          option.style.background = "white";
-        };
-        option.onclick = async () => {
-          await addDomainToConnection(connection.id, currentIds, domain.id);
-          input.value = "";
-          dropdown.style.display = "none";
-          onDocumentClick({ target: document.body });
-        };
-        dropdown.appendChild(option);
-      });
-      dropdown.style.display = "block";
-      ensureDocumentListener();
-    } else if (lowerQuery) {
-      const addOption = document.createElement("div");
-      addOption.textContent = `Add new domain: ${lowerQuery}`;
-      addOption.style.cssText =
-        "padding: 10px 16px; cursor: pointer; font-size: 14px; color: #6366f1; font-weight: 500;";
-      addOption.onmouseover = () => {
-        addOption.style.background = "#f9fafb";
-      };
-      addOption.onmouseout = () => {
-        addOption.style.background = "white";
-      };
-      addOption.onclick = async () => {
-        try {
-          const newDomainId = await createDomainInline(lowerQuery);
-          if (Number.isFinite(newDomainId)) {
-            await addDomainToConnection(connection.id, currentIds, newDomainId);
-          }
-        } catch (error) {
-          console.error("Failed to create domain:", error);
-          showGoogleError(
-            error.message || "Failed to create domain. Please try again."
-          );
-        }
-        input.value = "";
-        dropdown.style.display = "none";
-        onDocumentClick({ target: document.body });
-      };
-      dropdown.appendChild(addOption);
-      dropdown.style.display = "block";
-      ensureDocumentListener();
-    } else {
-      dropdown.style.display = "none";
-      onDocumentClick({ target: document.body });
-    }
+    await addDomainToConnection(connection.id, currentIds, domain.id);
   };
 
-  input.addEventListener("input", (event) => {
-    renderDropdown(event.target.value);
-  });
-
-  input.addEventListener("focus", () => {
-    renderDropdown(input.value);
-  });
-
-  input.addEventListener("click", (event) => {
-    event.stopPropagation();
-  });
-
-  form.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    const query = input.value.toLowerCase().trim();
-    if (!query) return;
-
-    const currentIds = connection.domain_ids || [];
-    const availableDomains = organisationDomains.filter(
-      (domain) => !currentIds.includes(domain.id)
-    );
-    const exactMatch = availableDomains.find(
-      (domain) => domain.name.toLowerCase() === query
-    );
-
-    if (exactMatch) {
-      await addDomainToConnection(connection.id, currentIds, exactMatch.id);
-    } else {
-      try {
-        const newDomainId = await createDomainInline(query);
-        if (Number.isFinite(newDomainId)) {
-          await addDomainToConnection(connection.id, currentIds, newDomainId);
-        }
-      } catch (error) {
-        console.error("Failed to create domain:", error);
+  if (window.BBDomainSearch) {
+    window.BBDomainSearch.setupDomainSearchInput({
+      input,
+      dropdown,
+      container: form,
+      form,
+      getExcludedDomainIds: () => connection.domain_ids || [],
+      onSelectDomain: selectDomain,
+      onCreateDomain: selectDomain,
+      clearOnSelect: true,
+      onError: (message) => {
         showGoogleError(
-          error.message || "Failed to create domain. Please try again."
+          message || "Failed to create domain. Please try again."
         );
-      }
-    }
-
-    input.value = "";
-    dropdown.style.display = "none";
-    onDocumentClick({ target: document.body });
-  });
+      },
+    });
+  }
 
   form.appendChild(input);
   form.appendChild(dropdown);
@@ -2195,13 +1897,18 @@ async function showDomainSelectorForProperty(propertyId, currentDomainIds) {
   const searchInput = document.createElement("input");
   searchInput.type = "text";
   searchInput.placeholder = "Search or add new domain...";
+  searchInput.setAttribute("bbb-domain-create", "option");
   searchInput.style.cssText =
     "width: 100%; padding: 12px 16px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; box-sizing: border-box;";
 
   // Dropdown list
-  const dropdown = document.createElement("div");
-  dropdown.style.cssText =
-    "display: none; position: absolute; top: 100%; left: 0; right: 0; max-height: 200px; overflow-y: auto; background: white; border: 1px solid #d1d5db; border-radius: 6px; margin-top: 4px; z-index: 1000; box-shadow: 0 2px 8px rgba(0,0,0,0.1);";
+  const dropdown = window.BBDomainSearch
+    ? window.BBDomainSearch.createDropdownElement()
+    : document.createElement("div");
+  if (!dropdown.style.cssText) {
+    dropdown.style.cssText =
+      "display: none; position: absolute; top: 100%; left: 0; right: 0; max-height: 200px; overflow-y: auto; background: white; border: 1px solid #d1d5db; border-radius: 6px; margin-top: 4px; z-index: 1000; box-shadow: 0 2px 8px rgba(0,0,0,0.1);";
+  }
 
   // Selected domains display
   const selectedContainer = document.createElement("div");
@@ -2243,177 +1950,30 @@ async function showDomainSelectorForProperty(propertyId, currentDomainIds) {
     });
   };
 
-  // Function to filter and render dropdown options
-  const renderDropdown = (query) => {
-    // Clear dropdown
-    while (dropdown.firstChild) {
-      dropdown.removeChild(dropdown.firstChild);
-    }
-
-    const lowerQuery = query.toLowerCase().trim();
-
-    // Filter domains that aren't already selected
-    const availableDomains = organisationDomains.filter(
-      (d) => !selectedDomainIds.includes(d.id)
-    );
-
-    // Filter by search query
-    const filtered = lowerQuery
-      ? availableDomains.filter((d) =>
-          d.name.toLowerCase().includes(lowerQuery)
-        )
-      : availableDomains;
-
-    // Show options
-    if (filtered.length > 0) {
-      filtered.forEach((domain) => {
-        const option = document.createElement("div");
-        option.textContent = domain.name;
-        option.style.cssText =
-          "padding: 10px 16px; cursor: pointer; font-size: 14px; border-bottom: 1px solid #f3f4f6;";
-        option.onmouseover = () => {
-          option.style.background = "#f9fafb";
-        };
-        option.onmouseout = () => {
-          option.style.background = "white";
-        };
-        option.onclick = () => {
-          if (!selectedDomainIds.includes(domain.id)) {
-            selectedDomainIds.push(domain.id);
-            renderSelectedTags();
-          }
-          searchInput.value = "";
-          dropdown.style.display = "none";
-          onDocumentClick({ target: document.body });
-        };
-        dropdown.appendChild(option);
-      });
-      dropdown.style.display = "block";
-      ensureDocumentListener();
-    } else if (lowerQuery) {
-      // Show "Add new domain" option
-      const addOption = document.createElement("div");
-      addOption.textContent = `Add new domain: ${lowerQuery}`;
-      addOption.style.cssText =
-        "padding: 10px 16px; cursor: pointer; font-size: 14px; color: #6366f1; font-weight: 500;";
-      addOption.onmouseover = () => {
-        addOption.style.background = "#f9fafb";
-      };
-      addOption.onmouseout = () => {
-        addOption.style.background = "white";
-      };
-      addOption.onclick = async () => {
-        await createAndSelectDomainTemp(lowerQuery);
-        searchInput.value = "";
-        dropdown.style.display = "none";
-        onDocumentClick({ target: document.body });
-      };
-      dropdown.appendChild(addOption);
-      dropdown.style.display = "block";
-      ensureDocumentListener();
-    } else {
-      dropdown.style.display = "none";
-      onDocumentClick({ target: document.body });
+  const selectDomain = (domain) => {
+    if (!selectedDomainIds.includes(domain.id)) {
+      selectedDomainIds.push(domain.id);
+      renderSelectedTags();
     }
   };
 
-  // Function to create a new domain and add it to selection
-  const createAndSelectDomainTemp = async (domainName) => {
-    try {
-      const session = await window.supabase.auth.getSession();
-      const token = session?.data?.session?.access_token;
-
-      if (!token) {
-        showGoogleError("Please sign in to create domains");
-        return;
-      }
-
-      // Use dedicated domain endpoint (no job side effects)
-      const response = await fetch("/v1/domains", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ domain: domainName }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Failed to create domain");
-      }
-
-      const result = await response.json();
-      const rawDomainId = result?.data?.domain_id ?? result?.domain_id ?? null;
-      const newDomainId = Number(rawDomainId);
-      const newDomainName =
-        result?.data?.domain ?? result?.domain ?? domainName;
-
-      if (!Number.isFinite(newDomainId)) {
-        throw new Error("Invalid domain ID in response");
-      }
-
-      // Add to organisationDomains array
-      organisationDomains.push({ id: newDomainId, name: newDomainName });
-
-      // Add to selection
-      if (!selectedDomainIds.includes(newDomainId)) {
-        selectedDomainIds.push(newDomainId);
-        renderSelectedTags();
-      }
-    } catch (error) {
-      console.error("Failed to create domain:", error);
-      showGoogleError(
-        error.message || "Failed to create domain. Please try again."
-      );
-    }
-  };
-
-  // Search input events
-  searchInput.addEventListener("input", (e) => {
-    renderDropdown(e.target.value);
-  });
-
-  searchInput.addEventListener("focus", () => {
-    renderDropdown(searchInput.value);
-  });
-
-  // Prevent click inside input from closing dropdown
-  searchInput.addEventListener("click", (e) => {
-    e.stopPropagation();
-  });
-
-  // Handle form submission (Enter key)
-  inputContainer.addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const query = searchInput.value.toLowerCase().trim();
-    if (!query) return;
-
-    // Check if there's an exact match in available domains
-    const availableDomains = organisationDomains.filter(
-      (d) => !selectedDomainIds.includes(d.id)
-    );
-    const exactMatch = availableDomains.find(
-      (d) => d.name.toLowerCase() === query
-    );
-
-    if (exactMatch) {
-      // Select the exact match
-      if (!selectedDomainIds.includes(exactMatch.id)) {
-        selectedDomainIds.push(exactMatch.id);
-        renderSelectedTags();
-      }
-    } else {
-      // Create new domain
-      await createAndSelectDomainTemp(query);
-    }
-
-    searchInput.value = "";
-    dropdown.style.display = "none";
-    onDocumentClick({ target: document.body });
-  });
-
-  // Document click listener managed via ensureDocumentListener/onDocumentClick
+  if (window.BBDomainSearch) {
+    window.BBDomainSearch.setupDomainSearchInput({
+      input: searchInput,
+      dropdown,
+      container: inputContainer,
+      form: inputContainer,
+      getExcludedDomainIds: () => selectedDomainIds,
+      onSelectDomain: selectDomain,
+      onCreateDomain: selectDomain,
+      clearOnSelect: true,
+      onError: (message) => {
+        showGoogleError(
+          message || "Failed to create domain. Please try again."
+        );
+      },
+    });
+  }
 
   // Buttons
   const buttonContainer = document.createElement("div");

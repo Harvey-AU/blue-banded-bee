@@ -31,6 +31,9 @@ On merge, CI will:
 
 ### Added
 
+- **Domain Search Attributes**: Shared domain search input with
+  `bbb-domain-create` and `bbb-domain-search` attributes to control create
+  behaviour and dropdown visibility across dashboard and GA workflows
 - **GA4 Analytics Integration**: Full Google Analytics 4 Data API integration
   for page view analytics
   - Progressive fetching: initial 100 pages, then background loops of 1000-page
