@@ -528,9 +528,11 @@ async function saveAllPropertiesForAccount(accountId, properties = null) {
     }
 
     const propertyDomainMap = {};
+    const activePropertyIds = [];
     accountProperties.forEach((prop) => {
       if (prop && prop.property_id) {
         propertyDomainMap[prop.property_id] = [];
+        activePropertyIds.push(prop.property_id);
       }
     });
 
@@ -545,7 +547,7 @@ async function saveAllPropertiesForAccount(accountId, properties = null) {
         body: JSON.stringify({
           session_id: pendingGASessionData.session_id,
           account_id: accountId,
-          active_property_ids: [],
+          active_property_ids: activePropertyIds,
           property_domain_map: propertyDomainMap,
         }),
       }

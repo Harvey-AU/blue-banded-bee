@@ -1736,6 +1736,9 @@ func (h *Handler) SaveGA4AccountProperties(w http.ResponseWriter, r *http.Reques
 	savedCount := 0
 	for _, prop := range properties {
 		if prop.PropertyID == "" {
+			logger.Debug().
+				Str("display_name", prop.DisplayName).
+				Msg("Skipping property with empty ID")
 			continue
 		}
 
