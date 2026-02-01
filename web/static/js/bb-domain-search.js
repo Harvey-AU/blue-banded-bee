@@ -235,6 +235,9 @@
         : resolvedMode === "auto";
 
     const handleSelect = async (domain) => {
+      if (input.setCustomValidity) {
+        input.setCustomValidity("");
+      }
       if (typeof onSelectDomain === "function") {
         await onSelectDomain(domain);
       }
@@ -251,15 +254,22 @@
         if (!domain) {
           return;
         }
+        if (input.setCustomValidity) {
+          input.setCustomValidity("");
+        }
         if (typeof onCreateDomain === "function") {
           await onCreateDomain(domain);
         } else {
           await handleSelect(domain);
         }
       } catch (error) {
-        reportError(
-          error.message || "Failed to create domain. Please try again."
-        );
+        const message =
+          error.message || "Failed to create domain. Please try again.";
+        reportError(message);
+        if (input.setCustomValidity) {
+          input.setCustomValidity(message);
+          input.reportValidity();
+        }
       }
     };
 
@@ -365,6 +375,9 @@
     });
 
     input.addEventListener("input", () => {
+      if (input.setCustomValidity) {
+        input.setCustomValidity("");
+      }
       renderDropdown(input.value);
     });
 
