@@ -162,10 +162,11 @@ async function loadGoogleConnections() {
         }
       }
 
-      // Set Google email
+      // Set Google account name
       const emailEl = clone.querySelector(".google-email");
-      if (emailEl && conn.google_email) {
-        emailEl.textContent = conn.google_email;
+      const accountName = conn.google_account_name || conn.google_email;
+      if (emailEl && accountName) {
+        emailEl.textContent = accountName;
       }
 
       // Display domain tags instead of connected date
