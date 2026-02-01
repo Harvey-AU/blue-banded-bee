@@ -494,19 +494,94 @@ async function selectGoogleAccount(accountId) {
     const result = await response.json();
     const properties = result.data?.properties || [];
 
-    // Store selected account and properties
     pendingGASessionData.selected_account_id = accountId;
     pendingGASessionData.properties = properties;
 
-    // Fetch organisation's domains for domain selection
-    await loadOrganisationDomains();
-
-    // Hide account selection, show property selection
-    hideAccountSelection();
-    showPropertySelection(properties);
+    await saveAllPropertiesForAccount(accountId, properties);
   } catch (error) {
     console.error("Failed to fetch properties for account:", error);
     showGoogleError("Failed to load properties. Please try again.");
+  }
+}
+
+async function saveAllPropertiesForAccount(accountId, properties = null) {
+  try {
+    const authResult = await getGoogleAuthToken();
+    const token = authResult.token;
+    if (!token) {
+      showGoogleError(
+        authResult.message || "Not authenticated. Please sign in."
+      );
+      return;
+    }
+
+    if (!pendingGASessionData || !pendingGASessionData.session_id) {
+      showGoogleError("OAuth session expired. Please reconnect.");
+      hideAccountSelection();
+      return;
+    }
+
+    let accountProperties = properties;
+    if (!Array.isArray(accountProperties)) {
+      const fetchUrl = `/v1/integrations/google/pending-session/${pendingGASessionData.session_id}/accounts/${encodeURIComponent(accountId)}/properties`;
+      const response = await fetch(fetchUrl, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(text || `HTTP ${response.status}`);
+      }
+
+      const result = await response.json();
+      accountProperties = result.data?.properties || [];
+    }
+
+    if (!Array.isArray(accountProperties) || accountProperties.length === 0) {
+      showGoogleError("No properties found for this account");
+      return;
+    }
+
+    const propertyDomainMap = {};
+    accountProperties.forEach((prop) => {
+      if (prop && prop.property_id) {
+        propertyDomainMap[prop.property_id] = [];
+      }
+    });
+
+    const saveResponse = await fetch(
+      "/v1/integrations/google/save-properties",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          session_id: pendingGASessionData.session_id,
+          account_id: accountId,
+          active_property_ids: [],
+          property_domain_map: propertyDomainMap,
+        }),
+      }
+    );
+
+    if (!saveResponse.ok) {
+      const text = await saveResponse.text();
+      throw new Error(text || `HTTP ${saveResponse.status}`);
+    }
+
+    pendingGASessionData = null;
+    if (window.tempPropertyDomains) {
+      window.tempPropertyDomains = {};
+    }
+    hidePropertySelection();
+    hideAccountSelection();
+    showGoogleSuccess("Google Analytics connected successfully!");
+    await loadGoogleConnections();
+  } catch (error) {
+    console.error("Failed to save properties:", error);
+    showGoogleError("Failed to save properties. Please try again.");
   }
 }
 
@@ -1555,9 +1630,9 @@ async function handleGoogleOAuthCallback() {
       if (accounts.length > 1 && properties.length === 0) {
         // Multiple accounts, no properties yet - show account picker
         showAccountSelection(accounts);
-      } else if (properties.length > 0) {
-        // Single account with properties already fetched, or properties from selected account
-        showPropertySelection(properties);
+      } else if (properties.length > 0 && accounts.length >= 1) {
+        // Properties already fetched for single account - save them immediately
+        await saveAllPropertiesForAccount(accounts[0].account_id, properties);
       } else if (accounts.length === 1) {
         // Single account but no properties - fetch them
         selectGoogleAccount(accounts[0].account_id);
