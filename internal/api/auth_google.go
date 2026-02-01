@@ -507,6 +507,15 @@ func (h *Handler) SaveGoogleProperties(w http.ResponseWriter, r *http.Request) {
 		allowedDomainIDs[domain.ID] = struct{}{}
 	}
 
+	for propertyID, domainIDs := range req.PropertyDomainMap {
+		for _, id := range domainIDs {
+			if _, ok := allowedDomainIDs[id]; !ok {
+				BadRequest(w, r, fmt.Sprintf("Domain ID %d does not belong to organisation for property %s", id, propertyID))
+				return
+			}
+		}
+	}
+
 	// Save all properties as connections
 	now := time.Now().UTC()
 	var savedCount int
@@ -547,7 +556,10 @@ func (h *Handler) SaveGoogleProperties(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if err := h.DB.CreateGoogleConnection(r.Context(), conn); err != nil {
-			logger.Warn().Err(err).Str("property_id", prop.PropertyID).Msg("Failed to save property connection")
+			logger.Warn().Err(err).
+				Str("property_id", prop.PropertyID).
+				Str("next_action", "retry_connection_create_or_check_db_connectivity").
+				Msg("Failed to save property connection")
 			continue
 		}
 
@@ -1727,7 +1739,7 @@ func (h *Handler) SaveGA4AccountProperties(w http.ResponseWriter, r *http.Reques
 			continue
 		}
 
-		var domainIDsArray pq.Int64Array
+		domainIDsArray := make(pq.Int64Array, 0)
 
 		conn := &db.GoogleAnalyticsConnection{
 			ID:               uuid.New().String(),
@@ -1745,7 +1757,10 @@ func (h *Handler) SaveGA4AccountProperties(w http.ResponseWriter, r *http.Reques
 		}
 
 		if err := h.DB.CreateGoogleConnection(r.Context(), conn); err != nil {
-			logger.Warn().Err(err).Str("property_id", prop.PropertyID).Msg("Failed to save property connection")
+			logger.Warn().Err(err).
+				Str("property_id", prop.PropertyID).
+				Str("next_action", "retry_connection_create_or_check_db_connectivity").
+				Msg("Failed to save property connection")
 			continue
 		}
 

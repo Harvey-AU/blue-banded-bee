@@ -703,6 +703,9 @@ let pendingGASessionData = null;
 // Store GA4 accounts loaded from DB
 let storedGA4Accounts = [];
 
+// Track document listener for account selector
+let accountSelectorDocListener = null;
+
 /**
  * Load GA4 accounts from the database (not from Google API)
  * These are persisted accounts that can be displayed immediately on page load
@@ -759,6 +762,23 @@ function renderAccountSelector() {
     return;
   }
 
+  if (accountSelectorDocListener) {
+    document.removeEventListener("click", accountSelectorDocListener);
+    accountSelectorDocListener = null;
+  }
+
+  if (!dropdown.id) {
+    dropdown.id = "googleAccountDropdown";
+  }
+
+  searchInput.setAttribute("role", "combobox");
+  searchInput.setAttribute("aria-autocomplete", "list");
+  searchInput.setAttribute("aria-controls", dropdown.id);
+  searchInput.setAttribute("aria-haspopup", "listbox");
+  searchInput.setAttribute("aria-expanded", "false");
+  dropdown.setAttribute("role", "listbox");
+  dropdown.setAttribute("aria-label", "Google Analytics accounts");
+
   // Show selector if we have accounts
   if (storedGA4Accounts.length > 0) {
     selectorContainer.style.display = "block";
@@ -772,6 +792,11 @@ function renderAccountSelector() {
     searchInput.value =
       selectedGA4Account.google_account_name || "Unnamed Account";
   }
+
+  const setDropdownOpen = (isOpen) => {
+    dropdown.style.display = isOpen ? "block" : "none";
+    searchInput.setAttribute("aria-expanded", isOpen ? "true" : "false");
+  };
 
   // Function to render dropdown options
   const renderDropdownOptions = (query) => {
@@ -796,15 +821,25 @@ function renderAccountSelector() {
       noResults.textContent = "No accounts found";
       noResults.style.cssText =
         "padding: 10px 16px; color: #6b7280; font-size: 14px;";
+      noResults.setAttribute("role", "option");
+      noResults.setAttribute("aria-disabled", "true");
       dropdown.appendChild(noResults);
-      dropdown.style.display = "block";
+      setDropdownOpen(true);
       return;
     }
 
-    filtered.forEach((account) => {
+    filtered.forEach((account, index) => {
       const option = document.createElement("div");
       option.style.cssText =
         "padding: 10px 16px; cursor: pointer; font-size: 14px; border-bottom: 1px solid #f3f4f6;";
+      option.setAttribute("role", "option");
+      option.id = `google-account-option-${index}`;
+      option.setAttribute(
+        "aria-selected",
+        selectedGA4Account?.google_account_id === account.google_account_id
+          ? "true"
+          : "false"
+      );
       option.onmouseover = () => {
         option.style.background = "#f9fafb";
       };
@@ -826,14 +861,14 @@ function renderAccountSelector() {
       option.onmousedown = (e) => {
         e.preventDefault();
         onAccountSelected(account);
-        dropdown.style.display = "none";
+        setDropdownOpen(false);
         onDocumentClick({ target: document.body });
       };
 
       dropdown.appendChild(option);
     });
 
-    dropdown.style.display = "block";
+    setDropdownOpen(true);
     ensureDocumentListener();
   };
 
@@ -841,7 +876,7 @@ function renderAccountSelector() {
   let documentListenerActive = false;
   const onDocumentClick = (event) => {
     if (!selectorContainer.contains(event.target)) {
-      dropdown.style.display = "none";
+      setDropdownOpen(false);
       if (selectedGA4Account) {
         searchInput.value =
           selectedGA4Account.google_account_name || "Unnamed Account";
@@ -849,6 +884,7 @@ function renderAccountSelector() {
       if (documentListenerActive) {
         document.removeEventListener("click", onDocumentClick);
         documentListenerActive = false;
+        accountSelectorDocListener = null;
       }
     }
   };
@@ -858,6 +894,7 @@ function renderAccountSelector() {
       return;
     }
     documentListenerActive = true;
+    accountSelectorDocListener = onDocumentClick;
     document.addEventListener("click", onDocumentClick);
   };
 
@@ -1207,8 +1244,14 @@ async function createDomainInline(domainName) {
   });
 
   if (!response.ok) {
-    const errorData = await response.json();
-    throw new Error(errorData.message || "Failed to create domain");
+    let errorMessage = "Failed to create domain";
+    try {
+      const errorData = await response.json();
+      errorMessage = errorData.message || errorMessage;
+    } catch {
+      errorMessage = response.statusText || errorMessage;
+    }
+    throw new Error(errorMessage);
   }
 
   const result = await response.json();
