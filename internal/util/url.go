@@ -69,7 +69,7 @@ func ValidateDomain(domain string) error {
 		if strings.Contains(err.Error(), "is a suffix") {
 			return fmt.Errorf("cannot use a public suffix alone (e.g., .com, .co.uk)")
 		}
-		return fmt.Errorf("invalid domain: %s", err.Error())
+		return fmt.Errorf("invalid domain. Please enter a full domain like example.com")
 	}
 
 	return nil

@@ -93,8 +93,8 @@ func TestValidateDomain(t *testing.T) {
 		// Invalid domains - using publicsuffix error messages
 		{name: "no_tld", input: "asdfasdf", wantError: true, errorMsg: "invalid domain"},
 		{name: "empty", input: "", wantError: true, errorMsg: "cannot be empty"},
-		{name: "just_tld", input: ".com", wantError: true, errorMsg: "empty label"},
-		{name: "double_dot", input: "example..com", wantError: true, errorMsg: "empty label"},
+		{name: "just_tld", input: ".com", wantError: true, errorMsg: "invalid domain"},
+		{name: "double_dot", input: "example..com", wantError: true, errorMsg: "invalid domain"},
 		{name: "localhost", input: "localhost", wantError: true, errorMsg: "not allowed"},
 		{name: "localhost_with_subdomain", input: "api.localhost", wantError: true, errorMsg: "not allowed"},
 		{name: "internal", input: "internal", wantError: true, errorMsg: "not allowed"},
