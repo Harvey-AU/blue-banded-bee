@@ -134,10 +134,13 @@
 
     const result = await response.json();
     const rawDomainId = result?.data?.domain_id ?? result?.domain_id ?? null;
+    if (rawDomainId === null || rawDomainId === undefined) {
+      throw new Error("Invalid domain ID in response");
+    }
     const newDomainId = Number(rawDomainId);
     const newDomainName = result?.data?.domain ?? result?.domain ?? normalised;
 
-    if (!Number.isFinite(newDomainId)) {
+    if (!Number.isFinite(newDomainId) || newDomainId < 1) {
       throw new Error("Invalid domain ID in response");
     }
 
@@ -400,32 +403,41 @@
       event.stopPropagation();
     });
 
+    let isSubmitting = false;
     if (form) {
       form.addEventListener("submit", async (event) => {
         event.preventDefault();
+        if (isSubmitting) {
+          return;
+        }
         const query = input.value.toLowerCase().trim();
         if (!query) {
           return;
         }
 
-        await ensureDomainsLoaded();
-        const excludedIds =
-          typeof getExcludedDomainIds === "function"
-            ? getExcludedDomainIds()
-            : [];
-        const availableDomains = domains.filter(
-          (domain) => !excludedIds.includes(domain.id)
-        );
-        const exactMatch = findExactDomain(query, availableDomains);
+        isSubmitting = true;
+        try {
+          await ensureDomainsLoaded();
+          const excludedIds =
+            typeof getExcludedDomainIds === "function"
+              ? getExcludedDomainIds()
+              : [];
+          const availableDomains = domains.filter(
+            (domain) => !excludedIds.includes(domain.id)
+          );
+          const exactMatch = findExactDomain(query, availableDomains);
 
-        if (exactMatch) {
-          await handleSelect(exactMatch);
-        } else if (resolvedAutoCreateOnSubmit && resolvedAllowCreate) {
-          await handleCreate(query);
+          if (exactMatch) {
+            await handleSelect(exactMatch);
+          } else if (resolvedAutoCreateOnSubmit && resolvedAllowCreate) {
+            await handleCreate(query);
+          }
+
+          dropdownEl.style.display = "none";
+          onDocumentClick({ target: document.body });
+        } finally {
+          isSubmitting = false;
         }
-
-        dropdownEl.style.display = "none";
-        onDocumentClick({ target: document.body });
       });
     }
   };
