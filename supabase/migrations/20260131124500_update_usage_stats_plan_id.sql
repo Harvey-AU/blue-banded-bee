@@ -26,8 +26,12 @@ BEGIN
     SELECT o.plan_id, p.daily_page_limit, p.name, p.display_name
     INTO v_plan_id, v_limit, v_plan_name, v_plan_display
     FROM organisations o
-    JOIN plans p ON o.plan_id = p.id
+    LEFT JOIN plans p ON o.plan_id = p.id
     WHERE o.id = p_org_id;
+
+    IF NOT FOUND THEN
+        RETURN;
+    END IF;
 
     IF v_limit IS NULL THEN
         v_limit := 0;

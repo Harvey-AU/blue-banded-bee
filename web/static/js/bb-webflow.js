@@ -1,7 +1,7 @@
 /**
  * Webflow Integration Handler
  * Handles Webflow workspace/site connections and per-site configuration.
- * Flow: Connect -> OAuth -> Return to modal -> Configure Sites
+ * Flow: Connect -> OAuth -> Return to settings -> Configure sites
  */
 
 // State for site configuration

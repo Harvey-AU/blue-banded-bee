@@ -564,8 +564,12 @@ func (db *DB) SetActiveOrganisation(userID, organisationID string) error {
 
 // AddOrganisationMember adds a user as a member of an organisation
 func (db *DB) AddOrganisationMember(userID, organisationID, role string) error {
+	role = strings.TrimSpace(strings.ToLower(role))
 	if role == "" {
 		role = "member"
+	}
+	if role != "admin" && role != "member" {
+		return fmt.Errorf("invalid role: %s", role)
 	}
 
 	query := `
