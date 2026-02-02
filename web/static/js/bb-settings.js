@@ -11,6 +11,12 @@
 
   function showSettingsToast(type, message) {
     const container = document.createElement("div");
+    container.setAttribute("role", "status");
+    container.setAttribute(
+      "aria-live",
+      type === "success" ? "polite" : "assertive"
+    );
+    container.setAttribute("aria-atomic", "true");
     const colours =
       type === "success"
         ? { bg: "#d1fae5", text: "#065f46", border: "#a7f3d0" }
@@ -637,6 +643,7 @@
   function formatTimeUntilReset(resetTime) {
     const now = new Date();
     const reset = new Date(resetTime);
+    if (!resetTime || Number.isNaN(reset.getTime())) return "Resets soon";
     const diffMs = reset - now;
 
     if (diffMs <= 0) return "Resets soon";
@@ -1074,13 +1081,12 @@
 
     if (!switcher || !btn) return;
 
-    btn.disabled = false;
-    btn.style.cursor = "";
-    const chevron = btn.querySelector(".bb-org-chevron");
-    if (chevron) chevron.style.display = "";
-
     const newBtn = btn.cloneNode(true);
     btn.parentNode.replaceChild(newBtn, btn);
+    const chevron = newBtn.querySelector(".bb-org-chevron");
+    newBtn.disabled = false;
+    newBtn.style.cursor = "";
+    if (chevron) chevron.style.display = "";
     const newOrgList = orgList.cloneNode(false);
     orgList.parentNode.replaceChild(newOrgList, orgList);
 
@@ -1502,6 +1508,3 @@
     initSettingsPage();
   });
 })();
-currentOrgNameRef =
-  newBtn.querySelector("#currentOrgName") ||
-  document.getElementById("currentOrgName");
