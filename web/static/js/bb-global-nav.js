@@ -194,7 +194,6 @@
     const titleMap = [
       { match: (p) => p === "/dashboard", title: "Dashboard" },
       { match: (p) => p.startsWith("/settings"), title: "Settings" },
-      { match: (p) => p.startsWith("/jobs/"), title: "Job Details" },
     ];
 
     const titleMatch = titleMap.find((entry) => entry.match(path));

@@ -218,6 +218,15 @@ function updatePageTitle(title) {
     return;
   }
   document.title = `${title} · Blue Banded Bee`;
+
+  const navTitle = document.getElementById("globalNavTitle");
+  const navSeparator = document.getElementById("globalNavSeparator");
+  if (navTitle) {
+    navTitle.textContent = title;
+  }
+  if (navSeparator) {
+    navSeparator.style.display = "inline";
+  }
 }
 
 function formatJobForBinding(job, jobId) {
