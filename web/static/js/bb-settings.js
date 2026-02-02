@@ -679,12 +679,16 @@
 
       const dailyLimit = Number.isFinite(usage.daily_limit)
         ? usage.daily_limit
-        : 0;
+        : null;
       const dailyUsed = Number.isFinite(usage.daily_used)
         ? usage.daily_used
         : 0;
       quotaPlan.textContent = usage.plan_display_name || "Free";
-      quotaUsage.textContent = `${dailyUsed.toLocaleString()}/${dailyLimit.toLocaleString()}`;
+      const usageValue = dailyUsed.toLocaleString();
+      const limitValue = Number.isFinite(dailyLimit)
+        ? dailyLimit.toLocaleString()
+        : "No limit";
+      quotaUsage.textContent = `${usageValue}/${limitValue}`;
       quotaReset.textContent = formatTimeUntilReset(usage.resets_at);
 
       quotaDisplay.classList.remove("quota-warning", "quota-exhausted");
