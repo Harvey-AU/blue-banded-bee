@@ -138,7 +138,6 @@
     const hash = window.location.hash.replace("#", "");
     const hashTarget = hash ? document.getElementById(hash) : null;
 
-    document.body.classList.add("settings-ready");
     sections.forEach((section) => {
       section.classList.toggle("active", section.id === targetId);
     });

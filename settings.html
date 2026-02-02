@@ -38,6 +38,23 @@
     </script>
 
     <script src="/js/core.js" defer></script>
+    <script>
+      (function () {
+        const path = window.location.pathname.replace(/\/$/, "");
+        const sectionMap = {
+          "/settings": "account",
+          "/settings/account": "account",
+          "/settings/team": "team",
+          "/settings/plans": "plans",
+          "/settings/billing": "billing",
+          "/settings/notifications": "notifications",
+          "/settings/analytics": "analytics",
+          "/settings/auto-crawl": "auto-crawl",
+        };
+        const target = sectionMap[path] || "account";
+        document.documentElement.setAttribute("data-settings-section", target);
+      })();
+    </script>
 
     <style>
       body {
@@ -783,8 +800,7 @@
     </style>
   </head>
   <body>
-    <div id="globalNav"></div>
-
+    <script src="/js/bb-global-nav.js"></script>
     <main class="settings-main">
       <div class="settings-container">
         <aside class="settings-nav">
@@ -1669,7 +1685,6 @@
       </div>
     </div>
 
-    <script src="/js/bb-global-nav.js" defer></script>
     <script src="/js/bb-data-binder.js" defer></script>
     <script src="/js/bb-auth-extension.js" defer></script>
     <script src="/js/bb-slack.js" defer></script>
