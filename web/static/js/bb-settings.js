@@ -1006,7 +1006,9 @@
         updateNotificationBadge(0);
         document
           .querySelectorAll(".bb-notification-item.unread")
-          .forEach((el) => el.classList.remove("unread"));
+          .forEach((el) => {
+            el.classList.remove("unread");
+          });
       }
     } catch (err) {
       console.error("Failed to mark all read:", err);
