@@ -66,56 +66,6 @@
         min-height: 100vh;
       }
 
-      .page-header {
-        background: white;
-        border-bottom: 1px solid #e5e7eb;
-        padding: 24px 0;
-        position: sticky;
-        top: 0;
-        z-index: 100;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-      }
-
-      .page-header .container {
-        max-width: 1200px;
-        margin: 0 auto;
-        padding: 0 24px;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-      }
-
-      .page-header-compact .container {
-        justify-content: flex-end;
-      }
-
-      .page-title {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        margin: 0;
-        font-size: 1.5rem;
-        font-weight: 700;
-        color: #1a1a1a;
-      }
-
-      .bee-icon {
-        font-size: 1.8rem;
-      }
-
-      .user-menu {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-      }
-
-      .user-info {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        font-size: 14px;
-      }
-
       .bb-button {
         padding: 8px 16px;
         border-radius: 6px;
@@ -792,21 +742,10 @@
         .settings-nav {
           position: static;
         }
-
-        .page-header .container {
-          flex-direction: column;
-          gap: 16px;
-          align-items: flex-start;
-        }
-
-        .user-menu {
-          flex-wrap: wrap;
-          gap: 8px;
-        }
       }
     </style>
   </head>
-  <body>
+  <body class="page-settings">
     <script src="/js/bb-global-nav.js"></script>
     <main class="settings-main">
       <div class="settings-container">
