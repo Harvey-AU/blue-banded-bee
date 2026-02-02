@@ -1076,6 +1076,7 @@
 
     const btnRef = newBtn;
     const orgListRef = newOrgList;
+    let currentOrgNameRef = currentOrgName;
     let settingsBtnRef = settingsSwitcherBtn;
     let settingsOrgListRef = settingsOrgList;
     let settingsOrgNameRef = settingsOrgName;
@@ -1126,7 +1127,8 @@
       const organisations = data.data?.organisations || [];
 
       if (organisations.length === 0) {
-        if (currentOrgName) currentOrgName.textContent = "No Organisation";
+        if (currentOrgNameRef)
+          currentOrgNameRef.textContent = "No Organisation";
         if (settingsOrgNameRef)
           settingsOrgNameRef.textContent = "No Organisation";
       }
@@ -1174,8 +1176,8 @@
       }
 
       const activeName = activeOrg?.name || organisations[0]?.name || "";
-      if (currentOrgName) {
-        currentOrgName.textContent = activeName || "Organisation";
+      if (currentOrgNameRef) {
+        currentOrgNameRef.textContent = activeName || "Organisation";
       }
       if (settingsOrgNameRef) {
         settingsOrgNameRef.textContent = activeName || "Organisation";
@@ -1227,7 +1229,7 @@
           if (switchRes.ok) {
             const switchData = await switchRes.json();
             window.BB_ACTIVE_ORG = switchData.data?.organisation;
-            if (currentOrgName) currentOrgName.textContent = org.name;
+            if (currentOrgNameRef) currentOrgNameRef.textContent = org.name;
             if (settingsOrgNameRef) settingsOrgNameRef.textContent = org.name;
 
             if (previous !== org.id) {
@@ -1241,8 +1243,8 @@
             await loadNotificationCount();
             await fetchAndDisplayQuota();
           } else {
-            if (currentOrgName) {
-              currentOrgName.textContent =
+            if (currentOrgNameRef) {
+              currentOrgNameRef.textContent =
                 window.BB_ACTIVE_ORG?.name || "Unknown";
             }
             if (settingsOrgNameRef) {
@@ -1253,8 +1255,8 @@
           }
         } catch (err) {
           console.error("Error switching organisation:", err);
-          if (currentOrgName) {
-            currentOrgName.textContent =
+          if (currentOrgNameRef) {
+            currentOrgNameRef.textContent =
               window.BB_ACTIVE_ORG?.name || "Unknown";
           }
           if (settingsOrgNameRef) {
@@ -1487,3 +1489,6 @@
     initSettingsPage();
   });
 })();
+currentOrgNameRef =
+  newBtn.querySelector("#currentOrgName") ||
+  document.getElementById("currentOrgName");
