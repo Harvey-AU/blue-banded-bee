@@ -319,7 +319,6 @@ async function disconnectGoogle(connectionId) {
  * @param {string} accountId - The GA account ID
  */
 async function selectGoogleAccount(accountId) {
-  console.log("[GA Debug] selectGoogleAccount called with:", accountId);
   try {
     const { data: { session } = {} } = await window.supabase.auth.getSession();
     const token = session?.access_token;
@@ -329,17 +328,10 @@ async function selectGoogleAccount(accountId) {
     }
 
     if (!pendingGASessionData || !pendingGASessionData.session_id) {
-      console.log("[GA Debug] No pending session data:", pendingGASessionData);
       showGoogleError("OAuth session expired. Please reconnect.");
       hideAccountSelection();
       return;
     }
-
-    console.log("[GA Debug] Session ID:", pendingGASessionData.session_id);
-    console.log(
-      "[GA Debug] Available accounts:",
-      pendingGASessionData.accounts
-    );
 
     // Show loading state
     const accountList = document.getElementById("googleAccountList");
@@ -350,22 +342,16 @@ async function selectGoogleAccount(accountId) {
 
     // Fetch properties for this account
     const fetchUrl = `/v1/integrations/google/pending-session/${pendingGASessionData.session_id}/accounts/${encodeURIComponent(accountId)}/properties`;
-    console.log("[GA Debug] Fetching URL:", fetchUrl);
-
     const response = await fetch(fetchUrl, {
       headers: { Authorization: `Bearer ${token}` },
     });
 
-    console.log("[GA Debug] Response status:", response.status);
-
     if (!response.ok) {
       const text = await response.text();
-      console.log("[GA Debug] Error response:", text);
       throw new Error(text || `HTTP ${response.status}`);
     }
 
     const result = await response.json();
-    console.log("[GA Debug] Full response:", JSON.stringify(result, null, 2));
     const properties = result.data?.properties || [];
 
     // Store selected account and properties
@@ -466,22 +452,14 @@ async function saveGoogleProperties() {
  * @param {boolean} active - Whether to set active
  */
 async function toggleConnectionStatus(connectionId, active) {
-  console.log(
-    `[GA Toggle] Toggling ${connectionId} to ${active ? "active" : "inactive"}`
-  );
-
   try {
     const { data: { session } = {} } = await window.supabase.auth.getSession();
     const token = session?.access_token;
     if (!token) {
-      console.error("[GA Toggle] No auth token available");
       showGoogleError("Not authenticated. Please sign in.");
       return;
     }
 
-    console.log(
-      `[GA Toggle] Making PATCH request to /v1/integrations/google/${connectionId}/status`
-    );
     const response = await fetch(
       `/v1/integrations/google/${encodeURIComponent(connectionId)}/status`,
       {
@@ -498,15 +476,11 @@ async function toggleConnectionStatus(connectionId, active) {
 
     if (!response.ok) {
       const text = await response.text();
-      console.error(`[GA Toggle] API error: ${response.status}`, text);
       throw new Error(text || `HTTP ${response.status}`);
     }
-
-    console.log("[GA Toggle] Status updated successfully");
     // Reload to update UI
     loadGoogleConnections();
   } catch (error) {
-    console.error("[GA Toggle] Failed to toggle connection status:", error);
     showGoogleError("Failed to update status");
     loadGoogleConnections(); // Reload to reset toggle state
   }
@@ -667,18 +641,8 @@ function filterGoogleProperties(query) {
  * @param {Array} properties - Array of GA4 properties to choose from
  */
 function showPropertySelection(properties) {
-  console.log(
-    "[GA OAuth] showPropertySelection called with",
-    properties?.length,
-    "properties"
-  );
   const selectionUI = document.getElementById("googlePropertySelection");
   const list = document.getElementById("googlePropertyList");
-
-  console.log("[GA OAuth] DOM elements found:", {
-    selectionUI: !!selectionUI,
-    list: !!list,
-  });
 
   if (!selectionUI || !list) {
     console.error("Property selection UI not found");
@@ -748,12 +712,6 @@ function hidePropertySelection() {
  * @param {Array} accounts - Array of GA accounts to choose from
  */
 function showAccountSelection(accounts) {
-  console.log(
-    "[GA OAuth] showAccountSelection called with",
-    accounts?.length,
-    "accounts"
-  );
-
   // Create or get the account selection UI
   let accountUI = document.getElementById("googleAccountSelection");
   if (!accountUI) {
@@ -896,12 +854,6 @@ async function handleGoogleOAuthCallback() {
     return;
   }
 
-  console.log("[GA OAuth] Checking URL params:", {
-    googleConnected,
-    googleError,
-    gaSession,
-  });
-
   if (googleConnected) {
     // Clean up URL
     const url = new URL(window.location.href);
@@ -912,18 +864,15 @@ async function handleGoogleOAuthCallback() {
     loadGoogleConnections();
   } else if (gaSession) {
     // Fetch session data from server
-    console.log("[GA OAuth] Found ga_session, fetching from server...");
     try {
       const { data: { session } = {} } =
         await window.supabase.auth.getSession();
       const token = session?.access_token;
-      console.log("[GA OAuth] Supabase token:", token ? "present" : "missing");
       if (!token) {
         showGoogleError("Not authenticated. Please sign in.");
         return;
       }
 
-      console.log("[GA OAuth] Fetching pending session:", gaSession);
       const response = await fetch(
         `/v1/integrations/google/pending-session/${gaSession}`,
         {
@@ -931,7 +880,6 @@ async function handleGoogleOAuthCallback() {
         }
       );
 
-      console.log("[GA OAuth] Response status:", response.status);
       if (!response.ok) {
         const text = await response.text();
         throw new Error(text || `HTTP ${response.status}`);
@@ -939,14 +887,6 @@ async function handleGoogleOAuthCallback() {
 
       const result = await response.json();
       const sessionData = result.data;
-      console.log("[GA OAuth] Session data received:", {
-        hasAccounts: !!sessionData?.accounts,
-        accountCount: sessionData?.accounts?.length,
-        hasProperties: !!sessionData?.properties,
-        propertyCount: sessionData?.properties?.length,
-        email: sessionData?.email,
-      });
-
       // Store session ID for subsequent requests
       sessionData.session_id = gaSession;
       pendingGASessionData = sessionData;
@@ -965,19 +905,12 @@ async function handleGoogleOAuthCallback() {
 
       if (accounts.length > 1 && properties.length === 0) {
         // Multiple accounts, no properties yet - show account picker
-        console.log("[GA OAuth] Multiple accounts, showing account picker");
         showAccountSelection(accounts);
       } else if (properties.length > 0) {
         // Single account with properties already fetched, or properties from selected account
-        console.log(
-          "[GA OAuth] Showing property selection with",
-          properties.length,
-          "properties"
-        );
         showPropertySelection(properties);
       } else if (accounts.length === 1) {
         // Single account but no properties - should not happen normally
-        console.log("[GA OAuth] Single account, no properties - fetching...");
         selectGoogleAccount(accounts[0].account_id);
       } else {
         throw new Error("No accounts or properties found");
