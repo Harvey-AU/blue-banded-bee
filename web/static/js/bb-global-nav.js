@@ -223,6 +223,7 @@
 
         link.classList.toggle("active", active);
       } catch (err) {
+        console.warn("Failed to resolve nav link state:", err);
         link.classList.remove("active");
       }
     });
@@ -230,19 +231,35 @@
     const initNavOrgSwitcher = async () => {
       if (!currentOrgName || !window.supabase?.auth) return;
 
+      let orgNameObserver = null;
+      let handleOrgSwitcherDocumentClick = null;
+
+      const teardownOrgNav = () => {
+        if (orgNameObserver) {
+          orgNameObserver.disconnect();
+          orgNameObserver = null;
+        }
+        if (handleOrgSwitcherDocumentClick) {
+          document.removeEventListener("click", handleOrgSwitcherDocumentClick);
+          handleOrgSwitcherDocumentClick = null;
+        }
+      };
+
       if (settingsOrgName) {
-        const observer = new MutationObserver(() => {
+        orgNameObserver = new MutationObserver(() => {
           const nextName = settingsOrgName.textContent?.trim();
           if (nextName) {
             currentOrgName.textContent = nextName;
           }
         });
-        observer.observe(settingsOrgName, {
+        orgNameObserver.observe(settingsOrgName, {
           childList: true,
           characterData: true,
           subtree: true,
         });
       }
+
+      window.addEventListener("beforeunload", teardownOrgNav, { once: true });
 
       try {
         const sessionResult = await window.supabase.auth.getSession();
@@ -282,6 +299,7 @@
               organisations.find((org) => org.id === activeOrgId) ||
               organisations[0];
           } catch (err) {
+            console.warn("Failed to resolve active organisation:", err);
             activeOrg = organisations[0];
           }
         }
@@ -321,6 +339,7 @@
                   currentOrgName.textContent = org.name;
                 }
               } catch (err) {
+                console.warn("Failed to switch organisation:", err);
                 return;
               }
             });
@@ -338,12 +357,20 @@
             );
           });
 
-          document.addEventListener("click", () => {
+          if (handleOrgSwitcherDocumentClick) {
+            document.removeEventListener(
+              "click",
+              handleOrgSwitcherDocumentClick
+            );
+          }
+          handleOrgSwitcherDocumentClick = () => {
             orgSwitcher.classList.remove("open");
             orgBtn.setAttribute("aria-expanded", "false");
-          });
+          };
+          document.addEventListener("click", handleOrgSwitcherDocumentClick);
         }
       } catch (err) {
+        console.warn("Failed to initialise org switcher:", err);
         return;
       }
     };
