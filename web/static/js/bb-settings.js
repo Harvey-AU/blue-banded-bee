@@ -97,11 +97,14 @@
         const linkPath = new URL(link.href).pathname.replace(/\/$/, "");
         if (linkPath === currentPath) {
           link.classList.add("active");
+          link.setAttribute("aria-current", "page");
         } else {
           link.classList.remove("active");
+          link.removeAttribute("aria-current");
         }
       } catch (err) {
         link.classList.remove("active");
+        link.removeAttribute("aria-current");
       }
     });
   }
