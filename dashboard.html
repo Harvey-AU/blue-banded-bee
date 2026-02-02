@@ -45,7 +45,7 @@
     </script>
 
     <script src="/js/core.js" defer></script>
-    <script src="/js/bb-global-nav.js"></script>
+    <script src="/js/bb-global-nav.js" defer></script>
 
     <style>
       body {
@@ -2923,7 +2923,7 @@
           });
         }
 
-        // Settings button now navigates to settings page
+        // Settings button closes the dropdown
         if (settingsBtn) {
           settingsBtn.addEventListener("click", () => {
             container.classList.remove("open");
@@ -3364,7 +3364,8 @@
           // Update display
           quotaPlan.textContent = usage.plan_display_name || "Free";
           quotaUsage.textContent = `${usage.daily_used.toLocaleString()}/${usage.daily_limit.toLocaleString()}`;
-          quotaReset.textContent = formatTimeUntilReset(usage.resets_at);
+          quotaResetTime = usage.resets_at;
+          updateResetCountdown();
 
           // Update styling based on usage percentage
           quotaDisplay.classList.remove("quota-warning", "quota-exhausted");
@@ -3381,16 +3382,30 @@
         }
       }
 
-      // Update quota display every 0.5s for real-time feel
+      // Fetch quota data periodically and update countdown locally
       let quotaResetInterval;
+      let quotaResetTime = null;
+      let countdownInterval;
+
+      function updateResetCountdown() {
+        if (!quotaResetTime) return;
+        const quotaReset = document.getElementById("quotaReset");
+        if (quotaReset) {
+          quotaReset.textContent = formatTimeUntilReset(quotaResetTime);
+        }
+      }
+
       function startQuotaResetCountdown() {
         if (quotaResetInterval) clearInterval(quotaResetInterval);
-        quotaResetInterval = setInterval(fetchAndDisplayQuota, 500);
+        if (countdownInterval) clearInterval(countdownInterval);
+        quotaResetInterval = setInterval(fetchAndDisplayQuota, 60000);
+        countdownInterval = setInterval(updateResetCountdown, 1000);
       }
 
       // Clean up interval on page unload to prevent memory leaks
       window.addEventListener("beforeunload", () => {
         if (quotaResetInterval) clearInterval(quotaResetInterval);
+        if (countdownInterval) clearInterval(countdownInterval);
       });
 
       // Listen for Supabase auth state change
@@ -3403,6 +3418,7 @@
             const quotaDisplay = document.getElementById("quotaDisplay");
             if (quotaDisplay) quotaDisplay.style.display = "none";
             if (quotaResetInterval) clearInterval(quotaResetInterval);
+            if (countdownInterval) clearInterval(countdownInterval);
           }
         });
       }
