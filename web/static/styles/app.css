@@ -23,6 +23,10 @@ body {
   z-index: 50;
 }
 
+body.page-job-details .global-nav .header {
+  padding: 16px 0;
+}
+
 .global-nav .header-content {
   display: flex;
   justify-content: space-between;
