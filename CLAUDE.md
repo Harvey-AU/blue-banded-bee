@@ -38,8 +38,8 @@ Last reviewed: 2026-02-02
 ## Technical Stack Preferences
 
 - Prefer Supabase features over custom implementations whenever possible.
-- The dashboard uses vanilla JavaScript without a build step; Web Components are
-  legacy and should be touched only when necessary.
+- The dashboard uses vanilla JavaScript without a build step; prefer Web
+  Components where relevant and replace non-Web-Component UI when possible.
 - Run a `docker build` before merging static asset changes (frontend assets,
   public files, or CSS/JS bundles).
 
