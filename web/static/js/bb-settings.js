@@ -495,7 +495,9 @@
                 : "Free";
           }
           if (limitEl) {
-            limitEl.textContent = `${plan.daily_page_limit.toLocaleString()} pages/day`;
+            limitEl.textContent = Number.isFinite(plan.daily_page_limit)
+              ? `${plan.daily_page_limit.toLocaleString()} pages/day`
+              : "No limit";
           }
           if (actionBtn) {
             actionBtn.dataset.planId = plan.id;
