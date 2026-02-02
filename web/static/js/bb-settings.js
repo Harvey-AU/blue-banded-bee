@@ -106,19 +106,7 @@
     });
   }
 
-  function scrollToHash() {
-    if (!window.location.hash) return;
-    const targetId = window.location.hash.replace("#", "");
-    const target = document.getElementById(targetId);
-    if (target) {
-      target.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
-  }
-
-  function scrollToPathSection() {
-    if (window.location.hash) return;
-
-    const path = window.location.pathname.replace(/\/$/, "");
+  function resolveTargetSectionId() {
     const sectionMap = {
       "/settings": "account",
       "/settings/account": "account",
@@ -130,27 +118,93 @@
       "/settings/auto-crawl": "auto-crawl",
     };
 
-    const targetId = sectionMap[path];
-    if (!targetId) return;
+    const hash = window.location.hash.replace("#", "");
+    if (hash) {
+      const hashTarget = document.getElementById(hash);
+      if (hashTarget) {
+        const section = hashTarget.closest(".settings-section");
+        if (section?.id) return section.id;
+      }
+    }
 
+    const path = window.location.pathname.replace(/\/$/, "");
+    return sectionMap[path] || "account";
+  }
+
+  function setActiveSection() {
+    const targetId = resolveTargetSectionId();
+    const sections = document.querySelectorAll(".settings-section");
     const target = document.getElementById(targetId);
-    if (target) {
+    const hash = window.location.hash.replace("#", "");
+    const hashTarget = hash ? document.getElementById(hash) : null;
+
+    document.body.classList.add("settings-ready");
+    sections.forEach((section) => {
+      section.classList.toggle("active", section.id === targetId);
+    });
+
+    if (hashTarget) {
+      hashTarget.scrollIntoView({ behavior: "smooth", block: "start" });
+    } else if (target) {
       target.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+
+    if (targetId === "plans" && !window.location.hash) {
+      activatePlanTab("planTabCurrent");
+    }
+    activateTabFromHash();
+  }
+
+  function activateTabFromHash() {
+    const hash = window.location.hash.replace("#", "");
+    if (!hash) return;
+    const target = document.getElementById(hash);
+    const panel = target?.closest(".settings-tab-panel");
+    if (panel?.id) {
+      activatePlanTab(panel.id);
     }
   }
 
   function setupSettingsNavigation() {
     setActiveSettingsLink();
-    scrollToHash();
-    scrollToPathSection();
+    setActiveSection();
 
     window.addEventListener("hashchange", () => {
-      scrollToHash();
+      setActiveSection();
     });
 
     window.addEventListener("popstate", () => {
       setActiveSettingsLink();
-      scrollToPathSection();
+      setActiveSection();
+    });
+  }
+
+  function activatePlanTab(panelId) {
+    const tabs = document.querySelectorAll(".settings-tab");
+    const panels = document.querySelectorAll(".settings-tab-panel");
+
+    panels.forEach((panel) => {
+      panel.classList.toggle("active", panel.id === panelId);
+    });
+
+    tabs.forEach((tab) => {
+      const isActive = tab.dataset.tabTarget === panelId;
+      tab.classList.toggle("active", isActive);
+      tab.setAttribute("aria-selected", isActive ? "true" : "false");
+    });
+  }
+
+  function setupPlanTabs() {
+    const tabs = document.querySelectorAll(".settings-tab");
+    if (!tabs.length) return;
+
+    tabs.forEach((tab) => {
+      tab.addEventListener("click", () => {
+        const targetId = tab.dataset.tabTarget;
+        if (targetId) {
+          activatePlanTab(targetId);
+        }
+      });
     });
   }
 
@@ -997,6 +1051,12 @@
     const orgList = document.getElementById("orgList");
     const currentOrgName = document.getElementById("currentOrgName");
     const settingsOrgName = document.getElementById("settingsOrgName");
+    const settingsSwitcher = document.getElementById("settingsOrgSwitcher");
+    const settingsDropdown = document.getElementById("settingsOrgDropdown");
+    const settingsOrgList = document.getElementById("settingsOrgList");
+    const settingsCreateOrgBtn = document.getElementById(
+      "settingsCreateOrgBtn"
+    );
     const settingsSwitcherBtn = document.getElementById(
       "settingsOrgSwitcherBtn"
     );
@@ -1017,6 +1077,7 @@
     const btnRef = newBtn;
     const orgListRef = newOrgList;
     let settingsBtnRef = settingsSwitcherBtn;
+    let settingsOrgListRef = settingsOrgList;
 
     if (settingsSwitcherBtn?.parentNode) {
       const newSettingsBtn = settingsSwitcherBtn.cloneNode(true);
@@ -1025,6 +1086,15 @@
         settingsSwitcherBtn
       );
       settingsBtnRef = newSettingsBtn;
+    }
+
+    if (settingsOrgList?.parentNode) {
+      const newSettingsOrgList = settingsOrgList.cloneNode(false);
+      settingsOrgList.parentNode.replaceChild(
+        newSettingsOrgList,
+        settingsOrgList
+      );
+      settingsOrgListRef = newSettingsOrgList;
     }
 
     try {
@@ -1042,6 +1112,9 @@
         if (divider) {
           divider.style.display = "none";
         }
+        if (settingsSwitcher) {
+          settingsSwitcher.style.display = "none";
+        }
         return;
       }
 
@@ -1057,6 +1130,7 @@
           settingsBtnRef.disabled = true;
           settingsBtnRef.style.cursor = "default";
         }
+        if (settingsDropdown) settingsDropdown.style.display = "none";
       }
 
       const activeOrg = organisations.find(
@@ -1068,6 +1142,15 @@
       if (settingsOrgName)
         settingsOrgName.textContent = activeName || "Organisation";
 
+      const closeOrgDropdowns = () => {
+        switcher.classList.remove("open");
+        btnRef.setAttribute("aria-expanded", "false");
+        if (settingsSwitcher) {
+          settingsSwitcher.classList.remove("open");
+          settingsBtnRef?.setAttribute("aria-expanded", "false");
+        }
+      };
+
       btnRef.addEventListener("click", (e) => {
         e.stopPropagation();
         switcher.classList.toggle("open");
@@ -1077,71 +1160,50 @@
         );
       });
 
-      if (settingsBtnRef) {
+      if (settingsBtnRef && settingsSwitcher) {
         settingsBtnRef.addEventListener("click", (e) => {
           e.stopPropagation();
-          switcher.classList.toggle("open");
-          btnRef.setAttribute(
+          settingsSwitcher.classList.toggle("open");
+          settingsBtnRef.setAttribute(
             "aria-expanded",
-            switcher.classList.contains("open")
+            settingsSwitcher.classList.contains("open")
           );
         });
       }
 
-      orgListRef.innerHTML = "";
-      organisations.forEach((org) => {
-        const button = document.createElement("button");
-        button.className = "bb-org-item";
-        button.textContent = org.name;
-        if (org.id === window.BB_ACTIVE_ORG?.id) {
-          button.classList.add("active");
-        }
-        button.addEventListener("click", async () => {
-          switcher.classList.remove("open");
-          btnRef.setAttribute("aria-expanded", "false");
-          const previous = window.BB_ACTIVE_ORG?.id;
+      const handleOrgSwitch = async (org) => {
+        closeOrgDropdowns();
+        const previous = window.BB_ACTIVE_ORG?.id;
 
-          try {
-            const switchRes = await fetch("/v1/organisations/switch", {
-              method: "POST",
-              headers: {
-                Authorization: `Bearer ${session.access_token}`,
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({ organisation_id: org.id }),
-            });
+        try {
+          const switchRes = await fetch("/v1/organisations/switch", {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${session.access_token}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ organisation_id: org.id }),
+          });
 
-            if (switchRes.ok) {
-              const switchData = await switchRes.json();
-              window.BB_ACTIVE_ORG = switchData.data?.organisation;
-              if (currentOrgName) currentOrgName.textContent = org.name;
-              if (settingsOrgName) settingsOrgName.textContent = org.name;
+          if (switchRes.ok) {
+            const switchData = await switchRes.json();
+            window.BB_ACTIVE_ORG = switchData.data?.organisation;
+            if (currentOrgName) currentOrgName.textContent = org.name;
+            if (settingsOrgName) settingsOrgName.textContent = org.name;
 
-              if (previous !== org.id) {
-                await refreshSettingsData();
-              }
-
-              if (typeof subscribeToNotifications === "function") {
-                await subscribeToNotifications();
-              }
-
-              await loadNotificationCount();
-              await fetchAndDisplayQuota();
-
-              showSettingsToast("success", `Switched to ${org.name}`);
-            } else {
-              if (currentOrgName) {
-                currentOrgName.textContent =
-                  window.BB_ACTIVE_ORG?.name || "Unknown";
-              }
-              if (settingsOrgName) {
-                settingsOrgName.textContent =
-                  window.BB_ACTIVE_ORG?.name || "Organisation";
-              }
-              showSettingsToast("error", "Failed to switch organisation");
+            if (previous !== org.id) {
+              await refreshSettingsData();
             }
-          } catch (err) {
-            console.error("Error switching organisation:", err);
+
+            if (typeof subscribeToNotifications === "function") {
+              await subscribeToNotifications();
+            }
+
+            await loadNotificationCount();
+            await fetchAndDisplayQuota();
+
+            showSettingsToast("success", `Switched to ${org.name}`);
+          } else {
             if (currentOrgName) {
               currentOrgName.textContent =
                 window.BB_ACTIVE_ORG?.name || "Unknown";
@@ -1152,17 +1214,50 @@
             }
             showSettingsToast("error", "Failed to switch organisation");
           }
-        });
-        orgListRef.appendChild(button);
+        } catch (err) {
+          console.error("Error switching organisation:", err);
+          if (currentOrgName) {
+            currentOrgName.textContent =
+              window.BB_ACTIVE_ORG?.name || "Unknown";
+          }
+          if (settingsOrgName) {
+            settingsOrgName.textContent =
+              window.BB_ACTIVE_ORG?.name || "Organisation";
+          }
+          showSettingsToast("error", "Failed to switch organisation");
+        }
+      };
+
+      const renderOrgButton = (listEl, org) => {
+        if (!listEl) return;
+        const button = document.createElement("button");
+        button.className = "bb-org-item";
+        button.textContent = org.name;
+        if (org.id === window.BB_ACTIVE_ORG?.id) {
+          button.classList.add("active");
+        }
+        button.addEventListener("click", () => handleOrgSwitch(org));
+        listEl.appendChild(button);
+      };
+
+      orgListRef.innerHTML = "";
+      if (settingsOrgListRef) settingsOrgListRef.innerHTML = "";
+      organisations.forEach((org) => {
+        renderOrgButton(orgListRef, org);
+        renderOrgButton(settingsOrgListRef, org);
       });
 
-      const closeOrgDropdown = () => {
-        switcher.classList.remove("open");
-        btnRef.setAttribute("aria-expanded", "false");
-      };
+      if (settingsCreateOrgBtn) {
+        settingsCreateOrgBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          closeOrgDropdowns();
+          document.getElementById("createOrgBtn")?.click();
+        });
+      }
+
       document.removeEventListener("click", window._closeOrgDropdown);
-      window._closeOrgDropdown = closeOrgDropdown;
-      document.addEventListener("click", closeOrgDropdown);
+      window._closeOrgDropdown = closeOrgDropdowns;
+      document.addEventListener("click", closeOrgDropdowns);
     } catch (err) {
       console.error("Error initialising org switcher:", err);
       switcher.style.display = "none";
@@ -1299,6 +1394,7 @@
       setupSettingsNavigation();
       setupNotificationsDropdown();
       setupUserMenuDropdown();
+      setupPlanTabs();
 
       const sessionResult = await window.supabase.auth.getSession();
       const session = sessionResult?.data?.session;

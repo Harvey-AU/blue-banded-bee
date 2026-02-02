@@ -495,6 +495,14 @@
         padding: 24px;
       }
 
+      .settings-ready .settings-section {
+        display: none;
+      }
+
+      .settings-ready .settings-section.active {
+        display: block;
+      }
+
       .settings-section-title {
         margin: 0 0 6px 0;
         font-size: 20px;
@@ -579,6 +587,42 @@
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
         gap: 16px;
+      }
+
+      .settings-tabs {
+        display: inline-flex;
+        gap: 8px;
+        border: 1px solid #e5e7eb;
+        border-radius: 999px;
+        padding: 4px;
+        background: #f9fafb;
+        margin-bottom: 16px;
+      }
+
+      .settings-tab {
+        border: none;
+        background: transparent;
+        padding: 8px 14px;
+        border-radius: 999px;
+        font-size: 13px;
+        color: #4b5563;
+        cursor: pointer;
+        transition:
+          background-color 0.2s ease,
+          color 0.2s ease;
+      }
+
+      .settings-tab.active {
+        background: #111827;
+        color: #f9fafb;
+      }
+
+      .settings-tab-panel {
+        display: none;
+      }
+
+      .settings-tab-panel.active {
+        display: block;
       }
 
       .settings-plan-card {
@@ -782,7 +826,7 @@
                 <div class="bb-dropdown-item" style="cursor: default">
                   <strong id="userEmail">Loading...</strong>
                 </div>
-                <a class="bb-dropdown-item" href="/settings/account#profile"
+                <a class="bb-dropdown-item" href="/settings/account"
                   >Your account</a
                 >
                 <div class="bb-dropdown-divider"></div>
@@ -806,28 +850,18 @@
                     >
                   </div>
                 </div>
-                <a
-                  class="bb-dropdown-item"
-                  href="/settings/billing#payment-methods"
-                  >Billing</a
-                >
-                <a class="bb-dropdown-item" href="/settings/plans#current"
-                  >Plans</a
-                >
-                <a class="bb-dropdown-item" href="/settings/notifications#slack"
+                <a class="bb-dropdown-item" href="/settings/billing">Billing</a>
+                <a class="bb-dropdown-item" href="/settings/plans">Plans</a>
+                <a class="bb-dropdown-item" href="/settings/notifications"
                   >Notifications</a
                 >
-                <a
-                  class="bb-dropdown-item"
-                  href="/settings/analytics#google-analytics"
+                <a class="bb-dropdown-item" href="/settings/analytics"
                   >Analytics</a
                 >
-                <a class="bb-dropdown-item" href="/settings/auto-crawl#webflow"
+                <a class="bb-dropdown-item" href="/settings/auto-crawl"
                   >Auto-crawl</a
                 >
-                <a class="bb-dropdown-item" href="/settings/team#members"
-                  >Team</a
-                >
+                <a class="bb-dropdown-item" href="/settings/team">Team</a>
                 <div class="bb-dropdown-divider"></div>
                 <button
                   id="logoutBtn"
@@ -884,7 +918,7 @@
                   <a
                     class="bb-notifications-footer-btn bb-notifications-settings-btn"
                     id="notificationsSettingsBtn"
-                    href="/settings#slack"
+                    href="/settings/notifications"
                   >
                     ⚙️ Notification Settings
                   </a>
@@ -900,29 +934,38 @@
       <div class="settings-container">
         <aside class="settings-nav">
           <div class="settings-group">
-            <div class="settings-group-title">Account settings</div>
-            <a class="settings-link" href="/settings/account#profile"
-              >Account</a
-            >
+            <div class="settings-group-title">Settings</div>
+            <a class="settings-link" href="/settings/account">Profile</a>
           </div>
 
           <div class="settings-group">
-            <button class="settings-org-switcher" id="settingsOrgSwitcherBtn">
-              <span id="settingsOrgName">Organisation</span>
-              <span>▼</span>
-            </button>
-            <a class="settings-link" href="/settings/team#members">Team</a>
-            <a class="settings-link" href="/settings/plans#current">Plans</a>
-            <a class="settings-link" href="/settings/billing#payment-methods"
-              >Billing</a
+            <div class="bb-org-switcher" id="settingsOrgSwitcher">
+              <button class="settings-org-switcher" id="settingsOrgSwitcherBtn">
+                <span id="settingsOrgName">Organisation</span>
+                <span>▼</span>
+              </button>
+              <div class="bb-org-dropdown" id="settingsOrgDropdown">
+                <div class="bb-org-dropdown-header">Switch Organisation</div>
+                <div class="bb-org-list" id="settingsOrgList"></div>
+                <div class="bb-org-dropdown-footer">
+                  <button
+                    class="bb-org-create-btn"
+                    id="settingsCreateOrgBtn"
+                    aria-label="Create a new organisation"
+                  >
+                    + Create Organisation
+                  </button>
+                </div>
+              </div>
+            </div>
+            <a class="settings-link" href="/settings/team">Team</a>
+            <a class="settings-link" href="/settings/plans">Plans</a>
+            <a class="settings-link" href="/settings/billing">Billing</a>
+            <a class="settings-link" href="/settings/notifications"
+              >Notifications</a
             >
-            <a class="settings-link" href="/settings#slack">Notifications</a>
-            <a class="settings-link" href="/settings/analytics#google-analytics"
-              >Analytics</a
-            >
-            <a class="settings-link" href="/settings/auto-crawl#webflow"
-              >Auto-crawl</a
-            >
+            <a class="settings-link" href="/settings/analytics">Analytics</a>
+            <a class="settings-link" href="/settings/auto-crawl">Auto-crawl</a>
           </div>
         </aside>
 
@@ -1053,29 +1096,65 @@
               switch plans.
             </p>
 
-            <div class="settings-card">
-              <div class="settings-row">
-                <div>
-                  <strong>Current plan</strong>
-                  <div class="settings-muted" id="planCurrentName">
-                    Loading...
+            <div class="settings-tabs" role="tablist" aria-label="Plan views">
+              <button
+                class="settings-tab active"
+                type="button"
+                data-tab-target="planTabCurrent"
+                role="tab"
+                aria-selected="true"
+              >
+                Current
+              </button>
+              <button
+                class="settings-tab"
+                type="button"
+                data-tab-target="planTabChange"
+                role="tab"
+                aria-selected="false"
+              >
+                Change plan
+              </button>
+              <button
+                class="settings-tab"
+                type="button"
+                data-tab-target="planTabUsage"
+                role="tab"
+                aria-selected="false"
+              >
+                Usage history
+              </button>
+            </div>
+
+            <div class="settings-tab-panel active" id="planTabCurrent">
+              <div class="settings-card">
+                <div class="settings-row">
+                  <div>
+                    <strong>Current plan</strong>
+                    <div class="settings-muted" id="planCurrentName">
+                      Loading...
+                    </div>
                   </div>
+                  <div class="settings-muted" id="planCurrentLimit"></div>
                 </div>
-                <div class="settings-muted" id="planCurrentLimit"></div>
-              </div>
-              <div class="settings-row">
-                <div class="settings-muted" id="planCurrentUsage"></div>
-                <div class="settings-muted" id="planCurrentReset"></div>
+                <div class="settings-row">
+                  <div class="settings-muted" id="planCurrentUsage"></div>
+                  <div class="settings-muted" id="planCurrentReset"></div>
+                </div>
               </div>
             </div>
 
-            <div class="settings-card" id="compare">
-              <div class="settings-plan-grid" id="planCards"></div>
+            <div class="settings-tab-panel" id="planTabChange">
+              <div class="settings-card" id="compare">
+                <div class="settings-plan-grid" id="planCards"></div>
+              </div>
             </div>
 
-            <div class="settings-card">
-              <strong>Usage history (30 days)</strong>
-              <div id="usageHistoryList" style="margin-top: 12px"></div>
+            <div class="settings-tab-panel" id="planTabUsage">
+              <div class="settings-card">
+                <strong>Usage history (30 days)</strong>
+                <div id="usageHistoryList" style="margin-top: 12px"></div>
+              </div>
             </div>
           </section>
 
