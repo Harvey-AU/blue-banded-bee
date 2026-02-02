@@ -1002,7 +1002,7 @@
     );
     const divider = document.querySelector(".bb-org-divider");
 
-    if (!switcher || !btn || !divider) return;
+    if (!switcher || !btn) return;
 
     btn.disabled = false;
     btn.style.cursor = "";
@@ -1039,7 +1039,9 @@
       if (!response.ok) {
         console.error("Failed to fetch organisations");
         switcher.style.display = "none";
-        divider.style.display = "none";
+        if (divider) {
+          divider.style.display = "none";
+        }
         return;
       }
 
@@ -1164,7 +1166,9 @@
     } catch (err) {
       console.error("Error initialising org switcher:", err);
       switcher.style.display = "none";
-      divider.style.display = "none";
+      if (divider) {
+        divider.style.display = "none";
+      }
     }
   }
 

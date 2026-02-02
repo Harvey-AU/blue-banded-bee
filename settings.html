@@ -779,12 +779,12 @@
                 ?
               </button>
               <div class="bb-dropdown-menu" id="userMenuDropdown">
-                <a class="bb-dropdown-item" href="/settings#profile"
-                  >Your account</a
-                >
                 <div class="bb-dropdown-item" style="cursor: default">
                   <strong id="userEmail">Loading...</strong>
                 </div>
+                <a class="bb-dropdown-item" href="/settings/account#profile"
+                  >Your account</a
+                >
                 <div class="bb-dropdown-divider"></div>
                 <div class="bb-dropdown-item" style="cursor: default">
                   <span id="userMenuOrgName">Organisation</span> settings
@@ -806,20 +806,28 @@
                     >
                   </div>
                 </div>
-                <a class="bb-dropdown-item" href="/settings#payment-methods"
+                <a
+                  class="bb-dropdown-item"
+                  href="/settings/billing#payment-methods"
                   >Billing</a
                 >
-                <a class="bb-dropdown-item" href="/settings#current">Plans</a>
-                <a class="bb-dropdown-item" href="/settings#slack"
+                <a class="bb-dropdown-item" href="/settings/plans#current"
+                  >Plans</a
+                >
+                <a class="bb-dropdown-item" href="/settings/notifications#slack"
                   >Notifications</a
                 >
-                <a class="bb-dropdown-item" href="/settings#google-analytics"
+                <a
+                  class="bb-dropdown-item"
+                  href="/settings/analytics#google-analytics"
                   >Analytics</a
                 >
-                <a class="bb-dropdown-item" href="/settings#webflow"
+                <a class="bb-dropdown-item" href="/settings/auto-crawl#webflow"
                   >Auto-crawl</a
                 >
-                <a class="bb-dropdown-item" href="/settings#members">Team</a>
+                <a class="bb-dropdown-item" href="/settings/team#members"
+                  >Team</a
+                >
                 <div class="bb-dropdown-divider"></div>
                 <button
                   id="logoutBtn"
