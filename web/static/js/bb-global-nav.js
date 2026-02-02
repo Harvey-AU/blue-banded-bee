@@ -1,13 +1,23 @@
 (function () {
-  if (window.location.pathname.startsWith("/shared/jobs/")) {
-    return;
-  }
-
   let resolveNavReady = null;
   if (!window.BB_NAV_READY) {
     window.BB_NAV_READY = new Promise((resolve) => {
       resolveNavReady = resolve;
     });
+  }
+
+  if (document.querySelector(".global-nav")) {
+    if (resolveNavReady) {
+      resolveNavReady();
+    }
+    return;
+  }
+
+  if (window.location.pathname.startsWith("/shared/jobs/")) {
+    if (resolveNavReady) {
+      resolveNavReady();
+    }
+    return;
   }
 
   const navHtml = `
@@ -166,74 +176,184 @@
     </div>
   `;
 
-  const navWrapper = document.createElement("div");
-  navWrapper.innerHTML = navHtml.trim();
-  const navElement = navWrapper.firstElementChild;
-  if (!navElement || !document.body) return;
-  document.body.prepend(navElement);
+  const mountNav = () => {
+    const navWrapper = document.createElement("div");
+    navWrapper.innerHTML = navHtml.trim();
+    const navElement = navWrapper.firstElementChild;
+    if (!navElement || !document.body) return;
 
-  const titleEl = navElement.querySelector("#globalNavTitle");
-  const separatorEl = navElement.querySelector("#globalNavSeparator");
-  const currentOrgName = navElement.querySelector("#currentOrgName");
-  const settingsOrgName = document.getElementById("settingsOrgName");
-  const path = window.location.pathname.replace(/\/$/, "");
-  const navLinks = navElement.querySelectorAll(".nav-link");
+    document.body.prepend(navElement);
 
-  const titleMap = [
-    { match: (p) => p === "/dashboard", title: "Dashboard" },
-    { match: (p) => p.startsWith("/settings"), title: "Settings" },
-    { match: (p) => p.startsWith("/jobs/"), title: "Job Details" },
-  ];
+    const titleEl = navElement.querySelector("#globalNavTitle");
+    const separatorEl = navElement.querySelector("#globalNavSeparator");
+    const currentOrgName = navElement.querySelector("#currentOrgName");
+    const settingsOrgName = document.getElementById("settingsOrgName");
+    const path = window.location.pathname.replace(/\/$/, "");
+    const navLinks = navElement.querySelectorAll(".nav-link");
 
-  const titleMatch = titleMap.find((entry) => entry.match(path));
-  if (titleEl) {
-    titleEl.textContent = titleMatch ? titleMatch.title : "";
-  }
-  if (separatorEl) {
-    separatorEl.style.display = titleMatch ? "inline" : "none";
-  }
+    const titleMap = [
+      { match: (p) => p === "/dashboard", title: "Dashboard" },
+      { match: (p) => p.startsWith("/settings"), title: "Settings" },
+      { match: (p) => p.startsWith("/jobs/"), title: "Job Details" },
+    ];
 
-  navLinks.forEach((link) => {
-    try {
-      const linkPath = new URL(link.href).pathname.replace(/\/$/, "");
-      const isDashboard = linkPath === "/dashboard";
-      const isSettings = linkPath.startsWith("/settings");
-
-      const active =
-        (isDashboard && (path === "/dashboard" || path.startsWith("/jobs"))) ||
-        (isSettings && path.startsWith("/settings"));
-
-      link.classList.toggle("active", active);
-    } catch (err) {
-      link.classList.remove("active");
+    const titleMatch = titleMap.find((entry) => entry.match(path));
+    if (titleEl) {
+      titleEl.textContent = titleMatch ? titleMatch.title : "";
     }
-  });
-
-  if (currentOrgName) {
-    const activeOrgName = window.BB_ACTIVE_ORG?.name;
-    if (activeOrgName) {
-      currentOrgName.textContent = activeOrgName;
-    } else if (settingsOrgName?.textContent?.trim()) {
-      currentOrgName.textContent = settingsOrgName.textContent.trim();
+    if (separatorEl) {
+      separatorEl.style.display = titleMatch ? "inline" : "none";
     }
 
-    if (settingsOrgName) {
-      const observer = new MutationObserver(() => {
-        const nextName = settingsOrgName.textContent?.trim();
-        if (nextName) {
-          currentOrgName.textContent = nextName;
+    navLinks.forEach((link) => {
+      try {
+        const linkPath = new URL(link.href).pathname.replace(/\/$/, "");
+        const isDashboard = linkPath === "/dashboard";
+        const isSettings = linkPath.startsWith("/settings");
+
+        const active =
+          (isDashboard &&
+            (path === "/dashboard" || path.startsWith("/jobs"))) ||
+          (isSettings && path.startsWith("/settings"));
+
+        link.classList.toggle("active", active);
+      } catch (err) {
+        link.classList.remove("active");
+      }
+    });
+
+    const initNavOrgSwitcher = async () => {
+      if (!currentOrgName || !window.supabase?.auth) return;
+
+      if (settingsOrgName) {
+        const observer = new MutationObserver(() => {
+          const nextName = settingsOrgName.textContent?.trim();
+          if (nextName) {
+            currentOrgName.textContent = nextName;
+          }
+        });
+        observer.observe(settingsOrgName, {
+          childList: true,
+          characterData: true,
+          subtree: true,
+        });
+      }
+
+      try {
+        const sessionResult = await window.supabase.auth.getSession();
+        const session = sessionResult?.data?.session;
+        if (!session) return;
+
+        const response = await fetch("/v1/organisations", {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        });
+        if (!response.ok) return;
+
+        const data = await response.json();
+        const organisations = data.data?.organisations || [];
+        const orgListEl = navElement.querySelector("#orgList");
+        const orgSwitcher = navElement.querySelector("#orgSwitcher");
+        const orgBtn = navElement.querySelector("#orgSwitcherBtn");
+
+        if (organisations.length === 0) {
+          currentOrgName.textContent = "No Organisation";
+          return;
         }
-      });
-      observer.observe(settingsOrgName, {
-        childList: true,
-        characterData: true,
-        subtree: true,
-      });
-    }
-  }
 
-  if (resolveNavReady) {
-    resolveNavReady();
+        let activeOrg = organisations.find(
+          (org) => org.id === window.BB_ACTIVE_ORG?.id
+        );
+
+        if (!activeOrg) {
+          try {
+            const { data: userData } = await window.supabase
+              .from("users")
+              .select("active_organisation_id")
+              .eq("id", session.user.id)
+              .single();
+
+            const activeOrgId = userData?.active_organisation_id;
+            activeOrg =
+              organisations.find((org) => org.id === activeOrgId) ||
+              organisations[0];
+          } catch (err) {
+            activeOrg = organisations[0];
+          }
+        }
+
+        if (activeOrg) {
+          window.BB_ACTIVE_ORG = activeOrg;
+          currentOrgName.textContent = activeOrg.name || "Organisation";
+        }
+
+        if (orgListEl) {
+          orgListEl.innerHTML = "";
+          organisations.forEach((org) => {
+            const button = document.createElement("button");
+            button.className = "bb-org-item";
+            button.textContent = org.name;
+            if (org.id === activeOrg?.id) {
+              button.classList.add("active");
+            }
+            button.addEventListener("click", async () => {
+              if (!orgSwitcher || !orgBtn) return;
+              orgSwitcher.classList.remove("open");
+              orgBtn.setAttribute("aria-expanded", "false");
+
+              try {
+                const switchRes = await fetch("/v1/organisations/switch", {
+                  method: "POST",
+                  headers: {
+                    Authorization: `Bearer ${session.access_token}`,
+                    "Content-Type": "application/json",
+                  },
+                  body: JSON.stringify({ organisation_id: org.id }),
+                });
+
+                if (switchRes.ok) {
+                  const switchData = await switchRes.json();
+                  window.BB_ACTIVE_ORG = switchData.data?.organisation;
+                  currentOrgName.textContent = org.name;
+                }
+              } catch (err) {
+                return;
+              }
+            });
+            orgListEl.appendChild(button);
+          });
+        }
+
+        if (orgSwitcher && orgBtn) {
+          orgBtn.addEventListener("click", (event) => {
+            event.stopPropagation();
+            orgSwitcher.classList.toggle("open");
+            orgBtn.setAttribute(
+              "aria-expanded",
+              orgSwitcher.classList.contains("open")
+            );
+          });
+
+          document.addEventListener("click", () => {
+            orgSwitcher.classList.remove("open");
+            orgBtn.setAttribute("aria-expanded", "false");
+          });
+        }
+      } catch (err) {
+        return;
+      }
+    };
+
+    initNavOrgSwitcher();
+
+    if (resolveNavReady) {
+      resolveNavReady();
+    }
+    document.dispatchEvent(new CustomEvent("bb:nav-ready"));
+  };
+
+  if (document.body) {
+    mountNav();
+  } else {
+    document.addEventListener("DOMContentLoaded", mountNav, { once: true });
   }
-  document.dispatchEvent(new CustomEvent("bb:nav-ready"));
 })();
