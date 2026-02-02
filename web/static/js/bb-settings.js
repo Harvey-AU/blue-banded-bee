@@ -1428,6 +1428,10 @@
         await window.setupQuickAuth(dataBinder);
       }
 
+      if (window.BB_NAV_READY) {
+        await window.BB_NAV_READY;
+      }
+
       setupSettingsNavigation();
       setupNotificationsDropdown();
       setupUserMenuDropdown();
