@@ -516,11 +516,17 @@
         padding: 24px;
       }
 
-      .settings-ready .settings-section {
+      html[data-settings-section] .settings-section {
         display: none;
       }
 
-      .settings-ready .settings-section.active {
+      html[data-settings-section="account"] #account,
+      html[data-settings-section="team"] #team,
+      html[data-settings-section="plans"] #plans,
+      html[data-settings-section="billing"] #billing,
+      html[data-settings-section="notifications"] #notifications,
+      html[data-settings-section="analytics"] #analytics,
+      html[data-settings-section="auto-crawl"] #auto-crawl {
         display: block;
       }
 
