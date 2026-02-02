@@ -68,8 +68,6 @@ function setupDashboardActions() {
       }
     });
   }
-
-  console.log("Dashboard action handlers initialised");
 }
 
 function handleDashboardAction(action, element) {

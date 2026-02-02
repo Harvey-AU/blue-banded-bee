@@ -1083,6 +1083,7 @@ type enqueueJobConfig struct {
 	concurrency      sql.NullInt64
 	runningTasks     int
 	pendingTaskCount int
+	domainID         sql.NullInt64
 	domainName       sql.NullString
 	orgID            sql.NullString
 	quotaRemaining   sql.NullInt64
@@ -1189,7 +1190,7 @@ func (q *DbQueue) EnqueueURLs(ctx context.Context, jobID string, pages []Page, s
 		// Get job's max_pages, concurrency, domain, org, and current task counts
 		var cfg enqueueJobConfig
 		err := tx.QueryRowContext(ctx, `
-			SELECT j.max_pages, j.concurrency, j.running_tasks, j.pending_tasks, d.name,
+			SELECT j.max_pages, j.concurrency, j.running_tasks, j.pending_tasks, j.domain_id, d.name,
 				   COALESCE((SELECT COUNT(*) FROM tasks WHERE job_id = $1 AND status != 'skipped'), 0),
 				   j.organisation_id,
 				   CASE WHEN j.organisation_id IS NOT NULL
@@ -1201,7 +1202,7 @@ func (q *DbQueue) EnqueueURLs(ctx context.Context, jobID string, pages []Page, s
 			WHERE j.id = $1
 			FOR UPDATE OF j
 		`, jobID).Scan(&cfg.maxPages, &cfg.concurrency, &cfg.runningTasks, &cfg.pendingTaskCount,
-			&cfg.domainName, &cfg.currentTaskCount, &cfg.orgID, &cfg.quotaRemaining)
+			&cfg.domainID, &cfg.domainName, &cfg.currentTaskCount, &cfg.orgID, &cfg.quotaRemaining)
 		if err != nil {
 			return fmt.Errorf("failed to get job configuration and task count: %w", err)
 		}
@@ -1356,6 +1357,31 @@ func (q *DbQueue) EnqueueURLs(ctx context.Context, jobID string, pages []Page, s
 
 		if err != nil {
 			return fmt.Errorf("failed to insert tasks: %w", err)
+		}
+
+		// Apply traffic scores from page_analytics using GREATEST
+		// This ensures high-traffic pages get prioritised even if structural priority is low
+		if cfg.orgID.Valid && cfg.domainID.Valid {
+			_, err = tx.ExecContext(ctx, `
+				UPDATE tasks t
+				SET priority_score = GREATEST(t.priority_score, COALESCE(pa.traffic_score, 0))
+				FROM pages p
+				JOIN page_analytics pa ON pa.organisation_id = $1
+					AND pa.domain_id = $2
+					AND pa.path = p.path
+				WHERE t.page_id = p.id
+				AND t.job_id = $3
+				AND t.status IN ('pending', 'waiting')
+				AND COALESCE(pa.traffic_score, 0) > t.priority_score
+			`, cfg.orgID.String, cfg.domainID.Int64, jobID)
+			if err != nil {
+				// Log but don't fail - traffic scores are an optimisation
+				log.Warn().
+					Err(err).
+					Str("job_id", jobID).
+					Str("next_action", "continuing_without_traffic_scores").
+					Msg("Failed to apply traffic scores to new tasks; continuing without scores")
+			}
 		}
 
 		// Note: Daily usage is incremented when tasks COMPLETE, not when created

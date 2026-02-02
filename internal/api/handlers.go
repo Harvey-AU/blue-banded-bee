@@ -171,6 +171,26 @@ type DBClient interface {
 	UpdateGoogleConnectionStatus(ctx context.Context, connectionID, organisationID, status string) error
 	StoreGoogleToken(ctx context.Context, connectionID, refreshToken string) error
 	GetGoogleToken(ctx context.Context, connectionID string) (string, error)
+	GetActiveGAConnectionForOrganisation(ctx context.Context, orgID string) (*db.GoogleAnalyticsConnection, error)
+	GetActiveGAConnectionForDomain(ctx context.Context, organisationID string, domainID int) (*db.GoogleAnalyticsConnection, error)
+	GetDomainsForOrganisation(ctx context.Context, organisationID string) ([]db.OrganisationDomain, error)
+	UpdateConnectionLastSync(ctx context.Context, connectionID string) error
+	UpdateConnectionDomains(ctx context.Context, connectionID string, domainIDs []int) error
+	MarkConnectionInactive(ctx context.Context, connectionID, reason string) error
+	UpsertPageWithAnalytics(ctx context.Context, organisationID string, domainID int, path string, pageViews map[string]int64, connectionID string) (int, error)
+	CalculateTrafficScores(ctx context.Context, organisationID string, domainID int) error
+	ApplyTrafficScoresToTasks(ctx context.Context, organisationID string, domainID int) error
+	GetOrCreateDomainID(ctx context.Context, domain string) (int, error)
+	UpsertOrganisationDomain(ctx context.Context, organisationID string, domainID int) error
+	// Google Analytics accounts methods (for persistent account storage)
+	UpsertGA4Account(ctx context.Context, account *db.GoogleAnalyticsAccount) error
+	ListGA4Accounts(ctx context.Context, organisationID string) ([]*db.GoogleAnalyticsAccount, error)
+	GetGA4Account(ctx context.Context, accountID string) (*db.GoogleAnalyticsAccount, error)
+	GetGA4AccountByGoogleID(ctx context.Context, organisationID, googleAccountID string) (*db.GoogleAnalyticsAccount, error)
+	StoreGA4AccountToken(ctx context.Context, accountID, refreshToken string) error
+	GetGA4AccountToken(ctx context.Context, accountID string) (string, error)
+	GetGA4AccountWithToken(ctx context.Context, organisationID string) (*db.GoogleAnalyticsAccount, error)
+	GetGAConnectionWithToken(ctx context.Context, organisationID string) (*db.GoogleAnalyticsConnection, error)
 	// Platform integration mappings
 	UpsertPlatformOrgMapping(ctx context.Context, mapping *db.PlatformOrgMapping) error
 	GetPlatformOrgMapping(ctx context.Context, platform, platformID string) (*db.PlatformOrgMapping, error)
@@ -192,15 +212,19 @@ type DBClient interface {
 
 // Handler holds dependencies for API handlers
 type Handler struct {
-	DB          DBClient
-	JobsManager jobs.JobManagerInterface
+	DB                 DBClient
+	JobsManager        jobs.JobManagerInterface
+	GoogleClientID     string
+	GoogleClientSecret string
 }
 
 // NewHandler creates a new API handler with dependencies
-func NewHandler(pgDB DBClient, jobsManager jobs.JobManagerInterface) *Handler {
+func NewHandler(pgDB DBClient, jobsManager jobs.JobManagerInterface, googleClientID, googleClientSecret string) *Handler {
 	return &Handler{
-		DB:          pgDB,
-		JobsManager: jobsManager,
+		DB:                 pgDB,
+		JobsManager:        jobsManager,
+		GoogleClientID:     googleClientID,
+		GoogleClientSecret: googleClientSecret,
 	}
 }
 
@@ -293,6 +317,9 @@ func (h *Handler) SetupRoutes(mux *http.ServeMux) {
 	mux.Handle("/v1/organisations/invites", auth.AuthMiddleware(http.HandlerFunc(h.OrganisationInvitesHandler)))
 	mux.Handle("/v1/organisations/invites/", auth.AuthMiddleware(http.HandlerFunc(h.OrganisationInviteHandler)))
 	mux.Handle("/v1/organisations/plan", auth.AuthMiddleware(http.HandlerFunc(h.OrganisationPlanHandler)))
+
+	// Domain routes (require auth)
+	mux.Handle("/v1/domains", auth.AuthMiddleware(http.HandlerFunc(h.DomainsHandler)))
 
 	// Usage routes (require auth)
 	mux.Handle("/v1/usage", auth.AuthMiddleware(http.HandlerFunc(h.UsageHandler)))
@@ -995,7 +1022,7 @@ func (h *Handler) WebflowWebhook(w http.ResponseWriter, r *http.Request) {
 		userForJob.ActiveOrganisationID = &orgID
 		userForJob.OrganisationID = &orgID
 	}
-	job, err := h.createJobFromRequest(r.Context(), &userForJob, req)
+	job, err := h.createJobFromRequest(r.Context(), &userForJob, req, logger)
 	if err != nil {
 		logger.Error().Err(err).
 			Str("user_id", user.ID).

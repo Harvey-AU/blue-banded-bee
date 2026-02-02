@@ -709,3 +709,247 @@ func Serialise(v interface{}) string {
 	}
 	return string(data)
 }
+
+// UpsertPageWithAnalytics creates or updates a page and its org-scoped analytics data
+// Stores GA4 page view data in the page_analytics table tied to the organisation
+func (db *DB) UpsertPageWithAnalytics(
+	ctx context.Context,
+	organisationID string,
+	domainID int,
+	path string,
+	pageViews map[string]int64,
+	connectionID string,
+) (int, error) {
+	// Create/get page_id in pages table
+	pageQuery := `
+		INSERT INTO pages (domain_id, path, created_at)
+		VALUES ($1, $2, NOW())
+		ON CONFLICT (domain_id, path)
+		DO UPDATE SET domain_id = EXCLUDED.domain_id
+		RETURNING id
+	`
+
+	var pageID int
+	err := db.client.QueryRowContext(ctx, pageQuery, domainID, path).Scan(&pageID)
+	if err != nil {
+		return 0, fmt.Errorf("failed to upsert page: %w", err)
+	}
+
+	// Upsert analytics data to page_analytics table (org-scoped to prevent data leaking)
+	analyticsQuery := `
+		INSERT INTO page_analytics (
+			organisation_id, domain_id, path,
+			page_views_7d, page_views_28d, page_views_180d,
+			ga_connection_id, fetched_at
+		)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+		ON CONFLICT (organisation_id, domain_id, path)
+		DO UPDATE SET
+			page_views_7d = EXCLUDED.page_views_7d,
+			page_views_28d = EXCLUDED.page_views_28d,
+			page_views_180d = EXCLUDED.page_views_180d,
+			ga_connection_id = EXCLUDED.ga_connection_id,
+			fetched_at = NOW(),
+			updated_at = NOW()
+	`
+
+	// Extract page view values with defaults
+	pageViews7d := pageViews["7d"]
+	pageViews28d := pageViews["28d"]
+	pageViews180d := pageViews["180d"]
+
+	// Handle nullable connection ID
+	var connID any
+	if connectionID != "" {
+		connID = connectionID
+	}
+
+	_, err = db.client.ExecContext(ctx, analyticsQuery,
+		organisationID, domainID, path,
+		pageViews7d, pageViews28d, pageViews180d,
+		connID,
+	)
+	if err != nil {
+		// Log but don't fail - page was created successfully
+		log.Warn().
+			Err(err).
+			Str("organisation_id", organisationID).
+			Int("domain_id", domainID).
+			Str("next_action", "continuing_without_analytics").
+			Msg("Failed to upsert page analytics data; continuing without analytics")
+	}
+
+	return pageID, nil
+}
+
+// CalculateTrafficScores calculates and stores traffic scores for all pages in a domain
+// using a log-scaled view curve (28-day). This emphasises high-traffic pages while
+// keeping the long tail near the floor.
+// Score range: 0 (0-1 views) then 0.10 (floor) to 0.99 (ceiling).
+func (db *DB) CalculateTrafficScores(ctx context.Context, organisationID string, domainID int) error {
+	// Calculate log-scaled scores in a single query.
+	query := `
+		WITH stats AS (
+			SELECT
+				id,
+				COALESCE(page_views_28d, 0) AS page_views_28d,
+				MIN(COALESCE(page_views_28d, 0)) OVER () AS min_views,
+				MAX(COALESCE(page_views_28d, 0)) OVER () AS max_views
+			FROM page_analytics
+			WHERE organisation_id = $1 AND domain_id = $2
+		)
+		UPDATE page_analytics pa
+		SET traffic_score = CASE
+			WHEN s.page_views_28d <= 1 THEN 0
+			WHEN s.max_views = 0 THEN 0.10
+			WHEN s.max_views = s.min_views THEN 0.10
+			ELSE 0.10 + 0.89 * (
+				LN(s.page_views_28d + 1) - LN(s.min_views + 1)
+			) / NULLIF(
+				LN(s.max_views + 1) - LN(s.min_views + 1),
+				0
+			)
+		END,
+		updated_at = NOW()
+		FROM stats s
+		WHERE pa.id = s.id
+	`
+
+	result, err := db.client.ExecContext(ctx, query, organisationID, domainID)
+	if err != nil {
+		return fmt.Errorf("failed to calculate traffic scores: %w", err)
+	}
+
+	rowsAffected, _ := result.RowsAffected()
+	log.Info().
+		Str("organisation_id", organisationID).
+		Int("domain_id", domainID).
+		Int64("pages_updated", rowsAffected).
+		Msg("Calculated traffic scores for domain")
+
+	return nil
+}
+
+// ApplyTrafficScoresToTasks updates pending tasks using traffic scores for a domain.
+// This ensures existing tasks are reprioritised once analytics are available.
+func (db *DB) ApplyTrafficScoresToTasks(ctx context.Context, organisationID string, domainID int) error {
+	query := `
+		UPDATE tasks t
+		SET priority_score = GREATEST(t.priority_score, COALESCE(pa.traffic_score, 0))
+		FROM pages p
+		JOIN jobs j ON t.job_id = j.id
+		LEFT JOIN page_analytics pa ON pa.organisation_id = j.organisation_id
+			AND pa.domain_id = p.domain_id
+			AND pa.path = p.path
+		WHERE j.organisation_id = $1
+		AND p.domain_id = $2
+		AND t.page_id = p.id
+		AND t.status IN ('pending', 'waiting')
+		AND COALESCE(pa.traffic_score, 0) > t.priority_score
+	`
+
+	result, err := db.client.ExecContext(ctx, query, organisationID, domainID)
+	if err != nil {
+		return fmt.Errorf("failed to apply traffic scores to tasks: %w", err)
+	}
+
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected > 0 {
+		log.Info().
+			Str("organisation_id", organisationID).
+			Int("domain_id", domainID).
+			Int64("tasks_updated", rowsAffected).
+			Msg("Applied traffic scores to pending tasks")
+	} else {
+		log.Debug().
+			Str("organisation_id", organisationID).
+			Int("domain_id", domainID).
+			Msg("No pending tasks to reprioritise")
+	}
+
+	return nil
+}
+
+// GetOrCreateDomainID retrieves or creates a domain ID for a given domain name
+// Uses INSERT ... ON CONFLICT to handle concurrent creation atomically
+func (db *DB) GetOrCreateDomainID(ctx context.Context, domain string) (int, error) {
+	var domainID int
+
+	// Use upsert to handle concurrent creation atomically
+	query := `
+		INSERT INTO domains (name, created_at)
+		VALUES ($1, NOW())
+		ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
+		RETURNING id
+	`
+	err := db.client.QueryRowContext(ctx, query, domain).Scan(&domainID)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get or create domain: %w", err)
+	}
+
+	return domainID, nil
+}
+
+// UpsertOrganisationDomain ensures a domain is associated with an organisation.
+func (db *DB) UpsertOrganisationDomain(ctx context.Context, organisationID string, domainID int) error {
+	query := `
+		INSERT INTO organisation_domains (organisation_id, domain_id, created_at)
+		VALUES ($1, $2, NOW())
+		ON CONFLICT (organisation_id, domain_id) DO NOTHING
+	`
+	if _, err := db.client.ExecContext(ctx, query, organisationID, domainID); err != nil {
+		return fmt.Errorf("failed to upsert organisation domain: %w", err)
+	}
+	return nil
+}
+
+// OrganisationDomain represents a domain belonging to an organisation
+type OrganisationDomain struct {
+	ID   int    `json:"id"`
+	Name string `json:"name"`
+}
+
+// GetDomainsForOrganisation returns all domains that belong to the organisation
+// This includes domains from jobs created by any user in the organisation
+func (db *DB) GetDomainsForOrganisation(ctx context.Context, organisationID string) ([]OrganisationDomain, error) {
+	query := `
+		SELECT DISTINCT id, name
+		FROM (
+			SELECT d.id, d.name
+			FROM domains d
+			JOIN organisation_domains od ON od.domain_id = d.id
+			WHERE od.organisation_id = $1
+			UNION
+			SELECT d.id, d.name
+			FROM domains d
+			JOIN jobs j ON j.domain_id = d.id
+			WHERE j.organisation_id = $1
+		) AS org_domains
+		ORDER BY name ASC
+	`
+
+	rows, err := db.client.QueryContext(ctx, query, organisationID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query organisation domains: %w", err)
+	}
+	defer func() {
+		if closeErr := rows.Close(); closeErr != nil {
+			log.Error().Err(closeErr).Str("organisation_id", organisationID).Msg("Failed to close rows")
+		}
+	}()
+
+	var domains []OrganisationDomain
+	for rows.Next() {
+		var domain OrganisationDomain
+		if err := rows.Scan(&domain.ID, &domain.Name); err != nil {
+			return nil, fmt.Errorf("failed to scan domain: %w", err)
+		}
+		domains = append(domains, domain)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating domains: %w", err)
+	}
+
+	return domains, nil
+}

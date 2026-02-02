@@ -45,6 +45,13 @@ Bee).
 | `bbb-on:submit` | Form submission        | `<form bbb-on:submit="create-job">...</form>`   | Calls handler on submit       |
 | `bbb-submit`    | Form submit shorthand  | `<form bbb-submit="create-job">...</form>`      | Calls handler on submit       |
 
+### Domain Search
+
+| Attribute           | Purpose                           | Example                              | Behaviour                                                            |
+| ------------------- | --------------------------------- | ------------------------------------ | -------------------------------------------------------------------- |
+| `bbb-domain-create` | Control domain creation behaviour | `<input bbb-domain-create="auto" />` | auto: Enter creates, option: shows create option, block: no creation |
+| `bbb-domain-search` | Enable domain search dropdown     | `<input bbb-domain-search="off" />`  | on (default): enable search, off/disabled: no search wiring          |
+
 ### Metadata & Help
 
 | Attribute     | Purpose                | Example                                       | Behavior                                     |

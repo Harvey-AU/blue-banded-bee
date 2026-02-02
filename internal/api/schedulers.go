@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -112,6 +113,12 @@ func (h *Handler) createScheduler(w http.ResponseWriter, r *http.Request) {
 
 	if req.Domain == "" {
 		BadRequest(w, r, "Domain is required")
+		return
+	}
+
+	// Validate domain format
+	if err := util.ValidateDomain(req.Domain); err != nil {
+		BadRequest(w, r, fmt.Sprintf("Invalid domain: %s", err.Error()))
 		return
 	}
 
