@@ -2058,7 +2058,7 @@ body.page-job-details a {
   color: inherit;
 }
 
-body.page-job-details header {
+body.page-job-details header.page-header-compact {
   background: white;
   border-bottom: 1px solid #e5e7eb;
   position: sticky;
@@ -2067,13 +2067,9 @@ body.page-job-details header {
 }
 
 body.page-job-details header.page-header-compact .container {
-  padding: 12px 24px;
-}
-
-body.page-job-details header .container {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 20px 24px;
+  padding: 12px 24px;
   display: flex;
   justify-content: space-between;
   align-items: center;
