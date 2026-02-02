@@ -103,6 +103,7 @@ function handleGoogleAction(action, element) {
  */
 async function loadGoogleConnections() {
   try {
+    resetSelectedGoogleProperties();
     if (!window.dataBinder?.fetchData) {
       console.warn(
         "dataBinder not available, skipping Google connections load"
@@ -357,6 +358,7 @@ async function selectGoogleAccount(accountId) {
     // Store selected account and properties
     pendingGASessionData.selected_account_id = accountId;
     pendingGASessionData.properties = properties;
+    resetSelectedGoogleProperties();
 
     // Hide account selection, show property selection
     hideAccountSelection();
@@ -385,13 +387,7 @@ async function saveGoogleProperties() {
       return;
     }
 
-    // Get selected (active) property IDs
-    const selectedItems = document.querySelectorAll(
-      "#googlePropertyList .selected[data-property-id]"
-    );
-    const activePropertyIds = Array.from(selectedItems).map((item) =>
-      item.getAttribute("data-property-id")
-    );
+    const activePropertyIds = Array.from(selectedGooglePropertyIds);
 
     // Show saving state
     const saveBtn = document.querySelector(
@@ -424,6 +420,7 @@ async function saveGoogleProperties() {
 
     // Clear stored session data
     pendingGASessionData = null;
+    resetSelectedGoogleProperties();
 
     hidePropertySelection();
     const activeCount = activePropertyIds.length;
@@ -523,7 +520,8 @@ function renderPropertyList(properties, totalCount) {
     item.className = "bb-job-card";
     item.style.cssText =
       "display: flex; align-items: center; width: 100%; margin-bottom: 8px; padding: 12px 16px; background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 8px;";
-    item.setAttribute("data-property-id", prop.property_id);
+    const propertyId = prop.property_id;
+    item.setAttribute("data-property-id", propertyId);
 
     // Property details
     const details = document.createElement("div");
@@ -552,7 +550,7 @@ function renderPropertyList(properties, totalCount) {
     toggleInput.type = "checkbox";
     toggleInput.className = "property-status-toggle";
     toggleInput.style.display = "none";
-    toggleInput.setAttribute("data-property-id", prop.property_id);
+    toggleInput.setAttribute("data-property-id", propertyId);
 
     const track = document.createElement("div");
     track.className = "property-toggle-track";
@@ -563,6 +561,14 @@ function renderPropertyList(properties, totalCount) {
     thumb.className = "property-toggle-thumb";
     thumb.style.cssText =
       "position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; background-color: white; border-radius: 10px; transition: transform 0.2s; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);";
+
+    const isSelected = selectedGooglePropertyIds.has(propertyId);
+    toggleInput.checked = isSelected;
+    if (isSelected) {
+      track.style.backgroundColor = "#10b981";
+      thumb.style.transform = "translateX(20px)";
+      item.classList.add("selected");
+    }
 
     track.appendChild(thumb);
     toggleLabel.appendChild(toggleInput);
@@ -576,10 +582,12 @@ function renderPropertyList(properties, totalCount) {
       toggleInput.checked = newActive;
 
       if (newActive) {
+        selectedGooglePropertyIds.add(propertyId);
         track.style.backgroundColor = "#10b981";
         thumb.style.transform = "translateX(20px)";
         item.classList.add("selected");
       } else {
+        selectedGooglePropertyIds.delete(propertyId);
         track.style.backgroundColor = "#d1d5db";
         thumb.style.transform = "translateX(0)";
         item.classList.remove("selected");
@@ -705,6 +713,7 @@ function hidePropertySelection() {
   }
   // Clear stored properties
   allGoogleProperties = [];
+  resetSelectedGoogleProperties();
 }
 
 /**
@@ -835,6 +844,11 @@ function showGoogleError(message) {
 
 // Store pending session data for property selection
 let pendingGASessionData = null;
+const selectedGooglePropertyIds = new Set();
+
+const resetSelectedGoogleProperties = () => {
+  selectedGooglePropertyIds.clear();
+};
 
 /**
  * Handle OAuth callback result checks
@@ -890,6 +904,7 @@ async function handleGoogleOAuthCallback() {
       // Store session ID for subsequent requests
       sessionData.session_id = gaSession;
       pendingGASessionData = sessionData;
+      resetSelectedGoogleProperties();
 
       // Ensure analytics section is visible
       const analyticsSection = document.getElementById(

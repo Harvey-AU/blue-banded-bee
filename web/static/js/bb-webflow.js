@@ -365,8 +365,9 @@ function handleWebflowOAuthCallback() {
 function focusWebflowSettings() {
   const targetPath = "/settings/auto-crawl";
   const targetHash = "#webflow";
+  const currentPath = window.location.pathname.replace(/\/$/, "");
 
-  if (!window.location.pathname.startsWith("/settings")) {
+  if (currentPath !== targetPath) {
     window.location.href = `${targetPath}${targetHash}`;
     return;
   }
