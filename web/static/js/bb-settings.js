@@ -192,13 +192,16 @@
     const panels = document.querySelectorAll(".settings-tab-panel");
 
     panels.forEach((panel) => {
-      panel.classList.toggle("active", panel.id === panelId);
+      const isActive = panel.id === panelId;
+      panel.classList.toggle("active", isActive);
+      panel.setAttribute("aria-hidden", isActive ? "false" : "true");
     });
 
     tabs.forEach((tab) => {
       const isActive = tab.dataset.tabTarget === panelId;
       tab.classList.toggle("active", isActive);
       tab.setAttribute("aria-selected", isActive ? "true" : "false");
+      tab.setAttribute("tabindex", isActive ? "0" : "-1");
     });
   }
 

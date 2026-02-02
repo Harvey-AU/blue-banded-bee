@@ -978,7 +978,9 @@
                 class="settings-tab active"
                 type="button"
                 data-tab-target="planTabCurrent"
+                id="planTabCurrentTrigger"
                 role="tab"
+                aria-controls="planTabCurrent"
                 aria-selected="true"
               >
                 Current
@@ -987,7 +989,9 @@
                 class="settings-tab"
                 type="button"
                 data-tab-target="planTabChange"
+                id="planTabChangeTrigger"
                 role="tab"
+                aria-controls="planTabChange"
                 aria-selected="false"
               >
                 Change plan
@@ -996,14 +1000,22 @@
                 class="settings-tab"
                 type="button"
                 data-tab-target="planTabUsage"
+                id="planTabUsageTrigger"
                 role="tab"
+                aria-controls="planTabUsage"
                 aria-selected="false"
               >
                 Usage history
               </button>
             </div>
 
-            <div class="settings-tab-panel active" id="planTabCurrent">
+            <div
+              class="settings-tab-panel active"
+              id="planTabCurrent"
+              role="tabpanel"
+              aria-labelledby="planTabCurrentTrigger"
+              tabindex="0"
+            >
               <div class="settings-card">
                 <div class="settings-row">
                   <div>
@@ -1021,13 +1033,25 @@
               </div>
             </div>
 
-            <div class="settings-tab-panel" id="planTabChange">
+            <div
+              class="settings-tab-panel"
+              id="planTabChange"
+              role="tabpanel"
+              aria-labelledby="planTabChangeTrigger"
+              tabindex="0"
+            >
               <div class="settings-card" id="compare">
                 <div class="settings-plan-grid" id="planCards"></div>
               </div>
             </div>
 
-            <div class="settings-tab-panel" id="planTabUsage">
+            <div
+              class="settings-tab-panel"
+              id="planTabUsage"
+              role="tabpanel"
+              aria-labelledby="planTabUsageTrigger"
+              tabindex="0"
+            >
               <div class="settings-card">
                 <strong>Usage history (30 days)</strong>
                 <div id="usageHistoryList" style="margin-top: 12px"></div>
@@ -1436,6 +1460,7 @@
                             <input
                               type="checkbox"
                               class="site-autopublish"
+                              aria-label="Run on Publish"
                               style="
                                 position: absolute;
                                 opacity: 0;
@@ -1625,10 +1650,18 @@
     </template>
 
     <!-- Create Organisation Modal -->
-    <div id="createOrgModal" class="bb-modal">
+    <div
+      id="createOrgModal"
+      class="bb-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="createOrgModalTitle"
+    >
       <div class="bb-modal-content" style="max-width: 440px">
         <div class="bb-modal-header">
-          <h2 class="bb-modal-title">Create Organisation</h2>
+          <h2 class="bb-modal-title" id="createOrgModalTitle">
+            Create Organisation
+          </h2>
           <button
             class="bb-modal-close"
             id="closeCreateOrgModal"
