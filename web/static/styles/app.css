@@ -9,6 +9,58 @@ body {
   min-height: 100vh;
 }
 
+.global-nav .container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+.global-nav .header {
+  background: #ffffff;
+  border-bottom: 1px solid #e5e7eb;
+  padding: 12px 0;
+  position: relative;
+  z-index: 50;
+}
+
+.global-nav .header-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.global-nav .logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #111827;
+  text-decoration: none;
+}
+
+.global-nav .logo:hover {
+  color: #111827;
+}
+
+.global-nav .header-nav {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
+.global-nav .nav-link {
+  color: #374151;
+  text-decoration: none;
+  font-weight: 500;
+  transition: color 0.2s ease;
+}
+
+.global-nav .nav-link:hover,
+.global-nav .nav-link.active {
+  color: #1d4ed8;
+}
+
 /* Shared component styles */
 .bb-modal {
   position: fixed;

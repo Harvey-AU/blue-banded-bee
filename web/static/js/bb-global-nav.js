@@ -15,6 +15,24 @@
     })
     .then((html) => {
       container.innerHTML = html;
+      const path = window.location.pathname.replace(/\/$/, "");
+      const navLinks = container.querySelectorAll(".nav-link");
+      navLinks.forEach((link) => {
+        try {
+          const linkPath = new URL(link.href).pathname.replace(/\/$/, "");
+          const isDashboard = linkPath === "/dashboard";
+          const isSettings = linkPath.startsWith("/settings");
+
+          const active =
+            (isDashboard &&
+              (path === "/dashboard" || path.startsWith("/jobs"))) ||
+            (isSettings && path.startsWith("/settings"));
+
+          link.classList.toggle("active", active);
+        } catch (err) {
+          link.classList.remove("active");
+        }
+      });
     })
     .catch((error) => {
       console.warn("Global nav load failed:", error);
