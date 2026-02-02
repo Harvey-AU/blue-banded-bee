@@ -1076,7 +1076,10 @@
 
     const btnRef = newBtn;
     const orgListRef = newOrgList;
-    let currentOrgNameRef = currentOrgName;
+    let currentOrgNameRef =
+      newBtn.querySelector("#currentOrgName") ||
+      document.getElementById("currentOrgName") ||
+      currentOrgName;
     let settingsBtnRef = settingsSwitcherBtn;
     let settingsOrgListRef = settingsOrgList;
     let settingsOrgNameRef = settingsOrgName;
