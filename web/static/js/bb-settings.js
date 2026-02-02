@@ -718,6 +718,53 @@
     subscribeToNotifications();
   }
 
+  function setupUserMenuDropdown() {
+    const dropdown = document.getElementById("userMenuDropdown");
+    const button = document.getElementById("userAvatar");
+    const orgName = document.getElementById("currentOrgName");
+    const userMenuOrgName = document.getElementById("userMenuOrgName");
+
+    if (!dropdown || !button) return;
+
+    const syncOrgName = () => {
+      if (!orgName || !userMenuOrgName) return;
+      const name = orgName.textContent?.trim();
+      if (name) {
+        userMenuOrgName.textContent = name;
+      }
+    };
+
+    syncOrgName();
+    if (orgName) {
+      const observer = new MutationObserver(syncOrgName);
+      observer.observe(orgName, {
+        childList: true,
+        characterData: true,
+        subtree: true,
+      });
+    }
+
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
+      const isOpen = dropdown.classList.toggle("show");
+      button.setAttribute("aria-expanded", isOpen ? "true" : "false");
+    });
+
+    document.addEventListener("click", (event) => {
+      if (!dropdown.contains(event.target) && !button.contains(event.target)) {
+        dropdown.classList.remove("show");
+        button.setAttribute("aria-expanded", "false");
+      }
+    });
+
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        dropdown.classList.remove("show");
+        button.setAttribute("aria-expanded", "false");
+      }
+    });
+  }
+
   async function subscribeToNotifications() {
     const orgId = window.BB_ACTIVE_ORG?.id;
     if (!orgId || !window.supabase) {
@@ -1247,6 +1294,7 @@
 
       setupSettingsNavigation();
       setupNotificationsDropdown();
+      setupUserMenuDropdown();
 
       const sessionResult = await window.supabase.auth.getSession();
       const session = sessionResult?.data?.session;

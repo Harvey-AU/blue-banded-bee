@@ -1656,11 +1656,6 @@
         </h1>
 
         <div class="user-menu">
-          <div class="status-indicator">
-            <span class="status-dot"></span>
-            <span>Live</span>
-          </div>
-
           <!-- Show when logged out -->
           <div bbb-auth="guest" class="auth-buttons">
             <button
@@ -1703,22 +1698,81 @@
               </div>
             </div>
 
-            <!-- Quota Display -->
-            <div
-              class="bb-quota-display"
-              id="quotaDisplay"
-              style="display: none"
-            >
-              <span class="bb-quota-plan" id="quotaPlan">Free</span>
-              <span class="bb-quota-usage">
-                <span class="bb-quota-usage-count" id="quotaUsage">0/1000</span>
-              </span>
-              <span class="bb-quota-reset" id="quotaReset">Resets in 12h</span>
+            <div class="bb-dropdown" id="userMenu">
+              <button
+                type="button"
+                class="user-avatar"
+                id="userAvatar"
+                aria-label="Open user menu"
+                aria-haspopup="true"
+                aria-expanded="false"
+              >
+                ?
+              </button>
+              <div class="bb-dropdown-menu" id="userMenuDropdown">
+                <a class="bb-dropdown-item" href="/settings#profile"
+                  >Your account</a
+                >
+                <div class="bb-dropdown-item" style="cursor: default">
+                  <strong id="userEmail">Loading...</strong>
+                </div>
+                <div class="bb-dropdown-divider"></div>
+                <div class="bb-dropdown-item" style="cursor: default">
+                  <span id="userMenuOrgName">Organisation</span> settings
+                </div>
+                <div class="bb-dropdown-item" style="cursor: default">
+                  <div
+                    class="bb-quota-display"
+                    id="quotaDisplay"
+                    style="display: none"
+                  >
+                    <span class="bb-quota-plan" id="quotaPlan">Free</span>
+                    <span class="bb-quota-usage">
+                      <span class="bb-quota-usage-count" id="quotaUsage"
+                        >0/1000</span
+                      >
+                    </span>
+                    <span class="bb-quota-reset" id="quotaReset"
+                      >Resets in 12h</span
+                    >
+                  </div>
+                </div>
+                <a class="bb-dropdown-item" href="/settings#payment-methods"
+                  >Billing</a
+                >
+                <a class="bb-dropdown-item" href="/settings#current">Plans</a>
+                <a class="bb-dropdown-item" href="/settings#slack"
+                  >Notifications</a
+                >
+                <a class="bb-dropdown-item" href="/settings#google-analytics"
+                  >Analytics</a
+                >
+                <a class="bb-dropdown-item" href="/settings#webflow"
+                  >Auto-crawl</a
+                >
+                <a class="bb-dropdown-item" href="/settings#members">Team</a>
+                <div class="bb-dropdown-divider"></div>
+                <button
+                  id="logoutBtn"
+                  class="bb-dropdown-item"
+                  aria-label="Sign out of your account"
+                  type="button"
+                >
+                  Sign Out
+                </button>
+                <div class="bb-dropdown-divider"></div>
+                <button
+                  id="resetDbBtn"
+                  class="bb-dropdown-item"
+                  style="display: none; color: #dc2626"
+                  title="Delete all jobs and tasks - USE WITH CAUTION"
+                  aria-label="Reset database - delete all jobs and tasks"
+                  type="button"
+                >
+                  Reset DB
+                </button>
+              </div>
             </div>
-
-            <span class="bb-org-divider">|</span>
-            <span id="userEmail">Loading...</span>
-            <div class="user-avatar" id="userAvatar">?</div>
             <!-- Notifications Dropdown -->
             <div class="bb-notifications-container" id="notificationsContainer">
               <button
@@ -1760,28 +1814,6 @@
                 </div>
               </div>
             </div>
-            <!-- Admin: Reset Database Button (only show for system admins) -->
-            <button
-              id="resetDbBtn"
-              class="bb-button bb-button-outline"
-              style="
-                margin-right: 8px;
-                background-color: #dc2626;
-                color: white;
-                display: none;
-              "
-              title="Delete all jobs and tasks - USE WITH CAUTION"
-              aria-label="Reset database - delete all jobs and tasks"
-            >
-              Reset DB
-            </button>
-            <button
-              id="logoutBtn"
-              class="bb-button bb-button-outline"
-              aria-label="Sign out of your account"
-            >
-              Sign Out
-            </button>
           </div>
         </div>
       </div>
@@ -2527,6 +2559,7 @@
           // Setup notifications modal handlers BEFORE OAuth callbacks
           // (callbacks may need to open the modal)
           setupNotificationsModal();
+          setupUserMenuDropdown();
 
           // Initialize Slack integration
           if (window.setupSlackIntegration) {
@@ -3082,6 +3115,56 @@
         loadNotificationCount();
         // Subscribe to realtime updates
         subscribeToNotifications();
+      }
+
+      function setupUserMenuDropdown() {
+        const dropdown = document.getElementById("userMenuDropdown");
+        const button = document.getElementById("userAvatar");
+        const orgName = document.getElementById("currentOrgName");
+        const userMenuOrgName = document.getElementById("userMenuOrgName");
+
+        if (!dropdown || !button) return;
+
+        const syncOrgName = () => {
+          if (!orgName || !userMenuOrgName) return;
+          const name = orgName.textContent?.trim();
+          if (name) {
+            userMenuOrgName.textContent = name;
+          }
+        };
+
+        syncOrgName();
+        if (orgName) {
+          const observer = new MutationObserver(syncOrgName);
+          observer.observe(orgName, {
+            childList: true,
+            characterData: true,
+            subtree: true,
+          });
+        }
+
+        button.addEventListener("click", (event) => {
+          event.stopPropagation();
+          const isOpen = dropdown.classList.toggle("show");
+          button.setAttribute("aria-expanded", isOpen ? "true" : "false");
+        });
+
+        document.addEventListener("click", (event) => {
+          if (
+            !dropdown.contains(event.target) &&
+            !button.contains(event.target)
+          ) {
+            dropdown.classList.remove("show");
+            button.setAttribute("aria-expanded", "false");
+          }
+        });
+
+        document.addEventListener("keydown", (event) => {
+          if (event.key === "Escape") {
+            dropdown.classList.remove("show");
+            button.setAttribute("aria-expanded", "false");
+          }
+        });
       }
 
       // Subscribe to realtime notifications via postgres_changes
