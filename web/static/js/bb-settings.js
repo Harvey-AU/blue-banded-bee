@@ -1078,6 +1078,7 @@
     const orgListRef = newOrgList;
     let settingsBtnRef = settingsSwitcherBtn;
     let settingsOrgListRef = settingsOrgList;
+    let settingsOrgNameRef = settingsOrgName;
 
     if (settingsSwitcherBtn?.parentNode) {
       const newSettingsBtn = settingsSwitcherBtn.cloneNode(true);
@@ -1086,6 +1087,9 @@
         settingsSwitcherBtn
       );
       settingsBtnRef = newSettingsBtn;
+      settingsOrgNameRef =
+        newSettingsBtn.querySelector("#settingsOrgName") ||
+        document.getElementById("settingsOrgName");
     }
 
     if (settingsOrgList?.parentNode) {
@@ -1123,7 +1127,8 @@
 
       if (organisations.length === 0) {
         if (currentOrgName) currentOrgName.textContent = "No Organisation";
-        if (settingsOrgName) settingsOrgName.textContent = "No Organisation";
+        if (settingsOrgNameRef)
+          settingsOrgNameRef.textContent = "No Organisation";
       }
 
       if (organisations.length <= 1) {
@@ -1172,8 +1177,8 @@
       if (currentOrgName) {
         currentOrgName.textContent = activeName || "Organisation";
       }
-      if (settingsOrgName) {
-        settingsOrgName.textContent = activeName || "Organisation";
+      if (settingsOrgNameRef) {
+        settingsOrgNameRef.textContent = activeName || "Organisation";
       }
 
       const closeOrgDropdowns = () => {
@@ -1223,7 +1228,7 @@
             const switchData = await switchRes.json();
             window.BB_ACTIVE_ORG = switchData.data?.organisation;
             if (currentOrgName) currentOrgName.textContent = org.name;
-            if (settingsOrgName) settingsOrgName.textContent = org.name;
+            if (settingsOrgNameRef) settingsOrgNameRef.textContent = org.name;
 
             if (previous !== org.id) {
               await refreshSettingsData();
@@ -1235,15 +1240,13 @@
 
             await loadNotificationCount();
             await fetchAndDisplayQuota();
-
-            showSettingsToast("success", `Switched to ${org.name}`);
           } else {
             if (currentOrgName) {
               currentOrgName.textContent =
                 window.BB_ACTIVE_ORG?.name || "Unknown";
             }
-            if (settingsOrgName) {
-              settingsOrgName.textContent =
+            if (settingsOrgNameRef) {
+              settingsOrgNameRef.textContent =
                 window.BB_ACTIVE_ORG?.name || "Organisation";
             }
             showSettingsToast("error", "Failed to switch organisation");
@@ -1254,8 +1257,8 @@
             currentOrgName.textContent =
               window.BB_ACTIVE_ORG?.name || "Unknown";
           }
-          if (settingsOrgName) {
-            settingsOrgName.textContent =
+          if (settingsOrgNameRef) {
+            settingsOrgNameRef.textContent =
               window.BB_ACTIVE_ORG?.name || "Organisation";
           }
           showSettingsToast("error", "Failed to switch organisation");
