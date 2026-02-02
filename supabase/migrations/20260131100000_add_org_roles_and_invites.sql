@@ -74,6 +74,12 @@ DROP POLICY IF EXISTS "Users can view org invites" ON organisation_invites;
 
 DROP POLICY IF EXISTS "Admins can manage org invites" ON organisation_invites;
 
+DROP POLICY IF EXISTS "Admins can insert org invites" ON organisation_invites;
+
+DROP POLICY IF EXISTS "Admins can update org invites" ON organisation_invites;
+
+DROP POLICY IF EXISTS "Admins can delete org invites" ON organisation_invites;
+
 CREATE POLICY "Users can view org invites"
 ON organisation_invites FOR SELECT
 USING (
@@ -85,9 +91,21 @@ USING (
     )
 );
 
-CREATE POLICY "Admins can manage org invites"
+CREATE POLICY "Admins can insert org invites"
 ON organisation_invites
-FOR ALL
+FOR INSERT
+WITH CHECK (
+    organisation_id IN (
+        SELECT om.organisation_id
+        FROM organisation_members om
+        WHERE om.user_id = (SELECT auth.uid())
+          AND om.role = 'admin'
+    )
+);
+
+CREATE POLICY "Admins can update org invites"
+ON organisation_invites
+FOR UPDATE
 USING (
     organisation_id IN (
         SELECT om.organisation_id
@@ -97,6 +115,18 @@ USING (
     )
 )
 WITH CHECK (
+    organisation_id IN (
+        SELECT om.organisation_id
+        FROM organisation_members om
+        WHERE om.user_id = (SELECT auth.uid())
+          AND om.role = 'admin'
+    )
+);
+
+CREATE POLICY "Admins can delete org invites"
+ON organisation_invites
+FOR DELETE
+USING (
     organisation_id IN (
         SELECT om.organisation_id
         FROM organisation_members om

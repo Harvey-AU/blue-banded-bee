@@ -663,9 +663,13 @@ func (h *Handler) createOrganisationInvite(w http.ResponseWriter, r *http.Reques
 		BadRequest(w, r, "Valid email is required")
 		return
 	}
-	if _, err := mail.ParseAddress(email); err != nil {
+	parsedEmail, err := mail.ParseAddress(email)
+	if err != nil {
 		BadRequest(w, r, "Valid email is required")
 		return
+	}
+	if parsedEmail != nil && parsedEmail.Address != "" {
+		email = parsedEmail.Address
 	}
 
 	role := strings.TrimSpace(strings.ToLower(req.Role))
