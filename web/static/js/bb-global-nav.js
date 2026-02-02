@@ -24,6 +24,8 @@
       container.innerHTML = html;
       const titleEl = container.querySelector("#globalNavTitle");
       const separatorEl = container.querySelector("#globalNavSeparator");
+      const currentOrgName = container.querySelector("#currentOrgName");
+      const settingsOrgName = document.getElementById("settingsOrgName");
       const path = window.location.pathname.replace(/\/$/, "");
       const navLinks = container.querySelectorAll(".nav-link");
 
@@ -57,6 +59,29 @@
           link.classList.remove("active");
         }
       });
+
+      if (currentOrgName) {
+        const activeOrgName = window.BB_ACTIVE_ORG?.name;
+        if (activeOrgName) {
+          currentOrgName.textContent = activeOrgName;
+        } else if (settingsOrgName?.textContent?.trim()) {
+          currentOrgName.textContent = settingsOrgName.textContent.trim();
+        }
+
+        if (settingsOrgName) {
+          const observer = new MutationObserver(() => {
+            const nextName = settingsOrgName.textContent?.trim();
+            if (nextName) {
+              currentOrgName.textContent = nextName;
+            }
+          });
+          observer.observe(settingsOrgName, {
+            childList: true,
+            characterData: true,
+            subtree: true,
+          });
+        }
+      }
 
       if (resolveNavReady) {
         resolveNavReady();
