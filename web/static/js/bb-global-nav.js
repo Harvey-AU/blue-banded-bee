@@ -6,17 +6,20 @@
     });
   }
 
-  if (document.querySelector(".global-nav")) {
+  const finishNavReady = () => {
     if (resolveNavReady) {
       resolveNavReady();
     }
+    document.dispatchEvent(new CustomEvent("bb:nav-ready"));
+  };
+
+  if (document.querySelector(".global-nav")) {
+    finishNavReady();
     return;
   }
 
   if (window.location.pathname.startsWith("/shared/jobs/")) {
-    if (resolveNavReady) {
-      resolveNavReady();
-    }
+    finishNavReady();
     return;
   }
 
@@ -180,7 +183,10 @@
     const navWrapper = document.createElement("div");
     navWrapper.innerHTML = navHtml.trim();
     const navElement = navWrapper.firstElementChild;
-    if (!navElement || !document.body) return;
+    if (!navElement || !document.body) {
+      finishNavReady();
+      return;
+    }
 
     document.body.prepend(navElement);
 
@@ -344,10 +350,7 @@
 
     initNavOrgSwitcher();
 
-    if (resolveNavReady) {
-      resolveNavReady();
-    }
-    document.dispatchEvent(new CustomEvent("bb:nav-ready"));
+    finishNavReady();
   };
 
   if (document.body) {
