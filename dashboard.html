@@ -75,6 +75,10 @@
         align-items: center;
       }
 
+      .page-header-compact .container {
+        justify-content: flex-end;
+      }
+
       .page-title {
         display: flex;
         align-items: center;
@@ -1647,14 +1651,10 @@
   </head>
 
   <body class="page-dashboard">
+    <div id="globalNav"></div>
     <!-- Page Header -->
-    <header class="page-header">
+    <header class="page-header page-header-compact">
       <div class="container">
-        <h1 class="page-title">
-          <span class="bee-icon">🐝</span>
-          Blue Banded Bee
-        </h1>
-
         <div class="user-menu">
           <!-- Show when logged out -->
           <div bbb-auth="guest" class="auth-buttons">
@@ -2464,6 +2464,7 @@
     <!-- Include the data binding and dashboard logic -->
     <script src="/js/bb-data-binder.js" defer></script>
     <script src="/js/bb-domain-search.js" defer></script>
+    <script src="/js/bb-global-nav.js" defer></script>
     <script src="/js/bb-auth-extension.js" defer></script>
     <script src="/js/bb-metadata.js" defer></script>
     <script src="/js/bb-dashboard-actions.js" defer></script>

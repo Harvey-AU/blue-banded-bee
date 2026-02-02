@@ -1654,6 +1654,10 @@ body.page-job-details header {
   z-index: 10;
 }
 
+body.page-job-details header.page-header-compact .container {
+  padding: 12px 24px;
+}
+
 body.page-job-details header .container {
   max-width: 1200px;
   margin: 0 auto;
