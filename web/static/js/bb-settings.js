@@ -1121,6 +1121,11 @@
       const data = await response.json();
       const organisations = data.data?.organisations || [];
 
+      if (organisations.length === 0) {
+        if (currentOrgName) currentOrgName.textContent = "No Organisation";
+        if (settingsOrgName) settingsOrgName.textContent = "No Organisation";
+      }
+
       if (organisations.length <= 1) {
         if (dropdown) dropdown.style.display = "none";
         btnRef.disabled = true;
@@ -1133,14 +1138,43 @@
         if (settingsDropdown) settingsDropdown.style.display = "none";
       }
 
-      const activeOrg = organisations.find(
+      let activeOrg = organisations.find(
         (org) => org.id === window.BB_ACTIVE_ORG?.id
       );
+
+      if (!activeOrg && organisations.length > 0) {
+        try {
+          const { data: userData, error: userError } = await window.supabase
+            .from("users")
+            .select("active_organisation_id")
+            .eq("id", session.user.id)
+            .single();
+
+          if (userError) {
+            console.warn("Failed to fetch user active org:", userError);
+          }
+
+          const activeOrgId = userData?.active_organisation_id;
+          activeOrg =
+            organisations.find((org) => org.id === activeOrgId) ||
+            organisations[0];
+        } catch (err) {
+          console.warn("Failed to resolve active organisation:", err);
+          activeOrg = organisations[0];
+        }
+      }
+
+      if (activeOrg) {
+        window.BB_ACTIVE_ORG = activeOrg;
+      }
+
       const activeName = activeOrg?.name || organisations[0]?.name || "";
-      if (currentOrgName)
-        currentOrgName.textContent = activeName || "Loading...";
-      if (settingsOrgName)
+      if (currentOrgName) {
+        currentOrgName.textContent = activeName || "Organisation";
+      }
+      if (settingsOrgName) {
         settingsOrgName.textContent = activeName || "Organisation";
+      }
 
       const closeOrgDropdowns = () => {
         switcher.classList.remove("open");
