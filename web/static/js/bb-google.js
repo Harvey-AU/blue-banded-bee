@@ -637,9 +637,9 @@ function filterGoogleProperties(query) {
 
   const filtered = allGoogleProperties.filter(
     (prop) =>
-      prop.display_name?.toLowerCase().includes(lowerQuery) ||
-      prop.property_id?.toLowerCase().includes(lowerQuery) ||
-      prop.account_name?.toLowerCase().includes(lowerQuery)
+      (prop.display_name || "").toLowerCase().includes(lowerQuery) ||
+      (prop.property_id || "").toLowerCase().includes(lowerQuery) ||
+      (prop.account_name || "").toLowerCase().includes(lowerQuery)
   );
   renderPropertyList(filtered, allGoogleProperties.length);
 }
