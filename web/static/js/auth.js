@@ -462,7 +462,7 @@ async function getGravatarUrl(email, size) {
       .join("");
     const params = new URLSearchParams({
       s: String(size || 80),
-      d: "identicon",
+      d: "404",
     });
     return `https://www.gravatar.com/avatar/${hash}?${params.toString()}`;
   } catch (error) {
