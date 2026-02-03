@@ -374,7 +374,27 @@
                 failure notifications.
               </p>
 
-              <div id="slackConnectionsList" bbb-list="slack-connections"></div>
+              <div id="slackConnectionsList" bbb-list="slack-connections">
+                <div
+                  class="settings-row"
+                  bbb-template="slack-connection"
+                  style="display: none"
+                >
+                  <div>
+                    <div
+                      class="slack-workspace-name"
+                      style="font-weight: 600"
+                    ></div>
+                    <div class="slack-connected-date settings-muted"></div>
+                  </div>
+                  <button
+                    class="bb-button bb-button-outline"
+                    bbb-action="slack-disconnect"
+                  >
+                    Disconnect
+                  </button>
+                </div>
+              </div>
 
               <div
                 id="slackEmptyState"
@@ -468,10 +488,62 @@
                 Connect Google Analytics
               </button>
 
-              <div
-                id="googleConnectionsList"
-                bbb-list="google-connections"
-              ></div>
+              <div id="googleConnectionsList" bbb-list="google-connections">
+                <div
+                  class="settings-row"
+                  bbb-template="google-connection"
+                  style="display: none"
+                >
+                  <div>
+                    <div class="google-name" style="font-weight: 600"></div>
+                    <div class="google-email settings-muted"></div>
+                    <div class="google-connected-date settings-muted"></div>
+                  </div>
+                  <div style="display: flex; align-items: center; gap: 12px">
+                    <span class="google-status settings-muted"></span>
+                    <div
+                      class="google-toggle-container"
+                      style="display: inline-flex; align-items: center"
+                    >
+                      <input
+                        type="checkbox"
+                        class="google-status-toggle"
+                        style="display: none"
+                      />
+                      <div
+                        class="google-toggle-track"
+                        style="
+                          position: relative;
+                          width: 44px;
+                          height: 24px;
+                          background: #d1d5db;
+                          border-radius: 999px;
+                        "
+                      >
+                        <div
+                          class="google-toggle-thumb"
+                          style="
+                            position: absolute;
+                            top: 2px;
+                            left: 2px;
+                            width: 20px;
+                            height: 20px;
+                            background: white;
+                            border-radius: 50%;
+                            transition: transform 0.2s;
+                          "
+                        ></div>
+                      </div>
+                    </div>
+                    <button
+                      class="bb-button bb-button-outline"
+                      bbb-action="google-disconnect"
+                    >
+                      Disconnect
+                    </button>
+                  </div>
+                </div>
+              </div>
 
               <div
                 id="googlePropertySelection"
@@ -565,10 +637,24 @@
                 schedules.
               </p>
 
-              <div
-                id="webflowConnectionsList"
-                bbb-list="webflow-connections"
-              ></div>
+              <div id="webflowConnectionsList" bbb-list="webflow-connections">
+                <div
+                  class="settings-row"
+                  bbb-template="webflow-connection"
+                  style="display: none"
+                >
+                  <div>
+                    <div class="webflow-name" style="font-weight: 600"></div>
+                    <div class="webflow-connected-date settings-muted"></div>
+                  </div>
+                  <button
+                    class="bb-button bb-button-outline"
+                    bbb-action="webflow-disconnect"
+                  >
+                    Disconnect
+                  </button>
+                </div>
+              </div>
 
               <div
                 id="webflowSitesConfig"
@@ -862,6 +948,8 @@
         </section>
       </div>
     </main>
+
+    <div id="authModalContainer"></div>
 
     <template id="teamMemberTemplate">
       <div class="settings-member-row">
