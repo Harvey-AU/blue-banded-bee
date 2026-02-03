@@ -845,12 +845,18 @@
     });
   }
 
+  let notificationsRetryCount = 0;
+  const maxNotificationRetries = 30;
   async function subscribeToNotifications() {
     const orgId = window.BB_ACTIVE_ORG?.id;
     if (!orgId || !window.supabase) {
-      setTimeout(subscribeToNotifications, 1000);
+      if (notificationsRetryCount < maxNotificationRetries) {
+        notificationsRetryCount += 1;
+        setTimeout(subscribeToNotifications, 1000);
+      }
       return;
     }
+    notificationsRetryCount = 0;
 
     if (window.notificationsChannel) {
       window.supabase.removeChannel(window.notificationsChannel);
