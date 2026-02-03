@@ -476,8 +476,11 @@
           : "No limit";
       }
       if (currentPlanUsage) {
+        const dailyUsed = Number.isFinite(usage.daily_used)
+          ? usage.daily_used
+          : 0;
         currentPlanUsage.textContent = usage.daily_limit
-          ? `${usage.daily_used.toLocaleString()} used today`
+          ? `${dailyUsed.toLocaleString()} used today`
           : "No usage data";
       }
       if (currentPlanReset) {
