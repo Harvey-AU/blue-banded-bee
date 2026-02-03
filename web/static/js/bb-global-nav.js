@@ -222,9 +222,15 @@
           (isSettings && path.startsWith("/settings"));
 
         link.classList.toggle("active", active);
+        if (active) {
+          link.setAttribute("aria-current", "page");
+        } else {
+          link.removeAttribute("aria-current");
+        }
       } catch (err) {
         console.warn("Failed to resolve nav link state:", err);
         link.classList.remove("active");
+        link.removeAttribute("aria-current");
       }
     });
 
