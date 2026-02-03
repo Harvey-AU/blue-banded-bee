@@ -1,3 +1,5 @@
+# Account Management Status
+
 | Page     | Section                      | UI      | Function | Notes                                                     |
 | -------- | ---------------------------- | ------- | -------- | --------------------------------------------------------- |
 | Settings | Account > Profile            | Done    | Partial  | Read-only name/email display; no edit/update flow.        |
