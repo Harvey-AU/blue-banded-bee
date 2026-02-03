@@ -320,6 +320,7 @@
           organisations.forEach((org) => {
             const button = document.createElement("button");
             button.className = "bb-org-item";
+            button.dataset.orgId = org.id;
             button.textContent = org.name;
             if (org.id === activeOrg?.id) {
               button.classList.add("active");
@@ -343,6 +344,14 @@
                   const switchData = await switchRes.json();
                   window.BB_ACTIVE_ORG = switchData.data?.organisation;
                   currentOrgName.textContent = org.name;
+                  if (orgListEl) {
+                    orgListEl.querySelectorAll(".bb-org-item").forEach((el) => {
+                      el.classList.toggle(
+                        "active",
+                        el.dataset.orgId === org.id
+                      );
+                    });
+                  }
                 }
               } catch (err) {
                 console.warn("Failed to switch organisation:", err);
