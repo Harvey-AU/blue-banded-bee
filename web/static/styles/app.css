@@ -2614,8 +2614,35 @@ body.page-settings .bb-auth-error {
   font-size: 13px;
 }
 
+/* Toggle switch base styles */
+body.page-settings .bb-toggle {
+  position: relative;
+  display: inline-block;
+  width: 40px;
+  height: 22px;
+}
+
+body.page-settings .bb-toggle input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+body.page-settings .bb-toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #ccc;
+  transition: 0.3s;
+  border-radius: 22px;
+}
+
 body.page-settings .bb-toggle input:checked + .bb-toggle-slider {
-  background-color: #3b82f6;
+  background-color: var(--color-primary);
 }
 
 body.page-settings .bb-toggle input:checked + .bb-toggle-slider:before {
@@ -2632,6 +2659,298 @@ body.page-settings .bb-toggle-slider:before {
   background-color: white;
   transition: 0.3s;
   border-radius: 50%;
+}
+
+/* Settings utility classes */
+.settings-hidden {
+  display: none;
+}
+
+.settings-row--borderless {
+  border-bottom: none;
+}
+
+/* Settings invite form grid */
+.settings-invite-grid {
+  display: grid;
+  grid-template-columns: 1fr 140px auto;
+  gap: 12px;
+  align-items: end;
+}
+
+.settings-spacing-top {
+  margin-top: 12px;
+}
+
+.settings-spacing-top-md {
+  margin-top: 16px;
+}
+
+/* Settings section header with icon */
+.settings-section-header {
+  margin-top: 0;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.settings-section-icon {
+  font-size: 20px;
+}
+
+/* Settings empty state */
+.settings-empty-state {
+  text-align: center;
+  padding: 24px;
+  background: #f9fafb;
+  border-radius: 8px;
+  border: 2px dashed var(--color-border);
+}
+
+.settings-empty-state--compact {
+  padding: 16px 24px;
+  margin-bottom: 16px;
+}
+
+.settings-empty-text {
+  color: var(--color-text-muted);
+  margin-bottom: 16px;
+}
+
+.settings-empty-text--no-margin {
+  margin: 0;
+}
+
+/* Settings notification banners */
+.settings-notification {
+  display: none;
+  margin-top: 16px;
+  padding: 12px 16px;
+  border-radius: 8px;
+}
+
+.settings-notification--success {
+  background: var(--color-success-bg);
+  color: var(--color-success);
+  border: 1px solid var(--color-success-border);
+}
+
+.settings-notification--error {
+  background: var(--color-error-bg);
+  color: var(--color-error);
+  border: 1px solid var(--color-error-border);
+}
+
+.settings-notification--compact {
+  padding: 12px;
+}
+
+/* Settings button with icon */
+.settings-btn-icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.settings-btn-icon--spaced {
+  margin-bottom: 16px;
+}
+
+/* Settings connection row */
+.settings-connection-name {
+  font-weight: 600;
+}
+
+.settings-connection-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Settings property selection panel */
+.settings-property-panel {
+  display: none;
+  background: #f9fafb;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.settings-property-title {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  color: #374151;
+}
+
+.settings-property-subtitle {
+  color: var(--color-text-muted);
+  font-size: 13px;
+  margin-bottom: 12px;
+}
+
+/* Settings sites config panel */
+.settings-sites-panel {
+  display: none;
+  margin-top: 20px;
+  background: #f9fafb;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.settings-sites-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.settings-sites-title {
+  margin: 0;
+  font-size: 15px;
+  color: #374151;
+}
+
+.settings-sites-search {
+  display: none;
+  margin-bottom: 12px;
+}
+
+.settings-sites-search-input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+/* Settings site row */
+.settings-site-row {
+  display: none;
+  background: var(--color-white);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  padding: 12px;
+  margin-bottom: 8px;
+}
+
+.settings-site-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.settings-site-info {
+  flex: 1;
+  min-width: 150px;
+}
+
+.settings-site-name {
+  font-weight: 500;
+  font-size: 14px;
+}
+
+.settings-site-domain {
+  color: var(--color-text-muted);
+  font-size: 12px;
+  margin-left: 8px;
+}
+
+.settings-site-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.settings-site-control-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.settings-site-label {
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.settings-site-select {
+  padding: 4px 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font-size: 13px;
+  background: var(--color-white);
+  cursor: pointer;
+}
+
+.settings-site-status {
+  display: none;
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+/* Settings sites loading/empty states */
+.settings-sites-loading,
+.settings-sites-empty {
+  text-align: center;
+  padding: 20px;
+  color: var(--color-text-muted);
+}
+
+.settings-sites-empty {
+  display: none;
+}
+
+/* Settings sites pagination */
+.settings-sites-pagination {
+  display: none;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--color-border);
+  text-align: center;
+}
+
+.settings-pagination-btn {
+  font-size: 12px;
+  padding: 4px 12px;
+}
+
+.settings-pagination-btn--prev {
+  margin-right: 8px;
+}
+
+.settings-pagination-btn--next {
+  margin-left: 8px;
+}
+
+.settings-pagination-info {
+  font-size: 13px;
+  color: var(--color-text-muted);
+  margin: 0 8px;
+}
+
+/* Settings small button */
+.settings-btn-sm {
+  font-size: 12px;
+  padding: 4px 10px;
+}
+
+/* Settings modal actions */
+.settings-modal-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  margin-top: 24px;
+  padding: 0 24px 20px;
+}
+
+/* Settings modal narrow variant */
+.settings-modal-narrow {
+  max-width: 440px;
 }
 
 @media (max-width: 960px) {

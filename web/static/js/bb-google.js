@@ -197,49 +197,14 @@ async function loadGoogleConnections() {
         disconnectBtn.setAttribute("bbb-id", conn.id);
       }
 
-      // Set up status toggle if present
+      // Set up status toggle (uses bb-toggle pattern - CSS handles visual state)
       const statusToggle = clone.querySelector(".google-status-toggle");
-      const toggleContainer = clone.querySelector(".google-toggle-container");
-
-      if (statusToggle && toggleContainer) {
-        const isActive = conn.status === "active";
-        statusToggle.checked = isActive;
+      if (statusToggle) {
+        statusToggle.checked = conn.status === "active";
         statusToggle.setAttribute("data-connection-id", conn.id);
 
-        // Update toggle visual state
-        const track = clone.querySelector(".google-toggle-track");
-        const thumb = clone.querySelector(".google-toggle-thumb");
-        if (track && thumb) {
-          if (isActive) {
-            track.style.backgroundColor = "#10b981";
-            thumb.style.transform = "translateX(20px)";
-          } else {
-            track.style.backgroundColor = "#d1d5db";
-            thumb.style.transform = "translateX(0)";
-          }
-        }
-
-        // Listen on label container instead of hidden checkbox
-        toggleContainer.addEventListener("click", async (e) => {
-          e.preventDefault(); // Prevent default label behavior
-
-          // Toggle the checkbox state
-          const newActive = !statusToggle.checked;
-          statusToggle.checked = newActive;
-
-          // Update visual state immediately
-          if (track && thumb) {
-            if (newActive) {
-              track.style.backgroundColor = "#10b981";
-              thumb.style.transform = "translateX(20px)";
-            } else {
-              track.style.backgroundColor = "#d1d5db";
-              thumb.style.transform = "translateX(0)";
-            }
-          }
-
-          // Call API to persist change
-          await toggleConnectionStatus(conn.id, newActive);
+        statusToggle.addEventListener("change", async () => {
+          await toggleConnectionStatus(conn.id, statusToggle.checked);
         });
       }
 

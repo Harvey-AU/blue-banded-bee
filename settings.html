@@ -156,17 +156,13 @@
 
             <div class="settings-card">
               <div id="teamMembersList"></div>
-              <div
-                class="settings-muted"
-                id="teamMembersEmpty"
-                style="display: none"
-              >
+              <div class="settings-muted settings-hidden" id="teamMembersEmpty">
                 No members found.
               </div>
             </div>
 
             <div class="settings-card" id="invites">
-              <div class="settings-row" style="border-bottom: none">
+              <div class="settings-row settings-row--borderless">
                 <div>
                   <strong>Invite someone</strong>
                   <div class="settings-muted">
@@ -174,15 +170,8 @@
                   </div>
                 </div>
               </div>
-              <form id="teamInviteForm" style="margin-top: 12px">
-                <div
-                  style="
-                    display: grid;
-                    grid-template-columns: 1fr 140px auto;
-                    gap: 12px;
-                    align-items: end;
-                  "
-                >
+              <form id="teamInviteForm" class="settings-spacing-top">
+                <div class="settings-invite-grid">
                   <div>
                     <label class="settings-muted" for="teamInviteEmail"
                       >Email</label
@@ -210,13 +199,12 @@
                 </div>
               </form>
 
-              <div style="margin-top: 16px">
+              <div class="settings-spacing-top-md">
                 <strong>Pending invites</strong>
-                <div id="teamInvitesList" style="margin-top: 12px"></div>
+                <div id="teamInvitesList" class="settings-spacing-top"></div>
                 <div
-                  class="settings-muted"
+                  class="settings-muted settings-hidden"
                   id="teamInvitesEmpty"
-                  style="display: none"
                 >
                   No pending invites.
                 </div>
@@ -312,7 +300,7 @@
             >
               <div class="settings-card">
                 <strong>Usage history (30 days)</strong>
-                <div id="usageHistoryList" style="margin-top: 12px"></div>
+                <div id="usageHistoryList" class="settings-spacing-top"></div>
               </div>
             </div>
           </section>
@@ -354,14 +342,7 @@
             </p>
 
             <div class="settings-card">
-              <h3
-                style="
-                  margin-top: 0;
-                  display: flex;
-                  gap: 8px;
-                  align-items: center;
-                "
-              >
+              <h3 class="settings-section-header">
                 <svg
                   width="20"
                   height="20"
@@ -383,14 +364,12 @@
 
               <div id="slackConnectionsList" bbb-list="slack-connections">
                 <div
-                  class="settings-row"
+                  class="settings-row settings-hidden"
                   bbb-template="slack-connection"
-                  style="display: none"
                 >
                   <div>
                     <div
-                      class="slack-workspace-name"
-                      style="font-weight: 600"
+                      class="slack-workspace-name settings-connection-name"
                     ></div>
                     <div class="slack-connected-date settings-muted"></div>
                   </div>
@@ -403,23 +382,13 @@
                 </div>
               </div>
 
-              <div
-                id="slackEmptyState"
-                style="
-                  text-align: center;
-                  padding: 24px;
-                  background: #f9fafb;
-                  border-radius: 8px;
-                  border: 2px dashed #e5e7eb;
-                "
-              >
-                <p style="color: #6b7280; margin-bottom: 16px">
+              <div id="slackEmptyState" class="settings-empty-state">
+                <p class="settings-empty-text">
                   No Slack workspace connected yet.
                 </p>
                 <button
-                  class="bb-button bb-button-primary"
+                  class="bb-button bb-button-primary settings-btn-icon"
                   bbb-action="slack-connect"
-                  style="display: inline-flex; align-items: center; gap: 8px"
                 >
                   Connect Slack Workspace
                 </button>
@@ -427,31 +396,13 @@
 
               <div
                 id="slackSuccessMessage"
-                class="bb-notification-success"
-                style="
-                  display: none;
-                  margin-top: 16px;
-                  padding: 12px 16px;
-                  border-radius: 8px;
-                  background: #dcfce7;
-                  color: #16a34a;
-                  border: 1px solid #bbf7d0;
-                "
+                class="settings-notification settings-notification--success"
               >
                 <span id="slackSuccessText"></span>
               </div>
               <div
                 id="slackErrorMessage"
-                class="bb-notification-error"
-                style="
-                  display: none;
-                  margin-top: 16px;
-                  padding: 12px 16px;
-                  border-radius: 8px;
-                  background: #fee2e2;
-                  color: #dc2626;
-                  border: 1px solid #fecaca;
-                "
+                class="settings-notification settings-notification--error"
               >
                 <span id="slackErrorText"></span>
               </div>
@@ -467,15 +418,8 @@
             </p>
 
             <div class="settings-card" id="googleAnalyticsSection">
-              <h3
-                style="
-                  margin-top: 0;
-                  display: flex;
-                  gap: 8px;
-                  align-items: center;
-                "
-              >
-                <span style="font-size: 20px">📊</span>
+              <h3 class="settings-section-header">
+                <span class="settings-section-icon">📊</span>
                 Google Analytics integration
               </h3>
               <p class="settings-muted">
@@ -483,71 +427,32 @@
               </p>
 
               <button
-                class="bb-button bb-button-primary"
+                class="bb-button bb-button-primary settings-btn-icon settings-btn-icon--spaced"
                 bbb-action="google-connect"
-                style="
-                  display: inline-flex;
-                  align-items: center;
-                  gap: 8px;
-                  margin-bottom: 16px;
-                "
               >
                 Connect Google Analytics
               </button>
 
               <div id="googleConnectionsList" bbb-list="google-connections">
                 <div
-                  class="settings-row"
+                  class="settings-row settings-hidden"
                   bbb-template="google-connection"
-                  style="display: none"
                 >
                   <div>
-                    <div class="google-name" style="font-weight: 600"></div>
+                    <div class="google-name settings-connection-name"></div>
                     <div class="google-email settings-muted"></div>
                     <div class="google-connected-date settings-muted"></div>
                   </div>
-                  <div style="display: flex; align-items: center; gap: 12px">
+                  <div class="settings-connection-actions">
                     <span class="google-status settings-muted"></span>
-                    <div
-                      class="google-toggle-container"
-                      style="display: inline-flex; align-items: center"
-                    >
+                    <label class="bb-toggle">
                       <input
                         type="checkbox"
                         class="google-status-toggle"
                         aria-label="Enable Google Analytics connection"
-                        style="
-                          position: absolute;
-                          opacity: 0;
-                          width: 0;
-                          height: 0;
-                        "
                       />
-                      <div
-                        class="google-toggle-track"
-                        style="
-                          position: relative;
-                          width: 44px;
-                          height: 24px;
-                          background: #d1d5db;
-                          border-radius: 999px;
-                        "
-                      >
-                        <div
-                          class="google-toggle-thumb"
-                          style="
-                            position: absolute;
-                            top: 2px;
-                            left: 2px;
-                            width: 20px;
-                            height: 20px;
-                            background: white;
-                            border-radius: 50%;
-                            transition: transform 0.2s;
-                          "
-                        ></div>
-                      </div>
-                    </div>
+                      <span class="bb-toggle-slider"></span>
+                    </label>
                     <button
                       class="bb-button bb-button-outline"
                       bbb-action="google-disconnect"
@@ -558,21 +463,9 @@
                 </div>
               </div>
 
-              <div
-                id="googlePropertySelection"
-                style="
-                  display: none;
-                  background: #f9fafb;
-                  border-radius: 8px;
-                  border: 1px solid #e5e7eb;
-                  padding: 16px;
-                  margin-bottom: 16px;
-                "
-              >
-                <h4 style="margin: 0 0 12px 0; font-size: 14px; color: #374151">
-                  Select a GA4 Property
-                </h4>
-                <p style="color: #6b7280; font-size: 13px; margin-bottom: 12px">
+              <div id="googlePropertySelection" class="settings-property-panel">
+                <h4 class="settings-property-title">Select a GA4 Property</h4>
+                <p class="settings-property-subtitle">
                   Multiple properties found. Please select which one to connect:
                 </p>
                 <div id="googlePropertyList"></div>
@@ -580,47 +473,23 @@
 
               <div
                 id="googleEmptyState"
-                style="
-                  display: none;
-                  text-align: center;
-                  padding: 16px 24px;
-                  background: #f9fafb;
-                  border-radius: 8px;
-                  border: 2px dashed #e5e7eb;
-                  margin-bottom: 16px;
-                "
+                class="settings-empty-state settings-empty-state--compact settings-hidden"
               >
-                <p style="color: #6b7280; margin: 0">
+                <p class="settings-empty-text settings-empty-text--no-margin">
                   No connections yet. Click above to connect your first
                   property.
                 </p>
               </div>
 
               <div
-                class="bb-notification-success"
                 id="googleSuccessMessage"
-                style="
-                  display: none;
-                  margin-top: 16px;
-                  background: #dcfce7;
-                  color: #166534;
-                  padding: 12px;
-                  border-radius: 8px;
-                "
+                class="settings-notification settings-notification--success settings-notification--compact"
               >
                 <span id="googleSuccessText"></span>
               </div>
               <div
-                class="bb-notification-error"
                 id="googleErrorMessage"
-                style="
-                  display: none;
-                  margin-top: 16px;
-                  background: #fee2e2;
-                  color: #dc2626;
-                  padding: 12px;
-                  border-radius: 8px;
-                "
+                class="settings-notification settings-notification--error settings-notification--compact"
               >
                 <span id="googleErrorText"></span>
               </div>
@@ -634,15 +503,8 @@
             </p>
 
             <div class="settings-card">
-              <h3
-                style="
-                  margin-top: 0;
-                  display: flex;
-                  gap: 8px;
-                  align-items: center;
-                "
-              >
-                <span style="font-size: 20px">⚡</span>
+              <h3 class="settings-section-header">
+                <span class="settings-section-icon">⚡</span>
                 Webflow integration
               </h3>
               <p class="settings-muted">
@@ -652,12 +514,11 @@
 
               <div id="webflowConnectionsList" bbb-list="webflow-connections">
                 <div
-                  class="settings-row"
+                  class="settings-row settings-hidden"
                   bbb-template="webflow-connection"
-                  style="display: none"
                 >
                   <div>
-                    <div class="webflow-name" style="font-weight: 600"></div>
+                    <div class="webflow-name settings-connection-name"></div>
                     <div class="webflow-connected-date settings-muted"></div>
                   </div>
                   <button
@@ -669,33 +530,13 @@
                 </div>
               </div>
 
-              <div
-                id="webflowSitesConfig"
-                style="
-                  display: none;
-                  margin-top: 20px;
-                  background: #f9fafb;
-                  border: 1px solid #e5e7eb;
-                  border-radius: 8px;
-                  padding: 16px;
-                "
-              >
-                <div
-                  style="
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    margin-bottom: 12px;
-                  "
-                >
-                  <h4 style="margin: 0; font-size: 15px; color: #374151">
-                    Configure Sites
-                  </h4>
+              <div id="webflowSitesConfig" class="settings-sites-panel">
+                <div class="settings-sites-header">
+                  <h4 class="settings-sites-title">Configure Sites</h4>
                   <button
                     id="webflowSitesRefresh"
-                    class="bb-button bb-button-outline"
+                    class="bb-button bb-button-outline settings-btn-sm"
                     bbb-action="webflow-sites-refresh"
-                    style="font-size: 12px; padding: 4px 10px"
                     title="Refresh sites list"
                     aria-label="Refresh sites list"
                   >
@@ -703,87 +544,33 @@
                   </button>
                 </div>
 
-                <div
-                  id="webflowSitesSearchBox"
-                  style="display: none; margin-bottom: 12px"
-                >
+                <div id="webflowSitesSearchBox" class="settings-sites-search">
                   <input
                     type="text"
                     id="webflowSiteSearch"
+                    class="settings-sites-search-input"
                     placeholder="Search sites..."
                     aria-label="Search Webflow sites"
-                    style="
-                      width: 100%;
-                      padding: 8px 12px;
-                      border: 1px solid #d1d5db;
-                      border-radius: 6px;
-                      font-size: 14px;
-                    "
                   />
                 </div>
 
                 <div id="webflowSitesList">
                   <div
-                    class="webflow-site-row"
+                    class="webflow-site-row settings-site-row"
                     bbb-template="webflow-site"
-                    style="
-                      display: none;
-                      background: white;
-                      border: 1px solid #e5e7eb;
-                      border-radius: 6px;
-                      padding: 12px;
-                      margin-bottom: 8px;
-                    "
                   >
-                    <div
-                      style="
-                        display: flex;
-                        justify-content: space-between;
-                        align-items: center;
-                        flex-wrap: wrap;
-                        gap: 8px;
-                      "
-                    >
-                      <div style="flex: 1; min-width: 150px">
-                        <span
-                          class="site-name"
-                          style="font-weight: 500; font-size: 14px"
-                        ></span>
-                        <span
-                          class="site-domain"
-                          style="
-                            color: #6b7280;
-                            font-size: 12px;
-                            margin-left: 8px;
-                          "
-                        ></span>
+                    <div class="settings-site-content">
+                      <div class="settings-site-info">
+                        <span class="site-name settings-site-name"></span>
+                        <span class="site-domain settings-site-domain"></span>
                       </div>
-                      <div
-                        style="
-                          display: flex;
-                          align-items: center;
-                          gap: 12px;
-                          flex-wrap: wrap;
-                        "
-                      >
-                        <div
-                          style="display: flex; align-items: center; gap: 6px"
-                        >
-                          <label style="font-size: 12px; color: #6b7280"
-                            >Schedule:</label
-                          >
+                      <div class="settings-site-controls">
+                        <div class="settings-site-control-group">
+                          <label class="settings-site-label">Schedule:</label>
                           <select
-                            class="site-schedule"
+                            class="site-schedule settings-site-select"
                             bbb-action="site-schedule-change"
                             aria-label="Schedule frequency for site"
-                            style="
-                              padding: 4px 8px;
-                              border: 1px solid #d1d5db;
-                              border-radius: 4px;
-                              font-size: 13px;
-                              background: white;
-                              cursor: pointer;
-                            "
                           >
                             <option value="">None</option>
                             <option value="6">Every 6 hours</option>
@@ -792,99 +579,40 @@
                             <option value="48">Every 48 hours</option>
                           </select>
                         </div>
-                        <div
-                          style="display: flex; align-items: center; gap: 6px"
-                        >
-                          <label style="font-size: 12px; color: #6b7280"
+                        <div class="settings-site-control-group">
+                          <label class="settings-site-label"
                             >Run on Publish:</label
                           >
-                          <label
-                            class="bb-toggle"
-                            style="
-                              position: relative;
-                              display: inline-block;
-                              width: 40px;
-                              height: 22px;
-                            "
-                          >
+                          <label class="bb-toggle">
                             <input
                               type="checkbox"
                               class="site-autopublish"
                               aria-label="Run on Publish"
-                              style="
-                                position: absolute;
-                                opacity: 0;
-                                width: 0;
-                                height: 0;
-                              "
                             />
-                            <span
-                              class="bb-toggle-slider"
-                              style="
-                                position: absolute;
-                                cursor: pointer;
-                                top: 0;
-                                left: 0;
-                                right: 0;
-                                bottom: 0;
-                                background-color: #ccc;
-                                transition: 0.3s;
-                                border-radius: 22px;
-                              "
-                            ></span>
+                            <span class="bb-toggle-slider"></span>
                           </label>
                         </div>
                       </div>
                     </div>
-                    <div
-                      class="site-status"
-                      style="
-                        display: none;
-                        margin-top: 8px;
-                        font-size: 12px;
-                        color: #6b7280;
-                      "
-                    ></div>
+                    <div class="site-status settings-site-status"></div>
                   </div>
 
-                  <div
-                    id="webflowSitesLoading"
-                    style="text-align: center; padding: 20px; color: #6b7280"
-                  >
+                  <div id="webflowSitesLoading" class="settings-sites-loading">
                     Loading sites...
                   </div>
-                  <div
-                    id="webflowSitesEmpty"
-                    style="
-                      display: none;
-                      text-align: center;
-                      padding: 20px;
-                      color: #6b7280;
-                    "
-                  >
+                  <div id="webflowSitesEmpty" class="settings-sites-empty">
                     No sites found in this Webflow workspace.
                   </div>
                 </div>
 
                 <div
                   id="webflowSitesPagination"
-                  style="
-                    display: none;
-                    margin-top: 12px;
-                    padding-top: 12px;
-                    border-top: 1px solid #e5e7eb;
-                    text-align: center;
-                  "
+                  class="settings-sites-pagination"
                 >
                   <button
                     id="webflowSitesPrevPage"
-                    class="bb-button bb-button-outline"
+                    class="bb-button bb-button-outline settings-pagination-btn settings-pagination-btn--prev"
                     bbb-action="webflow-sites-prev"
-                    style="
-                      font-size: 12px;
-                      padding: 4px 12px;
-                      margin-right: 8px;
-                    "
                     aria-label="Previous page of Webflow sites"
                     disabled
                   >
@@ -892,13 +620,12 @@
                   </button>
                   <span
                     id="webflowSitesPageInfo"
-                    style="font-size: 13px; color: #6b7280; margin: 0 8px"
+                    class="settings-pagination-info"
                   ></span>
                   <button
                     id="webflowSitesNextPage"
-                    class="bb-button bb-button-outline"
+                    class="bb-button bb-button-outline settings-pagination-btn settings-pagination-btn--next"
                     bbb-action="webflow-sites-next"
-                    style="font-size: 12px; padding: 4px 12px; margin-left: 8px"
                     aria-label="Next page of Webflow sites"
                   >
                     Next
@@ -906,53 +633,25 @@
                 </div>
               </div>
 
-              <div
-                id="webflowEmptyState"
-                style="
-                  text-align: center;
-                  padding: 24px;
-                  background: #f9fafb;
-                  border-radius: 8px;
-                  border: 2px dashed #e5e7eb;
-                "
-              >
-                <p style="color: #6b7280; margin-bottom: 16px">
-                  No Webflow connection yet.
-                </p>
+              <div id="webflowEmptyState" class="settings-empty-state">
+                <p class="settings-empty-text">No Webflow connection yet.</p>
                 <button
-                  class="bb-button bb-button-primary"
+                  class="bb-button bb-button-primary settings-btn-icon"
                   bbb-action="webflow-connect"
-                  style="display: inline-flex; align-items: center; gap: 8px"
                 >
                   Connect Webflow
                 </button>
               </div>
 
               <div
-                class="bb-notification-success"
                 id="webflowSuccessMessage"
-                style="
-                  display: none;
-                  margin-top: 16px;
-                  background: #dcfce7;
-                  color: #166534;
-                  padding: 12px;
-                  border-radius: 8px;
-                "
+                class="settings-notification settings-notification--success settings-notification--compact"
               >
                 <span id="webflowSuccessText"></span>
               </div>
               <div
-                class="bb-notification-error"
                 id="webflowErrorMessage"
-                style="
-                  display: none;
-                  margin-top: 16px;
-                  background: #fee2e2;
-                  color: #dc2626;
-                  padding: 12px;
-                  border-radius: 8px;
-                "
+                class="settings-notification settings-notification--error settings-notification--compact"
               >
                 <span id="webflowErrorText"></span>
               </div>
@@ -1009,7 +708,7 @@
       aria-modal="true"
       aria-labelledby="createOrgModalTitle"
     >
-      <div class="bb-modal-content" style="max-width: 440px">
+      <div class="bb-modal-content settings-modal-narrow">
         <div class="bb-modal-header">
           <h2 class="bb-modal-title" id="createOrgModalTitle">
             Create Organisation
@@ -1036,15 +735,7 @@
               aria-describedby="createOrgError"
             />
           </div>
-          <div
-            style="
-              display: flex;
-              gap: 12px;
-              justify-content: flex-end;
-              margin-top: 24px;
-              padding: 0 24px 20px;
-            "
-          >
+          <div class="settings-modal-actions">
             <button
               type="button"
               class="bb-button bb-button-outline"
@@ -1061,11 +752,7 @@
             </button>
           </div>
         </form>
-        <div
-          id="createOrgError"
-          class="bb-auth-error"
-          style="display: none"
-        ></div>
+        <div id="createOrgError" class="bb-auth-error settings-hidden"></div>
       </div>
     </div>
 
