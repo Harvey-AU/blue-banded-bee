@@ -341,6 +341,8 @@
     const invitesList = document.getElementById("teamInvitesList");
     const inviteTemplate = document.getElementById("teamInviteTemplate");
     const emptyState = document.getElementById("teamInvitesEmpty");
+    const defaultEmptyText =
+      emptyState?.textContent?.trim() || "No pending invites.";
     if (!invitesList || !inviteTemplate) return;
 
     invitesList.innerHTML = "";
@@ -351,6 +353,9 @@
         emptyState.textContent = "Only admins can view pending invites.";
       }
       return;
+    }
+    if (emptyState) {
+      emptyState.textContent = defaultEmptyText;
     }
 
     try {
