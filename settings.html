@@ -12,29 +12,31 @@
       crossorigin="anonymous"
     ></script>
     <script>
-      Sentry.init({
-        dsn: "https://04f57d1dedc67f307cef525b1b1551a6@o4509113950928896.ingest.us.sentry.io/4509113952370688",
-        environment:
-          window.location.hostname === "app.bluebandedbee.co"
-            ? "production"
-            : "development",
+      if (window.Sentry) {
+        Sentry.init({
+          dsn: "https://04f57d1dedc67f307cef525b1b1551a6@o4509113950928896.ingest.us.sentry.io/4509113952370688",
+          environment:
+            window.location.hostname === "app.bluebandedbee.co"
+              ? "production"
+              : "development",
 
-        tracesSampleRate: 0.1,
-        replaysSessionSampleRate: 0,
-        replaysOnErrorSampleRate: 1.0,
+          tracesSampleRate: 0.1,
+          replaysSessionSampleRate: 0,
+          replaysOnErrorSampleRate: 1.0,
 
-        beforeSend(event) {
-          return event;
-        },
+          beforeSend(event) {
+            return event;
+          },
 
-        ignoreErrors: [
-          "ResizeObserver loop limit exceeded",
-          "Non-Error promise rejection captured",
-          /Failed to fetch/,
-          /NetworkError/,
-          /Load failed/,
-        ],
-      });
+          ignoreErrors: [
+            "ResizeObserver loop limit exceeded",
+            "Non-Error promise rejection captured",
+            /Failed to fetch/,
+            /NetworkError/,
+            /Load failed/,
+          ],
+        });
+      }
     </script>
 
     <script src="/js/core.js" defer></script>
