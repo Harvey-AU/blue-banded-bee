@@ -150,8 +150,6 @@ async function handleAuthCallback() {
     const refreshToken = hashParams.get("refresh_token");
 
     if (accessToken) {
-      console.log("Processing auth callback with tokens...");
-
       // Set the session in Supabase using the tokens
       const {
         data: { session },
@@ -162,8 +160,6 @@ async function handleAuthCallback() {
       });
 
       if (session) {
-        console.log("User authenticated via callback:", session.user.id);
-
         // Clear the URL hash to clean up the URL
         history.replaceState(null, null, window.location.pathname);
 
@@ -344,7 +340,6 @@ function updateAuthState(isAuthenticated) {
               console.error("Logout error:", error);
               alert("Logout failed. Please try again.");
             } else {
-              console.log("Logout successful");
               window.location.reload();
             }
           } catch (error) {
@@ -859,8 +854,6 @@ async function handleSocialLogin(provider) {
 async function handlePendingDomain() {
   const pendingDomain = sessionStorage.getItem("bb_pending_domain");
   if (pendingDomain && window.dataBinder?.authManager?.isAuthenticated) {
-    console.log("Found pending domain after auth:", pendingDomain);
-
     // Clear the stored domain
     sessionStorage.removeItem("bb_pending_domain");
 

@@ -46,10 +46,6 @@ async function initializeAuthWithDataBinder(dataBinder, options = {}) {
   // Note: dataBinder.initAuth() already handles updating authManager.session
   if (window.supabase) {
     window.supabase.auth.onAuthStateChange(async (event, session) => {
-      if (debug) {
-        console.log("Auth state changed:", event, session?.user?.id);
-      }
-
       // Register user with backend on sign in (handles OAuth returns)
       if (
         (event === "SIGNED_IN" || event === "USER_UPDATED") &&
@@ -70,14 +66,6 @@ async function initializeAuthWithDataBinder(dataBinder, options = {}) {
   }
 
   // Log auth state for debugging
-  if (debug) {
-    console.log("Auth state after init:", {
-      hasAuth: !!dataBinder.authManager,
-      isAuthenticated: dataBinder.authManager?.isAuthenticated,
-      user: dataBinder.authManager?.user?.id,
-    });
-  }
-
   // Update auth state after data binder init
   const currentSession = await window.supabase.auth.getSession();
   window.BBAuth.updateAuthState(!!currentSession.data.session?.user);
@@ -97,7 +85,6 @@ function setupDashboardRefresh(dataBinder) {
   dataBinder.refresh = async function () {
     // Only load dashboard data if user is authenticated
     if (!this.authManager || !this.authManager.isAuthenticated) {
-      console.log("User not authenticated, skipping dashboard data load");
       return;
     }
 
@@ -123,7 +110,6 @@ function setupDashboardRefresh(dataBinder) {
         });
       } catch (error) {
         // Handle stats API errors gracefully
-        console.log("Stats API error (likely no data yet):", error);
         data = {
           stats: {
             total_jobs: 0,
@@ -142,7 +128,6 @@ function setupDashboardRefresh(dataBinder) {
         );
         jobs = jobsResponse.jobs || [];
       } catch (error) {
-        console.log("Jobs API error (likely no jobs yet):", error);
         jobs = [];
       }
 
@@ -409,8 +394,6 @@ async function handleDashboardJobCreation(event) {
         }
       );
 
-      console.log("Scheduler created:", schedulerResponse);
-
       // Create job immediately linked to the scheduler
       try {
         const jobResponse = await window.dataBinder.fetchData("/v1/jobs", {
@@ -421,8 +404,6 @@ async function handleDashboardJobCreation(event) {
             scheduler_id: schedulerResponse.id,
           }),
         });
-
-        console.log("Scheduled job created:", jobResponse);
       } catch (jobError) {
         // If job creation fails, attempt to clean up the scheduler
         console.error(
@@ -434,7 +415,6 @@ async function handleDashboardJobCreation(event) {
             `/v1/schedulers/${encodeURIComponent(schedulerResponse.id)}`,
             { method: "DELETE" }
           );
-          console.log("Scheduler cleanup successful");
         } catch (cleanupError) {
           console.error("Failed to clean up scheduler:", cleanupError);
         }
@@ -462,19 +442,11 @@ async function handleDashboardJobCreation(event) {
       }
     } else {
       // Regular one-time job creation
-      console.log("Creating job from dashboard form:", {
-        domain,
-        maxPages,
-        concurrency: requestBody.concurrency,
-      });
-
       const response = await window.dataBinder.fetchData("/v1/jobs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(requestBody),
       });
-
-      console.log("Dashboard job created successfully:", response);
 
       // Clear the form
       const domainField = document.getElementById("jobDomain");
@@ -679,8 +651,6 @@ async function setupQuickAuth(dataBinder) {
   // Setup handlers
   window.BBAuth.setupAuthHandlers();
   window.BBAuth.setupLoginPageHandlers();
-
-  console.log("Quick auth setup complete");
 }
 
 // Realtime subscription constants (exposed on window for job-page.js)

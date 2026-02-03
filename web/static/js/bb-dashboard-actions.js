@@ -151,7 +151,7 @@ function handleDashboardAction(action, element) {
     }
 
     default:
-      console.log("Unhandled dashboard action:", action);
+      break;
   }
 }
 

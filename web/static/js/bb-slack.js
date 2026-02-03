@@ -76,7 +76,7 @@ function handleSlackAction(action, element) {
       break;
 
     default:
-      console.log("Unhandled Slack action:", action);
+      break;
   }
 }
 

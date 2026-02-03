@@ -120,7 +120,7 @@ function handleWebflowAction(action, element) {
     }
 
     default:
-      console.log("Unhandled Webflow action:", action);
+      break;
   }
 }
 
