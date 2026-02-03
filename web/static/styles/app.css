@@ -2867,6 +2867,12 @@ body.page-job-details .sr-only {
   border: 0;
 }
 
+body.page-job-details .page-header-title {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 700;
+}
+
 body.page-job-details thead th {
   font-size: 12px;
   text-transform: uppercase;
