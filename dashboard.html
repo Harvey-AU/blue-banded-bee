@@ -937,21 +937,7 @@
           });
         }
 
-        // Toggle dropdown
-        btn.addEventListener("click", (e) => {
-          e.stopPropagation();
-          switcher.classList.toggle("open");
-          btn.setAttribute(
-            "aria-expanded",
-            switcher.classList.contains("open")
-          );
-        });
-
-        // Close dropdown on outside click
-        document.addEventListener("click", () => {
-          switcher.classList.remove("open");
-          btn.setAttribute("aria-expanded", "false");
-        });
+        // Note: Toggle/close handlers are managed by bb-global-nav.js
       }
 
       // Listen for org switches and refresh dashboard-specific data
