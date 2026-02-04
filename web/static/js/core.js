@@ -215,13 +215,9 @@
       const { data: sessionData } = await window.supabase.auth.getSession();
       const session = sessionData?.session;
       if (!session) {
-        // No session - don't mark as fully initialised so we can retry later
+        // No session - leave BB_ORG_READY pending so it resolves on sign-in
         window.BB_ACTIVE_ORG = null;
         window.BB_ORGANISATIONS = [];
-        if (!orgInitialised) {
-          orgReadyResolve(null);
-          orgInitialised = true;
-        }
         return null;
       }
 
