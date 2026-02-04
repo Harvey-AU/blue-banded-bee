@@ -1447,84 +1447,10 @@
   }
 
   function initAdminSection(session) {
-    if (!session?.user) return;
-
-    const isSystemAdmin =
-      session.user.app_metadata?.system_role === "system_admin" ||
-      session.user.user_metadata?.system_role === "system_admin";
-
-    if (!isSystemAdmin) return;
-
-    const adminGroup = document.getElementById("adminGroup");
-    if (adminGroup) {
-      adminGroup.classList.remove("settings-hidden");
-    }
-
-    const resetBtn = document.getElementById("settingsResetDbBtn");
-    if (resetBtn) {
-      resetBtn.addEventListener("click", () => handleResetDatabase(session));
-    }
-  }
-
-  async function handleResetDatabase(session) {
-    // Triple confirmation before resetting
-    if (
-      !confirm(
-        "⚠️ WARNING: This will DELETE ALL jobs and tasks!\n\nAre you absolutely sure you want to reset the database?"
-      )
-    ) {
-      return;
-    }
-
-    if (
-      !confirm("⚠️ FINAL WARNING: This action cannot be undone!\n\nContinue?")
-    ) {
-      return;
-    }
-
-    const deleteKeyword = prompt(
-      'Type "DELETE" to confirm database reset:',
-      ""
-    );
-    if (deleteKeyword !== "DELETE") {
-      alert("Reset cancelled - you did not type DELETE correctly.");
-      return;
-    }
-
-    const btn = document.getElementById("settingsResetDbBtn");
-    try {
-      if (btn) {
-        btn.disabled = true;
-        btn.textContent = "Resetting...";
-      }
-
-      const response = await fetch("/v1/admin/reset-db", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-          "Content-Type": "application/json",
-        },
+    if (window.BBAdmin) {
+      window.BBAdmin.initAdminResetButton("settingsResetDbBtn", session, {
+        containerSelector: "#adminGroup",
       });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        alert("✅ Database reset successful! Page will reload.");
-        window.location.reload();
-      } else {
-        alert(`❌ Reset failed: ${data.message || "Unknown error"}`);
-        if (btn) {
-          btn.disabled = false;
-          btn.textContent = "Reset Database";
-        }
-      }
-    } catch (error) {
-      console.error("Reset database error:", error);
-      alert(`❌ Reset failed: ${error.message}`);
-      if (btn) {
-        btn.disabled = false;
-        btn.textContent = "Reset Database";
-      }
     }
   }
 

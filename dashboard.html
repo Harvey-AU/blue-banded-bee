@@ -718,6 +718,7 @@
     <script src="/js/bb-slack.js" defer></script>
     <script src="/js/bb-webflow.js" defer></script>
     <script src="/js/bb-google.js" defer></script>
+    <script src="/js/bb-admin.js" defer></script>
 
     <script>
       // Initialize dashboard with unified authentication system
@@ -785,16 +786,8 @@
             initCreateOrgModal();
           }
 
-          if (session?.user) {
-            const isSystemAdmin =
-              session.user.app_metadata?.system_role === "system_admin" ||
-              session.user.user_metadata?.system_role === "system_admin";
-            if (isSystemAdmin) {
-              const resetBtn = document.getElementById("resetDbBtn");
-              if (resetBtn) {
-                resetBtn.style.display = "inline-block";
-              }
-            }
+          if (session?.user && window.BBAdmin) {
+            window.BBAdmin.initAdminResetButton("resetDbBtn", session);
           }
 
           // Setup notifications modal handlers BEFORE OAuth callbacks
@@ -1123,84 +1116,6 @@
           }
         });
       }
-
-      // Admin: Reset Database Button Handler
-      // Button visibility is controlled by system-admin role check in dashboard initialization
-      document
-        .getElementById("resetDbBtn")
-        ?.addEventListener("click", async () => {
-          console.info("reset-db: user clicked reset button");
-
-          // Triple confirmation before resetting
-          const confirm1 = confirm(
-            "⚠️ WARNING: This will DELETE ALL jobs and tasks!\\n\\nAre you absolutely sure you want to reset the database?"
-          );
-          if (!confirm1) {
-            console.info("reset-db: first confirmation declined");
-            return;
-          }
-
-          const confirm2 = confirm(
-            'This action CANNOT be undone. All data will be permanently lost.\\n\\nType "DELETE" in the next prompt to confirm.'
-          );
-          if (!confirm2) {
-            console.info("reset-db: second confirmation declined");
-            return;
-          }
-
-          const typeCheck = prompt("Type DELETE to confirm:");
-          if (typeCheck !== "DELETE") {
-            alert("Reset cancelled - you did not type DELETE correctly.");
-            console.info("reset-db: delete keyword mismatch");
-            return;
-          }
-
-          try {
-            const btn = document.getElementById("resetDbBtn");
-            btn.disabled = true;
-            btn.textContent = "Resetting...";
-            console.info("reset-db: request initialised, fetching session");
-
-            const {
-              data: { session },
-            } = await window.supabase.auth.getSession();
-            if (!session) {
-              alert("Not authenticated");
-              console.warn("reset-db: no session – aborting");
-              btn.disabled = false;
-              btn.textContent = "Reset DB";
-              return;
-            }
-
-            console.info("reset-db: sending POST /v1/admin/reset-db", {
-              user: session.user?.id ?? "unknown",
-            });
-            const response = await fetch("/v1/admin/reset-db", {
-              method: "POST",
-              headers: {
-                Authorization: `Bearer ${session.access_token}`,
-                "Content-Type": "application/json",
-              },
-            });
-
-            if (response.ok) {
-              console.info("reset-db: completed successfully");
-              alert("✅ Database reset successful! Page will reload.");
-              window.location.reload();
-            } else {
-              const error = await response.text();
-              console.error("reset-db: server returned error", error);
-              alert(`❌ Reset failed: ${error}`);
-              btn.disabled = false;
-              btn.textContent = "Reset DB";
-            }
-          } catch (error) {
-            console.error("reset-db: unexpected failure", error);
-            alert(`❌ Error: ${error.message}`);
-            document.getElementById("resetDbBtn").disabled = false;
-            document.getElementById("resetDbBtn").textContent = "Reset DB";
-          }
-        });
 
       // Notifications Dropdown and Modal Setup
       function setupNotificationsModal() {
