@@ -322,7 +322,10 @@
           currentOrgName.textContent = newOrg.name || "Organisation";
           if (orgListEl) {
             orgListEl.querySelectorAll(".bb-org-item").forEach((el) => {
-              el.classList.toggle("active", el.dataset.orgId === newOrg.id);
+              el.classList.toggle(
+                "active",
+                el.dataset.orgId === String(newOrg.id)
+              );
             });
           }
         }
