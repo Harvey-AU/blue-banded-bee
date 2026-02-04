@@ -1016,7 +1016,19 @@
       if (link.startsWith("/")) {
         window.location.href = link;
       } else {
-        const newWindow = window.open(link, "_blank", "noopener,noreferrer");
+        // Validate URL protocol to prevent javascript:/data: attacks
+        let safeUrl;
+        try {
+          const parsed = new URL(link, window.location.origin);
+          if (!["http:", "https:"].includes(parsed.protocol)) {
+            throw new Error("Unsupported protocol");
+          }
+          safeUrl = parsed.href;
+        } catch (e) {
+          showSettingsToast("error", "Invalid notification link");
+          return;
+        }
+        const newWindow = window.open(safeUrl, "_blank", "noopener,noreferrer");
         if (newWindow) {
           newWindow.opener = null;
         }
