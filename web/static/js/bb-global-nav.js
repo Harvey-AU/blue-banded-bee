@@ -328,6 +328,11 @@
         }
       });
 
+      // Listen for org ready (after auth state restored)
+      document.addEventListener("bb:org-ready", () => {
+        updateNavOrgDisplay(window.BB_ACTIVE_ORG, window.BB_ORGANISATIONS);
+      });
+
       // Sync with settings page org name if present
       if (settingsOrgName) {
         const orgNameObserver = new MutationObserver(() => {

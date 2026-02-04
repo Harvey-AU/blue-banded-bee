@@ -189,6 +189,7 @@
    * @returns {Promise<Object|null>} The active organisation or null
    */
   window.BB_APP.initialiseOrg = async function () {
+    // Return cached result if we have a valid org
     if (
       orgInitialised &&
       window.BB_ACTIVE_ORG?.id &&
@@ -205,9 +206,13 @@
       const { data: sessionData } = await window.supabase.auth.getSession();
       const session = sessionData?.session;
       if (!session) {
-        orgInitialised = true;
+        // No session - don't mark as fully initialised so we can retry later
         window.BB_ACTIVE_ORG = null;
-        orgReadyResolve(null);
+        window.BB_ORGANISATIONS = [];
+        if (!orgInitialised) {
+          orgReadyResolve(null);
+          orgInitialised = true;
+        }
         return null;
       }
 
@@ -269,6 +274,32 @@
    * @param {string} orgId - The organisation ID to switch to
    * @returns {Promise<Object>} The new active organisation
    */
+  // Listen for auth state changes to re-init org when user signs in
+  window.BB_APP.coreReady.then(() => {
+    if (window.supabase?.auth) {
+      window.supabase.auth.onAuthStateChange((event, session) => {
+        if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
+          // Re-init org if we don't have one yet
+          if (!window.BB_ACTIVE_ORG?.id) {
+            window.BB_APP.initialiseOrg()
+              .then((org) => {
+                if (org) {
+                  document.dispatchEvent(
+                    new CustomEvent("bb:org-ready", {
+                      detail: { organisation: org },
+                    })
+                  );
+                }
+              })
+              .catch((err) => {
+                console.warn("Failed to init org after auth change:", err);
+              });
+          }
+        }
+      });
+    }
+  });
+
   window.BB_APP.switchOrg = async function (orgId) {
     if (!window.supabase?.auth) {
       throw new Error("Supabase not initialised");
