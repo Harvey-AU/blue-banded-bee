@@ -168,6 +168,146 @@
   window.BB_APP = window.BB_APP || {};
   window.BB_APP.coreReady = coreReady;
 
+  // ========================================
+  // Unified Organisation Initialisation
+  // ========================================
+  // Single source of truth for active organisation.
+  // All code should await BB_ORG_READY before accessing BB_ACTIVE_ORG.
+
+  let orgReadyResolve = null;
+  let orgReadyReject = null;
+  let orgInitialised = false;
+
+  window.BB_ORG_READY = new Promise((resolve, reject) => {
+    orgReadyResolve = resolve;
+    orgReadyReject = reject;
+  });
+
+  /**
+   * Initialise the active organisation. Called once after auth is confirmed.
+   * Sets window.BB_ACTIVE_ORG and resolves BB_ORG_READY.
+   * @returns {Promise<Object|null>} The active organisation or null
+   */
+  window.BB_APP.initialiseOrg = async function () {
+    if (
+      orgInitialised &&
+      window.BB_ACTIVE_ORG?.id &&
+      window.BB_ACTIVE_ORG?.name
+    ) {
+      return window.BB_ACTIVE_ORG;
+    }
+
+    try {
+      if (!window.supabase?.auth) {
+        throw new Error("Supabase not initialised");
+      }
+
+      const { data: sessionData } = await window.supabase.auth.getSession();
+      const session = sessionData?.session;
+      if (!session) {
+        orgInitialised = true;
+        window.BB_ACTIVE_ORG = null;
+        orgReadyResolve(null);
+        return null;
+      }
+
+      // Fetch organisations from API
+      const response = await fetch("/v1/organisations", {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch organisations: ${response.status}`);
+      }
+
+      const data = await response.json();
+      const organisations = data.data?.organisations || [];
+
+      if (organisations.length === 0) {
+        orgInitialised = true;
+        window.BB_ACTIVE_ORG = null;
+        window.BB_ORGANISATIONS = [];
+        orgReadyResolve(null);
+        return null;
+      }
+
+      // Get active org ID from users table
+      let activeOrgId = null;
+      try {
+        const { data: userData } = await window.supabase
+          .from("users")
+          .select("active_organisation_id")
+          .eq("id", session.user.id)
+          .single();
+        activeOrgId = userData?.active_organisation_id;
+      } catch (err) {
+        console.warn("Failed to fetch active_organisation_id:", err);
+      }
+
+      // Find active org in list, fall back to first
+      const activeOrg =
+        organisations.find((org) => org.id === activeOrgId) || organisations[0];
+
+      // Set globals
+      window.BB_ACTIVE_ORG = activeOrg;
+      window.BB_ORGANISATIONS = organisations;
+      orgInitialised = true;
+
+      orgReadyResolve(activeOrg);
+      return activeOrg;
+    } catch (err) {
+      console.error("Failed to initialise organisation:", err);
+      orgInitialised = true;
+      window.BB_ACTIVE_ORG = null;
+      orgReadyReject(err);
+      throw err;
+    }
+  };
+
+  /**
+   * Switch to a different organisation. Updates DB, globals, and notifies listeners.
+   * @param {string} orgId - The organisation ID to switch to
+   * @returns {Promise<Object>} The new active organisation
+   */
+  window.BB_APP.switchOrg = async function (orgId) {
+    if (!window.supabase?.auth) {
+      throw new Error("Supabase not initialised");
+    }
+
+    const { data: sessionData } = await window.supabase.auth.getSession();
+    const session = sessionData?.session;
+    if (!session) {
+      throw new Error("Not authenticated");
+    }
+
+    const response = await fetch("/v1/organisations/switch", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ organisation_id: orgId }),
+    });
+
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.message || "Failed to switch organisation");
+    }
+
+    const switchData = await response.json();
+    const newOrg = switchData.data?.organisation;
+
+    // Update global
+    window.BB_ACTIVE_ORG = newOrg;
+
+    // Dispatch event for listeners
+    document.dispatchEvent(
+      new CustomEvent("bb:org-switched", { detail: { organisation: newOrg } })
+    );
+
+    return newOrg;
+  };
+
   /**
    * Builds the payload for restarting a job with the same configuration.
    * @param {Object} job - The job object to extract config from

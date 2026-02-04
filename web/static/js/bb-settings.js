@@ -1098,6 +1098,26 @@
 
     if (!switcher || !btn) return;
 
+    // Ensure org is initialised (may already be done by dashboard or nav)
+    if (window.BB_APP?.initialiseOrg && !window.BB_ACTIVE_ORG?.name) {
+      try {
+        await window.BB_APP.initialiseOrg();
+      } catch (err) {
+        console.warn("Org init failed:", err);
+      }
+    }
+
+    // Wait for shared org data
+    try {
+      await window.BB_ORG_READY;
+    } catch (err) {
+      console.warn("BB_ORG_READY failed:", err);
+    }
+
+    const organisations = window.BB_ORGANISATIONS || [];
+    const activeOrg = window.BB_ACTIVE_ORG;
+
+    // Clone elements to remove old listeners
     const newBtn = btn.cloneNode(true);
     btn.parentNode.replaceChild(newBtn, btn);
     const chevron = newBtn.querySelector(".bb-org-chevron");
@@ -1138,209 +1158,181 @@
       settingsOrgListRef = newSettingsOrgList;
     }
 
-    try {
-      const sessionResult = await window.supabase.auth.getSession();
-      const session = sessionResult?.data?.session;
-      if (!session) return;
+    // Handle no orgs case
+    if (organisations.length === 0) {
+      if (currentOrgNameRef) currentOrgNameRef.textContent = "No Organisation";
+      if (settingsOrgNameRef)
+        settingsOrgNameRef.textContent = "No Organisation";
+      return;
+    }
 
-      const response = await fetch("/v1/organisations", {
-        headers: { Authorization: `Bearer ${session.access_token}` },
-      });
-
-      if (!response.ok) {
-        console.error("Failed to fetch organisations");
-        switcher.style.display = "none";
-        if (divider) {
-          divider.style.display = "none";
-        }
-        if (settingsSwitcher) {
-          settingsSwitcher.style.display = "none";
-        }
-        return;
+    // Disable dropdown if only one org
+    if (organisations.length <= 1) {
+      if (dropdown) dropdown.style.display = "none";
+      btnRef.disabled = true;
+      btnRef.style.cursor = "default";
+      if (chevron) chevron.style.display = "none";
+      if (settingsBtnRef) {
+        settingsBtnRef.disabled = true;
+        settingsBtnRef.style.cursor = "default";
       }
+      if (settingsDropdown) settingsDropdown.style.display = "none";
+    }
 
-      const data = await response.json();
-      const organisations = data.data?.organisations || [];
+    // Set display name
+    const activeName = activeOrg?.name || organisations[0]?.name || "";
+    if (currentOrgNameRef) {
+      currentOrgNameRef.textContent = activeName || "Organisation";
+    }
+    if (settingsOrgNameRef) {
+      settingsOrgNameRef.textContent = activeName || "Organisation";
+    }
 
-      if (organisations.length === 0) {
-        if (currentOrgNameRef)
-          currentOrgNameRef.textContent = "No Organisation";
-        if (settingsOrgNameRef)
-          settingsOrgNameRef.textContent = "No Organisation";
+    const closeOrgDropdowns = () => {
+      switcher.classList.remove("open");
+      btnRef.setAttribute("aria-expanded", "false");
+      if (settingsSwitcher) {
+        settingsSwitcher.classList.remove("open");
+        settingsBtnRef?.setAttribute("aria-expanded", "false");
       }
+    };
 
-      if (organisations.length <= 1) {
-        if (dropdown) dropdown.style.display = "none";
-        btnRef.disabled = true;
-        btnRef.style.cursor = "default";
-        if (chevron) chevron.style.display = "none";
-        if (settingsBtnRef) {
-          settingsBtnRef.disabled = true;
-          settingsBtnRef.style.cursor = "default";
-        }
-        if (settingsDropdown) settingsDropdown.style.display = "none";
-      }
+    // Toggle dropdowns
+    btnRef.addEventListener("click", (e) => {
+      e.stopPropagation();
+      switcher.classList.toggle("open");
+      btnRef.setAttribute("aria-expanded", switcher.classList.contains("open"));
+    });
 
-      let activeOrg = organisations.find(
-        (org) => org.id === window.BB_ACTIVE_ORG?.id
-      );
-
-      if (!activeOrg && organisations.length > 0) {
-        try {
-          const { data: userData, error: userError } = await window.supabase
-            .from("users")
-            .select("active_organisation_id")
-            .eq("id", session.user.id)
-            .single();
-
-          if (userError) {
-            console.warn("Failed to fetch user active org:", userError);
-          }
-
-          const activeOrgId = userData?.active_organisation_id;
-          activeOrg =
-            organisations.find((org) => org.id === activeOrgId) ||
-            organisations[0];
-        } catch (err) {
-          console.warn("Failed to resolve active organisation:", err);
-          activeOrg = organisations[0];
-        }
-      }
-
-      if (activeOrg) {
-        window.BB_ACTIVE_ORG = activeOrg;
-      }
-
-      const activeName = activeOrg?.name || organisations[0]?.name || "";
-      if (currentOrgNameRef) {
-        currentOrgNameRef.textContent = activeName || "Organisation";
-      }
-      if (settingsOrgNameRef) {
-        settingsOrgNameRef.textContent = activeName || "Organisation";
-      }
-
-      const closeOrgDropdowns = () => {
-        switcher.classList.remove("open");
-        btnRef.setAttribute("aria-expanded", "false");
-        if (settingsSwitcher) {
-          settingsSwitcher.classList.remove("open");
-          settingsBtnRef?.setAttribute("aria-expanded", "false");
-        }
-      };
-
-      btnRef.addEventListener("click", (e) => {
+    if (settingsBtnRef && settingsSwitcher) {
+      settingsBtnRef.addEventListener("click", (e) => {
         e.stopPropagation();
-        switcher.classList.toggle("open");
-        btnRef.setAttribute(
+        settingsSwitcher.classList.toggle("open");
+        settingsBtnRef.setAttribute(
           "aria-expanded",
-          switcher.classList.contains("open")
+          settingsSwitcher.classList.contains("open")
         );
       });
+    }
 
-      if (settingsBtnRef && settingsSwitcher) {
-        settingsBtnRef.addEventListener("click", (e) => {
-          e.stopPropagation();
-          settingsSwitcher.classList.toggle("open");
-          settingsBtnRef.setAttribute(
-            "aria-expanded",
-            settingsSwitcher.classList.contains("open")
-          );
-        });
-      }
+    // Handle org switch using shared function
+    const handleOrgSwitch = async (org) => {
+      closeOrgDropdowns();
+      const previous = window.BB_ACTIVE_ORG?.id;
 
-      const handleOrgSwitch = async (org) => {
-        closeOrgDropdowns();
-        const previous = window.BB_ACTIVE_ORG?.id;
+      // Show loading state
+      if (currentOrgNameRef) currentOrgNameRef.textContent = "Switching...";
+      if (settingsOrgNameRef) settingsOrgNameRef.textContent = "Switching...";
 
-        try {
-          const switchRes = await fetch("/v1/organisations/switch", {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${session.access_token}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ organisation_id: org.id }),
-          });
-
-          if (switchRes.ok) {
-            const switchData = await switchRes.json();
-            window.BB_ACTIVE_ORG = switchData.data?.organisation;
-            if (currentOrgNameRef) currentOrgNameRef.textContent = org.name;
-            if (settingsOrgNameRef) settingsOrgNameRef.textContent = org.name;
-
-            if (previous !== org.id) {
-              await refreshSettingsData();
-            }
-
-            if (typeof subscribeToNotifications === "function") {
-              await subscribeToNotifications();
-            }
-
-            await loadNotificationCount();
-            await fetchAndDisplayQuota();
-          } else {
-            if (currentOrgNameRef) {
-              currentOrgNameRef.textContent =
-                window.BB_ACTIVE_ORG?.name || "Unknown";
-            }
-            if (settingsOrgNameRef) {
-              settingsOrgNameRef.textContent =
-                window.BB_ACTIVE_ORG?.name || "Organisation";
-            }
-            showSettingsToast("error", "Failed to switch organisation");
-          }
-        } catch (err) {
-          console.error("Error switching organisation:", err);
-          if (currentOrgNameRef) {
-            currentOrgNameRef.textContent =
-              window.BB_ACTIVE_ORG?.name || "Unknown";
-          }
-          if (settingsOrgNameRef) {
-            settingsOrgNameRef.textContent =
-              window.BB_ACTIVE_ORG?.name || "Organisation";
-          }
-          showSettingsToast("error", "Failed to switch organisation");
+      try {
+        await window.BB_APP.switchOrg(org.id);
+        // bb:org-switched event will handle UI updates
+      } catch (err) {
+        console.error("Error switching organisation:", err);
+        if (currentOrgNameRef) {
+          currentOrgNameRef.textContent =
+            window.BB_ACTIVE_ORG?.name || "Unknown";
         }
-      };
-
-      const renderOrgButton = (listEl, org) => {
-        if (!listEl) return;
-        const button = document.createElement("button");
-        button.className = "bb-org-item";
-        button.textContent = org.name;
-        if (org.id === window.BB_ACTIVE_ORG?.id) {
-          button.classList.add("active");
+        if (settingsOrgNameRef) {
+          settingsOrgNameRef.textContent =
+            window.BB_ACTIVE_ORG?.name || "Organisation";
         }
-        button.addEventListener("click", () => handleOrgSwitch(org));
-        listEl.appendChild(button);
-      };
-
-      orgListRef.innerHTML = "";
-      if (settingsOrgListRef) settingsOrgListRef.innerHTML = "";
-      organisations.forEach((org) => {
-        renderOrgButton(orgListRef, org);
-        renderOrgButton(settingsOrgListRef, org);
-      });
-
-      if (settingsCreateOrgBtn) {
-        settingsCreateOrgBtn.addEventListener("click", (e) => {
-          e.stopPropagation();
-          closeOrgDropdowns();
-          document.getElementById("createOrgBtn")?.click();
-        });
+        showSettingsToast("error", "Failed to switch organisation");
       }
+    };
 
-      document.removeEventListener("click", window._closeOrgDropdown);
-      window._closeOrgDropdown = closeOrgDropdowns;
-      document.addEventListener("click", closeOrgDropdowns);
-    } catch (err) {
-      console.error("Error initialising org switcher:", err);
-      switcher.style.display = "none";
-      if (divider) {
-        divider.style.display = "none";
+    // Render org buttons
+    const renderOrgButton = (listEl, org) => {
+      if (!listEl) return;
+      const button = document.createElement("button");
+      button.className = "bb-org-item";
+      button.dataset.orgId = org.id;
+      button.textContent = org.name;
+      if (org.id === activeOrg?.id) {
+        button.classList.add("active");
+      }
+      button.addEventListener("click", () => handleOrgSwitch(org));
+      listEl.appendChild(button);
+    };
+
+    // Clear and populate lists
+    while (orgListRef.firstChild) {
+      orgListRef.removeChild(orgListRef.firstChild);
+    }
+    if (settingsOrgListRef) {
+      while (settingsOrgListRef.firstChild) {
+        settingsOrgListRef.removeChild(settingsOrgListRef.firstChild);
       }
     }
+    organisations.forEach((org) => {
+      renderOrgButton(orgListRef, org);
+      renderOrgButton(settingsOrgListRef, org);
+    });
+
+    if (settingsCreateOrgBtn) {
+      settingsCreateOrgBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        closeOrgDropdowns();
+        document.getElementById("createOrgBtn")?.click();
+      });
+    }
+
+    document.removeEventListener("click", window._closeOrgDropdown);
+    window._closeOrgDropdown = closeOrgDropdowns;
+    document.addEventListener("click", closeOrgDropdowns);
   }
+
+  // Listen for org switches to update settings-specific UI and data
+  document.addEventListener("bb:org-switched", async (e) => {
+    const newOrg = e.detail?.organisation;
+    if (!newOrg) return;
+
+    // Update name displays
+    const currentOrgNameRef = document.getElementById("currentOrgName");
+    const settingsOrgNameRef = document.getElementById("settingsOrgName");
+    if (currentOrgNameRef) currentOrgNameRef.textContent = newOrg.name;
+    if (settingsOrgNameRef) settingsOrgNameRef.textContent = newOrg.name;
+
+    // Update active states in dropdowns
+    document.querySelectorAll(".bb-org-item").forEach((el) => {
+      el.classList.toggle("active", el.dataset.orgId === newOrg.id);
+    });
+
+    // Refresh settings-specific data
+    if (typeof refreshSettingsData === "function") {
+      try {
+        await refreshSettingsData();
+      } catch (err) {
+        console.warn("Failed to refresh settings data:", err);
+      }
+    }
+
+    if (typeof subscribeToNotifications === "function") {
+      try {
+        await subscribeToNotifications();
+      } catch (err) {
+        console.warn("Failed to subscribe to notifications:", err);
+      }
+    }
+
+    if (typeof loadNotificationCount === "function") {
+      try {
+        await loadNotificationCount();
+      } catch (err) {
+        console.warn("Failed to load notification count:", err);
+      }
+    }
+
+    if (typeof fetchAndDisplayQuota === "function") {
+      try {
+        await fetchAndDisplayQuota();
+      } catch (err) {
+        console.warn("Failed to refresh quota:", err);
+      }
+    }
+
+    showSettingsToast("success", `Switched to ${newOrg.name}`);
+  });
 
   function initCreateOrgModal() {
     const modal = document.getElementById("createOrgModal");
@@ -1417,11 +1409,22 @@
         if (response.ok) {
           closeModal();
 
-          const currentOrgName = document.getElementById("currentOrgName");
-          const settingsOrgName = document.getElementById("settingsOrgName");
-          if (currentOrgName) currentOrgName.textContent = name;
-          if (settingsOrgName) settingsOrgName.textContent = name;
-          window.BB_ACTIVE_ORG = data.data?.organisation;
+          const newOrg = data.data?.organisation;
+
+          // Update shared org data
+          window.BB_ACTIVE_ORG = newOrg;
+          if (Array.isArray(window.BB_ORGANISATIONS)) {
+            window.BB_ORGANISATIONS.push(newOrg);
+          } else {
+            window.BB_ORGANISATIONS = [newOrg];
+          }
+
+          // Dispatch event for all listeners
+          document.dispatchEvent(
+            new CustomEvent("bb:org-switched", {
+              detail: { organisation: newOrg },
+            })
+          );
 
           await initOrgSwitcher();
           await refreshSettingsData();
@@ -1478,6 +1481,14 @@
       const sessionResult = await window.supabase.auth.getSession();
       const session = sessionResult?.data?.session;
       if (session?.user) {
+        // Initialise org using shared logic (single source of truth)
+        if (window.BB_APP?.initialiseOrg) {
+          try {
+            await window.BB_APP.initialiseOrg();
+          } catch (err) {
+            console.warn("Failed to initialise org:", err);
+          }
+        }
         await initOrgSwitcher();
         initCreateOrgModal();
         await loadAccountDetails();

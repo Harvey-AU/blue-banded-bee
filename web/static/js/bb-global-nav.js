@@ -235,26 +235,104 @@
     });
 
     const initNavOrgSwitcher = async () => {
-      if (!currentOrgName || !window.supabase?.auth) return;
+      if (!currentOrgName) return;
 
-      let orgNameObserver = null;
-      let handleOrgSwitcherDocumentClick = null;
+      const orgListEl = navElement.querySelector("#orgList");
+      const orgSwitcher = navElement.querySelector("#orgSwitcher");
+      const orgBtn = navElement.querySelector("#orgSwitcherBtn");
 
-      const teardownOrgNav = () => {
-        if (orgNameObserver) {
-          orgNameObserver.disconnect();
-          orgNameObserver = null;
+      // Helper to update the nav display
+      const updateNavOrgDisplay = (activeOrg, organisations) => {
+        if (!activeOrg) {
+          currentOrgName.textContent = "No Organisation";
+          return;
         }
-        if (handleOrgSwitcherDocumentClick) {
-          document.removeEventListener("click", handleOrgSwitcherDocumentClick);
-          handleOrgSwitcherDocumentClick = null;
+
+        currentOrgName.textContent = activeOrg.name || "Organisation";
+
+        if (orgListEl) {
+          // Clear existing items safely
+          while (orgListEl.firstChild) {
+            orgListEl.removeChild(orgListEl.firstChild);
+          }
+          (organisations || []).forEach((org) => {
+            const button = document.createElement("button");
+            button.className = "bb-org-item";
+            button.dataset.orgId = org.id;
+            button.dataset.orgName = org.name;
+            button.textContent = org.name;
+            if (org.id === activeOrg?.id) {
+              button.classList.add("active");
+            }
+            orgListEl.appendChild(button);
+          });
         }
       };
 
+      // Handle org item clicks (delegated)
+      if (orgListEl) {
+        orgListEl.addEventListener("click", async (e) => {
+          const item = e.target.closest(".bb-org-item");
+          if (!item || item.classList.contains("active")) {
+            orgSwitcher?.classList.remove("open");
+            return;
+          }
+
+          const orgId = item.dataset.orgId;
+
+          // Show loading state
+          currentOrgName.textContent = "Switching...";
+          orgSwitcher?.classList.remove("open");
+          orgBtn?.setAttribute("aria-expanded", "false");
+
+          try {
+            // Use shared switch function
+            await window.BB_APP.switchOrg(orgId);
+            // bb:org-switched event will update UI
+          } catch (err) {
+            console.warn("Failed to switch organisation:", err);
+            // Restore previous name
+            currentOrgName.textContent =
+              window.BB_ACTIVE_ORG?.name || "Organisation";
+          }
+        });
+      }
+
+      // Toggle dropdown
+      if (orgSwitcher && orgBtn) {
+        orgBtn.addEventListener("click", (event) => {
+          event.stopPropagation();
+          orgSwitcher.classList.toggle("open");
+          orgBtn.setAttribute(
+            "aria-expanded",
+            orgSwitcher.classList.contains("open")
+          );
+        });
+
+        document.addEventListener("click", () => {
+          orgSwitcher.classList.remove("open");
+          orgBtn.setAttribute("aria-expanded", "false");
+        });
+      }
+
+      // Listen for org switches (from anywhere)
+      document.addEventListener("bb:org-switched", (e) => {
+        const newOrg = e.detail?.organisation;
+        if (newOrg) {
+          currentOrgName.textContent = newOrg.name || "Organisation";
+          if (orgListEl) {
+            orgListEl.querySelectorAll(".bb-org-item").forEach((el) => {
+              el.classList.toggle("active", el.dataset.orgId === newOrg.id);
+            });
+          }
+        }
+      });
+
+      // Sync with settings page org name if present
       if (settingsOrgName) {
-        orgNameObserver = new MutationObserver(() => {
+        const orgNameObserver = new MutationObserver(() => {
           const nextName = settingsOrgName.textContent?.trim();
-          if (nextName) {
+          if (nextName && nextName !== currentOrgName.textContent) {
             currentOrgName.textContent = nextName;
           }
         });
@@ -263,130 +341,20 @@
           characterData: true,
           subtree: true,
         });
+        window.addEventListener(
+          "beforeunload",
+          () => orgNameObserver.disconnect(),
+          { once: true }
+        );
       }
 
-      window.addEventListener("beforeunload", teardownOrgNav, { once: true });
-
+      // Wait for shared org init, then populate
       try {
-        const sessionResult = await window.supabase.auth.getSession();
-        const session = sessionResult?.data?.session;
-        if (!session) return;
-
-        const response = await fetch("/v1/organisations", {
-          headers: { Authorization: `Bearer ${session.access_token}` },
-        });
-        if (!response.ok) return;
-
-        const data = await response.json();
-        const organisations = data.data?.organisations || [];
-        const orgListEl = navElement.querySelector("#orgList");
-        const orgSwitcher = navElement.querySelector("#orgSwitcher");
-        const orgBtn = navElement.querySelector("#orgSwitcherBtn");
-
-        if (organisations.length === 0) {
-          currentOrgName.textContent = "No Organisation";
-          return;
-        }
-
-        let activeOrg = organisations.find(
-          (org) => org.id === window.BB_ACTIVE_ORG?.id
-        );
-
-        if (!activeOrg) {
-          try {
-            const { data: userData } = await window.supabase
-              .from("users")
-              .select("active_organisation_id")
-              .eq("id", session.user.id)
-              .single();
-
-            const activeOrgId = userData?.active_organisation_id;
-            activeOrg =
-              organisations.find((org) => org.id === activeOrgId) ||
-              organisations[0];
-          } catch (err) {
-            console.warn("Failed to resolve active organisation:", err);
-            activeOrg = organisations[0];
-          }
-        }
-
-        if (activeOrg) {
-          window.BB_ACTIVE_ORG = activeOrg;
-          currentOrgName.textContent = activeOrg.name || "Organisation";
-        }
-
-        if (orgListEl) {
-          orgListEl.innerHTML = "";
-          organisations.forEach((org) => {
-            const button = document.createElement("button");
-            button.className = "bb-org-item";
-            button.dataset.orgId = org.id;
-            button.textContent = org.name;
-            if (org.id === activeOrg?.id) {
-              button.classList.add("active");
-            }
-            button.addEventListener("click", async () => {
-              if (!orgSwitcher || !orgBtn) return;
-              orgSwitcher.classList.remove("open");
-              orgBtn.setAttribute("aria-expanded", "false");
-
-              try {
-                const switchRes = await fetch("/v1/organisations/switch", {
-                  method: "POST",
-                  headers: {
-                    Authorization: `Bearer ${session.access_token}`,
-                    "Content-Type": "application/json",
-                  },
-                  body: JSON.stringify({ organisation_id: org.id }),
-                });
-
-                if (switchRes.ok) {
-                  const switchData = await switchRes.json();
-                  window.BB_ACTIVE_ORG = switchData.data?.organisation;
-                  currentOrgName.textContent = org.name;
-                  if (orgListEl) {
-                    orgListEl.querySelectorAll(".bb-org-item").forEach((el) => {
-                      el.classList.toggle(
-                        "active",
-                        el.dataset.orgId === org.id
-                      );
-                    });
-                  }
-                }
-              } catch (err) {
-                console.warn("Failed to switch organisation:", err);
-                return;
-              }
-            });
-            orgListEl.appendChild(button);
-          });
-        }
-
-        if (orgSwitcher && orgBtn) {
-          orgBtn.addEventListener("click", (event) => {
-            event.stopPropagation();
-            orgSwitcher.classList.toggle("open");
-            orgBtn.setAttribute(
-              "aria-expanded",
-              orgSwitcher.classList.contains("open")
-            );
-          });
-
-          if (handleOrgSwitcherDocumentClick) {
-            document.removeEventListener(
-              "click",
-              handleOrgSwitcherDocumentClick
-            );
-          }
-          handleOrgSwitcherDocumentClick = () => {
-            orgSwitcher.classList.remove("open");
-            orgBtn.setAttribute("aria-expanded", "false");
-          };
-          document.addEventListener("click", handleOrgSwitcherDocumentClick);
-        }
+        await window.BB_ORG_READY;
+        updateNavOrgDisplay(window.BB_ACTIVE_ORG, window.BB_ORGANISATIONS);
       } catch (err) {
-        console.warn("Failed to initialise org switcher:", err);
-        return;
+        // Org init failed - show fallback
+        currentOrgName.textContent = "Organisation";
       }
     };
 
