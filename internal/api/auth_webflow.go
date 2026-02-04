@@ -117,7 +117,7 @@ func (h *Handler) HandleWebflowOAuthCallback(w http.ResponseWriter, r *http.Requ
 
 	if errParam != "" {
 		logger.Warn().Str("error", errParam).Msg("Webflow OAuth denied")
-		h.redirectToDashboardWithError(w, r, "Webflow", "Webflow connection was cancelled")
+		h.redirectToSettingsWithError(w, r, "Webflow", "Webflow connection was cancelled", "auto-crawl", "webflow")
 		return
 	}
 
@@ -130,7 +130,7 @@ func (h *Handler) HandleWebflowOAuthCallback(w http.ResponseWriter, r *http.Requ
 	state, err := h.validateOAuthState(stateParam)
 	if err != nil {
 		logger.Warn().Err(err).Msg("Invalid OAuth state")
-		h.redirectToDashboardWithError(w, r, "Webflow", "Invalid or expired state")
+		h.redirectToSettingsWithError(w, r, "Webflow", "Invalid or expired state", "auto-crawl", "webflow")
 		return
 	}
 
@@ -138,7 +138,7 @@ func (h *Handler) HandleWebflowOAuthCallback(w http.ResponseWriter, r *http.Requ
 	tokenResp, err := h.exchangeWebflowCode(code)
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to exchange Webflow OAuth code")
-		h.redirectToDashboardWithError(w, r, "Webflow", "Failed to connect to Webflow")
+		h.redirectToSettingsWithError(w, r, "Webflow", "Failed to connect to Webflow", "auto-crawl", "webflow")
 		return
 	}
 
@@ -162,7 +162,7 @@ func (h *Handler) HandleWebflowOAuthCallback(w http.ResponseWriter, r *http.Requ
 	}
 	if workspaceID == "" {
 		logger.Warn().Msg("Webflow OAuth response missing workspace ID")
-		h.redirectToDashboardWithError(w, r, "Webflow", "Webflow workspace ID not found. Please ensure a workspace is selected.")
+		h.redirectToSettingsWithError(w, r, "Webflow", "Webflow workspace ID not found. Please ensure a workspace is selected.", "auto-crawl", "webflow")
 		return
 	}
 
@@ -180,7 +180,7 @@ func (h *Handler) HandleWebflowOAuthCallback(w http.ResponseWriter, r *http.Requ
 
 	if err := h.DB.CreateWebflowConnection(r.Context(), conn); err != nil {
 		logger.Error().Err(err).Msg("Failed to save Webflow connection")
-		h.redirectToDashboardWithError(w, r, "Webflow", "Failed to save connection")
+		h.redirectToSettingsWithError(w, r, "Webflow", "Failed to save connection", "auto-crawl", "webflow")
 		return
 	}
 
@@ -191,7 +191,7 @@ func (h *Handler) HandleWebflowOAuthCallback(w http.ResponseWriter, r *http.Requ
 		if delErr := h.DB.DeleteWebflowConnection(r.Context(), conn.ID, state.OrgID); delErr != nil {
 			logger.Error().Err(delErr).Msg("Failed to clean up orphan connection after token storage failure")
 		}
-		h.redirectToDashboardWithError(w, r, "Webflow", "Failed to secure connection")
+		h.redirectToSettingsWithError(w, r, "Webflow", "Failed to secure connection", "auto-crawl", "webflow")
 		return
 	}
 
@@ -204,7 +204,7 @@ func (h *Handler) HandleWebflowOAuthCallback(w http.ResponseWriter, r *http.Requ
 	}
 	if err := h.DB.UpsertPlatformOrgMapping(r.Context(), mapping); err != nil {
 		logger.Error().Err(err).Msg("Failed to store Webflow workspace mapping")
-		h.redirectToDashboardWithError(w, r, "Webflow", "Failed to save Webflow workspace mapping")
+		h.redirectToSettingsWithError(w, r, "Webflow", "Failed to save Webflow workspace mapping", "auto-crawl", "webflow")
 		return
 	}
 
@@ -217,8 +217,8 @@ func (h *Handler) HandleWebflowOAuthCallback(w http.ResponseWriter, r *http.Requ
 		Str("webflow_user_id", authedUserID).
 		Msg("Webflow connection established")
 
-	// Redirect to dashboard with success + setup flag to open site configuration
-	h.redirectToDashboardWithSetup(w, r, "Webflow", "Webflow Connection", conn.ID)
+	// Redirect to settings with success + setup flag to open site configuration
+	h.redirectToSettingsWithSetup(w, r, "Webflow", "Webflow Connection", conn.ID, "auto-crawl", "webflow")
 }
 
 func (h *Handler) exchangeWebflowCode(code string) (*WebflowTokenResponse, error) {

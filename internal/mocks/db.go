@@ -302,9 +302,105 @@ func (m *MockDB) CreateOrganisation(name string) (*db.Organisation, error) {
 }
 
 // AddOrganisationMember mocks the AddOrganisationMember method
-func (m *MockDB) AddOrganisationMember(userID, organisationID string) error {
-	args := m.Called(userID, organisationID)
+func (m *MockDB) AddOrganisationMember(userID, organisationID, role string) error {
+	args := m.Called(userID, organisationID, role)
 	return args.Error(0)
+}
+
+// GetOrganisationMemberRole mocks role lookups
+func (m *MockDB) GetOrganisationMemberRole(ctx context.Context, userID, organisationID string) (string, error) {
+	args := m.Called(ctx, userID, organisationID)
+	return args.String(0), args.Error(1)
+}
+
+// ListOrganisationMembers mocks member listing
+func (m *MockDB) ListOrganisationMembers(ctx context.Context, organisationID string) ([]db.OrganisationMember, error) {
+	args := m.Called(ctx, organisationID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]db.OrganisationMember), args.Error(1)
+}
+
+// IsOrganisationMemberEmail mocks email membership checks
+func (m *MockDB) IsOrganisationMemberEmail(ctx context.Context, organisationID, email string) (bool, error) {
+	args := m.Called(ctx, organisationID, email)
+	return args.Bool(0), args.Error(1)
+}
+
+// RemoveOrganisationMember mocks member removal
+func (m *MockDB) RemoveOrganisationMember(ctx context.Context, userID, organisationID string) error {
+	args := m.Called(ctx, userID, organisationID)
+	return args.Error(0)
+}
+
+// CountOrganisationAdmins mocks admin counting
+func (m *MockDB) CountOrganisationAdmins(ctx context.Context, organisationID string) (int, error) {
+	args := m.Called(ctx, organisationID)
+	return args.Int(0), args.Error(1)
+}
+
+// CreateOrganisationInvite mocks invite creation
+func (m *MockDB) CreateOrganisationInvite(ctx context.Context, invite *db.OrganisationInvite) (*db.OrganisationInvite, error) {
+	args := m.Called(ctx, invite)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*db.OrganisationInvite), args.Error(1)
+}
+
+// ListOrganisationInvites mocks invite listing
+func (m *MockDB) ListOrganisationInvites(ctx context.Context, organisationID string) ([]db.OrganisationInvite, error) {
+	args := m.Called(ctx, organisationID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]db.OrganisationInvite), args.Error(1)
+}
+
+// RevokeOrganisationInvite mocks invite revocation
+func (m *MockDB) RevokeOrganisationInvite(ctx context.Context, inviteID, organisationID string) error {
+	args := m.Called(ctx, inviteID, organisationID)
+	return args.Error(0)
+}
+
+// GetOrganisationInviteByToken mocks invite lookup
+func (m *MockDB) GetOrganisationInviteByToken(ctx context.Context, token string) (*db.OrganisationInvite, error) {
+	args := m.Called(ctx, token)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*db.OrganisationInvite), args.Error(1)
+}
+
+// AcceptOrganisationInvite mocks invite acceptance
+func (m *MockDB) AcceptOrganisationInvite(ctx context.Context, token, userID string) (*db.OrganisationInvite, error) {
+	args := m.Called(ctx, token, userID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*db.OrganisationInvite), args.Error(1)
+}
+
+// SetOrganisationPlan mocks plan updates
+func (m *MockDB) SetOrganisationPlan(ctx context.Context, organisationID, planID string) error {
+	args := m.Called(ctx, organisationID, planID)
+	return args.Error(0)
+}
+
+// GetOrganisationPlanID mocks plan retrieval
+func (m *MockDB) GetOrganisationPlanID(ctx context.Context, organisationID string) (string, error) {
+	args := m.Called(ctx, organisationID)
+	return args.String(0), args.Error(1)
+}
+
+// ListDailyUsage mocks daily usage history
+func (m *MockDB) ListDailyUsage(ctx context.Context, organisationID string, startDate, endDate time.Time) ([]db.DailyUsageEntry, error) {
+	args := m.Called(ctx, organisationID, startDate, endDate)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]db.DailyUsageEntry), args.Error(1)
 }
 
 // Slack integration methods

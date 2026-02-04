@@ -1,12 +1,22 @@
 package api
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
+	"net/mail"
+	"net/url"
+	"os"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/Harvey-AU/blue-banded-bee/internal/auth"
+	"github.com/Harvey-AU/blue-banded-bee/internal/db"
+	"github.com/google/uuid"
 )
 
 // OrganisationsHandler handles GET and POST /v1/organisations
@@ -100,8 +110,8 @@ func (h *Handler) createOrganisation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Add user as member
-	err = h.DB.AddOrganisationMember(userClaims.UserID, org.ID)
+	// Add user as admin member
+	err = h.DB.AddOrganisationMember(userClaims.UserID, org.ID, "admin")
 	if err != nil {
 		InternalError(w, r, err)
 		return
@@ -270,4 +280,532 @@ func (h *Handler) PlansHandler(w http.ResponseWriter, r *http.Request) {
 	WriteSuccess(w, r, map[string]interface{}{
 		"plans": publicPlans,
 	}, "Plans retrieved successfully")
+}
+
+// OrganisationMembersHandler handles GET /v1/organisations/members
+func (h *Handler) OrganisationMembersHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		MethodNotAllowed(w, r)
+		return
+	}
+
+	orgID := h.GetActiveOrganisation(w, r)
+	if orgID == "" {
+		return
+	}
+
+	userClaims, ok := auth.GetUserFromContext(r.Context())
+	if !ok {
+		Unauthorised(w, r, "User information not found")
+		return
+	}
+
+	// Ensure user exists in database
+	_, err := h.DB.GetOrCreateUser(userClaims.UserID, userClaims.Email, nil)
+	if err != nil {
+		InternalError(w, r, err)
+		return
+	}
+
+	members, err := h.DB.ListOrganisationMembers(r.Context(), orgID)
+	if err != nil {
+		InternalError(w, r, err)
+		return
+	}
+
+	currentRole, err := h.DB.GetOrganisationMemberRole(r.Context(), userClaims.UserID, orgID)
+	if err != nil {
+		Forbidden(w, r, "Not a member of this organisation")
+		return
+	}
+
+	responseMembers := make([]map[string]interface{}, 0, len(members))
+	for _, member := range members {
+		responseMembers = append(responseMembers, map[string]interface{}{
+			"id":         member.UserID,
+			"email":      member.Email,
+			"full_name":  member.FullName,
+			"role":       member.Role,
+			"created_at": member.CreatedAt.Format(time.RFC3339),
+		})
+	}
+
+	WriteSuccess(w, r, map[string]interface{}{
+		"members":           responseMembers,
+		"current_user_id":   userClaims.UserID,
+		"current_user_role": currentRole,
+	}, "Organisation members retrieved successfully")
+}
+
+// OrganisationMemberHandler handles DELETE /v1/organisations/members/:id
+func (h *Handler) OrganisationMemberHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodDelete {
+		MethodNotAllowed(w, r)
+		return
+	}
+
+	orgID := h.GetActiveOrganisation(w, r)
+	if orgID == "" {
+		return
+	}
+
+	userClaims, ok := auth.GetUserFromContext(r.Context())
+	if !ok {
+		Unauthorised(w, r, "User information not found")
+		return
+	}
+
+	if ok := h.requireOrganisationAdmin(w, r, orgID, userClaims.UserID); !ok {
+		return
+	}
+
+	memberID := strings.TrimPrefix(r.URL.Path, "/v1/organisations/members/")
+	if memberID == "" {
+		BadRequest(w, r, "member ID is required")
+		return
+	}
+
+	memberRole, err := h.DB.GetOrganisationMemberRole(r.Context(), memberID, orgID)
+	if err != nil {
+		BadRequest(w, r, "Member not found")
+		return
+	}
+
+	if memberRole == "admin" {
+		adminCount, err := h.DB.CountOrganisationAdmins(r.Context(), orgID)
+		if err != nil {
+			InternalError(w, r, err)
+			return
+		}
+		if adminCount <= 1 {
+			Forbidden(w, r, "Organisation must have at least one admin")
+			return
+		}
+	}
+
+	if err := h.DB.RemoveOrganisationMember(r.Context(), memberID, orgID); err != nil {
+		InternalError(w, r, err)
+		return
+	}
+
+	WriteSuccess(w, r, map[string]interface{}{
+		"member_id": memberID,
+	}, "Organisation member removed successfully")
+}
+
+// OrganisationInvitesHandler handles GET/POST /v1/organisations/invites
+func (h *Handler) OrganisationInvitesHandler(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		h.listOrganisationInvites(w, r)
+	case http.MethodPost:
+		h.createOrganisationInvite(w, r)
+	default:
+		MethodNotAllowed(w, r)
+	}
+}
+
+// OrganisationInviteHandler handles DELETE /v1/organisations/invites/:id
+func (h *Handler) OrganisationInviteHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodDelete {
+		MethodNotAllowed(w, r)
+		return
+	}
+
+	orgID := h.GetActiveOrganisation(w, r)
+	if orgID == "" {
+		return
+	}
+
+	userClaims, ok := auth.GetUserFromContext(r.Context())
+	if !ok {
+		Unauthorised(w, r, "User information not found")
+		return
+	}
+
+	if ok := h.requireOrganisationAdmin(w, r, orgID, userClaims.UserID); !ok {
+		return
+	}
+
+	inviteID := strings.TrimPrefix(r.URL.Path, "/v1/organisations/invites/")
+	if inviteID == "" {
+		BadRequest(w, r, "invite ID is required")
+		return
+	}
+
+	if err := h.DB.RevokeOrganisationInvite(r.Context(), inviteID, orgID); err != nil {
+		InternalError(w, r, err)
+		return
+	}
+
+	WriteSuccess(w, r, map[string]interface{}{
+		"invite_id": inviteID,
+	}, "Invite revoked successfully")
+}
+
+// OrganisationInviteAcceptHandler handles POST /v1/organisations/invites/accept
+func (h *Handler) OrganisationInviteAcceptHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		MethodNotAllowed(w, r)
+		return
+	}
+
+	userClaims, ok := auth.GetUserFromContext(r.Context())
+	if !ok {
+		Unauthorised(w, r, "User information not found")
+		return
+	}
+
+	var req struct {
+		Token string `json:"token"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		BadRequest(w, r, "Invalid JSON request body")
+		return
+	}
+
+	if req.Token == "" {
+		BadRequest(w, r, "token is required")
+		return
+	}
+
+	// Ensure user exists in database
+	_, err := h.DB.GetOrCreateUser(userClaims.UserID, userClaims.Email, nil)
+	if err != nil {
+		InternalError(w, r, err)
+		return
+	}
+
+	invite, err := h.DB.GetOrganisationInviteByToken(r.Context(), req.Token)
+	if err != nil {
+		BadRequest(w, r, "Invite not found")
+		return
+	}
+
+	if !strings.EqualFold(invite.Email, userClaims.Email) {
+		Forbidden(w, r, "Invite email does not match this account")
+		return
+	}
+
+	acceptedInvite, err := h.DB.AcceptOrganisationInvite(r.Context(), req.Token, userClaims.UserID)
+	if err != nil {
+		BadRequest(w, r, err.Error())
+		return
+	}
+
+	if err := h.DB.SetActiveOrganisation(userClaims.UserID, acceptedInvite.OrganisationID); err != nil {
+		logger := loggerWithRequest(r)
+		logger.Warn().Err(err).Msg("Failed to set active organisation after invite acceptance")
+	}
+
+	WriteSuccess(w, r, map[string]interface{}{
+		"organisation_id": acceptedInvite.OrganisationID,
+		"role":            acceptedInvite.Role,
+	}, "Invite accepted successfully")
+}
+
+// OrganisationPlanHandler handles PUT /v1/organisations/plan
+func (h *Handler) OrganisationPlanHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPut {
+		MethodNotAllowed(w, r)
+		return
+	}
+
+	orgID := h.GetActiveOrganisation(w, r)
+	if orgID == "" {
+		return
+	}
+
+	userClaims, ok := auth.GetUserFromContext(r.Context())
+	if !ok {
+		Unauthorised(w, r, "User information not found")
+		return
+	}
+
+	if ok := h.requireOrganisationAdmin(w, r, orgID, userClaims.UserID); !ok {
+		return
+	}
+
+	var req struct {
+		PlanID string `json:"plan_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		BadRequest(w, r, "Invalid JSON request body")
+		return
+	}
+
+	if req.PlanID == "" {
+		BadRequest(w, r, "plan_id is required")
+		return
+	}
+
+	if err := h.DB.SetOrganisationPlan(r.Context(), orgID, req.PlanID); err != nil {
+		BadRequest(w, r, err.Error())
+		return
+	}
+
+	WriteSuccess(w, r, map[string]interface{}{
+		"plan_id": req.PlanID,
+	}, "Organisation plan updated successfully")
+}
+
+// UsageHistoryHandler handles GET /v1/usage/history
+func (h *Handler) UsageHistoryHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		MethodNotAllowed(w, r)
+		return
+	}
+
+	orgID := h.GetActiveOrganisation(w, r)
+	if orgID == "" {
+		return
+	}
+
+	queryDays := r.URL.Query().Get("days")
+	days := 30
+	if queryDays != "" {
+		if parsed, err := strconv.Atoi(queryDays); err == nil && parsed > 0 && parsed <= 365 {
+			days = parsed
+		}
+	}
+
+	today := time.Now().UTC().Truncate(24 * time.Hour)
+	startDate := today.AddDate(0, 0, -(days - 1))
+
+	entries, err := h.DB.ListDailyUsage(r.Context(), orgID, startDate, today)
+	if err != nil {
+		InternalError(w, r, err)
+		return
+	}
+
+	response := make([]map[string]interface{}, 0, len(entries))
+	for _, entry := range entries {
+		response = append(response, map[string]interface{}{
+			"usage_date":      entry.UsageDate.Format("2006-01-02"),
+			"pages_processed": entry.PagesProcessed,
+			"jobs_created":    entry.JobsCreated,
+		})
+	}
+
+	WriteSuccess(w, r, map[string]interface{}{
+		"days":  days,
+		"usage": response,
+	}, "Usage history retrieved successfully")
+}
+
+type organisationInviteRequest struct {
+	Email string `json:"email"`
+	Role  string `json:"role"`
+}
+
+func (h *Handler) listOrganisationInvites(w http.ResponseWriter, r *http.Request) {
+	orgID := h.GetActiveOrganisation(w, r)
+	if orgID == "" {
+		return
+	}
+
+	userClaims, ok := auth.GetUserFromContext(r.Context())
+	if !ok {
+		Unauthorised(w, r, "User information not found")
+		return
+	}
+
+	if ok := h.requireOrganisationAdmin(w, r, orgID, userClaims.UserID); !ok {
+		return
+	}
+
+	invites, err := h.DB.ListOrganisationInvites(r.Context(), orgID)
+	if err != nil {
+		InternalError(w, r, err)
+		return
+	}
+
+	responseInvites := make([]map[string]interface{}, 0, len(invites))
+	for _, invite := range invites {
+		responseInvites = append(responseInvites, map[string]interface{}{
+			"id":         invite.ID,
+			"email":      invite.Email,
+			"role":       invite.Role,
+			"created_at": invite.CreatedAt.Format(time.RFC3339),
+			"expires_at": invite.ExpiresAt.Format(time.RFC3339),
+		})
+	}
+
+	WriteSuccess(w, r, map[string]interface{}{
+		"invites": responseInvites,
+	}, "Organisation invites retrieved successfully")
+}
+
+func (h *Handler) createOrganisationInvite(w http.ResponseWriter, r *http.Request) {
+	orgID := h.GetActiveOrganisation(w, r)
+	if orgID == "" {
+		return
+	}
+
+	userClaims, ok := auth.GetUserFromContext(r.Context())
+	if !ok {
+		Unauthorised(w, r, "User information not found")
+		return
+	}
+
+	if ok := h.requireOrganisationAdmin(w, r, orgID, userClaims.UserID); !ok {
+		return
+	}
+
+	var req organisationInviteRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		BadRequest(w, r, "Invalid JSON request body")
+		return
+	}
+
+	email := strings.TrimSpace(strings.ToLower(req.Email))
+	if email == "" {
+		BadRequest(w, r, "Valid email is required")
+		return
+	}
+	parsedEmail, err := mail.ParseAddress(email)
+	if err != nil {
+		BadRequest(w, r, "Valid email is required")
+		return
+	}
+	if parsedEmail != nil && parsedEmail.Address != "" {
+		email = parsedEmail.Address
+	}
+
+	role := strings.TrimSpace(strings.ToLower(req.Role))
+	if role == "" {
+		role = "member"
+	}
+	if role != "admin" && role != "member" {
+		BadRequest(w, r, "Role must be admin or member")
+		return
+	}
+
+	isMember, err := h.DB.IsOrganisationMemberEmail(r.Context(), orgID, email)
+	if err != nil {
+		InternalError(w, r, err)
+		return
+	}
+	if isMember {
+		BadRequest(w, r, "User is already a member of this organisation")
+		return
+	}
+
+	inviteToken := uuid.NewString()
+	expiresAt := time.Now().Add(7 * 24 * time.Hour)
+
+	invite, err := h.DB.CreateOrganisationInvite(r.Context(), &db.OrganisationInvite{
+		OrganisationID: orgID,
+		Email:          email,
+		Role:           role,
+		Token:          inviteToken,
+		CreatedBy:      userClaims.UserID,
+		ExpiresAt:      expiresAt,
+	})
+	if err != nil {
+		if strings.Contains(err.Error(), "organisation_invites_unique_pending") {
+			BadRequest(w, r, "Invite already pending for this email")
+			return
+		}
+		InternalError(w, r, err)
+		return
+	}
+
+	redirectParams := url.Values{}
+	redirectParams.Set("invite_token", inviteToken)
+	redirectURL := buildSettingsURL("team", redirectParams, "invites")
+
+	if err := sendSupabaseInviteEmail(r.Context(), email, redirectURL, map[string]interface{}{
+		"organisation_id": orgID,
+		"role":            role,
+	}); err != nil {
+		if revokeErr := h.DB.RevokeOrganisationInvite(r.Context(), invite.ID, orgID); revokeErr != nil {
+			logger := loggerWithRequest(r)
+			logger.Warn().Err(revokeErr).Msg("Failed to revoke invite after email failure")
+		}
+		InternalError(w, r, err)
+		return
+	}
+
+	WriteCreated(w, r, map[string]interface{}{
+		"invite": map[string]interface{}{
+			"id":         invite.ID,
+			"email":      invite.Email,
+			"role":       invite.Role,
+			"created_at": invite.CreatedAt.Format(time.RFC3339),
+			"expires_at": invite.ExpiresAt.Format(time.RFC3339),
+		},
+	}, "Invite sent successfully")
+}
+
+func (h *Handler) requireOrganisationAdmin(w http.ResponseWriter, r *http.Request, organisationID, userID string) bool {
+	role, err := h.DB.GetOrganisationMemberRole(r.Context(), userID, organisationID)
+	if err != nil {
+		Forbidden(w, r, "Not a member of this organisation")
+		return false
+	}
+	if role != "admin" {
+		Forbidden(w, r, "Organisation administrator access required")
+		return false
+	}
+	return true
+}
+
+type supabaseInviteRequest struct {
+	Email      string                 `json:"email"`
+	RedirectTo string                 `json:"redirect_to,omitempty"`
+	Data       map[string]interface{} `json:"data,omitempty"`
+}
+
+func sendSupabaseInviteEmail(ctx context.Context, email, redirectTo string, data map[string]interface{}) error {
+	authURL := strings.TrimSuffix(os.Getenv("SUPABASE_AUTH_URL"), "/")
+	if authURL == "" {
+		legacyURL := strings.TrimSuffix(os.Getenv("SUPABASE_URL"), "/")
+		if legacyURL != "" {
+			authURL = legacyURL + "/auth/v1"
+		}
+	}
+	if authURL == "" {
+		return fmt.Errorf("supabase auth URL is not configured")
+	}
+	if !strings.Contains(authURL, "/auth/") {
+		authURL = authURL + "/auth/v1"
+	}
+
+	serviceKey := os.Getenv("SUPABASE_SERVICE_ROLE_KEY")
+	if serviceKey == "" {
+		return fmt.Errorf("supabase service role key is not configured")
+	}
+
+	payload, err := json.Marshal(supabaseInviteRequest{
+		Email:      email,
+		RedirectTo: redirectTo,
+		Data:       data,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to build invite payload: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, authURL+"/invite", bytes.NewReader(payload))
+	if err != nil {
+		return fmt.Errorf("failed to create invite request: %w", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+serviceKey)
+	req.Header.Set("apikey", serviceKey)
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to send invite request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= http.StatusMultipleChoices {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("supabase invite failed: %s", strings.TrimSpace(string(body)))
+	}
+
+	return nil
 }

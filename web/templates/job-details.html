@@ -11,22 +11,10 @@
     </head>
 
   <body class="page-job-details">
-    <header>
-      <div class="container">
-        <div>
-          <a href="/dashboard" class="back-link">← Back to Dashboard</a>
-          <h1 style="margin: 8px 0 0; font-size: 24px; font-weight: 700" bbb-text="job.page_title">Job Details</h1>
-        </div>
-
-        <div class="user-meta" id="userMeta">
-          <span id="userEmail">Loading…</span>
-          <button id="shareJobBtn" class="bb-btn" aria-label="Generate or copy shareable link">Generate Link</button>
-          <button id="logoutBtn" class="bb-btn" aria-label="Sign out of Blue Banded Bee">Sign Out</button>
-        </div>
-      </div>
-    </header>
+    <script src="/js/bb-global-nav.js" defer></script>
 
     <main>
+      <h1 class="page-header-title sr-only">Job Details</h1>
       <div id="shareLinkPanel" class="share-panel" style="display: none">
         <div class="share-details">
           <span class="share-label">Public Link</span>
@@ -44,6 +32,13 @@
             </p>
           </div>
           <div style="display: flex; gap: 8px">
+            <button
+              id="shareJobBtn"
+              class="bb-btn bb-btn-secondary"
+              aria-label="Generate or copy shareable link"
+            >
+              Generate Link
+            </button>
             <button
               id="restartJobBtn"
               class="bb-btn bb-btn-primary"

@@ -1160,7 +1160,6 @@ class BBDataBinder {
    */
   log(message, data = null) {
     if (this.debug) {
-      console.log(`[BBDataBinder] ${message}`, data);
     }
   }
 

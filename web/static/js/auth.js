@@ -150,8 +150,6 @@ async function handleAuthCallback() {
     const refreshToken = hashParams.get("refresh_token");
 
     if (accessToken) {
-      console.log("Processing auth callback with tokens...");
-
       // Set the session in Supabase using the tokens
       const {
         data: { session },
@@ -162,8 +160,6 @@ async function handleAuthCallback() {
       });
 
       if (session) {
-        console.log("User authenticated via callback:", session.user.id);
-
         // Clear the URL hash to clean up the URL
         history.replaceState(null, null, window.location.pathname);
 
@@ -344,7 +340,6 @@ function updateAuthState(isAuthenticated) {
               console.error("Logout error:", error);
               alert("Logout failed. Please try again.");
             } else {
-              console.log("Logout successful");
               window.location.reload();
             }
           } catch (error) {
@@ -379,9 +374,9 @@ async function updateUserInfo() {
       // Update email display
       userEmailElement.textContent = email;
 
-      // Update avatar with user initials
+      // Update avatar with Gravatar fallback to initials
       const initials = getInitials(email);
-      userAvatarElement.textContent = initials;
+      await setUserAvatar(userAvatarElement, email, initials);
     } else {
       // No session, reset to defaults
       userEmailElement.textContent = "Loading...";
@@ -421,6 +416,58 @@ function getInitials(email) {
   } else {
     // Just use first two characters of email prefix
     return emailPrefix.slice(0, 2).toUpperCase();
+  }
+}
+
+async function setUserAvatar(target, email, initials) {
+  if (!target) return;
+
+  const existingImg = target.querySelector("img");
+  if (existingImg) {
+    existingImg.remove();
+  }
+
+  target.textContent = initials || "?";
+
+  const gravatarUrl = await getGravatarUrl(email, 80);
+  if (!gravatarUrl) return;
+
+  const avatarImg = document.createElement("img");
+  avatarImg.src = gravatarUrl;
+  avatarImg.alt = "User avatar";
+  avatarImg.loading = "lazy";
+  avatarImg.decoding = "async";
+  avatarImg.addEventListener("load", () => {
+    target.textContent = "";
+    target.appendChild(avatarImg);
+  });
+  avatarImg.addEventListener("error", () => {
+    if (avatarImg.parentNode) {
+      avatarImg.parentNode.removeChild(avatarImg);
+    }
+    target.textContent = initials || "?";
+  });
+}
+
+async function getGravatarUrl(email, size) {
+  const normalised = (email || "").trim().toLowerCase();
+  if (!normalised || !window.crypto?.subtle) return "";
+
+  const encoder = new TextEncoder();
+  const data = encoder.encode(normalised);
+  try {
+    const digest = await window.crypto.subtle.digest("SHA-256", data);
+    const hash = Array.from(new Uint8Array(digest))
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
+    const params = new URLSearchParams({
+      s: String(size || 80),
+      d: "404",
+    });
+    return `https://www.gravatar.com/avatar/${hash}?${params.toString()}`;
+  } catch (error) {
+    console.warn("Failed to generate Gravatar hash:", error);
+    return "";
   }
 }
 
@@ -807,8 +854,6 @@ async function handleSocialLogin(provider) {
 async function handlePendingDomain() {
   const pendingDomain = sessionStorage.getItem("bb_pending_domain");
   if (pendingDomain && window.dataBinder?.authManager?.isAuthenticated) {
-    console.log("Found pending domain after auth:", pendingDomain);
-
     // Clear the stored domain
     sessionStorage.removeItem("bb_pending_domain");
 

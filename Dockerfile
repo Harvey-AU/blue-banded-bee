@@ -32,9 +32,11 @@ COPY --from=builder /app/main .
 # Copy static files
 COPY --from=builder /app/dashboard.html .
 COPY --from=builder /app/homepage.html .
+COPY --from=builder /app/settings.html .
 COPY --from=builder /app/auth-modal.html .
 COPY --from=builder /app/cli-login.html .
 COPY --from=builder /app/web/static ./web/static
+COPY --from=builder /app/web/partials ./web/partials
 COPY --from=builder /app/web/templates ./web/templates
 
 # Copy migration files (required for reset-db endpoint)
