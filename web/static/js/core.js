@@ -322,7 +322,16 @@
   window.BB_APP.coreReady.then(() => {
     if (window.supabase?.auth) {
       window.supabase.auth.onAuthStateChange((event, session) => {
-        if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
+        if (event === "SIGNED_OUT") {
+          // Clear org state on sign out
+          window.BB_ACTIVE_ORG = null;
+          window.BB_ORGANISATIONS = [];
+          try {
+            localStorage.removeItem("bb_active_org_id");
+          } catch (e) {
+            // localStorage might be blocked
+          }
+        } else if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
           // Re-init org if we don't have one yet
           if (!window.BB_ACTIVE_ORG?.id) {
             window.BB_APP.initialiseOrg()
