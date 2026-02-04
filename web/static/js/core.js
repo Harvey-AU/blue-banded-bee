@@ -249,9 +249,25 @@
         console.warn("Failed to fetch active_organisation_id:", err);
       }
 
+      // Fall back to localStorage if DB didn't return an active org
+      if (!activeOrgId) {
+        try {
+          activeOrgId = localStorage.getItem("bb_active_org_id");
+        } catch (e) {
+          // localStorage might be blocked
+        }
+      }
+
       // Find active org in list, fall back to first
       const activeOrg =
         organisations.find((org) => org.id === activeOrgId) || organisations[0];
+
+      // Store in localStorage for faster future loads
+      try {
+        localStorage.setItem("bb_active_org_id", activeOrg.id);
+      } catch (e) {
+        // localStorage might be blocked
+      }
 
       // Set globals
       window.BB_ACTIVE_ORG = activeOrg;
@@ -330,6 +346,13 @@
 
     // Update global
     window.BB_ACTIVE_ORG = newOrg;
+
+    // Store in localStorage for persistence
+    try {
+      localStorage.setItem("bb_active_org_id", newOrg.id);
+    } catch (e) {
+      // localStorage might be blocked
+    }
 
     // Dispatch event for listeners
     document.dispatchEvent(
