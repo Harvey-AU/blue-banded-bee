@@ -189,21 +189,12 @@
    * @returns {Promise<Object|null>} The active organisation or null
    */
   window.BB_APP.initialiseOrg = async function () {
-    console.log(
-      "[org-init] initialiseOrg called, orgInitialised:",
-      orgInitialised
-    );
-
     // Return cached result if we have a valid org
     if (
       orgInitialised &&
       window.BB_ACTIVE_ORG?.id &&
       window.BB_ACTIVE_ORG?.name
     ) {
-      console.log(
-        "[org-init] Returning cached org:",
-        window.BB_ACTIVE_ORG?.name
-      );
       return window.BB_ACTIVE_ORG;
     }
 
@@ -247,12 +238,6 @@
       // Check localStorage first - it's set immediately on switch
       try {
         activeOrgId = localStorage.getItem("bb_active_org_id");
-        if (activeOrgId) {
-          console.log(
-            "[org-init] Using localStorage activeOrgId:",
-            activeOrgId
-          );
-        }
       } catch (e) {
         // localStorage might be blocked
       }
@@ -266,7 +251,6 @@
             .eq("id", session.user.id)
             .single();
           activeOrgId = userData?.active_organisation_id;
-          console.log("[org-init] Using DB activeOrgId:", activeOrgId);
         } catch (err) {
           console.warn("Failed to fetch active_organisation_id:", err);
         }
@@ -275,16 +259,6 @@
       // Find active org in list, fall back to first
       const activeOrg =
         organisations.find((org) => org.id === activeOrgId) || organisations[0];
-
-      console.log(
-        "[org-init] Selected org:",
-        activeOrg?.id,
-        activeOrg?.name,
-        "| activeOrgId was:",
-        activeOrgId,
-        "| found in list:",
-        !!organisations.find((org) => org.id === activeOrgId)
-      );
 
       // Store in localStorage for faster future loads
       try {
@@ -350,8 +324,6 @@
   });
 
   window.BB_APP.switchOrg = async function (orgId) {
-    console.log("[org-switch] switchOrg called with:", orgId);
-
     if (!window.supabase?.auth) {
       throw new Error("Supabase not initialised");
     }
@@ -388,13 +360,8 @@
     // Store in localStorage for persistence
     try {
       localStorage.setItem("bb_active_org_id", newOrg.id);
-      console.log(
-        "[org-switch] Stored in localStorage:",
-        newOrg.id,
-        newOrg.name
-      );
     } catch (e) {
-      console.warn("[org-switch] Failed to store in localStorage:", e);
+      // localStorage might be blocked
     }
 
     // Dispatch event for listeners
