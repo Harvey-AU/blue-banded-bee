@@ -348,9 +348,14 @@
         );
       }
 
-      // Wait for shared org init, then populate
+      // Wait for core (Supabase) to be ready, then init org
       try {
-        await window.BB_ORG_READY;
+        if (window.BB_APP?.coreReady) {
+          await window.BB_APP.coreReady;
+        }
+        if (window.BB_APP?.initialiseOrg) {
+          await window.BB_APP.initialiseOrg();
+        }
         updateNavOrgDisplay(window.BB_ACTIVE_ORG, window.BB_ORGANISATIONS);
       } catch (err) {
         // Org init failed - show fallback
