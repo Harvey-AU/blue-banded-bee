@@ -2354,6 +2354,21 @@ body.page-settings .bb-org-divider {
   color: #1d4ed8;
 }
 
+.settings-link--danger {
+  color: var(--color-error);
+  background: none;
+  border: none;
+  cursor: pointer;
+  font: inherit;
+  width: 100%;
+  text-align: left;
+}
+
+.settings-link--danger:hover {
+  background: var(--color-error-bg);
+  color: var(--color-error);
+}
+
 .settings-content {
   display: flex;
   flex-direction: column;
