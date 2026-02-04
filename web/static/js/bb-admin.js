@@ -12,10 +12,8 @@
    */
   function isSystemAdmin(session) {
     if (!session?.user) return false;
-    return (
-      session.user.app_metadata?.system_role === "system_admin" ||
-      session.user.user_metadata?.system_role === "system_admin"
-    );
+    // Only trust app_metadata - user_metadata is user-controlled
+    return session.user.app_metadata?.system_role === "system_admin";
   }
 
   /**
