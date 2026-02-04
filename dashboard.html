@@ -845,92 +845,15 @@
       });
 
       // Organisation Switcher Logic
-      // Uses shared org data from BB_APP.initialiseOrg() - no duplicate fetching
+      // Note: The nav (bb-global-nav.js) handles all org switcher UI and interactions.
+      // This function just waits for org init to complete.
       async function initOrgSwitcher() {
-        const switcher = document.getElementById("orgSwitcher");
-        const btn = document.getElementById("orgSwitcherBtn");
-        const orgList = document.getElementById("orgList");
-
-        if (!switcher || !btn) return;
-
         // Wait for shared org init to complete
         try {
           await window.BB_ORG_READY;
         } catch (err) {
-          console.warn("Org init failed, switcher may not work:", err);
+          console.warn("Org init failed:", err);
         }
-
-        const orgs = window.BB_ORGANISATIONS || [];
-        const activeOrg = window.BB_ACTIVE_ORG;
-
-        // Populate dropdown from shared data (using DOM methods to prevent XSS)
-        if (orgList && orgs.length > 0) {
-          // Clear existing items
-          while (orgList.firstChild) {
-            orgList.removeChild(orgList.firstChild);
-          }
-          orgs.forEach((org) => {
-            const button = document.createElement("button");
-            button.className = `bb-org-item ${org.id === activeOrg?.id ? "active" : ""}`;
-            button.dataset.orgId = org.id;
-            button.dataset.orgName = org.name;
-
-            const span = document.createElement("span");
-            span.className = "bb-org-item-name";
-            span.textContent = org.name;
-
-            button.appendChild(span);
-            orgList.appendChild(button);
-          });
-        }
-
-        // Handle org selection using shared switchOrg
-        if (orgList && orgs.length > 0) {
-          orgList.addEventListener("click", async (e) => {
-            const item = e.target.closest(".bb-org-item");
-            if (!item || item.classList.contains("active")) {
-              switcher.classList.remove("open");
-              return;
-            }
-
-            const orgId = item.dataset.orgId;
-            const orgName = item.dataset.orgName;
-
-            // Show loading state
-            const currentOrgName = document.getElementById("currentOrgName");
-            if (currentOrgName) currentOrgName.textContent = "Switching...";
-            switcher.classList.remove("open");
-
-            try {
-              // Use shared switch function - it updates BB_ACTIVE_ORG and dispatches event
-              await window.BB_APP.switchOrg(orgId);
-
-              // Update dropdown active state
-              orgList.querySelectorAll(".bb-org-item").forEach((el) => {
-                el.classList.toggle("active", el.dataset.orgId === orgId);
-              });
-
-              // Show success notification
-              if (window.showNotification) {
-                window.showNotification(`Switched to ${orgName}`, "success");
-              }
-            } catch (err) {
-              console.error("Error switching org:", err);
-              if (currentOrgName) {
-                currentOrgName.textContent =
-                  window.BB_ACTIVE_ORG?.name || "Unknown";
-              }
-              if (window.showNotification) {
-                window.showNotification(
-                  "Failed to switch organisation",
-                  "error"
-                );
-              }
-            }
-          });
-        }
-
-        // Note: Toggle/close handlers are managed by bb-global-nav.js
       }
 
       // Listen for org switches and refresh dashboard-specific data
