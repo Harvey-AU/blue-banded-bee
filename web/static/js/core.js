@@ -189,12 +189,21 @@
    * @returns {Promise<Object|null>} The active organisation or null
    */
   window.BB_APP.initialiseOrg = async function () {
+    console.log(
+      "[org-init] initialiseOrg called, orgInitialised:",
+      orgInitialised
+    );
+
     // Return cached result if we have a valid org
     if (
       orgInitialised &&
       window.BB_ACTIVE_ORG?.id &&
       window.BB_ACTIVE_ORG?.name
     ) {
+      console.log(
+        "[org-init] Returning cached org:",
+        window.BB_ACTIVE_ORG?.name
+      );
       return window.BB_ACTIVE_ORG;
     }
 
@@ -336,6 +345,8 @@
   });
 
   window.BB_APP.switchOrg = async function (orgId) {
+    console.log("[org-switch] switchOrg called with:", orgId);
+
     if (!window.supabase?.auth) {
       throw new Error("Supabase not initialised");
     }
@@ -362,6 +373,9 @@
 
     const switchData = await response.json();
     const newOrg = switchData.data?.organisation;
+    if (!newOrg?.id) {
+      throw new Error("Failed to switch organisation");
+    }
 
     // Update global
     window.BB_ACTIVE_ORG = newOrg;
