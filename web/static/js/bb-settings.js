@@ -965,26 +965,44 @@
       system: "ℹ️",
     };
 
-    list.innerHTML = notifications
-      .map((n) => {
-        const isUnread = !n.read_at;
-        const icon = typeIcons[n.type] || "📬";
-        const time = formatRelativeTime(n.created_at);
+    // Use DOM methods instead of innerHTML for XSS protection
+    list.textContent = "";
+    notifications.forEach((n) => {
+      const isUnread = !n.read_at;
+      const icon = typeIcons[n.type] || "📬";
+      const time = formatRelativeTime(n.created_at);
 
-        return `
-        <div class="bb-notification-item ${isUnread ? "unread" : ""}"
-             data-id="${escapeHtml(n.id)}"
-             data-link="${escapeHtml(n.link || "")}">
-          <div class="bb-notification-item-icon">${icon}</div>
-          <div class="bb-notification-item-content">
-            <div class="bb-notification-item-subject">${escapeHtml(n.subject)}</div>
-            <div class="bb-notification-item-preview">${escapeHtml(n.preview)}</div>
-            <div class="bb-notification-item-time">${time}</div>
-          </div>
-        </div>
-      `;
-      })
-      .join("");
+      const item = document.createElement("div");
+      item.className = `bb-notification-item${isUnread ? " unread" : ""}`;
+      item.dataset.id = n.id;
+      item.dataset.link = n.link || "";
+
+      const iconEl = document.createElement("div");
+      iconEl.className = "bb-notification-item-icon";
+      iconEl.textContent = icon;
+
+      const content = document.createElement("div");
+      content.className = "bb-notification-item-content";
+
+      const subject = document.createElement("div");
+      subject.className = "bb-notification-item-subject";
+      subject.textContent = n.subject;
+
+      const preview = document.createElement("div");
+      preview.className = "bb-notification-item-preview";
+      preview.textContent = n.preview;
+
+      const timeEl = document.createElement("div");
+      timeEl.className = "bb-notification-item-time";
+      timeEl.textContent = time;
+
+      content.appendChild(subject);
+      content.appendChild(preview);
+      content.appendChild(timeEl);
+      item.appendChild(iconEl);
+      item.appendChild(content);
+      list.appendChild(item);
+    });
 
     list.onclick = (e) => {
       const item = e.target.closest(".bb-notification-item");
