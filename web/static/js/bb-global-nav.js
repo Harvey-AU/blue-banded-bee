@@ -366,7 +366,7 @@
         }
         updateNavOrgDisplay(window.BB_ACTIVE_ORG, window.BB_ORGANISATIONS);
       } catch (err) {
-        // Org init failed - show fallback
+        console.warn("Organisation initialisation failed:", err);
         currentOrgName.textContent = "Organisation";
       }
     };
