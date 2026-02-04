@@ -72,13 +72,21 @@
         user: session.user?.id ?? "unknown",
       });
 
-      const response = await fetch("/v1/admin/reset-db", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-          "Content-Type": "application/json",
-        },
-      });
+      const controller = new AbortController();
+      const timeoutId = window.setTimeout(() => controller.abort(), 15000);
+      let response;
+      try {
+        response = await fetch("/v1/admin/reset-db", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+            "Content-Type": "application/json",
+          },
+          signal: controller.signal,
+        });
+      } finally {
+        window.clearTimeout(timeoutId);
+      }
 
       if (response.ok) {
         console.info("reset-db: completed successfully");
@@ -94,8 +102,12 @@
         }
       }
     } catch (error) {
+      const message =
+        error?.name === "AbortError"
+          ? "Request timed out. Please try again."
+          : String(error?.message ?? error);
       console.error("reset-db: unexpected failure", error);
-      alert(`❌ Error: ${error.message}`);
+      alert(`❌ Error: ${message}`);
       if (btn) {
         btn.disabled = false;
         btn.textContent = originalText;
