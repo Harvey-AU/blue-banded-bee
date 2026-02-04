@@ -236,31 +236,50 @@
         return null;
       }
 
-      // Get active org ID from users table
+      // Get active org ID - check localStorage first (set on switch), then DB
       let activeOrgId = null;
+
+      // Check localStorage first - it's set immediately on switch
       try {
-        const { data: userData } = await window.supabase
-          .from("users")
-          .select("active_organisation_id")
-          .eq("id", session.user.id)
-          .single();
-        activeOrgId = userData?.active_organisation_id;
-      } catch (err) {
-        console.warn("Failed to fetch active_organisation_id:", err);
+        activeOrgId = localStorage.getItem("bb_active_org_id");
+        if (activeOrgId) {
+          console.log(
+            "[org-init] Using localStorage activeOrgId:",
+            activeOrgId
+          );
+        }
+      } catch (e) {
+        // localStorage might be blocked
       }
 
-      // Fall back to localStorage if DB didn't return an active org
+      // Fall back to DB query if localStorage is empty
       if (!activeOrgId) {
         try {
-          activeOrgId = localStorage.getItem("bb_active_org_id");
-        } catch (e) {
-          // localStorage might be blocked
+          const { data: userData } = await window.supabase
+            .from("users")
+            .select("active_organisation_id")
+            .eq("id", session.user.id)
+            .single();
+          activeOrgId = userData?.active_organisation_id;
+          console.log("[org-init] Using DB activeOrgId:", activeOrgId);
+        } catch (err) {
+          console.warn("Failed to fetch active_organisation_id:", err);
         }
       }
 
       // Find active org in list, fall back to first
       const activeOrg =
         organisations.find((org) => org.id === activeOrgId) || organisations[0];
+
+      console.log(
+        "[org-init] Selected org:",
+        activeOrg?.id,
+        activeOrg?.name,
+        "| activeOrgId was:",
+        activeOrgId,
+        "| found in list:",
+        !!organisations.find((org) => org.id === activeOrgId)
+      );
 
       // Store in localStorage for faster future loads
       try {
@@ -350,8 +369,13 @@
     // Store in localStorage for persistence
     try {
       localStorage.setItem("bb_active_org_id", newOrg.id);
+      console.log(
+        "[org-switch] Stored in localStorage:",
+        newOrg.id,
+        newOrg.name
+      );
     } catch (e) {
-      // localStorage might be blocked
+      console.warn("[org-switch] Failed to store in localStorage:", e);
     }
 
     // Dispatch event for listeners
