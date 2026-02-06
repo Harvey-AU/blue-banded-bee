@@ -573,7 +573,6 @@ function changeTimeRange(range) {
 async function initializeDashboard(config = {}) {
   const {
     debug = false,
-    refreshInterval = 1,
     apiBaseUrl = "",
     autoRefresh = true,
     networkMonitoring = true,
@@ -589,7 +588,6 @@ async function initializeDashboard(config = {}) {
   const dataBinder = new BBDataBinder({
     apiBaseUrl,
     debug,
-    refreshInterval: autoRefresh ? refreshInterval : 0, // Disable auto-refresh if not wanted
   });
 
   // Expose the binder globally so shared handlers (e.g. auth, forms) can reuse the instance
@@ -657,7 +655,7 @@ async function setupQuickAuth(dataBinder) {
 const TRANSACTION_VISIBILITY_DELAY_MS = 200;
 window.TRANSACTION_VISIBILITY_DELAY_MS = TRANSACTION_VISIBILITY_DELAY_MS;
 const SUBSCRIBE_RETRY_INTERVAL_MS = 1000;
-const FALLBACK_POLLING_INTERVAL_MS = 60000;
+const FALLBACK_POLLING_INTERVAL_MS = 1000;
 const MAX_SUBSCRIBE_RETRIES = 15;
 const REALTIME_DEBOUNCE_MS = 250; // Throttle realtime notifications to max 4 refreshes per second
 

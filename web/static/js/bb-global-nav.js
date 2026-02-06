@@ -373,6 +373,118 @@
 
     initNavOrgSwitcher();
 
+    // Quota display logic (global, runs on all pages)
+    const initQuota = () => {
+      let quotaInterval = null;
+      let quotaVisibilityListener = null;
+
+      function formatTimeUntilReset(resetTime) {
+        const now = new Date();
+        const reset = new Date(resetTime);
+        if (!resetTime || Number.isNaN(reset.getTime())) return "Resets soon";
+        const diffMs = reset - now;
+        if (diffMs <= 0) return "Resets soon";
+        const hours = Math.floor(diffMs / (1000 * 60 * 60));
+        const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+        if (hours > 0) {
+          return `Resets in ${hours}h ${minutes}m`;
+        }
+        return `Resets in ${minutes}m`;
+      }
+
+      async function fetchAndDisplayQuota() {
+        const quotaDisplay = document.getElementById("quotaDisplay");
+        const quotaPlan = document.getElementById("quotaPlan");
+        const quotaUsage = document.getElementById("quotaUsage");
+        const quotaReset = document.getElementById("quotaReset");
+
+        if (!quotaDisplay || !window.supabase) return;
+
+        try {
+          const session = await window.supabase.auth.getSession();
+          const token = session?.data?.session?.access_token;
+          if (!token) return;
+
+          const response = await fetch("/v1/usage", {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+
+          if (!response.ok) {
+            console.warn("Failed to fetch quota:", response.status);
+            return;
+          }
+
+          const data = await response.json();
+          const usage = data.data?.usage;
+          if (!usage) return;
+
+          const dailyLimit = Number.isFinite(usage.daily_limit)
+            ? usage.daily_limit
+            : null;
+          const dailyUsed = Number.isFinite(usage.daily_used)
+            ? usage.daily_used
+            : 0;
+
+          quotaPlan.textContent = usage.plan_display_name || "Free";
+          const usageValue = dailyUsed.toLocaleString();
+          const limitValue = Number.isFinite(dailyLimit)
+            ? dailyLimit.toLocaleString()
+            : "No limit";
+          quotaUsage.textContent = `${usageValue}/${limitValue}`;
+          quotaReset.textContent = formatTimeUntilReset(usage.resets_at);
+
+          quotaDisplay.classList.remove("quota-warning", "quota-exhausted");
+          if (usage.usage_percentage >= 100) {
+            quotaDisplay.classList.add("quota-exhausted");
+          } else if (usage.usage_percentage >= 80) {
+            quotaDisplay.classList.add("quota-warning");
+          }
+
+          quotaDisplay.style.display = "flex";
+        } catch (err) {
+          console.warn("Error fetching quota:", err);
+        }
+      }
+
+      function startQuotaPolling() {
+        if (quotaInterval) clearInterval(quotaInterval);
+        quotaInterval = null;
+        if (quotaVisibilityListener) {
+          document.removeEventListener(
+            "visibilitychange",
+            quotaVisibilityListener
+          );
+        }
+
+        quotaVisibilityListener = () => {
+          if (document.visibilityState === "visible") {
+            fetchAndDisplayQuota();
+            if (!quotaInterval) {
+              quotaInterval = setInterval(fetchAndDisplayQuota, 30000);
+            }
+          } else if (quotaInterval) {
+            clearInterval(quotaInterval);
+            quotaInterval = null;
+          }
+        };
+
+        document.addEventListener("visibilitychange", quotaVisibilityListener);
+        quotaVisibilityListener();
+      }
+
+      // Expose globally for settings page to trigger refresh
+      window.BBQuota = {
+        refresh: fetchAndDisplayQuota,
+        start: startQuotaPolling,
+        formatTimeUntilReset,
+      };
+
+      // Start after a short delay to ensure auth is ready
+      setTimeout(startQuotaPolling, 100);
+    };
+
+    initQuota();
+
     finishNavReady();
   };
 
