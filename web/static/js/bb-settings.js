@@ -377,6 +377,7 @@
         const roleEl = clone.querySelector(".settings-invite-role");
         const dateEl = clone.querySelector(".settings-invite-date");
         const revokeBtn = clone.querySelector(".settings-invite-revoke");
+        const copyBtn = clone.querySelector(".settings-invite-copy");
 
         if (row) row.dataset.inviteId = invite.id;
         if (emailEl) emailEl.textContent = invite.email;
@@ -384,6 +385,19 @@
         if (dateEl) {
           const date = new Date(invite.created_at);
           dateEl.textContent = `Sent ${date.toLocaleDateString("en-AU")}`;
+        }
+        if (copyBtn && invite.invite_link) {
+          copyBtn.addEventListener("click", async () => {
+            try {
+              await navigator.clipboard.writeText(invite.invite_link);
+              copyBtn.textContent = "Copied!";
+              setTimeout(() => {
+                copyBtn.textContent = "Copy link";
+              }, 2000);
+            } catch {
+              showSettingsToast("error", "Failed to copy link");
+            }
+          });
         }
         if (revokeBtn) {
           revokeBtn.dataset.inviteId = invite.id;

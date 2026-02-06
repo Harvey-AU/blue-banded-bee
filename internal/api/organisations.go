@@ -629,12 +629,17 @@ func (h *Handler) listOrganisationInvites(w http.ResponseWriter, r *http.Request
 
 	responseInvites := make([]map[string]interface{}, 0, len(invites))
 	for _, invite := range invites {
+		inviteParams := url.Values{}
+		inviteParams.Set("invite_token", invite.Token)
+		inviteLink := buildSettingsURL("team", inviteParams, "invites")
+
 		responseInvites = append(responseInvites, map[string]interface{}{
-			"id":         invite.ID,
-			"email":      invite.Email,
-			"role":       invite.Role,
-			"created_at": invite.CreatedAt.Format(time.RFC3339),
-			"expires_at": invite.ExpiresAt.Format(time.RFC3339),
+			"id":          invite.ID,
+			"email":       invite.Email,
+			"role":        invite.Role,
+			"invite_link": inviteLink,
+			"created_at":  invite.CreatedAt.Format(time.RFC3339),
+			"expires_at":  invite.ExpiresAt.Format(time.RFC3339),
 		})
 	}
 
