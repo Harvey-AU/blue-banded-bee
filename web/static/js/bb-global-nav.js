@@ -496,7 +496,9 @@
 
       // Start after core (Supabase) is ready
       if (window.BB_APP?.coreReady) {
-        window.BB_APP.coreReady.then(startQuotaPolling).catch(() => {});
+        window.BB_APP.coreReady
+          .then(startQuotaPolling)
+          .catch(() => startQuotaPolling()); // still attempt polling on failure
       } else {
         // Fallback: wait for supabase to be defined
         const checkSupabase = setInterval(() => {
