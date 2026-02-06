@@ -1665,11 +1665,7 @@ async function subscribeToJobProgress(state) {
         }
       )
       .subscribe((status, err) => {
-        if (
-          status === "CHANNEL_ERROR" ||
-          status === "TIMED_OUT" ||
-          err
-        ) {
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || err) {
           console.warn(
             "[Realtime] Job progress connection issue, fallback polling will continue"
           );

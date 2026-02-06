@@ -853,11 +853,7 @@ async function subscribeToJobUpdates() {
         }
       )
       .subscribe((status, err) => {
-        if (
-          status === "CHANNEL_ERROR" ||
-          status === "TIMED_OUT" ||
-          err
-        ) {
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || err) {
           console.warn(
             "[Realtime] Connection issue, fallback polling will continue"
           );
