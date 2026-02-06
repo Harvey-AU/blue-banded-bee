@@ -573,7 +573,6 @@ function changeTimeRange(range) {
 async function initializeDashboard(config = {}) {
   const {
     debug = false,
-    refreshInterval = 1,
     apiBaseUrl = "",
     autoRefresh = true,
     networkMonitoring = true,
@@ -589,7 +588,6 @@ async function initializeDashboard(config = {}) {
   const dataBinder = new BBDataBinder({
     apiBaseUrl,
     debug,
-    refreshInterval: autoRefresh ? refreshInterval : 0, // Disable auto-refresh if not wanted
   });
 
   // Expose the binder globally so shared handlers (e.g. auth, forms) can reuse the instance
@@ -657,7 +655,7 @@ async function setupQuickAuth(dataBinder) {
 const TRANSACTION_VISIBILITY_DELAY_MS = 200;
 window.TRANSACTION_VISIBILITY_DELAY_MS = TRANSACTION_VISIBILITY_DELAY_MS;
 const SUBSCRIBE_RETRY_INTERVAL_MS = 1000;
-const FALLBACK_POLLING_INTERVAL_MS = 60000;
+const FALLBACK_POLLING_INTERVAL_MS = 1000;
 const MAX_SUBSCRIBE_RETRIES = 15;
 const REALTIME_DEBOUNCE_MS = 250; // Throttle realtime notifications to max 4 refreshes per second
 
@@ -674,8 +672,12 @@ let isRefreshing = false;
  * Throttled refresh for realtime notifications.
  * Guarantees at most one refresh per REALTIME_DEBOUNCE_MS interval,
  * but ensures refresh happens even with continuous notifications.
+ * Also stops fallback polling once we receive a real event.
  */
 function throttledRealtimeRefresh() {
+  // Receiving a real event proves realtime works - stop fallback polling
+  clearFallbackPolling();
+
   const now = Date.now();
   const timeSinceLastRefresh = now - lastRealtimeRefresh;
 
@@ -851,20 +853,17 @@ async function subscribeToJobUpdates() {
         }
       )
       .subscribe((status, err) => {
-        if (status === "SUBSCRIBED") {
-          // Connection successful - stop fallback polling
-          clearFallbackPolling();
-        } else if (
-          status === "CHANNEL_ERROR" ||
-          status === "TIMED_OUT" ||
-          err
-        ) {
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || err) {
           console.warn(
-            "[Realtime] Connection issue, enabling fallback polling"
+            "[Realtime] Connection issue, fallback polling will continue"
           );
-          startFallbackPolling();
         }
+        // Note: fallback polling stops only when we receive an actual realtime event
+        // This ensures polling continues on staging where realtime doesn't work
       });
+
+    // Start fallback polling immediately - it will be cleared when we receive a real event
+    startFallbackPolling();
 
     window.jobsChannel = channel;
   } catch (err) {

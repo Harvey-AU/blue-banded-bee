@@ -1543,14 +1543,44 @@ function triggerFileDownload(content, mimeType, filename) {
 
 // Throttling state for job page realtime updates
 const JOB_PAGE_THROTTLE_MS = 250;
+const JOB_PAGE_FALLBACK_POLLING_MS = 1000;
 let jobPageLastRefresh = 0;
 let jobPageThrottleTimeoutId = null;
 let jobPageIsRefreshing = false;
+let jobPageFallbackPollingId = null;
+
+/**
+ * Start fallback polling when realtime connection fails
+ * State is captured in the closure to avoid module-level coupling
+ */
+function startJobPageFallbackPolling(state) {
+  if (jobPageFallbackPollingId) return;
+  jobPageFallbackPollingId = setInterval(() => {
+    if (!jobPageIsRefreshing) {
+      // Pass the channel so cleanup works when job completes
+      executeJobPageRefresh(state, window.jobProgressChannel);
+    }
+  }, JOB_PAGE_FALLBACK_POLLING_MS);
+}
+
+/**
+ * Stop fallback polling when realtime connection is restored
+ */
+function clearJobPageFallbackPolling() {
+  if (jobPageFallbackPollingId) {
+    clearInterval(jobPageFallbackPollingId);
+    jobPageFallbackPollingId = null;
+  }
+}
 
 /**
  * Throttled refresh for job page realtime notifications
+ * Also stops fallback polling once we receive a real event.
  */
 function throttledJobPageRefresh(state, channel) {
+  // Receiving a real event proves realtime works - stop fallback polling
+  clearJobPageFallbackPolling();
+
   const now = Date.now();
   const timeSinceLastRefresh = now - jobPageLastRefresh;
 
@@ -1588,8 +1618,11 @@ async function executeJobPageRefresh(state, channel) {
 
     // Stop auto-refresh if job is no longer active
     if (updatedJob && !["running", "pending"].includes(updatedJob.status)) {
-      window.supabase.removeChannel(channel);
+      if (channel) {
+        window.supabase.removeChannel(channel);
+      }
       window.jobProgressChannel = null;
+      clearJobPageFallbackPolling();
     }
   } catch (err) {
     console.warn("Realtime data reload failed:", err);
@@ -1632,14 +1665,21 @@ async function subscribeToJobProgress(state) {
         }
       )
       .subscribe((status, err) => {
-        if (err) {
-          console.error("[Realtime] Job progress subscription error:", err);
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || err) {
+          console.warn(
+            "[Realtime] Job progress connection issue, fallback polling will continue"
+          );
         }
+        // Note: fallback polling stops only when we receive an actual realtime event
       });
+
+    // Start fallback polling immediately - it will be cleared when we receive a real event
+    startJobPageFallbackPolling(state);
 
     window.jobProgressChannel = channel;
   } catch (err) {
     console.error("[Realtime] Failed to subscribe to job progress:", err);
+    startJobPageFallbackPolling(state);
   }
 }
 

@@ -373,6 +373,155 @@
 
     initNavOrgSwitcher();
 
+    // Quota display logic (global, runs on all pages)
+    const initQuota = () => {
+      let quotaInterval = null;
+      let quotaVisibilityListener = null;
+      let isQuotaRefreshing = false;
+
+      // Cache DOM elements once (they're static in the nav template)
+      const quotaDisplay = document.getElementById("quotaDisplay");
+      const quotaPlan = document.getElementById("quotaPlan");
+      const quotaUsage = document.getElementById("quotaUsage");
+      const quotaReset = document.getElementById("quotaReset");
+
+      function formatTimeUntilReset(resetTime) {
+        const now = new Date();
+        const reset = new Date(resetTime);
+        if (!resetTime || Number.isNaN(reset.getTime())) return "Resets soon";
+        const diffMs = reset - now;
+        if (diffMs <= 0) return "Resets soon";
+        const hours = Math.floor(diffMs / (1000 * 60 * 60));
+        const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+        if (hours > 0) {
+          return `Resets in ${hours}h ${minutes}m`;
+        }
+        if (minutes <= 0) return "Resets soon";
+        return `Resets in ${minutes}m`;
+      }
+
+      async function fetchAndDisplayQuota() {
+        if (isQuotaRefreshing) return;
+        if (
+          !quotaDisplay ||
+          !quotaPlan ||
+          !quotaUsage ||
+          !quotaReset ||
+          !window.supabase
+        )
+          return;
+
+        isQuotaRefreshing = true;
+        try {
+          // Use cached session from dataBinder if available, fallback to getSession()
+          const token =
+            window.dataBinder?.authManager?.session?.access_token ||
+            (await window.supabase.auth.getSession())?.data?.session
+              ?.access_token;
+          if (!token) return;
+
+          const response = await fetch("/v1/usage", {
+            headers: { Authorization: `Bearer ${token}` },
+            signal: AbortSignal.timeout(15000), // 15s ceiling
+          });
+
+          if (!response.ok) {
+            console.warn("Failed to fetch quota:", response.status);
+            return;
+          }
+
+          const data = await response.json();
+          const usage = data.data?.usage;
+          if (!usage) return;
+
+          const dailyLimit = Number.isFinite(usage.daily_limit)
+            ? usage.daily_limit
+            : null;
+          const dailyUsed = Number.isFinite(usage.daily_used)
+            ? usage.daily_used
+            : 0;
+
+          quotaPlan.textContent = usage.plan_display_name || "Free";
+          const usageValue = dailyUsed.toLocaleString();
+          const limitValue = Number.isFinite(dailyLimit)
+            ? dailyLimit.toLocaleString()
+            : "No limit";
+          quotaUsage.textContent = `${usageValue}/${limitValue}`;
+          quotaReset.textContent = formatTimeUntilReset(usage.resets_at);
+
+          quotaDisplay.classList.remove("quota-warning", "quota-exhausted");
+          if (usage.usage_percentage >= 100) {
+            quotaDisplay.classList.add("quota-exhausted");
+          } else if (usage.usage_percentage >= 80) {
+            quotaDisplay.classList.add("quota-warning");
+          }
+
+          quotaDisplay.style.display = "flex";
+        } catch (err) {
+          console.warn("Error fetching quota:", err);
+        } finally {
+          isQuotaRefreshing = false;
+        }
+      }
+
+      function startQuotaPolling() {
+        if (quotaInterval) clearInterval(quotaInterval);
+        quotaInterval = null;
+        if (quotaVisibilityListener) {
+          document.removeEventListener(
+            "visibilitychange",
+            quotaVisibilityListener
+          );
+        }
+
+        quotaVisibilityListener = () => {
+          if (document.visibilityState === "visible") {
+            fetchAndDisplayQuota();
+            if (!quotaInterval) {
+              quotaInterval = setInterval(fetchAndDisplayQuota, 30000);
+            }
+          } else if (quotaInterval) {
+            clearInterval(quotaInterval);
+            quotaInterval = null;
+          }
+        };
+
+        document.addEventListener("visibilitychange", quotaVisibilityListener);
+        quotaVisibilityListener();
+      }
+
+      // Refresh quota immediately when organisation changes (registered once)
+      document.addEventListener("bb:org-switched", () => {
+        fetchAndDisplayQuota();
+      });
+
+      // Expose globally for settings page to trigger refresh
+      window.BBQuota = {
+        refresh: fetchAndDisplayQuota,
+        start: startQuotaPolling,
+        formatTimeUntilReset,
+      };
+
+      // Start after core (Supabase) is ready
+      if (window.BB_APP?.coreReady) {
+        window.BB_APP.coreReady
+          .then(startQuotaPolling)
+          .catch(() => startQuotaPolling()); // still attempt polling on failure
+      } else {
+        // Fallback: wait for supabase to be defined
+        const checkSupabase = setInterval(() => {
+          if (window.supabase) {
+            clearInterval(checkSupabase);
+            startQuotaPolling();
+          }
+        }, 100);
+        // Stop checking after 10 seconds
+        setTimeout(() => clearInterval(checkSupabase), 10000);
+      }
+    };
+
+    initQuota();
+
     finishNavReady();
   };
 
