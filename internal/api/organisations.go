@@ -775,7 +775,9 @@ type supabaseInviteRequest struct {
 	Data       map[string]interface{} `json:"data,omitempty"`
 }
 
-func sendSupabaseInviteEmail(ctx context.Context, email, redirectTo string, data map[string]interface{}) error {
+// resolveSupabaseAuthURL returns the Supabase Auth base URL, preferring
+// SUPABASE_AUTH_URL and falling back to SUPABASE_URL + "/auth/v1".
+func resolveSupabaseAuthURL() (string, error) {
 	authURL := strings.TrimSuffix(os.Getenv("SUPABASE_AUTH_URL"), "/")
 	if authURL == "" {
 		legacyURL := strings.TrimSuffix(os.Getenv("SUPABASE_URL"), "/")
@@ -784,15 +786,35 @@ func sendSupabaseInviteEmail(ctx context.Context, email, redirectTo string, data
 		}
 	}
 	if authURL == "" {
-		return fmt.Errorf("supabase auth URL is not configured")
+		return "", fmt.Errorf("supabase auth URL is not configured")
 	}
 	if !strings.Contains(authURL, "/auth/") {
 		authURL = authURL + "/auth/v1"
 	}
+	return authURL, nil
+}
 
-	serviceKey := os.Getenv("SUPABASE_SERVICE_ROLE_KEY")
-	if serviceKey == "" {
-		return fmt.Errorf("supabase service role key is not configured")
+// supabaseServiceKey returns the service role key or an error.
+func supabaseServiceKey() (string, error) {
+	key := os.Getenv("SUPABASE_SERVICE_ROLE_KEY")
+	if key == "" {
+		return "", fmt.Errorf("supabase service role key is not configured")
+	}
+	return key, nil
+}
+
+// maxErrorBodyBytes caps how much of an error response body we read.
+const maxErrorBodyBytes = 4096
+
+func sendSupabaseInviteEmail(ctx context.Context, email, redirectTo string, data map[string]interface{}) error {
+	authURL, err := resolveSupabaseAuthURL()
+	if err != nil {
+		return err
+	}
+
+	serviceKey, err := supabaseServiceKey()
+	if err != nil {
+		return err
 	}
 
 	payload, err := json.Marshal(supabaseInviteRequest{
@@ -821,7 +843,7 @@ func sendSupabaseInviteEmail(ctx context.Context, email, redirectTo string, data
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= http.StatusMultipleChoices {
-		body, _ := io.ReadAll(resp.Body)
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, maxErrorBodyBytes))
 		bodyStr := strings.TrimSpace(string(body))
 
 		// If the user already exists in Supabase Auth, the invite endpoint
@@ -844,29 +866,26 @@ func sendSupabaseInviteEmail(ctx context.Context, email, redirectTo string, data
 
 // sendSupabaseMagicLink sends a magic-link email to an existing Supabase Auth
 // user. The link logs them in and redirects to redirectTo (the invite
-// acceptance page).
+// acceptance page). GoTrue reads redirect_to from the query string.
 func sendSupabaseMagicLink(ctx context.Context, email, redirectTo string) error {
-	supabaseURL := strings.TrimSuffix(os.Getenv("SUPABASE_URL"), "/")
-	if supabaseURL == "" {
-		return fmt.Errorf("supabase URL is not configured")
+	authURL, err := resolveSupabaseAuthURL()
+	if err != nil {
+		return err
 	}
 
-	anonKey := os.Getenv("SUPABASE_PUBLISHABLE_KEY")
-	if anonKey == "" {
-		anonKey = os.Getenv("SUPABASE_ANON_KEY")
-	}
-	if anonKey == "" {
-		return fmt.Errorf("supabase publishable key is not configured")
+	serviceKey, err := supabaseServiceKey()
+	if err != nil {
+		return err
 	}
 
-	payload, err := json.Marshal(map[string]interface{}{
+	payload, err := json.Marshal(map[string]string{
 		"email": email,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to build magic link payload: %w", err)
 	}
 
-	endpoint := supabaseURL + "/auth/v1/magiclink"
+	endpoint := authURL + "/magiclink"
 	if redirectTo != "" {
 		endpoint += "?redirect_to=" + url.QueryEscape(redirectTo)
 	}
@@ -876,7 +895,8 @@ func sendSupabaseMagicLink(ctx context.Context, email, redirectTo string) error 
 		return fmt.Errorf("failed to create magic link request: %w", err)
 	}
 
-	req.Header.Set("apikey", anonKey)
+	req.Header.Set("Authorization", "Bearer "+serviceKey)
+	req.Header.Set("apikey", serviceKey)
 	req.Header.Set("Content-Type", "application/json")
 
 	client := &http.Client{Timeout: 10 * time.Second}
@@ -887,7 +907,7 @@ func sendSupabaseMagicLink(ctx context.Context, email, redirectTo string) error 
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= http.StatusMultipleChoices {
-		body, _ := io.ReadAll(resp.Body)
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, maxErrorBodyBytes))
 		return fmt.Errorf("supabase magic link failed: %s", strings.TrimSpace(string(body)))
 	}
 
