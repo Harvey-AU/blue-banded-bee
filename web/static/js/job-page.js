@@ -1548,17 +1548,16 @@ let jobPageLastRefresh = 0;
 let jobPageThrottleTimeoutId = null;
 let jobPageIsRefreshing = false;
 let jobPageFallbackPollingId = null;
-let jobPageState = null;
 
 /**
  * Start fallback polling when realtime connection fails
+ * State is captured in the closure to avoid module-level coupling
  */
 function startJobPageFallbackPolling(state) {
   if (jobPageFallbackPollingId) return;
-  jobPageState = state;
   jobPageFallbackPollingId = setInterval(() => {
-    if (jobPageState && !jobPageIsRefreshing) {
-      executeJobPageRefresh(jobPageState, null);
+    if (!jobPageIsRefreshing) {
+      executeJobPageRefresh(state, null);
     }
   }, JOB_PAGE_FALLBACK_POLLING_MS);
 }

@@ -377,6 +377,7 @@
     const initQuota = () => {
       let quotaInterval = null;
       let quotaVisibilityListener = null;
+      let isQuotaRefreshing = false;
 
       function formatTimeUntilReset(resetTime) {
         const now = new Date();
@@ -394,6 +395,8 @@
       }
 
       async function fetchAndDisplayQuota() {
+        if (isQuotaRefreshing) return;
+
         const quotaDisplay = document.getElementById("quotaDisplay");
         const quotaPlan = document.getElementById("quotaPlan");
         const quotaUsage = document.getElementById("quotaUsage");
@@ -401,9 +404,13 @@
 
         if (!quotaDisplay || !window.supabase) return;
 
+        isQuotaRefreshing = true;
         try {
-          const session = await window.supabase.auth.getSession();
-          const token = session?.data?.session?.access_token;
+          // Use cached session from dataBinder if available, fallback to getSession()
+          const token =
+            window.dataBinder?.authManager?.session?.access_token ||
+            (await window.supabase.auth.getSession())?.data?.session
+              ?.access_token;
           if (!token) return;
 
           const response = await fetch("/v1/usage", {
@@ -444,6 +451,8 @@
           quotaDisplay.style.display = "flex";
         } catch (err) {
           console.warn("Error fetching quota:", err);
+        } finally {
+          isQuotaRefreshing = false;
         }
       }
 
