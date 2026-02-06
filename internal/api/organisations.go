@@ -722,6 +722,9 @@ func (h *Handler) createOrganisationInvite(w http.ResponseWriter, r *http.Reques
 	redirectParams.Set("invite_token", inviteToken)
 	redirectURL := buildSettingsURL("team", redirectParams, "invites")
 
+	emailDelivery := "sent"
+	responseMsg := "Invite sent successfully"
+
 	if err := sendSupabaseInviteEmail(r.Context(), email, redirectURL, map[string]interface{}{
 		"organisation_id": orgID,
 		"role":            role,
@@ -734,6 +737,8 @@ func (h *Handler) createOrganisationInvite(w http.ResponseWriter, r *http.Reques
 				logger.Warn().Err(mlErr).Msg("Failed to send magic link for existing user invite")
 				// Invite record is still valid; don't revoke. The invitee
 				// can log in manually and accept via the settings page.
+				emailDelivery = "failed"
+				responseMsg = "Invite created but email delivery failed — the user can log in and accept manually"
 			}
 		} else {
 			if revokeErr := h.DB.RevokeOrganisationInvite(r.Context(), invite.ID, orgID); revokeErr != nil {
@@ -747,13 +752,14 @@ func (h *Handler) createOrganisationInvite(w http.ResponseWriter, r *http.Reques
 
 	WriteCreated(w, r, map[string]interface{}{
 		"invite": map[string]interface{}{
-			"id":         invite.ID,
-			"email":      invite.Email,
-			"role":       invite.Role,
-			"created_at": invite.CreatedAt.Format(time.RFC3339),
-			"expires_at": invite.ExpiresAt.Format(time.RFC3339),
+			"id":             invite.ID,
+			"email":          invite.Email,
+			"role":           invite.Role,
+			"email_delivery": emailDelivery,
+			"created_at":     invite.CreatedAt.Format(time.RFC3339),
+			"expires_at":     invite.ExpiresAt.Format(time.RFC3339),
 		},
-	}, "Invite sent successfully")
+	}, responseMsg)
 }
 
 func (h *Handler) requireOrganisationAdmin(w http.ResponseWriter, r *http.Request, organisationID, userID string) bool {
