@@ -422,6 +422,7 @@
 
           const response = await fetch("/v1/usage", {
             headers: { Authorization: `Bearer ${token}` },
+            signal: AbortSignal.timeout(15000), // 15s ceiling
           });
 
           if (!response.ok) {
