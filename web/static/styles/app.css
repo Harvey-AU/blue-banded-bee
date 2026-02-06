@@ -2478,7 +2478,7 @@ html[data-settings-section="auto-crawl"] #auto-crawl {
 
 .settings-invite-actions {
   display: flex;
-  gap: 8px;
+  gap: var(--spacing-sm);
   flex-shrink: 0;
 }
 

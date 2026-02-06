@@ -386,18 +386,22 @@
           const date = new Date(invite.created_at);
           dateEl.textContent = `Sent ${date.toLocaleDateString("en-AU")}`;
         }
-        if (copyBtn && invite.invite_link) {
-          copyBtn.addEventListener("click", async () => {
-            try {
-              await navigator.clipboard.writeText(invite.invite_link);
-              copyBtn.textContent = "Copied!";
-              setTimeout(() => {
-                copyBtn.textContent = "Copy link";
-              }, 2000);
-            } catch {
-              showSettingsToast("error", "Failed to copy link");
-            }
-          });
+        if (copyBtn) {
+          if (invite.invite_link) {
+            copyBtn.addEventListener("click", async () => {
+              try {
+                await navigator.clipboard.writeText(invite.invite_link);
+                copyBtn.textContent = "Copied!";
+                setTimeout(() => {
+                  copyBtn.textContent = "Copy link";
+                }, 2000);
+              } catch {
+                showSettingsToast("error", "Failed to copy link");
+              }
+            });
+          } else {
+            copyBtn.style.display = "none";
+          }
         }
         if (revokeBtn) {
           revokeBtn.dataset.inviteId = invite.id;
