@@ -379,6 +379,12 @@
       let quotaVisibilityListener = null;
       let isQuotaRefreshing = false;
 
+      // Cache DOM elements once (they're static in the nav template)
+      const quotaDisplay = document.getElementById("quotaDisplay");
+      const quotaPlan = document.getElementById("quotaPlan");
+      const quotaUsage = document.getElementById("quotaUsage");
+      const quotaReset = document.getElementById("quotaReset");
+
       function formatTimeUntilReset(resetTime) {
         const now = new Date();
         const reset = new Date(resetTime);
@@ -396,12 +402,6 @@
 
       async function fetchAndDisplayQuota() {
         if (isQuotaRefreshing) return;
-
-        const quotaDisplay = document.getElementById("quotaDisplay");
-        const quotaPlan = document.getElementById("quotaPlan");
-        const quotaUsage = document.getElementById("quotaUsage");
-        const quotaReset = document.getElementById("quotaReset");
-
         if (!quotaDisplay || !window.supabase) return;
 
         isQuotaRefreshing = true;
@@ -480,6 +480,11 @@
 
         document.addEventListener("visibilitychange", quotaVisibilityListener);
         quotaVisibilityListener();
+
+        // Refresh quota immediately when organisation changes
+        document.addEventListener("bb:org-switched", () => {
+          fetchAndDisplayQuota();
+        });
       }
 
       // Expose globally for settings page to trigger refresh

@@ -1557,7 +1557,8 @@ function startJobPageFallbackPolling(state) {
   if (jobPageFallbackPollingId) return;
   jobPageFallbackPollingId = setInterval(() => {
     if (!jobPageIsRefreshing) {
-      executeJobPageRefresh(state, null);
+      // Pass the channel so cleanup works when job completes
+      executeJobPageRefresh(state, window.jobProgressChannel);
     }
   }, JOB_PAGE_FALLBACK_POLLING_MS);
 }
