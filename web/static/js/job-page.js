@@ -1575,8 +1575,12 @@ function clearJobPageFallbackPolling() {
 
 /**
  * Throttled refresh for job page realtime notifications
+ * Also stops fallback polling once we receive a real event.
  */
 function throttledJobPageRefresh(state, channel) {
+  // Receiving a real event proves realtime works - stop fallback polling
+  clearJobPageFallbackPolling();
+
   const now = Date.now();
   const timeSinceLastRefresh = now - jobPageLastRefresh;
 
@@ -1661,19 +1665,20 @@ async function subscribeToJobProgress(state) {
         }
       )
       .subscribe((status, err) => {
-        if (status === "SUBSCRIBED") {
-          clearJobPageFallbackPolling();
-        } else if (
+        if (
           status === "CHANNEL_ERROR" ||
           status === "TIMED_OUT" ||
           err
         ) {
           console.warn(
-            "[Realtime] Job progress connection issue, enabling fallback polling"
+            "[Realtime] Job progress connection issue, fallback polling will continue"
           );
-          startJobPageFallbackPolling(state);
         }
+        // Note: fallback polling stops only when we receive an actual realtime event
       });
+
+    // Start fallback polling immediately - it will be cleared when we receive a real event
+    startJobPageFallbackPolling(state);
 
     window.jobProgressChannel = channel;
   } catch (err) {

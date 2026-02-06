@@ -672,8 +672,12 @@ let isRefreshing = false;
  * Throttled refresh for realtime notifications.
  * Guarantees at most one refresh per REALTIME_DEBOUNCE_MS interval,
  * but ensures refresh happens even with continuous notifications.
+ * Also stops fallback polling once we receive a real event.
  */
 function throttledRealtimeRefresh() {
+  // Receiving a real event proves realtime works - stop fallback polling
+  clearFallbackPolling();
+
   const now = Date.now();
   const timeSinceLastRefresh = now - lastRealtimeRefresh;
 
@@ -849,20 +853,21 @@ async function subscribeToJobUpdates() {
         }
       )
       .subscribe((status, err) => {
-        if (status === "SUBSCRIBED") {
-          // Connection successful - stop fallback polling
-          clearFallbackPolling();
-        } else if (
+        if (
           status === "CHANNEL_ERROR" ||
           status === "TIMED_OUT" ||
           err
         ) {
           console.warn(
-            "[Realtime] Connection issue, enabling fallback polling"
+            "[Realtime] Connection issue, fallback polling will continue"
           );
-          startFallbackPolling();
         }
+        // Note: fallback polling stops only when we receive an actual realtime event
+        // This ensures polling continues on staging where realtime doesn't work
       });
+
+    // Start fallback polling immediately - it will be cleared when we receive a real event
+    startFallbackPolling();
 
     window.jobsChannel = channel;
   } catch (err) {

@@ -479,8 +479,20 @@
         formatTimeUntilReset,
       };
 
-      // Start after a short delay to ensure auth is ready
-      setTimeout(startQuotaPolling, 100);
+      // Start after core (Supabase) is ready
+      if (window.BB_APP?.coreReady) {
+        window.BB_APP.coreReady.then(startQuotaPolling).catch(() => {});
+      } else {
+        // Fallback: wait for supabase to be defined
+        const checkSupabase = setInterval(() => {
+          if (window.supabase) {
+            clearInterval(checkSupabase);
+            startQuotaPolling();
+          }
+        }, 100);
+        // Stop checking after 10 seconds
+        setTimeout(() => clearInterval(checkSupabase), 10000);
+      }
     };
 
     initQuota();
