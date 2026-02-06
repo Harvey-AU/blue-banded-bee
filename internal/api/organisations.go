@@ -825,10 +825,15 @@ func sendSupabaseInviteEmail(ctx context.Context, email, redirectTo string, data
 		bodyStr := strings.TrimSpace(string(body))
 
 		// If the user already exists in Supabase Auth, the invite endpoint
-		// returns 422 email_exists. This is not a failure — the invite record
-		// is still valid and the existing user can accept it after logging in.
-		if resp.StatusCode == http.StatusUnprocessableEntity && strings.Contains(bodyStr, "email_exists") {
-			return errInviteEmailExists
+		// returns 422 email_exists. Parse the JSON response structurally
+		// rather than relying on substring matching.
+		if resp.StatusCode == http.StatusUnprocessableEntity {
+			var errResp struct {
+				ErrorCode string `json:"error_code"`
+			}
+			if json.Unmarshal(body, &errResp) == nil && errResp.ErrorCode == "email_exists" {
+				return errInviteEmailExists
+			}
 		}
 
 		return fmt.Errorf("supabase invite failed: %s", bodyStr)

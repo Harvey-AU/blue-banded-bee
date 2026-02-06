@@ -443,7 +443,7 @@
         }
       );
       showSettingsToast("success", "Invite revoked");
-      loadOrganisationInvites();
+      await loadOrganisationInvites();
     } catch (err) {
       console.error("Failed to revoke invite:", err);
       showSettingsToast("error", "Failed to revoke invite");
