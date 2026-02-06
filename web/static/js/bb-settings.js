@@ -424,7 +424,7 @@
       });
       showSettingsToast("success", "Invite sent");
       emailInput.value = "";
-      loadOrganisationInvites();
+      await loadOrganisationInvites();
     } catch (err) {
       console.error("Failed to send invite:", err);
       showSettingsToast("error", "Failed to send invite");

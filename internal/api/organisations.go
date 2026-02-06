@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -18,6 +19,12 @@ import (
 	"github.com/Harvey-AU/blue-banded-bee/internal/db"
 	"github.com/google/uuid"
 )
+
+// errInviteEmailExists is returned when the Supabase /invite endpoint reports
+// the user already has an account. The invite record is still valid — the
+// caller should fall back to a magic-link email so the existing user can log
+// in and accept.
+var errInviteEmailExists = errors.New("user already registered")
 
 // OrganisationsHandler handles GET and POST /v1/organisations
 func (h *Handler) OrganisationsHandler(w http.ResponseWriter, r *http.Request) {
@@ -719,12 +726,23 @@ func (h *Handler) createOrganisationInvite(w http.ResponseWriter, r *http.Reques
 		"organisation_id": orgID,
 		"role":            role,
 	}); err != nil {
-		if revokeErr := h.DB.RevokeOrganisationInvite(r.Context(), invite.ID, orgID); revokeErr != nil {
-			logger := loggerWithRequest(r)
-			logger.Warn().Err(revokeErr).Msg("Failed to revoke invite after email failure")
+		if errors.Is(err, errInviteEmailExists) {
+			// User already has a Supabase Auth account — send a magic link
+			// so they receive an email and can log in to accept the invite.
+			if mlErr := sendSupabaseMagicLink(r.Context(), email, redirectURL); mlErr != nil {
+				logger := loggerWithRequest(r)
+				logger.Warn().Err(mlErr).Msg("Failed to send magic link for existing user invite")
+				// Invite record is still valid; don't revoke. The invitee
+				// can log in manually and accept via the settings page.
+			}
+		} else {
+			if revokeErr := h.DB.RevokeOrganisationInvite(r.Context(), invite.ID, orgID); revokeErr != nil {
+				logger := loggerWithRequest(r)
+				logger.Warn().Err(revokeErr).Msg("Failed to revoke invite after email failure")
+			}
+			InternalError(w, r, err)
+			return
 		}
-		InternalError(w, r, err)
-		return
 	}
 
 	WriteCreated(w, r, map[string]interface{}{
@@ -804,7 +822,68 @@ func sendSupabaseInviteEmail(ctx context.Context, email, redirectTo string, data
 
 	if resp.StatusCode >= http.StatusMultipleChoices {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("supabase invite failed: %s", strings.TrimSpace(string(body)))
+		bodyStr := strings.TrimSpace(string(body))
+
+		// If the user already exists in Supabase Auth, the invite endpoint
+		// returns 422 email_exists. This is not a failure — the invite record
+		// is still valid and the existing user can accept it after logging in.
+		if resp.StatusCode == http.StatusUnprocessableEntity && strings.Contains(bodyStr, "email_exists") {
+			return errInviteEmailExists
+		}
+
+		return fmt.Errorf("supabase invite failed: %s", bodyStr)
+	}
+
+	return nil
+}
+
+// sendSupabaseMagicLink sends a magic-link email to an existing Supabase Auth
+// user. The link logs them in and redirects to redirectTo (the invite
+// acceptance page).
+func sendSupabaseMagicLink(ctx context.Context, email, redirectTo string) error {
+	supabaseURL := strings.TrimSuffix(os.Getenv("SUPABASE_URL"), "/")
+	if supabaseURL == "" {
+		return fmt.Errorf("supabase URL is not configured")
+	}
+
+	anonKey := os.Getenv("SUPABASE_PUBLISHABLE_KEY")
+	if anonKey == "" {
+		anonKey = os.Getenv("SUPABASE_ANON_KEY")
+	}
+	if anonKey == "" {
+		return fmt.Errorf("supabase publishable key is not configured")
+	}
+
+	payload, err := json.Marshal(map[string]interface{}{
+		"email": email,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to build magic link payload: %w", err)
+	}
+
+	endpoint := supabaseURL + "/auth/v1/magiclink"
+	if redirectTo != "" {
+		endpoint += "?redirect_to=" + url.QueryEscape(redirectTo)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(payload))
+	if err != nil {
+		return fmt.Errorf("failed to create magic link request: %w", err)
+	}
+
+	req.Header.Set("apikey", anonKey)
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to send magic link request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= http.StatusMultipleChoices {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("supabase magic link failed: %s", strings.TrimSpace(string(body)))
 	}
 
 	return nil

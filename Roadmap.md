@@ -280,10 +280,9 @@ Organisation model implemented:
   - [x] Job creation forms with template-based validation
   - [x] Error handling and user feedback systems
   - [x] Advanced filtering and search capabilities
-- [ ] **User Experience Features**
-  - [ ] Account settings and profile management templates
+- [x] **User Experience Features**
+  - [x] Account settings and profile management templates
   - [x] Notification system integration
-  - [ ] Responsive design compatibility testing
 
 ### ✅ Task prioritisation & URL processing
 
@@ -378,44 +377,38 @@ Organisation model implemented:
   - [x] Error notifications when jobs fail
   - [x] API endpoints for workspace management and user preferences
 
-### 🟡 Google Analytics 4 Integration
+### ✅ Google Analytics 4 Integration (Completed)
 
-- [x] **OAuth Connection Setup** (Steps 1-3 COMPLETE)
+- [x] **OAuth Connection Setup** (Steps 1-3)
   - [x] Google OAuth 2.0 configuration and credentials
   - [x] OAuth flow implementation with state token CSRF protection
   - [x] Account and property selection functionality
   - [x] Token storage in Supabase Vault with refresh logic
   - [x] Database schema for `user_ga_connections` table
   - [x] Dashboard UI for connecting/disconnecting GA4 properties
-- [ ] **Analytics Data Retrieval** (Step 4)
-  - [ ] Implement GA4 Data API client (`analyticsdata/v1beta`)
-  - [ ] Fetch recent visitor/view data for each page path
-  - [ ] Query metric: `screenPageViews` only
-  - [ ] Support for 7, 28, 180, and 365-day lookback periods
-  - [ ] Scheduled background sync service (opt-in per domain, no sync by
+- [x] **Analytics Data Retrieval** (Step 4)
+  - [x] Implement GA4 Data API client (`analyticsdata/v1beta`)
+  - [x] Fetch recent visitor/view data for each page path
+  - [x] Query metric: `screenPageViews` only
+  - [x] Support for 7, 28, and 180-day lookback periods
+  - [x] Scheduled background sync service (opt-in per domain, no sync by
         default)
-  - [ ] Token refresh mechanism for expired access tokens
-- [ ] **Pages Table Integration** (Step 5)
-  - [ ] Add analytics columns to `pages` table:
-    - [ ] `page_views_7d` - Page views (last 7 days)
-    - [ ] `page_views_28d` - Page views (last 28 days)
-    - [ ] `page_views_180d` - Page views (last 180 days)
-    - [ ] `page_views_365d` - Page views (last 365 days)
-    - [ ] `last_analytics_sync_at` - Timestamp of last GA sync
-  - [ ] Atomic upsert logic to merge GA data with existing page records
-- [ ] **Task Prioritisation Enhancement** (Step 6)
-  - [ ] Incorporate page view data into task priority calculation
-  - [ ] Prioritise high-traffic pages for earlier cache warming
-  - [ ] Automatically enabled when domain has linked GA account
-- [ ] **Data Export Integration** (Step 7)
-  - [ ] Include page view metrics in CSV exports
-  - [ ] Add columns: Page Views (7d), Page Views (28d), Page Views (180d), Page
-        Views (365d)
-  - [ ] Dashboard displays page view metrics alongside performance data
-
-**Implementation Plan:** See
-[plans/google-analytics-integration.md](google-analytics-integration.md) for
-complete technical architecture and Go implementation details.
+  - [x] Token refresh mechanism for expired access tokens
+- [x] **Pages Table Integration** (Step 5)
+  - [x] Add analytics columns to `page_analytics` table:
+    - [x] `page_views_7d` - Page views (last 7 days)
+    - [x] `page_views_28d` - Page views (last 28 days)
+    - [x] `page_views_180d` - Page views (last 180 days)
+    - [x] `fetched_at` - Timestamp of last GA sync
+  - [x] Atomic upsert logic to merge GA data with existing page records
+- [x] **Task Prioritisation Enhancement** (Step 6)
+  - [x] Incorporate page view data into task priority calculation
+  - [x] Prioritise high-traffic pages for earlier cache warming
+  - [x] Automatically enabled when domain has linked GA account
+- [x] **Data Export Integration** (Step 7)
+  - [x] Include page view metrics in CSV/JSON/Excel exports
+  - [x] Add columns: Views (7d), Views (28d), Views (180d)
+  - [x] Dashboard displays page view metrics alongside performance data
 
 ---
 
@@ -423,8 +416,9 @@ complete technical architecture and Go implementation details.
 
 ### 5.0 Finalise outstanding actions above
 
-- [ ] GA
-- [ ] Account settings / management
+- [x] GA
+- [x] Account settings / management (settings page operational — billing awaits
+      Paddle in 5.2)
 
 ### 5.1: Webflow Job Triggering & Polish
 
@@ -519,6 +513,13 @@ complete technical architecture and Go implementation details.
   - [ ] Final security audit of authentication flows
   - [ ] Review RLS policies and data isolation
   - [ ] Confirm GDPR/privacy compliance basics
+- [ ] **Responsive Design Cleanup**
+  - [ ] Audit all pages/layouts at mobile (<480px), tablet (480-960px), and
+        desktop (960px+) breakpoints
+  - [ ] Fix dashboard, settings, job details, and nav for small screens
+  - [ ] Test integration panels (Webflow sites grid, member lists, GA
+        properties) at all breakpoints
+  - [ ] Ensure forms, modals, and toast notifications work on touch devices
 
 ### 5.7: Launch & First Customers
 
