@@ -1108,18 +1108,7 @@ function setupInteractions(state) {
 }
 
 async function initialiseAuth(state) {
-  // Wait for core.js defer script to execute and expose coreReady.
-  // On cold loads core.js may not have run yet when DOMContentLoaded fires.
-  const maxWaitMs = 5000;
-  const pollMs = 50;
-  let waited = 0;
-  while (!window.BB_APP?.coreReady && waited < maxWaitMs) {
-    await new Promise((r) => setTimeout(r, pollMs));
-    waited += pollMs;
-  }
-  if (window.BB_APP?.coreReady) {
-    await window.BB_APP.coreReady;
-  }
+  await window.BB_APP.whenReady();
 
   if (!window.supabase) {
     throw new Error("Supabase client not initialised");

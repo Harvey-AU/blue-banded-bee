@@ -724,23 +724,7 @@
       // Initialize dashboard with unified authentication system
       document.addEventListener("DOMContentLoaded", async () => {
         try {
-          // Wait for core.js defer script to execute and expose coreReady.
-          // On first load (cold cache) core.js may not have run yet when
-          // DOMContentLoaded fires, so we poll briefly before giving up.
-          const maxWaitMs = 5000;
-          const pollMs = 50;
-          let waited = 0;
-          while (!window.BB_APP?.coreReady && waited < maxWaitMs) {
-            await new Promise((r) => setTimeout(r, pollMs));
-            waited += pollMs;
-          }
-          if (window.BB_APP?.coreReady) {
-            await window.BB_APP.coreReady;
-          } else {
-            throw new Error(
-              "core.js did not initialise within " + maxWaitMs + "ms"
-            );
-          }
+          await window.BB_APP.whenReady();
           // Initialize the complete dashboard with auth integration
           await initializeDashboard({
             debug: false,
