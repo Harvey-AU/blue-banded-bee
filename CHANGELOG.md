@@ -29,6 +29,50 @@ On merge, CI will:
 
 ## [Unreleased]
 
+## [0.26.0] – 2026-02-06
+
+### Added
+
+- **Settings Page**: New unified settings page with account management
+  - Profile section with read-only name/email display
+  - Security section with password reset via Supabase
+  - Team members list with admin-gated removal
+  - Team invites with send/list/revoke functionality (admin-only)
+  - Plan management with current plan, change plan, and usage history
+  - Integrations sections for Slack, Google Analytics, and Webflow
+- **Organisation Switching**: Global nav org switcher on all pages
+  - Dropdown to switch between organisations
+  - Persistent active org selection via localStorage
+  - `bb:org-switched` event for cross-component coordination
+- **Global Quota Display**: Usage quota now visible in nav on all pages
+  - Auto-refreshes every 30 seconds when page visible
+  - Updates immediately on organisation switch
+  - Warning/exhausted states at 80%/100% thresholds
+- **Admin Database Reset**: Settings button to reset database (admin-only)
+- **Notifications Dropdown**: Bell icon with notification list in global nav
+
+### Changed
+
+- **Polling Architecture**: Consolidated duplicate polling systems
+  - Dashboard and job details now use single fallback polling mechanism
+  - Polling only starts when Supabase Realtime fails (staging/preview)
+  - Fallback polling stops when first real realtime event received
+  - Removed unused auto-refresh code from BBDataBinder (~35 lines)
+- **Quota Display**: Moved from settings-only to global nav
+  - Cached DOM references for efficiency
+  - Re-entrancy guard prevents concurrent fetches
+  - 15-second timeout prevents hung requests blocking future updates
+
+### Fixed
+
+- **Staging Realtime**: Fixed polling not working on Supabase preview branches
+  where realtime connects but events don't fire
+- **Quota Init**: Fixed quota fetch failing when Supabase not ready
+- **Org Init Race Conditions**: Unified org initialisation to prevent race
+  conditions between nav and page scripts
+- **Notification Security**: Validate notification link protocols before
+  rendering
+
 ## [0.25.0] – 2026-02-01
 
 ### Added
