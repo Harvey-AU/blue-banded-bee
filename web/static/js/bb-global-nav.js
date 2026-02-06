@@ -402,7 +402,14 @@
 
       async function fetchAndDisplayQuota() {
         if (isQuotaRefreshing) return;
-        if (!quotaDisplay || !window.supabase) return;
+        if (
+          !quotaDisplay ||
+          !quotaPlan ||
+          !quotaUsage ||
+          !quotaReset ||
+          !window.supabase
+        )
+          return;
 
         isQuotaRefreshing = true;
         try {
