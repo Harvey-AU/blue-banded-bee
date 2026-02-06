@@ -373,28 +373,6 @@
   };
 
   /**
-   * Wait for core initialisation to complete.
-   * Handles the case where this is called before core.js has finished
-   * executing (e.g. DOMContentLoaded firing before deferred scripts run
-   * on a cold-cache first load). All pages should use this instead of
-   * checking window.BB_APP.coreReady directly.
-   * @param {number} [timeoutMs=5000] - Maximum time to wait in milliseconds
-   * @returns {Promise<void>}
-   */
-  window.BB_APP.whenReady = async function whenReady(timeoutMs = 5000) {
-    const pollMs = 50;
-    let waited = 0;
-    while (!window.BB_APP?.coreReady && waited < timeoutMs) {
-      await new Promise((r) => setTimeout(r, pollMs));
-      waited += pollMs;
-    }
-    if (!window.BB_APP?.coreReady) {
-      throw new Error("core.js did not initialise within " + timeoutMs + "ms");
-    }
-    await window.BB_APP.coreReady;
-  };
-
-  /**
    * Builds the payload for restarting a job with the same configuration.
    * @param {Object} job - The job object to extract config from
    * @returns {Object} Payload for POST /v1/jobs
