@@ -50,13 +50,18 @@
          safely wait for core.js even on cold-cache first loads. */
       window.BB_APP = window.BB_APP || {};
       window.BB_APP.whenReady = async function whenReady(timeoutMs = 5000) {
-        var pollMs = 50, waited = 0;
+        var pollMs = 50,
+          waited = 0;
         while (!window.BB_APP.coreReady && waited < timeoutMs) {
-          await new Promise(function (r) { setTimeout(r, pollMs); });
+          await new Promise(function (r) {
+            setTimeout(r, pollMs);
+          });
           waited += pollMs;
         }
         if (!window.BB_APP.coreReady) {
-          throw new Error("core.js did not initialise within " + timeoutMs + "ms");
+          throw new Error(
+            "core.js did not initialise within " + timeoutMs + "ms"
+          );
         }
         await window.BB_APP.coreReady;
       };
