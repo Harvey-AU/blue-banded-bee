@@ -48,8 +48,6 @@ function setupSlackIntegration() {
     event.preventDefault();
     handleSlackAction(action, element);
   });
-
-  console.log("Slack integration handlers initialised");
 }
 
 /**
@@ -78,7 +76,7 @@ function handleSlackAction(action, element) {
       break;
 
     default:
-      console.log("Unhandled Slack action:", action);
+      break;
   }
 }
 

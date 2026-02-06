@@ -226,6 +226,18 @@ func (m *MockDB) GetDomainNameByID(ctx context.Context, domainID int) (string, e
 	return args.String(0), args.Error(1)
 }
 
+// GetOrCreateDomainID mocks the GetOrCreateDomainID method
+func (m *MockDB) GetOrCreateDomainID(ctx context.Context, domain string) (int, error) {
+	args := m.Called(ctx, domain)
+	return args.Int(0), args.Error(1)
+}
+
+// UpsertOrganisationDomain mocks the UpsertOrganisationDomain method
+func (m *MockDB) UpsertOrganisationDomain(ctx context.Context, organisationID string, domainID int) error {
+	args := m.Called(ctx, organisationID, domainID)
+	return args.Error(0)
+}
+
 // GetDomainNames mocks the GetDomainNames method
 func (m *MockDB) GetDomainNames(ctx context.Context, domainIDs []int) (map[int]string, error) {
 	args := m.Called(ctx, domainIDs)
@@ -233,6 +245,15 @@ func (m *MockDB) GetDomainNames(ctx context.Context, domainIDs []int) (map[int]s
 		return nil, args.Error(1)
 	}
 	return args.Get(0).(map[int]string), args.Error(1)
+}
+
+// GetDomainsForOrganisation mocks the GetDomainsForOrganisation method
+func (m *MockDB) GetDomainsForOrganisation(ctx context.Context, organisationID string) ([]db.OrganisationDomain, error) {
+	args := m.Called(ctx, organisationID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]db.OrganisationDomain), args.Error(1)
 }
 
 // GetLastJobStartTimeForScheduler mocks the GetLastJobStartTimeForScheduler method
@@ -281,9 +302,105 @@ func (m *MockDB) CreateOrganisation(name string) (*db.Organisation, error) {
 }
 
 // AddOrganisationMember mocks the AddOrganisationMember method
-func (m *MockDB) AddOrganisationMember(userID, organisationID string) error {
-	args := m.Called(userID, organisationID)
+func (m *MockDB) AddOrganisationMember(userID, organisationID, role string) error {
+	args := m.Called(userID, organisationID, role)
 	return args.Error(0)
+}
+
+// GetOrganisationMemberRole mocks role lookups
+func (m *MockDB) GetOrganisationMemberRole(ctx context.Context, userID, organisationID string) (string, error) {
+	args := m.Called(ctx, userID, organisationID)
+	return args.String(0), args.Error(1)
+}
+
+// ListOrganisationMembers mocks member listing
+func (m *MockDB) ListOrganisationMembers(ctx context.Context, organisationID string) ([]db.OrganisationMember, error) {
+	args := m.Called(ctx, organisationID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]db.OrganisationMember), args.Error(1)
+}
+
+// IsOrganisationMemberEmail mocks email membership checks
+func (m *MockDB) IsOrganisationMemberEmail(ctx context.Context, organisationID, email string) (bool, error) {
+	args := m.Called(ctx, organisationID, email)
+	return args.Bool(0), args.Error(1)
+}
+
+// RemoveOrganisationMember mocks member removal
+func (m *MockDB) RemoveOrganisationMember(ctx context.Context, userID, organisationID string) error {
+	args := m.Called(ctx, userID, organisationID)
+	return args.Error(0)
+}
+
+// CountOrganisationAdmins mocks admin counting
+func (m *MockDB) CountOrganisationAdmins(ctx context.Context, organisationID string) (int, error) {
+	args := m.Called(ctx, organisationID)
+	return args.Int(0), args.Error(1)
+}
+
+// CreateOrganisationInvite mocks invite creation
+func (m *MockDB) CreateOrganisationInvite(ctx context.Context, invite *db.OrganisationInvite) (*db.OrganisationInvite, error) {
+	args := m.Called(ctx, invite)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*db.OrganisationInvite), args.Error(1)
+}
+
+// ListOrganisationInvites mocks invite listing
+func (m *MockDB) ListOrganisationInvites(ctx context.Context, organisationID string) ([]db.OrganisationInvite, error) {
+	args := m.Called(ctx, organisationID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]db.OrganisationInvite), args.Error(1)
+}
+
+// RevokeOrganisationInvite mocks invite revocation
+func (m *MockDB) RevokeOrganisationInvite(ctx context.Context, inviteID, organisationID string) error {
+	args := m.Called(ctx, inviteID, organisationID)
+	return args.Error(0)
+}
+
+// GetOrganisationInviteByToken mocks invite lookup
+func (m *MockDB) GetOrganisationInviteByToken(ctx context.Context, token string) (*db.OrganisationInvite, error) {
+	args := m.Called(ctx, token)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*db.OrganisationInvite), args.Error(1)
+}
+
+// AcceptOrganisationInvite mocks invite acceptance
+func (m *MockDB) AcceptOrganisationInvite(ctx context.Context, token, userID string) (*db.OrganisationInvite, error) {
+	args := m.Called(ctx, token, userID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*db.OrganisationInvite), args.Error(1)
+}
+
+// SetOrganisationPlan mocks plan updates
+func (m *MockDB) SetOrganisationPlan(ctx context.Context, organisationID, planID string) error {
+	args := m.Called(ctx, organisationID, planID)
+	return args.Error(0)
+}
+
+// GetOrganisationPlanID mocks plan retrieval
+func (m *MockDB) GetOrganisationPlanID(ctx context.Context, organisationID string) (string, error) {
+	args := m.Called(ctx, organisationID)
+	return args.String(0), args.Error(1)
+}
+
+// ListDailyUsage mocks daily usage history
+func (m *MockDB) ListDailyUsage(ctx context.Context, organisationID string, startDate, endDate time.Time) ([]db.DailyUsageEntry, error) {
+	args := m.Called(ctx, organisationID, startDate, endDate)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]db.DailyUsageEntry), args.Error(1)
 }
 
 // Slack integration methods
@@ -424,6 +541,24 @@ func (m *MockDB) GetPlatformOrgMapping(ctx context.Context, platform, platformID
 	return args.Get(0).(*db.PlatformOrgMapping), args.Error(1)
 }
 
+// Usage and plans methods
+
+func (m *MockDB) GetOrganisationUsageStats(ctx context.Context, orgID string) (*db.UsageStats, error) {
+	args := m.Called(ctx, orgID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*db.UsageStats), args.Error(1)
+}
+
+func (m *MockDB) GetActivePlans(ctx context.Context) ([]db.Plan, error) {
+	args := m.Called(ctx)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]db.Plan), args.Error(1)
+}
+
 // Webflow site settings mock methods
 
 func (m *MockDB) CreateOrUpdateSiteSetting(ctx context.Context, setting *db.WebflowSiteSetting) error {
@@ -497,4 +632,47 @@ func (m *MockDB) GetSiteSettingBySiteID(ctx context.Context, orgID, webflowSiteI
 		return nil, args.Error(1)
 	}
 	return args.Get(0).(*db.WebflowSiteSetting), args.Error(1)
+}
+
+// Google Analytics integration mock methods
+
+func (m *MockDB) CreateGoogleConnection(ctx context.Context, conn *db.GoogleAnalyticsConnection) error {
+	args := m.Called(ctx, conn)
+	return args.Error(0)
+}
+
+func (m *MockDB) GetGoogleConnection(ctx context.Context, connectionID string) (*db.GoogleAnalyticsConnection, error) {
+	args := m.Called(ctx, connectionID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*db.GoogleAnalyticsConnection), args.Error(1)
+}
+
+func (m *MockDB) ListGoogleConnections(ctx context.Context, organisationID string) ([]*db.GoogleAnalyticsConnection, error) {
+	args := m.Called(ctx, organisationID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*db.GoogleAnalyticsConnection), args.Error(1)
+}
+
+func (m *MockDB) DeleteGoogleConnection(ctx context.Context, connectionID, organisationID string) error {
+	args := m.Called(ctx, connectionID, organisationID)
+	return args.Error(0)
+}
+
+func (m *MockDB) UpdateGoogleConnectionStatus(ctx context.Context, connectionID, organisationID, status string) error {
+	args := m.Called(ctx, connectionID, organisationID, status)
+	return args.Error(0)
+}
+
+func (m *MockDB) StoreGoogleToken(ctx context.Context, connectionID, token string) error {
+	args := m.Called(ctx, connectionID, token)
+	return args.Error(0)
+}
+
+func (m *MockDB) GetGoogleToken(ctx context.Context, connectionID string) (string, error) {
+	args := m.Called(ctx, connectionID)
+	return args.String(0), args.Error(1)
 }

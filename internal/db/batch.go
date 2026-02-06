@@ -459,6 +459,13 @@ func (bm *BatchManager) flushTaskUpdates(ctx context.Context, updates []*TaskUpd
 			}
 		}
 
+		// After updating task statuses, increment daily usage so subsequent quota checks see accurate values
+		if len(completedTasks) > 0 || len(failedTasks) > 0 {
+			if err := incrementDailyUsageForTasks(txCtx, tx, completedTasks, failedTasks); err != nil {
+				return fmt.Errorf("failed to increment daily usage: %w", err)
+			}
+		}
+
 		// Promote waiting→pending for jobs that freed capacity
 		// Completed/failed/skipped tasks all free up job slots
 		jobIDsToPromote := make(map[string]bool)
@@ -519,6 +526,68 @@ func (bm *BatchManager) flushTaskUpdates(ctx context.Context, updates []*TaskUpd
 		Int("pending", len(pendingTasks)).
 		Dur("duration_ms", duration).
 		Msg("Batch update successful")
+
+	return nil
+}
+
+// incrementDailyUsageForTasks increments the daily usage counter for completed/failed tasks.
+// Returns an error if quota increment fails, allowing callers to gate subsequent operations.
+func incrementDailyUsageForTasks(txCtx context.Context, tx *sql.Tx, completedTasks, failedTasks []*Task) error {
+	// Build job counts map: jobID → task count
+	jobCounts := make(map[string]int)
+	for _, task := range completedTasks {
+		jobCounts[task.JobID]++
+	}
+	for _, task := range failedTasks {
+		jobCounts[task.JobID]++
+	}
+
+	if len(jobCounts) == 0 {
+		return nil
+	}
+
+	// Collect job IDs for batch query
+	jobIDs := make([]string, 0, len(jobCounts))
+	for jobID := range jobCounts {
+		jobIDs = append(jobIDs, jobID)
+	}
+
+	// Single batch query to get organisation IDs for all jobs
+	rows, err := tx.QueryContext(txCtx,
+		`SELECT id, organisation_id FROM jobs WHERE id = ANY($1) AND organisation_id IS NOT NULL`,
+		pq.Array(jobIDs))
+	if err != nil {
+		return fmt.Errorf("fetch job organisations for quota increment: %w", err)
+	}
+	defer rows.Close()
+
+	// Map job IDs to org IDs and aggregate counts per org
+	orgCounts := make(map[string]int)
+	for rows.Next() {
+		var jobID string
+		var orgID string
+		if err := rows.Scan(&jobID, &orgID); err != nil {
+			return fmt.Errorf("scan job organisation row for quota increment: %w", err)
+		}
+		orgCounts[orgID] += jobCounts[jobID]
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("iterate job organisations for quota increment: %w", err)
+	}
+
+	// Increment usage once per org with aggregated count
+	for orgID, count := range orgCounts {
+		_, err := tx.ExecContext(txCtx, `SELECT increment_daily_usage($1, $2)`, orgID, count)
+		if err != nil {
+			sentry.WithScope(func(scope *sentry.Scope) {
+				scope.SetLevel(sentry.LevelWarning)
+				scope.SetTag("org_id", orgID)
+				scope.SetExtra("pages", count)
+				sentry.CaptureException(fmt.Errorf("quota increment failed: %w", err))
+			})
+			return fmt.Errorf("increment daily usage for org %s (%d pages): %w", orgID, count, err)
+		}
+	}
 
 	return nil
 }

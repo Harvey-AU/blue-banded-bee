@@ -42,6 +42,15 @@ function setupDashboardActions() {
       return;
     }
 
+    // Skip actions handled by other modules (google, slack, webflow)
+    if (
+      action.startsWith("google-") ||
+      action.startsWith("slack-") ||
+      action.startsWith("webflow-")
+    ) {
+      return;
+    }
+
     event.preventDefault();
     handleDashboardAction(action, element);
   });
@@ -59,8 +68,6 @@ function setupDashboardActions() {
       }
     });
   }
-
-  console.log("Dashboard action handlers initialised");
 }
 
 function handleDashboardAction(action, element) {
@@ -144,7 +151,7 @@ function handleDashboardAction(action, element) {
     }
 
     default:
-      console.log("Unhandled dashboard action:", action);
+      break;
   }
 }
 

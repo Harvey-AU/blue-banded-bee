@@ -8,7 +8,7 @@
 
     <!-- Sentry Error Monitoring & Performance -->
     <script
-      src="https://browser.sentry-cdn.com/8.45.0/bundle.tracing.replay.min.js"
+      src="https://browser.sentry-cdn.com/10.38.0/bundle.tracing.replay.min.js"
       crossorigin="anonymous"
     ></script>
     <script>
@@ -45,1540 +45,7 @@
     </script>
 
     <script src="/js/core.js" defer></script>
-
-    <style>
-      body {
-        font-family:
-          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-        margin: 0;
-        padding: 0;
-        background: #f5f7fa;
-        min-height: 100vh;
-      }
-
-      .page-header {
-        background: white;
-        border-bottom: 1px solid #e5e7eb;
-        padding: 24px 0;
-        position: sticky;
-        top: 0;
-        z-index: 100;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-      }
-
-      .page-header .container {
-        max-width: 1200px;
-        margin: 0 auto;
-        padding: 0 24px;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-      }
-
-      .page-title {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        margin: 0;
-        font-size: 1.5rem;
-        font-weight: 700;
-        color: #1a1a1a;
-      }
-
-      .bee-icon {
-        font-size: 1.8rem;
-      }
-
-      .page-nav {
-        display: flex;
-        gap: 24px;
-        align-items: center;
-      }
-
-      .nav-link {
-        color: #6b7280;
-        text-decoration: none;
-        font-weight: 500;
-        transition: color 0.2s ease;
-      }
-
-      .nav-link:hover,
-      .nav-link.active {
-        color: #3b82f6;
-      }
-
-      .user-menu {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-      }
-
-      .auth-buttons {
-        display: flex;
-        gap: 8px;
-      }
-
-      .user-info {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        font-size: 14px;
-      }
-
-      .bb-button {
-        padding: 8px 16px;
-        border-radius: 6px;
-        border: none;
-        font-size: 14px;
-        font-weight: 500;
-        cursor: pointer;
-        transition: all 0.2s ease;
-      }
-
-      .bb-button-primary {
-        background: #3b82f6;
-        color: white;
-      }
-
-      .bb-button-primary:hover {
-        background: #2563eb;
-      }
-
-      .bb-button-outline {
-        background: transparent;
-        color: #6b7280;
-        border: 1px solid #d1d5db;
-      }
-
-      .bb-button-outline:hover {
-        background: #f9fafb;
-        border-color: #9ca3af;
-      }
-
-      .user-avatar {
-        width: 32px;
-        height: 32px;
-        border-radius: 50%;
-        background: #3b82f6;
-        color: white;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-weight: 600;
-        font-size: 14px;
-      }
-
-      .main-content {
-        max-width: 1200px;
-        margin: 0 auto;
-        padding: 24px;
-      }
-
-      .dashboard-actions {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 24px;
-        padding: 20px;
-        background: white;
-        border-radius: 12px;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-      }
-
-      .dashboard-filters {
-        display: flex;
-        gap: 16px;
-        align-items: center;
-      }
-
-      .filter-group {
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
-      }
-
-      .filter-label {
-        font-size: 12px;
-        font-weight: 500;
-        color: #6b7280;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-      }
-
-      .filter-select {
-        padding: 8px 12px;
-        border: 1px solid #d1d5db;
-        border-radius: 6px;
-        font-size: 14px;
-        background: white;
-        color: #374151;
-      }
-
-      .filter-select:focus {
-        outline: none;
-        border-color: #3b82f6;
-        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-      }
-
-      .filter-tabs {
-        display: flex;
-        gap: 8px;
-        align-items: center;
-      }
-
-      .filter-tab {
-        padding: 8px 16px;
-        border-radius: 6px;
-        text-decoration: none;
-        color: #6b7280;
-        font-weight: 500;
-        cursor: pointer;
-        transition: all 0.2s ease;
-        border: 1px solid #d1d5db;
-      }
-
-      .filter-tab:hover {
-        background-color: #f3f4f6;
-        border-color: #9ca3af;
-      }
-
-      .filter-tab.active {
-        background-color: #3b82f6;
-        color: white;
-        border-color: #3b82f6;
-      }
-
-      .page-actions {
-        display: flex;
-        gap: 12px;
-      }
-
-      .status-indicator {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        font-size: 12px;
-        color: #6b7280;
-      }
-
-      .status-dot {
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
-        background: #22c55e;
-        animation: pulse 2s infinite;
-      }
-
-      @keyframes pulse {
-        0%,
-        100% {
-          opacity: 1;
-        }
-        50% {
-          opacity: 0.5;
-        }
-      }
-
-      /* Job status visual enhancements */
-      .job-running {
-        border-left: 4px solid #3b82f6;
-        background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-      }
-
-      .job-completed {
-        border-left: 4px solid #22c55e;
-      }
-
-      .job-failed {
-        border-left: 4px solid #ef4444;
-      }
-
-      .job-cancelled {
-        border-left: 4px solid #6b7280;
-        opacity: 0.7;
-      }
-
-      .progress-pulsing {
-        animation: progressPulse 2s ease-in-out infinite;
-      }
-
-      @keyframes progressPulse {
-        0%,
-        100% {
-          opacity: 1;
-          transform: scaleY(1);
-        }
-        50% {
-          opacity: 0.8;
-          transform: scaleY(0.95);
-        }
-      }
-
-      .bb-btn {
-        padding: 8px 16px;
-        border-radius: 6px;
-        border: none;
-        font-weight: 500;
-        cursor: pointer;
-        transition: all 0.2s ease;
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        text-decoration: none;
-      }
-
-      .bb-btn-primary {
-        background: #3b82f6;
-        color: white;
-      }
-
-      .bb-btn-primary:hover {
-        background: #2563eb;
-      }
-
-      .bb-btn-secondary {
-        background: #f3f4f6;
-        color: #374151;
-      }
-
-      .bb-btn-secondary:hover {
-        background: #e5e7eb;
-      }
-
-      .bb-status-running {
-        background: #dbeafe;
-        color: #1d4ed8;
-      }
-      .bb-status-completed {
-        background: #dcfce7;
-        color: #16a34a;
-      }
-      .bb-status-failed {
-        background: #fee2e2;
-        color: #dc2626;
-      }
-      .bb-status-pending {
-        background: #fef3c7;
-        color: #d97706;
-      }
-      .bb-status-cancelled {
-        background: #f3f4f6;
-        color: #6b7280;
-      }
-
-      .bb-stats-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-        gap: 20px;
-        margin-bottom: 30px;
-      }
-
-      .bb-stat-card {
-        background: white;
-        padding: 24px;
-        border-radius: 12px;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-        text-align: center;
-        border: 1px solid #f0f0f0;
-      }
-
-      .bb-stat-value {
-        font-size: 2.5em;
-        font-weight: 700;
-        margin-bottom: 8px;
-        color: #1a1a1a;
-      }
-
-      .bb-stat-label {
-        color: #666;
-        font-size: 14px;
-        font-weight: 500;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-      }
-
-      .bb-jobs-section {
-        background: white;
-        border-radius: 12px;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-        overflow: hidden;
-        margin-bottom: 30px;
-      }
-
-      .bb-section-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 24px 24px 0 24px;
-        margin-bottom: 20px;
-      }
-
-      .bb-section-header h3 {
-        margin: 0;
-        font-size: 1.25em;
-        font-weight: 600;
-      }
-
-      .bb-section-actions {
-        display: flex;
-        gap: 12px;
-      }
-
-      .bb-jobs-list {
-        padding: 0 24px 24px 24px;
-      }
-
-      .bb-job-card {
-        background: #f8f9fa;
-        border: 1px solid #e9ecef;
-        border-radius: 8px;
-        padding: 20px;
-        margin-bottom: 16px;
-      }
-
-      .bb-schedule-info {
-        display: flex;
-        gap: 12px;
-        align-items: center;
-        font-size: 14px;
-        color: #6b7280;
-      }
-
-      .bb-schedule-status {
-        padding: 4px 8px;
-        border-radius: 4px;
-        font-size: 12px;
-        font-weight: 500;
-      }
-
-      .bb-schedule-enabled {
-        background: #d1fae5;
-        color: #065f46;
-      }
-
-      .bb-schedule-disabled {
-        background: #fee2e2;
-        color: #991b1b;
-      }
-
-      .bb-job-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 16px;
-      }
-
-      .bb-job-domain {
-        font-weight: 600;
-        font-size: 1.1em;
-        color: #1a1a1a;
-      }
-
-      .bb-job-status {
-        padding: 6px 12px;
-        border-radius: 20px;
-        font-size: 12px;
-        font-weight: 600;
-        text-transform: uppercase;
-      }
-
-      .bb-job-progress {
-        margin-bottom: 16px;
-      }
-
-      .bb-progress-bar {
-        width: 100%;
-        height: 8px;
-        background: #e5e7eb;
-        border-radius: 4px;
-        overflow: hidden;
-        margin-bottom: 8px;
-      }
-
-      .bb-progress-fill {
-        height: 100%;
-        background: linear-gradient(90deg, #3b82f6, #1d4ed8);
-        transition: width 0.3s ease;
-      }
-
-      .bb-job-details {
-        font-size: 14px;
-        color: #6b7280;
-      }
-
-      .bb-job-footer {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        font-size: 14px;
-      }
-
-      .bb-job-started {
-        color: #6b7280;
-      }
-
-      .bb-job-actions {
-        display: flex;
-        gap: 8px;
-      }
-
-      .bb-job-link {
-        background: none;
-        border: none;
-        color: #3b82f6;
-        cursor: pointer;
-        text-decoration: underline;
-        font-size: 14px;
-        margin-right: 12px;
-      }
-
-      .bb-job-link:hover {
-        color: #2563eb;
-      }
-
-      .bb-job-link[data-bb-show-if],
-      .bb-job-link[bbb-show],
-      .bb-job-link[bbb-hide],
-      .bb-job-link[bbb-if] {
-        display: none;
-      }
-
-      /* Modal Styles */
-      .bb-modal {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: rgba(0, 0, 0, 0.5);
-        display: none;
-        align-items: center;
-        justify-content: center;
-        z-index: 1000;
-      }
-
-      .bb-modal.show {
-        display: flex;
-      }
-
-      .bb-modal-content {
-        background: white;
-        border-radius: 12px;
-        padding: 32px;
-        max-width: 800px;
-        width: 90%;
-        max-height: 80vh;
-        overflow-y: auto;
-        box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
-      }
-
-      .bb-modal-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 24px;
-        padding-bottom: 16px;
-        border-bottom: 1px solid #e5e7eb;
-      }
-
-      .bb-modal-title {
-        font-size: 1.5rem;
-        font-weight: 600;
-        margin: 0;
-      }
-
-      .bb-modal-close {
-        background: none;
-        border: none;
-        font-size: 24px;
-        cursor: pointer;
-        color: #6b7280;
-      }
-
-      .bb-modal-close:hover {
-        color: #374151;
-      }
-
-      .bb-modal-section {
-        margin-bottom: 24px;
-      }
-
-      .bb-modal-section-title {
-        font-size: 1.1rem;
-        font-weight: 600;
-        margin-bottom: 12px;
-        color: #374151;
-      }
-
-      .bb-job-info-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-        gap: 16px;
-        margin-bottom: 24px;
-      }
-
-      .bb-info-item {
-        background: #f9fafb;
-        padding: 16px;
-        border-radius: 8px;
-        border: 1px solid #e5e7eb;
-      }
-
-      .bb-info-label {
-        font-size: 12px;
-        font-weight: 500;
-        color: #6b7280;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        margin-bottom: 4px;
-      }
-
-      .bb-info-value {
-        font-size: 16px;
-        font-weight: 600;
-        color: #1f2937;
-      }
-
-      .bb-tasks-table {
-        width: 100%;
-        border-collapse: collapse;
-        margin-top: 16px;
-      }
-
-      .bb-tasks-table th,
-      .bb-tasks-table td {
-        padding: 12px;
-        text-align: left;
-        border-bottom: 1px solid #e5e7eb;
-      }
-
-      .bb-tasks-table th {
-        background: #f9fafb;
-        font-weight: 600;
-        color: #374151;
-        font-size: 14px;
-      }
-
-      .bb-tasks-table td {
-        font-size: 14px;
-        color: #6b7280;
-      }
-
-      .bb-task-path {
-        font-family: "Monaco", "Menlo", monospace;
-        background: #f3f4f6;
-        padding: 4px 8px;
-        border-radius: 4px;
-        font-size: 12px;
-      }
-
-      .bb-task-status {
-        padding: 4px 8px;
-        border-radius: 12px;
-        font-size: 11px;
-        font-weight: 600;
-        text-transform: uppercase;
-      }
-
-      .bb-loading {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        padding: 40px;
-        color: #6b7280;
-      }
-
-      .bb-error {
-        color: #dc2626;
-        background: #fee2e2;
-        padding: 12px 16px;
-        border-radius: 8px;
-        margin: 16px 0;
-      }
-
-      .loading {
-        color: #6b7280;
-        font-style: italic;
-      }
-
-      /* Authentication Modal Styles */
-      .bb-auth-form {
-        padding: 8px 0;
-      }
-
-      .bb-form-group {
-        margin-bottom: 20px;
-      }
-
-      .bb-form-group label {
-        display: block;
-        margin-bottom: 6px;
-        font-weight: 500;
-        color: #374151;
-        font-size: 14px;
-      }
-
-      .bb-form-input {
-        width: 100%;
-        padding: 12px 16px;
-        border: 1px solid #d1d5db;
-        border-radius: 6px;
-        font-size: 14px;
-        background: white;
-        color: #374151;
-        box-sizing: border-box;
-      }
-
-      .bb-form-input:focus {
-        outline: none;
-        border-color: #3b82f6;
-        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-      }
-
-      .bb-button-full {
-        width: 100%;
-        margin-bottom: 16px;
-      }
-
-      .bb-auth-divider {
-        text-align: center;
-        margin: 24px 0;
-        position: relative;
-        color: #6b7280;
-        font-size: 14px;
-      }
-
-      .bb-auth-divider::before {
-        content: "";
-        position: absolute;
-        top: 50%;
-        left: 0;
-        right: 0;
-        height: 1px;
-        background: #e5e7eb;
-        z-index: 1;
-      }
-
-      .bb-auth-divider span {
-        background: white;
-        padding: 0 16px;
-        position: relative;
-        z-index: 2;
-      }
-
-      .bb-social-buttons {
-        display: flex;
-        flex-direction: column;
-        gap: 12px;
-        margin-bottom: 24px;
-      }
-
-      .bb-social-btn {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 12px;
-        position: relative;
-      }
-
-      .bb-social-icon {
-        width: 20px;
-        height: 20px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-weight: bold;
-        font-size: 12px;
-      }
-
-      .bb-auth-links {
-        text-align: center;
-      }
-
-      .bb-auth-links a {
-        color: #3b82f6;
-        text-decoration: none;
-        font-size: 14px;
-        display: block;
-        margin-bottom: 8px;
-      }
-
-      .bb-auth-links a:hover {
-        text-decoration: underline;
-      }
-
-      .bb-auth-loading {
-        text-align: center;
-        padding: 40px 20px;
-      }
-
-      .bb-spinner {
-        width: 32px;
-        height: 32px;
-        border: 3px solid #e5e7eb;
-        border-top: 3px solid #3b82f6;
-        border-radius: 50%;
-        animation: spin 1s linear infinite;
-        margin: 0 auto 16px;
-      }
-
-      @keyframes spin {
-        0% {
-          transform: rotate(0deg);
-        }
-        100% {
-          transform: rotate(360deg);
-        }
-      }
-
-      .bb-auth-error {
-        background: #fee2e2;
-        color: #dc2626;
-        padding: 12px 16px;
-        border-radius: 6px;
-        margin-bottom: 16px;
-        font-size: 14px;
-        border: 1px solid #fecaca;
-      }
-
-      /* Password Strength Indicator */
-      .bb-password-strength {
-        margin-top: 8px;
-        padding: 12px;
-        background: #f9fafb;
-        border-radius: 6px;
-        border: 1px solid #e5e7eb;
-      }
-
-      .bb-strength-meter {
-        width: 100%;
-        height: 8px;
-        background: #e5e7eb;
-        border-radius: 4px;
-        overflow: hidden;
-        margin-bottom: 8px;
-      }
-
-      .bb-strength-fill {
-        height: 100%;
-        transition: all 0.3s ease;
-        border-radius: 4px;
-      }
-
-      .bb-strength-fill.weak {
-        width: 25%;
-        background: #ef4444;
-      }
-
-      .bb-strength-fill.fair {
-        width: 50%;
-        background: #f59e0b;
-      }
-
-      .bb-strength-fill.good {
-        width: 75%;
-        background: #eab308;
-      }
-
-      .bb-strength-fill.strong {
-        width: 100%;
-        background: #22c55e;
-      }
-
-      .bb-strength-text {
-        font-size: 12px;
-        font-weight: 600;
-        margin-bottom: 4px;
-      }
-
-      .bb-strength-text.weak {
-        color: #ef4444;
-      }
-
-      .bb-strength-text.fair {
-        color: #f59e0b;
-      }
-
-      .bb-strength-text.good {
-        color: #eab308;
-      }
-
-      .bb-strength-text.strong {
-        color: #22c55e;
-      }
-
-      .bb-strength-feedback {
-        font-size: 11px;
-        color: #6b7280;
-        line-height: 1.4;
-      }
-
-      /* Field validation states */
-      .bb-field-valid {
-        border-color: #22c55e !important;
-        box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.1) !important;
-      }
-
-      .bb-field-invalid {
-        border-color: #ef4444 !important;
-        box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1) !important;
-      }
-
-      .bb-field-error {
-        color: #dc2626;
-        font-size: 12px;
-        margin-top: 4px;
-      }
-
-      /* Global notification system */
-      .bb-notification {
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        max-width: 400px;
-        z-index: 10000;
-        transform: translateX(100%);
-        transition: transform 0.3s ease;
-        opacity: 0;
-      }
-
-      .bb-notification-show {
-        transform: translateX(0);
-        opacity: 1;
-      }
-
-      .bb-notification-content {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        padding: 16px 20px;
-        border-radius: 8px;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-        font-size: 14px;
-        font-weight: 500;
-      }
-
-      .bb-notification-error .bb-notification-content {
-        background: #fee2e2;
-        color: #dc2626;
-        border: 1px solid #fecaca;
-      }
-
-      .bb-notification-success .bb-notification-content {
-        background: #dcfce7;
-        color: #16a34a;
-        border: 1px solid #bbf7d0;
-      }
-
-      .bb-notification-info .bb-notification-content {
-        background: #dbeafe;
-        color: #1d4ed8;
-        border: 1px solid #bfdbfe;
-      }
-
-      .bb-notification-icon {
-        font-size: 16px;
-        flex-shrink: 0;
-      }
-
-      .bb-notification-message {
-        flex: 1;
-        line-height: 1.4;
-      }
-
-      .bb-notification-close {
-        background: none;
-        border: none;
-        font-size: 18px;
-        font-weight: bold;
-        cursor: pointer;
-        color: inherit;
-        opacity: 0.7;
-        transition: opacity 0.2s ease;
-        padding: 0;
-        width: 20px;
-        height: 20px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-      }
-
-      .bb-notification-close:hover {
-        opacity: 1;
-      }
-
-      /* Notifications Dropdown Styles */
-      .bb-notifications-container {
-        position: relative;
-        display: inline-block;
-      }
-
-      .bb-notifications-btn {
-        position: relative;
-      }
-
-      .bb-notifications-badge {
-        position: absolute;
-        top: -4px;
-        right: -4px;
-        background: #ef4444;
-        color: white;
-        font-size: 10px;
-        font-weight: 600;
-        min-width: 16px;
-        height: 16px;
-        border-radius: 8px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        padding: 0 4px;
-      }
-
-      .bb-notifications-badge:empty,
-      .bb-notifications-badge[data-count="0"] {
-        display: none;
-      }
-
-      .bb-notifications-dropdown {
-        position: absolute;
-        top: 100%;
-        right: 0;
-        margin-top: 4px;
-        background: white;
-        border: 1px solid #e5e7eb;
-        border-radius: 8px;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-        width: 360px;
-        max-height: 480px;
-        z-index: 1000;
-        display: none;
-        overflow: hidden;
-      }
-
-      .bb-notifications-container.open .bb-notifications-dropdown {
-        display: block;
-      }
-
-      .bb-notifications-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 12px 16px;
-        border-bottom: 1px solid #e5e7eb;
-      }
-
-      .bb-notifications-title {
-        font-weight: 600;
-        color: #111827;
-        font-size: 14px;
-      }
-
-      .bb-notifications-mark-read {
-        font-size: 12px;
-        color: #3b82f6;
-        background: none;
-        border: none;
-        cursor: pointer;
-        padding: 4px 8px;
-        border-radius: 4px;
-      }
-
-      .bb-notifications-mark-read:hover {
-        background: #eff6ff;
-      }
-
-      .bb-notifications-list {
-        max-height: 320px;
-        overflow-y: auto;
-      }
-
-      .bb-notifications-empty {
-        padding: 32px 16px;
-        text-align: center;
-        color: #6b7280;
-      }
-
-      .bb-notifications-empty-icon {
-        font-size: 32px;
-        margin-bottom: 8px;
-      }
-
-      .bb-notification-item {
-        display: flex;
-        gap: 12px;
-        padding: 12px 16px;
-        border-bottom: 1px solid #f3f4f6;
-        cursor: pointer;
-        transition: background 0.15s ease;
-      }
-
-      .bb-notification-item:hover {
-        background: #f9fafb;
-      }
-
-      .bb-notification-item.unread {
-        background: #eff6ff;
-      }
-
-      .bb-notification-item.unread:hover {
-        background: #dbeafe;
-      }
-
-      .bb-notification-item-icon {
-        font-size: 20px;
-        flex-shrink: 0;
-      }
-
-      .bb-notification-item-content {
-        flex: 1;
-        min-width: 0;
-      }
-
-      .bb-notification-item-subject {
-        font-weight: 500;
-        color: #111827;
-        font-size: 13px;
-        margin-bottom: 2px;
-      }
-
-      .bb-notification-item-preview {
-        color: #6b7280;
-        font-size: 12px;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-      }
-
-      .bb-notification-item-time {
-        font-size: 11px;
-        color: #9ca3af;
-        margin-top: 4px;
-      }
-
-      .bb-notifications-footer {
-        border-top: 1px solid #e5e7eb;
-        padding: 8px;
-        display: flex;
-        gap: 8px;
-      }
-
-      .bb-notifications-footer-btn {
-        flex: 1;
-        padding: 8px;
-        font-size: 12px;
-        border: none;
-        border-radius: 6px;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 6px;
-        transition: background 0.15s ease;
-      }
-
-      .bb-notifications-settings-btn {
-        background: #f3f4f6;
-        color: #374151;
-      }
-
-      .bb-notifications-settings-btn:hover {
-        background: #e5e7eb;
-      }
-
-      /* Organisation Switcher Styles */
-      .bb-org-switcher {
-        position: relative;
-        display: inline-block;
-      }
-
-      .bb-org-switcher-btn {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        padding: 6px 12px;
-        background: #f3f4f6;
-        border: 1px solid #e5e7eb;
-        border-radius: 6px;
-        cursor: pointer;
-        font-size: 13px;
-        color: #374151;
-        transition: all 0.2s ease;
-      }
-
-      .bb-org-switcher-btn:hover {
-        background: #e5e7eb;
-        border-color: #d1d5db;
-      }
-
-      .bb-org-name {
-        max-width: 150px;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-        font-weight: 500;
-      }
-
-      .bb-org-chevron {
-        font-size: 10px;
-        color: #6b7280;
-        transition: transform 0.2s ease;
-      }
-
-      .bb-org-switcher.open .bb-org-chevron {
-        transform: rotate(180deg);
-      }
-
-      .bb-org-dropdown {
-        position: absolute;
-        top: 100%;
-        right: 0;
-        margin-top: 4px;
-        background: white;
-        border: 1px solid #e5e7eb;
-        border-radius: 8px;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-        min-width: 220px;
-        z-index: 1000;
-        display: none;
-      }
-
-      .bb-org-switcher.open .bb-org-dropdown {
-        display: block;
-      }
-
-      .bb-org-dropdown-header {
-        padding: 12px 16px;
-        font-size: 12px;
-        font-weight: 600;
-        color: #6b7280;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        border-bottom: 1px solid #e5e7eb;
-      }
-
-      .bb-org-list {
-        max-height: 240px;
-        overflow-y: auto;
-      }
-
-      .bb-org-item {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 12px 16px;
-        cursor: pointer;
-        transition: background 0.2s ease;
-        border: none;
-        background: none;
-        width: 100%;
-        text-align: left;
-        font-size: 14px;
-        color: #374151;
-      }
-
-      .bb-org-item:hover {
-        background: #f3f4f6;
-      }
-
-      .bb-org-item.active {
-        background: #eff6ff;
-        color: #1d4ed8;
-      }
-
-      .bb-org-item.active::after {
-        content: "✓";
-        color: #1d4ed8;
-        font-weight: bold;
-      }
-
-      .bb-org-item-name {
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-      }
-
-      .bb-org-divider {
-        color: #d1d5db;
-        margin: 0 4px;
-      }
-
-      .bb-org-single {
-        padding: 6px 12px;
-        font-size: 13px;
-        color: #374151;
-        font-weight: 500;
-      }
-
-      .bb-org-dropdown-footer {
-        border-top: 1px solid #e5e7eb;
-        padding: 8px;
-      }
-
-      .bb-org-create-btn {
-        width: 100%;
-        padding: 10px 12px;
-        background: #f3f4f6;
-        border: 1px dashed #d1d5db;
-        border-radius: 6px;
-        color: #4b5563;
-        font-size: 13px;
-        cursor: pointer;
-        transition: all 0.2s ease;
-      }
-
-      .bb-org-create-btn:hover {
-        background: #e5e7eb;
-        border-color: #9ca3af;
-        color: #374151;
-      }
-
-      /* Dropdown menu styles */
-      .bb-dropdown {
-        position: relative;
-        display: inline-block;
-      }
-
-      .bb-dropdown-menu {
-        position: absolute;
-        top: 100%;
-        right: 0;
-        margin-top: 4px;
-        background: white;
-        border: 1px solid #e5e7eb;
-        border-radius: 6px;
-        box-shadow:
-          0 4px 6px -1px rgba(0, 0, 0, 0.1),
-          0 2px 4px -1px rgba(0, 0, 0, 0.06);
-        min-width: 160px;
-        z-index: 10;
-        display: none;
-      }
-
-      .bb-dropdown-menu.show {
-        display: block;
-      }
-
-      .bb-dropdown-item {
-        display: block;
-        width: 100%;
-        padding: 8px 16px;
-        text-align: left;
-        background: none;
-        border: none;
-        cursor: pointer;
-        font-size: 14px;
-        color: #374151;
-        transition: background-color 0.2s;
-      }
-
-      .bb-dropdown-item:hover {
-        background-color: #f3f4f6;
-      }
-
-      .bb-dropdown-item:first-child {
-        border-radius: 5px 5px 0 0;
-      }
-
-      .bb-dropdown-item:last-child {
-        border-radius: 0 0 5px 5px;
-      }
-
-      .bb-dropdown-divider {
-        height: 1px;
-        background: #e5e7eb;
-        margin: 6px 0;
-      }
-
-      @media (max-width: 768px) {
-        .page-header .container {
-          padding: 0 16px;
-        }
-
-        .page-nav {
-          display: none;
-        }
-
-        .main-content {
-          padding: 16px;
-        }
-
-        .dashboard-actions {
-          flex-direction: column;
-          align-items: stretch;
-          gap: 16px;
-        }
-
-        .dashboard-filters {
-          justify-content: space-between;
-        }
-
-        .page-actions {
-          justify-content: center;
-        }
-      }
-
-      /* Analysis sections styles */
-      .bb-analysis-section {
-        background: white;
-        border-radius: 8px;
-        padding: 24px;
-        margin-bottom: 24px;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-      }
-
-      .bb-analysis-card {
-        border: 1px solid #e5e7eb;
-        border-radius: 6px;
-        padding: 16px;
-        margin-bottom: 12px;
-        background: #fafbfc;
-      }
-
-      .bb-analysis-card:last-child {
-        margin-bottom: 0;
-      }
-
-      .bb-analysis-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: flex-start;
-        margin-bottom: 8px;
-      }
-
-      .bb-analysis-url {
-        font-family: "Monaco", "Consolas", monospace;
-        font-size: 0.9rem;
-        font-weight: 500;
-        color: #1f2937;
-        word-break: break-all;
-      }
-
-      .bb-analysis-metric {
-        font-size: 0.9rem;
-        color: #6b7280;
-        white-space: nowrap;
-      }
-
-      .bb-analysis-details {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        font-size: 0.85rem;
-        color: #9ca3af;
-      }
-
-      .bb-analysis-domain {
-        color: #059669;
-        font-weight: 500;
-      }
-
-      .bb-redirect-url {
-        font-family: "Monaco", "Consolas", monospace;
-        font-size: 0.85rem;
-        color: #dc2626;
-        word-break: break-all;
-        margin-top: 4px;
-      }
-
-      .bb-analysis-empty {
-        text-align: center;
-        color: #6b7280;
-        font-style: italic;
-        padding: 32px 16px;
-      }
-
-      /* Info Icon & Tooltip Styles */
-      .bb-info-icon {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        width: 1em;
-        height: 1em;
-        margin-left: 0.2em;
-        margin-top: -0.7em;
-        color: #6b7280;
-        cursor: help;
-        user-select: none;
-        transition: color 0.2s;
-        vertical-align: middle;
-        line-height: 0;
-      }
-
-      .bb-info-icon svg {
-        width: 100%;
-        height: 100%;
-        display: block;
-        fill: currentColor;
-      }
-
-      .bb-info-icon:hover {
-        color: #2563eb;
-      }
-      /* Mobile/click popup tooltip */
-      .bb-tooltip-popup {
-        position: fixed;
-        background: #ffffff;
-        border: 1px solid #e5e7eb;
-        border-radius: 8px;
-        padding: 16px;
-        max-width: 360px;
-        box-shadow:
-          0 10px 15px -3px rgba(0, 0, 0, 0.1),
-          0 4px 6px -2px rgba(0, 0, 0, 0.05);
-        z-index: 10000;
-        font-size: 14px;
-        line-height: 1.6;
-        color: #374151;
-      }
-
-      .bb-tooltip-popup a {
-        color: #2563eb;
-        text-decoration: underline;
-      }
-
-      .bb-tooltip-popup a:hover {
-        color: #1d4ed8;
-      }
-
-      .bb-tooltip-close {
-        position: absolute;
-        top: 8px;
-        right: 8px;
-        background: transparent;
-        border: none;
-        font-size: 24px;
-        color: #9ca3af;
-        cursor: pointer;
-        padding: 0;
-        width: 24px;
-        height: 24px;
-        line-height: 24px;
-        text-align: center;
-      }
-
-      .bb-tooltip-close:hover {
-        color: #374151;
-      }
-
-      /* Toggle switch styles */
-      .bb-toggle input:checked + .bb-toggle-slider {
-        background-color: #3b82f6;
-      }
-      .bb-toggle input:checked + .bb-toggle-slider:before {
-        transform: translateX(18px);
-      }
-      .bb-toggle-slider:before {
-        position: absolute;
-        content: "";
-        height: 16px;
-        width: 16px;
-        left: 3px;
-        bottom: 3px;
-        background-color: white;
-        transition: 0.3s;
-        border-radius: 50%;
-      }
-    </style>
+    <script src="/js/bb-global-nav.js" defer></script>
 
     <!-- Google tag (gtag.js) -->
     <script
@@ -1597,131 +64,7 @@
   </head>
 
   <body class="page-dashboard">
-    <!-- Page Header -->
-    <header class="page-header">
-      <div class="container">
-        <h1 class="page-title">
-          <span class="bee-icon">🐝</span>
-          Blue Banded Bee
-        </h1>
-
-        <div class="user-menu">
-          <div class="status-indicator">
-            <span class="status-dot"></span>
-            <span>Live</span>
-          </div>
-
-          <!-- Show when logged out -->
-          <div bbb-auth="guest" class="auth-buttons">
-            <button
-              id="loginBtn"
-              class="bb-button bb-button-primary"
-              aria-label="Sign in to your account"
-            >
-              Sign In
-            </button>
-          </div>
-
-          <!-- Show when logged in -->
-          <div bbb-auth="required" class="user-info">
-            <!-- Organisation Switcher -->
-            <div class="bb-org-switcher" id="orgSwitcher">
-              <button
-                class="bb-org-switcher-btn"
-                id="orgSwitcherBtn"
-                aria-label="Switch organisation"
-                aria-expanded="false"
-                aria-haspopup="true"
-              >
-                <span class="bb-org-name" id="currentOrgName">Loading...</span>
-                <span class="bb-org-chevron">▼</span>
-              </button>
-              <div class="bb-org-dropdown" id="orgDropdown">
-                <div class="bb-org-dropdown-header">Switch Organisation</div>
-                <div class="bb-org-list" id="orgList">
-                  <!-- Populated dynamically -->
-                </div>
-                <div class="bb-org-dropdown-footer">
-                  <button
-                    class="bb-org-create-btn"
-                    id="createOrgBtn"
-                    aria-label="Create a new organisation"
-                  >
-                    + Create Organisation
-                  </button>
-                </div>
-              </div>
-            </div>
-            <span class="bb-org-divider">|</span>
-            <span id="userEmail">Loading...</span>
-            <div class="user-avatar" id="userAvatar">?</div>
-            <!-- Notifications Dropdown -->
-            <div class="bb-notifications-container" id="notificationsContainer">
-              <button
-                id="notificationsBtn"
-                class="bb-button bb-button-outline bb-notifications-btn"
-                style="margin-right: 8px"
-                aria-label="View notifications"
-              >
-                🔔
-                <span
-                  class="bb-notifications-badge"
-                  id="notificationsBadge"
-                ></span>
-              </button>
-              <div class="bb-notifications-dropdown" id="notificationsDropdown">
-                <div class="bb-notifications-header">
-                  <span class="bb-notifications-title">Notifications</span>
-                  <button
-                    class="bb-notifications-mark-read"
-                    id="markAllReadBtn"
-                  >
-                    Mark all read
-                  </button>
-                </div>
-                <div class="bb-notifications-list" id="notificationsList">
-                  <div class="bb-notifications-empty">
-                    <div class="bb-notifications-empty-icon">🔔</div>
-                    <div>No notifications yet</div>
-                  </div>
-                </div>
-                <div class="bb-notifications-footer">
-                  <button
-                    class="bb-notifications-footer-btn bb-notifications-settings-btn"
-                    id="notificationsSettingsBtn"
-                  >
-                    ⚙️ Notification Settings
-                  </button>
-                </div>
-              </div>
-            </div>
-            <!-- Admin: Reset Database Button (only show for system admins) -->
-            <button
-              id="resetDbBtn"
-              class="bb-button bb-button-outline"
-              style="
-                margin-right: 8px;
-                background-color: #dc2626;
-                color: white;
-                display: none;
-              "
-              title="Delete all jobs and tasks - USE WITH CAUTION"
-              aria-label="Reset database - delete all jobs and tasks"
-            >
-              Reset DB
-            </button>
-            <button
-              id="logoutBtn"
-              class="bb-button bb-button-outline"
-              aria-label="Sign out of your account"
-            >
-              Sign Out
-            </button>
-          </div>
-        </div>
-      </div>
-    </header>
-
+    <div id="globalNav"></div>
     <!-- Main Content -->
     <main class="main-content">
       <!-- Job Creation Form -->
@@ -2201,15 +544,18 @@
         <form id="createJobForm" class="bb-auth-form">
           <div class="bb-form-group">
             <label for="jobDomain">Domain</label>
-            <input
-              type="text"
-              id="jobDomain"
-              name="domain"
-              required
-              placeholder="example.com"
-              class="bb-form-input"
-              aria-label="Domain to crawl"
-            />
+            <div class="bb-domain-search" style="position: relative">
+              <input
+                type="text"
+                id="jobDomain"
+                name="domain"
+                bbb-domain-create="auto"
+                required
+                placeholder="example.com"
+                class="bb-form-input"
+                aria-label="Domain to crawl"
+              />
+            </div>
             <div
               class="bb-field-error"
               id="domainError"
@@ -2304,553 +650,6 @@
       </div>
     </div>
 
-    <!-- Notification Channel Settings Modal -->
-    <div id="notificationsModal" class="bb-modal">
-      <div class="bb-modal-content" style="max-width: 600px">
-        <div class="bb-modal-header">
-          <h2 class="bb-modal-title">⚙️ Notification Channels</h2>
-          <button
-            class="bb-modal-close"
-            bbb-action="close-notifications-modal"
-            aria-label="Close notification settings"
-          >
-            &times;
-          </button>
-        </div>
-
-        <p
-          style="
-            color: #6b7280;
-            font-size: 14px;
-            margin: 0 0 24px 0;
-            padding: 0 24px;
-          "
-        >
-          Configure how you receive notifications for job completions, failures,
-          and other events.
-        </p>
-
-        <!-- Slack Channel Section -->
-        <div class="bb-modal-section">
-          <h3
-            class="bb-modal-section-title"
-            style="display: flex; align-items: center; gap: 8px"
-          >
-            <svg
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <path
-                d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.528 2.528 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52v2.52zM6.313 15.165a2.527 2.527 0 0 1 2.521-2.52 2.527 2.527 0 0 1 2.521 2.52v6.313A2.528 2.528 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522v-6.313zM8.834 5.042a2.528 2.528 0 0 1-2.521-2.52A2.528 2.528 0 0 1 8.834 0a2.528 2.528 0 0 1 2.521 2.522v2.52H8.834zM8.834 6.313a2.528 2.528 0 0 1 2.521 2.521 2.528 2.528 0 0 1-2.521 2.521H2.522A2.528 2.528 0 0 1 0 8.834a2.528 2.528 0 0 1 2.522-2.521h6.312zM18.956 8.834a2.528 2.528 0 0 1 2.522-2.521A2.528 2.528 0 0 1 24 8.834a2.528 2.528 0 0 1-2.522 2.521h-2.522V8.834zM17.688 8.834a2.528 2.528 0 0 1-2.523 2.521 2.527 2.527 0 0 1-2.52-2.521V2.522A2.527 2.527 0 0 1 15.165 0a2.528 2.528 0 0 1 2.523 2.522v6.312zM15.165 18.956a2.528 2.528 0 0 1 2.523 2.522A2.528 2.528 0 0 1 15.165 24a2.527 2.527 0 0 1-2.52-2.522v-2.522h2.52zM15.165 17.688a2.527 2.527 0 0 1-2.52-2.523 2.526 2.526 0 0 1 2.52-2.52h6.313A2.527 2.527 0 0 1 24 15.165a2.528 2.528 0 0 1-2.522 2.523h-6.313z"
-                fill="#E01E5A"
-              />
-            </svg>
-            Slack Integration
-          </h3>
-          <p style="color: #6b7280; font-size: 14px; margin-bottom: 16px">
-            Connect your Slack workspace to receive notifications when jobs
-            complete or fail.
-          </p>
-
-          <!-- Slack Connections List -->
-          <div
-            id="slackConnectionsList"
-            bbb-list="slack-connections"
-            style="margin-bottom: 16px"
-          >
-            <!-- Template for each connection -->
-            <div
-              class="bb-job-card"
-              bbb-template="slack-connection"
-              style="
-                display: none;
-                background: #f8f9fa;
-                border: 1px solid #e9ecef;
-                border-radius: 8px;
-                padding: 16px;
-                margin-bottom: 12px;
-              "
-            >
-              <div
-                style="
-                  display: flex;
-                  justify-content: space-between;
-                  align-items: center;
-                "
-              >
-                <div>
-                  <strong class="slack-workspace-name" style="font-size: 16px"
-                    >Workspace</strong
-                  >
-                  <span
-                    class="slack-connected-date"
-                    style="color: #6b7280; font-size: 13px; margin-left: 8px"
-                  ></span>
-                  <span
-                    class="slack-link-status"
-                    style="
-                      display: inline-block;
-                      font-size: 12px;
-                      padding: 2px 8px;
-                      border-radius: 4px;
-                      background: #dcfce7;
-                      color: #166534;
-                      margin-left: 8px;
-                    "
-                  >
-                    Notifications enabled
-                  </span>
-                </div>
-                <button
-                  class="bb-button bb-button-outline"
-                  bbb-action="slack-disconnect"
-                  bbb-id=""
-                  style="
-                    font-size: 13px;
-                    padding: 6px 12px;
-                    color: #dc2626;
-                    border-color: #dc2626;
-                  "
-                >
-                  Disconnect
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <!-- Empty state / Connect button -->
-          <div
-            id="slackEmptyState"
-            style="
-              text-align: center;
-              padding: 24px;
-              background: #f9fafb;
-              border-radius: 8px;
-              border: 2px dashed #e5e7eb;
-            "
-          >
-            <p style="color: #6b7280; margin-bottom: 16px">
-              No Slack workspace connected yet.
-            </p>
-            <button
-              class="bb-button bb-button-primary"
-              bbb-action="slack-connect"
-              style="display: inline-flex; align-items: center; gap: 8px"
-            >
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="currentColor"
-              >
-                <path
-                  d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.528 2.528 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52v2.52zM6.313 15.165a2.527 2.527 0 0 1 2.521-2.52 2.527 2.527 0 0 1 2.521 2.52v6.313A2.528 2.528 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522v-6.313z"
-                />
-              </svg>
-              Connect Slack Workspace
-            </button>
-          </div>
-
-          <!-- Success/Error Messages -->
-          <div
-            id="slackSuccessMessage"
-            class="bb-notification-success"
-            style="
-              display: none;
-              margin-top: 16px;
-              padding: 12px 16px;
-              border-radius: 8px;
-              background: #dcfce7;
-              color: #16a34a;
-              border: 1px solid #bbf7d0;
-            "
-          >
-            <span id="slackSuccessText"></span>
-          </div>
-          <div
-            id="slackErrorMessage"
-            class="bb-notification-error"
-            style="
-              display: none;
-              margin-top: 16px;
-              padding: 12px 16px;
-              border-radius: 8px;
-              background: #fee2e2;
-              color: #dc2626;
-              border: 1px solid #fecaca;
-            "
-          >
-            <span id="slackErrorText"></span>
-          </div>
-        </div>
-
-        <!-- Webflow Connection Section -->
-        <div
-          class="bb-modal-section"
-          style="
-            border-top: 1px solid #e5e7eb;
-            padding-top: 24px;
-            margin-top: 24px;
-          "
-        >
-          <h3
-            class="bb-modal-section-title"
-            style="display: flex; align-items: center; gap: 8px"
-          >
-            <span style="font-size: 20px">⚡</span>
-            Webflow Integration
-          </h3>
-          <p style="color: #6b7280; font-size: 14px; margin-bottom: 16px">
-            Connect your Webflow sites to enable "Run on Publish" and access the
-            Designer App.
-          </p>
-
-          <!-- Webflow Connections List -->
-          <div
-            id="webflowConnectionsList"
-            bbb-list="webflow-connections"
-            style="margin-bottom: 16px"
-          >
-            <!-- Template for each connection -->
-            <div
-              class="bb-job-card"
-              bbb-template="webflow-connection"
-              style="
-                display: none;
-                background: #f8f9fa;
-                border: 1px solid #e9ecef;
-                border-radius: 8px;
-                padding: 16px;
-                margin-bottom: 12px;
-              "
-            >
-              <div
-                style="
-                  display: flex;
-                  justify-content: space-between;
-                  align-items: center;
-                "
-              >
-                <div>
-                  <strong class="webflow-name" style="font-size: 16px"
-                    >Webflow Connection</strong
-                  >
-                  <span
-                    class="webflow-connected-date"
-                    style="color: #6b7280; font-size: 13px; margin-left: 8px"
-                  ></span>
-                </div>
-                <button
-                  class="bb-button bb-button-outline"
-                  bbb-action="webflow-disconnect"
-                  bbb-id=""
-                  style="
-                    font-size: 13px;
-                    padding: 6px 12px;
-                    color: #dc2626;
-                    border-color: #dc2626;
-                  "
-                >
-                  Disconnect
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <!-- Site Configuration (shown after connection is established) -->
-          <div
-            id="webflowSitesConfig"
-            style="
-              display: none;
-              margin-top: 20px;
-              background: #f9fafb;
-              border: 1px solid #e5e7eb;
-              border-radius: 8px;
-              padding: 16px;
-            "
-          >
-            <div
-              style="
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                margin-bottom: 12px;
-              "
-            >
-              <h4 style="margin: 0; font-size: 15px; color: #374151">
-                Configure Sites
-              </h4>
-              <button
-                id="webflowSitesRefresh"
-                class="bb-button bb-button-outline"
-                bbb-action="webflow-sites-refresh"
-                style="font-size: 12px; padding: 4px 10px"
-                title="Refresh sites list"
-                aria-label="Refresh sites list"
-              >
-                Refresh
-              </button>
-            </div>
-
-            <!-- Search box (shown when >5 sites) -->
-            <div
-              id="webflowSitesSearchBox"
-              style="display: none; margin-bottom: 12px"
-            >
-              <input
-                type="text"
-                id="webflowSiteSearch"
-                placeholder="Search sites..."
-                aria-label="Search Webflow sites"
-                style="
-                  width: 100%;
-                  padding: 8px 12px;
-                  border: 1px solid #d1d5db;
-                  border-radius: 6px;
-                  font-size: 14px;
-                "
-              />
-            </div>
-
-            <!-- Sites list -->
-            <div id="webflowSitesList">
-              <!-- Template for each site row -->
-              <div
-                class="webflow-site-row"
-                bbb-template="webflow-site"
-                style="
-                  display: none;
-                  background: white;
-                  border: 1px solid #e5e7eb;
-                  border-radius: 6px;
-                  padding: 12px;
-                  margin-bottom: 8px;
-                "
-              >
-                <div
-                  style="
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    flex-wrap: wrap;
-                    gap: 8px;
-                  "
-                >
-                  <div style="flex: 1; min-width: 150px">
-                    <span
-                      class="site-name"
-                      style="font-weight: 500; font-size: 14px"
-                    ></span>
-                    <span
-                      class="site-domain"
-                      style="color: #6b7280; font-size: 12px; margin-left: 8px"
-                    ></span>
-                  </div>
-                  <div
-                    style="
-                      display: flex;
-                      align-items: center;
-                      gap: 12px;
-                      flex-wrap: wrap;
-                    "
-                  >
-                    <!-- Schedule dropdown -->
-                    <div style="display: flex; align-items: center; gap: 6px">
-                      <label style="font-size: 12px; color: #6b7280"
-                        >Schedule:</label
-                      >
-                      <select
-                        class="site-schedule"
-                        bbb-action="site-schedule-change"
-                        aria-label="Schedule frequency for site"
-                        style="
-                          padding: 4px 8px;
-                          border: 1px solid #d1d5db;
-                          border-radius: 4px;
-                          font-size: 13px;
-                          background: white;
-                          cursor: pointer;
-                        "
-                      >
-                        <option value="">None</option>
-                        <option value="6">Every 6 hours</option>
-                        <option value="12">Every 12 hours</option>
-                        <option value="24">Every 24 hours</option>
-                        <option value="48">Every 48 hours</option>
-                      </select>
-                    </div>
-                    <!-- Auto-publish toggle -->
-                    <div style="display: flex; align-items: center; gap: 6px">
-                      <label style="font-size: 12px; color: #6b7280"
-                        >Run on Publish:</label
-                      >
-                      <label
-                        class="bb-toggle"
-                        style="
-                          position: relative;
-                          display: inline-block;
-                          width: 40px;
-                          height: 22px;
-                        "
-                      >
-                        <input
-                          type="checkbox"
-                          class="site-autopublish"
-                          style="
-                            position: absolute;
-                            opacity: 0;
-                            width: 0;
-                            height: 0;
-                          "
-                        />
-                        <span
-                          class="bb-toggle-slider"
-                          style="
-                            position: absolute;
-                            cursor: pointer;
-                            top: 0;
-                            left: 0;
-                            right: 0;
-                            bottom: 0;
-                            background-color: #ccc;
-                            transition: 0.3s;
-                            border-radius: 22px;
-                          "
-                        ></span>
-                      </label>
-                    </div>
-                  </div>
-                </div>
-                <!-- Status indicator -->
-                <div
-                  class="site-status"
-                  style="
-                    display: none;
-                    margin-top: 8px;
-                    font-size: 12px;
-                    color: #6b7280;
-                  "
-                ></div>
-              </div>
-
-              <!-- Loading state -->
-              <div
-                id="webflowSitesLoading"
-                style="text-align: center; padding: 20px; color: #6b7280"
-              >
-                Loading sites...
-              </div>
-
-              <!-- Empty state for sites -->
-              <div
-                id="webflowSitesEmpty"
-                style="
-                  display: none;
-                  text-align: center;
-                  padding: 20px;
-                  color: #6b7280;
-                "
-              >
-                No sites found in this Webflow workspace.
-              </div>
-            </div>
-
-            <!-- Pagination (shown when >10 configured sites) -->
-            <div
-              id="webflowSitesPagination"
-              style="
-                display: none;
-                margin-top: 12px;
-                padding-top: 12px;
-                border-top: 1px solid #e5e7eb;
-                text-align: center;
-              "
-            >
-              <button
-                id="webflowSitesPrevPage"
-                class="bb-button bb-button-outline"
-                bbb-action="webflow-sites-prev"
-                style="font-size: 12px; padding: 4px 12px; margin-right: 8px"
-                aria-label="Previous page of Webflow sites"
-                disabled
-              >
-                Previous
-              </button>
-              <span
-                id="webflowSitesPageInfo"
-                style="font-size: 13px; color: #6b7280; margin: 0 8px"
-              ></span>
-              <button
-                id="webflowSitesNextPage"
-                class="bb-button bb-button-outline"
-                bbb-action="webflow-sites-next"
-                style="font-size: 12px; padding: 4px 12px; margin-left: 8px"
-                aria-label="Next page of Webflow sites"
-              >
-                Next
-              </button>
-            </div>
-          </div>
-
-          <!-- Empty state / Connect button -->
-          <div
-            id="webflowEmptyState"
-            style="
-              text-align: center;
-              padding: 24px;
-              background: #f9fafb;
-              border-radius: 8px;
-              border: 2px dashed #e5e7eb;
-            "
-          >
-            <p style="color: #6b7280; margin-bottom: 16px">
-              No Webflow connection yet.
-            </p>
-            <button
-              class="bb-button bb-button-primary"
-              bbb-action="webflow-connect"
-              style="display: inline-flex; align-items: center; gap: 8px"
-            >
-              Connect Webflow
-            </button>
-          </div>
-
-          <!-- Success/Error Messages -->
-          <div
-            class="bb-notification-success"
-            id="webflowSuccessMessage"
-            style="
-              display: none;
-              margin-top: 16px;
-              background: #dcfce7;
-              color: #166534;
-              padding: 12px;
-              border-radius: 8px;
-            "
-          >
-            <span id="webflowSuccessText"></span>
-          </div>
-          <div
-            class="bb-notification-error"
-            id="webflowErrorMessage"
-            style="
-              display: none;
-              margin-top: 16px;
-              background: #fee2e2;
-              color: #dc2626;
-              padding: 12px;
-              border-radius: 8px;
-            "
-          >
-            <span id="webflowErrorText"></span>
-          </div>
-        </div>
-      </div>
-    </div>
-
     <!-- Create Organisation Modal -->
     <div id="createOrgModal" class="bb-modal">
       <div class="bb-modal-content" style="max-width: 440px">
@@ -2912,11 +711,14 @@
 
     <!-- Include the data binding and dashboard logic -->
     <script src="/js/bb-data-binder.js" defer></script>
+    <script src="/js/bb-domain-search.js" defer></script>
     <script src="/js/bb-auth-extension.js" defer></script>
     <script src="/js/bb-metadata.js" defer></script>
     <script src="/js/bb-dashboard-actions.js" defer></script>
     <script src="/js/bb-slack.js" defer></script>
     <script src="/js/bb-webflow.js" defer></script>
+    <script src="/js/bb-google.js" defer></script>
+    <script src="/js/bb-admin.js" defer></script>
 
     <script>
       // Initialize dashboard with unified authentication system
@@ -2928,7 +730,7 @@
           // Initialize the complete dashboard with auth integration
           await initializeDashboard({
             debug: false,
-            refreshInterval: 60,
+            refreshInterval: 1,
             apiBaseUrl: "",
             autoRefresh: true,
             networkMonitoring: true,
@@ -2947,31 +749,25 @@
               window.handleDashboardJobCreation
             );
           }
+          if (window.setupJobDomainSearch) {
+            window.setupJobDomainSearch();
+          }
 
           // Check for system-admin role and load schedules
           const {
             data: { session },
           } = await window.supabase.auth.getSession();
 
-          // Pre-load active org from Supabase DB directly to ensure Realtime starts
-          // This bypasses potential 429s on the /v1/organisations API endpoint
-          if (session?.user) {
+          // Initialise organisation using shared logic (single source of truth)
+          if (session?.user && window.BB_APP?.initialiseOrg) {
             try {
-              const { data: userRow } = await window.supabase
-                .from("users")
-                .select("active_organisation_id")
-                .eq("id", session.user.id)
-                .single();
-
-              if (userRow?.active_organisation_id) {
-                window.BB_ACTIVE_ORG = { id: userRow.active_organisation_id };
-                // Trigger subscription immediately
-                if (window.subscribeToJobUpdates) {
-                  window.subscribeToJobUpdates();
-                }
+              await window.BB_APP.initialiseOrg();
+              // Trigger subscription after org is confirmed
+              if (window.subscribeToJobUpdates) {
+                window.subscribeToJobUpdates();
               }
             } catch (err) {
-              console.warn("Failed to pre-load org:", err);
+              console.warn("Failed to initialise org:", err);
             }
           }
 
@@ -2980,27 +776,24 @@
             window.loadSchedules();
           }
 
+          if (window.BB_NAV_READY) {
+            await window.BB_NAV_READY;
+          }
+
           // Initialise organisation switcher and create modal
           if (session?.user) {
             await initOrgSwitcher();
             initCreateOrgModal();
           }
 
-          if (session?.user) {
-            const isSystemAdmin =
-              session.user.app_metadata?.system_role === "system_admin" ||
-              session.user.user_metadata?.system_role === "system_admin";
-            if (isSystemAdmin) {
-              const resetBtn = document.getElementById("resetDbBtn");
-              if (resetBtn) {
-                resetBtn.style.display = "inline-block";
-              }
-            }
+          if (session?.user && window.BBAdmin) {
+            window.BBAdmin.initAdminResetButton("resetDbBtn", session);
           }
 
           // Setup notifications modal handlers BEFORE OAuth callbacks
           // (callbacks may need to open the modal)
           setupNotificationsModal();
+          setupUserMenuDropdown();
 
           // Initialize Slack integration
           if (window.setupSlackIntegration) {
@@ -3016,6 +809,14 @@
           }
           if (window.handleWebflowOAuthCallback) {
             window.handleWebflowOAuthCallback();
+          }
+
+          // Initialize Google Analytics integration
+          if (window.setupGoogleIntegration) {
+            window.setupGoogleIntegration();
+          }
+          if (window.handleGoogleOAuthCallback) {
+            window.handleGoogleOAuthCallback();
           }
 
           console.log(
@@ -3044,252 +845,72 @@
       });
 
       // Organisation Switcher Logic
+      // Note: The nav (bb-global-nav.js) handles all org switcher UI and interactions.
+      // This function just waits for org init to complete.
       async function initOrgSwitcher() {
-        const switcher = document.getElementById("orgSwitcher");
-        const btn = document.getElementById("orgSwitcherBtn");
-        const dropdown = document.getElementById("orgDropdown");
-        const orgList = document.getElementById("orgList");
-        const currentOrgName = document.getElementById("currentOrgName");
-        const divider = document.querySelector(".bb-org-divider");
-
-        if (!switcher || !btn || !divider) return;
-
-        // Reset button state for re-initialization
-        btn.disabled = false;
-        btn.style.cursor = "";
-        const chevron = btn.querySelector(".bb-org-chevron");
-        if (chevron) chevron.style.display = "";
-
-        // Remove old event listeners by cloning elements
-        const newBtn = btn.cloneNode(true);
-        btn.parentNode.replaceChild(newBtn, btn);
-        const newOrgList = orgList.cloneNode(false); // shallow clone to clear children and listeners
-        orgList.parentNode.replaceChild(newOrgList, orgList);
-
-        // Update references to new elements
-        const btnRef = newBtn;
-        const orgListRef = newOrgList;
-
+        // Wait for shared org init to complete
         try {
-          const {
-            data: { session },
-          } = await window.supabase.auth.getSession();
-          if (!session) return;
-
-          // Fetch organisations
-          const response = await fetch("/v1/organisations", {
-            headers: { Authorization: `Bearer ${session.access_token}` },
-          });
-
-          if (!response.ok) {
-            console.error("Failed to fetch organisations");
-            switcher.style.display = "none";
-            divider.style.display = "none";
-            return;
-          }
-
-          const data = await response.json();
-          const orgs = data.data?.organisations || [];
-
-          // Handle no orgs case - still show switcher for create option
-          if (orgs.length === 0) {
-            document.getElementById("currentOrgName").textContent =
-              "No Organisation";
-          } else {
-            // Get active org from user data or use first org
-            const { data: userData, error: userError } = await window.supabase
-              .from("users")
-              .select("active_organisation_id")
-              .eq("id", session.user.id)
-              .single();
-
-            if (userError) {
-              console.warn("Failed to fetch user active org:", userError);
-            }
-
-            const activeOrgId = userData?.active_organisation_id || orgs[0].id;
-            const activeOrg = orgs.find((o) => o.id === activeOrgId) || orgs[0];
-
-            document.getElementById("currentOrgName").textContent =
-              activeOrg.name;
-            window.BB_ACTIVE_ORG = activeOrg;
-
-            // Populate dropdown (using DOM methods to prevent XSS)
-            orgs.forEach((org) => {
-              const button = document.createElement("button");
-              button.className = `bb-org-item ${org.id === activeOrg.id ? "active" : ""}`;
-              button.dataset.orgId = org.id;
-              button.dataset.orgName = org.name;
-
-              const span = document.createElement("span");
-              span.className = "bb-org-item-name";
-              span.textContent = org.name;
-
-              button.appendChild(span);
-              orgListRef.appendChild(button);
-            });
-          }
-
-          // Toggle dropdown (works for both 0 and 1+ orgs)
-          btnRef.addEventListener("click", (e) => {
-            e.stopPropagation();
-            switcher.classList.toggle("open");
-            btnRef.setAttribute(
-              "aria-expanded",
-              switcher.classList.contains("open")
-            );
-          });
-
-          // Handle org selection (only if we have orgs)
-          if (orgs.length > 0) {
-            orgListRef.addEventListener("click", async (e) => {
-              const item = e.target.closest(".bb-org-item");
-              if (!item || item.classList.contains("active")) {
-                switcher.classList.remove("open");
-                return;
-              }
-
-              const orgId = item.dataset.orgId;
-              const orgName = item.dataset.orgName;
-
-              // Show loading state
-              document.getElementById("currentOrgName").textContent =
-                "Switching...";
-              switcher.classList.remove("open");
-
-              try {
-                const switchRes = await fetch("/v1/organisations/switch", {
-                  method: "POST",
-                  headers: {
-                    Authorization: `Bearer ${session.access_token}`,
-                    "Content-Type": "application/json",
-                  },
-                  body: JSON.stringify({ organisation_id: orgId }),
-                });
-
-                if (switchRes.ok) {
-                  // Update UI
-                  document.getElementById("currentOrgName").textContent =
-                    orgName;
-                  orgListRef.querySelectorAll(".bb-org-item").forEach((el) => {
-                    el.classList.toggle("active", el.dataset.orgId === orgId);
-                  });
-                  window.BB_ACTIVE_ORG = orgs.find((o) => o.id === orgId) || {
-                    id: orgId,
-                    name: orgName,
-                  };
-
-                  // Re-establish realtime subscription for new org
-                  // Wrapped in separate try-catch so subscription failure doesn't
-                  // incorrectly show "Failed to switch organisation" error
-                  if (window.subscribeToJobUpdates) {
-                    try {
-                      await window.subscribeToJobUpdates();
-                    } catch (subErr) {
-                      console.warn(
-                        "Failed to re-establish realtime subscription:",
-                        subErr
-                      );
-                      // Don't block org switch - subscription will retry on next page load
-                    }
-                  }
-
-                  // Refresh all org-scoped data
-                  if (window.dataBinder) {
-                    try {
-                      await window.dataBinder.refresh();
-                    } catch (err) {
-                      console.warn("Failed to refresh data binder:", err);
-                    }
-                  }
-                  if (window.loadSchedules) {
-                    try {
-                      await window.loadSchedules();
-                    } catch (err) {
-                      console.warn("Failed to load schedules:", err);
-                    }
-                  }
-
-                  // Re-subscribe to notifications for new org + refresh badge
-                  if (typeof subscribeToNotifications === "function") {
-                    try {
-                      await subscribeToNotifications();
-                    } catch (err) {
-                      console.warn(
-                        "Failed to subscribe to notifications:",
-                        err
-                      );
-                    }
-                  }
-                  if (typeof loadNotificationCount === "function") {
-                    try {
-                      await loadNotificationCount();
-                    } catch (err) {
-                      console.warn("Failed to load notification count:", err);
-                    }
-                  }
-
-                  // Only refresh Slack connections if settings modal is open
-                  const settingsModal =
-                    document.getElementById("notificationsModal");
-                  if (
-                    settingsModal?.classList.contains("show") &&
-                    window.loadSlackConnections
-                  ) {
-                    try {
-                      await window.loadSlackConnections();
-                    } catch (err) {
-                      console.warn("Failed to load Slack connections:", err);
-                    }
-                  }
-
-                  // Show success notification
-                  if (window.showNotification) {
-                    window.showNotification(
-                      `Switched to ${orgName}`,
-                      "success"
-                    );
-                  }
-                } else {
-                  const err = await switchRes.json();
-                  console.error("Failed to switch org:", err);
-                  document.getElementById("currentOrgName").textContent =
-                    window.BB_ACTIVE_ORG?.name || "Unknown";
-                  if (window.showNotification) {
-                    window.showNotification(
-                      "Failed to switch organisation",
-                      "error"
-                    );
-                  }
-                }
-              } catch (err) {
-                console.error("Error switching org:", err);
-                document.getElementById("currentOrgName").textContent =
-                  window.BB_ACTIVE_ORG?.name || "Unknown";
-                if (window.showNotification) {
-                  window.showNotification(
-                    "Failed to switch organisation",
-                    "error"
-                  );
-                }
-              }
-            });
-          }
-
-          // Close dropdown on outside click (use named function to prevent duplicates)
-          const closeOrgDropdown = () => {
-            switcher.classList.remove("open");
-            btnRef.setAttribute("aria-expanded", "false");
-          };
-          document.removeEventListener("click", window._closeOrgDropdown);
-          window._closeOrgDropdown = closeOrgDropdown;
-          document.addEventListener("click", closeOrgDropdown);
+          await window.BB_ORG_READY;
         } catch (err) {
-          console.error("Error initialising org switcher:", err);
-          switcher.style.display = "none";
-          divider.style.display = "none";
+          console.warn("Org init failed:", err);
         }
       }
+
+      // Listen for org switches and refresh dashboard-specific data
+      document.addEventListener("bb:org-switched", async (e) => {
+        const newOrg = e.detail?.organisation;
+        if (!newOrg) return;
+
+        // Re-establish realtime subscription for new org
+        if (window.subscribeToJobUpdates) {
+          try {
+            await window.subscribeToJobUpdates();
+          } catch (err) {
+            console.warn("Failed to re-establish realtime subscription:", err);
+          }
+        }
+
+        // Refresh all org-scoped data
+        if (window.dataBinder) {
+          try {
+            await window.dataBinder.refresh();
+          } catch (err) {
+            console.warn("Failed to refresh data binder:", err);
+          }
+        }
+        if (window.loadSchedules) {
+          try {
+            await window.loadSchedules();
+          } catch (err) {
+            console.warn("Failed to load schedules:", err);
+          }
+        }
+
+        // Re-subscribe to notifications for new org + refresh badge
+        if (typeof subscribeToNotifications === "function") {
+          try {
+            await subscribeToNotifications();
+          } catch (err) {
+            console.warn("Failed to subscribe to notifications:", err);
+          }
+        }
+        if (typeof loadNotificationCount === "function") {
+          try {
+            await loadNotificationCount();
+          } catch (err) {
+            console.warn("Failed to load notification count:", err);
+          }
+        }
+
+        // Refresh quota display for new organisation
+        if (typeof fetchAndDisplayQuota === "function") {
+          try {
+            await fetchAndDisplayQuota();
+          } catch (err) {
+            console.warn("Failed to refresh quota display:", err);
+          }
+        }
+      });
 
       // Create Organisation Modal Handler
       function initCreateOrgModal() {
@@ -3372,12 +993,22 @@
             if (response.ok) {
               closeModal();
 
-              // Update the org switcher UI
-              const currentOrgName = document.getElementById("currentOrgName");
-              if (currentOrgName) {
-                currentOrgName.textContent = name;
+              const newOrg = data.data?.organisation;
+
+              // Update shared org data
+              window.BB_ACTIVE_ORG = newOrg;
+              if (Array.isArray(window.BB_ORGANISATIONS)) {
+                window.BB_ORGANISATIONS.push(newOrg);
+              } else {
+                window.BB_ORGANISATIONS = [newOrg];
               }
-              window.BB_ACTIVE_ORG = data.data?.organisation;
+
+              // Dispatch event for all listeners (nav, dashboard, etc.)
+              document.dispatchEvent(
+                new CustomEvent("bb:org-switched", {
+                  detail: { organisation: newOrg },
+                })
+              );
 
               // Refresh the org switcher to show new org in list
               await initOrgSwitcher();
@@ -3409,87 +1040,8 @@
         });
       }
 
-      // Admin: Reset Database Button Handler
-      // Button visibility is controlled by system-admin role check in dashboard initialization
-      document
-        .getElementById("resetDbBtn")
-        ?.addEventListener("click", async () => {
-          console.info("reset-db: user clicked reset button");
-
-          // Triple confirmation before resetting
-          const confirm1 = confirm(
-            "⚠️ WARNING: This will DELETE ALL jobs and tasks!\\n\\nAre you absolutely sure you want to reset the database?"
-          );
-          if (!confirm1) {
-            console.info("reset-db: first confirmation declined");
-            return;
-          }
-
-          const confirm2 = confirm(
-            'This action CANNOT be undone. All data will be permanently lost.\\n\\nType "DELETE" in the next prompt to confirm.'
-          );
-          if (!confirm2) {
-            console.info("reset-db: second confirmation declined");
-            return;
-          }
-
-          const typeCheck = prompt("Type DELETE to confirm:");
-          if (typeCheck !== "DELETE") {
-            alert("Reset cancelled - you did not type DELETE correctly.");
-            console.info("reset-db: delete keyword mismatch");
-            return;
-          }
-
-          try {
-            const btn = document.getElementById("resetDbBtn");
-            btn.disabled = true;
-            btn.textContent = "Resetting...";
-            console.info("reset-db: request initialised, fetching session");
-
-            const {
-              data: { session },
-            } = await window.supabase.auth.getSession();
-            if (!session) {
-              alert("Not authenticated");
-              console.warn("reset-db: no session – aborting");
-              btn.disabled = false;
-              btn.textContent = "Reset DB";
-              return;
-            }
-
-            console.info("reset-db: sending POST /v1/admin/reset-db", {
-              user: session.user?.id ?? "unknown",
-            });
-            const response = await fetch("/v1/admin/reset-db", {
-              method: "POST",
-              headers: {
-                Authorization: `Bearer ${session.access_token}`,
-                "Content-Type": "application/json",
-              },
-            });
-
-            if (response.ok) {
-              console.info("reset-db: completed successfully");
-              alert("✅ Database reset successful! Page will reload.");
-              window.location.reload();
-            } else {
-              const error = await response.text();
-              console.error("reset-db: server returned error", error);
-              alert(`❌ Reset failed: ${error}`);
-              btn.disabled = false;
-              btn.textContent = "Reset DB";
-            }
-          } catch (error) {
-            console.error("reset-db: unexpected failure", error);
-            alert(`❌ Error: ${error.message}`);
-            document.getElementById("resetDbBtn").disabled = false;
-            document.getElementById("resetDbBtn").textContent = "Reset DB";
-          }
-        });
-
       // Notifications Dropdown and Modal Setup
       function setupNotificationsModal() {
-        const modal = document.getElementById("notificationsModal");
         const container = document.getElementById("notificationsContainer");
         const toggleBtn = document.getElementById("notificationsBtn");
         const settingsBtn = document.getElementById("notificationsSettingsBtn");
@@ -3506,26 +1058,10 @@
           });
         }
 
-        // Settings button opens the modal
+        // Settings button closes the dropdown
         if (settingsBtn) {
-          settingsBtn.addEventListener("click", async () => {
+          settingsBtn.addEventListener("click", () => {
             container.classList.remove("open");
-            modal.classList.add("show");
-            try {
-              if (window.loadSlackConnections) {
-                await window.loadSlackConnections();
-                updateSlackEmptyState();
-              }
-            } catch (err) {
-              console.error("Failed to load Slack connections:", err);
-            }
-            try {
-              if (window.loadWebflowConnections) {
-                await window.loadWebflowConnections();
-              }
-            } catch (err) {
-              console.error("Failed to load Webflow connections:", err);
-            }
           });
         }
 
@@ -3543,28 +1079,9 @@
           }
         });
 
-        // Close modal handlers
-        document
-          .querySelectorAll('[bbb-action="close-notifications-modal"]')
-          .forEach((btn) => {
-            btn.addEventListener("click", () => {
-              modal.classList.remove("show");
-            });
-          });
-
-        // Close on backdrop click
-        modal.addEventListener("click", (e) => {
-          if (e.target === modal) {
-            modal.classList.remove("show");
-          }
-        });
-
         // Close on Escape key
         document.addEventListener("keydown", (e) => {
           if (e.key === "Escape") {
-            if (modal.classList.contains("show")) {
-              modal.classList.remove("show");
-            }
             if (container.classList.contains("open")) {
               container.classList.remove("open");
             }
@@ -3575,6 +1092,56 @@
         loadNotificationCount();
         // Subscribe to realtime updates
         subscribeToNotifications();
+      }
+
+      function setupUserMenuDropdown() {
+        const dropdown = document.getElementById("userMenuDropdown");
+        const button = document.getElementById("userAvatar");
+        const orgName = document.getElementById("currentOrgName");
+        const userMenuOrgName = document.getElementById("userMenuOrgName");
+
+        if (!dropdown || !button) return;
+
+        const syncOrgName = () => {
+          if (!orgName || !userMenuOrgName) return;
+          const name = orgName.textContent?.trim();
+          if (name) {
+            userMenuOrgName.textContent = name;
+          }
+        };
+
+        syncOrgName();
+        if (orgName) {
+          const observer = new MutationObserver(syncOrgName);
+          observer.observe(orgName, {
+            childList: true,
+            characterData: true,
+            subtree: true,
+          });
+        }
+
+        button.addEventListener("click", (event) => {
+          event.stopPropagation();
+          const isOpen = dropdown.classList.toggle("show");
+          button.setAttribute("aria-expanded", isOpen ? "true" : "false");
+        });
+
+        document.addEventListener("click", (event) => {
+          if (
+            !dropdown.contains(event.target) &&
+            !button.contains(event.target)
+          ) {
+            dropdown.classList.remove("show");
+            button.setAttribute("aria-expanded", "false");
+          }
+        });
+
+        document.addEventListener("keydown", (event) => {
+          if (event.key === "Escape") {
+            dropdown.classList.remove("show");
+            button.setAttribute("aria-expanded", "false");
+          }
+        });
       }
 
       // Subscribe to realtime notifications via postgres_changes
@@ -3873,6 +1440,134 @@
         window.showIntegrationFeedback("webflow", "success", msg);
       window.showWebflowError = (msg) =>
         window.showIntegrationFeedback("webflow", "error", msg);
+
+      // ========================================
+      // Quota Display
+      // ========================================
+
+      // Format time remaining until reset
+      function formatTimeUntilReset(resetTime) {
+        const now = new Date();
+        const reset = new Date(resetTime);
+        const diffMs = reset - now;
+
+        if (diffMs <= 0) return "Resets soon";
+
+        const hours = Math.floor(diffMs / (1000 * 60 * 60));
+        const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+
+        if (hours > 0) {
+          return `Resets in ${hours}h ${minutes}m`;
+        }
+        return `Resets in ${minutes}m`;
+      }
+
+      // Fetch and display quota information
+      async function fetchAndDisplayQuota() {
+        const quotaDisplay = document.getElementById("quotaDisplay");
+        const quotaPlan = document.getElementById("quotaPlan");
+        const quotaUsage = document.getElementById("quotaUsage");
+        const quotaReset = document.getElementById("quotaReset");
+
+        if (!quotaDisplay || !window.supabase) return;
+
+        try {
+          // Get auth token from Supabase session
+          const session = await window.supabase.auth.getSession();
+          const token = session?.data?.session?.access_token;
+
+          if (!token) {
+            return;
+          }
+
+          const response = await fetch("/v1/usage", {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          });
+
+          if (!response.ok) {
+            console.warn("Failed to fetch quota:", response.status);
+            return;
+          }
+
+          const data = await response.json();
+          const usage = data.data?.usage;
+
+          if (!usage) return;
+
+          // Update display
+          quotaPlan.textContent = usage.plan_display_name || "Free";
+          quotaUsage.textContent = `${usage.daily_used.toLocaleString()}/${usage.daily_limit.toLocaleString()}`;
+          quotaResetTime = usage.resets_at;
+          updateResetCountdown();
+
+          // Update styling based on usage percentage
+          quotaDisplay.classList.remove("quota-warning", "quota-exhausted");
+          if (usage.usage_percentage >= 100) {
+            quotaDisplay.classList.add("quota-exhausted");
+          } else if (usage.usage_percentage >= 80) {
+            quotaDisplay.classList.add("quota-warning");
+          }
+
+          // Show the display
+          quotaDisplay.style.display = "flex";
+        } catch (err) {
+          console.warn("Error fetching quota:", err);
+        }
+      }
+
+      // Fetch quota data periodically and update countdown locally
+      let quotaResetInterval;
+      let quotaResetTime = null;
+      let countdownInterval;
+
+      function updateResetCountdown() {
+        if (!quotaResetTime) return;
+        const quotaReset = document.getElementById("quotaReset");
+        if (quotaReset) {
+          quotaReset.textContent = formatTimeUntilReset(quotaResetTime);
+        }
+      }
+
+      function startQuotaResetCountdown() {
+        if (quotaResetInterval) clearInterval(quotaResetInterval);
+        if (countdownInterval) clearInterval(countdownInterval);
+        quotaResetInterval = setInterval(fetchAndDisplayQuota, 60000);
+        countdownInterval = setInterval(updateResetCountdown, 1000);
+      }
+
+      // Clean up interval on page unload to prevent memory leaks
+      window.addEventListener("beforeunload", () => {
+        if (quotaResetInterval) clearInterval(quotaResetInterval);
+        if (countdownInterval) clearInterval(countdownInterval);
+      });
+
+      // Listen for Supabase auth state change
+      if (window.supabase) {
+        window.supabase.auth.onAuthStateChange((event, session) => {
+          if (session) {
+            fetchAndDisplayQuota();
+            startQuotaResetCountdown();
+          } else {
+            const quotaDisplay = document.getElementById("quotaDisplay");
+            if (quotaDisplay) quotaDisplay.style.display = "none";
+            if (quotaResetInterval) clearInterval(quotaResetInterval);
+            if (countdownInterval) clearInterval(countdownInterval);
+          }
+        });
+      }
+
+      // Also try after a delay to catch already-logged-in users
+      setTimeout(async () => {
+        if (window.supabase) {
+          const session = await window.supabase.auth.getSession();
+          if (session?.data?.session) {
+            fetchAndDisplayQuota();
+            startQuotaResetCountdown();
+          }
+        }
+      }, 1000);
     </script>
   </body>
 </html>

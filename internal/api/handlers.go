@@ -124,9 +124,22 @@ type DBClient interface {
 	ValidateOrganisationMembership(userID, organisationID string) (bool, error)
 	SetActiveOrganisation(userID, organisationID string) error
 	GetEffectiveOrganisationID(user *db.User) string
+	GetOrganisationMemberRole(ctx context.Context, userID, organisationID string) (string, error)
+	ListOrganisationMembers(ctx context.Context, organisationID string) ([]db.OrganisationMember, error)
+	IsOrganisationMemberEmail(ctx context.Context, organisationID, email string) (bool, error)
+	RemoveOrganisationMember(ctx context.Context, userID, organisationID string) error
+	CountOrganisationAdmins(ctx context.Context, organisationID string) (int, error)
 	// Organisation management methods
 	CreateOrganisation(name string) (*db.Organisation, error)
-	AddOrganisationMember(userID, organisationID string) error
+	AddOrganisationMember(userID, organisationID, role string) error
+	CreateOrganisationInvite(ctx context.Context, invite *db.OrganisationInvite) (*db.OrganisationInvite, error)
+	ListOrganisationInvites(ctx context.Context, organisationID string) ([]db.OrganisationInvite, error)
+	RevokeOrganisationInvite(ctx context.Context, inviteID, organisationID string) error
+	GetOrganisationInviteByToken(ctx context.Context, token string) (*db.OrganisationInvite, error)
+	AcceptOrganisationInvite(ctx context.Context, token, userID string) (*db.OrganisationInvite, error)
+	SetOrganisationPlan(ctx context.Context, organisationID, planID string) error
+	GetOrganisationPlanID(ctx context.Context, organisationID string) (string, error)
+	ListDailyUsage(ctx context.Context, organisationID string, startDate, endDate time.Time) ([]db.DailyUsageEntry, error)
 	// Slack integration methods
 	CreateSlackConnection(ctx context.Context, conn *db.SlackConnection) error
 	GetSlackConnection(ctx context.Context, connectionID string) (*db.SlackConnection, error)
@@ -150,9 +163,40 @@ type DBClient interface {
 	DeleteWebflowConnection(ctx context.Context, connectionID, organisationID string) error
 	StoreWebflowToken(ctx context.Context, connectionID, token string) error
 	GetWebflowToken(ctx context.Context, connectionID string) (string, error)
+	// Google Analytics integration methods
+	CreateGoogleConnection(ctx context.Context, conn *db.GoogleAnalyticsConnection) error
+	GetGoogleConnection(ctx context.Context, connectionID string) (*db.GoogleAnalyticsConnection, error)
+	ListGoogleConnections(ctx context.Context, organisationID string) ([]*db.GoogleAnalyticsConnection, error)
+	DeleteGoogleConnection(ctx context.Context, connectionID, organisationID string) error
+	UpdateGoogleConnectionStatus(ctx context.Context, connectionID, organisationID, status string) error
+	StoreGoogleToken(ctx context.Context, connectionID, refreshToken string) error
+	GetGoogleToken(ctx context.Context, connectionID string) (string, error)
+	GetActiveGAConnectionForOrganisation(ctx context.Context, orgID string) (*db.GoogleAnalyticsConnection, error)
+	GetActiveGAConnectionForDomain(ctx context.Context, organisationID string, domainID int) (*db.GoogleAnalyticsConnection, error)
+	GetDomainsForOrganisation(ctx context.Context, organisationID string) ([]db.OrganisationDomain, error)
+	UpdateConnectionLastSync(ctx context.Context, connectionID string) error
+	UpdateConnectionDomains(ctx context.Context, connectionID string, domainIDs []int) error
+	MarkConnectionInactive(ctx context.Context, connectionID, reason string) error
+	UpsertPageWithAnalytics(ctx context.Context, organisationID string, domainID int, path string, pageViews map[string]int64, connectionID string) (int, error)
+	CalculateTrafficScores(ctx context.Context, organisationID string, domainID int) error
+	ApplyTrafficScoresToTasks(ctx context.Context, organisationID string, domainID int) error
+	GetOrCreateDomainID(ctx context.Context, domain string) (int, error)
+	UpsertOrganisationDomain(ctx context.Context, organisationID string, domainID int) error
+	// Google Analytics accounts methods (for persistent account storage)
+	UpsertGA4Account(ctx context.Context, account *db.GoogleAnalyticsAccount) error
+	ListGA4Accounts(ctx context.Context, organisationID string) ([]*db.GoogleAnalyticsAccount, error)
+	GetGA4Account(ctx context.Context, accountID string) (*db.GoogleAnalyticsAccount, error)
+	GetGA4AccountByGoogleID(ctx context.Context, organisationID, googleAccountID string) (*db.GoogleAnalyticsAccount, error)
+	StoreGA4AccountToken(ctx context.Context, accountID, refreshToken string) error
+	GetGA4AccountToken(ctx context.Context, accountID string) (string, error)
+	GetGA4AccountWithToken(ctx context.Context, organisationID string) (*db.GoogleAnalyticsAccount, error)
+	GetGAConnectionWithToken(ctx context.Context, organisationID string) (*db.GoogleAnalyticsConnection, error)
 	// Platform integration mappings
 	UpsertPlatformOrgMapping(ctx context.Context, mapping *db.PlatformOrgMapping) error
 	GetPlatformOrgMapping(ctx context.Context, platform, platformID string) (*db.PlatformOrgMapping, error)
+	// Usage and plans methods
+	GetOrganisationUsageStats(ctx context.Context, orgID string) (*db.UsageStats, error)
+	GetActivePlans(ctx context.Context) ([]db.Plan, error)
 	// Webflow site settings methods
 	CreateOrUpdateSiteSetting(ctx context.Context, setting *db.WebflowSiteSetting) error
 	GetSiteSetting(ctx context.Context, organisationID, webflowSiteID string) (*db.WebflowSiteSetting, error)
@@ -168,15 +212,19 @@ type DBClient interface {
 
 // Handler holds dependencies for API handlers
 type Handler struct {
-	DB          DBClient
-	JobsManager jobs.JobManagerInterface
+	DB                 DBClient
+	JobsManager        jobs.JobManagerInterface
+	GoogleClientID     string
+	GoogleClientSecret string
 }
 
 // NewHandler creates a new API handler with dependencies
-func NewHandler(pgDB DBClient, jobsManager jobs.JobManagerInterface) *Handler {
+func NewHandler(pgDB DBClient, jobsManager jobs.JobManagerInterface, googleClientID, googleClientSecret string) *Handler {
 	return &Handler{
-		DB:          pgDB,
-		JobsManager: jobsManager,
+		DB:                 pgDB,
+		JobsManager:        jobsManager,
+		GoogleClientID:     googleClientID,
+		GoogleClientSecret: googleClientSecret,
 	}
 }
 
@@ -263,6 +311,22 @@ func (h *Handler) SetupRoutes(mux *http.ServeMux) {
 	// Organisation routes (require auth)
 	mux.Handle("/v1/organisations", auth.AuthMiddleware(http.HandlerFunc(h.OrganisationsHandler)))
 	mux.Handle("/v1/organisations/switch", auth.AuthMiddleware(http.HandlerFunc(h.SwitchOrganisationHandler)))
+	mux.Handle("/v1/organisations/members", auth.AuthMiddleware(http.HandlerFunc(h.OrganisationMembersHandler)))
+	mux.Handle("/v1/organisations/members/", auth.AuthMiddleware(http.HandlerFunc(h.OrganisationMemberHandler)))
+	mux.Handle("/v1/organisations/invites/accept", auth.AuthMiddleware(http.HandlerFunc(h.OrganisationInviteAcceptHandler)))
+	mux.Handle("/v1/organisations/invites", auth.AuthMiddleware(http.HandlerFunc(h.OrganisationInvitesHandler)))
+	mux.Handle("/v1/organisations/invites/", auth.AuthMiddleware(http.HandlerFunc(h.OrganisationInviteHandler)))
+	mux.Handle("/v1/organisations/plan", auth.AuthMiddleware(http.HandlerFunc(h.OrganisationPlanHandler)))
+
+	// Domain routes (require auth)
+	mux.Handle("/v1/domains", auth.AuthMiddleware(http.HandlerFunc(h.DomainsHandler)))
+
+	// Usage routes (require auth)
+	mux.Handle("/v1/usage", auth.AuthMiddleware(http.HandlerFunc(h.UsageHandler)))
+	mux.Handle("/v1/usage/history", auth.AuthMiddleware(http.HandlerFunc(h.UsageHistoryHandler)))
+
+	// Plans route (public - for pricing page)
+	mux.Handle("/v1/plans", http.HandlerFunc(h.PlansHandler))
 
 	// Webhook endpoints (no auth required)
 	mux.HandleFunc("/v1/webhooks/webflow/", h.WebflowWebhook) // Note: trailing slash for path params
@@ -278,6 +342,12 @@ func (h *Handler) SetupRoutes(mux *http.ServeMux) {
 	// Webflow site settings endpoints (must be before catch-all)
 	mux.Handle("/v1/integrations/webflow/sites/", auth.AuthMiddleware(http.HandlerFunc(h.webflowSitesRouter)))
 	mux.Handle("/v1/integrations/webflow/", auth.AuthMiddleware(http.HandlerFunc(h.WebflowConnectionHandler)))
+
+	// Google Analytics integration endpoints
+	mux.Handle("/v1/integrations/google", auth.AuthMiddleware(http.HandlerFunc(h.GoogleConnectionsHandler)))
+	mux.Handle("/v1/integrations/google/", auth.AuthMiddleware(http.HandlerFunc(h.GoogleConnectionHandler)))
+	mux.HandleFunc("/v1/integrations/google/callback", h.HandleGoogleOAuthCallback) // No auth - state validation
+	mux.Handle("/v1/integrations/google/save-property", auth.AuthMiddleware(http.HandlerFunc(h.SaveGoogleProperty)))
 
 	// Notification endpoints
 	mux.Handle("/v1/notifications", auth.AuthMiddleware(http.HandlerFunc(h.NotificationsHandler)))
@@ -329,6 +399,8 @@ func (h *Handler) SetupRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/test-data-components.html", h.ServeTestDataComponents)
 	mux.HandleFunc("/dashboard", h.ServeDashboard)
 	mux.HandleFunc("/dashboard-new", h.ServeNewDashboard)
+	mux.HandleFunc("/settings", h.ServeSettings)
+	mux.HandleFunc("/settings/", h.ServeSettings)
 	mux.HandleFunc("/auth-modal.html", h.ServeAuthModal)
 	mux.HandleFunc("/cli-login.html", h.ServeCliLogin)
 	mux.HandleFunc("/debug-auth.html", h.ServeDebugAuth)
@@ -407,6 +479,16 @@ func (h *Handler) ServeTestDataComponents(w http.ResponseWriter, r *http.Request
 // ServeDashboard serves the dashboard page
 func (h *Handler) ServeDashboard(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, "dashboard.html")
+}
+
+// ServeSettings serves the settings page
+func (h *Handler) ServeSettings(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		MethodNotAllowed(w, r)
+		return
+	}
+
+	http.ServeFile(w, r, "settings.html")
 }
 
 // ServeNewDashboard serves the new Web Components dashboard page
@@ -940,7 +1022,7 @@ func (h *Handler) WebflowWebhook(w http.ResponseWriter, r *http.Request) {
 		userForJob.ActiveOrganisationID = &orgID
 		userForJob.OrganisationID = &orgID
 	}
-	job, err := h.createJobFromRequest(r.Context(), &userForJob, req)
+	job, err := h.createJobFromRequest(r.Context(), &userForJob, req, logger)
 	if err != nil {
 		logger.Error().Err(err).
 			Str("user_id", user.ID).

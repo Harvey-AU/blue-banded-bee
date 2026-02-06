@@ -9,13 +9,13 @@
 
 # Blue Banded Bee 🐝
 
-A comprehensive website health and performance tool designed to monitor your
-site's health by detecting broken links, identifying slow pages, and speeding up
-slow pages by warming cache for optimal performance after publishing, and ensure
-your visitors always get the best experience. Works with any site and integrates
-seamlessly with Webflow, Shopify and WordPress.
+A comprehensive website health and performance tool that monitors site health,
+detects broken links, identifies slow pages, and warms cache for optimal
+performance after publishing. Integrates seamlessly with Webflow via OAuth with
+automated scheduling and webhook-triggered crawls.
 
-Schedule your site audit as often as you need and when your site is published.
+Keep your site fast and healthy with continuous monitoring and intelligent cache
+warming.
 
 Named after
 [a special little bee](https://www.aussiebee.com.au/blue-banded-bee-information.html)
@@ -40,12 +40,13 @@ native to where we live in Castlemaine, Victoria, Australia.
 
 ### Automation & Integration
 
-- 🔄 Scheduled crawls to monitor site health continuously
-- 🚀 Automatic runs triggered by Webflow/Shopify publishing events
-- 📊 Real-time dashboard with job progress tracking
-- 🔔 Slack notifications when jobs complete
-- 🔐 Multi-tenant architecture with Supabase Auth
-- 🔌 API-first architecture for platform integrations
+- 🔄 Scheduled crawls (6/12/24/48 hour intervals) per site
+- 🚀 Webflow OAuth integration with auto-crawl on publish webhooks
+- 📊 Real-time dashboard with live job progress via WebSockets
+- 🔔 Slack notifications via DMs when jobs complete or fail
+- 🔐 Multi-organisation support with Supabase Auth and RLS
+- 🔌 RESTful API for platform integrations
+- 🏷️ Technology detection (CMS, CDN, frameworks)
 
 ## Quick Start
 
@@ -79,16 +80,27 @@ One command starts everything:
 
 ## Status
 
-**Stage 4 of 7** - Core Authentication & MVP Interface (mostly complete)
+**~65% Complete** - Stage 4 of 7 (Core Authentication & MVP Interface)
 
-In progress: Platform integrations (Webflow/Shopify apps) and subscriptions. See
-[roadmap](./Roadmap.md) for details.
+**Recent milestones:**
+
+- ✅ Webflow OAuth integration with per-site scheduling and webhooks (v0.23.0)
+- ✅ Slack notifications and real-time dashboard updates (v0.20.x)
+- ✅ Multi-organisation support with context switching (v0.19.0)
+- ✅ Security and compliance testing with CI/CD (Go Report Card: A)
+
+**In progress:** Google Analytics integration, payment infrastructure, platform
+SDK
+
+See [Roadmap.md](./Roadmap.md) for detailed progress tracking.
 
 ## Tech Stack
 
-- **Backend**: Go with PostgreSQL
-- **Infrastructure**: Fly.io, Cloudflare CDN, Supabase DB and Auth
-- **Monitoring**: Sentry, Grafana Cloud (traces), Codecov
+- **Backend**: Go 1.25 with PostgreSQL (Supabase)
+- **Frontend**: Vanilla JavaScript with data-binding (no build process)
+- **Infrastructure**: Fly.io (app + DB), Cloudflare CDN, Supabase (auth +
+  realtime)
+- **Monitoring**: Sentry (errors), Grafana Cloud (traces), Codecov (coverage)
 
 ## Documentation
 

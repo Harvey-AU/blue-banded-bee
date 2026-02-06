@@ -65,6 +65,7 @@ const (
 	defaultRetryMaxDelay       = 1500 * time.Millisecond
 
 	waitingReasonConcurrencyLimit = "concurrency_limit"
+	waitingReasonQuotaExhausted   = "quota_exhausted"
 )
 
 // NewDbQueue creates a PostgreSQL job queue
@@ -905,6 +906,8 @@ func (q *DbQueue) GetNextTask(ctx context.Context, jobID string) (*Task, error) 
 				AND j.status = 'running'
 				-- Support legacy jobs with NULL or 0 concurrency (unlimited)
 				AND (j.concurrency IS NULL OR j.concurrency = 0 OR j.running_tasks < j.concurrency)
+				-- Quota enforcement: don't claim if org has exceeded daily quota (completed pages only)
+				AND (j.organisation_id IS NULL OR NOT is_org_over_daily_quota(j.organisation_id))
 		`
 
 		// Add job filter if specified
@@ -1074,6 +1077,104 @@ func (q *DbQueue) GetNextTask(ctx context.Context, jobID string) (*Task, error) 
 	return &task, nil
 }
 
+// enqueueJobConfig holds configuration fetched from the database for task enqueueing
+type enqueueJobConfig struct {
+	maxPages         int
+	concurrency      sql.NullInt64
+	runningTasks     int
+	pendingTaskCount int
+	domainID         sql.NullInt64
+	domainName       sql.NullString
+	orgID            sql.NullString
+	quotaRemaining   sql.NullInt64
+	currentTaskCount int
+}
+
+// deduplicatePages removes duplicate pages, keeping highest priority for each page ID
+func deduplicatePages(pages []Page) []Page {
+	uniquePages := make([]Page, 0, len(pages))
+	seen := make(map[int]int, len(pages))
+	for _, page := range pages {
+		if page.ID == 0 {
+			continue
+		}
+		if idx, ok := seen[page.ID]; ok {
+			if page.Priority > uniquePages[idx].Priority {
+				uniquePages[idx].Priority = page.Priority
+			}
+			continue
+		}
+		seen[page.ID] = len(uniquePages)
+		uniquePages = append(uniquePages, page)
+	}
+	return uniquePages
+}
+
+// calculateEffectiveConcurrency applies domain limiter override if applicable
+func (q *DbQueue) calculateEffectiveConcurrency(
+	jobID string,
+	concurrency sql.NullInt64,
+	domainName sql.NullString,
+) sql.NullInt64 {
+	if q.concurrencyOverride == nil || !domainName.Valid {
+		return concurrency
+	}
+	override := q.concurrencyOverride(jobID, domainName.String)
+	if override <= 0 {
+		return concurrency
+	}
+	// Use the minimum of configured concurrency and limiter override
+	if !concurrency.Valid || concurrency.Int64 == 0 {
+		return sql.NullInt64{Int64: int64(override), Valid: true}
+	}
+	if int64(override) < concurrency.Int64 {
+		return sql.NullInt64{Int64: int64(override), Valid: true}
+	}
+	return concurrency
+}
+
+// calculateAvailableSlots determines how many pending tasks can be created
+// Returns availableSlots and whether quota was the limiting factor
+func calculateAvailableSlots(
+	effectiveConcurrency sql.NullInt64,
+	runningTasks, pendingTaskCount int,
+	quotaRemaining sql.NullInt64,
+) (slots int, quotaLimited bool) {
+	const maxPendingQueueSize = 100
+
+	if !effectiveConcurrency.Valid || effectiveConcurrency.Int64 == 0 {
+		// Even for unlimited concurrency jobs, cap pending queue to prevent flooding
+		used := runningTasks + pendingTaskCount
+		slots = maxPendingQueueSize - used
+		if slots < 0 {
+			slots = 0
+		}
+	} else {
+		// Capacity = concurrency - (running + existing_pending)
+		capacity := int(effectiveConcurrency.Int64)
+		used := runningTasks + pendingTaskCount
+		slots = capacity - used
+		if slots < 0 {
+			slots = 0
+		}
+	}
+
+	// Cap available slots by daily quota remaining (if org has quota system)
+	if quotaRemaining.Valid {
+		remaining := int(quotaRemaining.Int64)
+		if remaining <= 0 {
+			// Quota exhausted or exceeded - no new pending tasks
+			slots = 0
+			quotaLimited = true
+		} else if remaining < slots {
+			slots = remaining
+			quotaLimited = true
+		}
+	}
+
+	return slots, quotaLimited
+}
+
 // EnqueueURLs adds multiple URLs as tasks for a job
 func (q *DbQueue) EnqueueURLs(ctx context.Context, jobID string, pages []Page, sourceType string, sourceURL string) error {
 	if len(pages) == 0 {
@@ -1081,82 +1182,39 @@ func (q *DbQueue) EnqueueURLs(ctx context.Context, jobID string, pages []Page, s
 	}
 
 	return q.Execute(ctx, func(tx *sql.Tx) error {
-		uniquePages := make([]Page, 0, len(pages))
-		seen := make(map[int]int, len(pages))
-		for _, page := range pages {
-			if page.ID == 0 {
-				continue
-			}
-
-			if idx, ok := seen[page.ID]; ok {
-				if page.Priority > uniquePages[idx].Priority {
-					uniquePages[idx].Priority = page.Priority
-				}
-				continue
-			}
-
-			seen[page.ID] = len(uniquePages)
-			uniquePages = append(uniquePages, page)
-		}
-
+		uniquePages := deduplicatePages(pages)
 		if len(uniquePages) == 0 {
 			return nil
 		}
 
-		// Get job's max_pages, concurrency, domain, and current task counts
-		var maxPages int
-		var currentTaskCount int
-		var concurrency sql.NullInt64
-		var runningTasks int
-		var pendingTaskCount int
-		var domainName sql.NullString
+		// Get job's max_pages, concurrency, domain, org, and current task counts
+		var cfg enqueueJobConfig
 		err := tx.QueryRowContext(ctx, `
-			SELECT j.max_pages, j.concurrency, j.running_tasks, j.pending_tasks, d.name,
-				   COALESCE((SELECT COUNT(*) FROM tasks WHERE job_id = $1 AND status != 'skipped'), 0)
+			SELECT j.max_pages, j.concurrency, j.running_tasks, j.pending_tasks, j.domain_id, d.name,
+				   COALESCE((SELECT COUNT(*) FROM tasks WHERE job_id = $1 AND status != 'skipped'), 0),
+				   j.organisation_id,
+				   CASE WHEN j.organisation_id IS NOT NULL
+				        THEN get_daily_quota_remaining(j.organisation_id)
+				        ELSE NULL
+				   END
 			FROM jobs j
 			LEFT JOIN domains d ON j.domain_id = d.id
 			WHERE j.id = $1
 			FOR UPDATE OF j
-		`, jobID).Scan(&maxPages, &concurrency, &runningTasks, &pendingTaskCount, &domainName, &currentTaskCount)
+		`, jobID).Scan(&cfg.maxPages, &cfg.concurrency, &cfg.runningTasks, &cfg.pendingTaskCount,
+			&cfg.domainID, &cfg.domainName, &cfg.currentTaskCount, &cfg.orgID, &cfg.quotaRemaining)
 		if err != nil {
 			return fmt.Errorf("failed to get job configuration and task count: %w", err)
 		}
 
-		// Calculate how many new pending tasks we can add before hitting concurrency limit
-		// Check for domain limiter override first
-		effectiveConcurrency := concurrency
-		if q.concurrencyOverride != nil && domainName.Valid {
-			if override := q.concurrencyOverride(jobID, domainName.String); override > 0 {
-				// Use the minimum of configured concurrency and limiter override
-				if !concurrency.Valid || concurrency.Int64 == 0 {
-					effectiveConcurrency = sql.NullInt64{Int64: int64(override), Valid: true}
-				} else if int64(override) < concurrency.Int64 {
-					effectiveConcurrency = sql.NullInt64{Int64: int64(override), Valid: true}
-				}
-			}
-		}
+		// Calculate available slots with concurrency override and quota limits
+		effectiveConcurrency := q.calculateEffectiveConcurrency(jobID, cfg.concurrency, cfg.domainName)
+		concurrencySlots, _ := calculateAvailableSlots(effectiveConcurrency, cfg.runningTasks, cfg.pendingTaskCount, sql.NullInt64{})
+		availableSlots, quotaLimited := calculateAvailableSlots(effectiveConcurrency, cfg.runningTasks, cfg.pendingTaskCount, cfg.quotaRemaining)
 
-		var availableSlots int
-		if !effectiveConcurrency.Valid || effectiveConcurrency.Int64 == 0 {
-			// Even for unlimited concurrency jobs, cap pending queue to prevent flooding
-			const maxPendingQueueSize = 100
-			used := runningTasks + pendingTaskCount
-			availableSlots = maxPendingQueueSize - used
-			if availableSlots < 0 {
-				availableSlots = 0
-			}
-			// Ensure we don't try to create more tasks than we have pages
-			if availableSlots > len(uniquePages) {
-				availableSlots = len(uniquePages)
-			}
-		} else {
-			// Capacity = concurrency - (running + existing_pending)
-			capacity := int(effectiveConcurrency.Int64)
-			used := runningTasks + pendingTaskCount
-			availableSlots = capacity - used
-			if availableSlots < 0 {
-				availableSlots = 0
-			}
+		// Ensure we don't try to create more tasks than we have pages
+		if availableSlots > len(uniquePages) {
+			availableSlots = len(uniquePages)
 		}
 
 		// Count how many tasks will be pending/waiting vs skipped
@@ -1164,7 +1222,7 @@ func (q *DbQueue) EnqueueURLs(ctx context.Context, jobID string, pages []Page, s
 		waitingCount := 0
 		skippedCount := 0
 		for range uniquePages {
-			if maxPages == 0 || currentTaskCount+pendingCount+waitingCount < maxPages {
+			if cfg.maxPages == 0 || cfg.currentTaskCount+pendingCount+waitingCount < cfg.maxPages {
 				if pendingCount < availableSlots {
 					pendingCount++
 				} else {
@@ -1251,7 +1309,7 @@ func (q *DbQueue) EnqueueURLs(ctx context.Context, jobID string, pages []Page, s
 			}
 
 			var status string
-			if maxPages == 0 || currentTaskCount+processedPending+processedWaiting < maxPages {
+			if cfg.maxPages == 0 || cfg.currentTaskCount+processedPending+processedWaiting < cfg.maxPages {
 				if processedPending < availableSlots {
 					status = "pending"
 					processedPending++
@@ -1301,19 +1359,59 @@ func (q *DbQueue) EnqueueURLs(ctx context.Context, jobID string, pages []Page, s
 			return fmt.Errorf("failed to insert tasks: %w", err)
 		}
 
+		// Apply traffic scores from page_analytics using GREATEST
+		// This ensures high-traffic pages get prioritised even if structural priority is low
+		if cfg.orgID.Valid && cfg.domainID.Valid {
+			_, err = tx.ExecContext(ctx, `
+				UPDATE tasks t
+				SET priority_score = GREATEST(t.priority_score, COALESCE(pa.traffic_score, 0))
+				FROM pages p
+				JOIN page_analytics pa ON pa.organisation_id = $1
+					AND pa.domain_id = $2
+					AND pa.path = p.path
+				WHERE t.page_id = p.id
+				AND t.job_id = $3
+				AND t.status IN ('pending', 'waiting')
+				AND COALESCE(pa.traffic_score, 0) > t.priority_score
+			`, cfg.orgID.String, cfg.domainID.Int64, jobID)
+			if err != nil {
+				// Log but don't fail - traffic scores are an optimisation
+				log.Warn().
+					Err(err).
+					Str("job_id", jobID).
+					Str("next_action", "continuing_without_traffic_scores").
+					Msg("Failed to apply traffic scores to new tasks; continuing without scores")
+			}
+		}
+
+		// Note: Daily usage is incremented when tasks COMPLETE, not when created
+		// See batch.go FlushUpdates for quota increment on completion/failure
+
 		// Log when tasks are placed in waiting status
 		if processedWaiting > 0 {
-			observability.RecordTaskWaiting(ctx, jobID, waitingReasonConcurrencyLimit, processedWaiting)
-			log.Debug().
+			waitingReason := waitingReasonConcurrencyLimit
+			if quotaLimited {
+				waitingReason = waitingReasonQuotaExhausted
+			}
+			observability.RecordTaskWaiting(ctx, jobID, waitingReason, processedWaiting)
+
+			logEvent := log.Debug().
 				Str("job_id", jobID).
 				Int("waiting_tasks", processedWaiting).
 				Int("pending_tasks", processedPending).
-				Int("running_tasks", runningTasks).
-				Int("existing_pending", pendingTaskCount).
+				Int("running_tasks", cfg.runningTasks).
+				Int("existing_pending", cfg.pendingTaskCount).
 				Int("available_slots", availableSlots).
-				Int64("concurrency_limit", concurrency.Int64).
-				Str("waiting_reason", waitingReasonConcurrencyLimit).
-				Msg("Created tasks in waiting status due to job concurrency limit")
+				Int64("concurrency_limit", cfg.concurrency.Int64).
+				Str("waiting_reason", waitingReason)
+
+			if quotaLimited {
+				logEvent.Int64("quota_remaining", cfg.quotaRemaining.Int64).
+					Int("concurrency_slots", concurrencySlots).
+					Msg("Created tasks in waiting status due to daily quota limit")
+			} else {
+				logEvent.Msg("Created tasks in waiting status due to job concurrency limit")
+			}
 		}
 
 		return nil

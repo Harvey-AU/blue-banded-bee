@@ -1,6 +1,7 @@
 package db
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"strings"
@@ -306,10 +307,11 @@ func (db *DB) GetOrganisation(organisationID string) (*Organisation, error) {
 
 func (db *DB) GetOrganisationMembers(organisationID string) ([]*User, error) {
 	query := `
-		SELECT id, email, full_name, organisation_id, active_organisation_id, slack_user_id, created_at, updated_at
-		FROM users
-		WHERE organisation_id = $1
-		ORDER BY created_at ASC
+		SELECT u.id, u.email, u.full_name, u.organisation_id, u.active_organisation_id, u.slack_user_id, u.created_at, u.updated_at
+		FROM organisation_members om
+		JOIN users u ON u.id = om.user_id
+		WHERE om.organisation_id = $1
+		ORDER BY om.created_at ASC
 	`
 
 	rows, err := db.client.Query(query, organisationID)
@@ -375,6 +377,7 @@ func (db *DB) CreateUser(userID, email string, fullName *string, orgName string)
 
 	// For business emails, check if organisation already exists
 	var org *Organisation
+	createdNewOrg := false
 	if isBusinessEmail(email) {
 		existingOrg, err := db.GetOrganisationByName(orgName)
 		if err == nil {
@@ -390,6 +393,7 @@ func (db *DB) CreateUser(userID, email string, fullName *string, orgName string)
 
 	// If no existing organisation found (or personal email), create new one
 	if org == nil {
+		createdNewOrg = true
 		org = &Organisation{
 			ID:   uuid.New().String(),
 			Name: orgName,
@@ -431,14 +435,20 @@ func (db *DB) CreateUser(userID, email string, fullName *string, orgName string)
 		return nil, nil, fmt.Errorf("failed to create user: %w", err)
 	}
 
+	memberRole := "member"
+	if createdNewOrg {
+		memberRole = "admin"
+	}
+
 	// Add user to organisation_members table
 	memberQuery := `
-		INSERT INTO organisation_members (user_id, organisation_id, created_at)
-		VALUES ($1, $2, NOW())
-		ON CONFLICT (user_id, organisation_id) DO NOTHING
+		INSERT INTO organisation_members (user_id, organisation_id, role, created_at)
+		VALUES ($1, $2, $3, NOW())
+		ON CONFLICT (user_id, organisation_id) DO UPDATE
+		SET role = EXCLUDED.role
 	`
 
-	_, err = tx.Exec(memberQuery, user.ID, org.ID)
+	_, err = tx.Exec(memberQuery, user.ID, org.ID, memberRole)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to add organisation membership: %w", err)
 	}
@@ -553,14 +563,23 @@ func (db *DB) SetActiveOrganisation(userID, organisationID string) error {
 }
 
 // AddOrganisationMember adds a user as a member of an organisation
-func (db *DB) AddOrganisationMember(userID, organisationID string) error {
+func (db *DB) AddOrganisationMember(userID, organisationID, role string) error {
+	role = strings.TrimSpace(strings.ToLower(role))
+	if role == "" {
+		role = "member"
+	}
+	if role != "admin" && role != "member" {
+		return fmt.Errorf("invalid role: %s", role)
+	}
+
 	query := `
-		INSERT INTO organisation_members (user_id, organisation_id, created_at)
-		VALUES ($1, $2, NOW())
-		ON CONFLICT (user_id, organisation_id) DO NOTHING
+		INSERT INTO organisation_members (user_id, organisation_id, role, created_at)
+		VALUES ($1, $2, $3, NOW())
+		ON CONFLICT (user_id, organisation_id) DO UPDATE
+		SET role = EXCLUDED.role
 	`
 
-	_, err := db.client.Exec(query, userID, organisationID)
+	_, err := db.client.Exec(query, userID, organisationID, role)
 	if err != nil {
 		return fmt.Errorf("failed to add organisation member: %w", err)
 	}
@@ -583,4 +602,93 @@ func (db *DB) GetEffectiveOrganisationID(user *User) string {
 		return *user.OrganisationID
 	}
 	return ""
+}
+
+// GetOrganisationUsageStats returns current usage statistics for an organisation
+func (db *DB) GetOrganisationUsageStats(ctx context.Context, orgID string) (*UsageStats, error) {
+	query := `SELECT daily_limit, daily_used, daily_remaining, plan_id, plan_name, plan_display_name, reset_time
+	          FROM get_organisation_usage_stats($1)`
+
+	var stats UsageStats
+	err := db.client.QueryRowContext(ctx, query, orgID).Scan(
+		&stats.DailyLimit,
+		&stats.DailyUsed,
+		&stats.DailyRemaining,
+		&stats.PlanID,
+		&stats.PlanName,
+		&stats.PlanDisplayName,
+		&stats.ResetsAt,
+	)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("organisation not found or has no plan: %s", orgID)
+		}
+		return nil, fmt.Errorf("failed to get organisation usage stats: %w", err)
+	}
+
+	// Calculate percentage
+	if stats.DailyLimit > 0 {
+		stats.UsagePercentage = float64(stats.DailyUsed) / float64(stats.DailyLimit) * 100
+	}
+
+	return &stats, nil
+}
+
+// UsageStats represents current usage statistics for an organisation
+type UsageStats struct {
+	DailyLimit      int       `json:"daily_limit"`
+	DailyUsed       int       `json:"daily_used"`
+	DailyRemaining  int       `json:"daily_remaining"`
+	UsagePercentage float64   `json:"usage_percentage"`
+	PlanID          string    `json:"plan_id"`
+	PlanName        string    `json:"plan_name"`
+	PlanDisplayName string    `json:"plan_display_name"`
+	ResetsAt        time.Time `json:"resets_at"`
+}
+
+// Plan represents a subscription tier
+type Plan struct {
+	ID                string    `json:"id"`
+	Name              string    `json:"name"`
+	DisplayName       string    `json:"display_name"`
+	DailyPageLimit    int       `json:"daily_page_limit"`
+	MonthlyPriceCents int       `json:"monthly_price_cents"`
+	IsActive          bool      `json:"is_active"`
+	SortOrder         int       `json:"sort_order"`
+	CreatedAt         time.Time `json:"created_at"`
+}
+
+// GetActivePlans returns all active subscription plans
+func (db *DB) GetActivePlans(ctx context.Context) ([]Plan, error) {
+	query := `
+		SELECT id, name, display_name, daily_page_limit, monthly_price_cents,
+		       is_active, sort_order, created_at
+		FROM plans
+		WHERE is_active = true
+		ORDER BY sort_order
+	`
+
+	rows, err := db.client.QueryContext(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get active plans: %w", err)
+	}
+	defer rows.Close()
+
+	var plans []Plan
+	for rows.Next() {
+		var p Plan
+		if err := rows.Scan(
+			&p.ID, &p.Name, &p.DisplayName, &p.DailyPageLimit, &p.MonthlyPriceCents,
+			&p.IsActive, &p.SortOrder, &p.CreatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("failed to scan plan: %w", err)
+		}
+		plans = append(plans, p)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to iterate plan rows: %w", err)
+	}
+
+	return plans, nil
 }

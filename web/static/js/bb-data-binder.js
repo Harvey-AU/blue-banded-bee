@@ -9,8 +9,6 @@ class BBDataBinder {
   constructor(options = {}) {
     this.apiBaseUrl = options.apiBaseUrl || "";
     this.authManager = null;
-    this.refreshInterval = options.refreshInterval || 0;
-    this.refreshTimer = null;
     this.debug = options.debug || false;
 
     // Store bound elements for efficient updates
@@ -33,11 +31,6 @@ class BBDataBinder {
 
     // Scan and bind all elements
     this.scanAndBind();
-
-    // Set up auto-refresh if configured
-    if (this.refreshInterval > 0) {
-      this.startAutoRefresh();
-    }
 
     this.log("Data binder initialized successfully");
   }
@@ -582,9 +575,16 @@ class BBDataBinder {
       errors.push(`Must be no more than ${rules.maxLength} characters`);
     }
 
-    // Custom pattern validation
-    if (value && rules.pattern && !new RegExp(rules.pattern).test(value)) {
-      errors.push(rules.patternMessage || "Invalid format");
+    // Custom pattern validation (wrapped in try-catch for ReDoS prevention)
+    if (value && rules.pattern) {
+      try {
+        if (!new RegExp(rules.pattern).test(value)) {
+          errors.push(rules.patternMessage || "Invalid format");
+        }
+      } catch (e) {
+        console.warn("Invalid validation pattern:", rules.pattern, e);
+        errors.push("Unable to validate format");
+      }
     }
 
     // Update field UI
@@ -1080,33 +1080,6 @@ class BBDataBinder {
   }
 
   /**
-   * Start auto-refresh timer
-   */
-  startAutoRefresh() {
-    if (this.refreshTimer) {
-      clearInterval(this.refreshTimer);
-    }
-
-    this.refreshTimer = setInterval(() => {
-      this.refresh();
-    }, this.refreshInterval * 1000);
-
-    this.log("Auto-refresh started", { interval: this.refreshInterval });
-  }
-
-  /**
-   * Stop auto-refresh timer
-   */
-  stopAutoRefresh() {
-    if (this.refreshTimer) {
-      clearInterval(this.refreshTimer);
-      this.refreshTimer = null;
-    }
-
-    this.log("Auto-refresh stopped");
-  }
-
-  /**
    * Refresh all bound data
    */
   async refresh() {
@@ -1153,7 +1126,6 @@ class BBDataBinder {
    */
   log(message, data = null) {
     if (this.debug) {
-      console.log(`[BBDataBinder] ${message}`, data);
     }
   }
 
@@ -1161,7 +1133,6 @@ class BBDataBinder {
    * Destroy the data binder
    */
   destroy() {
-    this.stopAutoRefresh();
     this.boundElements.clear();
     this.templates.clear();
     this.log("Data binder destroyed");

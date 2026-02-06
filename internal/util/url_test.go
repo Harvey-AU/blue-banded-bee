@@ -72,6 +72,53 @@ func TestNormaliseDomain(t *testing.T) {
 	}
 }
 
+func TestValidateDomain(t *testing.T) {
+	tests := []struct {
+		name      string
+		input     string
+		wantError bool
+		errorMsg  string
+	}{
+		// Valid domains
+		{name: "simple_domain", input: "example.com", wantError: false},
+		{name: "subdomain", input: "www.example.com", wantError: false},
+		{name: "deep_subdomain", input: "api.v1.example.com", wantError: false},
+		{name: "with_https", input: "https://example.com", wantError: false},
+		{name: "with_http", input: "http://example.com", wantError: false},
+		{name: "co_uk_tld", input: "example.co.uk", wantError: false},
+		{name: "hyphen_in_domain", input: "my-site.example.com", wantError: false},
+		{name: "numbers_in_domain", input: "site123.example.com", wantError: false},
+		{name: "punycode_domain", input: "xn--nxasmq5b.com", wantError: false},
+
+		// Invalid domains - using publicsuffix error messages
+		{name: "no_tld", input: "asdfasdf", wantError: true, errorMsg: "invalid domain"},
+		{name: "empty", input: "", wantError: true, errorMsg: "domain cannot be empty"},
+		{name: "just_tld", input: ".com", wantError: true, errorMsg: "invalid domain"},
+		{name: "double_dot", input: "example..com", wantError: true, errorMsg: "invalid domain"},
+		{name: "localhost", input: "localhost", wantError: true, errorMsg: "domain"},
+		{name: "localhost_with_subdomain", input: "api.localhost", wantError: true, errorMsg: "domain"},
+		{name: "internal", input: "internal", wantError: true, errorMsg: "domain"},
+		{name: "ip_address", input: "192.168.1.1", wantError: true, errorMsg: "domain"},
+		{name: "ipv6_address", input: "[2001:db8::1]", wantError: true, errorMsg: "domain must not include a port"},
+		{name: "domain_with_port", input: "example.com:8080", wantError: true, errorMsg: "domain must not include a port"},
+		{name: "just_suffix", input: "com", wantError: true, errorMsg: "invalid domain"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateDomain(tt.input)
+			if tt.wantError {
+				assert.Error(t, err)
+				if tt.errorMsg != "" && err != nil {
+					assert.Contains(t, err.Error(), tt.errorMsg)
+				}
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
 func TestNormaliseURL(t *testing.T) {
 	tests := []struct {
 		name     string

@@ -63,7 +63,6 @@ function initialiseSupabase() {
   if (window.supabase && window.supabase.createClient) {
     supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     window.supabase = supabase; // Ensure it's globally available
-    console.log("Supabase client created successfully");
     return true;
   }
   return false;
@@ -74,7 +73,6 @@ function initialiseSupabase() {
  */
 async function loadAuthModal() {
   try {
-    console.log("Loading auth modal...");
     const response = await fetch("/auth-modal.html");
 
     if (!response.ok) {
@@ -84,13 +82,7 @@ async function loadAuthModal() {
     }
 
     const modalHTML = await response.text();
-    console.log("Auth modal HTML loaded, length:", modalHTML.length);
-
     document.getElementById("authModalContainer").innerHTML = modalHTML;
-
-    // Verify the modal was inserted
-    const authModal = document.getElementById("authModal");
-    console.log("Auth modal element after insertion:", authModal);
 
     // Set default to login form for dashboard
     setTimeout(() => {
@@ -158,8 +150,6 @@ async function handleAuthCallback() {
     const refreshToken = hashParams.get("refresh_token");
 
     if (accessToken) {
-      console.log("Processing auth callback with tokens...");
-
       // Set the session in Supabase using the tokens
       const {
         data: { session },
@@ -170,8 +160,6 @@ async function handleAuthCallback() {
       });
 
       if (session) {
-        console.log("User authenticated via callback:", session.user.id);
-
         // Clear the URL hash to clean up the URL
         history.replaceState(null, null, window.location.pathname);
 
@@ -186,7 +174,6 @@ async function handleAuthCallback() {
         data: { session },
       } = await supabase.auth.getSession();
       if (session) {
-        console.log("User already authenticated:", session.user.id);
         return true;
       }
     }
@@ -237,7 +224,6 @@ async function registerUserWithBackend(user) {
     if (!response.ok) {
       // If user already exists (409 Conflict), that's fine
       if (response.status === 409) {
-        console.log("User already registered in backend");
         return true;
       }
       const errorData = await response.json();
@@ -245,8 +231,7 @@ async function registerUserWithBackend(user) {
       return false;
     }
 
-    const data = await response.json();
-    console.log("User registered with backend:", data);
+    await response.json();
     return true;
   } catch (error) {
     console.error("Failed to register user with backend:", error);
@@ -265,8 +250,6 @@ async function registerUserWithBackend(user) {
  * @param {boolean} isAuthenticated - Whether user is authenticated
  */
 function updateAuthState(isAuthenticated) {
-  console.log("Updating auth state:", isAuthenticated);
-
   // Show/hide elements based on authentication (support both old and new attributes)
   const allAuthElements = document.querySelectorAll(
     "[data-bb-auth], [bbb-auth]"
@@ -285,19 +268,49 @@ function updateAuthState(isAuthenticated) {
     }
   });
 
+  // Authentication state display management
+  // Strategy: Remove inline styles when showing elements (let CSS cascade work)
+  // Only preserve inline styles that were explicitly set before we modified them
   guestElements.forEach((el) => {
-    el.style.display = isAuthenticated
-      ? "none"
-      : el.dataset.originalDisplay || "block";
+    if (isAuthenticated) {
+      // Store original inline display before hiding
+      if (el.style.display && el.style.display !== "none") {
+        el.dataset.originalDisplay = el.style.display;
+      }
+      el.style.display = "none";
+    } else {
+      // Restore: either use stored value or remove inline style
+      if (el.dataset.originalDisplay) {
+        el.style.display = el.dataset.originalDisplay;
+      } else {
+        el.style.removeProperty("display"); // Let CSS control it
+      }
+    }
   });
 
   requiredElements.forEach((el) => {
     if (!isAuthenticated) {
-      el.dataset.originalDisplay = el.style.display || "block";
+      // Store original inline display value (if any), but never store "none"
+      // and don't overwrite an already-stored value
+      if (
+        el.style.display &&
+        el.style.display !== "none" &&
+        !el.dataset.originalDisplay
+      ) {
+        el.dataset.originalDisplay = el.style.display;
+      }
     }
-    el.style.display = isAuthenticated
-      ? el.dataset.originalDisplay || "block"
-      : "none";
+
+    if (isAuthenticated) {
+      // Restore: either use stored value or remove inline style
+      if (el.dataset.originalDisplay) {
+        el.style.display = el.dataset.originalDisplay;
+      } else {
+        el.style.removeProperty("display"); // Let CSS control it
+      }
+    } else {
+      el.style.display = "none";
+    }
   });
 
   // If user just authenticated and dataBinder exists, load dashboard data (debounced)
@@ -327,7 +340,6 @@ function updateAuthState(isAuthenticated) {
               console.error("Logout error:", error);
               alert("Logout failed. Please try again.");
             } else {
-              console.log("Logout successful");
               window.location.reload();
             }
           } catch (error) {
@@ -336,7 +348,6 @@ function updateAuthState(isAuthenticated) {
           }
         });
         logoutBtn.setAttribute("data-logout-handler-attached", "true");
-        console.log("Logout handler attached to visible button");
       }
     }, 150);
   }
@@ -363,11 +374,9 @@ async function updateUserInfo() {
       // Update email display
       userEmailElement.textContent = email;
 
-      // Update avatar with user initials
+      // Update avatar with Gravatar fallback to initials
       const initials = getInitials(email);
-      userAvatarElement.textContent = initials;
-
-      console.log("User info updated");
+      await setUserAvatar(userAvatarElement, email, initials);
     } else {
       // No session, reset to defaults
       userEmailElement.textContent = "Loading...";
@@ -407,6 +416,58 @@ function getInitials(email) {
   } else {
     // Just use first two characters of email prefix
     return emailPrefix.slice(0, 2).toUpperCase();
+  }
+}
+
+async function setUserAvatar(target, email, initials) {
+  if (!target) return;
+
+  const existingImg = target.querySelector("img");
+  if (existingImg) {
+    existingImg.remove();
+  }
+
+  target.textContent = initials || "?";
+
+  const gravatarUrl = await getGravatarUrl(email, 80);
+  if (!gravatarUrl) return;
+
+  const avatarImg = document.createElement("img");
+  avatarImg.src = gravatarUrl;
+  avatarImg.alt = "User avatar";
+  avatarImg.loading = "lazy";
+  avatarImg.decoding = "async";
+  avatarImg.addEventListener("load", () => {
+    target.textContent = "";
+    target.appendChild(avatarImg);
+  });
+  avatarImg.addEventListener("error", () => {
+    if (avatarImg.parentNode) {
+      avatarImg.parentNode.removeChild(avatarImg);
+    }
+    target.textContent = initials || "?";
+  });
+}
+
+async function getGravatarUrl(email, size) {
+  const normalised = (email || "").trim().toLowerCase();
+  if (!normalised || !window.crypto?.subtle) return "";
+
+  const encoder = new TextEncoder();
+  const data = encoder.encode(normalised);
+  try {
+    const digest = await window.crypto.subtle.digest("SHA-256", data);
+    const hash = Array.from(new Uint8Array(digest))
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
+    const params = new URLSearchParams({
+      s: String(size || 80),
+      d: "404",
+    });
+    return `https://www.gravatar.com/avatar/${hash}?${params.toString()}`;
+  } catch (error) {
+    console.warn("Failed to generate Gravatar hash:", error);
+    return "";
   }
 }
 
@@ -456,7 +517,12 @@ function showAuthForm(formType) {
 
   const authModalTitle = document.getElementById("authModalTitle");
   if (authModalTitle) {
-    authModalTitle.textContent = titles[formType];
+    if (Object.hasOwn(titles, formType)) {
+      authModalTitle.textContent = titles[formType];
+    } else {
+      console.warn("Unknown form type:", formType);
+      authModalTitle.textContent = "Authentication";
+    }
   }
 
   const targetForm = document.getElementById(`${formType}Form`);
@@ -569,8 +635,6 @@ async function handleEmailLogin(event) {
 
     if (error) throw error;
 
-    console.log("Email login successful:", data.user.id);
-
     const handler =
       typeof window.handleAuthSuccess === "function"
         ? window.handleAuthSuccess
@@ -648,7 +712,6 @@ async function executeEmailSignup() {
 
     if (error) throw error;
 
-    console.log("Email signup successful:", data.user?.id);
     recordTurnstileEvent("signup_success", { userId: data.user?.id || null });
 
     pendingSignupSubmission = null;
@@ -791,8 +854,6 @@ async function handleSocialLogin(provider) {
 async function handlePendingDomain() {
   const pendingDomain = sessionStorage.getItem("bb_pending_domain");
   if (pendingDomain && window.dataBinder?.authManager?.isAuthenticated) {
-    console.log("Found pending domain after auth:", pendingDomain);
-
     // Clear the stored domain
     sessionStorage.removeItem("bb_pending_domain");
 
@@ -1051,8 +1112,6 @@ function setupPasswordStrength() {
  * Setup authentication event handlers
  */
 function setupAuthHandlers() {
-  console.log("Setting up auth handlers...");
-
   // Use event delegation for main auth buttons that might not exist initially
   document.addEventListener("click", (e) => {
     const target = e.target;
@@ -1060,7 +1119,6 @@ function setupAuthHandlers() {
     // Handle login button clicks (various IDs)
     if (target.id === "loginBtn" || target.id === "showLoginBtn") {
       e.preventDefault();
-      console.log("Login button clicked via delegation");
       showAuthModal();
       showAuthForm("login");
     }
@@ -1068,7 +1126,6 @@ function setupAuthHandlers() {
     // Handle signup button clicks
     if (target.id === "showSignupBtn") {
       e.preventDefault();
-      console.log("Signup button clicked via delegation");
       showAuthModal();
       showAuthForm("signup");
     }
@@ -1076,7 +1133,6 @@ function setupAuthHandlers() {
     // Handle logout button clicks
     if (target.id === "logoutBtn") {
       e.preventDefault();
-      console.log("Logout button clicked via delegation");
       handleLogout();
     }
   });
@@ -1098,7 +1154,6 @@ async function handleLogout() {
       console.error("Logout error:", error);
       alert("Logout failed. Please try again.");
     } else {
-      console.log("Logout successful");
       window.location.reload();
     }
   } catch (error) {
@@ -1156,7 +1211,6 @@ function setupAuthModalHandlers() {
 function setupLoginPageHandlers() {
   // This is now handled by event delegation in setupAuthHandlers()
   // No need for direct element handlers since they're covered by delegation
-  console.log("Login page handlers setup - using event delegation");
 }
 
 function isLoopbackCallback(url) {

@@ -626,8 +626,20 @@ func main() {
 	// Create a rate limiter
 	limiter := newRateLimiter()
 
+	// Check GA4 integration availability
+	googleClientID := os.Getenv("GOOGLE_CLIENT_ID")
+	googleClientSecret := os.Getenv("GOOGLE_CLIENT_SECRET")
+	if googleClientID == "" || googleClientSecret == "" {
+		log.Info().Msg("GA4 integration unavailable: GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET not configured")
+	}
+
 	// Create API handler with dependencies
-	apiHandler := api.NewHandler(pgDB, jobsManager)
+	apiHandler := api.NewHandler(
+		pgDB,
+		jobsManager,
+		googleClientID,
+		googleClientSecret,
+	)
 
 	// Create HTTP multiplexer
 	mux := http.NewServeMux()

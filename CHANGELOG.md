@@ -29,6 +29,154 @@ On merge, CI will:
 
 ## [Unreleased]
 
+## [0.26.0] – 2026-02-06
+
+### Added
+
+- **Settings Page**: New unified settings page with account management
+  - Profile section with read-only name/email display
+  - Security section with password reset via Supabase
+  - Team members list with admin-gated removal
+  - Team invites with send/list/revoke functionality (admin-only)
+  - Plan management with current plan, change plan, and usage history
+  - Integrations sections for Slack, Google Analytics, and Webflow
+- **Organisation Switching**: Global nav org switcher on all pages
+  - Dropdown to switch between organisations
+  - Persistent active org selection via localStorage
+  - `bb:org-switched` event for cross-component coordination
+- **Global Quota Display**: Usage quota now visible in nav on all pages
+  - Auto-refreshes every 30 seconds when page visible
+  - Updates immediately on organisation switch
+  - Warning/exhausted states at 80%/100% thresholds
+- **Admin Database Reset**: Settings button to reset database (admin-only)
+- **Notifications Dropdown**: Bell icon with notification list in global nav
+
+### Changed
+
+- **Polling Architecture**: Consolidated duplicate polling systems
+  - Dashboard and job details now use single fallback polling mechanism
+  - Polling only starts when Supabase Realtime fails (staging/preview)
+  - Fallback polling stops when first real realtime event received
+  - Removed unused auto-refresh code from BBDataBinder (~35 lines)
+- **Quota Display**: Moved from settings-only to global nav
+  - Cached DOM references for efficiency
+  - Re-entrancy guard prevents concurrent fetches
+  - 15-second timeout prevents hung requests blocking future updates
+
+### Fixed
+
+- **Staging Realtime**: Fixed polling not working on Supabase preview branches
+  where realtime connects but events don't fire
+- **Quota Init**: Fixed quota fetch failing when Supabase not ready
+- **Org Init Race Conditions**: Unified org initialisation to prevent race
+  conditions between nav and page scripts
+- **Notification Security**: Validate notification link protocols before
+  rendering
+
+## [0.25.0] – 2026-02-01
+
+### Added
+
+- **Domain Search Attributes**: Shared domain search input with
+  `bbb-domain-create` and `bbb-domain-search` attributes to control create
+  behaviour and dropdown visibility across dashboard and GA workflows
+- **GA4 Analytics Integration**: Full Google Analytics 4 Data API integration
+  for page view analytics
+  - Progressive fetching: initial 100 pages, then background loops of 1000-page
+    batches (until 10k), then 50000-page batches until all pages fetched
+  - OAuth token refresh with RFC 6749 compliant form-urlencoded requests
+  - Thread-safe token management with automatic refresh on 401 responses
+  - Triggered automatically when job created with `findLinks: true`
+- **Org-Scoped Page Analytics Storage**: GA4 data persisted per organisation
+  - New `page_analytics` table stores 7-day, 28-day, and 180-day page view
+    counts
+  - Data tied to organisation that fetched it, preventing cross-org data leakage
+  - RLS policies enforce organisation membership for all CRUD operations
+- **GA4 Domain Mapping**: Connect GA4 properties to specific domains
+  - Domain tags UI on GA4 connections in integrations modal
+  - Inline search input for domain selection with Enter key support
+  - PATCH endpoint (`/v1/integrations/google/analytics/{id}/domains`) to update
+    mappings
+  - `domain_ids` array column on `google_analytics_connections` table
+- **Domain Creation Endpoint**: Dedicated `/v1/domains` endpoint for creating
+  domains without job side effects
+- **Job Response Enhancement**: Job creation response now includes `domain_id`
+- **Traffic-Based Task Prioritisation**: High-traffic pages now get prioritised
+  in the crawl queue
+  - Log-scaled view curve assigns scores from 0.10 to 0.99 based on 28-day page
+    views
+  - Pages with 0-1 views are excluded from analytics scoring
+  - Uses `GREATEST(structural_priority, traffic_score)` so traffic and structure
+    both contribute
+  - Traffic scores calculated after GA4 fetch completes, applied to pending
+    tasks for reprioritisation
+  - Link discovery also applies traffic scores via `GREATEST`
+- **Job Detail Analytics**: Job tasks and exports now include GA4 page views
+  (7d, 28d, 180d)
+
+### Changed
+
+- **Go Version**: Updated to Go 1.25.6 for security fixes
+- **Sitemap Baseline Priority**: Default sitemap task priority lowered to 0.1 to
+  let GA4 traffic scores surface high-traffic pages
+
+### Fixed
+
+- **Domain Creation Race**: Fixed TOCTOU race with atomic
+  `INSERT ... ON CONFLICT` pattern in `GetOrCreateDomainID`
+- **Console Noise**: Removed verbose debug logging from GA4 integration and page
+  load
+- **GA Account Reuse**: Stored GA4 accounts now retry auth initialisation and
+  fall back to connection tokens when account tokens are unavailable
+- **GA4 Path Normalisation**: Analytics upserts now normalise GA4 page paths so
+  traffic scores match task paths more reliably
+- **Task Reprioritisation Logs**: Reduced noise when no tasks are updated after
+  traffic scoring
+
+## [0.24.3] – 2026-01-27
+
+### Fixed
+
+- **Dashboard Authentication Display**: Fixed bug where elements with
+  CSS-defined `display` properties (e.g., `display: flex`) were incorrectly
+  forced to `display: block` after authentication state changes
+  - Auth elements now properly preserve CSS cascade by removing inline styles
+    instead of applying default values
+  - Fixes layout breakage in header elements (user info, auth buttons)
+  - Resolves quota display not updating after organisation switch
+  - Prevents capturing "none" as original display value
+
+## [0.24.2] – 2026-01-26
+
+### Added
+
+- **Immediate Job Triggering**: Jobs now automatically triggered when enabling
+  schedules or auto-publish webhooks for Webflow sites
+  - Schedule enable/update creates immediate job with
+    `source_type="schedule_setup"`
+  - Auto-publish enable creates immediate job with
+    `source_type="auto_publish_setup"`
+  - Provides instant user feedback that automation features are working
+  - Graceful error handling - feature enable succeeds even if job creation fails
+
+## [0.24.1] – 2026-01-26
+
+### Changed
+
+- **Test Suite Simplification**: Reduced test suite by 73% (23,000→6,369 LOC,
+  78→21 files)
+  - Removed: Mock-heavy database tests, CRUD validation tests, manager/worker
+    unit tests with extensive mocking
+  - Kept: Security tests (JWT validation, webhook signatures, SSRF protection),
+    compliance tests (robots.txt enforcement), algorithm tests (sitemap parsing,
+    error classification, job lifecycle)
+  - Philosophy: Test for breakage, not coverage. Focus on security boundaries
+    and complex business logic
+- **Documentation Updates**: Updated README and Roadmap to reflect
+  security/compliance testing approach instead of coverage percentage targets
+- **CI Configuration**: Removed coverage floor gates from CI workflow, kept
+  Codecov for visibility only (informational, non-blocking)
+
 ## [0.23.0] – 2026-01-04
 
 ### Added

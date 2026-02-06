@@ -111,22 +111,47 @@ func getAppURL() string {
 	return "https://app.bluebandedbee.co"
 }
 
-// getDashboardURL returns the dashboard URL
-func getDashboardURL() string {
-	if dashURL := os.Getenv("DASHBOARD_URL"); dashURL != "" {
-		return dashURL
+// getSettingsURL returns the settings URL
+func getSettingsURL() string {
+	if settingsURL := os.Getenv("SETTINGS_URL"); settingsURL != "" {
+		return settingsURL
 	}
-	return getAppURL() + "/dashboard"
+	return getAppURL() + "/settings"
 }
 
-func (h *Handler) redirectToDashboardWithError(w http.ResponseWriter, r *http.Request, integration, errMsg string) {
+func buildSettingsURL(path string, params url.Values, fragment string) string {
+	base := strings.TrimSuffix(getSettingsURL(), "/")
+	if path != "" {
+		if !strings.HasPrefix(path, "/") {
+			path = "/" + path
+		}
+		base = base + path
+	}
+
+	settingsURL, err := url.Parse(base)
+	if err != nil {
+		return base
+	}
+
+	if len(params) > 0 {
+		settingsURL.RawQuery = params.Encode()
+	}
+	if fragment != "" {
+		settingsURL.Fragment = fragment
+	}
+
+	return settingsURL.String()
+}
+
+func (h *Handler) redirectToSettingsWithError(w http.ResponseWriter, r *http.Request, integration, errMsg, path, fragment string) {
 	paramName := fmt.Sprintf("%s_error", strings.ToLower(integration))
 	params := url.Values{}
 	params.Set(paramName, errMsg)
-	http.Redirect(w, r, getDashboardURL()+"?"+params.Encode(), http.StatusSeeOther)
+	redirectURL := buildSettingsURL(path, params, fragment)
+	http.Redirect(w, r, redirectURL, http.StatusSeeOther)
 }
 
-func (h *Handler) redirectToDashboardWithSuccess(w http.ResponseWriter, r *http.Request, integration, label, connectionID string) {
+func (h *Handler) redirectToSettingsWithSuccess(w http.ResponseWriter, r *http.Request, integration, label, connectionID, path, fragment string) {
 	paramName := fmt.Sprintf("%s_connected", strings.ToLower(integration))
 	params := url.Values{}
 	params.Set(paramName, label)
@@ -134,11 +159,11 @@ func (h *Handler) redirectToDashboardWithSuccess(w http.ResponseWriter, r *http.
 		idParamName := fmt.Sprintf("%s_connection_id", strings.ToLower(integration))
 		params.Set(idParamName, connectionID)
 	}
-	http.Redirect(w, r, getDashboardURL()+"?"+params.Encode(), http.StatusSeeOther)
+	redirectURL := buildSettingsURL(path, params, fragment)
+	http.Redirect(w, r, redirectURL, http.StatusSeeOther)
 }
 
-// redirectToDashboardWithSetup redirects to dashboard with setup flag for post-OAuth configuration
-func (h *Handler) redirectToDashboardWithSetup(w http.ResponseWriter, r *http.Request, integration, label, connectionID string) {
+func (h *Handler) redirectToSettingsWithSetup(w http.ResponseWriter, r *http.Request, integration, label, connectionID, path, fragment string) {
 	paramName := fmt.Sprintf("%s_connected", strings.ToLower(integration))
 	params := url.Values{}
 	params.Set(paramName, label)
@@ -146,8 +171,8 @@ func (h *Handler) redirectToDashboardWithSetup(w http.ResponseWriter, r *http.Re
 		idParamName := fmt.Sprintf("%s_connection_id", strings.ToLower(integration))
 		params.Set(idParamName, connectionID)
 	}
-	// Add setup flag to indicate frontend should open site configuration
 	setupParamName := fmt.Sprintf("%s_setup", strings.ToLower(integration))
 	params.Set(setupParamName, "true")
-	http.Redirect(w, r, getDashboardURL()+"?"+params.Encode(), http.StatusSeeOther)
+	redirectURL := buildSettingsURL(path, params, fragment)
+	http.Redirect(w, r, redirectURL, http.StatusSeeOther)
 }

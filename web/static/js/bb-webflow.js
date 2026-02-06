@@ -1,7 +1,7 @@
 /**
  * Webflow Integration Handler
  * Handles Webflow workspace/site connections and per-site configuration.
- * Flow: Connect -> OAuth -> Return to modal -> Configure Sites
+ * Flow: Connect -> OAuth -> Return to settings -> Configure sites
  */
 
 // State for site configuration
@@ -70,8 +70,6 @@ function setupWebflowIntegration() {
       debounceTimer = setTimeout(() => handleSiteSearch(event), 200);
     });
   }
-
-  console.log("Webflow integration handlers initialised");
 }
 
 /**
@@ -122,7 +120,7 @@ function handleWebflowAction(action, element) {
     }
 
     default:
-      console.log("Unhandled Webflow action:", action);
+      break;
   }
 }
 
@@ -348,8 +346,8 @@ function handleWebflowOAuthCallback() {
       showWebflowSuccess("Webflow connected! Configure your sites below.");
     }
 
-    // Open the settings modal to show site configuration
-    openSettingsModalForWebflow();
+    // Focus the settings page and Webflow section
+    focusWebflowSettings();
 
     // Load connections (which will also load sites)
     loadWebflowConnections();
@@ -362,19 +360,22 @@ function handleWebflowOAuthCallback() {
 }
 
 /**
- * Open the settings modal and scroll to Webflow section
+ * Focus settings and the Webflow section
  */
-function openSettingsModalForWebflow() {
-  const settingsBtn = document.getElementById("notificationsSettingsBtn");
-  const modal = document.getElementById("notificationsModal");
+function focusWebflowSettings() {
+  const targetPath = "/settings/auto-crawl";
+  const targetHash = "#webflow";
+  const currentPath = window.location.pathname.replace(/\/$/, "");
 
-  if (settingsBtn) {
-    settingsBtn.click();
-  } else if (modal) {
-    modal.classList.add("show");
+  if (currentPath !== targetPath) {
+    window.location.href = `${targetPath}${targetHash}`;
+    return;
   }
 
-  // Give modal time to open, then scroll to Webflow section
+  if (window.location.hash !== targetHash) {
+    window.location.hash = targetHash;
+  }
+
   setTimeout(() => {
     const webflowSection = document.getElementById("webflowSitesConfig");
     if (webflowSection) {

@@ -1,8 +1,6 @@
-# Roadmap
+### ✅ Stage 0: Project Setup & Infrastructure
 
-## ✅ Stage 0: Project Setup & Infrastructure
-
-### ✅ Development Environment Setup
+#### ✅ Development Environment Setup
 
 - [x] Initialise GitHub repository
 - [x] Set up branch protection
@@ -11,7 +9,7 @@
 - [x] Set up local development environment
 - [x] Add initial documentation
 
-### ✅ Go Project Structure
+#### ✅ Go Project Structure
 
 - [x] Initialise Go project
 - [x] Set up dependency management
@@ -19,7 +17,7 @@
 - [x] Add basic configs
 - [x] Set up testing framework
 
-### ✅ Production Infrastructure Setup
+#### ✅ Production Infrastructure Setup
 
 - [x] Set up dev/prod environments
 - [x] Configure environment variables
@@ -211,7 +209,7 @@
 - [x] Clean up dependencies and imports
 - [x] Update configuration and documentation
 
-## ✅ Stage 4: Core Authentication & MVP Interface
+## 🟡 Stage 4: Core Authentication & MVP Interface
 
 ### ✅ Implement Supabase Authentication
 
@@ -223,7 +221,8 @@
 - [x] Implement comprehensive auth error handling
 - [x] Create user registration with auto-organisation creation
 - [x] Configure custom domain authentication (auth.bluebandedbee.co)
-- [x] Implement account linking for multiple auth providers per user
+- [x] Implement account linking for multiple auth providers per user (handled by
+      Supabase Auth via auth.identities table)
 
 ### ✅ Connect user data to PostgreSQL
 
@@ -266,7 +265,7 @@ Organisation model implemented:
   - [x] Event delegation framework for extensible functionality
   - [x] Demonstration of template approach in production dashboard
 
-### ✅ Template + Data Binding Implementation (Completed v0.5.5)
+### 🟡 Template + Data Binding Implementation (Completed v0.5.5)
 
 - [x] **Core Data Binding Library**
   - [x] Basic attribute-based event handling (`bb-action="refresh-dashboard"`)
@@ -283,8 +282,7 @@ Organisation model implemented:
   - [x] Advanced filtering and search capabilities
 - [ ] **User Experience Features**
   - [ ] Account settings and profile management templates
-  - [ ] Notification system integration
-  - [ ] Performance analytics and trend visualisation
+  - [x] Notification system integration
   - [ ] Responsive design compatibility testing
 
 ### ✅ Task prioritisation & URL processing
@@ -298,7 +296,6 @@ Organisation model implemented:
   - [x] Implement link priority ordering for header links (1st: 1.000, 2nd:
         0.990, etc.)
   - [x] Apply priority ordering logic to all discovered page links
-  - [ ] Job-level task prioritisation options
 
 - [x] **Robots.txt Compliance**
   - [x] Parse and honour robots.txt crawl-delay directives
@@ -335,34 +332,39 @@ Organisation model implemented:
   - [x] Comprehensive error handling with structured logging
   - [x] Input validation and rollback logic for failed operations
 
-### 🟡 Webflow App Integration
+### 🟡 Webflow App Integration (Completed v0.23.0)
 
-- [x] **Webflow OAuth Connection** (PR #210)
+- [x] **Webflow OAuth Connection**
   - [x] Register as Webflow developer and create App
   - [x] OAuth flow with HMAC-signed state for CSRF protection
   - [x] Token storage in Supabase Vault with automatic cleanup
   - [x] User identity display via `authorized_user:read` scope
-  - [x] Dashboard UI showing connection status and user name
+  - [x] Dashboard UI showing connection status and username
   - [x] Shared OAuth utilities extracted from Slack integration
-- [ ] **Webflow Site Selection**
-  - [ ] List user's accessible Webflow sites via `/v2/sites` endpoint
-  - [ ] Site picker UI in dashboard connections panel
-  - [ ] Store selected site ID with connection for job targeting
-  - [ ] Add list/delete endpoints for connection management
-- [ ] **Manual Job Triggering**
-  - [ ] "Crawl Now" button triggers job for selected Webflow site
-  - [ ] Show last crawl status and results for connected site
-  - [ ] Link Webflow connection to existing job creation flow
-- [ ] **Scheduling Configuration**
-  - [ ] Connect Webflow sites to existing scheduler system
-  - [ ] Schedule dropdown for recurring cache warming (6/12/24/48h)
-  - [ ] Per-site schedule management in dashboard
-- [ ] **Run on Publish (Webhooks)**
-  - [ ] "Auto-crawl on publish" toggle in connection settings
-  - [ ] Register `site_publish` webhook with Webflow API
-  - [ ] Webhook endpoint to receive publish events
-  - [ ] Verify webhook signatures using `x-webflow-signature` headers
-  - [ ] Trigger cache warming job on verified publish events
+- [x] **Webflow Site Selection**
+  - [x] List user's accessible Webflow sites via `/v2/sites` endpoint
+  - [x] Site picker UI in dashboard connections panel with search/pagination
+  - [x] Per-site settings stored in `webflow_site_settings` table
+  - [x] Connection management endpoints (list/get/delete)
+- [x] **Manual Job Triggering** (Completed v0.24.0)
+  - [x] Jobs automatically triggered when schedule or auto-publish enabled
+  - [x] Jobs can be triggered via scheduler or webhooks
+  - [x] Show last crawl status (via general job list)
+- [x] **Scheduling Configuration**
+  - [x] Connect Webflow sites to existing scheduler system
+  - [x] Schedule dropdown for recurring cache warming (None/6h/12h/24h/48h)
+  - [x] Per-site schedule management in dashboard
+  - [x] Automatic scheduler creation/update/deletion based on interval selection
+- [x] **Run on Publish (Webhooks)**
+  - [x] "Auto-crawl on publish" toggle in site configuration
+  - [x] Register `site_publish` webhook with Webflow API (per-site control)
+  - [x] Webhook endpoint to receive publish events (org-scoped and legacy
+        token-based)
+  - [x] Webhook signature verification (NOTE: Webflow v2 doesn't provide
+        signatures yet)
+  - [x] Trigger cache warming job on verified publish events with auto_publish
+        validation
+  - [x] Platform-org mapping for workspace-based webhook resolution
 
 ### ✅ Slack Integration (Completed v0.20.0)
 
@@ -375,14 +377,193 @@ Organisation model implemented:
   - [x] Job completion notifications via Slack DMs
   - [x] Error notifications when jobs fail
   - [x] API endpoints for workspace management and user preferences
-- [ ] **Future Enhancements** (Not in scope for MVP)
-  - [ ] Slash commands (`/crawl sitedomain.com`)
-  - [ ] Threading with progress updates
-  - [ ] Interactive message actions
 
-## ⚪ Stage 4.5: Platform Integration Foundation
+### 🟡 Google Analytics 4 Integration
 
-### 🟡 Multi-Platform Authentication Architecture
+- [x] **OAuth Connection Setup** (Steps 1-3 COMPLETE)
+  - [x] Google OAuth 2.0 configuration and credentials
+  - [x] OAuth flow implementation with state token CSRF protection
+  - [x] Account and property selection functionality
+  - [x] Token storage in Supabase Vault with refresh logic
+  - [x] Database schema for `user_ga_connections` table
+  - [x] Dashboard UI for connecting/disconnecting GA4 properties
+- [ ] **Analytics Data Retrieval** (Step 4)
+  - [ ] Implement GA4 Data API client (`analyticsdata/v1beta`)
+  - [ ] Fetch recent visitor/view data for each page path
+  - [ ] Query metric: `screenPageViews` only
+  - [ ] Support for 7, 28, 180, and 365-day lookback periods
+  - [ ] Scheduled background sync service (opt-in per domain, no sync by
+        default)
+  - [ ] Token refresh mechanism for expired access tokens
+- [ ] **Pages Table Integration** (Step 5)
+  - [ ] Add analytics columns to `pages` table:
+    - [ ] `page_views_7d` - Page views (last 7 days)
+    - [ ] `page_views_28d` - Page views (last 28 days)
+    - [ ] `page_views_180d` - Page views (last 180 days)
+    - [ ] `page_views_365d` - Page views (last 365 days)
+    - [ ] `last_analytics_sync_at` - Timestamp of last GA sync
+  - [ ] Atomic upsert logic to merge GA data with existing page records
+- [ ] **Task Prioritisation Enhancement** (Step 6)
+  - [ ] Incorporate page view data into task priority calculation
+  - [ ] Prioritise high-traffic pages for earlier cache warming
+  - [ ] Automatically enabled when domain has linked GA account
+- [ ] **Data Export Integration** (Step 7)
+  - [ ] Include page view metrics in CSV exports
+  - [ ] Add columns: Page Views (7d), Page Views (28d), Page Views (180d), Page
+        Views (365d)
+  - [ ] Dashboard displays page view metrics alongside performance data
+
+**Implementation Plan:** See
+[plans/google-analytics-integration.md](google-analytics-integration.md) for
+complete technical architecture and Go implementation details.
+
+---
+
+## 🎯 STAGE 5: MVP LAUNCH PREPARATION (Current)
+
+### 5.0 Finalise outstanding actions above
+
+- [ ] GA
+- [ ] Account settings / management
+
+### 5.1: Webflow Job Triggering & Polish
+
+- [x] **Trigger immediate job when schedule or auto-publish enabled**
+- [ ] **Extension Development**
+  - [ ] Build Webflow Designer Extension using Designer Extension SDK
+  - [ ] Implement site health metrics display (broken links, slow pages)
+  - [ ] Add job management interface (view status, trigger crawls)
+  - [ ] Configuration panel for schedule and webhook settings
+- [ ] **Integration & Testing**
+  - [ ] Connect extension to BBB API via OAuth
+  - [ ] Test extension in Webflow Designer workspace
+  - [ ] Handle error states and loading indicators
+
+### 5.2: Payment Infrastructure
+
+- [ ] **Paddle Integration**
+  - [ ] Set up Paddle account and configuration
+  - [ ] Implement subscription webhooks and payment flow
+  - [ ] Create subscription plans and checkout process
+- [ ] **Subscription Management**
+  - [ ] Link subscriptions to organisations
+  - [ ] Handle subscription updates and plan changes
+  - [ ] Add subscription status checks
+- [ ] **Usage Tracking & Quotas**
+  - [ ] Implement usage counters and basic limits
+  - [ ] Set up usage reporting functionality
+  - [ ] Implement organisation-level usage quotas
+
+### 5.3: Branding & UI Cleanup
+
+- [ ] **Visual Design System**
+  - [ ] Define colour palette, typography, spacing scales
+  - [ ] Create reusable CSS variables and utility classes
+  - [ ] Design logo and favicon assets
+- [ ] **Dashboard Redesign & Polish**
+  - [ ] Ensure responsive layout at core to everything
+  - [ ] Optimise elements for dashboard vs. Webflow designer App
+  - [ ] Improve nav bar, settings & notifications layout
+  - [ ] Improve layout consistency and visual hierarchy
+  - [ ] Refine job cards, status indicators, and data tables
+  - [ ] Add loading states, empty states, and transitions
+- [ ] **Error States & Messaging**
+  - [ ] Design clear error messages and recovery suggestions
+  - [ ] Improve validation feedback for forms
+  - [ ] Create consistent notification system
+- [ ] **Onboarding Flow**
+  - [ ] Quick start flow - Crawl domain & create account
+    - [ ] Marketing page
+    - [ ] Webflow App + auth Webflow, set schedule, publish
+  - [ ] Welcome screen for new users - tick box/dismiss cards
+    - [ ] Quick start guide or tooltip tour
+    - [ ] Crawl domain, create a schedule
+    - [ ] Explain plans & update if required
+    - [ ] View results, export slow and error pages
+    - [ ] Integrate steps GA, Slack, Webflow
+
+### 5.4: Marketing Page
+
+- [ ] **Marketing Infrastructure**
+  - [ ] Simple Webflow marketing page with product explanation
+  - [ ] Basic navigation structure and call-to-action
+    - [ ] Quick crawl & account creation
+  - [ ] User documentation and help resources
+  - [ ] Landing pages
+    - [ ] Cache warmer - make your site load faster
+    - [ ] Load speed - find slow pages
+    - [ ] Broken links - find the important ones
+    - [ ] Integrations - Slack, Webflow, Google Analytics
+  - [ ] Pricing page with subscription tiers
+
+### 5.5: Webflow Marketplace Submission
+
+[Full details in Webflow Marketplace](docs/plans/webflow-marketplace.md)
+
+- [ ] **Marketplace Preparation**
+  - [ ] Complete Webflow App listing (description, screenshots, demo video)
+  - [ ] Prepare support documentation and setup guide
+  - [ ] Create terms of service and privacy policy
+- [ ] **Submission & Approval**
+  - [ ] Submit app to Webflow marketplace for review
+  - [ ] Address feedback and make required changes
+  - [ ] Obtain marketplace approval
+
+### 5.6: Pre-Launch Polish & Testing
+
+- [ ] **Alpha Testing**
+  - [ ] Internal testing with team members
+  - [ ] Beta testing with 3-5 friendly Webflow users
+  - [ ] Collect feedback and address critical issues
+- [ ] **Security & Compliance**
+  - [ ] Final security audit of authentication flows
+  - [ ] Review RLS policies and data isolation
+  - [ ] Confirm GDPR/privacy compliance basics
+
+### 5.7: Launch & First Customers
+
+- [ ] **Soft Launch**
+  - [ ] Make app available to first 10 users
+  - [ ] Monitor system performance and error rates
+  - [ ] Provide responsive support to early adopters
+- [ ] **Iterative Improvements**
+  - [ ] Gather user feedback on critical issues
+  - [ ] Address bugs and usability problems
+  - [ ] Track key metrics (signup rate, job success, retention)
+
+## ⚪ Stage 6: Post-MVP Enhancements
+
+### 🔴 WordPress Integration
+
+- [ ] **WordPress Plugin Development**
+  - [ ] Create basic WordPress plugin for Blue Banded Bee
+  - [ ] Plugin configuration interface for domain settings
+  - [ ] Display crawl results and statistics in WordPress admin
+  - [ ] Trigger manual crawls from WordPress dashboard
+- [ ] **WordPress.org Submission**
+  - [ ] Prepare plugin listing and screenshots
+  - [ ] Submit plugin to WordPress plugin directory
+  - [ ] Address review feedback and obtain approval
+
+### 🔴 Shopify Integration
+
+- [ ] **Shopify App Development**
+  - [ ] OAuth integration with Shopify
+  - [ ] Embedded app interface for store owners
+  - [ ] Display site health metrics in Shopify admin
+  - [ ] Automatic crawl triggers on theme publish
+- [ ] **Shopify App Store Submission**
+  - [ ] Complete app listing with demo and screenshots
+  - [ ] Submit to Shopify App Store for review
+  - [ ] Address feedback and obtain approval
+
+### Slack enhancements
+
+- [ ] Slash commands (`/crawl sitedomain.com`)
+- [ ] Threading with progress updates
+- [ ] Interactive message actions
+
+### 🔴 Multi-Platform Authentication Architecture
 
 - [x] **Organisation-Based Data Model** (Completed v0.19.0)
   - [x] Implement many-to-many user-organisation relationships
@@ -391,7 +572,7 @@ Organisation model implemented:
   - [ ] Add store/site entity linked to single organisation
 - [ ] **Platform Authentication Adapters**
   - [ ] Shopify OAuth and session management
-  - [ ] Webflow OAuth and site context handling
+  - [ ] WordPress API key integration
   - [ ] Map platform stores/sites to BB organisations
   - [ ] Progressive account creation for platform users
 - [ ] **Unified User System**
@@ -409,57 +590,25 @@ Organisation model implemented:
   - [ ] Add platform-specific authentication handlers
 - [ ] **Platform Adapters**
   - [ ] Shopify app bridge integration
-  - [ ] Webflow designer API integration
+  - [ ] WordPress plugin integration helpers
   - [ ] Platform-specific UI component adapters
   - [ ] Event handling for platform contexts
 
-## ⚪ Stage 5: Subscriptions & Monetisation
-
-### ✅ Testing & Quality
-
-- [x] **Comprehensive Test Coverage** - ✅ **COMPLETED**
-  - [x] Achieved 45.8% total coverage (exceeded expectations)
-  - [x] API endpoints: 33.2% coverage with all major endpoints tested
-  - [x] Implement critical integration tests
-  - [x] Fix critical test issues (P0/P1 from expert review)
-  - [x] Comprehensive testing infrastructure with interface-based and sqlmock
-        patterns
-  - [ ] Add performance benchmarks
-
-### 🔴 Security & Alpha Guardrails
-
-- [ ] **Core guardrails for alpha**
-  - [ ] Active job limits per organisation
-  - [ ] Usage guardrails to prevent abuse during alpha
-- [ ] **Audit & access basics**
-  - [ ] Audit logging for account changes and access history
-  - [ ] Login IP tracking and session limits
-  - [ ] Suspicious activity detection and monitoring
-
-### 🔴 Payment Infrastructure
-
-- [ ] **Paddle Integration**
-  - [ ] Set up Paddle account and configuration
-  - [ ] Implement subscription webhooks and payment flow
-  - [ ] Create subscription plans and checkout process
-- [ ] **Subscription Management**
-  - [ ] Link subscriptions to organisations
-  - [ ] Handle subscription updates and plan changes
-  - [ ] Add subscription status checks
-- [ ] **Usage Tracking & Quotas**
-  - [ ] Implement usage counters and basic limits
-  - [ ] Set up usage reporting functionality
-  - [ ] Implement organisation-level usage quotas
-
-## ⚪ Stage 6: Platform Optimisation & Advanced Features
+## ⚪ Stage 7: Scale & Advanced Features
 
 ### 🔴 Supabase Platform Integration
 
 - [ ] **Real-time Features** (See
-      [SUPABASE-REALTIME.md](docs/development/SUPABASE-REALTIME.md))
+      [SUPABASE-REALTIME.md](docs/development/SUPABASE-REALTIME.md)) - **60%
+      COMPLETE**
   - [x] Real-time notification badge updates via Postgres Changes subscription
-  - [ ] Live job progress via Postgres Changes (replace polling)
-  - [ ] Real-time dashboard stats without page refresh
+        (v0.20.1)
+  - [x] Real-time dashboard job list updates via WebSocket subscriptions
+        (v0.20.1)
+  - [x] Real-time job detail progress updates with per-job subscriptions
+        (v0.20.1)
+  - [ ] Real-time dashboard stats without page refresh (requires API endpoint
+        changes)
   - [ ] Live presence indicators for multi-user organisations
 - [ ] **Database Optimisation**
   - [x] Move CPU-intensive analytics queries to PostgreSQL functions
@@ -532,6 +681,11 @@ Organisation model implemented:
         alerts
   - [ ] Incident runbook and escalation checklist
   - [ ] Minimal status page for alpha
+- [ ] **Frontend Architecture Consideration**
+  - [ ] Evaluate Vue/Svelte framework migration if dashboard exceeds 8000 LOC or
+        team scaling requires modern framework (current: 4000 LOC vanilla JS
+        with custom data binding, no build process - consider migration only if
+        actual pain points emerge)
 
 ## ⚪ Stage 7: Feature Refinement & Launch Preparation
 
@@ -585,7 +739,7 @@ Organisation model implemented:
   - [ ] Implement HTML parsing and canonical content extraction in Go worker
   - [ ] Store HTML in Supabase Storage only when semantic hash changes
 
-### 🔴 Code Quality & Maintenance
+### ✅ Code Quality & Maintenance (Completed)
 
 - [x] **Increase Test Coverage** -
       [Implementation Plan](./docs/plans/increase-test-coverage.md)

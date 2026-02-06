@@ -68,6 +68,40 @@ System administrators have access to restricted endpoints such as:
 - All system administrator actions are logged and tracked in Sentry for audit
   purposes
 
+## Security Scanning
+
+This project uses automated security scanning via `./scripts/security-check.sh`:
+
+- **Trivy**: Detects secrets, vulnerabilities, and misconfigurations in code and
+  dependencies
+- **govulncheck**: Scans Go dependencies for known vulnerabilities
+- **ESLint Security**: Analyses JavaScript code for security anti-patterns
+- **Gosec**: Detects security issues in Go code (via golangci-lint)
+
+### Running Security Scans
+
+```bash
+./scripts/security-check.sh
+```
+
+### Understanding Results
+
+Security scans may report false positives. All known false positives are
+documented in `docs/security/SECURITY_REMEDIATION_PLAN.md` with:
+
+- Analysis of why the finding is a false positive
+- Risk assessment
+- Justification for suppression
+
+**Current Baseline** (as of 2026-01-04):
+
+- Trivy vulnerabilities: 0
+- Trivy misconfigurations: 0
+- Trivy secrets: 0 (anon key suppressed as documented false positive)
+- govulncheck: 0
+- ESLint security: 1 warning (non-literal RegExp, wrapped in try-catch)
+- Gosec: 0
+
 ## Configuration
 
 Sensitive configuration should be set via environment variables, never in code

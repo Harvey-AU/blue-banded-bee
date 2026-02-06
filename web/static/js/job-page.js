@@ -44,6 +44,13 @@ function formatCount(value) {
   return integerFormatter.format(numeric);
 }
 
+function formatOptionalCount(value, empty = "—") {
+  if (value === null || value === undefined) {
+    return empty;
+  }
+  return formatCount(value);
+}
+
 function formatDecimal(value) {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) {
@@ -211,6 +218,15 @@ function updatePageTitle(title) {
     return;
   }
   document.title = `${title} · Blue Banded Bee`;
+
+  const navTitle = document.getElementById("globalNavTitle");
+  const navSeparator = document.getElementById("globalNavSeparator");
+  if (navTitle) {
+    navTitle.textContent = title;
+  }
+  if (navSeparator) {
+    navSeparator.style.display = "inline";
+  }
 }
 
 function formatJobForBinding(job, jobId) {
@@ -450,11 +466,14 @@ function formatTasksForBinding(tasks, defaultDomain) {
         empty: "—",
       }),
       status_code: task.status_code != null ? String(task.status_code) : "—",
+      page_views_7d: formatOptionalCount(task.page_views_7d),
+      page_views_28d: formatOptionalCount(task.page_views_28d),
+      page_views_180d: formatOptionalCount(task.page_views_180d),
     };
   });
 }
 
-function renderTasksTable(tasks) {
+function renderTasksTable(tasks, showAnalytics) {
   const table = document.getElementById("tasksTable");
   const tbody = document.getElementById("tasksTableBody");
   const emptyEl = document.getElementById("tasksEmpty");
@@ -478,8 +497,15 @@ function renderTasksTable(tasks) {
   }
 
   const rowsHtml = tasks
-    .map(
-      (task) => `
+    .map((task) => {
+      const analyticsCells = showAnalytics
+        ? `
+          <td>${escapeHTML(task.page_views_7d)}</td>
+          <td>${escapeHTML(task.page_views_28d)}</td>
+          <td>${escapeHTML(task.page_views_180d)}</td>
+        `
+        : "";
+      return `
         <tr>
           <td>
             <a href="${escapeHTML(task.url)}" target="_blank" rel="noopener noreferrer">
@@ -491,15 +517,16 @@ function renderTasksTable(tasks) {
           <td>${escapeHTML(task.cache_status)}</td>
           <td>${escapeHTML(task.second_response_time)}</td>
           <td>${escapeHTML(task.status_code)}</td>
+          ${analyticsCells}
         </tr>
-      `
-    )
+      `;
+    })
     .join("");
 
   tbody.innerHTML = rowsHtml;
 }
 
-function renderTaskHeader(state) {
+function renderTaskHeader(state, showAnalytics) {
   const table = document.getElementById("tasksTable");
   if (!table) {
     return;
@@ -518,6 +545,14 @@ function renderTaskHeader(state) {
     { key: "second_response_time", label: "2nd Response (ms)" },
     { key: "status_code", label: "Status Code" },
   ];
+
+  if (showAnalytics) {
+    headers.push(
+      { key: "page_views_7d", label: "Views (7d)" },
+      { key: "page_views_28d", label: "Views (28d)" },
+      { key: "page_views_180d", label: "Views (180d)" }
+    );
+  }
 
   const headerHtml = headers
     .map((header) => {
@@ -1200,10 +1235,17 @@ async function loadTasks(state) {
   const tasks = Array.isArray(data?.tasks) ? data.tasks : [];
   const pagination = data?.pagination || {};
 
-  renderTaskHeader(state);
+  const showAnalytics = tasks.some(
+    (task) =>
+      task.page_views_7d !== undefined ||
+      task.page_views_28d !== undefined ||
+      task.page_views_180d !== undefined
+  );
+
+  renderTaskHeader(state, showAnalytics);
 
   const formattedTasks = formatTasksForBinding(tasks, state.domain);
-  renderTasksTable(formattedTasks);
+  renderTasksTable(formattedTasks, showAnalytics);
 
   updateTasksTableVisibility(formattedTasks.length);
   updatePagination(pagination, state);
@@ -1501,14 +1543,44 @@ function triggerFileDownload(content, mimeType, filename) {
 
 // Throttling state for job page realtime updates
 const JOB_PAGE_THROTTLE_MS = 250;
+const JOB_PAGE_FALLBACK_POLLING_MS = 1000;
 let jobPageLastRefresh = 0;
 let jobPageThrottleTimeoutId = null;
 let jobPageIsRefreshing = false;
+let jobPageFallbackPollingId = null;
+
+/**
+ * Start fallback polling when realtime connection fails
+ * State is captured in the closure to avoid module-level coupling
+ */
+function startJobPageFallbackPolling(state) {
+  if (jobPageFallbackPollingId) return;
+  jobPageFallbackPollingId = setInterval(() => {
+    if (!jobPageIsRefreshing) {
+      // Pass the channel so cleanup works when job completes
+      executeJobPageRefresh(state, window.jobProgressChannel);
+    }
+  }, JOB_PAGE_FALLBACK_POLLING_MS);
+}
+
+/**
+ * Stop fallback polling when realtime connection is restored
+ */
+function clearJobPageFallbackPolling() {
+  if (jobPageFallbackPollingId) {
+    clearInterval(jobPageFallbackPollingId);
+    jobPageFallbackPollingId = null;
+  }
+}
 
 /**
  * Throttled refresh for job page realtime notifications
+ * Also stops fallback polling once we receive a real event.
  */
 function throttledJobPageRefresh(state, channel) {
+  // Receiving a real event proves realtime works - stop fallback polling
+  clearJobPageFallbackPolling();
+
   const now = Date.now();
   const timeSinceLastRefresh = now - jobPageLastRefresh;
 
@@ -1546,8 +1618,11 @@ async function executeJobPageRefresh(state, channel) {
 
     // Stop auto-refresh if job is no longer active
     if (updatedJob && !["running", "pending"].includes(updatedJob.status)) {
-      window.supabase.removeChannel(channel);
+      if (channel) {
+        window.supabase.removeChannel(channel);
+      }
       window.jobProgressChannel = null;
+      clearJobPageFallbackPolling();
     }
   } catch (err) {
     console.warn("Realtime data reload failed:", err);
@@ -1590,14 +1665,21 @@ async function subscribeToJobProgress(state) {
         }
       )
       .subscribe((status, err) => {
-        if (err) {
-          console.error("[Realtime] Job progress subscription error:", err);
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || err) {
+          console.warn(
+            "[Realtime] Job progress connection issue, fallback polling will continue"
+          );
         }
+        // Note: fallback polling stops only when we receive an actual realtime event
       });
+
+    // Start fallback polling immediately - it will be cleared when we receive a real event
+    startJobPageFallbackPolling(state);
 
     window.jobProgressChannel = channel;
   } catch (err) {
     console.error("[Realtime] Failed to subscribe to job progress:", err);
+    startJobPageFallbackPolling(state);
   }
 }
 

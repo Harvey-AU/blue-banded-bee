@@ -46,10 +46,6 @@ async function initializeAuthWithDataBinder(dataBinder, options = {}) {
   // Note: dataBinder.initAuth() already handles updating authManager.session
   if (window.supabase) {
     window.supabase.auth.onAuthStateChange(async (event, session) => {
-      if (debug) {
-        console.log("Auth state changed:", event, session?.user?.id);
-      }
-
       // Register user with backend on sign in (handles OAuth returns)
       if (
         (event === "SIGNED_IN" || event === "USER_UPDATED") &&
@@ -70,14 +66,6 @@ async function initializeAuthWithDataBinder(dataBinder, options = {}) {
   }
 
   // Log auth state for debugging
-  if (debug) {
-    console.log("Auth state after init:", {
-      hasAuth: !!dataBinder.authManager,
-      isAuthenticated: dataBinder.authManager?.isAuthenticated,
-      user: dataBinder.authManager?.user?.id,
-    });
-  }
-
   // Update auth state after data binder init
   const currentSession = await window.supabase.auth.getSession();
   window.BBAuth.updateAuthState(!!currentSession.data.session?.user);
@@ -97,7 +85,6 @@ function setupDashboardRefresh(dataBinder) {
   dataBinder.refresh = async function () {
     // Only load dashboard data if user is authenticated
     if (!this.authManager || !this.authManager.isAuthenticated) {
-      console.log("User not authenticated, skipping dashboard data load");
       return;
     }
 
@@ -123,7 +110,6 @@ function setupDashboardRefresh(dataBinder) {
         });
       } catch (error) {
         // Handle stats API errors gracefully
-        console.log("Stats API error (likely no data yet):", error);
         data = {
           stats: {
             total_jobs: 0,
@@ -142,7 +128,6 @@ function setupDashboardRefresh(dataBinder) {
         );
         jobs = jobsResponse.jobs || [];
       } catch (error) {
-        console.log("Jobs API error (likely no jobs yet):", error);
         jobs = [];
       }
 
@@ -280,6 +265,34 @@ function setupDashboardFormHandler() {
   }
 }
 
+function setupJobDomainSearch() {
+  const domainInput = document.getElementById("jobDomain");
+  if (!domainInput || !window.BBDomainSearch) {
+    return;
+  }
+
+  const container = domainInput.closest(".bb-domain-search");
+
+  window.BBDomainSearch.setupDomainSearchInput({
+    input: domainInput,
+    container: container || domainInput.parentElement,
+    clearOnSelect: false,
+    onSelectDomain: (domain) => {
+      domainInput.value = domain.name;
+    },
+    onCreateDomain: (domain) => {
+      domainInput.value = domain.name;
+    },
+    onError: (message) => {
+      if (window.showDashboardError) {
+        window.showDashboardError(
+          message || "Failed to create domain. Please try again."
+        );
+      }
+    },
+  });
+}
+
 /**
  * Handle dashboard job creation form
  * @param {Event} event - Form submit event
@@ -288,7 +301,7 @@ async function handleDashboardJobCreation(event) {
   event.preventDefault();
   const formData = new FormData(event.target);
 
-  const domain = formData.get("domain");
+  let domain = formData.get("domain");
   const maxPages = parseInt(formData.get("max_pages"));
   const concurrencyValue = formData.get("concurrency");
   const scheduleInterval = formData.get("schedule_interval_hours");
@@ -299,6 +312,30 @@ async function handleDashboardJobCreation(event) {
       window.showDashboardError("Domain is required");
     }
     return;
+  }
+
+  if (window.BBDomainSearch) {
+    try {
+      const ensuredDomain = await window.BBDomainSearch.ensureDomainByName(
+        domain,
+        { allowCreate: true }
+      );
+      if (ensuredDomain?.name) {
+        domain = ensuredDomain.name;
+      }
+    } catch (error) {
+      if (window.showDashboardError) {
+        window.showDashboardError(
+          error.message || "Failed to create domain. Please try again."
+        );
+      }
+      return;
+    }
+  }
+
+  const domainField = document.getElementById("jobDomain");
+  if (domainField) {
+    domainField.value = domain;
   }
 
   if (maxPages < 0 || maxPages > 10000) {
@@ -357,8 +394,6 @@ async function handleDashboardJobCreation(event) {
         }
       );
 
-      console.log("Scheduler created:", schedulerResponse);
-
       // Create job immediately linked to the scheduler
       try {
         const jobResponse = await window.dataBinder.fetchData("/v1/jobs", {
@@ -369,8 +404,6 @@ async function handleDashboardJobCreation(event) {
             scheduler_id: schedulerResponse.id,
           }),
         });
-
-        console.log("Scheduled job created:", jobResponse);
       } catch (jobError) {
         // If job creation fails, attempt to clean up the scheduler
         console.error(
@@ -382,7 +415,6 @@ async function handleDashboardJobCreation(event) {
             `/v1/schedulers/${encodeURIComponent(schedulerResponse.id)}`,
             { method: "DELETE" }
           );
-          console.log("Scheduler cleanup successful");
         } catch (cleanupError) {
           console.error("Failed to clean up scheduler:", cleanupError);
         }
@@ -410,19 +442,11 @@ async function handleDashboardJobCreation(event) {
       }
     } else {
       // Regular one-time job creation
-      console.log("Creating job from dashboard form:", {
-        domain,
-        maxPages,
-        concurrency: requestBody.concurrency,
-      });
-
       const response = await window.dataBinder.fetchData("/v1/jobs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(requestBody),
       });
-
-      console.log("Dashboard job created successfully:", response);
 
       // Clear the form
       const domainField = document.getElementById("jobDomain");
@@ -549,13 +573,10 @@ function changeTimeRange(range) {
 async function initializeDashboard(config = {}) {
   const {
     debug = false,
-    refreshInterval = 1,
     apiBaseUrl = "",
     autoRefresh = true,
     networkMonitoring = true,
   } = config;
-
-  console.log("Enhanced dashboard initialising...");
 
   // Load the shared authentication modal
   await window.BBAuth.loadAuthModal();
@@ -567,7 +588,6 @@ async function initializeDashboard(config = {}) {
   const dataBinder = new BBDataBinder({
     apiBaseUrl,
     debug,
-    refreshInterval: autoRefresh ? refreshInterval : 0, // Disable auto-refresh if not wanted
   });
 
   // Expose the binder globally so shared handlers (e.g. auth, forms) can reuse the instance
@@ -609,8 +629,6 @@ async function initializeDashboard(config = {}) {
     await dataBinder.refresh();
   }
 
-  console.log("Enhanced dashboard initialised");
-
   return dataBinder;
 }
 
@@ -631,15 +649,13 @@ async function setupQuickAuth(dataBinder) {
   // Setup handlers
   window.BBAuth.setupAuthHandlers();
   window.BBAuth.setupLoginPageHandlers();
-
-  console.log("Quick auth setup complete");
 }
 
 // Realtime subscription constants (exposed on window for job-page.js)
 const TRANSACTION_VISIBILITY_DELAY_MS = 200;
 window.TRANSACTION_VISIBILITY_DELAY_MS = TRANSACTION_VISIBILITY_DELAY_MS;
 const SUBSCRIBE_RETRY_INTERVAL_MS = 1000;
-const FALLBACK_POLLING_INTERVAL_MS = 60000;
+const FALLBACK_POLLING_INTERVAL_MS = 1000;
 const MAX_SUBSCRIBE_RETRIES = 15;
 const REALTIME_DEBOUNCE_MS = 250; // Throttle realtime notifications to max 4 refreshes per second
 
@@ -656,8 +672,12 @@ let isRefreshing = false;
  * Throttled refresh for realtime notifications.
  * Guarantees at most one refresh per REALTIME_DEBOUNCE_MS interval,
  * but ensures refresh happens even with continuous notifications.
+ * Also stops fallback polling once we receive a real event.
  */
 function throttledRealtimeRefresh() {
+  // Receiving a real event proves realtime works - stop fallback polling
+  clearFallbackPolling();
+
   const now = Date.now();
   const timeSinceLastRefresh = now - lastRealtimeRefresh;
 
@@ -833,20 +853,17 @@ async function subscribeToJobUpdates() {
         }
       )
       .subscribe((status, err) => {
-        if (status === "SUBSCRIBED") {
-          // Connection successful - stop fallback polling
-          clearFallbackPolling();
-        } else if (
-          status === "CHANNEL_ERROR" ||
-          status === "TIMED_OUT" ||
-          err
-        ) {
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || err) {
           console.warn(
-            "[Realtime] Connection issue, enabling fallback polling"
+            "[Realtime] Connection issue, fallback polling will continue"
           );
-          startFallbackPolling();
         }
+        // Note: fallback polling stops only when we receive an actual realtime event
+        // This ensures polling continues on staging where realtime doesn't work
       });
+
+    // Start fallback polling immediately - it will be cleared when we receive a real event
+    startFallbackPolling();
 
     window.jobsChannel = channel;
   } catch (err) {
@@ -862,6 +879,7 @@ if (typeof module !== "undefined" && module.exports) {
     initializeAuthWithDataBinder,
     setupDashboardRefresh,
     setupDashboardFormHandler,
+    setupJobDomainSearch,
     handleDashboardJobCreation,
     setupNetworkMonitoring,
     updateNetworkStatus,
@@ -877,6 +895,7 @@ if (typeof module !== "undefined" && module.exports) {
     initializeAuthWithDataBinder,
     setupDashboardRefresh,
     setupDashboardFormHandler,
+    setupJobDomainSearch,
     handleDashboardJobCreation,
     setupNetworkMonitoring,
     updateNetworkStatus,
@@ -892,6 +911,7 @@ if (typeof module !== "undefined" && module.exports) {
   window.initializeAuthWithDataBinder = initializeAuthWithDataBinder;
   window.setupDashboardRefresh = setupDashboardRefresh;
   window.setupDashboardFormHandler = setupDashboardFormHandler;
+  window.setupJobDomainSearch = setupJobDomainSearch;
   window.handleDashboardJobCreation = handleDashboardJobCreation;
   window.setupNetworkMonitoring = setupNetworkMonitoring;
   window.updateNetworkStatus = updateNetworkStatus;

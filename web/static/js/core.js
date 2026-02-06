@@ -168,6 +168,210 @@
   window.BB_APP = window.BB_APP || {};
   window.BB_APP.coreReady = coreReady;
 
+  // ========================================
+  // Unified Organisation Initialisation
+  // ========================================
+  // Single source of truth for active organisation.
+  // All code should await BB_ORG_READY before accessing BB_ACTIVE_ORG.
+
+  let orgReadyResolve = null;
+  let orgReadyReject = null;
+  let orgInitialised = false;
+
+  window.BB_ORG_READY = new Promise((resolve, reject) => {
+    orgReadyResolve = resolve;
+    orgReadyReject = reject;
+  });
+
+  /**
+   * Initialise the active organisation. Called once after auth is confirmed.
+   * Sets window.BB_ACTIVE_ORG and resolves BB_ORG_READY.
+   * @returns {Promise<Object|null>} The active organisation or null
+   */
+  window.BB_APP.initialiseOrg = async function () {
+    // Return cached result if we have a valid org
+    if (
+      orgInitialised &&
+      window.BB_ACTIVE_ORG?.id &&
+      window.BB_ACTIVE_ORG?.name
+    ) {
+      return window.BB_ACTIVE_ORG;
+    }
+
+    try {
+      if (!window.supabase?.auth) {
+        throw new Error("Supabase not initialised");
+      }
+
+      const { data: sessionData } = await window.supabase.auth.getSession();
+      const session = sessionData?.session;
+      if (!session) {
+        // No session - leave BB_ORG_READY pending so it resolves on sign-in
+        window.BB_ACTIVE_ORG = null;
+        window.BB_ORGANISATIONS = [];
+        return null;
+      }
+
+      // Fetch organisations from API
+      const response = await fetch("/v1/organisations", {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch organisations: ${response.status}`);
+      }
+
+      const data = await response.json();
+      const organisations = data.data?.organisations || [];
+
+      if (organisations.length === 0) {
+        orgInitialised = true;
+        window.BB_ACTIVE_ORG = null;
+        window.BB_ORGANISATIONS = [];
+        orgReadyResolve(null);
+        return null;
+      }
+
+      // Get active org ID - check localStorage first (set on switch), then DB
+      let activeOrgId = null;
+
+      // Check localStorage first - it's set immediately on switch
+      try {
+        activeOrgId = localStorage.getItem("bb_active_org_id");
+      } catch (e) {
+        // localStorage might be blocked
+      }
+
+      // Fall back to DB query if localStorage is empty
+      if (!activeOrgId) {
+        try {
+          const { data: userData } = await window.supabase
+            .from("users")
+            .select("active_organisation_id")
+            .eq("id", session.user.id)
+            .single();
+          activeOrgId = userData?.active_organisation_id;
+        } catch (err) {
+          console.warn("Failed to fetch active_organisation_id:", err);
+        }
+      }
+
+      // Find active org in list, fall back to first
+      const activeOrg =
+        organisations.find((org) => org.id === activeOrgId) || organisations[0];
+
+      // Store in localStorage for faster future loads
+      try {
+        localStorage.setItem("bb_active_org_id", activeOrg.id);
+      } catch (e) {
+        // localStorage might be blocked
+      }
+
+      // Set globals
+      window.BB_ACTIVE_ORG = activeOrg;
+      window.BB_ORGANISATIONS = organisations;
+      orgInitialised = true;
+
+      orgReadyResolve(activeOrg);
+      return activeOrg;
+    } catch (err) {
+      console.error("Failed to initialise organisation:", err);
+      orgInitialised = true;
+      window.BB_ACTIVE_ORG = null;
+      orgReadyReject(err);
+      throw err;
+    }
+  };
+
+  /**
+   * Switch to a different organisation. Updates DB, globals, and notifies listeners.
+   * @param {string} orgId - The organisation ID to switch to
+   * @returns {Promise<Object>} The new active organisation
+   */
+  // Listen for auth state changes to re-init org when user signs in
+  window.BB_APP.coreReady.then(() => {
+    if (window.supabase?.auth) {
+      window.supabase.auth.onAuthStateChange((event, session) => {
+        if (event === "SIGNED_OUT") {
+          // Clear org state on sign out
+          window.BB_ACTIVE_ORG = null;
+          window.BB_ORGANISATIONS = [];
+          try {
+            localStorage.removeItem("bb_active_org_id");
+          } catch (e) {
+            // localStorage might be blocked
+          }
+        } else if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
+          // Re-init org if we don't have one yet
+          if (!window.BB_ACTIVE_ORG?.id) {
+            window.BB_APP.initialiseOrg()
+              .then((org) => {
+                if (org) {
+                  document.dispatchEvent(
+                    new CustomEvent("bb:org-ready", {
+                      detail: { organisation: org },
+                    })
+                  );
+                }
+              })
+              .catch((err) => {
+                console.warn("Failed to init org after auth change:", err);
+              });
+          }
+        }
+      });
+    }
+  });
+
+  window.BB_APP.switchOrg = async function (orgId) {
+    if (!window.supabase?.auth) {
+      throw new Error("Supabase not initialised");
+    }
+
+    const { data: sessionData } = await window.supabase.auth.getSession();
+    const session = sessionData?.session;
+    if (!session) {
+      throw new Error("Not authenticated");
+    }
+
+    const response = await fetch("/v1/organisations/switch", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ organisation_id: orgId }),
+    });
+
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.message || "Failed to switch organisation");
+    }
+
+    const switchData = await response.json();
+    const newOrg = switchData.data?.organisation;
+    if (!newOrg?.id) {
+      throw new Error("Failed to switch organisation");
+    }
+
+    // Update global
+    window.BB_ACTIVE_ORG = newOrg;
+
+    // Store in localStorage for persistence
+    try {
+      localStorage.setItem("bb_active_org_id", newOrg.id);
+    } catch (e) {
+      // localStorage might be blocked
+    }
+
+    // Dispatch event for listeners
+    document.dispatchEvent(
+      new CustomEvent("bb:org-switched", { detail: { organisation: newOrg } })
+    );
+
+    return newOrg;
+  };
+
   /**
    * Builds the payload for restarting a job with the same configuration.
    * @param {Object} job - The job object to extract config from

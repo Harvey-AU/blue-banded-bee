@@ -164,6 +164,7 @@ func TestLoggingMiddleware(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create test handler
 			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				time.Sleep(1 * time.Millisecond)
 				w.WriteHeader(tt.responseCode)
 			})
 
@@ -188,7 +189,7 @@ func TestLoggingMiddleware(t *testing.T) {
 			// Verify response
 			assert.Equal(t, tt.responseCode, rec.Code)
 
-			// Verify duration was recorded (should be > 0)
+			// Verify duration was recorded
 			assert.Greater(t, duration.Nanoseconds(), int64(0))
 		})
 	}
