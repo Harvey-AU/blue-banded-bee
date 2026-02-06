@@ -480,12 +480,12 @@
 
         document.addEventListener("visibilitychange", quotaVisibilityListener);
         quotaVisibilityListener();
-
-        // Refresh quota immediately when organisation changes
-        document.addEventListener("bb:org-switched", () => {
-          fetchAndDisplayQuota();
-        });
       }
+
+      // Refresh quota immediately when organisation changes (registered once)
+      document.addEventListener("bb:org-switched", () => {
+        fetchAndDisplayQuota();
+      });
 
       // Expose globally for settings page to trigger refresh
       window.BBQuota = {
