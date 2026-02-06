@@ -389,6 +389,7 @@
         if (hours > 0) {
           return `Resets in ${hours}h ${minutes}m`;
         }
+        if (minutes <= 0) return "Resets soon";
         return `Resets in ${minutes}m`;
       }
 
