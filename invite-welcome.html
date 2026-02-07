@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en-AU">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Join Organisation - Blue Banded Bee</title>
+    <link rel="stylesheet" href="/styles/app.css" />
+    <style>
+      .invite-main {
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        background: linear-gradient(180deg, #f4f8f7 0%, #ffffff 100%);
+      }
+
+      .invite-card {
+        width: 100%;
+        max-width: 640px;
+        background: #ffffff;
+        border: 1px solid #e5e7eb;
+        border-radius: 16px;
+        box-shadow: 0 10px 30px rgba(17, 24, 39, 0.08);
+        padding: 28px;
+      }
+
+      .invite-title {
+        margin: 0 0 8px;
+        font-size: 1.7rem;
+      }
+
+      .invite-copy {
+        margin: 0;
+        color: #4b5563;
+      }
+
+      .invite-meta {
+        margin-top: 16px;
+        padding: 16px;
+        border-radius: 10px;
+        background: #f9fafb;
+        border: 1px solid #e5e7eb;
+      }
+
+      .invite-meta p {
+        margin: 6px 0;
+      }
+
+      .invite-status {
+        margin-top: 16px;
+        padding: 12px 14px;
+        border-radius: 8px;
+        font-weight: 500;
+      }
+
+      .invite-status-info {
+        background: #eff6ff;
+        color: #1d4ed8;
+      }
+
+      .invite-status-success {
+        background: #ecfdf3;
+        color: #047857;
+      }
+
+      .invite-status-error {
+        background: #fef2f2;
+        color: #b91c1c;
+      }
+    </style>
+
+    <script src="/js/core.js" defer></script>
+    <script src="/js/bb-invite-flow.js" defer></script>
+    <script src="/js/bb-invite-welcome.js" defer></script>
+  </head>
+  <body>
+    <main class="invite-main">
+      <section class="invite-card" aria-live="polite">
+        <h1 class="invite-title">You’ve been invited</h1>
+        <p class="invite-copy">
+          Accept this invite to join your team in Blue Banded Bee.
+        </p>
+
+        <div class="invite-meta">
+          <p>
+            <strong id="inviteInviter">a team member</strong> invited you to
+            <strong id="inviteOrg">this organisation</strong>.
+          </p>
+          <p>Your role will be <strong id="inviteRole">member</strong>.</p>
+        </div>
+
+        <div id="inviteStatus" class="invite-status invite-status-info">
+          Loading invite details…
+        </div>
+      </section>
+    </main>
+
+    <div id="authModalContainer"></div>
+  </body>
+</html>

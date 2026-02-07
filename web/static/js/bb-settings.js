@@ -643,25 +643,24 @@
   }
 
   async function handleInviteToken() {
-    const params = new URLSearchParams(window.location.search);
-    const token = params.get("invite_token");
-    if (!token) return;
+    if (!window.BBInviteFlow?.handleInviteTokenFlow) return;
 
-    try {
-      await window.dataBinder.fetchData("/v1/organisations/invites/accept", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token }),
-      });
-      showSettingsToast("success", "Invite accepted");
-      params.delete("invite_token");
-      const url = new URL(window.location.href);
-      url.search = params.toString();
-      window.history.replaceState({}, "", url.toString());
-      await refreshSettingsData();
-    } catch (err) {
-      console.error("Failed to accept invite:", err);
-      showSettingsToast("error", "Failed to accept invite");
+    const result = await window.BBInviteFlow.handleInviteTokenFlow({
+      onAccepted: async () => {
+        showSettingsToast("success", "Invite accepted");
+        await refreshSettingsData();
+      },
+      onError: (err) => {
+        console.error("Failed to accept invite:", err);
+        showSettingsToast("error", err?.message || "Failed to accept invite");
+      },
+    });
+
+    if (result?.status === "auth_required") {
+      showSettingsToast(
+        "warning",
+        "Sign in or create an account to accept this invite"
+      );
     }
   }
 
@@ -1456,19 +1455,8 @@
         await loadAccountDetails();
         await refreshSettingsData();
         await handleInviteToken();
-      } else if (
-        new URLSearchParams(window.location.search).has("invite_token")
-      ) {
-        // Unauthenticated user arriving via invite link — show login modal
-        // and reload after sign-in so handleInviteToken runs with a session.
-        if (typeof window.showAuthModal === "function") {
-          window.showAuthModal();
-        }
-        window.supabase.auth.onAuthStateChange((event) => {
-          if (event === "SIGNED_IN") {
-            window.location.reload();
-          }
-        });
+      } else if (window.BBInviteFlow?.getInviteToken?.()) {
+        await handleInviteToken();
       }
 
       const inviteForm = document.getElementById("teamInviteForm");

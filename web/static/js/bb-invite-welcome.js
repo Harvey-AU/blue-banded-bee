@@ -1,0 +1,73 @@
+(function () {
+  function setStatus(text, type = "") {
+    const statusEl = document.getElementById("inviteStatus");
+    if (!statusEl) return;
+
+    statusEl.textContent = text;
+    statusEl.className = "invite-status";
+    if (type) {
+      statusEl.classList.add(`invite-status-${type}`);
+    }
+  }
+
+  function renderInviteDetails(invite) {
+    const inviterEl = document.getElementById("inviteInviter");
+    const orgEl = document.getElementById("inviteOrg");
+    const roleEl = document.getElementById("inviteRole");
+
+    if (inviterEl)
+      inviterEl.textContent = invite?.inviter_name || "a team member";
+    if (orgEl)
+      orgEl.textContent = invite?.organisation_name || "this organisation";
+    if (roleEl) roleEl.textContent = invite?.role || "member";
+  }
+
+  async function initialiseInviteWelcome() {
+    await window.BB_APP?.coreReady;
+
+    const inviteFlow = window.BBInviteFlow;
+    if (!inviteFlow) {
+      setStatus("Invite flow is unavailable. Please try again.", "error");
+      return;
+    }
+
+    const token = inviteFlow.getInviteToken();
+    if (!token) {
+      setStatus("Invite link is missing a token.", "error");
+      return;
+    }
+
+    try {
+      const invite = await inviteFlow.fetchInvitePreview(token);
+      renderInviteDetails(invite);
+    } catch (error) {
+      setStatus(error.message || "Failed to load invite details.", "error");
+      return;
+    }
+
+    setStatus("Checking your session…");
+
+    await inviteFlow.handleInviteTokenFlow({
+      redirectTo: "/welcome",
+      onAuthRequired: () => {
+        setStatus(
+          "Sign in or create an account to accept this invite.",
+          "info"
+        );
+      },
+      onAccepted: () => {
+        setStatus("Invite accepted. Redirecting to your dashboard…", "success");
+      },
+      onError: (error) => {
+        setStatus(error.message || "Failed to accept invite.", "error");
+      },
+    });
+  }
+
+  document.addEventListener("DOMContentLoaded", () => {
+    initialiseInviteWelcome().catch((error) => {
+      console.error("Failed to initialise invite welcome page:", error);
+      setStatus("Something went wrong loading the invite flow.", "error");
+    });
+  });
+})();

@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/mail"
-	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -404,6 +403,60 @@ func (h *Handler) OrganisationInvitesHandler(w http.ResponseWriter, r *http.Requ
 	}
 }
 
+// OrganisationInvitePreviewHandler handles GET /v1/organisations/invites/preview?token=...
+// It is intentionally public so invite recipients can see who invited them before authentication.
+func (h *Handler) OrganisationInvitePreviewHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		MethodNotAllowed(w, r)
+		return
+	}
+
+	token := strings.TrimSpace(r.URL.Query().Get("token"))
+	if token == "" {
+		BadRequest(w, r, "token is required")
+		return
+	}
+
+	invite, err := h.DB.GetOrganisationInviteByToken(r.Context(), token)
+	if err != nil {
+		NotFound(w, r, "Invite not found")
+		return
+	}
+
+	if invite.AcceptedAt != nil || invite.RevokedAt != nil || time.Now().After(invite.ExpiresAt) {
+		BadRequest(w, r, "Invite is no longer valid")
+		return
+	}
+
+	org, err := h.DB.GetOrganisation(invite.OrganisationID)
+	if err != nil {
+		InternalError(w, r, err)
+		return
+	}
+
+	inviterLabel := "a team member"
+	if invite.CreatedBy != "" {
+		if inviter, inviterErr := h.DB.GetUser(invite.CreatedBy); inviterErr == nil {
+			if inviter.FullName != nil && strings.TrimSpace(*inviter.FullName) != "" {
+				inviterLabel = strings.TrimSpace(*inviter.FullName)
+			} else if strings.TrimSpace(inviter.Email) != "" {
+				inviterLabel = strings.TrimSpace(inviter.Email)
+			}
+		}
+	}
+
+	WriteSuccess(w, r, map[string]interface{}{
+		"invite": map[string]interface{}{
+			"email":             invite.Email,
+			"role":              invite.Role,
+			"organisation_id":   invite.OrganisationID,
+			"organisation_name": org.Name,
+			"inviter_name":      inviterLabel,
+			"expires_at":        invite.ExpiresAt.Format(time.RFC3339),
+		},
+	}, "Invite preview retrieved successfully")
+}
+
 // OrganisationInviteHandler handles DELETE /v1/organisations/invites/:id
 func (h *Handler) OrganisationInviteHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodDelete {
@@ -621,9 +674,7 @@ func (h *Handler) listOrganisationInvites(w http.ResponseWriter, r *http.Request
 
 	responseInvites := make([]map[string]interface{}, 0, len(invites))
 	for _, invite := range invites {
-		inviteParams := url.Values{}
-		inviteParams.Set("invite_token", invite.Token)
-		inviteLink := buildSettingsURL("team", inviteParams, "invites")
+		inviteLink := buildInviteWelcomeURL(invite.Token)
 
 		responseInvites = append(responseInvites, map[string]interface{}{
 			"id":          invite.ID,
@@ -715,9 +766,7 @@ func (h *Handler) createOrganisationInvite(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	redirectParams := url.Values{}
-	redirectParams.Set("invite_token", inviteToken)
-	redirectURL := buildSettingsURL("team", redirectParams, "invites")
+	redirectURL := buildInviteWelcomeURL(inviteToken)
 
 	emailDelivery := "sent"
 	responseMsg := "Invite sent successfully"
