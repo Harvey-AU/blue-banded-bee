@@ -728,6 +728,7 @@ func (h *Handler) createOrganisationInvite(w http.ResponseWriter, r *http.Reques
 		"role":            role,
 		"inviter_name":    inviterName,
 		"device":          meta.Device,
+		"location":        meta.Location,
 		"ip":              meta.IP,
 		"timestamp":       meta.FormattedTimestamp(),
 	}); err != nil {

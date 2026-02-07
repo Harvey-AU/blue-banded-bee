@@ -159,6 +159,10 @@ func TestExtractRequestMeta(t *testing.T) {
 	r := httptest.NewRequest(http.MethodPost, "/v1/organisations/invites", nil)
 	r.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
 	r.Header.Set("X-Forwarded-For", "203.0.113.50")
+	r.Header.Set("cf-ipcity", "Melbourne")
+	r.Header.Set("cf-region", "Victoria")
+	r.Header.Set("cf-ipcountry", "AU")
+	r.Header.Set("cf-timezone", "Australia/Melbourne")
 
 	meta := ExtractRequestMeta(r)
 
@@ -166,5 +170,66 @@ func TestExtractRequestMeta(t *testing.T) {
 	assert.Equal(t, "Chrome", meta.Browser)
 	assert.Equal(t, "macOS", meta.OS)
 	assert.Equal(t, "Chrome on macOS", meta.Device)
+	assert.Equal(t, "Melbourne", meta.City)
+	assert.Equal(t, "Victoria", meta.Region)
+	assert.Equal(t, "Australia", meta.Country)
+	assert.Equal(t, "Australia/Melbourne", meta.Timezone)
+	assert.Equal(t, "Melbourne, Victoria, Australia", meta.Location)
 	assert.NotEmpty(t, meta.FormattedTimestamp())
+}
+
+func TestExtractRequestMeta_NoCloudflareHeaders(t *testing.T) {
+	r := httptest.NewRequest(http.MethodGet, "/", nil)
+	r.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Firefox/121.0")
+
+	meta := ExtractRequestMeta(r)
+
+	assert.Equal(t, "Firefox", meta.Browser)
+	assert.Equal(t, "Windows", meta.OS)
+	assert.Empty(t, meta.City)
+	assert.Empty(t, meta.Location)
+}
+
+func TestBuildLocation(t *testing.T) {
+	tests := []struct {
+		name     string
+		city     string
+		region   string
+		country  string
+		expected string
+	}{
+		{"full", "Melbourne", "Victoria", "Australia", "Melbourne, Victoria, Australia"},
+		{"city and country only", "Sydney", "", "Australia", "Sydney, Australia"},
+		{"country only", "", "", "Australia", "Australia"},
+		{"empty", "", "", "", ""},
+		{"region matches country", "Singapore", "Singapore", "Singapore", "Singapore"},
+		{"city matches region", "London", "London", "United Kingdom", "London, United Kingdom"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, buildLocation(tt.city, tt.region, tt.country))
+		})
+	}
+}
+
+func TestCountryName(t *testing.T) {
+	tests := []struct {
+		code     string
+		expected string
+	}{
+		{"AU", "Australia"},
+		{"US", "United States"},
+		{"GB", "United Kingdom"},
+		{"au", "Australia"},   // lowercase
+		{" AU ", "Australia"}, // whitespace
+		{"XX", "XX"},          // unknown code passed through
+		{"", ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.code, func(t *testing.T) {
+			assert.Equal(t, tt.expected, countryName(tt.code))
+		})
+	}
 }
