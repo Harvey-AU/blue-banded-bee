@@ -715,9 +715,15 @@ func (h *Handler) createOrganisationInvite(w http.ResponseWriter, r *http.Reques
 	redirectParams.Set("invite_token", inviteToken)
 	redirectURL := buildSettingsURL("team", redirectParams, "invites")
 
+	inviterName, _ := userClaims.UserMetadata["full_name"].(string)
+	if inviterName == "" {
+		inviterName = userClaims.Email
+	}
+
 	if err := sendSupabaseInviteEmail(r.Context(), email, redirectURL, map[string]interface{}{
 		"organisation_id": orgID,
 		"role":            role,
+		"inviter_name":    inviterName,
 	}); err != nil {
 		if revokeErr := h.DB.RevokeOrganisationInvite(r.Context(), invite.ID, orgID); revokeErr != nil {
 			logger := loggerWithRequest(r)
