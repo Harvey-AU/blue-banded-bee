@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"unicode"
 )
 
 // RequestMeta contains metadata extracted from an HTTP request.
@@ -68,6 +69,19 @@ func buildLocation(city, region, country string) string {
 // FormattedTimestamp returns the timestamp in a human-readable format.
 func (m *RequestMeta) FormattedTimestamp() string {
 	return m.Timestamp.UTC().Format("January 2, 2006")
+}
+
+// SanitiseForJSON strips control characters (tabs, newlines, etc.) from a
+// string so it can be safely embedded in a JSON value via a Go template.
+// Supabase's email templates render {{ .Data.* }} without JSON-escaping,
+// so any control character in user_metadata breaks the Loops payload.
+func SanitiseForJSON(s string) string {
+	return strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) {
+			return -1
+		}
+		return r
+	}, s)
 }
 
 // GetClientIP extracts the client IP address from a request,
