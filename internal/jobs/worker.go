@@ -4009,7 +4009,7 @@ func (wp *WorkerPool) updateTaskPriorities(ctx context.Context, jobID string, do
 				COALESCE(pa.traffic_score, 0)
 			)
 			FROM pages p
-			JOIN jobs j ON t.job_id = j.id
+			JOIN jobs j ON j.id = $2
 			LEFT JOIN page_analytics pa ON pa.organisation_id = j.organisation_id
 				AND pa.domain_id = p.domain_id
 				AND pa.path = p.path
