@@ -18,6 +18,7 @@ import (
 	"github.com/Harvey-AU/blue-banded-bee/internal/auth"
 	"github.com/Harvey-AU/blue-banded-bee/internal/db"
 	"github.com/Harvey-AU/blue-banded-bee/internal/jobs"
+	"github.com/Harvey-AU/blue-banded-bee/internal/loops"
 	"github.com/rs/zerolog/log"
 )
 
@@ -214,15 +215,17 @@ type DBClient interface {
 type Handler struct {
 	DB                 DBClient
 	JobsManager        jobs.JobManagerInterface
+	Loops              *loops.Client
 	GoogleClientID     string
 	GoogleClientSecret string
 }
 
 // NewHandler creates a new API handler with dependencies
-func NewHandler(pgDB DBClient, jobsManager jobs.JobManagerInterface, googleClientID, googleClientSecret string) *Handler {
+func NewHandler(pgDB DBClient, jobsManager jobs.JobManagerInterface, loopsClient *loops.Client, googleClientID, googleClientSecret string) *Handler {
 	return &Handler{
 		DB:                 pgDB,
 		JobsManager:        jobsManager,
+		Loops:              loopsClient,
 		GoogleClientID:     googleClientID,
 		GoogleClientSecret: googleClientSecret,
 	}

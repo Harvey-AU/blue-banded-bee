@@ -17,8 +17,10 @@ import (
 
 	"github.com/Harvey-AU/blue-banded-bee/internal/auth"
 	"github.com/Harvey-AU/blue-banded-bee/internal/db"
+	"github.com/Harvey-AU/blue-banded-bee/internal/loops"
 	"github.com/Harvey-AU/blue-banded-bee/internal/util"
 	"github.com/google/uuid"
+	"github.com/rs/zerolog/log"
 )
 
 // errInviteEmailExists is returned when the Supabase /invite endpoint reports
@@ -738,7 +740,9 @@ func (h *Handler) createOrganisationInvite(w http.ResponseWriter, r *http.Reques
 
 	meta := util.ExtractRequestMeta(r)
 
-	if err := sendSupabaseInviteEmail(r.Context(), email, redirectURL, map[string]interface{}{
+	// Step 1: Create user and obtain confirmation URL via generate_link
+	// (bypasses SMTP to avoid RFC 2822 line-wrapping corruption).
+	linkResp, err := generateSupabaseInviteLink(r.Context(), email, redirectURL, map[string]interface{}{
 		"organisation_id": orgID,
 		"role":            role,
 		"inviter_name":    util.SanitiseForJSON(inviterName),
@@ -746,25 +750,43 @@ func (h *Handler) createOrganisationInvite(w http.ResponseWriter, r *http.Reques
 		"location":        util.SanitiseForJSON(meta.Location),
 		"ip":              util.SanitiseForJSON(meta.IP),
 		"timestamp":       util.SanitiseForJSON(meta.FormattedTimestamp()),
-	}); err != nil {
+	})
+	if err != nil {
 		if errors.Is(err, errInviteEmailExists) {
 			// User already has a Supabase Auth account — send a magic link
 			// so they receive an email and can log in to accept the invite.
 			if mlErr := sendSupabaseMagicLink(r.Context(), email, redirectURL); mlErr != nil {
 				logger := loggerWithRequest(r)
 				logger.Warn().Err(mlErr).Msg("Failed to send magic link for existing user invite")
-				// Invite record is still valid; don't revoke. The invitee
-				// can log in manually and accept via the settings page.
 				emailDelivery = "failed"
 				responseMsg = "Invite created but email delivery failed — the user can log in and accept manually"
 			}
 		} else {
 			if revokeErr := h.DB.RevokeOrganisationInvite(r.Context(), invite.ID, orgID); revokeErr != nil {
 				logger := loggerWithRequest(r)
-				logger.Warn().Err(revokeErr).Msg("Failed to revoke invite after email failure")
+				logger.Warn().Err(revokeErr).Msg("Failed to revoke invite after generate_link failure")
 			}
 			InternalError(w, r, err)
 			return
+		}
+	} else {
+		// Step 2: Send invite email via Loops with proper JSON encoding.
+		loopsErr := h.sendInviteViaLoops(r.Context(), email, map[string]any{
+			"InviterName":     util.SanitiseForJSON(inviterName),
+			"Device":          util.SanitiseForJSON(meta.Device),
+			"Location":        util.SanitiseForJSON(meta.Location),
+			"IP":              util.SanitiseForJSON(meta.IP),
+			"Timestamp":       util.SanitiseForJSON(meta.FormattedTimestamp()),
+			"SiteURL":         getAppURL(),
+			"ConfirmationURL": linkResp.ActionLink,
+			"Token":           inviteToken,
+		})
+		if loopsErr != nil {
+			// Degrade gracefully — invite record is intact; log and continue.
+			logger := loggerWithRequest(r)
+			logger.Error().Err(loopsErr).Str("email", email).Msg("Failed to send invite via Loops")
+			emailDelivery = "failed"
+			responseMsg = "Invite created but email delivery failed — the user can log in and accept manually"
 		}
 	}
 
@@ -791,12 +813,6 @@ func (h *Handler) requireOrganisationAdmin(w http.ResponseWriter, r *http.Reques
 		return false
 	}
 	return true
-}
-
-type supabaseInviteRequest struct {
-	Email      string                 `json:"email"`
-	RedirectTo string                 `json:"redirect_to,omitempty"`
-	Data       map[string]interface{} `json:"data,omitempty"`
 }
 
 // resolveSupabaseAuthURL returns the Supabase Auth base URL, preferring
@@ -830,29 +846,38 @@ func supabaseServiceKey() (string, error) {
 // maxErrorBodyBytes caps how much of an error response body we read.
 const maxErrorBodyBytes = 4096
 
-func sendSupabaseInviteEmail(ctx context.Context, email, redirectTo string, data map[string]interface{}) error {
+// generateLinkResponse holds the fields we need from Supabase's generate_link response.
+type generateLinkResponse struct {
+	ActionLink string `json:"action_link"`
+}
+
+// generateSupabaseInviteLink calls POST /auth/v1/admin/generate_link with
+// type "invite" to create a user and obtain a confirmation URL without
+// sending an email (bypassing the SMTP line-wrapping issue).
+func generateSupabaseInviteLink(ctx context.Context, email, redirectTo string, data map[string]interface{}) (*generateLinkResponse, error) {
 	authURL, err := resolveSupabaseAuthURL()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	serviceKey, err := supabaseServiceKey()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	payload, err := json.Marshal(supabaseInviteRequest{
-		Email:      email,
-		RedirectTo: redirectTo,
-		Data:       data,
+	payload, err := json.Marshal(map[string]interface{}{
+		"type":        "invite",
+		"email":       email,
+		"redirect_to": redirectTo,
+		"data":        data,
 	})
 	if err != nil {
-		return fmt.Errorf("failed to build invite payload: %w", err)
+		return nil, fmt.Errorf("failed to build generate_link payload: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, authURL+"/invite", bytes.NewReader(payload))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, authURL+"/admin/generate_link", bytes.NewReader(payload))
 	if err != nil {
-		return fmt.Errorf("failed to create invite request: %w", err)
+		return nil, fmt.Errorf("failed to create generate_link request: %w", err)
 	}
 
 	req.Header.Set("Authorization", "Bearer "+serviceKey)
@@ -862,30 +887,55 @@ func sendSupabaseInviteEmail(ctx context.Context, email, redirectTo string, data
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		return fmt.Errorf("failed to send invite request: %w", err)
+		return nil, fmt.Errorf("failed to send generate_link request: %w", err)
 	}
 	defer resp.Body.Close()
 
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, maxErrorBodyBytes))
+
 	if resp.StatusCode >= http.StatusMultipleChoices {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, maxErrorBodyBytes))
 		bodyStr := strings.TrimSpace(string(body))
 
-		// If the user already exists in Supabase Auth, the invite endpoint
-		// returns 422 email_exists. Parse the JSON response structurally
-		// rather than relying on substring matching.
+		// Detect existing user: 422 + error_code "email_exists"
 		if resp.StatusCode == http.StatusUnprocessableEntity {
 			var errResp struct {
 				ErrorCode string `json:"error_code"`
 			}
 			if json.Unmarshal(body, &errResp) == nil && errResp.ErrorCode == "email_exists" {
-				return errInviteEmailExists
+				return nil, errInviteEmailExists
 			}
 		}
 
-		return fmt.Errorf("supabase invite failed: %s", bodyStr)
+		return nil, fmt.Errorf("supabase generate_link failed: %s", bodyStr)
 	}
 
-	return nil
+	var linkResp generateLinkResponse
+	if err := json.Unmarshal(body, &linkResp); err != nil {
+		return nil, fmt.Errorf("failed to parse generate_link response: %w", err)
+	}
+	if linkResp.ActionLink == "" {
+		return nil, fmt.Errorf("generate_link returned empty action_link")
+	}
+
+	return &linkResp, nil
+}
+
+// loopsInviteTemplateID is the Loops transactional template for organisation invites.
+const loopsInviteTemplateID = "cmlbixdob0d3v0i34iy1nd6ad"
+
+// sendInviteViaLoops sends the invite email through the Loops transactional API.
+// Returns nil without error if the Loops client is not configured (dev environments).
+func (h *Handler) sendInviteViaLoops(ctx context.Context, email string, vars map[string]any) error {
+	if h.Loops == nil {
+		log.Warn().Str("email", email).Msg("Loops client not configured; skipping invite email")
+		return nil
+	}
+
+	return h.Loops.SendTransactional(ctx, &loops.TransactionalRequest{
+		Email:           email,
+		TransactionalID: loopsInviteTemplateID,
+		DataVariables:   vars,
+	})
 }
 
 // sendSupabaseMagicLink sends a magic-link email to an existing Supabase Auth
