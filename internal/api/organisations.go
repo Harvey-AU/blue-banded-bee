@@ -17,6 +17,7 @@ import (
 
 	"github.com/Harvey-AU/blue-banded-bee/internal/auth"
 	"github.com/Harvey-AU/blue-banded-bee/internal/db"
+	"github.com/Harvey-AU/blue-banded-bee/internal/util"
 	"github.com/google/uuid"
 )
 
@@ -730,9 +731,21 @@ func (h *Handler) createOrganisationInvite(w http.ResponseWriter, r *http.Reques
 	emailDelivery := "sent"
 	responseMsg := "Invite sent successfully"
 
+	inviterName, _ := userClaims.UserMetadata["full_name"].(string)
+	if inviterName == "" {
+		inviterName = userClaims.Email
+	}
+
+	meta := util.ExtractRequestMeta(r)
+
 	if err := sendSupabaseInviteEmail(r.Context(), email, redirectURL, map[string]interface{}{
 		"organisation_id": orgID,
 		"role":            role,
+		"inviter_name":    inviterName,
+		"device":          meta.Device,
+		"location":        meta.Location,
+		"ip":              meta.IP,
+		"timestamp":       meta.FormattedTimestamp(),
 	}); err != nil {
 		if errors.Is(err, errInviteEmailExists) {
 			// User already has a Supabase Auth account — send a magic link

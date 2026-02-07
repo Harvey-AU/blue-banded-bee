@@ -1108,10 +1108,7 @@ function setupInteractions(state) {
 }
 
 async function initialiseAuth(state) {
-  // Wait for core.js to finish initialisation
-  if (window.BB_APP?.coreReady) {
-    await window.BB_APP.coreReady;
-  }
+  await window.BB_APP.whenReady();
 
   if (!window.supabase) {
     throw new Error("Supabase client not initialised");

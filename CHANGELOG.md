@@ -60,6 +60,60 @@ On merge, CI will:
 - **Error Body Reads**: Auth error response reads are now capped at 4 KB via
   `io.LimitReader` to prevent unbounded memory allocation.
 
+## [0.26.2] – 2026-02-07
+
+### Added
+
+- **Loops.so Email Client**: Custom Go client for Loops.so transactional email
+  API (`internal/loops/client.go`)
+  - SendTransactional, SendEvent, CreateContact, UpdateContact methods
+  - Structured APIError type with status code and message
+  - Idempotency key support for safe retries
+  - Zero external dependencies — follows existing storage client pattern
+  - Full test suite with httptest server and custom RoundTripper
+- **Request Metadata Utility**: Reusable request metadata extraction
+  (`internal/util/request.go`)
+  - Extracts client IP (X-Forwarded-For, X-Real-IP, RemoteAddr fallback)
+  - User agent parsing for browser and OS detection
+  - Cloudflare geolocation via managed transform headers (cf-ipcity, cf-region,
+    cf-ipcountry, cf-timezone)
+  - ISO country code to full name lookup (60+ countries)
+  - Smart location formatting with deduplication (e.g. "Singapore" not
+    "Singapore, Singapore, Singapore")
+  - 27+ table-driven tests covering all extraction and parsing functions
+- **Invite Email Enrichment**: Organisation invite emails now include inviter
+  name, device info, location, IP address, and timestamp
+  - Inviter name extracted from Supabase JWT UserMetadata with email fallback
+
+### Changed
+
+- **Client IP Extraction**: Moved `getClientIP` from `internal/api/jobs.go` to
+  shared `util.GetClientIP` in `internal/util/request.go` — jobs handler updated
+  to use the shared function
+
+## [0.26.1] – 2026-02-07
+
+### Fixed
+
+- **Dashboard Cold-Load Race Condition**: Fixed "Failed to initialise dashboard"
+  error appearing on first page load (cold browser cache) across all authed
+  pages
+  - Root cause: `DOMContentLoaded` fired before deferred `core.js` had executed,
+    so `window.BB_APP.coreReady` didn't exist yet and the await was silently
+    skipped
+  - New `bb-bootstrap.js` provides `BB_APP.whenReady()` — a polling wrapper that
+    waits for `core.js` to finish before proceeding
+  - Loaded without `defer` so it's available immediately; all pages now use a
+    single `await window.BB_APP.whenReady()` call
+  - Homepage now shows a visible error banner on timeout instead of silently
+    leaving buttons non-functional
+- **Static Asset Rate Limiting**: Hard refresh no longer triggers 429 errors on
+  JS, CSS, and image files
+  - Rate limiter now excludes `/js/*`, `/styles/*`, `/web/*`, `/images/*`,
+    `/config.js`, and `/favicon.ico` from per-IP rate limits
+  - Static assets are cheap to serve and browsers legitimately request many in
+    parallel during hard refresh
+
 ## [0.26.0] – 2026-02-06
 
 ### Added

@@ -647,12 +647,23 @@ func main() {
 	// Setup API routes
 	apiHandler.SetupRoutes(mux)
 
-	// Create middleware stack with rate limiting
+	// Create middleware stack with rate limiting.
+	// Static assets are excluded — browsers request many files in parallel
+	// on hard refresh and these are cheap to serve.
 	var handler http.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ip := getClientIP(r)
-		if !limiter.getLimiter(ip).Allow() {
-			api.WriteErrorMessage(w, r, "Too many requests", http.StatusTooManyRequests, api.ErrCodeRateLimit)
-			return
+		p := r.URL.Path
+		isStatic := strings.HasPrefix(p, "/js/") ||
+			strings.HasPrefix(p, "/styles/") ||
+			strings.HasPrefix(p, "/web/") ||
+			strings.HasPrefix(p, "/images/") ||
+			p == "/config.js" ||
+			p == "/favicon.ico"
+		if !isStatic {
+			ip := getClientIP(r)
+			if !limiter.getLimiter(ip).Allow() {
+				api.WriteErrorMessage(w, r, "Too many requests", http.StatusTooManyRequests, api.ErrCodeRateLimit)
+				return
+			}
 		}
 		mux.ServeHTTP(w, r)
 	})
