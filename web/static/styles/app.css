@@ -2476,6 +2476,12 @@ html[data-settings-section="auto-crawl"] #auto-crawl {
   color: #1d4ed8;
 }
 
+.settings-invite-actions {
+  display: flex;
+  gap: var(--spacing-sm);
+  flex-shrink: 0;
+}
+
 .settings-plan-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));

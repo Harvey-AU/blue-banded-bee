@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -19,6 +20,12 @@ import (
 	"github.com/Harvey-AU/blue-banded-bee/internal/util"
 	"github.com/google/uuid"
 )
+
+// errInviteEmailExists is returned when the Supabase /invite endpoint reports
+// the user already has an account. The invite record is still valid — the
+// caller should fall back to a magic-link email so the existing user can log
+// in and accept.
+var errInviteEmailExists = errors.New("user already registered")
 
 // OrganisationsHandler handles GET and POST /v1/organisations
 func (h *Handler) OrganisationsHandler(w http.ResponseWriter, r *http.Request) {
@@ -623,12 +630,17 @@ func (h *Handler) listOrganisationInvites(w http.ResponseWriter, r *http.Request
 
 	responseInvites := make([]map[string]interface{}, 0, len(invites))
 	for _, invite := range invites {
+		inviteParams := url.Values{}
+		inviteParams.Set("invite_token", invite.Token)
+		inviteLink := buildSettingsURL("team", inviteParams, "invites")
+
 		responseInvites = append(responseInvites, map[string]interface{}{
-			"id":         invite.ID,
-			"email":      invite.Email,
-			"role":       invite.Role,
-			"created_at": invite.CreatedAt.Format(time.RFC3339),
-			"expires_at": invite.ExpiresAt.Format(time.RFC3339),
+			"id":          invite.ID,
+			"email":       invite.Email,
+			"role":        invite.Role,
+			"invite_link": inviteLink,
+			"created_at":  invite.CreatedAt.Format(time.RFC3339),
+			"expires_at":  invite.ExpiresAt.Format(time.RFC3339),
 		})
 	}
 
@@ -716,6 +728,9 @@ func (h *Handler) createOrganisationInvite(w http.ResponseWriter, r *http.Reques
 	redirectParams.Set("invite_token", inviteToken)
 	redirectURL := buildSettingsURL("team", redirectParams, "invites")
 
+	emailDelivery := "sent"
+	responseMsg := "Invite sent successfully"
+
 	inviterName, _ := userClaims.UserMetadata["full_name"].(string)
 	if inviterName == "" {
 		inviterName = userClaims.Email
@@ -732,23 +747,37 @@ func (h *Handler) createOrganisationInvite(w http.ResponseWriter, r *http.Reques
 		"ip":              meta.IP,
 		"timestamp":       meta.FormattedTimestamp(),
 	}); err != nil {
-		if revokeErr := h.DB.RevokeOrganisationInvite(r.Context(), invite.ID, orgID); revokeErr != nil {
-			logger := loggerWithRequest(r)
-			logger.Warn().Err(revokeErr).Msg("Failed to revoke invite after email failure")
+		if errors.Is(err, errInviteEmailExists) {
+			// User already has a Supabase Auth account — send a magic link
+			// so they receive an email and can log in to accept the invite.
+			if mlErr := sendSupabaseMagicLink(r.Context(), email, redirectURL); mlErr != nil {
+				logger := loggerWithRequest(r)
+				logger.Warn().Err(mlErr).Msg("Failed to send magic link for existing user invite")
+				// Invite record is still valid; don't revoke. The invitee
+				// can log in manually and accept via the settings page.
+				emailDelivery = "failed"
+				responseMsg = "Invite created but email delivery failed — the user can log in and accept manually"
+			}
+		} else {
+			if revokeErr := h.DB.RevokeOrganisationInvite(r.Context(), invite.ID, orgID); revokeErr != nil {
+				logger := loggerWithRequest(r)
+				logger.Warn().Err(revokeErr).Msg("Failed to revoke invite after email failure")
+			}
+			InternalError(w, r, err)
+			return
 		}
-		InternalError(w, r, err)
-		return
 	}
 
 	WriteCreated(w, r, map[string]interface{}{
 		"invite": map[string]interface{}{
-			"id":         invite.ID,
-			"email":      invite.Email,
-			"role":       invite.Role,
-			"created_at": invite.CreatedAt.Format(time.RFC3339),
-			"expires_at": invite.ExpiresAt.Format(time.RFC3339),
+			"id":             invite.ID,
+			"email":          invite.Email,
+			"role":           invite.Role,
+			"email_delivery": emailDelivery,
+			"created_at":     invite.CreatedAt.Format(time.RFC3339),
+			"expires_at":     invite.ExpiresAt.Format(time.RFC3339),
 		},
-	}, "Invite sent successfully")
+	}, responseMsg)
 }
 
 func (h *Handler) requireOrganisationAdmin(w http.ResponseWriter, r *http.Request, organisationID, userID string) bool {
@@ -770,7 +799,9 @@ type supabaseInviteRequest struct {
 	Data       map[string]interface{} `json:"data,omitempty"`
 }
 
-func sendSupabaseInviteEmail(ctx context.Context, email, redirectTo string, data map[string]interface{}) error {
+// resolveSupabaseAuthURL returns the Supabase Auth base URL, preferring
+// SUPABASE_AUTH_URL and falling back to SUPABASE_URL + "/auth/v1".
+func resolveSupabaseAuthURL() (string, error) {
 	authURL := strings.TrimSuffix(os.Getenv("SUPABASE_AUTH_URL"), "/")
 	if authURL == "" {
 		legacyURL := strings.TrimSuffix(os.Getenv("SUPABASE_URL"), "/")
@@ -779,15 +810,35 @@ func sendSupabaseInviteEmail(ctx context.Context, email, redirectTo string, data
 		}
 	}
 	if authURL == "" {
-		return fmt.Errorf("supabase auth URL is not configured")
+		return "", fmt.Errorf("supabase auth URL is not configured")
 	}
 	if !strings.Contains(authURL, "/auth/") {
 		authURL = authURL + "/auth/v1"
 	}
+	return authURL, nil
+}
 
-	serviceKey := os.Getenv("SUPABASE_SERVICE_ROLE_KEY")
-	if serviceKey == "" {
-		return fmt.Errorf("supabase service role key is not configured")
+// supabaseServiceKey returns the service role key or an error.
+func supabaseServiceKey() (string, error) {
+	key := os.Getenv("SUPABASE_SERVICE_ROLE_KEY")
+	if key == "" {
+		return "", fmt.Errorf("supabase service role key is not configured")
+	}
+	return key, nil
+}
+
+// maxErrorBodyBytes caps how much of an error response body we read.
+const maxErrorBodyBytes = 4096
+
+func sendSupabaseInviteEmail(ctx context.Context, email, redirectTo string, data map[string]interface{}) error {
+	authURL, err := resolveSupabaseAuthURL()
+	if err != nil {
+		return err
+	}
+
+	serviceKey, err := supabaseServiceKey()
+	if err != nil {
+		return err
 	}
 
 	payload, err := json.Marshal(supabaseInviteRequest{
@@ -816,8 +867,75 @@ func sendSupabaseInviteEmail(ctx context.Context, email, redirectTo string, data
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= http.StatusMultipleChoices {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("supabase invite failed: %s", strings.TrimSpace(string(body)))
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, maxErrorBodyBytes))
+		bodyStr := strings.TrimSpace(string(body))
+
+		// If the user already exists in Supabase Auth, the invite endpoint
+		// returns 422 email_exists. Parse the JSON response structurally
+		// rather than relying on substring matching.
+		if resp.StatusCode == http.StatusUnprocessableEntity {
+			var errResp struct {
+				ErrorCode string `json:"error_code"`
+			}
+			if json.Unmarshal(body, &errResp) == nil && errResp.ErrorCode == "email_exists" {
+				return errInviteEmailExists
+			}
+		}
+
+		return fmt.Errorf("supabase invite failed: %s", bodyStr)
+	}
+
+	return nil
+}
+
+// sendSupabaseMagicLink sends a magic-link email to an existing Supabase Auth
+// user. The link logs them in and redirects to redirectTo (the invite
+// acceptance page). GoTrue reads redirect_to from the query string.
+// Only the publishable (anon) key is needed — no service-role privilege.
+func sendSupabaseMagicLink(ctx context.Context, email, redirectTo string) error {
+	authURL, err := resolveSupabaseAuthURL()
+	if err != nil {
+		return err
+	}
+
+	publishableKey := os.Getenv("SUPABASE_PUBLISHABLE_KEY")
+	if publishableKey == "" {
+		publishableKey = os.Getenv("SUPABASE_ANON_KEY")
+	}
+	if publishableKey == "" {
+		return fmt.Errorf("supabase publishable key is not configured")
+	}
+
+	payload, err := json.Marshal(map[string]string{
+		"email": email,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to build magic link payload: %w", err)
+	}
+
+	endpoint := authURL + "/magiclink"
+	if redirectTo != "" {
+		endpoint += "?redirect_to=" + url.QueryEscape(redirectTo)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(payload))
+	if err != nil {
+		return fmt.Errorf("failed to create magic link request: %w", err)
+	}
+
+	req.Header.Set("apikey", publishableKey)
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to send magic link request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= http.StatusMultipleChoices {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, maxErrorBodyBytes))
+		return fmt.Errorf("supabase magic link failed: %s", strings.TrimSpace(string(body)))
 	}
 
 	return nil

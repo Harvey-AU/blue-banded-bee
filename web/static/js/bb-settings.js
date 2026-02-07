@@ -17,10 +17,12 @@
       type === "success" ? "polite" : "assertive"
     );
     container.setAttribute("aria-atomic", "true");
-    const colours =
-      type === "success"
-        ? { bg: "#d1fae5", text: "#065f46", border: "#a7f3d0" }
-        : { bg: "#fee2e2", text: "#dc2626", border: "#fecaca" };
+    const colourMap = {
+      success: { bg: "#d1fae5", text: "#065f46", border: "#a7f3d0" },
+      warning: { bg: "#fef3c7", text: "#92400e", border: "#fde68a" },
+      error: { bg: "#fee2e2", text: "#dc2626", border: "#fecaca" },
+    };
+    const colours = colourMap[type] || colourMap.error;
 
     container.style.cssText = `
       position: fixed; top: 20px; right: 20px; z-index: 10000;
@@ -377,6 +379,7 @@
         const roleEl = clone.querySelector(".settings-invite-role");
         const dateEl = clone.querySelector(".settings-invite-date");
         const revokeBtn = clone.querySelector(".settings-invite-revoke");
+        const copyBtn = clone.querySelector(".settings-invite-copy");
 
         if (row) row.dataset.inviteId = invite.id;
         if (emailEl) emailEl.textContent = invite.email;
@@ -384,6 +387,23 @@
         if (dateEl) {
           const date = new Date(invite.created_at);
           dateEl.textContent = `Sent ${date.toLocaleDateString("en-AU")}`;
+        }
+        if (copyBtn) {
+          if (invite.invite_link) {
+            copyBtn.addEventListener("click", async () => {
+              try {
+                await navigator.clipboard.writeText(invite.invite_link);
+                copyBtn.textContent = "Copied!";
+                setTimeout(() => {
+                  copyBtn.textContent = "Copy link";
+                }, 2000);
+              } catch {
+                showSettingsToast("error", "Failed to copy link");
+              }
+            });
+          } else {
+            copyBtn.style.display = "none";
+          }
         }
         if (revokeBtn) {
           revokeBtn.dataset.inviteId = invite.id;
@@ -417,14 +437,25 @@
     }
 
     try {
-      await window.dataBinder.fetchData("/v1/organisations/invites", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, role }),
-      });
-      showSettingsToast("success", "Invite sent");
+      const result = await window.dataBinder.fetchData(
+        "/v1/organisations/invites",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, role }),
+        }
+      );
+      const delivery = result?.invite?.email_delivery;
+      if (delivery === "failed") {
+        showSettingsToast(
+          "warning",
+          "Invite created but email failed — use the copy link button to share manually"
+        );
+      } else {
+        showSettingsToast("success", "Invite sent");
+      }
       emailInput.value = "";
-      loadOrganisationInvites();
+      await loadOrganisationInvites();
     } catch (err) {
       console.error("Failed to send invite:", err);
       showSettingsToast("error", "Failed to send invite");
@@ -443,7 +474,7 @@
         }
       );
       showSettingsToast("success", "Invite revoked");
-      loadOrganisationInvites();
+      await loadOrganisationInvites();
     } catch (err) {
       console.error("Failed to revoke invite:", err);
       showSettingsToast("error", "Failed to revoke invite");
