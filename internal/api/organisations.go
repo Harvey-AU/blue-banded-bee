@@ -16,6 +16,7 @@ import (
 
 	"github.com/Harvey-AU/blue-banded-bee/internal/auth"
 	"github.com/Harvey-AU/blue-banded-bee/internal/db"
+	"github.com/Harvey-AU/blue-banded-bee/internal/util"
 	"github.com/google/uuid"
 )
 
@@ -720,10 +721,15 @@ func (h *Handler) createOrganisationInvite(w http.ResponseWriter, r *http.Reques
 		inviterName = userClaims.Email
 	}
 
+	meta := util.ExtractRequestMeta(r)
+
 	if err := sendSupabaseInviteEmail(r.Context(), email, redirectURL, map[string]interface{}{
 		"organisation_id": orgID,
 		"role":            role,
 		"inviter_name":    inviterName,
+		"device":          meta.Device,
+		"ip":              meta.IP,
+		"timestamp":       meta.FormattedTimestamp(),
 	}); err != nil {
 		if revokeErr := h.DB.RevokeOrganisationInvite(r.Context(), invite.ID, orgID); revokeErr != nil {
 			logger := loggerWithRequest(r)
