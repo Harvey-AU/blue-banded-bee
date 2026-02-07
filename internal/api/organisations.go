@@ -741,11 +741,11 @@ func (h *Handler) createOrganisationInvite(w http.ResponseWriter, r *http.Reques
 	if err := sendSupabaseInviteEmail(r.Context(), email, redirectURL, map[string]interface{}{
 		"organisation_id": orgID,
 		"role":            role,
-		"inviter_name":    inviterName,
-		"device":          meta.Device,
-		"location":        meta.Location,
-		"ip":              meta.IP,
-		"timestamp":       meta.FormattedTimestamp(),
+		"inviter_name":    util.SanitiseForJSON(inviterName),
+		"device":          util.SanitiseForJSON(meta.Device),
+		"location":        util.SanitiseForJSON(meta.Location),
+		"ip":              util.SanitiseForJSON(meta.IP),
+		"timestamp":       util.SanitiseForJSON(meta.FormattedTimestamp()),
 	}); err != nil {
 		if errors.Is(err, errInviteEmailExists) {
 			// User already has a Supabase Auth account — send a magic link
