@@ -1456,6 +1456,19 @@
         await loadAccountDetails();
         await refreshSettingsData();
         await handleInviteToken();
+      } else if (
+        new URLSearchParams(window.location.search).has("invite_token")
+      ) {
+        // Unauthenticated user arriving via invite link — show login modal
+        // and reload after sign-in so handleInviteToken runs with a session.
+        if (typeof window.showAuthModal === "function") {
+          window.showAuthModal();
+        }
+        window.supabase.auth.onAuthStateChange((event) => {
+          if (event === "SIGNED_IN") {
+            window.location.reload();
+          }
+        });
       }
 
       const inviteForm = document.getElementById("teamInviteForm");
