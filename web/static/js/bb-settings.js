@@ -17,10 +17,12 @@
       type === "success" ? "polite" : "assertive"
     );
     container.setAttribute("aria-atomic", "true");
-    const colours =
-      type === "success"
-        ? { bg: "#d1fae5", text: "#065f46", border: "#a7f3d0" }
-        : { bg: "#fee2e2", text: "#dc2626", border: "#fecaca" };
+    const colourMap = {
+      success: { bg: "#d1fae5", text: "#065f46", border: "#a7f3d0" },
+      warning: { bg: "#fef3c7", text: "#92400e", border: "#fde68a" },
+      error: { bg: "#fee2e2", text: "#dc2626", border: "#fecaca" },
+    };
+    const colours = colourMap[type] || colourMap.error;
 
     container.style.cssText = `
       position: fixed; top: 20px; right: 20px; z-index: 10000;
@@ -435,12 +437,23 @@
     }
 
     try {
-      await window.dataBinder.fetchData("/v1/organisations/invites", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, role }),
-      });
-      showSettingsToast("success", "Invite sent");
+      const result = await window.dataBinder.fetchData(
+        "/v1/organisations/invites",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, role }),
+        }
+      );
+      const delivery = result?.invite?.email_delivery;
+      if (delivery === "failed") {
+        showSettingsToast(
+          "warning",
+          "Invite created but email failed — use the copy link button to share manually"
+        );
+      } else {
+        showSettingsToast("success", "Invite sent");
+      }
       emailInput.value = "";
       await loadOrganisationInvites();
     } catch (err) {

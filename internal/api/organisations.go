@@ -878,15 +878,19 @@ func sendSupabaseInviteEmail(ctx context.Context, email, redirectTo string, data
 // sendSupabaseMagicLink sends a magic-link email to an existing Supabase Auth
 // user. The link logs them in and redirects to redirectTo (the invite
 // acceptance page). GoTrue reads redirect_to from the query string.
+// Only the publishable (anon) key is needed — no service-role privilege.
 func sendSupabaseMagicLink(ctx context.Context, email, redirectTo string) error {
 	authURL, err := resolveSupabaseAuthURL()
 	if err != nil {
 		return err
 	}
 
-	serviceKey, err := supabaseServiceKey()
-	if err != nil {
-		return err
+	publishableKey := os.Getenv("SUPABASE_PUBLISHABLE_KEY")
+	if publishableKey == "" {
+		publishableKey = os.Getenv("SUPABASE_ANON_KEY")
+	}
+	if publishableKey == "" {
+		return fmt.Errorf("supabase publishable key is not configured")
 	}
 
 	payload, err := json.Marshal(map[string]string{
@@ -906,8 +910,7 @@ func sendSupabaseMagicLink(ctx context.Context, email, redirectTo string) error 
 		return fmt.Errorf("failed to create magic link request: %w", err)
 	}
 
-	req.Header.Set("Authorization", "Bearer "+serviceKey)
-	req.Header.Set("apikey", serviceKey)
+	req.Header.Set("apikey", publishableKey)
 	req.Header.Set("Content-Type", "application/json")
 
 	client := &http.Client{Timeout: 10 * time.Second}
