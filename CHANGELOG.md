@@ -29,6 +29,37 @@ On merge, CI will:
 
 ## [Unreleased]
 
+## [0.26.2] – 2026-02-07
+
+### Added
+
+- **Loops.so Email Client**: Custom Go client for Loops.so transactional email
+  API (`internal/loops/client.go`)
+  - SendTransactional, SendEvent, CreateContact, UpdateContact methods
+  - Structured APIError type with status code and message
+  - Idempotency key support for safe retries
+  - Zero external dependencies — follows existing storage client pattern
+  - Full test suite with httptest server and custom RoundTripper
+- **Request Metadata Utility**: Reusable request metadata extraction
+  (`internal/util/request.go`)
+  - Extracts client IP (X-Forwarded-For, X-Real-IP, RemoteAddr fallback)
+  - User agent parsing for browser and OS detection
+  - Cloudflare geolocation via managed transform headers (cf-ipcity, cf-region,
+    cf-ipcountry, cf-timezone)
+  - ISO country code to full name lookup (60+ countries)
+  - Smart location formatting with deduplication (e.g. "Singapore" not
+    "Singapore, Singapore, Singapore")
+  - 27+ table-driven tests covering all extraction and parsing functions
+- **Invite Email Enrichment**: Organisation invite emails now include inviter
+  name, device info, location, IP address, and timestamp
+  - Inviter name extracted from Supabase JWT UserMetadata with email fallback
+
+### Changed
+
+- **Client IP Extraction**: Moved `getClientIP` from `internal/api/jobs.go` to
+  shared `util.GetClientIP` in `internal/util/request.go` — jobs handler updated
+  to use the shared function
+
 ## [0.26.1] – 2026-02-07
 
 ### Fixed

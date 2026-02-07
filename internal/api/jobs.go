@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net"
 	"net/http"
 	"strconv"
 	"strings"
@@ -324,7 +323,7 @@ func (h *Handler) createJob(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.SourceInfo == nil {
 		sourceInfoData := map[string]interface{}{
-			"ip":        getClientIP(r),
+			"ip":        util.GetClientIP(r),
 			"userAgent": r.UserAgent(),
 			"timestamp": time.Now().UTC().Format(time.RFC3339),
 			"endpoint":  r.URL.Path,
@@ -884,31 +883,6 @@ func formatTasksFromRows(rows *sql.Rows) ([]TaskResponse, error) {
 	}
 
 	return tasks, nil
-}
-
-func getClientIP(r *http.Request) string {
-	// Check for X-Forwarded-For header first (common with proxies/load balancers)
-	xff := r.Header.Get("X-Forwarded-For")
-	if xff != "" {
-		// X-Forwarded-For can contain multiple IPs, use the first one
-		if idx := strings.Index(xff, ","); idx != -1 {
-			return strings.TrimSpace(xff[:idx])
-		}
-		return strings.TrimSpace(xff)
-	}
-
-	// Check for X-Real-IP header
-	xri := r.Header.Get("X-Real-IP")
-	if xri != "" {
-		return strings.TrimSpace(xri)
-	}
-
-	// Fall back to RemoteAddr
-	ip, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr
-	}
-	return ip
 }
 
 // TaskResponse represents a task in API responses
