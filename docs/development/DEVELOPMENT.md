@@ -448,6 +448,28 @@ docker build -t blue-banded-bee .
 docker run --env-file .env -p 8847:8847 blue-banded-bee
 ```
 
+### Adding New HTML Pages (Avoid 404s)
+
+When adding a new top-level page (for example `/welcome` or `/welcome/invite`),
+you must update all required surfaces:
+
+1. **Register route handlers**
+   - Add `mux.HandleFunc(...)` entries in `internal/api/handlers.go`.
+   - Add or update the corresponding `Serve...` methods.
+2. **Create the HTML file**
+   - Add the page file at repository root (for example `welcome.html`).
+3. **Package the file in Docker**
+   - Add a `COPY --from=builder /app/<page>.html .` line in `Dockerfile`.
+   - If omitted, local runs may work but Fly deployments will return 404.
+4. **Verify before merge**
+   - Run `docker build -t blue-banded-bee .`
+   - Open the route in the built container or review app.
+
+Recommended quick checks:
+
+- `rg -n "/welcome|/your-path" internal/api/handlers.go`
+- `rg -n "COPY --from=builder /app/.*\\.html" Dockerfile`
+
 ### Environment-Specific Configs
 
 **Development**:

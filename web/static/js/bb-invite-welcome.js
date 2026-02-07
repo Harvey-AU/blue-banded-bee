@@ -10,20 +10,42 @@
     }
   }
 
+  async function ensureAuthModalReady() {
+    if (window.BBAuth?.loadAuthModal) {
+      await window.BBAuth.loadAuthModal();
+    }
+  }
+
+  function showInlineAuthForm(formType = "login") {
+    if (typeof window.showAuthModal === "function") {
+      // Reuse shared auth initialisation + state handling.
+      // CSS on this page renders the modal inline instead of as an overlay.
+      window.showAuthModal();
+    }
+    if (window.BBAuth?.showAuthForm) {
+      window.BBAuth.showAuthForm(formType);
+    }
+  }
+
   function renderInviteDetails(invite) {
     const inviterEl = document.getElementById("inviteInviter");
     const orgEl = document.getElementById("inviteOrg");
     const roleEl = document.getElementById("inviteRole");
 
-    if (inviterEl)
+    if (inviterEl) {
       inviterEl.textContent = invite?.inviter_name || "a team member";
-    if (orgEl)
+    }
+    if (orgEl) {
       orgEl.textContent = invite?.organisation_name || "this organisation";
-    if (roleEl) roleEl.textContent = invite?.role || "member";
+    }
+    if (roleEl) {
+      roleEl.textContent = invite?.role || "member";
+    }
   }
 
   async function initialiseInviteWelcome() {
     await window.BB_APP?.coreReady;
+    await ensureAuthModalReady();
 
     const inviteFlow = window.BBInviteFlow;
     if (!inviteFlow) {
@@ -50,15 +72,17 @@
     await inviteFlow.handleInviteTokenFlow({
       redirectTo: "/welcome",
       onAuthRequired: () => {
+        showInlineAuthForm("login");
         setStatus(
           "Sign in or create an account to accept this invite.",
           "info"
         );
       },
       onAccepted: () => {
-        setStatus("Invite accepted. Redirecting to your dashboard…", "success");
+        setStatus("Invite accepted. Redirecting to welcome…", "success");
       },
       onError: (error) => {
+        showInlineAuthForm("login");
         setStatus(error.message || "Failed to accept invite.", "error");
       },
     });

@@ -42,6 +42,12 @@ Last reviewed: 2026-02-02
   Components where relevant and replace non-Web-Component UI when possible.
 - Run a `docker build` before merging static asset changes (frontend assets,
   public files, or CSS/JS bundles).
+- For any new top-level HTML page/route, update all three surfaces:
+  - HTTP route registration in `internal/api/handlers.go`
+  - page file on disk (for example `welcome.html`)
+  - container packaging in `Dockerfile`
+    (`COPY --from=builder /app/<page>.html .`) Missing the Dockerfile copy will
+    cause a runtime 404 in Fly deployments.
 
 ## Git Commit Style
 
