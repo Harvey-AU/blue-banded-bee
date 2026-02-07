@@ -29,6 +29,37 @@ On merge, CI will:
 
 ## [Unreleased]
 
+### Fixed
+
+- **Invite Existing Users**: Inviting a user who already has a Supabase account
+  no longer returns a 500 error. The system detects the existing account and
+  sends a magic link email instead, with the invite record still created for
+  tracking.
+- **Invite List Refresh**: Pending invites list now refreshes immediately after
+  sending or revoking an invite (fixed missing `await` calls).
+
+### Added
+
+- **Copy Invite Link**: Pending invites now show a "Copy link" button so admins
+  can manually share the invite URL via other channels. Button is hidden when no
+  link is available.
+- **Email Delivery Status**: Invite API response now includes an
+  `email_delivery` field. The UI shows a warning toast when the notification
+  email could not be delivered, advising the admin to share the invite link
+  manually.
+- **Warning Toast Style**: Settings toast notifications support a new warning
+  colour scheme (amber) for non-critical alerts.
+
+### Changed
+
+- **Supabase Auth Helpers**: Extracted shared `resolveSupabaseAuthURL` and
+  `supabaseServiceKey` helpers to reduce duplication across invite and magic
+  link flows.
+- **Magic Link Security**: Magic link endpoint now uses the publishable/anon key
+  rather than the service role key, following Supabase best practices.
+- **Error Body Reads**: Auth error response reads are now capped at 4 KB via
+  `io.LimitReader` to prevent unbounded memory allocation.
+
 ## [0.26.0] – 2026-02-06
 
 ### Added
