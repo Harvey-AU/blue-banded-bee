@@ -44,6 +44,7 @@
       });
     </script>
 
+    <script src="/js/bb-bootstrap.js"></script>
     <script src="/js/core.js" defer></script>
     <script src="/js/bb-global-nav.js" defer></script>
 
@@ -724,9 +725,7 @@
       // Initialize dashboard with unified authentication system
       document.addEventListener("DOMContentLoaded", async () => {
         try {
-          if (window.BB_APP?.coreReady) {
-            await window.BB_APP.coreReady;
-          }
+          await window.BB_APP.whenReady();
           // Initialize the complete dashboard with auth integration
           await initializeDashboard({
             debug: false,

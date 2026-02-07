@@ -29,6 +29,29 @@ On merge, CI will:
 
 ## [Unreleased]
 
+## [0.26.1] – 2026-02-07
+
+### Fixed
+
+- **Dashboard Cold-Load Race Condition**: Fixed "Failed to initialise dashboard"
+  error appearing on first page load (cold browser cache) across all authed
+  pages
+  - Root cause: `DOMContentLoaded` fired before deferred `core.js` had executed,
+    so `window.BB_APP.coreReady` didn't exist yet and the await was silently
+    skipped
+  - New `bb-bootstrap.js` provides `BB_APP.whenReady()` — a polling wrapper that
+    waits for `core.js` to finish before proceeding
+  - Loaded without `defer` so it's available immediately; all pages now use a
+    single `await window.BB_APP.whenReady()` call
+  - Homepage now shows a visible error banner on timeout instead of silently
+    leaving buttons non-functional
+- **Static Asset Rate Limiting**: Hard refresh no longer triggers 429 errors on
+  JS, CSS, and image files
+  - Rate limiter now excludes `/js/*`, `/styles/*`, `/web/*`, `/images/*`,
+    `/config.js`, and `/favicon.ico` from per-IP rate limits
+  - Static assets are cheap to serve and browsers legitimately request many in
+    parallel during hard refresh
+
 ## [0.26.0] – 2026-02-06
 
 ### Added
