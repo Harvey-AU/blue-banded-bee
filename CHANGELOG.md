@@ -50,10 +50,6 @@ On merge, CI will:
   - Static assets are cheap to serve and browsers legitimately request many in
     parallel during hard refresh
 
----
-
-<!-- ⬆️ Add new unreleased changes above this line ⬆️ -->
-
 ## [0.26.0] – 2026-02-06
 
 ### Added
