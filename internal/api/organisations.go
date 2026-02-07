@@ -1,16 +1,11 @@
 package api
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
-	"fmt"
-	"io"
 	"net/http"
 	"net/mail"
 	"net/url"
-	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -22,12 +17,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 )
-
-// errInviteEmailExists is returned when the Supabase /invite endpoint reports
-// the user already has an account. The invite record is still valid — the
-// caller should fall back to a magic-link email so the existing user can log
-// in and accept.
-var errInviteEmailExists = errors.New("user already registered")
 
 // OrganisationsHandler handles GET and POST /v1/organisations
 func (h *Handler) OrganisationsHandler(w http.ResponseWriter, r *http.Request) {
@@ -740,25 +729,8 @@ func (h *Handler) createOrganisationInvite(w http.ResponseWriter, r *http.Reques
 
 	meta := util.ExtractRequestMeta(r)
 
-	// Step 1: Create a confirmed Supabase Auth user via the admin API.
-	// Using /admin/users with email_confirm:true avoids the short-lived OTP
-	// issue from generate_link — the user can log in at any time.
-	err = createSupabaseInviteUser(r.Context(), email, map[string]interface{}{
-		"organisation_id": orgID,
-		"role":            role,
-		"inviter_name":    util.SanitiseForJSON(inviterName),
-	})
-	if err != nil && !errors.Is(err, errInviteEmailExists) {
-		if revokeErr := h.DB.RevokeOrganisationInvite(r.Context(), invite.ID, orgID); revokeErr != nil {
-			logger := loggerWithRequest(r)
-			logger.Warn().Err(revokeErr).Msg("Failed to revoke invite after user creation failure")
-		}
-		InternalError(w, r, err)
-		return
-	}
-	// errInviteEmailExists is fine — user already has a confirmed account.
-
-	// Step 2: Send invite email via Loops with our own invite URL.
+	// Send invite email via Loops. The invitee signs up or logs in via
+	// the normal auth flow, then accepts the invite using the token.
 	loopsErr := h.sendInviteViaLoops(r.Context(), email, map[string]any{
 		"InviterName":     util.SanitiseForJSON(inviterName),
 		"Device":          util.SanitiseForJSON(meta.Device),
@@ -799,95 +771,6 @@ func (h *Handler) requireOrganisationAdmin(w http.ResponseWriter, r *http.Reques
 		return false
 	}
 	return true
-}
-
-// resolveSupabaseAuthURL returns the Supabase Auth base URL, preferring
-// SUPABASE_AUTH_URL and falling back to SUPABASE_URL + "/auth/v1".
-func resolveSupabaseAuthURL() (string, error) {
-	authURL := strings.TrimSuffix(os.Getenv("SUPABASE_AUTH_URL"), "/")
-	if authURL == "" {
-		legacyURL := strings.TrimSuffix(os.Getenv("SUPABASE_URL"), "/")
-		if legacyURL != "" {
-			authURL = legacyURL + "/auth/v1"
-		}
-	}
-	if authURL == "" {
-		return "", fmt.Errorf("supabase auth URL is not configured")
-	}
-	if !strings.Contains(authURL, "/auth/") {
-		authURL = authURL + "/auth/v1"
-	}
-	return authURL, nil
-}
-
-// supabaseServiceKey returns the service role key or an error.
-func supabaseServiceKey() (string, error) {
-	key := os.Getenv("SUPABASE_SERVICE_ROLE_KEY")
-	if key == "" {
-		return "", fmt.Errorf("supabase service role key is not configured")
-	}
-	return key, nil
-}
-
-// maxErrorBodyBytes caps how much of an error response body we read.
-const maxErrorBodyBytes = 4096
-
-// createSupabaseInviteUser creates a confirmed user via the Supabase admin API.
-// The user is immediately able to log in; no short-lived OTP link required.
-func createSupabaseInviteUser(ctx context.Context, email string, metadata map[string]interface{}) error {
-	authURL, err := resolveSupabaseAuthURL()
-	if err != nil {
-		return err
-	}
-
-	serviceKey, err := supabaseServiceKey()
-	if err != nil {
-		return err
-	}
-
-	payload, err := json.Marshal(map[string]interface{}{
-		"email":         email,
-		"email_confirm": true,
-		"user_metadata": metadata,
-	})
-	if err != nil {
-		return fmt.Errorf("failed to build admin create user payload: %w", err)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, authURL+"/admin/users", bytes.NewReader(payload))
-	if err != nil {
-		return fmt.Errorf("failed to create admin user request: %w", err)
-	}
-
-	req.Header.Set("Authorization", "Bearer "+serviceKey)
-	req.Header.Set("apikey", serviceKey)
-	req.Header.Set("Content-Type", "application/json")
-
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return fmt.Errorf("failed to send admin create user request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= http.StatusMultipleChoices {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, maxErrorBodyBytes))
-		bodyStr := strings.TrimSpace(string(body))
-
-		// Detect existing user: 422 + error_code "email_exists"
-		if resp.StatusCode == http.StatusUnprocessableEntity {
-			var errResp struct {
-				ErrorCode string `json:"error_code"`
-			}
-			if json.Unmarshal(body, &errResp) == nil && errResp.ErrorCode == "email_exists" {
-				return errInviteEmailExists
-			}
-		}
-
-		return fmt.Errorf("supabase admin create user failed: %s", bodyStr)
-	}
-
-	return nil
 }
 
 // loopsInviteTemplateID is the Loops transactional template for organisation invites.
