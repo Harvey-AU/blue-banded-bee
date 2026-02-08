@@ -460,7 +460,7 @@ you must update all required surfaces:
    - Add the page file at repository root (for example `welcome.html`).
 3. **Package the file in Docker**
    - Add a `COPY --from=builder /app/<page>.html .` line in `Dockerfile`.
-   - If omitted, local runs may work but Fly deployments will return 404.
+   - If omitted, local runs may work, but Fly deployments will return 404.
 4. **Verify before merge**
    - Run `docker build -t blue-banded-bee .`
    - Open the route in the built container or review app.
@@ -509,7 +509,7 @@ Use backend state as the source of truth for active organisation selection:
   be exercised.
 - Invite flows described in **Auth Redirect Contract** rely on this integration
   for delivery (`invite_token` handling and acceptance still run in-app).
-- If `LOOPS_API_KEY` is missing, invite records are still created but email
+- If `LOOPS_API_KEY` is missing, invite records are still created, but email
   delivery is skipped and should be treated as non-delivery for test runs.
 - Configure `LOOPS_API_KEY` in your review app and CI environment variables when
   validating invite emails end-to-end.
