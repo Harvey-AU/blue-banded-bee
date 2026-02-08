@@ -825,6 +825,8 @@ async function handleSocialLogin(provider) {
   clearAuthError();
 
   try {
+    // Source of truth for social OAuth post-auth routing.
+    // Keep deep-link and invite-token handling here instead of per-page logic.
     const getOAuthRedirectTarget = () => {
       const params = new URLSearchParams(window.location.search);
       if (params.has("invite_token")) {

@@ -470,6 +470,25 @@ Recommended quick checks:
 - `rg -n "/welcome|/your-path" internal/api/handlers.go`
 - `rg -n "COPY --from=builder /app/.*\\.html" Dockerfile`
 
+### Auth Redirect Contract
+
+Keep social auth redirect behaviour centralised in `web/static/js/auth.js`.
+Avoid page-by-page redirect logic unless the page intentionally owns a
+specialised flow.
+
+Baseline rules:
+
+1. **Deep links return to themselves**
+   - If auth starts on a deep link (path/query), return to that same URL after
+     OAuth.
+2. **Homepage uses default app landing**
+   - If auth starts from `/`, route to the default signed-in landing page.
+3. **Invite links complete invite first**
+   - Preserve `invite_token` through OAuth, accept invite, then redirect to
+     `/welcome`.
+4. **Page-specific overrides are explicit**
+   - If a page must override redirect behaviour, document why in code comments.
+
 ### Environment-Specific Configs
 
 **Development**:

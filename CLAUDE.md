@@ -49,6 +49,19 @@ Last reviewed: 2026-02-02
     (`COPY --from=builder /app/<page>.html .`) Missing the Dockerfile copy will
     cause a runtime 404 in Fly deployments.
 
+## Auth Redirect Contract
+
+- Social OAuth redirect targets are centralised in `web/static/js/auth.js`
+  (`handleSocialLogin`), with CLI-specific override logic in `initCliAuthPage`.
+- Deep-link behaviour: if the current URL contains path/query context (for
+  example invite token links), OAuth must return to that exact URL.
+- Homepage behaviour: auth started from `/` may route to the default app landing
+  page rather than returning to `/`.
+- Invite behaviour: after successful invite acceptance, route users to
+  `/welcome`.
+- Page-specific post-auth redirects are allowed when the page explicitly owns
+  that flow.
+
 ## Git Commit Style
 
 - Keep commit messages to five or six words, no AI attribution, and no footers
