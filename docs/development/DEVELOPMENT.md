@@ -503,6 +503,17 @@ Use backend state as the source of truth for active organisation selection:
 
 ### Environment-Specific Configs
 
+### Integration Requirements
+
+- Review apps and CI must set `LOOPS_API_KEY` if invite email delivery needs to
+  be exercised.
+- Invite flows described in **Auth Redirect Contract** rely on this integration
+  for delivery (`invite_token` handling and acceptance still run in-app).
+- If `LOOPS_API_KEY` is missing, invite records are still created but email
+  delivery is skipped and should be treated as non-delivery for test runs.
+- Configure `LOOPS_API_KEY` in your review app and CI environment variables when
+  validating invite emails end-to-end.
+
 **Development**:
 
 - Hot reloading enabled
