@@ -196,6 +196,27 @@
     const settingsOrgName = document.getElementById("settingsOrgName");
     const path = window.location.pathname.replace(/\/$/, "");
     const navLinks = navElement.querySelectorAll(".nav-link");
+    const closeNavOverlays = ({ except } = {}) => {
+      const orgSwitcher = navElement.querySelector("#orgSwitcher");
+      const orgBtn = navElement.querySelector("#orgSwitcherBtn");
+      const userMenuDropdown = navElement.querySelector("#userMenuDropdown");
+      const userAvatar = navElement.querySelector("#userAvatar");
+      const notificationsContainer = navElement.querySelector(
+        "#notificationsContainer"
+      );
+
+      if (except !== "org") {
+        orgSwitcher?.classList.remove("open");
+        orgBtn?.setAttribute("aria-expanded", "false");
+      }
+      if (except !== "user") {
+        userMenuDropdown?.classList.remove("show");
+        userAvatar?.setAttribute("aria-expanded", "false");
+      }
+      if (except !== "notifications") {
+        notificationsContainer?.classList.remove("open");
+      }
+    };
 
     const titleMap = [
       { match: (p) => p === "/dashboard", title: "Dashboard" },
@@ -302,11 +323,10 @@
       if (orgSwitcher && orgBtn) {
         orgBtn.addEventListener("click", (event) => {
           event.stopPropagation();
-          orgSwitcher.classList.toggle("open");
-          orgBtn.setAttribute(
-            "aria-expanded",
-            orgSwitcher.classList.contains("open")
-          );
+          const willOpen = !orgSwitcher.classList.contains("open");
+          closeNavOverlays({ except: willOpen ? "org" : undefined });
+          orgSwitcher.classList.toggle("open", willOpen);
+          orgBtn.setAttribute("aria-expanded", willOpen ? "true" : "false");
         });
 
         document.addEventListener("click", () => {
@@ -391,8 +411,10 @@
 
       userAvatar.addEventListener("click", (event) => {
         event.stopPropagation();
-        const isOpen = userMenuDropdown.classList.toggle("show");
-        userAvatar.setAttribute("aria-expanded", isOpen ? "true" : "false");
+        const willOpen = !userMenuDropdown.classList.contains("show");
+        closeNavOverlays({ except: willOpen ? "user" : undefined });
+        userMenuDropdown.classList.toggle("show", willOpen);
+        userAvatar.setAttribute("aria-expanded", willOpen ? "true" : "false");
       });
 
       userMenuDropdown.addEventListener("click", (event) => {
@@ -407,9 +429,13 @@
       });
 
       document.addEventListener("keydown", (event) => {
-        if (event.key === "Escape") {
+        if (
+          event.key === "Escape" &&
+          userMenuDropdown.classList.contains("show")
+        ) {
           userMenuDropdown.classList.remove("show");
           userAvatar.setAttribute("aria-expanded", "false");
+          userAvatar.focus();
         }
       });
 
@@ -578,8 +604,10 @@
 
       notificationsBtn.addEventListener("click", async (event) => {
         event.stopPropagation();
-        const isOpen = notificationsContainer.classList.toggle("open");
-        if (isOpen) {
+        const willOpen = !notificationsContainer.classList.contains("open");
+        closeNavOverlays({ except: willOpen ? "notifications" : undefined });
+        notificationsContainer.classList.toggle("open", willOpen);
+        if (willOpen) {
           await loadDropdown();
         }
       });
@@ -614,14 +642,7 @@
           if (!["http:", "https:"].includes(target.protocol)) {
             throw new Error("Unsupported protocol");
           }
-          const opened = window.open(
-            target.href,
-            "_blank",
-            "noopener,noreferrer"
-          );
-          if (opened) {
-            opened.opener = null;
-          }
+          window.open(target.href, "_blank", "noopener,noreferrer");
         } catch (_error) {
           console.warn("Invalid notification link:", link);
         }
@@ -640,6 +661,7 @@
           const response = await fetch("/v1/notifications/read-all", {
             method: "POST",
             headers: { Authorization: `Bearer ${token}` },
+            signal: AbortSignal.timeout(15000),
           });
           if (response.ok) {
             updateBadge(0);
