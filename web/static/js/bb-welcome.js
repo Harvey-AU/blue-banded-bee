@@ -21,6 +21,8 @@
   }
 
   document.addEventListener("DOMContentLoaded", () => {
-    initialiseWelcomeTitle();
+    initialiseWelcomeTitle().catch((error) => {
+      console.warn("Failed to initialise welcome title:", error);
+    });
   });
 })();
