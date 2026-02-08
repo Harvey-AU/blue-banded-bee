@@ -159,6 +159,9 @@
       if (clearTokenOnSuccess) {
         clearInviteTokenFromURL(tokenParamName);
       }
+      if (typeof window.BBAuth?.clearPendingInviteToken === "function") {
+        window.BBAuth.clearPendingInviteToken();
+      }
 
       if (typeof onAccepted === "function") {
         await onAccepted(result);

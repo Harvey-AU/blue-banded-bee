@@ -179,6 +179,11 @@ async function handleAuthCallback() {
   try {
     // Check for error parameters in URL (from OAuth failures)
     const urlParams = new URLSearchParams(window.location.search);
+    const hasOAuthCallbackParams =
+      urlParams.has("code") ||
+      urlParams.has("state") ||
+      urlParams.has("error") ||
+      urlParams.has("error_code");
     const error = urlParams.get("error");
     const errorDescription = urlParams.get("error_description");
 
@@ -220,7 +225,17 @@ async function handleAuthCallback() {
       });
 
       if (session) {
-        clearPendingInviteToken();
+        const pendingInviteToken = getPendingInviteToken();
+        if (
+          pendingInviteToken &&
+          window.location.pathname !== "/welcome/invite"
+        ) {
+          const inviteUrl = new URL(
+            `${window.location.origin}/welcome/invite?invite_token=${encodeURIComponent(pendingInviteToken)}`
+          );
+          window.location.replace(inviteUrl.toString());
+          return false;
+        }
         // Clear the URL hash to clean up the URL
         history.replaceState(null, null, getCleanOAuthCallbackPath());
 
@@ -235,6 +250,18 @@ async function handleAuthCallback() {
         data: { session },
       } = await supabase.auth.getSession();
       if (session) {
+        const pendingInviteToken = getPendingInviteToken();
+        if (
+          hasOAuthCallbackParams &&
+          pendingInviteToken &&
+          window.location.pathname !== "/welcome/invite"
+        ) {
+          const inviteUrl = new URL(
+            `${window.location.origin}/welcome/invite?invite_token=${encodeURIComponent(pendingInviteToken)}`
+          );
+          window.location.replace(inviteUrl.toString());
+          return false;
+        }
         return true;
       }
     }
@@ -1793,6 +1820,7 @@ if (typeof module !== "undefined" && module.exports) {
     handleLogout,
     initCliAuthPage,
     resumeCliAuthFromStorage,
+    clearPendingInviteToken,
   };
 
   // Also make individual functions available globally for backward compatibility
@@ -1824,6 +1852,7 @@ if (typeof module !== "undefined" && module.exports) {
   window.handleAuthSuccess = defaultHandleAuthSuccess;
   window.initCliAuthPage = initCliAuthPage;
   window.resumeCliAuthFromStorage = resumeCliAuthFromStorage;
+  window.clearPendingInviteToken = clearPendingInviteToken;
 
   // Convenience functions for common auth form actions
   window.showLoginForm = () => showAuthForm("login");
