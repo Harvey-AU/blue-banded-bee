@@ -42,6 +42,28 @@ Last reviewed: 2026-02-02
   Components where relevant and replace non-Web-Component UI when possible.
 - Run a `docker build` before merging static asset changes (frontend assets,
   public files, or CSS/JS bundles).
+- For any new top-level HTML page/route, update all three surfaces:
+  - HTTP route registration in `internal/api/handlers.go`
+  - page file on disk (for example `welcome.html`)
+  - container packaging in `Dockerfile`
+    (`COPY --from=builder /app/<page>.html .`) Missing the Dockerfile copy will
+    cause a runtime 404 in Fly deployments.
+
+## Auth Redirect Contract
+
+- Social OAuth redirect targets are centralised in `web/static/js/auth.js`
+  (`handleSocialLogin`), with CLI-specific override logic in `initCliAuthPage`.
+- Deep-link behaviour: if the current URL contains path/query context (for
+  example invite token links), OAuth must return to that exact URL.
+- Homepage behaviour: auth started from `/` may route to the default app landing
+  page rather than returning to `/`.
+- Invite behaviour: after successful invite acceptance, route users to
+  `/welcome`.
+- Page-specific post-auth redirects are allowed when the page explicitly owns
+  that flow.
+- Active-organisation source of truth is backend API response
+  (`GET /v1/organisations` -> `active_organisation_id`). Frontend state may
+  cache this in local storage, but must not override backend truth.
 
 ## Git Commit Style
 
