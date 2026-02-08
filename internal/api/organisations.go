@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/mail"
 	"os"
@@ -839,9 +840,14 @@ func (h *Handler) createOrganisationInvite(w http.ResponseWriter, r *http.Reques
 	})
 	if loopsErr != nil {
 		logger := loggerWithRequest(r)
-		logger.Error().Err(loopsErr).Str("email", email).Msg("Failed to send invite via Loops")
-		emailDelivery = "failed"
-		responseMsg = "Invite created but email delivery failed — the user can log in and accept manually"
+		if errors.Is(loopsErr, errLoopsNotConfigured) {
+			emailDelivery = "skipped"
+			responseMsg = "Invite created but email delivery is not configured in this environment"
+		} else {
+			logger.Error().Err(loopsErr).Msg("Failed to send invite via Loops")
+			emailDelivery = "failed"
+			responseMsg = "Invite created but email delivery failed — the user can log in and accept manually"
+		}
 	}
 
 	WriteCreated(w, r, map[string]interface{}{
@@ -877,12 +883,14 @@ var loopsInviteTemplateID = func() string {
 	return "cmlbixdob0d3v0i34iy1nd6ad"
 }()
 
+var errLoopsNotConfigured = errors.New("loops client not configured")
+
 // sendInviteViaLoops sends the invite email through the Loops transactional API.
-// Returns nil without error if the Loops client is not configured (dev environments).
+// Returns errLoopsNotConfigured if the Loops client is not configured.
 func (h *Handler) sendInviteViaLoops(ctx context.Context, email string, vars map[string]any) error {
 	if h.Loops == nil {
-		log.Warn().Str("email", email).Msg("Loops client not configured; skipping invite email")
-		return nil
+		log.Warn().Msg("Loops client not configured; skipping invite email")
+		return errLoopsNotConfigured
 	}
 
 	return h.Loops.SendTransactional(ctx, &loops.TransactionalRequest{
