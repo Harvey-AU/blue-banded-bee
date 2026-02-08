@@ -204,6 +204,7 @@
       const notificationsContainer = navElement.querySelector(
         "#notificationsContainer"
       );
+      const notificationsBtn = navElement.querySelector("#notificationsBtn");
 
       if (except !== "org") {
         orgSwitcher?.classList.remove("open");
@@ -215,6 +216,7 @@
       }
       if (except !== "notifications") {
         notificationsContainer?.classList.remove("open");
+        notificationsBtn?.setAttribute("aria-expanded", "false");
       }
     };
 
@@ -476,6 +478,8 @@
       if (!notificationsContainer || !notificationsBtn || !notificationsBadge) {
         return;
       }
+      notificationsBtn.setAttribute("aria-haspopup", "true");
+      notificationsBtn.setAttribute("aria-expanded", "false");
 
       const getAccessToken = async () => {
         return (
@@ -626,6 +630,10 @@
         const willOpen = !notificationsContainer.classList.contains("open");
         closeNavOverlays({ except: willOpen ? "notifications" : undefined });
         notificationsContainer.classList.toggle("open", willOpen);
+        notificationsBtn.setAttribute(
+          "aria-expanded",
+          willOpen ? "true" : "false"
+        );
         if (willOpen) {
           await loadDropdown();
         }
@@ -651,6 +659,7 @@
 
         if (!link) return;
         notificationsContainer.classList.remove("open");
+        notificationsBtn.setAttribute("aria-expanded", "false");
         if (link.startsWith("/")) {
           window.location.href = link;
           return;
@@ -670,6 +679,7 @@
       document.addEventListener("click", (event) => {
         if (!notificationsContainer.contains(event.target)) {
           notificationsContainer.classList.remove("open");
+          notificationsBtn.setAttribute("aria-expanded", "false");
         }
       });
 
