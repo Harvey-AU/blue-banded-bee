@@ -61,6 +61,9 @@ Last reviewed: 2026-02-02
   `/welcome`.
 - Page-specific post-auth redirects are allowed when the page explicitly owns
   that flow.
+- Active-organisation source of truth is backend API response
+  (`GET /v1/organisations` -> `active_organisation_id`). Frontend state may
+  cache this in local storage, but must not override backend truth.
 
 ## Git Commit Style
 

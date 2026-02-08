@@ -38,7 +38,7 @@ func (h *Handler) listUserOrganisations(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// Ensure user exists in database
-	_, err := h.DB.GetOrCreateUser(userClaims.UserID, userClaims.Email, nil)
+	user, err := h.DB.GetOrCreateUser(userClaims.UserID, userClaims.Email, nil)
 	if err != nil {
 		InternalError(w, r, err)
 		return
@@ -67,7 +67,8 @@ func (h *Handler) listUserOrganisations(w http.ResponseWriter, r *http.Request) 
 	}
 
 	WriteSuccess(w, r, map[string]interface{}{
-		"organisations": formattedOrgs,
+		"organisations":          formattedOrgs,
+		"active_organisation_id": user.ActiveOrganisationID,
 	}, "Organisations retrieved successfully")
 }
 

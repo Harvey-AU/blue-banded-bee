@@ -48,6 +48,7 @@ let captchaIssuedAt = null;
 // Auth state refresh debouncing - prevents rapid-fire dashboard refreshes
 const AUTH_REFRESH_DEBOUNCE_MS = 500;
 let authRefreshTimeoutId = null;
+let authStateSyncInitialised = false;
 
 /**
  * Initialise Supabase client
@@ -1155,6 +1156,40 @@ function setupAuthHandlers() {
 
   // Set up password strength checking if signup form is present
   setupPasswordStrength();
+
+  initialiseAuthStateSync();
+}
+
+function initialiseAuthStateSync() {
+  if (authStateSyncInitialised || !supabase?.auth) {
+    return;
+  }
+  authStateSyncInitialised = true;
+
+  // Initial paint: apply auth visibility immediately from current session.
+  supabase.auth
+    .getSession()
+    .then(({ data }) => {
+      const session = data?.session;
+      const isAuthenticated = Boolean(session);
+      updateAuthState(isAuthenticated);
+      if (isAuthenticated) {
+        updateUserInfo();
+      }
+    })
+    .catch((error) => {
+      console.warn("Failed to synchronise initial auth state:", error);
+      updateAuthState(false);
+    });
+
+  // Keep auth visibility and user header in sync across sign-in/out.
+  supabase.auth.onAuthStateChange((_event, session) => {
+    const isAuthenticated = Boolean(session);
+    updateAuthState(isAuthenticated);
+    if (isAuthenticated) {
+      updateUserInfo();
+    }
+  });
 }
 
 /**

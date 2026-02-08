@@ -489,6 +489,18 @@ Baseline rules:
 4. **Page-specific overrides are explicit**
    - If a page must override redirect behaviour, document why in code comments.
 
+### Active Organisation Contract
+
+Use backend state as the source of truth for active organisation selection:
+
+1. `GET /v1/organisations` returns both:
+   - `organisations`
+   - `active_organisation_id`
+2. Frontend org bootstrap in `web/static/js/core.js` must prefer
+   `active_organisation_id` from API.
+3. `localStorage` key `bb_active_org_id` is a cache/fallback only; it must not
+   override backend-selected organisation after invite acceptance or org switch.
+
 ### Environment-Specific Configs
 
 **Development**:
