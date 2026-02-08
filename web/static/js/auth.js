@@ -665,6 +665,12 @@ function ensureTurnstileWidgetRendered(maxAttempts = 10, delayMs = 200) {
     if (!window.turnstile) {
       if (attempts < maxAttempts) {
         setTimeout(tryRender, delayMs);
+      } else {
+        console.warn("Turnstile script did not load within retry window", {
+          maxAttempts,
+          delayMs,
+          sitekey: widget.dataset.sitekey || null,
+        });
       }
       return;
     }
