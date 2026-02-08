@@ -587,7 +587,6 @@ func (h *Handler) OrganisationInviteAcceptHandler(w http.ResponseWriter, r *http
 		}()
 	} else {
 		activeOrganisationSet = true
-		activeOrganisationError = ""
 	}
 
 	responseData := map[string]interface{}{
