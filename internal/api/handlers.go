@@ -506,7 +506,7 @@ func (h *Handler) ServeWelcome(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.URL.Path != "/welcome" && r.URL.Path != "/welcome/" {
-		http.NotFound(w, r)
+		NotFound(w, r, "Page not found")
 		return
 	}
 
