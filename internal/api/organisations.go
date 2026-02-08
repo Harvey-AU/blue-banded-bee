@@ -531,11 +531,6 @@ func (h *Handler) OrganisationInviteAcceptHandler(w http.ResponseWriter, r *http
 		return
 	}
 
-	if _, err := h.DB.GetOrganisationInviteByToken(r.Context(), req.Token); err != nil {
-		BadRequest(w, r, "Invite not found")
-		return
-	}
-
 	acceptedInvite, err := h.DB.AcceptOrganisationInvite(r.Context(), req.Token, userClaims.UserID)
 	if err != nil {
 		BadRequest(w, r, err.Error())
