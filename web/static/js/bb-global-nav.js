@@ -377,7 +377,7 @@
       const userMenu = navElement.querySelector("#userMenu");
       const userAvatar = navElement.querySelector("#userAvatar");
       const userMenuDropdown = navElement.querySelector("#userMenuDropdown");
-      const currentOrgNameEl = navElement.querySelector("#currentOrgName");
+      const currentOrgNameEl = currentOrgName; // Reuse from outer scope (line 195)
       const userMenuOrgNameEl = navElement.querySelector("#userMenuOrgName");
       if (!userMenu || !userAvatar || !userMenuDropdown) return;
 
