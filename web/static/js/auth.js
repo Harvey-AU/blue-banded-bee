@@ -49,6 +49,49 @@ let captchaIssuedAt = null;
 const AUTH_REFRESH_DEBOUNCE_MS = 500;
 let authRefreshTimeoutId = null;
 let authStateSyncInitialised = false;
+const PENDING_INVITE_TOKEN_STORAGE_KEY = "bb_pending_invite_token";
+const OAUTH_CALLBACK_QUERY_KEYS = [
+  "error",
+  "error_code",
+  "error_description",
+  "sb",
+  "code",
+  "state",
+];
+
+function getCleanOAuthCallbackPath() {
+  const url = new URL(window.location.href);
+  url.hash = "";
+  OAUTH_CALLBACK_QUERY_KEYS.forEach((key) => {
+    url.searchParams.delete(key);
+  });
+  return `${url.pathname}${url.search}`;
+}
+
+function getPendingInviteToken() {
+  try {
+    return window.sessionStorage.getItem(PENDING_INVITE_TOKEN_STORAGE_KEY);
+  } catch (_error) {
+    return null;
+  }
+}
+
+function setPendingInviteToken(token) {
+  if (!token) return;
+  try {
+    window.sessionStorage.setItem(PENDING_INVITE_TOKEN_STORAGE_KEY, token);
+  } catch (_error) {
+    // sessionStorage may be unavailable.
+  }
+}
+
+function clearPendingInviteToken() {
+  try {
+    window.sessionStorage.removeItem(PENDING_INVITE_TOKEN_STORAGE_KEY);
+  } catch (_error) {
+    // sessionStorage may be unavailable.
+  }
+}
 
 /**
  * Initialise Supabase client
@@ -129,9 +172,6 @@ function waitForAuthScript(pollIntervalMs = 50, timeoutMs = 12000) {
  */
 async function handleAuthCallback() {
   try {
-    const getUrlWithoutHash = () =>
-      `${window.location.pathname}${window.location.search}`;
-
     // Check for error parameters in URL (from OAuth failures)
     const urlParams = new URLSearchParams(window.location.search);
     const error = urlParams.get("error");
@@ -139,8 +179,20 @@ async function handleAuthCallback() {
 
     if (error) {
       console.error("OAuth error:", error, errorDescription);
+      const inviteToken =
+        urlParams.get("invite_token") || getPendingInviteToken();
+      if (inviteToken && window.location.pathname !== "/welcome/invite") {
+        const inviteUrl = new URL(
+          `${window.location.origin}/welcome/invite?invite_token=${encodeURIComponent(inviteToken)}`
+        );
+        inviteUrl.searchParams.set("auth_error", "oauth_failed");
+        history.replaceState(null, null, inviteUrl.toString());
+        window.location.replace(inviteUrl.toString());
+        return false;
+      }
+
       // Clear error from URL
-      history.replaceState(null, null, getUrlWithoutHash());
+      history.replaceState(null, null, getCleanOAuthCallbackPath());
       // Show error to user
       if (window.showAuthError) {
         showAuthError("Authentication failed. Please try again.");
@@ -164,8 +216,9 @@ async function handleAuthCallback() {
       });
 
       if (session) {
+        clearPendingInviteToken();
         // Clear the URL hash to clean up the URL
-        history.replaceState(null, null, getUrlWithoutHash());
+        history.replaceState(null, null, getCleanOAuthCallbackPath());
 
         // Update user info will be called after dataBinder init
         return true;
@@ -835,6 +888,10 @@ async function handleSocialLogin(provider) {
       const params = new URLSearchParams(window.location.search);
       const currentUrl = new URL(window.location.href);
       currentUrl.hash = "";
+      const inviteToken = params.get("invite_token");
+      if (inviteToken) {
+        setPendingInviteToken(inviteToken);
+      }
 
       if (params.has("invite_token")) {
         return currentUrl.toString();
@@ -1132,6 +1189,17 @@ function setupPasswordStrength() {
  * Setup authentication event handlers
  */
 function setupAuthHandlers() {
+  handleAuthCallback()
+    .then((hasSession) => {
+      if (hasSession) {
+        updateAuthState(true);
+        updateUserInfo();
+      }
+    })
+    .catch((error) => {
+      console.warn("Auth callback setup failed:", error);
+    });
+
   // Use event delegation for main auth buttons that might not exist initially
   document.addEventListener("click", (e) => {
     const target = e.target;

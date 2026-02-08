@@ -746,6 +746,12 @@ func (h *Handler) createOrganisationInvite(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	org, err := h.DB.GetOrganisation(orgID)
+	if err != nil {
+		InternalError(w, r, err)
+		return
+	}
+
 	var req organisationInviteRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		BadRequest(w, r, "Invalid JSON request body")
@@ -820,14 +826,16 @@ func (h *Handler) createOrganisationInvite(w http.ResponseWriter, r *http.Reques
 	// Send invite email via Loops. The invitee signs up or logs in via
 	// the normal auth flow, then accepts the invite using the token.
 	loopsErr := h.sendInviteViaLoops(r.Context(), email, map[string]any{
-		"InviterName":     util.SanitiseForJSON(inviterName),
-		"Device":          util.SanitiseForJSON(meta.Device),
-		"Location":        util.SanitiseForJSON(meta.Location),
-		"IP":              util.SanitiseForJSON(meta.IP),
-		"Timestamp":       util.SanitiseForJSON(meta.FormattedTimestamp()),
-		"SiteURL":         getAppURL(),
-		"ConfirmationURL": redirectURL,
-		"Token":           inviteToken,
+		"InviterName":      util.SanitiseForJSON(inviterName),
+		"OrganisationName": util.SanitiseForJSON(org.Name),
+		"OrgName":          util.SanitiseForJSON(org.Name),
+		"Device":           util.SanitiseForJSON(meta.Device),
+		"Location":         util.SanitiseForJSON(meta.Location),
+		"IP":               util.SanitiseForJSON(meta.IP),
+		"Timestamp":        util.SanitiseForJSON(meta.FormattedTimestamp()),
+		"SiteURL":          getAppURL(),
+		"ConfirmationURL":  redirectURL,
+		"Token":            inviteToken,
 	})
 	if loopsErr != nil {
 		logger := loggerWithRequest(r)

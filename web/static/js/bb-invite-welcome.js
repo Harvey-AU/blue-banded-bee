@@ -59,6 +59,16 @@
       return;
     }
 
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get("auth_error")) {
+      setStatus(
+        "We couldn’t complete that social sign-in. Please try another sign-in method.",
+        "error"
+      );
+      showInlineAuthForm("login");
+      return;
+    }
+
     try {
       const invite = await inviteFlow.fetchInvitePreview(token);
       renderInviteDetails(invite);
