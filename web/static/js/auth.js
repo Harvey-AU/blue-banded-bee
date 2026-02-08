@@ -50,6 +50,10 @@ let turnstileWidgetId = null;
 const AUTH_REFRESH_DEBOUNCE_MS = 500;
 let authRefreshTimeoutId = null;
 let authStateSyncInitialised = false;
+const AUTH_SYNC_RETRY_ATTEMPTS = 40;
+const AUTH_SYNC_RETRY_DELAY_MS = 100;
+let authSyncRetryTimer = null;
+let authSyncRetryCount = 0;
 const PENDING_INVITE_TOKEN_STORAGE_KEY = "bb_pending_invite_token";
 const OAUTH_CALLBACK_QUERY_KEYS = [
   "error",
@@ -1313,12 +1317,17 @@ function setupAuthHandlers() {
   // Set up password strength checking if signup form is present
   setupPasswordStrength();
 
-  initialiseAuthStateSync();
+  if (!initialiseAuthStateSync()) {
+    scheduleAuthStateSyncRetry();
+  }
 }
 
 function initialiseAuthStateSync() {
-  if (authStateSyncInitialised || !supabase?.auth) {
-    return;
+  if (authStateSyncInitialised) {
+    return true;
+  }
+  if (!supabase?.auth && !initialiseSupabase()) {
+    return false;
   }
   authStateSyncInitialised = true;
 
@@ -1346,6 +1355,25 @@ function initialiseAuthStateSync() {
       updateUserInfo();
     }
   });
+  return true;
+}
+
+function scheduleAuthStateSyncRetry() {
+  if (authStateSyncInitialised || authSyncRetryTimer) {
+    return;
+  }
+
+  authSyncRetryCount = 0;
+  authSyncRetryTimer = setInterval(() => {
+    authSyncRetryCount += 1;
+    if (
+      initialiseAuthStateSync() ||
+      authSyncRetryCount >= AUTH_SYNC_RETRY_ATTEMPTS
+    ) {
+      clearInterval(authSyncRetryTimer);
+      authSyncRetryTimer = null;
+    }
+  }, AUTH_SYNC_RETRY_DELAY_MS);
 }
 
 /**
