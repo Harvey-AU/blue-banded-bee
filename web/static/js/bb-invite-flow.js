@@ -72,7 +72,7 @@
       throw new Error(message);
     }
 
-    return payload?.data || payload;
+    return payload?.data ?? null;
   }
 
   async function getSessionWithRetry() {
