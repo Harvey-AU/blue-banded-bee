@@ -590,7 +590,7 @@ function showAuthForm(formType) {
   // Reset CAPTCHA state for signup form
   if (formType === "signup") {
     captchaToken = null;
-    setSignupButtonEnabled(!isTurnstileEnabled());
+    setSignupButtonEnabled(true);
     resetTurnstileWidget("show_form");
   }
 
@@ -617,9 +617,9 @@ function getTurnstileWidget() {
 function resetTurnstileWidget(reason = "manual") {
   captchaToken = null;
   captchaIssuedAt = null;
-  setSignupButtonEnabled(!isTurnstileEnabled());
+  setSignupButtonEnabled(true);
 
-  if (!window.turnstile) {
+  if (!isTurnstileEnabled() || !window.turnstile) {
     return;
   }
 
@@ -628,11 +628,21 @@ function resetTurnstileWidget(reason = "manual") {
     return;
   }
 
+  const hasRenderedWidget = Boolean(
+    widget.querySelector(
+      "iframe, input[name='cf-turnstile-response'], textarea[name='cf-turnstile-response']"
+    )
+  );
+  if (!hasRenderedWidget) {
+    // Widget has not been rendered yet; nothing to reset.
+    return;
+  }
+
   try {
     window.turnstile.reset(widget);
     console.debug("Turnstile reset", { reason });
   } catch (error) {
-    console.warn("Failed to reset Turnstile widget", error);
+    console.debug("Skipped Turnstile reset", { reason, error: error?.message });
   }
 }
 
@@ -755,7 +765,6 @@ async function executeEmailSignup() {
 
   if (isTurnstileEnabled() && !captchaToken) {
     showAuthError("Please complete the CAPTCHA verification.");
-    setSignupButtonEnabled(false);
     return;
   }
 
