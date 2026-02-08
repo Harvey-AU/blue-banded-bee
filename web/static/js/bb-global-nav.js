@@ -476,6 +476,13 @@
       };
 
       const renderList = (notifications) => {
+        const escapeHtml = (str) =>
+          (str || "")
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;");
+
         if (!notificationsList) return;
         if (!notifications || notifications.length === 0) {
           notificationsList.innerHTML = `
@@ -489,10 +496,10 @@
 
         notificationsList.innerHTML = notifications
           .map((n) => {
-            const preview = (n.preview || "").replace(/[<>&]/g, "");
-            const subject = (n.subject || "").replace(/[<>&]/g, "");
-            const notificationId = n.id || "";
-            const notificationLink = (n.link || "").replace(/"/g, "&quot;");
+            const preview = escapeHtml(n.preview);
+            const subject = escapeHtml(n.subject);
+            const notificationId = escapeHtml(n.id);
+            const notificationLink = escapeHtml(n.link);
             return `
               <div class="bb-notification-item ${!n.read_at ? "unread" : ""}" data-id="${notificationId}" data-link="${notificationLink}">
                 <div class="bb-notification-item-content">
