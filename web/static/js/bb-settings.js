@@ -1266,22 +1266,6 @@
       }
     }
 
-    if (typeof subscribeToNotifications === "function") {
-      try {
-        await subscribeToNotifications();
-      } catch (err) {
-        console.warn("Failed to subscribe to notifications:", err);
-      }
-    }
-
-    if (typeof loadNotificationCount === "function") {
-      try {
-        await loadNotificationCount();
-      } catch (err) {
-        console.warn("Failed to load notification count:", err);
-      }
-    }
-
     window.BBQuota?.refresh();
 
     showSettingsToast("success", `Switched to ${newOrg.name}`);
@@ -1434,8 +1418,6 @@
       }
 
       setupSettingsNavigation();
-      setupNotificationsDropdown();
-      setupUserMenuDropdown();
       setupPlanTabs();
 
       const sessionResult = await window.supabase.auth.getSession();

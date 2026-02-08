@@ -421,11 +421,6 @@
     initUserMenuDropdown();
 
     const initNavNotifications = () => {
-      const route = window.location.pathname.replace(/\/$/, "");
-      if (route === "/dashboard" || route.startsWith("/settings")) {
-        return;
-      }
-
       const notificationsContainer = navElement.querySelector(
         "#notificationsContainer"
       );
@@ -519,6 +514,56 @@
         }
       };
 
+      const markNotificationRead = async (id) => {
+        if (!id) return;
+        const token = await getAccessToken();
+        if (!token) return;
+        await fetch(`/v1/notifications/${id}/read`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+        });
+      };
+
+      const notificationsChannelKey = "__bbNavNotificationsChannel";
+      const subscribeRealtime = async () => {
+        const orgId = window.BB_ACTIVE_ORG?.id;
+        const supabaseAuth = window.supabase?.auth;
+        if (!orgId || !supabaseAuth || !window.supabase?.channel) {
+          return;
+        }
+
+        if (window[notificationsChannelKey]) {
+          window.supabase.removeChannel(window[notificationsChannelKey]);
+          window[notificationsChannelKey] = null;
+        }
+
+        try {
+          const channel = window.supabase
+            .channel(`notifications-changes:${orgId}`)
+            .on(
+              "postgres_changes",
+              {
+                event: "INSERT",
+                schema: "public",
+                table: "notifications",
+                filter: `organisation_id=eq.${orgId}`,
+              },
+              () => {
+                setTimeout(() => {
+                  refreshBadge();
+                  if (notificationsContainer.classList.contains("open")) {
+                    loadDropdown();
+                  }
+                }, 200);
+              }
+            )
+            .subscribe();
+          window[notificationsChannelKey] = channel;
+        } catch (error) {
+          console.warn("Failed to subscribe to notifications:", error);
+        }
+      };
+
       notificationsBtn.addEventListener("click", async (event) => {
         event.stopPropagation();
         const isOpen = notificationsContainer.classList.toggle("open");
@@ -529,6 +574,45 @@
 
       notificationsDropdown?.addEventListener("click", (event) => {
         event.stopPropagation();
+      });
+
+      notificationsList?.addEventListener("click", async (event) => {
+        const item = event.target.closest(".bb-notification-item");
+        if (!item) return;
+
+        const id = item.dataset.id;
+        const link = item.dataset.link || "";
+        try {
+          await markNotificationRead(id);
+          await refreshBadge();
+          item.classList.remove("unread");
+        } catch (error) {
+          console.warn("Failed to mark notification as read:", error);
+        }
+
+        if (!link) return;
+        notificationsContainer.classList.remove("open");
+        if (link.startsWith("/")) {
+          window.location.href = link;
+          return;
+        }
+
+        try {
+          const target = new URL(link, window.location.origin);
+          if (!["http:", "https:"].includes(target.protocol)) {
+            throw new Error("Unsupported protocol");
+          }
+          const opened = window.open(
+            target.href,
+            "_blank",
+            "noopener,noreferrer"
+          );
+          if (opened) {
+            opened.opener = null;
+          }
+        } catch (_error) {
+          console.warn("Invalid notification link:", link);
+        }
       });
 
       document.addEventListener("click", (event) => {
@@ -556,9 +640,16 @@
         }
       });
 
-      document.addEventListener("bb:org-switched", refreshBadge);
-      document.addEventListener("bb:org-ready", refreshBadge);
+      document.addEventListener("bb:org-switched", async () => {
+        await refreshBadge();
+        await subscribeRealtime();
+      });
+      document.addEventListener("bb:org-ready", async () => {
+        await refreshBadge();
+        await subscribeRealtime();
+      });
       refreshBadge();
+      subscribeRealtime();
     };
 
     initNavNotifications();
