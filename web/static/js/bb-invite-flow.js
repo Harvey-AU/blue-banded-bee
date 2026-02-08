@@ -1,5 +1,6 @@
 (function () {
   let authListenerAttached = false;
+  let authSubscription = null;
   const SESSION_RETRY_ATTEMPTS = 12;
   const SESSION_RETRY_DELAY_MS = 150;
 
@@ -92,11 +93,23 @@
     }
 
     authListenerAttached = true;
-    window.supabase.auth.onAuthStateChange((event) => {
-      if (event === "SIGNED_IN") {
-        window.location.reload();
+    const authStateChangeResult = window.supabase.auth.onAuthStateChange(
+      (event) => {
+        if (event === "SIGNED_IN") {
+          authSubscription?.unsubscribe?.();
+          authSubscription = null;
+          authListenerAttached = false;
+          window.location.reload();
+        }
       }
-    });
+    );
+    authSubscription = authStateChangeResult?.data?.subscription || null;
+    if (!authSubscription?.unsubscribe && authStateChangeResult?.unsubscribe) {
+      authSubscription = authStateChangeResult;
+    }
+    if (!authSubscription?.unsubscribe) {
+      authListenerAttached = false;
+    }
   }
 
   async function handleInviteTokenFlow(options = {}) {
