@@ -541,12 +541,17 @@
             const notificationId = escapeHtml(n.id);
             const notificationLink = escapeHtml(n.link);
             return `
-              <div class="bb-notification-item ${!n.read_at ? "unread" : ""}" data-id="${notificationId}" data-link="${notificationLink}">
+              <button
+                type="button"
+                class="bb-notification-item ${!n.read_at ? "unread" : ""}"
+                data-id="${notificationId}"
+                data-link="${notificationLink}"
+              >
                 <div class="bb-notification-item-content">
                   <div class="bb-notification-item-subject">${subject}</div>
                   <div class="bb-notification-item-preview">${preview}</div>
                 </div>
-              </div>
+              </button>
             `;
           })
           .join("");
