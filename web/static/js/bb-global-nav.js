@@ -420,6 +420,149 @@
 
     initUserMenuDropdown();
 
+    const initNavNotifications = () => {
+      const route = window.location.pathname.replace(/\/$/, "");
+      if (route === "/dashboard" || route.startsWith("/settings")) {
+        return;
+      }
+
+      const notificationsContainer = navElement.querySelector(
+        "#notificationsContainer"
+      );
+      const notificationsBtn = navElement.querySelector("#notificationsBtn");
+      const notificationsDropdown = navElement.querySelector(
+        "#notificationsDropdown"
+      );
+      const notificationsList = navElement.querySelector("#notificationsList");
+      const notificationsBadge = navElement.querySelector(
+        "#notificationsBadge"
+      );
+      const markAllReadBtn = navElement.querySelector("#markAllReadBtn");
+      if (!notificationsContainer || !notificationsBtn || !notificationsBadge) {
+        return;
+      }
+
+      const getAccessToken = async () => {
+        return (
+          window.dataBinder?.authManager?.session?.access_token ||
+          (await window.supabase?.auth?.getSession?.())?.data?.session
+            ?.access_token ||
+          null
+        );
+      };
+
+      const updateBadge = (count) => {
+        const unreadCount = Number(count) || 0;
+        notificationsBadge.textContent =
+          unreadCount > 9 ? "9+" : unreadCount || "";
+        notificationsBadge.dataset.count = unreadCount;
+      };
+
+      const fetchNotifications = async (limit = 10) => {
+        const token = await getAccessToken();
+        if (!token) return null;
+        const response = await fetch(`/v1/notifications?limit=${limit}`, {
+          headers: { Authorization: `Bearer ${token}` },
+          signal: AbortSignal.timeout(15000),
+        });
+        if (!response.ok) return null;
+        return response.json();
+      };
+
+      const refreshBadge = async () => {
+        try {
+          const data = await fetchNotifications(1);
+          if (!data) return;
+          const unreadCount = data.unread_count ?? data.data?.unread_count ?? 0;
+          updateBadge(unreadCount);
+        } catch (error) {
+          console.warn("Failed to refresh notifications badge:", error);
+        }
+      };
+
+      const renderList = (notifications) => {
+        if (!notificationsList) return;
+        if (!notifications || notifications.length === 0) {
+          notificationsList.innerHTML = `
+            <div class="bb-notifications-empty">
+              <div class="bb-notifications-empty-icon">🔔</div>
+              <div>No notifications yet</div>
+            </div>
+          `;
+          return;
+        }
+
+        notificationsList.innerHTML = notifications
+          .map((n) => {
+            const preview = (n.preview || "").replace(/[<>&]/g, "");
+            const subject = (n.subject || "").replace(/[<>&]/g, "");
+            return `
+              <div class="bb-notification-item ${!n.read_at ? "unread" : ""}">
+                <div class="bb-notification-item-content">
+                  <div class="bb-notification-item-subject">${subject}</div>
+                  <div class="bb-notification-item-preview">${preview}</div>
+                </div>
+              </div>
+            `;
+          })
+          .join("");
+      };
+
+      const loadDropdown = async () => {
+        try {
+          const data = await fetchNotifications(10);
+          if (!data) return;
+          updateBadge(data.unread_count ?? data.data?.unread_count ?? 0);
+          renderList(data.notifications ?? data.data?.notifications ?? []);
+        } catch (error) {
+          console.warn("Failed to load notifications:", error);
+        }
+      };
+
+      notificationsBtn.addEventListener("click", async (event) => {
+        event.stopPropagation();
+        const isOpen = notificationsContainer.classList.toggle("open");
+        if (isOpen) {
+          await loadDropdown();
+        }
+      });
+
+      notificationsDropdown?.addEventListener("click", (event) => {
+        event.stopPropagation();
+      });
+
+      document.addEventListener("click", (event) => {
+        if (!notificationsContainer.contains(event.target)) {
+          notificationsContainer.classList.remove("open");
+        }
+      });
+
+      markAllReadBtn?.addEventListener("click", async () => {
+        try {
+          const token = await getAccessToken();
+          if (!token) return;
+          const response = await fetch("/v1/notifications/read-all", {
+            method: "POST",
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (response.ok) {
+            updateBadge(0);
+            notificationsList
+              ?.querySelectorAll(".bb-notification-item.unread")
+              .forEach((el) => el.classList.remove("unread"));
+          }
+        } catch (error) {
+          console.warn("Failed to mark notifications as read:", error);
+        }
+      });
+
+      document.addEventListener("bb:org-switched", refreshBadge);
+      document.addEventListener("bb:org-ready", refreshBadge);
+      refreshBadge();
+    };
+
+    initNavNotifications();
+
     // Quota display logic (global, runs on all pages)
     const initQuota = () => {
       let quotaInterval = null;
