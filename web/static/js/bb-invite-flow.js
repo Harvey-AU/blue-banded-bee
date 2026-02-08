@@ -5,6 +5,7 @@
   const SESSION_RETRY_DELAY_MS = 150;
 
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  const getSupabaseAuth = () => window.supabase?.auth || null;
 
   function getInviteToken(paramName = "invite_token") {
     return new URLSearchParams(window.location.search).get(paramName);
@@ -46,7 +47,11 @@
       });
     }
 
-    const sessionResult = await window.supabase.auth.getSession();
+    const auth = getSupabaseAuth();
+    if (!auth) {
+      throw new Error("Authentication is unavailable");
+    }
+    const sessionResult = await auth.getSession();
     const session = sessionResult?.data?.session;
     if (!session?.access_token) {
       throw new Error("Authentication is required");
@@ -71,9 +76,14 @@
   }
 
   async function getSessionWithRetry() {
+    const auth = getSupabaseAuth();
+    if (!auth) {
+      return null;
+    }
+
     let session = null;
     for (let attempt = 0; attempt < SESSION_RETRY_ATTEMPTS; attempt += 1) {
-      const sessionResult = await window.supabase.auth.getSession();
+      const sessionResult = await auth.getSession();
       session = sessionResult?.data?.session || null;
       if (session?.user) {
         return session;
@@ -88,21 +98,20 @@
       window.showAuthModal();
     }
 
-    if (authListenerAttached || !window.supabase?.auth) {
+    const auth = getSupabaseAuth();
+    if (authListenerAttached || !auth) {
       return;
     }
 
     authListenerAttached = true;
-    const authStateChangeResult = window.supabase.auth.onAuthStateChange(
-      (event) => {
-        if (event === "SIGNED_IN") {
-          authSubscription?.unsubscribe?.();
-          authSubscription = null;
-          authListenerAttached = false;
-          window.location.reload();
-        }
+    const authStateChangeResult = auth.onAuthStateChange((event) => {
+      if (event === "SIGNED_IN") {
+        authSubscription?.unsubscribe?.();
+        authSubscription = null;
+        authListenerAttached = false;
+        window.location.reload();
       }
-    );
+    });
     authSubscription = authStateChangeResult?.data?.subscription || null;
     if (!authSubscription?.unsubscribe && authStateChangeResult?.unsubscribe) {
       authSubscription = authStateChangeResult;
