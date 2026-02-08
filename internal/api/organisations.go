@@ -828,7 +828,6 @@ func (h *Handler) createOrganisationInvite(w http.ResponseWriter, r *http.Reques
 	loopsErr := h.sendInviteViaLoops(r.Context(), email, map[string]any{
 		"InviterName":      util.SanitiseForJSON(inviterName),
 		"OrganisationName": util.SanitiseForJSON(org.Name),
-		"OrgName":          util.SanitiseForJSON(org.Name),
 		"Device":           util.SanitiseForJSON(meta.Device),
 		"Location":         util.SanitiseForJSON(meta.Location),
 		"IP":               util.SanitiseForJSON(meta.IP),

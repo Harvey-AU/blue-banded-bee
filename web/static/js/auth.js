@@ -590,7 +590,7 @@ function showAuthForm(formType) {
   // Reset CAPTCHA state for signup form
   if (formType === "signup") {
     captchaToken = null;
-    setSignupButtonEnabled(false);
+    setSignupButtonEnabled(!isTurnstileEnabled());
     resetTurnstileWidget("show_form");
   }
 
@@ -605,6 +605,11 @@ function setSignupButtonEnabled(enabled) {
   }
 }
 
+function isTurnstileEnabled() {
+  const config = window.BBB_CONFIG || {};
+  return Boolean(window.BB_APP?.enableTurnstile ?? config.enableTurnstile);
+}
+
 function getTurnstileWidget() {
   return document.querySelector(".cf-turnstile");
 }
@@ -612,7 +617,7 @@ function getTurnstileWidget() {
 function resetTurnstileWidget(reason = "manual") {
   captchaToken = null;
   captchaIssuedAt = null;
-  setSignupButtonEnabled(false);
+  setSignupButtonEnabled(!isTurnstileEnabled());
 
   if (!window.turnstile) {
     return;
@@ -748,7 +753,7 @@ async function executeEmailSignup() {
     return;
   }
 
-  if (!captchaToken) {
+  if (isTurnstileEnabled() && !captchaToken) {
     showAuthError("Please complete the CAPTCHA verification.");
     setSignupButtonEnabled(false);
     return;
@@ -761,10 +766,15 @@ async function executeEmailSignup() {
   });
 
   try {
+    const signupOptions = {};
+    if (isTurnstileEnabled() && captchaToken) {
+      signupOptions.captchaToken = captchaToken;
+    }
+
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      options: { captchaToken },
+      options: signupOptions,
     });
 
     if (error) throw error;
