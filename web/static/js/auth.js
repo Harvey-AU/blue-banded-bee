@@ -1328,7 +1328,6 @@ function initialiseAuthStateSync() {
   }
   authStateSyncInitialised = true;
 
-  // Initial paint: apply auth visibility immediately from current session.
   supabase.auth
     .getSession()
     .then(({ data }) => {
@@ -1344,7 +1343,6 @@ function initialiseAuthStateSync() {
       updateAuthState(false);
     });
 
-  // Keep auth visibility and user header in sync across sign-in/out.
   supabase.auth.onAuthStateChange((_event, session) => {
     const isAuthenticated = Boolean(session);
     updateAuthState(isAuthenticated);
