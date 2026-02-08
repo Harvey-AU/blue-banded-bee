@@ -825,10 +825,21 @@ async function handleSocialLogin(provider) {
   clearAuthError();
 
   try {
+    const getOAuthRedirectTarget = () => {
+      const params = new URLSearchParams(window.location.search);
+      if (params.has("invite_token")) {
+        return window.location.href;
+      }
+      if (window.location.pathname === "/") {
+        return `${window.location.origin}/dashboard`;
+      }
+      return window.location.href;
+    };
+
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider,
       options: {
-        redirectTo: `${window.location.origin}/dashboard`,
+        redirectTo: getOAuthRedirectTarget(),
       },
     });
 
