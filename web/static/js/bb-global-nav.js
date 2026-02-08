@@ -476,8 +476,8 @@
       };
 
       const renderList = (notifications) => {
-        const escapeHtml = (str) =>
-          (str || "")
+        const escapeHtml = (value) =>
+          String(value ?? "")
             .replace(/&/g, "&amp;")
             .replace(/</g, "&lt;")
             .replace(/>/g, "&gt;")
