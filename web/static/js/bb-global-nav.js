@@ -527,10 +527,13 @@
         if (!id) return;
         const token = await getAccessToken();
         if (!token) return;
-        await fetch(`/v1/notifications/${id}/read`, {
+        const response = await fetch(`/v1/notifications/${id}/read`, {
           method: "POST",
           headers: { Authorization: `Bearer ${token}` },
         });
+        if (!response.ok) {
+          throw new Error("Failed to mark notification as read");
+        }
       };
 
       const notificationsChannelKey = "__bbNavNotificationsChannel";
