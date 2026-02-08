@@ -528,14 +528,8 @@ func (h *Handler) OrganisationInviteAcceptHandler(w http.ResponseWriter, r *http
 		return
 	}
 
-	invite, err := h.DB.GetOrganisationInviteByToken(r.Context(), req.Token)
-	if err != nil {
+	if _, err := h.DB.GetOrganisationInviteByToken(r.Context(), req.Token); err != nil {
 		BadRequest(w, r, "Invite not found")
-		return
-	}
-
-	if !strings.EqualFold(invite.Email, userClaims.Email) {
-		Forbidden(w, r, "Invite email does not match this account")
 		return
 	}
 

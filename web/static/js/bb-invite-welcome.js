@@ -73,10 +73,7 @@
       redirectTo: "/welcome",
       onAuthRequired: () => {
         showInlineAuthForm("login");
-        setStatus(
-          "Sign in or create an account to accept this invite.",
-          "info"
-        );
+        setStatus("Sign in or create an account to continue.", "info");
       },
       onAccepted: () => {
         setStatus("Invite accepted. Redirecting to welcome…", "success");
