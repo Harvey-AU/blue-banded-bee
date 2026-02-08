@@ -409,6 +409,20 @@
         }
       };
 
+      if (currentOrgNameEl) {
+        const orgNameObserver = new MutationObserver(syncUserMenuOrgName);
+        orgNameObserver.observe(currentOrgNameEl, {
+          childList: true,
+          characterData: true,
+          subtree: true,
+        });
+        window.addEventListener(
+          "beforeunload",
+          () => orgNameObserver.disconnect(),
+          { once: true }
+        );
+      }
+
       userAvatar.addEventListener("click", (event) => {
         event.stopPropagation();
         const willOpen = !userMenuDropdown.classList.contains("show");
