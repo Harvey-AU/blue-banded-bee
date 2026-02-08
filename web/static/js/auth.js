@@ -804,11 +804,26 @@ async function executeEmailSignup() {
     }
   } catch (error) {
     const retryable = shouldRetryTurnstile(error);
+    const canRetryTurnstileChallenge = Boolean(
+      isTurnstileEnabled() && window.turnstile && getTurnstileWidget()
+    );
     recordTurnstileEvent("signup_error", {
       retryable,
+      canRetryTurnstileChallenge,
       message: error.message,
       status: error.status,
     });
+
+    if (retryable && !canRetryTurnstileChallenge) {
+      awaitingCaptchaRefresh = false;
+      pendingSignupSubmission = null;
+      console.error("Turnstile challenge required but unavailable:", error);
+      showAuthError(
+        "Email signup is unavailable right now. Please use Google or GitHub sign-in."
+      );
+      hideAuthLoading();
+      return;
+    }
 
     if (retryable && turnstileRetryCount < MAX_TURNSTILE_RETRIES) {
       turnstileRetryCount += 1;
