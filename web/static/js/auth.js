@@ -191,7 +191,6 @@ async function handleAuthCallback() {
           `${window.location.origin}/welcome/invite?invite_token=${encodeURIComponent(inviteToken)}`
         );
         inviteUrl.searchParams.set("auth_error", "oauth_failed");
-        history.replaceState(null, null, inviteUrl.toString());
         window.location.replace(inviteUrl.toString());
         return false;
       }
