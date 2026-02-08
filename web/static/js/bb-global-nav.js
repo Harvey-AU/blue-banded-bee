@@ -373,6 +373,53 @@
 
     initNavOrgSwitcher();
 
+    const initUserMenuDropdown = () => {
+      const userMenu = navElement.querySelector("#userMenu");
+      const userAvatar = navElement.querySelector("#userAvatar");
+      const userMenuDropdown = navElement.querySelector("#userMenuDropdown");
+      const currentOrgNameEl = navElement.querySelector("#currentOrgName");
+      const userMenuOrgNameEl = navElement.querySelector("#userMenuOrgName");
+      if (!userMenu || !userAvatar || !userMenuDropdown) return;
+
+      const syncUserMenuOrgName = () => {
+        if (!currentOrgNameEl || !userMenuOrgNameEl) return;
+        const name = currentOrgNameEl.textContent?.trim();
+        if (name) {
+          userMenuOrgNameEl.textContent = name;
+        }
+      };
+
+      userAvatar.addEventListener("click", (event) => {
+        event.stopPropagation();
+        const isOpen = userMenuDropdown.classList.toggle("show");
+        userAvatar.setAttribute("aria-expanded", isOpen ? "true" : "false");
+      });
+
+      userMenuDropdown.addEventListener("click", (event) => {
+        event.stopPropagation();
+      });
+
+      document.addEventListener("click", (event) => {
+        if (!userMenu.contains(event.target)) {
+          userMenuDropdown.classList.remove("show");
+          userAvatar.setAttribute("aria-expanded", "false");
+        }
+      });
+
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape") {
+          userMenuDropdown.classList.remove("show");
+          userAvatar.setAttribute("aria-expanded", "false");
+        }
+      });
+
+      document.addEventListener("bb:org-switched", syncUserMenuOrgName);
+      document.addEventListener("bb:org-ready", syncUserMenuOrgName);
+      syncUserMenuOrgName();
+    };
+
+    initUserMenuDropdown();
+
     // Quota display logic (global, runs on all pages)
     const initQuota = () => {
       let quotaInterval = null;
