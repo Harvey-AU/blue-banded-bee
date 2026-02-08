@@ -702,6 +702,12 @@ function shouldRetryTurnstile(error) {
   return false;
 }
 
+function getEmailSignupRedirectTarget() {
+  const redirectUrl = new URL(window.location.href);
+  redirectUrl.hash = "";
+  return redirectUrl.toString();
+}
+
 function recordTurnstileEvent(event, metadata = {}) {
   const details = {
     event,
@@ -820,6 +826,7 @@ async function executeEmailSignup() {
     if (isTurnstileEnabled() && captchaToken) {
       signupOptions.captchaToken = captchaToken;
     }
+    signupOptions.emailRedirectTo = getEmailSignupRedirectTarget();
 
     const { data, error } = await supabase.auth.signUp({
       email,
