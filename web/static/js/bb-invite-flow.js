@@ -24,7 +24,6 @@
       `/v1/organisations/invites/preview?token=${encodeURIComponent(token)}`,
       {
         method: "GET",
-        headers: { "Content-Type": "application/json" },
       }
     );
 
