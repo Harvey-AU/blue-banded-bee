@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/mail"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -869,7 +870,12 @@ func (h *Handler) requireOrganisationAdmin(w http.ResponseWriter, r *http.Reques
 }
 
 // loopsInviteTemplateID is the Loops transactional template for organisation invites.
-const loopsInviteTemplateID = "cmlbixdob0d3v0i34iy1nd6ad"
+var loopsInviteTemplateID = func() string {
+	if v := strings.TrimSpace(os.Getenv("LOOPS_INVITE_TEMPLATE_ID")); v != "" {
+		return v
+	}
+	return "cmlbixdob0d3v0i34iy1nd6ad"
+}()
 
 // sendInviteViaLoops sends the invite email through the Loops transactional API.
 // Returns nil without error if the Loops client is not configured (dev environments).
