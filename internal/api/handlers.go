@@ -73,18 +73,9 @@ func buildConfigSnippet() ([]byte, error) {
 	if appEnv != "" {
 		config["environment"] = appEnv
 	}
-	if raw := os.Getenv("BBB_ENABLE_TURNSTILE"); raw != "" {
-		if enabled, err := strconv.ParseBool(raw); err == nil {
-			config["enableTurnstile"] = enabled
-		} else {
-			log.Warn().
-				Str("value", raw).
-				Msg("invalid BBB_ENABLE_TURNSTILE value; falling back to default")
-		}
-	} else {
-		// Default: enable Turnstile only in production unless explicitly overridden
-		config["enableTurnstile"] = appEnv == "production"
-	}
+	// Enable Turnstile based on environment only.
+	// Staging mirrors production auth hardening to catch issues before release.
+	config["enableTurnstile"] = appEnv == "production" || appEnv == "staging"
 	bytes, err := json.Marshal(config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal config: %w", err)
