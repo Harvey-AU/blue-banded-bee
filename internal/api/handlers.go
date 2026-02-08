@@ -408,6 +408,7 @@ func (h *Handler) SetupRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/settings", h.ServeSettings)
 	mux.HandleFunc("/settings/", h.ServeSettings)
 	mux.HandleFunc("/welcome/invite", h.ServeInviteWelcome)
+	mux.HandleFunc("/welcome/invite/", h.ServeInviteWelcome)
 	mux.HandleFunc("/auth-modal.html", h.ServeAuthModal)
 	mux.HandleFunc("/cli-login.html", h.ServeCliLogin)
 	mux.HandleFunc("/debug-auth.html", h.ServeDebugAuth)
@@ -516,6 +517,10 @@ func (h *Handler) ServeWelcome(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) ServeInviteWelcome(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		MethodNotAllowed(w, r)
+		return
+	}
+	if r.URL.Path != "/welcome/invite" && r.URL.Path != "/welcome/invite/" {
+		http.NotFound(w, r)
 		return
 	}
 
