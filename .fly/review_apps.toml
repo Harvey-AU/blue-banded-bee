@@ -22,6 +22,7 @@ primary_region = "syd"
 [env]
 APP_ENV = "staging"
 PORT = "8080"
+BBB_ENABLE_TURNSTILE = "true"
 
 # Explicitly source DATABASE_URL from secrets
 DATABASE_URL = { from_secret = "DATABASE_URL" }
