@@ -540,15 +540,59 @@ func (h *Handler) OrganisationInviteAcceptHandler(w http.ResponseWriter, r *http
 		return
 	}
 
-	if err := h.DB.SetActiveOrganisation(userClaims.UserID, acceptedInvite.OrganisationID); err != nil {
-		logger := loggerWithRequest(r)
-		logger.Warn().Err(err).Msg("Failed to set active organisation after invite acceptance")
+	logger := loggerWithRequest(r)
+	activeOrganisationSet := false
+	activeOrganisationAttempts := 0
+	activeOrganisationError := ""
+	retryBackoffs := []time.Duration{
+		0,
+		100 * time.Millisecond,
+		300 * time.Millisecond,
+		700 * time.Millisecond,
 	}
 
-	WriteSuccess(w, r, map[string]interface{}{
-		"organisation_id": acceptedInvite.OrganisationID,
-		"role":            acceptedInvite.Role,
-	}, "Invite accepted successfully")
+	for attemptIndex, backoff := range retryBackoffs {
+		if backoff > 0 {
+			time.Sleep(backoff)
+		}
+
+		activeOrganisationAttempts = attemptIndex + 1
+		if err := h.DB.SetActiveOrganisation(userClaims.UserID, acceptedInvite.OrganisationID); err != nil {
+			activeOrganisationError = err.Error()
+			logger.Warn().
+				Err(err).
+				Int("attempt", activeOrganisationAttempts).
+				Int("max_attempts", len(retryBackoffs)).
+				Str("user_id", userClaims.UserID).
+				Str("organisation_id", acceptedInvite.OrganisationID).
+				Msg("Failed to set active organisation after invite acceptance attempt")
+			continue
+		}
+
+		activeOrganisationSet = true
+		activeOrganisationError = ""
+		break
+	}
+
+	if !activeOrganisationSet {
+		logger.Warn().
+			Str("user_id", userClaims.UserID).
+			Str("organisation_id", acceptedInvite.OrganisationID).
+			Int("attempts", activeOrganisationAttempts).
+			Msg("Failed to set active organisation after invite acceptance")
+	}
+
+	responseData := map[string]interface{}{
+		"organisation_id":              acceptedInvite.OrganisationID,
+		"role":                         acceptedInvite.Role,
+		"active_organisation_set":      activeOrganisationSet,
+		"active_organisation_attempts": activeOrganisationAttempts,
+	}
+	if !activeOrganisationSet && activeOrganisationError != "" {
+		responseData["active_organisation_error"] = activeOrganisationError
+	}
+
+	WriteSuccess(w, r, responseData, "Invite accepted successfully")
 }
 
 // OrganisationPlanHandler handles PUT /v1/organisations/plan
