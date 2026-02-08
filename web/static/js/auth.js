@@ -44,6 +44,7 @@ let pendingSignupSubmission = null;
 let turnstileRetryCount = 0;
 let awaitingCaptchaRefresh = false;
 let captchaIssuedAt = null;
+let turnstileWidgetId = null;
 
 // Auth state refresh debouncing - prevents rapid-fire dashboard refreshes
 const AUTH_REFRESH_DEBOUNCE_MS = 500;
@@ -591,6 +592,7 @@ function showAuthForm(formType) {
   if (formType === "signup") {
     captchaToken = null;
     setSignupButtonEnabled(true);
+    ensureTurnstileWidgetRendered();
     resetTurnstileWidget("show_form");
   }
 
@@ -614,12 +616,52 @@ function getTurnstileWidget() {
   return document.querySelector(".cf-turnstile");
 }
 
+function ensureTurnstileWidgetRendered(maxAttempts = 10, delayMs = 200) {
+  if (!isTurnstileEnabled()) {
+    return;
+  }
+
+  const widget = getTurnstileWidget();
+  if (!widget) {
+    return;
+  }
+  if (turnstileWidgetId !== null) {
+    return;
+  }
+
+  let attempts = 0;
+  const tryRender = () => {
+    attempts += 1;
+    if (!window.turnstile) {
+      if (attempts < maxAttempts) {
+        setTimeout(tryRender, delayMs);
+      }
+      return;
+    }
+
+    try {
+      turnstileWidgetId = window.turnstile.render(widget, {
+        sitekey: widget.dataset.sitekey,
+        callback: window.onTurnstileSuccess,
+      });
+    } catch (error) {
+      if (attempts < maxAttempts) {
+        setTimeout(tryRender, delayMs);
+      } else {
+        console.warn("Failed to render Turnstile widget:", error);
+      }
+    }
+  };
+
+  tryRender();
+}
+
 function resetTurnstileWidget(reason = "manual") {
   captchaToken = null;
   captchaIssuedAt = null;
   setSignupButtonEnabled(true);
 
-  if (!isTurnstileEnabled() || !window.turnstile) {
+  if (!isTurnstileEnabled()) {
     return;
   }
 
@@ -628,21 +670,20 @@ function resetTurnstileWidget(reason = "manual") {
     return;
   }
 
-  const hasRenderedWidget = Boolean(
-    widget.querySelector(
-      "iframe, input[name='cf-turnstile-response'], textarea[name='cf-turnstile-response']"
-    )
-  );
-  if (!hasRenderedWidget) {
-    // Widget has not been rendered yet; nothing to reset.
+  ensureTurnstileWidgetRendered();
+
+  if (!window.turnstile || turnstileWidgetId === null) {
     return;
   }
 
   try {
-    window.turnstile.reset(widget);
+    window.turnstile.reset(turnstileWidgetId);
     console.debug("Turnstile reset", { reason });
   } catch (error) {
-    console.debug("Skipped Turnstile reset", { reason, error: error?.message });
+    console.debug("Skipped Turnstile reset", {
+      reason,
+      error: error?.message,
+    });
   }
 }
 
