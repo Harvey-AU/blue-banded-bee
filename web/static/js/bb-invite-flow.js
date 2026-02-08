@@ -1,5 +1,9 @@
 (function () {
   let authListenerAttached = false;
+  const SESSION_RETRY_ATTEMPTS = 12;
+  const SESSION_RETRY_DELAY_MS = 150;
+
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
   function getInviteToken(paramName = "invite_token") {
     return new URLSearchParams(window.location.search).get(paramName);
@@ -66,6 +70,19 @@
     return payload?.data || payload;
   }
 
+  async function getSessionWithRetry() {
+    let session = null;
+    for (let attempt = 0; attempt < SESSION_RETRY_ATTEMPTS; attempt += 1) {
+      const sessionResult = await window.supabase.auth.getSession();
+      session = sessionResult?.data?.session || null;
+      if (session?.user) {
+        return session;
+      }
+      await sleep(SESSION_RETRY_DELAY_MS);
+    }
+    return session;
+  }
+
   function ensureAuthModalAndReloadOnSignIn() {
     if (typeof window.showAuthModal === "function") {
       window.showAuthModal();
@@ -98,8 +115,15 @@
       return { status: "no_token" };
     }
 
-    const sessionResult = await window.supabase.auth.getSession();
-    const session = sessionResult?.data?.session;
+    if (typeof window.BBAuth?.handleAuthCallback === "function") {
+      try {
+        await window.BBAuth.handleAuthCallback();
+      } catch (error) {
+        console.warn("Invite flow auth callback processing failed:", error);
+      }
+    }
+
+    const session = await getSessionWithRetry();
     if (!session?.user) {
       ensureAuthModalAndReloadOnSignIn();
       if (typeof onAuthRequired === "function") {

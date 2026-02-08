@@ -129,6 +129,9 @@ function waitForAuthScript(pollIntervalMs = 50, timeoutMs = 12000) {
  */
 async function handleAuthCallback() {
   try {
+    const getUrlWithoutHash = () =>
+      `${window.location.pathname}${window.location.search}`;
+
     // Check for error parameters in URL (from OAuth failures)
     const urlParams = new URLSearchParams(window.location.search);
     const error = urlParams.get("error");
@@ -137,7 +140,7 @@ async function handleAuthCallback() {
     if (error) {
       console.error("OAuth error:", error, errorDescription);
       // Clear error from URL
-      history.replaceState(null, null, window.location.pathname);
+      history.replaceState(null, null, getUrlWithoutHash());
       // Show error to user
       if (window.showAuthError) {
         showAuthError("Authentication failed. Please try again.");
@@ -162,7 +165,7 @@ async function handleAuthCallback() {
 
       if (session) {
         // Clear the URL hash to clean up the URL
-        history.replaceState(null, null, window.location.pathname);
+        history.replaceState(null, null, getUrlWithoutHash());
 
         // Update user info will be called after dataBinder init
         return true;
@@ -830,13 +833,16 @@ async function handleSocialLogin(provider) {
     // Keep deep-link and invite-token handling here instead of per-page logic.
     const getOAuthRedirectTarget = () => {
       const params = new URLSearchParams(window.location.search);
+      const currentUrl = new URL(window.location.href);
+      currentUrl.hash = "";
+
       if (params.has("invite_token")) {
-        return window.location.href;
+        return currentUrl.toString();
       }
       if (window.location.pathname === "/") {
         return `${window.location.origin}/dashboard`;
       }
-      return window.location.href;
+      return currentUrl.toString();
     };
 
     const { data, error } = await supabase.auth.signInWithOAuth({
