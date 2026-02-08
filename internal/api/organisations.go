@@ -546,42 +546,56 @@ func (h *Handler) OrganisationInviteAcceptHandler(w http.ResponseWriter, r *http
 	activeOrganisationSet := false
 	activeOrganisationAttempts := 0
 	activeOrganisationError := ""
-	retryBackoffs := []time.Duration{
-		0,
-		100 * time.Millisecond,
-		300 * time.Millisecond,
-		700 * time.Millisecond,
-	}
-
-	for attemptIndex, backoff := range retryBackoffs {
-		if backoff > 0 {
-			time.Sleep(backoff)
-		}
-
-		activeOrganisationAttempts = attemptIndex + 1
-		if err := h.DB.SetActiveOrganisation(userClaims.UserID, acceptedInvite.OrganisationID); err != nil {
-			activeOrganisationError = err.Error()
-			logger.Warn().
-				Err(err).
-				Int("attempt", activeOrganisationAttempts).
-				Int("max_attempts", len(retryBackoffs)).
-				Str("user_id", userClaims.UserID).
-				Str("organisation_id", acceptedInvite.OrganisationID).
-				Msg("Failed to set active organisation after invite acceptance attempt")
-			continue
-		}
-
-		activeOrganisationSet = true
-		activeOrganisationError = ""
-		break
-	}
-
-	if !activeOrganisationSet {
+	if err := h.DB.SetActiveOrganisation(userClaims.UserID, acceptedInvite.OrganisationID); err != nil {
+		activeOrganisationSet = false
+		activeOrganisationAttempts = 0
+		activeOrganisationError = err.Error()
 		logger.Warn().
+			Err(err).
+			Int("attempt", 1).
 			Str("user_id", userClaims.UserID).
 			Str("organisation_id", acceptedInvite.OrganisationID).
-			Int("attempts", activeOrganisationAttempts).
-			Msg("Failed to set active organisation after invite acceptance")
+			Msg("Initial set active organisation failed after invite acceptance")
+
+		userID := userClaims.UserID
+		orgID := acceptedInvite.OrganisationID
+		go func() {
+			retryBackoffs := []time.Duration{
+				100 * time.Millisecond,
+				300 * time.Millisecond,
+				700 * time.Millisecond,
+			}
+			for retryAttempt, backoff := range retryBackoffs {
+				time.Sleep(backoff)
+				if retryErr := h.DB.SetActiveOrganisation(userID, orgID); retryErr != nil {
+					logger.Warn().
+						Err(retryErr).
+						Int("attempt", retryAttempt+2).
+						Int("max_attempts", len(retryBackoffs)+1).
+						Str("user_id", userID).
+						Str("organisation_id", orgID).
+						Msg("Background retry failed setting active organisation after invite acceptance")
+					continue
+				}
+
+				logger.Info().
+					Int("attempt", retryAttempt+2).
+					Str("user_id", userID).
+					Str("organisation_id", orgID).
+					Msg("Background retry set active organisation after invite acceptance")
+				return
+			}
+
+			logger.Warn().
+				Str("user_id", userID).
+				Str("organisation_id", orgID).
+				Int("attempts", len(retryBackoffs)+1).
+				Msg("All attempts failed setting active organisation after invite acceptance")
+		}()
+	} else {
+		activeOrganisationSet = true
+		activeOrganisationAttempts = 1
+		activeOrganisationError = ""
 	}
 
 	responseData := map[string]interface{}{
