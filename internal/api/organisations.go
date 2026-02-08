@@ -539,7 +539,7 @@ func (h *Handler) OrganisationInviteAcceptHandler(w http.ResponseWriter, r *http
 
 	logger := loggerWithRequest(r)
 	activeOrganisationSet := false
-	activeOrganisationAttempts := 0
+	activeOrganisationAttempts := 1
 	activeOrganisationError := ""
 	if err := h.DB.SetActiveOrganisation(userClaims.UserID, acceptedInvite.OrganisationID); err != nil {
 		activeOrganisationError = err.Error()
@@ -587,7 +587,6 @@ func (h *Handler) OrganisationInviteAcceptHandler(w http.ResponseWriter, r *http
 		}()
 	} else {
 		activeOrganisationSet = true
-		activeOrganisationAttempts = 1
 		activeOrganisationError = ""
 	}
 
