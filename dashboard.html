@@ -789,11 +789,6 @@
             window.BBAdmin.initAdminResetButton("resetDbBtn", session);
           }
 
-          // Setup notifications modal handlers BEFORE OAuth callbacks
-          // (callbacks may need to open the modal)
-          setupNotificationsModal();
-          setupUserMenuDropdown();
-
           // Initialize Slack integration
           if (window.setupSlackIntegration) {
             window.setupSlackIntegration();
@@ -882,22 +877,6 @@
             await window.loadSchedules();
           } catch (err) {
             console.warn("Failed to load schedules:", err);
-          }
-        }
-
-        // Re-subscribe to notifications for new org + refresh badge
-        if (typeof subscribeToNotifications === "function") {
-          try {
-            await subscribeToNotifications();
-          } catch (err) {
-            console.warn("Failed to subscribe to notifications:", err);
-          }
-        }
-        if (typeof loadNotificationCount === "function") {
-          try {
-            await loadNotificationCount();
-          } catch (err) {
-            console.warn("Failed to load notification count:", err);
           }
         }
 

@@ -44,10 +44,59 @@ let pendingSignupSubmission = null;
 let turnstileRetryCount = 0;
 let awaitingCaptchaRefresh = false;
 let captchaIssuedAt = null;
+let turnstileWidgetId = null;
 
 // Auth state refresh debouncing - prevents rapid-fire dashboard refreshes
 const AUTH_REFRESH_DEBOUNCE_MS = 500;
 let authRefreshTimeoutId = null;
+let authStateSyncInitialised = false;
+const AUTH_SYNC_RETRY_ATTEMPTS = 40;
+const AUTH_SYNC_RETRY_DELAY_MS = 100;
+let authSyncRetryTimer = null;
+let authSyncRetryCount = 0;
+const PENDING_INVITE_TOKEN_STORAGE_KEY = "bb_pending_invite_token";
+const OAUTH_CALLBACK_QUERY_KEYS = [
+  "error",
+  "error_code",
+  "error_description",
+  "sb",
+  "code",
+  "state",
+];
+
+function getCleanOAuthCallbackPath() {
+  const url = new URL(window.location.href);
+  url.hash = "";
+  OAUTH_CALLBACK_QUERY_KEYS.forEach((key) => {
+    url.searchParams.delete(key);
+  });
+  return `${url.pathname}${url.search}`;
+}
+
+function getPendingInviteToken() {
+  try {
+    return window.sessionStorage.getItem(PENDING_INVITE_TOKEN_STORAGE_KEY);
+  } catch (_error) {
+    return null;
+  }
+}
+
+function setPendingInviteToken(token) {
+  if (!token) return;
+  try {
+    window.sessionStorage.setItem(PENDING_INVITE_TOKEN_STORAGE_KEY, token);
+  } catch (_error) {
+    // sessionStorage may be unavailable.
+  }
+}
+
+function clearPendingInviteToken() {
+  try {
+    window.sessionStorage.removeItem(PENDING_INVITE_TOKEN_STORAGE_KEY);
+  } catch (_error) {
+    // sessionStorage may be unavailable.
+  }
+}
 
 /**
  * Initialise Supabase client
@@ -130,13 +179,29 @@ async function handleAuthCallback() {
   try {
     // Check for error parameters in URL (from OAuth failures)
     const urlParams = new URLSearchParams(window.location.search);
+    const hasOAuthCallbackParams =
+      urlParams.has("code") ||
+      urlParams.has("state") ||
+      urlParams.has("error") ||
+      urlParams.has("error_code");
     const error = urlParams.get("error");
     const errorDescription = urlParams.get("error_description");
 
     if (error) {
       console.error("OAuth error:", error, errorDescription);
+      const inviteToken =
+        urlParams.get("invite_token") || getPendingInviteToken();
+      if (inviteToken && window.location.pathname !== "/welcome/invite") {
+        const inviteUrl = new URL(
+          `${window.location.origin}/welcome/invite?invite_token=${encodeURIComponent(inviteToken)}`
+        );
+        inviteUrl.searchParams.set("auth_error", "oauth_failed");
+        window.location.replace(inviteUrl.toString());
+        return false;
+      }
+
       // Clear error from URL
-      history.replaceState(null, null, window.location.pathname);
+      history.replaceState(null, null, getCleanOAuthCallbackPath());
       // Show error to user
       if (window.showAuthError) {
         showAuthError("Authentication failed. Please try again.");
@@ -160,8 +225,19 @@ async function handleAuthCallback() {
       });
 
       if (session) {
+        const pendingInviteToken = getPendingInviteToken();
+        if (
+          pendingInviteToken &&
+          window.location.pathname !== "/welcome/invite"
+        ) {
+          const inviteUrl = new URL(
+            `${window.location.origin}/welcome/invite?invite_token=${encodeURIComponent(pendingInviteToken)}`
+          );
+          window.location.replace(inviteUrl.toString());
+          return false;
+        }
         // Clear the URL hash to clean up the URL
-        history.replaceState(null, null, window.location.pathname);
+        history.replaceState(null, null, getCleanOAuthCallbackPath());
 
         // Update user info will be called after dataBinder init
         return true;
@@ -174,6 +250,18 @@ async function handleAuthCallback() {
         data: { session },
       } = await supabase.auth.getSession();
       if (session) {
+        const pendingInviteToken = getPendingInviteToken();
+        if (
+          hasOAuthCallbackParams &&
+          pendingInviteToken &&
+          window.location.pathname !== "/welcome/invite"
+        ) {
+          const inviteUrl = new URL(
+            `${window.location.origin}/welcome/invite?invite_token=${encodeURIComponent(pendingInviteToken)}`
+          );
+          window.location.replace(inviteUrl.toString());
+          return false;
+        }
         return true;
       }
     }
@@ -533,7 +621,8 @@ function showAuthForm(formType) {
   // Reset CAPTCHA state for signup form
   if (formType === "signup") {
     captchaToken = null;
-    setSignupButtonEnabled(false);
+    setSignupButtonEnabled(true);
+    ensureTurnstileWidgetRendered();
     resetTurnstileWidget("show_form");
   }
 
@@ -548,16 +637,67 @@ function setSignupButtonEnabled(enabled) {
   }
 }
 
+function isTurnstileEnabled() {
+  const config = window.BBB_CONFIG || {};
+  return Boolean(window.BB_APP?.enableTurnstile ?? config.enableTurnstile);
+}
+
 function getTurnstileWidget() {
   return document.querySelector(".cf-turnstile");
+}
+
+function ensureTurnstileWidgetRendered(maxAttempts = 10, delayMs = 200) {
+  if (!isTurnstileEnabled()) {
+    return;
+  }
+
+  const widget = getTurnstileWidget();
+  if (!widget) {
+    return;
+  }
+  if (turnstileWidgetId !== null) {
+    return;
+  }
+
+  let attempts = 0;
+  const tryRender = () => {
+    attempts += 1;
+    if (!window.turnstile) {
+      if (attempts < maxAttempts) {
+        setTimeout(tryRender, delayMs);
+      } else {
+        console.warn("Turnstile script did not load within retry window", {
+          maxAttempts,
+          delayMs,
+          sitekey: widget.dataset.sitekey || null,
+        });
+      }
+      return;
+    }
+
+    try {
+      turnstileWidgetId = window.turnstile.render(widget, {
+        sitekey: widget.dataset.sitekey,
+        callback: window.onTurnstileSuccess,
+      });
+    } catch (error) {
+      if (attempts < maxAttempts) {
+        setTimeout(tryRender, delayMs);
+      } else {
+        console.warn("Failed to render Turnstile widget:", error);
+      }
+    }
+  };
+
+  tryRender();
 }
 
 function resetTurnstileWidget(reason = "manual") {
   captchaToken = null;
   captchaIssuedAt = null;
-  setSignupButtonEnabled(false);
+  setSignupButtonEnabled(true);
 
-  if (!window.turnstile) {
+  if (!isTurnstileEnabled()) {
     return;
   }
 
@@ -566,11 +706,20 @@ function resetTurnstileWidget(reason = "manual") {
     return;
   }
 
+  ensureTurnstileWidgetRendered();
+
+  if (!window.turnstile || turnstileWidgetId === null) {
+    return;
+  }
+
   try {
-    window.turnstile.reset(widget);
+    window.turnstile.reset(turnstileWidgetId);
     console.debug("Turnstile reset", { reason });
   } catch (error) {
-    console.warn("Failed to reset Turnstile widget", error);
+    console.debug("Skipped Turnstile reset", {
+      reason,
+      error: error?.message,
+    });
   }
 }
 
@@ -587,6 +736,12 @@ function shouldRetryTurnstile(error) {
     return true;
   }
   return false;
+}
+
+function getEmailSignupRedirectTarget() {
+  const redirectUrl = new URL(window.location.href);
+  redirectUrl.hash = "";
+  return redirectUrl.toString();
 }
 
 function recordTurnstileEvent(event, metadata = {}) {
@@ -691,9 +846,8 @@ async function executeEmailSignup() {
     return;
   }
 
-  if (!captchaToken) {
+  if (isTurnstileEnabled() && !captchaToken) {
     showAuthError("Please complete the CAPTCHA verification.");
-    setSignupButtonEnabled(false);
     return;
   }
 
@@ -704,10 +858,16 @@ async function executeEmailSignup() {
   });
 
   try {
+    const signupOptions = {};
+    if (isTurnstileEnabled() && captchaToken) {
+      signupOptions.captchaToken = captchaToken;
+    }
+    signupOptions.emailRedirectTo = getEmailSignupRedirectTarget();
+
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      options: { captchaToken },
+      options: signupOptions,
     });
 
     if (error) throw error;
@@ -737,11 +897,26 @@ async function executeEmailSignup() {
     }
   } catch (error) {
     const retryable = shouldRetryTurnstile(error);
+    const canRetryTurnstileChallenge = Boolean(
+      isTurnstileEnabled() && window.turnstile && getTurnstileWidget()
+    );
     recordTurnstileEvent("signup_error", {
       retryable,
+      canRetryTurnstileChallenge,
       message: error.message,
       status: error.status,
     });
+
+    if (retryable && !canRetryTurnstileChallenge) {
+      awaitingCaptchaRefresh = false;
+      pendingSignupSubmission = null;
+      console.error("Turnstile challenge required but unavailable:", error);
+      showAuthError(
+        "Email signup is unavailable right now. Please use Google or GitHub sign-in."
+      );
+      hideAuthLoading();
+      return;
+    }
 
     if (retryable && turnstileRetryCount < MAX_TURNSTILE_RETRIES) {
       turnstileRetryCount += 1;
@@ -825,10 +1000,28 @@ async function handleSocialLogin(provider) {
   clearAuthError();
 
   try {
+    const getOAuthRedirectTarget = () => {
+      const params = new URLSearchParams(window.location.search);
+      const currentUrl = new URL(window.location.href);
+      currentUrl.hash = "";
+      const inviteToken = params.get("invite_token");
+      if (inviteToken) {
+        setPendingInviteToken(inviteToken);
+      }
+
+      if (params.has("invite_token")) {
+        return currentUrl.toString();
+      }
+      if (window.location.pathname === "/") {
+        return `${window.location.origin}/dashboard`;
+      }
+      return currentUrl.toString();
+    };
+
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider,
       options: {
-        redirectTo: `${window.location.origin}/dashboard`,
+        redirectTo: getOAuthRedirectTarget(),
       },
     });
 
@@ -1112,6 +1305,17 @@ function setupPasswordStrength() {
  * Setup authentication event handlers
  */
 function setupAuthHandlers() {
+  handleAuthCallback()
+    .then((hasSession) => {
+      if (hasSession) {
+        updateAuthState(true);
+        updateUserInfo();
+      }
+    })
+    .catch((error) => {
+      console.warn("Auth callback setup failed:", error);
+    });
+
   // Use event delegation for main auth buttons that might not exist initially
   document.addEventListener("click", (e) => {
     const target = e.target;
@@ -1142,6 +1346,62 @@ function setupAuthHandlers() {
 
   // Set up password strength checking if signup form is present
   setupPasswordStrength();
+
+  if (!initialiseAuthStateSync()) {
+    scheduleAuthStateSyncRetry();
+  }
+}
+
+function initialiseAuthStateSync() {
+  if (authStateSyncInitialised) {
+    return true;
+  }
+  if (!supabase?.auth && !initialiseSupabase()) {
+    return false;
+  }
+  authStateSyncInitialised = true;
+
+  supabase.auth
+    .getSession()
+    .then(({ data }) => {
+      const session = data?.session;
+      const isAuthenticated = Boolean(session);
+      updateAuthState(isAuthenticated);
+      if (isAuthenticated) {
+        updateUserInfo();
+      }
+    })
+    .catch((error) => {
+      console.warn("Failed to synchronise initial auth state:", error);
+      updateAuthState(false);
+    });
+
+  supabase.auth.onAuthStateChange((_event, session) => {
+    const isAuthenticated = Boolean(session);
+    updateAuthState(isAuthenticated);
+    if (isAuthenticated) {
+      updateUserInfo();
+    }
+  });
+  return true;
+}
+
+function scheduleAuthStateSyncRetry() {
+  if (authStateSyncInitialised || authSyncRetryTimer) {
+    return;
+  }
+
+  authSyncRetryCount = 0;
+  authSyncRetryTimer = setInterval(() => {
+    authSyncRetryCount += 1;
+    if (
+      initialiseAuthStateSync() ||
+      authSyncRetryCount >= AUTH_SYNC_RETRY_ATTEMPTS
+    ) {
+      clearInterval(authSyncRetryTimer);
+      authSyncRetryTimer = null;
+    }
+  }, AUTH_SYNC_RETRY_DELAY_MS);
 }
 
 /**
@@ -1566,6 +1826,7 @@ if (typeof module !== "undefined" && module.exports) {
     handleLogout,
     initCliAuthPage,
     resumeCliAuthFromStorage,
+    clearPendingInviteToken,
   };
 
   // Also make individual functions available globally for backward compatibility
@@ -1597,6 +1858,7 @@ if (typeof module !== "undefined" && module.exports) {
   window.handleAuthSuccess = defaultHandleAuthSuccess;
   window.initCliAuthPage = initCliAuthPage;
   window.resumeCliAuthFromStorage = resumeCliAuthFromStorage;
+  window.clearPendingInviteToken = clearPendingInviteToken;
 
   // Convenience functions for common auth form actions
   window.showLoginForm = () => showAuthForm("login");

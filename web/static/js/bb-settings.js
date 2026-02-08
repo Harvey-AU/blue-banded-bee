@@ -643,25 +643,24 @@
   }
 
   async function handleInviteToken() {
-    const params = new URLSearchParams(window.location.search);
-    const token = params.get("invite_token");
-    if (!token) return;
+    if (!window.BBInviteFlow?.handleInviteTokenFlow) return;
 
-    try {
-      await window.dataBinder.fetchData("/v1/organisations/invites/accept", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token }),
-      });
-      showSettingsToast("success", "Invite accepted");
-      params.delete("invite_token");
-      const url = new URL(window.location.href);
-      url.search = params.toString();
-      window.history.replaceState({}, "", url.toString());
-      await refreshSettingsData();
-    } catch (err) {
-      console.error("Failed to accept invite:", err);
-      showSettingsToast("error", "Failed to accept invite");
+    const result = await window.BBInviteFlow.handleInviteTokenFlow({
+      onAccepted: async () => {
+        showSettingsToast("success", "Invite accepted");
+        await refreshSettingsData();
+      },
+      onError: (err) => {
+        console.error("Failed to accept invite:", err);
+        showSettingsToast("error", err?.message || "Failed to accept invite");
+      },
+    });
+
+    if (result?.status === "auth_required") {
+      showSettingsToast(
+        "warning",
+        "Sign in or create an account to accept this invite"
+      );
     }
   }
 
@@ -1267,22 +1266,6 @@
       }
     }
 
-    if (typeof subscribeToNotifications === "function") {
-      try {
-        await subscribeToNotifications();
-      } catch (err) {
-        console.warn("Failed to subscribe to notifications:", err);
-      }
-    }
-
-    if (typeof loadNotificationCount === "function") {
-      try {
-        await loadNotificationCount();
-      } catch (err) {
-        console.warn("Failed to load notification count:", err);
-      }
-    }
-
     window.BBQuota?.refresh();
 
     showSettingsToast("success", `Switched to ${newOrg.name}`);
@@ -1435,8 +1418,6 @@
       }
 
       setupSettingsNavigation();
-      setupNotificationsDropdown();
-      setupUserMenuDropdown();
       setupPlanTabs();
 
       const sessionResult = await window.supabase.auth.getSession();
@@ -1455,6 +1436,8 @@
         initAdminSection(session);
         await loadAccountDetails();
         await refreshSettingsData();
+        await handleInviteToken();
+      } else if (window.BBInviteFlow?.getInviteToken?.()) {
         await handleInviteToken();
       }
 

@@ -1,15 +1,11 @@
 package api
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
-	"io"
 	"net/http"
 	"net/mail"
-	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -17,15 +13,11 @@ import (
 
 	"github.com/Harvey-AU/blue-banded-bee/internal/auth"
 	"github.com/Harvey-AU/blue-banded-bee/internal/db"
+	"github.com/Harvey-AU/blue-banded-bee/internal/loops"
 	"github.com/Harvey-AU/blue-banded-bee/internal/util"
 	"github.com/google/uuid"
+	"github.com/rs/zerolog/log"
 )
-
-// errInviteEmailExists is returned when the Supabase /invite endpoint reports
-// the user already has an account. The invite record is still valid — the
-// caller should fall back to a magic-link email so the existing user can log
-// in and accept.
-var errInviteEmailExists = errors.New("user already registered")
 
 // OrganisationsHandler handles GET and POST /v1/organisations
 func (h *Handler) OrganisationsHandler(w http.ResponseWriter, r *http.Request) {
@@ -48,7 +40,7 @@ func (h *Handler) listUserOrganisations(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// Ensure user exists in database
-	_, err := h.DB.GetOrCreateUser(userClaims.UserID, userClaims.Email, nil)
+	user, err := h.DB.GetOrCreateUser(userClaims.UserID, userClaims.Email, nil)
 	if err != nil {
 		InternalError(w, r, err)
 		return
@@ -77,7 +69,8 @@ func (h *Handler) listUserOrganisations(w http.ResponseWriter, r *http.Request) 
 	}
 
 	WriteSuccess(w, r, map[string]interface{}{
-		"organisations": formattedOrgs,
+		"organisations":          formattedOrgs,
+		"active_organisation_id": user.ActiveOrganisationID,
 	}, "Organisations retrieved successfully")
 }
 
@@ -413,6 +406,60 @@ func (h *Handler) OrganisationInvitesHandler(w http.ResponseWriter, r *http.Requ
 	}
 }
 
+// OrganisationInvitePreviewHandler handles GET /v1/organisations/invites/preview?token=...
+// It is intentionally public so invite recipients can see who invited them before authentication.
+func (h *Handler) OrganisationInvitePreviewHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		MethodNotAllowed(w, r)
+		return
+	}
+
+	token := strings.TrimSpace(r.URL.Query().Get("token"))
+	if token == "" {
+		BadRequest(w, r, "token is required")
+		return
+	}
+
+	invite, err := h.DB.GetOrganisationInviteByToken(r.Context(), token)
+	if err != nil {
+		NotFound(w, r, "Invite not found")
+		return
+	}
+
+	if invite.AcceptedAt != nil || invite.RevokedAt != nil || time.Now().After(invite.ExpiresAt) {
+		BadRequest(w, r, "Invite is no longer valid")
+		return
+	}
+
+	org, err := h.DB.GetOrganisation(invite.OrganisationID)
+	if err != nil {
+		InternalError(w, r, err)
+		return
+	}
+
+	inviterLabel := "a team member"
+	if invite.CreatedBy != "" {
+		if inviter, inviterErr := h.DB.GetUser(invite.CreatedBy); inviterErr == nil {
+			if inviter.FullName != nil && strings.TrimSpace(*inviter.FullName) != "" {
+				inviterLabel = strings.TrimSpace(*inviter.FullName)
+			} else if strings.TrimSpace(inviter.Email) != "" {
+				inviterLabel = strings.TrimSpace(inviter.Email)
+			}
+		}
+	}
+
+	WriteSuccess(w, r, map[string]interface{}{
+		"invite": map[string]interface{}{
+			"email":             invite.Email,
+			"role":              invite.Role,
+			"organisation_id":   invite.OrganisationID,
+			"organisation_name": org.Name,
+			"inviter_name":      inviterLabel,
+			"expires_at":        invite.ExpiresAt.Format(time.RFC3339),
+		},
+	}, "Invite preview retrieved successfully")
+}
+
 // OrganisationInviteHandler handles DELETE /v1/organisations/invites/:id
 func (h *Handler) OrganisationInviteHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodDelete {
@@ -484,32 +531,75 @@ func (h *Handler) OrganisationInviteAcceptHandler(w http.ResponseWriter, r *http
 		return
 	}
 
-	invite, err := h.DB.GetOrganisationInviteByToken(r.Context(), req.Token)
-	if err != nil {
-		BadRequest(w, r, "Invite not found")
-		return
-	}
-
-	if !strings.EqualFold(invite.Email, userClaims.Email) {
-		Forbidden(w, r, "Invite email does not match this account")
-		return
-	}
-
 	acceptedInvite, err := h.DB.AcceptOrganisationInvite(r.Context(), req.Token, userClaims.UserID)
 	if err != nil {
 		BadRequest(w, r, err.Error())
 		return
 	}
 
+	logger := loggerWithRequest(r)
+	activeOrganisationSet := false
+	activeOrganisationAttempts := 1
+	activeOrganisationError := ""
 	if err := h.DB.SetActiveOrganisation(userClaims.UserID, acceptedInvite.OrganisationID); err != nil {
-		logger := loggerWithRequest(r)
-		logger.Warn().Err(err).Msg("Failed to set active organisation after invite acceptance")
+		activeOrganisationError = err.Error()
+		logger.Warn().
+			Err(err).
+			Int("attempt", 1).
+			Str("user_id", userClaims.UserID).
+			Str("organisation_id", acceptedInvite.OrganisationID).
+			Msg("Initial set active organisation failed after invite acceptance")
+
+		userID := userClaims.UserID
+		orgID := acceptedInvite.OrganisationID
+		go func() {
+			retryBackoffs := []time.Duration{
+				100 * time.Millisecond,
+				300 * time.Millisecond,
+				700 * time.Millisecond,
+			}
+			for retryAttempt, backoff := range retryBackoffs {
+				time.Sleep(backoff)
+				if retryErr := h.DB.SetActiveOrganisation(userID, orgID); retryErr != nil {
+					logger.Warn().
+						Err(retryErr).
+						Int("attempt", retryAttempt+2).
+						Int("max_attempts", len(retryBackoffs)+1).
+						Str("user_id", userID).
+						Str("organisation_id", orgID).
+						Msg("Background retry failed setting active organisation after invite acceptance")
+					continue
+				}
+
+				logger.Info().
+					Int("attempt", retryAttempt+2).
+					Str("user_id", userID).
+					Str("organisation_id", orgID).
+					Msg("Background retry set active organisation after invite acceptance")
+				return
+			}
+
+			logger.Warn().
+				Str("user_id", userID).
+				Str("organisation_id", orgID).
+				Int("attempts", len(retryBackoffs)+1).
+				Msg("All attempts failed setting active organisation after invite acceptance")
+		}()
+	} else {
+		activeOrganisationSet = true
 	}
 
-	WriteSuccess(w, r, map[string]interface{}{
-		"organisation_id": acceptedInvite.OrganisationID,
-		"role":            acceptedInvite.Role,
-	}, "Invite accepted successfully")
+	responseData := map[string]interface{}{
+		"organisation_id":              acceptedInvite.OrganisationID,
+		"role":                         acceptedInvite.Role,
+		"active_organisation_set":      activeOrganisationSet,
+		"active_organisation_attempts": activeOrganisationAttempts,
+	}
+	if !activeOrganisationSet && activeOrganisationError != "" {
+		responseData["active_organisation_error"] = activeOrganisationError
+	}
+
+	WriteSuccess(w, r, responseData, "Invite accepted successfully")
 }
 
 // OrganisationPlanHandler handles PUT /v1/organisations/plan
@@ -630,9 +720,7 @@ func (h *Handler) listOrganisationInvites(w http.ResponseWriter, r *http.Request
 
 	responseInvites := make([]map[string]interface{}, 0, len(invites))
 	for _, invite := range invites {
-		inviteParams := url.Values{}
-		inviteParams.Set("invite_token", invite.Token)
-		inviteLink := buildSettingsURL("team", inviteParams, "invites")
+		inviteLink := buildInviteWelcomeURL(invite.Token)
 
 		responseInvites = append(responseInvites, map[string]interface{}{
 			"id":          invite.ID,
@@ -662,6 +750,12 @@ func (h *Handler) createOrganisationInvite(w http.ResponseWriter, r *http.Reques
 	}
 
 	if ok := h.requireOrganisationAdmin(w, r, orgID, userClaims.UserID); !ok {
+		return
+	}
+
+	org, err := h.DB.GetOrganisation(orgID)
+	if err != nil {
+		InternalError(w, r, err)
 		return
 	}
 
@@ -724,9 +818,7 @@ func (h *Handler) createOrganisationInvite(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	redirectParams := url.Values{}
-	redirectParams.Set("invite_token", inviteToken)
-	redirectURL := buildSettingsURL("team", redirectParams, "invites")
+	redirectURL := buildInviteWelcomeURL(inviteToken)
 
 	emailDelivery := "sent"
 	responseMsg := "Invite sent successfully"
@@ -738,33 +830,28 @@ func (h *Handler) createOrganisationInvite(w http.ResponseWriter, r *http.Reques
 
 	meta := util.ExtractRequestMeta(r)
 
-	if err := sendSupabaseInviteEmail(r.Context(), email, redirectURL, map[string]interface{}{
-		"organisation_id": orgID,
-		"role":            role,
-		"inviter_name":    util.SanitiseForJSON(inviterName),
-		"device":          util.SanitiseForJSON(meta.Device),
-		"location":        util.SanitiseForJSON(meta.Location),
-		"ip":              util.SanitiseForJSON(meta.IP),
-		"timestamp":       util.SanitiseForJSON(meta.FormattedTimestamp()),
-	}); err != nil {
-		if errors.Is(err, errInviteEmailExists) {
-			// User already has a Supabase Auth account — send a magic link
-			// so they receive an email and can log in to accept the invite.
-			if mlErr := sendSupabaseMagicLink(r.Context(), email, redirectURL); mlErr != nil {
-				logger := loggerWithRequest(r)
-				logger.Warn().Err(mlErr).Msg("Failed to send magic link for existing user invite")
-				// Invite record is still valid; don't revoke. The invitee
-				// can log in manually and accept via the settings page.
-				emailDelivery = "failed"
-				responseMsg = "Invite created but email delivery failed — the user can log in and accept manually"
-			}
+	// Send invite email via Loops. The invitee signs up or logs in via
+	// the normal auth flow, then accepts the invite using the token.
+	loopsErr := h.sendInviteViaLoops(r.Context(), email, map[string]any{
+		"InviterName":      util.SanitiseForJSON(inviterName),
+		"OrganisationName": util.SanitiseForJSON(org.Name),
+		"Device":           util.SanitiseForJSON(meta.Device),
+		"Location":         util.SanitiseForJSON(meta.Location),
+		"IP":               util.SanitiseForJSON(meta.IP),
+		"Timestamp":        util.SanitiseForJSON(meta.FormattedTimestamp()),
+		"SiteURL":          getAppURL(),
+		"ConfirmationURL":  redirectURL,
+		"Token":            inviteToken,
+	})
+	if loopsErr != nil {
+		logger := loggerWithRequest(r)
+		if errors.Is(loopsErr, errLoopsNotConfigured) {
+			emailDelivery = "skipped"
+			responseMsg = "Invite created but email delivery is not configured in this environment"
 		} else {
-			if revokeErr := h.DB.RevokeOrganisationInvite(r.Context(), invite.ID, orgID); revokeErr != nil {
-				logger := loggerWithRequest(r)
-				logger.Warn().Err(revokeErr).Msg("Failed to revoke invite after email failure")
-			}
-			InternalError(w, r, err)
-			return
+			logger.Error().Err(loopsErr).Msg("Failed to send invite via Loops")
+			emailDelivery = "failed"
+			responseMsg = "Invite created but email delivery failed — the user can log in and accept manually"
 		}
 	}
 
@@ -793,150 +880,27 @@ func (h *Handler) requireOrganisationAdmin(w http.ResponseWriter, r *http.Reques
 	return true
 }
 
-type supabaseInviteRequest struct {
-	Email      string                 `json:"email"`
-	RedirectTo string                 `json:"redirect_to,omitempty"`
-	Data       map[string]interface{} `json:"data,omitempty"`
-}
-
-// resolveSupabaseAuthURL returns the Supabase Auth base URL, preferring
-// SUPABASE_AUTH_URL and falling back to SUPABASE_URL + "/auth/v1".
-func resolveSupabaseAuthURL() (string, error) {
-	authURL := strings.TrimSuffix(os.Getenv("SUPABASE_AUTH_URL"), "/")
-	if authURL == "" {
-		legacyURL := strings.TrimSuffix(os.Getenv("SUPABASE_URL"), "/")
-		if legacyURL != "" {
-			authURL = legacyURL + "/auth/v1"
-		}
+// loopsInviteTemplateID is the Loops transactional template for organisation invites.
+var loopsInviteTemplateID = func() string {
+	if v := strings.TrimSpace(os.Getenv("LOOPS_INVITE_TEMPLATE_ID")); v != "" {
+		return v
 	}
-	if authURL == "" {
-		return "", fmt.Errorf("supabase auth URL is not configured")
-	}
-	if !strings.Contains(authURL, "/auth/") {
-		authURL = authURL + "/auth/v1"
-	}
-	return authURL, nil
-}
+	return "cmlbixdob0d3v0i34iy1nd6ad"
+}()
 
-// supabaseServiceKey returns the service role key or an error.
-func supabaseServiceKey() (string, error) {
-	key := os.Getenv("SUPABASE_SERVICE_ROLE_KEY")
-	if key == "" {
-		return "", fmt.Errorf("supabase service role key is not configured")
-	}
-	return key, nil
-}
+var errLoopsNotConfigured = errors.New("loops client not configured")
 
-// maxErrorBodyBytes caps how much of an error response body we read.
-const maxErrorBodyBytes = 4096
-
-func sendSupabaseInviteEmail(ctx context.Context, email, redirectTo string, data map[string]interface{}) error {
-	authURL, err := resolveSupabaseAuthURL()
-	if err != nil {
-		return err
+// sendInviteViaLoops sends the invite email through the Loops transactional API.
+// Returns errLoopsNotConfigured if the Loops client is not configured.
+func (h *Handler) sendInviteViaLoops(ctx context.Context, email string, vars map[string]any) error {
+	if h.Loops == nil {
+		log.Warn().Msg("Loops client not configured; skipping invite email")
+		return errLoopsNotConfigured
 	}
 
-	serviceKey, err := supabaseServiceKey()
-	if err != nil {
-		return err
-	}
-
-	payload, err := json.Marshal(supabaseInviteRequest{
-		Email:      email,
-		RedirectTo: redirectTo,
-		Data:       data,
+	return h.Loops.SendTransactional(ctx, &loops.TransactionalRequest{
+		Email:           email,
+		TransactionalID: loopsInviteTemplateID,
+		DataVariables:   vars,
 	})
-	if err != nil {
-		return fmt.Errorf("failed to build invite payload: %w", err)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, authURL+"/invite", bytes.NewReader(payload))
-	if err != nil {
-		return fmt.Errorf("failed to create invite request: %w", err)
-	}
-
-	req.Header.Set("Authorization", "Bearer "+serviceKey)
-	req.Header.Set("apikey", serviceKey)
-	req.Header.Set("Content-Type", "application/json")
-
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return fmt.Errorf("failed to send invite request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= http.StatusMultipleChoices {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, maxErrorBodyBytes))
-		bodyStr := strings.TrimSpace(string(body))
-
-		// If the user already exists in Supabase Auth, the invite endpoint
-		// returns 422 email_exists. Parse the JSON response structurally
-		// rather than relying on substring matching.
-		if resp.StatusCode == http.StatusUnprocessableEntity {
-			var errResp struct {
-				ErrorCode string `json:"error_code"`
-			}
-			if json.Unmarshal(body, &errResp) == nil && errResp.ErrorCode == "email_exists" {
-				return errInviteEmailExists
-			}
-		}
-
-		return fmt.Errorf("supabase invite failed: %s", bodyStr)
-	}
-
-	return nil
-}
-
-// sendSupabaseMagicLink sends a magic-link email to an existing Supabase Auth
-// user. The link logs them in and redirects to redirectTo (the invite
-// acceptance page). GoTrue reads redirect_to from the query string.
-// Only the publishable (anon) key is needed — no service-role privilege.
-func sendSupabaseMagicLink(ctx context.Context, email, redirectTo string) error {
-	authURL, err := resolveSupabaseAuthURL()
-	if err != nil {
-		return err
-	}
-
-	publishableKey := os.Getenv("SUPABASE_PUBLISHABLE_KEY")
-	if publishableKey == "" {
-		publishableKey = os.Getenv("SUPABASE_ANON_KEY")
-	}
-	if publishableKey == "" {
-		return fmt.Errorf("supabase publishable key is not configured")
-	}
-
-	payload, err := json.Marshal(map[string]string{
-		"email": email,
-	})
-	if err != nil {
-		return fmt.Errorf("failed to build magic link payload: %w", err)
-	}
-
-	endpoint := authURL + "/magiclink"
-	if redirectTo != "" {
-		endpoint += "?redirect_to=" + url.QueryEscape(redirectTo)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(payload))
-	if err != nil {
-		return fmt.Errorf("failed to create magic link request: %w", err)
-	}
-
-	req.Header.Set("apikey", publishableKey)
-	req.Header.Set("Content-Type", "application/json")
-
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return fmt.Errorf("failed to send magic link request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= http.StatusMultipleChoices {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, maxErrorBodyBytes))
-		return fmt.Errorf("supabase magic link failed: %s", strings.TrimSpace(string(body)))
-	}
-
-	return nil
 }

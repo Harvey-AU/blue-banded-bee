@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en-AU">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Welcome - Blue Banded Bee</title>
+    <link rel="stylesheet" href="/styles/app.css" />
+    <style>
+      .welcome-main {
+        max-width: 980px;
+        margin: 0 auto;
+        padding: 32px 20px 60px;
+      }
+
+      .welcome-card {
+        background: #fff;
+        border: 1px solid #e5e7eb;
+        border-radius: 14px;
+        box-shadow: 0 8px 24px rgba(17, 24, 39, 0.06);
+        padding: 24px;
+      }
+
+      .welcome-card h1 {
+        margin: 0 0 8px;
+      }
+
+      .welcome-card p {
+        margin: 0;
+        color: #4b5563;
+      }
+
+      .welcome-checklist {
+        margin: 20px 0 0;
+        padding-left: 20px;
+      }
+
+      .welcome-checklist li {
+        margin: 10px 0;
+      }
+
+      .welcome-note {
+        margin-top: 16px;
+        font-size: 0.95rem;
+        color: #6b7280;
+      }
+    </style>
+    <script src="/js/core.js" defer></script>
+    <script src="/js/bb-global-nav.js" defer></script>
+    <script src="/js/bb-welcome.js" defer></script>
+  </head>
+  <body>
+    <main class="welcome-main">
+      <section class="welcome-card">
+        <h1 id="welcomeTitle">Welcome to Blue Banded Bee</h1>
+        <p>You’re in. This onboarding checklist is a placeholder for now.</p>
+
+        <ol class="welcome-checklist">
+          <li>Confirm your organisation and role</li>
+          <li>Connect your first platform (Webflow, Slack, or Google)</li>
+          <li>Create your first cache warming job</li>
+          <li>Review settings and invite your team</li>
+        </ol>
+
+        <p class="welcome-note">
+          This page will be expanded into the full onboarding flow.
+        </p>
+      </section>
+    </main>
+    <div id="authModalContainer"></div>
+  </body>
+</html>

@@ -143,6 +143,18 @@ func buildSettingsURL(path string, params url.Values, fragment string) string {
 	return settingsURL.String()
 }
 
+func buildInviteWelcomeURL(token string) string {
+	params := url.Values{}
+	params.Set("invite_token", token)
+
+	inviteURL, err := url.Parse(strings.TrimSuffix(getAppURL(), "/") + "/welcome/invite")
+	if err != nil {
+		return strings.TrimSuffix(getAppURL(), "/") + "/welcome/invite?invite_token=" + url.QueryEscape(token)
+	}
+	inviteURL.RawQuery = params.Encode()
+	return inviteURL.String()
+}
+
 func (h *Handler) redirectToSettingsWithError(w http.ResponseWriter, r *http.Request, integration, errMsg, path, fragment string) {
 	paramName := fmt.Sprintf("%s_error", strings.ToLower(integration))
 	params := url.Values{}

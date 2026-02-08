@@ -196,6 +196,29 @@
     const settingsOrgName = document.getElementById("settingsOrgName");
     const path = window.location.pathname.replace(/\/$/, "");
     const navLinks = navElement.querySelectorAll(".nav-link");
+    const closeNavOverlays = ({ except } = {}) => {
+      const orgSwitcher = navElement.querySelector("#orgSwitcher");
+      const orgBtn = navElement.querySelector("#orgSwitcherBtn");
+      const userMenuDropdown = navElement.querySelector("#userMenuDropdown");
+      const userAvatar = navElement.querySelector("#userAvatar");
+      const notificationsContainer = navElement.querySelector(
+        "#notificationsContainer"
+      );
+      const notificationsBtn = navElement.querySelector("#notificationsBtn");
+
+      if (except !== "org") {
+        orgSwitcher?.classList.remove("open");
+        orgBtn?.setAttribute("aria-expanded", "false");
+      }
+      if (except !== "user") {
+        userMenuDropdown?.classList.remove("show");
+        userAvatar?.setAttribute("aria-expanded", "false");
+      }
+      if (except !== "notifications") {
+        notificationsContainer?.classList.remove("open");
+        notificationsBtn?.setAttribute("aria-expanded", "false");
+      }
+    };
 
     const titleMap = [
       { match: (p) => p === "/dashboard", title: "Dashboard" },
@@ -302,11 +325,10 @@
       if (orgSwitcher && orgBtn) {
         orgBtn.addEventListener("click", (event) => {
           event.stopPropagation();
-          orgSwitcher.classList.toggle("open");
-          orgBtn.setAttribute(
-            "aria-expanded",
-            orgSwitcher.classList.contains("open")
-          );
+          const willOpen = !orgSwitcher.classList.contains("open");
+          closeNavOverlays({ except: willOpen ? "org" : undefined });
+          orgSwitcher.classList.toggle("open", willOpen);
+          orgBtn.setAttribute("aria-expanded", willOpen ? "true" : "false");
         });
 
         document.addEventListener("click", () => {
@@ -372,6 +394,330 @@
     };
 
     initNavOrgSwitcher();
+
+    const initUserMenuDropdown = () => {
+      const userMenu = navElement.querySelector("#userMenu");
+      const userAvatar = navElement.querySelector("#userAvatar");
+      const userMenuDropdown = navElement.querySelector("#userMenuDropdown");
+      const currentOrgNameEl = currentOrgName;
+      const userMenuOrgNameEl = navElement.querySelector("#userMenuOrgName");
+      if (!userMenu || !userAvatar || !userMenuDropdown) return;
+
+      const syncUserMenuOrgName = () => {
+        if (!currentOrgNameEl || !userMenuOrgNameEl) return;
+        const name = currentOrgNameEl.textContent?.trim();
+        if (name) {
+          userMenuOrgNameEl.textContent = name;
+        }
+      };
+
+      if (currentOrgNameEl) {
+        const orgNameObserver = new MutationObserver(syncUserMenuOrgName);
+        orgNameObserver.observe(currentOrgNameEl, {
+          childList: true,
+          characterData: true,
+          subtree: true,
+        });
+        window.addEventListener(
+          "beforeunload",
+          () => orgNameObserver.disconnect(),
+          { once: true }
+        );
+      }
+
+      userAvatar.addEventListener("click", (event) => {
+        event.stopPropagation();
+        const willOpen = !userMenuDropdown.classList.contains("show");
+        closeNavOverlays({ except: willOpen ? "user" : undefined });
+        userMenuDropdown.classList.toggle("show", willOpen);
+        userAvatar.setAttribute("aria-expanded", willOpen ? "true" : "false");
+      });
+
+      userMenuDropdown.addEventListener("click", (event) => {
+        event.stopPropagation();
+      });
+
+      document.addEventListener("click", (event) => {
+        if (!userMenu.contains(event.target)) {
+          userMenuDropdown.classList.remove("show");
+          userAvatar.setAttribute("aria-expanded", "false");
+        }
+      });
+
+      document.addEventListener("keydown", (event) => {
+        if (
+          event.key === "Escape" &&
+          userMenuDropdown.classList.contains("show")
+        ) {
+          userMenuDropdown.classList.remove("show");
+          userAvatar.setAttribute("aria-expanded", "false");
+          userAvatar.focus();
+        }
+      });
+
+      document.addEventListener("bb:org-switched", syncUserMenuOrgName);
+      document.addEventListener("bb:org-ready", syncUserMenuOrgName);
+      syncUserMenuOrgName();
+    };
+
+    initUserMenuDropdown();
+
+    const initNavNotifications = () => {
+      const notificationsContainer = navElement.querySelector(
+        "#notificationsContainer"
+      );
+      const notificationsBtn = navElement.querySelector("#notificationsBtn");
+      const notificationsDropdown = navElement.querySelector(
+        "#notificationsDropdown"
+      );
+      const notificationsList = navElement.querySelector("#notificationsList");
+      const notificationsBadge = navElement.querySelector(
+        "#notificationsBadge"
+      );
+      const markAllReadBtn = navElement.querySelector("#markAllReadBtn");
+      if (!notificationsContainer || !notificationsBtn || !notificationsBadge) {
+        return;
+      }
+      notificationsBtn.setAttribute("aria-haspopup", "true");
+      notificationsBtn.setAttribute("aria-expanded", "false");
+
+      const getAccessToken = async () => {
+        return (
+          window.dataBinder?.authManager?.session?.access_token ||
+          (await window.supabase?.auth?.getSession?.())?.data?.session
+            ?.access_token ||
+          null
+        );
+      };
+
+      const updateBadge = (count) => {
+        const unreadCount = Number(count) || 0;
+        notificationsBadge.textContent =
+          unreadCount > 9 ? "9+" : unreadCount || "";
+        notificationsBadge.dataset.count = unreadCount;
+      };
+
+      const fetchNotifications = async (limit = 10) => {
+        const token = await getAccessToken();
+        if (!token) return null;
+        const response = await fetch(`/v1/notifications?limit=${limit}`, {
+          headers: { Authorization: `Bearer ${token}` },
+          signal: AbortSignal.timeout(15000),
+        });
+        if (!response.ok) return null;
+        return response.json();
+      };
+
+      const refreshBadge = async () => {
+        try {
+          const data = await fetchNotifications(1);
+          if (!data) return;
+          const unreadCount = data.unread_count ?? data.data?.unread_count ?? 0;
+          updateBadge(unreadCount);
+        } catch (error) {
+          console.warn("Failed to refresh notifications badge:", error);
+        }
+      };
+
+      const renderList = (notifications) => {
+        const escapeHtml = (value) =>
+          String(value ?? "")
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;");
+
+        if (!notificationsList) return;
+        if (!notifications || notifications.length === 0) {
+          notificationsList.innerHTML = `
+            <div class="bb-notifications-empty">
+              <div class="bb-notifications-empty-icon">🔔</div>
+              <div>No notifications yet</div>
+            </div>
+          `;
+          return;
+        }
+
+        notificationsList.innerHTML = notifications
+          .map((n) => {
+            const preview = escapeHtml(n.preview);
+            const subject = escapeHtml(n.subject);
+            const notificationId = escapeHtml(n.id);
+            const notificationLink = escapeHtml(n.link);
+            return `
+              <button
+                type="button"
+                class="bb-notification-item ${!n.read_at ? "unread" : ""}"
+                data-id="${notificationId}"
+                data-link="${notificationLink}"
+              >
+                <div class="bb-notification-item-content">
+                  <div class="bb-notification-item-subject">${subject}</div>
+                  <div class="bb-notification-item-preview">${preview}</div>
+                </div>
+              </button>
+            `;
+          })
+          .join("");
+      };
+
+      const loadDropdown = async () => {
+        try {
+          const data = await fetchNotifications(10);
+          if (!data) return;
+          updateBadge(data.unread_count ?? data.data?.unread_count ?? 0);
+          renderList(data.notifications ?? data.data?.notifications ?? []);
+        } catch (error) {
+          console.warn("Failed to load notifications:", error);
+        }
+      };
+
+      const markNotificationRead = async (id) => {
+        if (!id) return;
+        const token = await getAccessToken();
+        if (!token) return;
+        const response = await fetch(`/v1/notifications/${id}/read`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!response.ok) {
+          throw new Error("Failed to mark notification as read");
+        }
+      };
+
+      const notificationsChannelKey = "__bbNavNotificationsChannel";
+      const subscribeRealtime = async () => {
+        const orgId = window.BB_ACTIVE_ORG?.id;
+        const supabaseAuth = window.supabase?.auth;
+        if (!orgId || !supabaseAuth || !window.supabase?.channel) {
+          return;
+        }
+
+        if (window[notificationsChannelKey]) {
+          window.supabase.removeChannel(window[notificationsChannelKey]);
+          window[notificationsChannelKey] = null;
+        }
+
+        try {
+          const channel = window.supabase
+            .channel(`notifications-changes:${orgId}`)
+            .on(
+              "postgres_changes",
+              {
+                event: "INSERT",
+                schema: "public",
+                table: "notifications",
+                filter: `organisation_id=eq.${orgId}`,
+              },
+              () => {
+                setTimeout(() => {
+                  refreshBadge();
+                  if (notificationsContainer.classList.contains("open")) {
+                    loadDropdown();
+                  }
+                }, 200);
+              }
+            )
+            .subscribe();
+          window[notificationsChannelKey] = channel;
+        } catch (error) {
+          console.warn("Failed to subscribe to notifications:", error);
+        }
+      };
+
+      notificationsBtn.addEventListener("click", async (event) => {
+        event.stopPropagation();
+        const willOpen = !notificationsContainer.classList.contains("open");
+        closeNavOverlays({ except: willOpen ? "notifications" : undefined });
+        notificationsContainer.classList.toggle("open", willOpen);
+        notificationsBtn.setAttribute(
+          "aria-expanded",
+          willOpen ? "true" : "false"
+        );
+        if (willOpen) {
+          await loadDropdown();
+        }
+      });
+
+      notificationsDropdown?.addEventListener("click", (event) => {
+        event.stopPropagation();
+      });
+
+      notificationsList?.addEventListener("click", async (event) => {
+        const item = event.target.closest(".bb-notification-item");
+        if (!item) return;
+
+        const id = item.dataset.id;
+        const link = item.dataset.link || "";
+        try {
+          await markNotificationRead(id);
+          await refreshBadge();
+          item.classList.remove("unread");
+        } catch (error) {
+          console.warn("Failed to mark notification as read:", error);
+        }
+
+        if (!link) return;
+        notificationsContainer.classList.remove("open");
+        notificationsBtn.setAttribute("aria-expanded", "false");
+        if (link.startsWith("/")) {
+          window.location.href = link;
+          return;
+        }
+
+        try {
+          const target = new URL(link, window.location.origin);
+          if (!["http:", "https:"].includes(target.protocol)) {
+            throw new Error("Unsupported protocol");
+          }
+          window.open(target.href, "_blank", "noopener,noreferrer");
+        } catch (_error) {
+          console.warn("Invalid notification link:", link);
+        }
+      });
+
+      document.addEventListener("click", (event) => {
+        if (!notificationsContainer.contains(event.target)) {
+          notificationsContainer.classList.remove("open");
+          notificationsBtn.setAttribute("aria-expanded", "false");
+        }
+      });
+
+      markAllReadBtn?.addEventListener("click", async () => {
+        try {
+          const token = await getAccessToken();
+          if (!token) return;
+          const response = await fetch("/v1/notifications/read-all", {
+            method: "POST",
+            headers: { Authorization: `Bearer ${token}` },
+            signal: AbortSignal.timeout(15000),
+          });
+          if (response.ok) {
+            updateBadge(0);
+            notificationsList
+              ?.querySelectorAll(".bb-notification-item.unread")
+              .forEach((el) => {
+                el.classList.remove("unread");
+              });
+          }
+        } catch (error) {
+          console.warn("Failed to mark notifications as read:", error);
+        }
+      });
+
+      document.addEventListener("bb:org-switched", async () => {
+        await refreshBadge();
+        await subscribeRealtime();
+      });
+      document.addEventListener("bb:org-ready", async () => {
+        await refreshBadge();
+        await subscribeRealtime();
+      });
+      refreshBadge();
+      subscribeRealtime();
+    };
+
+    initNavNotifications();
 
     // Quota display logic (global, runs on all pages)
     const initQuota = () => {

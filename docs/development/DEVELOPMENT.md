@@ -448,7 +448,71 @@ docker build -t blue-banded-bee .
 docker run --env-file .env -p 8847:8847 blue-banded-bee
 ```
 
+### Adding New HTML Pages (Avoid 404s)
+
+When adding a new top-level page (for example `/welcome` or `/welcome/invite`),
+you must update all required surfaces:
+
+1. **Register route handlers**
+   - Add `mux.HandleFunc(...)` entries in `internal/api/handlers.go`.
+   - Add or update the corresponding `Serve...` methods.
+2. **Create the HTML file**
+   - Add the page file at repository root (for example `welcome.html`).
+3. **Package the file in Docker**
+   - Add a `COPY --from=builder /app/<page>.html .` line in `Dockerfile`.
+   - If omitted, local runs may work, but Fly deployments will return 404.
+4. **Verify before merge**
+   - Run `docker build -t blue-banded-bee .`
+   - Open the route in the built container or review app.
+
+Recommended quick checks:
+
+- `rg -n "/welcome|/your-path" internal/api/handlers.go`
+- `rg -n "COPY --from=builder /app/.*\\.html" Dockerfile`
+
+### Auth Redirect Contract
+
+Keep social auth redirect behaviour centralised in `web/static/js/auth.js`.
+Avoid page-by-page redirect logic unless the page intentionally owns a
+specialised flow.
+
+Baseline rules:
+
+1. **Deep links return to themselves**
+   - If auth starts on a deep link (path/query), return to that same URL after
+     OAuth.
+2. **Homepage uses default app landing**
+   - If auth starts from `/`, route to the default signed-in landing page.
+3. **Invite links complete invite first**
+   - Preserve `invite_token` through OAuth, accept invite, then redirect to
+     `/welcome`.
+4. **Page-specific overrides are explicit**
+   - If a page must override redirect behaviour, document why in code comments.
+
+### Active Organisation Contract
+
+Use backend state as the source of truth for active organisation selection:
+
+1. `GET /v1/organisations` returns both:
+   - `organisations`
+   - `active_organisation_id`
+2. Frontend org bootstrap in `web/static/js/core.js` must prefer
+   `active_organisation_id` from API.
+3. `localStorage` key `bb_active_org_id` is a cache/fallback only; it must not
+   override backend-selected organisation after invite acceptance or org switch.
+
 ### Environment-Specific Configs
+
+### Integration Requirements
+
+- Review apps and CI must set `LOOPS_API_KEY` if invite email delivery needs to
+  be exercised.
+- Invite flows described in **Auth Redirect Contract** rely on this integration
+  for delivery (`invite_token` handling and acceptance still run in-app).
+- If `LOOPS_API_KEY` is missing, invite records are still created, but email
+  delivery is skipped and should be treated as non-delivery for test runs.
+- Configure `LOOPS_API_KEY` in your review app and CI environment variables when
+  validating invite emails end-to-end.
 
 **Development**:
 

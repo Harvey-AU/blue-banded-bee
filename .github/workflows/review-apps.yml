@@ -144,6 +144,7 @@ jobs:
               SUPABASE_JWT_SECRET="${{ secrets.SUPABASE_JWT_SECRET }}" \
               SUPABASE_SERVICE_ROLE_KEY="${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
               SENTRY_DSN="${{ secrets.SENTRY_DSN }}" \
+              LOOPS_API_KEY="${{ secrets.LOOPS_API_KEY }}" \
               SLACK_CLIENT_ID="${{ secrets.SLACK_CLIENT_ID }}" \
               SLACK_CLIENT_SECRET="${{ secrets.SLACK_CLIENT_SECRET }}" \
               WEBFLOW_CLIENT_ID="${{ secrets.WEBFLOW_CLIENT_ID }}" \
@@ -159,6 +160,7 @@ jobs:
               SUPABASE_JWT_SECRET="${{ secrets.SUPABASE_JWT_SECRET }}" \
               SUPABASE_SERVICE_ROLE_KEY="${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
               SENTRY_DSN="${{ secrets.SENTRY_DSN }}" \
+              LOOPS_API_KEY="${{ secrets.LOOPS_API_KEY }}" \
               SLACK_CLIENT_ID="${{ secrets.SLACK_CLIENT_ID }}" \
               SLACK_CLIENT_SECRET="${{ secrets.SLACK_CLIENT_SECRET }}" \
               WEBFLOW_CLIENT_ID="${{ secrets.WEBFLOW_CLIENT_ID }}" \

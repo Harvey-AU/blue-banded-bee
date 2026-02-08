@@ -18,6 +18,7 @@ import (
 	"github.com/Harvey-AU/blue-banded-bee/internal/auth"
 	"github.com/Harvey-AU/blue-banded-bee/internal/db"
 	"github.com/Harvey-AU/blue-banded-bee/internal/jobs"
+	"github.com/Harvey-AU/blue-banded-bee/internal/loops"
 	"github.com/rs/zerolog/log"
 )
 
@@ -214,15 +215,17 @@ type DBClient interface {
 type Handler struct {
 	DB                 DBClient
 	JobsManager        jobs.JobManagerInterface
+	Loops              *loops.Client
 	GoogleClientID     string
 	GoogleClientSecret string
 }
 
 // NewHandler creates a new API handler with dependencies
-func NewHandler(pgDB DBClient, jobsManager jobs.JobManagerInterface, googleClientID, googleClientSecret string) *Handler {
+func NewHandler(pgDB DBClient, jobsManager jobs.JobManagerInterface, loopsClient *loops.Client, googleClientID, googleClientSecret string) *Handler {
 	return &Handler{
 		DB:                 pgDB,
 		JobsManager:        jobsManager,
+		Loops:              loopsClient,
 		GoogleClientID:     googleClientID,
 		GoogleClientSecret: googleClientSecret,
 	}
@@ -309,6 +312,7 @@ func (h *Handler) SetupRoutes(mux *http.ServeMux) {
 	mux.Handle("/v1/auth/profile", auth.AuthMiddleware(http.HandlerFunc(h.AuthProfile)))
 
 	// Organisation routes (require auth)
+	mux.HandleFunc("/v1/organisations/invites/preview", h.OrganisationInvitePreviewHandler)
 	mux.Handle("/v1/organisations", auth.AuthMiddleware(http.HandlerFunc(h.OrganisationsHandler)))
 	mux.Handle("/v1/organisations/switch", auth.AuthMiddleware(http.HandlerFunc(h.SwitchOrganisationHandler)))
 	mux.Handle("/v1/organisations/members", auth.AuthMiddleware(http.HandlerFunc(h.OrganisationMembersHandler)))
@@ -399,8 +403,12 @@ func (h *Handler) SetupRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/test-data-components.html", h.ServeTestDataComponents)
 	mux.HandleFunc("/dashboard", h.ServeDashboard)
 	mux.HandleFunc("/dashboard-new", h.ServeNewDashboard)
+	mux.HandleFunc("/welcome", h.ServeWelcome)
+	mux.HandleFunc("/welcome/", h.ServeWelcome)
 	mux.HandleFunc("/settings", h.ServeSettings)
 	mux.HandleFunc("/settings/", h.ServeSettings)
+	mux.HandleFunc("/welcome/invite", h.ServeInviteWelcome)
+	mux.HandleFunc("/welcome/invite/", h.ServeInviteWelcome)
 	mux.HandleFunc("/auth-modal.html", h.ServeAuthModal)
 	mux.HandleFunc("/cli-login.html", h.ServeCliLogin)
 	mux.HandleFunc("/debug-auth.html", h.ServeDebugAuth)
@@ -489,6 +497,34 @@ func (h *Handler) ServeSettings(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.ServeFile(w, r, "settings.html")
+}
+
+// ServeWelcome serves the post-sign-in welcome page.
+func (h *Handler) ServeWelcome(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		MethodNotAllowed(w, r)
+		return
+	}
+	if r.URL.Path != "/welcome" && r.URL.Path != "/welcome/" {
+		NotFound(w, r, "Page not found")
+		return
+	}
+
+	http.ServeFile(w, r, "welcome.html")
+}
+
+// ServeInviteWelcome serves the invite welcome page.
+func (h *Handler) ServeInviteWelcome(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		MethodNotAllowed(w, r)
+		return
+	}
+	if r.URL.Path != "/welcome/invite" && r.URL.Path != "/welcome/invite/" {
+		http.NotFound(w, r)
+		return
+	}
+
+	http.ServeFile(w, r, "invite-welcome.html")
 }
 
 // ServeNewDashboard serves the new Web Components dashboard page

@@ -20,6 +20,7 @@ import (
 	"github.com/Harvey-AU/blue-banded-bee/internal/crawler"
 	"github.com/Harvey-AU/blue-banded-bee/internal/db"
 	"github.com/Harvey-AU/blue-banded-bee/internal/jobs"
+	"github.com/Harvey-AU/blue-banded-bee/internal/loops"
 	"github.com/Harvey-AU/blue-banded-bee/internal/notifications"
 	"github.com/Harvey-AU/blue-banded-bee/internal/observability"
 	"github.com/getsentry/sentry-go"
@@ -633,10 +634,20 @@ func main() {
 		log.Info().Msg("GA4 integration unavailable: GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET not configured")
 	}
 
+	// Initialise Loops email client (nil-safe for dev environments)
+	var loopsClient *loops.Client
+	if loopsAPIKey := os.Getenv("LOOPS_API_KEY"); loopsAPIKey != "" {
+		loopsClient = loops.New(loopsAPIKey)
+		log.Info().Msg("Loops email client initialised")
+	} else {
+		log.Info().Msg("Loops email client unavailable: LOOPS_API_KEY not configured")
+	}
+
 	// Create API handler with dependencies
 	apiHandler := api.NewHandler(
 		pgDB,
 		jobsManager,
+		loopsClient,
 		googleClientID,
 		googleClientSecret,
 	)

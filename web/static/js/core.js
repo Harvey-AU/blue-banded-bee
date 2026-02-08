@@ -223,6 +223,7 @@
 
       const data = await response.json();
       const organisations = data.data?.organisations || [];
+      const serverActiveOrgId = data.data?.active_organisation_id || null;
 
       if (organisations.length === 0) {
         orgInitialised = true;
@@ -232,27 +233,18 @@
         return null;
       }
 
-      // Get active org ID - check localStorage first (set on switch), then DB
+      // Get active org ID from API first (authoritative), then localStorage.
       let activeOrgId = null;
 
-      // Check localStorage first - it's set immediately on switch
-      try {
-        activeOrgId = localStorage.getItem("bb_active_org_id");
-      } catch (e) {
-        // localStorage might be blocked
-      }
+      // API /v1/organisations includes the user's current active org.
+      activeOrgId = serverActiveOrgId;
 
-      // Fall back to DB query if localStorage is empty
+      // Fall back to localStorage only if API value is absent.
       if (!activeOrgId) {
         try {
-          const { data: userData } = await window.supabase
-            .from("users")
-            .select("active_organisation_id")
-            .eq("id", session.user.id)
-            .single();
-          activeOrgId = userData?.active_organisation_id;
-        } catch (err) {
-          console.warn("Failed to fetch active_organisation_id:", err);
+          activeOrgId = localStorage.getItem("bb_active_org_id");
+        } catch (e) {
+          // localStorage might be blocked
         }
       }
 
