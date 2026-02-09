@@ -324,27 +324,12 @@ func New(config *Config) (*DB, error) {
 	if config.SSLMode == "" {
 		config.SSLMode = "disable"
 	}
+	defaultMaxOpen, defaultMaxIdle := poolLimitsForEnv(os.Getenv("APP_ENV"))
 	if config.MaxIdleConns == 0 {
-		// Environment-based idle connection limits (~30% of max open)
-		switch os.Getenv("APP_ENV") {
-		case "production":
-			config.MaxIdleConns = 20
-		case "staging":
-			config.MaxIdleConns = 4
-		default:
-			config.MaxIdleConns = 1
-		}
+		config.MaxIdleConns = defaultMaxIdle
 	}
 	if config.MaxOpenConns == 0 {
-		// Environment-based connection limits to prevent pool exhaustion
-		switch os.Getenv("APP_ENV") {
-		case "production":
-			config.MaxOpenConns = 70
-		case "staging":
-			config.MaxOpenConns = 10
-		default:
-			config.MaxOpenConns = 3
-		}
+		config.MaxOpenConns = defaultMaxOpen
 	}
 	if config.MaxLifetime == 0 {
 		config.MaxLifetime = 5 * time.Minute // Shorter lifetime for pooler compatibility
