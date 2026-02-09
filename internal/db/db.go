@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -46,12 +47,42 @@ type Config struct {
 func poolLimitsForEnv(appEnv string) (maxOpen, maxIdle int) {
 	switch appEnv {
 	case "production":
-		return 70, 20
+		maxOpen, maxIdle = 70, 20
 	case "staging":
-		return 5, 2
+		maxOpen, maxIdle = 5, 2
 	default:
-		return 2, 1
+		maxOpen, maxIdle = 2, 1
 	}
+
+	if parsed, ok := parsePositiveIntEnv("DB_MAX_OPEN_CONNS"); ok {
+		maxOpen = parsed
+	}
+	if parsed, ok := parsePositiveIntEnv("DB_MAX_IDLE_CONNS"); ok {
+		maxIdle = parsed
+	}
+	if maxOpen < 1 {
+		maxOpen = 1
+	}
+	if maxIdle < 1 {
+		maxIdle = 1
+	}
+	if maxIdle > maxOpen {
+		maxIdle = maxOpen
+	}
+
+	return maxOpen, maxIdle
+}
+
+func parsePositiveIntEnv(key string) (int, bool) {
+	raw := strings.TrimSpace(os.Getenv(key))
+	if raw == "" {
+		return 0, false
+	}
+	parsed, err := strconv.Atoi(raw)
+	if err != nil || parsed <= 0 {
+		return 0, false
+	}
+	return parsed, true
 }
 
 func sanitiseAppName(name string) string {

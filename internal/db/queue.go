@@ -36,6 +36,7 @@ type DbQueue struct {
 	poolRejectThreshold float64
 	lastWarnLog         time.Time
 	lastRejectLog       time.Time
+	lastRejectWaitCount int64
 	poolSemaphore       chan struct{}
 	preserveConnections int
 	maxConcurrent       int
@@ -58,6 +59,7 @@ var ErrConcurrencyBlocked = errors.New("tasks exist but blocked by concurrency l
 const (
 	defaultPoolWarnThreshold   = 0.90
 	defaultPoolRejectThreshold = 0.95
+	minRejectWaitDelta         = 5
 	poolLogCooldown            = 5 * time.Second
 	defaultQueueConcurrency    = 12
 	defaultTxRetries           = 3
@@ -792,13 +794,15 @@ func (q *DbQueue) ensurePoolCapacity(ctx context.Context) (func(), error) {
 		Usage:        usage,
 	})
 
-	if usage >= q.poolRejectThreshold && time.Since(q.lastRejectLog) > poolLogCooldown {
+	waitDelta := stats.WaitCount - q.lastRejectWaitCount
+	if usage >= q.poolRejectThreshold && waitDelta >= minRejectWaitDelta && time.Since(q.lastRejectLog) > poolLogCooldown {
 		log.Warn().
 			Int("in_use", stats.InUse).
 			Int("max_open", maxOpen).
 			Int("reserved", q.preserveConnections).
 			Float64("usage", usage).
 			Int64("wait_count", stats.WaitCount).
+			Int64("wait_delta", waitDelta).
 			Msg("DB pool saturated: requests will queue")
 		sentry.WithScope(func(scope *sentry.Scope) {
 			scope.SetLevel(sentry.LevelWarning)
@@ -810,11 +814,13 @@ func (q *DbQueue) ensurePoolCapacity(ctx context.Context) (func(), error) {
 				"reserved":   q.preserveConnections,
 				"idle":       stats.Idle,
 				"wait_count": stats.WaitCount,
+				"wait_delta": waitDelta,
 				"usage":      usage,
 			})
 			sentry.CaptureMessage("DB pool saturated (queuing)")
 		})
 		q.lastRejectLog = time.Now()
+		q.lastRejectWaitCount = stats.WaitCount
 	}
 
 	if usage >= q.poolWarnThreshold && time.Since(q.lastWarnLog) > poolLogCooldown {
