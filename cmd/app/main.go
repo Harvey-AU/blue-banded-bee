@@ -591,6 +591,38 @@ func main() {
 		workerConcurrency = 20
 	}
 
+	// Keep staging worker capacity aligned with queue DB pool limits to reduce
+	// recurring queue-pressure alerts from brief capacity spikes.
+	if appEnv == "staging" {
+		reservedConnections := getEnvInt("DB_POOL_RESERVED_CONNECTIONS", 4)
+		if reservedConnections < 0 {
+			reservedConnections = 0
+		}
+
+		if cfg := queueDB.GetConfig(); cfg != nil && cfg.MaxOpenConns > 0 {
+			availablePoolSlots := cfg.MaxOpenConns - reservedConnections
+			if availablePoolSlots < 1 {
+				availablePoolSlots = 1
+			}
+
+			safeWorkers := availablePoolSlots / workerConcurrency
+			if safeWorkers < 1 {
+				safeWorkers = 1
+			}
+
+			if safeWorkers < jobWorkers {
+				log.Warn().
+					Int("configured_workers", jobWorkers).
+					Int("capped_workers", safeWorkers).
+					Int("db_max_open", cfg.MaxOpenConns).
+					Int("reserved_connections", reservedConnections).
+					Int("worker_concurrency", workerConcurrency).
+					Msg("Capping staging workers to fit database pool capacity")
+				jobWorkers = safeWorkers
+			}
+		}
+	}
+
 	totalCapacity := jobWorkers * workerConcurrency
 	log.Info().
 		Int("workers", jobWorkers).

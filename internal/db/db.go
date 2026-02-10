@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -46,12 +47,46 @@ type Config struct {
 func poolLimitsForEnv(appEnv string) (maxOpen, maxIdle int) {
 	switch appEnv {
 	case "production":
-		return 70, 20
+		maxOpen, maxIdle = 70, 20
 	case "staging":
-		return 5, 2
+		maxOpen, maxIdle = 5, 2
 	default:
-		return 2, 1
+		maxOpen, maxIdle = 2, 1
 	}
+
+	if parsed, ok := parsePositiveIntEnv("DB_MAX_OPEN_CONNS"); ok {
+		maxOpen = parsed
+	} else if raw := strings.TrimSpace(os.Getenv("DB_MAX_OPEN_CONNS")); raw != "" {
+		log.Warn().Str("value", raw).Msg("Invalid DB_MAX_OPEN_CONNS; using default")
+	}
+	if parsed, ok := parsePositiveIntEnv("DB_MAX_IDLE_CONNS"); ok {
+		maxIdle = parsed
+	} else if raw := strings.TrimSpace(os.Getenv("DB_MAX_IDLE_CONNS")); raw != "" {
+		log.Warn().Str("value", raw).Msg("Invalid DB_MAX_IDLE_CONNS; using default")
+	}
+	if maxOpen < 1 {
+		maxOpen = 1
+	}
+	if maxIdle < 1 {
+		maxIdle = 1
+	}
+	if maxIdle > maxOpen {
+		maxIdle = maxOpen
+	}
+
+	return maxOpen, maxIdle
+}
+
+func parsePositiveIntEnv(key string) (int, bool) {
+	raw := strings.TrimSpace(os.Getenv(key))
+	if raw == "" {
+		return 0, false
+	}
+	parsed, err := strconv.Atoi(raw)
+	if err != nil || parsed <= 0 {
+		return 0, false
+	}
+	return parsed, true
 }
 
 func sanitiseAppName(name string) string {
@@ -293,27 +328,12 @@ func New(config *Config) (*DB, error) {
 	if config.SSLMode == "" {
 		config.SSLMode = "disable"
 	}
+	defaultMaxOpen, defaultMaxIdle := poolLimitsForEnv(os.Getenv("APP_ENV"))
 	if config.MaxIdleConns == 0 {
-		// Environment-based idle connection limits (~30% of max open)
-		switch os.Getenv("APP_ENV") {
-		case "production":
-			config.MaxIdleConns = 20
-		case "staging":
-			config.MaxIdleConns = 4
-		default:
-			config.MaxIdleConns = 1
-		}
+		config.MaxIdleConns = defaultMaxIdle
 	}
 	if config.MaxOpenConns == 0 {
-		// Environment-based connection limits to prevent pool exhaustion
-		switch os.Getenv("APP_ENV") {
-		case "production":
-			config.MaxOpenConns = 70
-		case "staging":
-			config.MaxOpenConns = 10
-		default:
-			config.MaxOpenConns = 3
-		}
+		config.MaxOpenConns = defaultMaxOpen
 	}
 	if config.MaxLifetime == 0 {
 		config.MaxLifetime = 5 * time.Minute // Shorter lifetime for pooler compatibility
