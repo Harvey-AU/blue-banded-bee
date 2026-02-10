@@ -56,9 +56,13 @@ func poolLimitsForEnv(appEnv string) (maxOpen, maxIdle int) {
 
 	if parsed, ok := parsePositiveIntEnv("DB_MAX_OPEN_CONNS"); ok {
 		maxOpen = parsed
+	} else if raw := strings.TrimSpace(os.Getenv("DB_MAX_OPEN_CONNS")); raw != "" {
+		log.Warn().Str("value", raw).Msg("Invalid DB_MAX_OPEN_CONNS; using default")
 	}
 	if parsed, ok := parsePositiveIntEnv("DB_MAX_IDLE_CONNS"); ok {
 		maxIdle = parsed
+	} else if raw := strings.TrimSpace(os.Getenv("DB_MAX_IDLE_CONNS")); raw != "" {
+		log.Warn().Str("value", raw).Msg("Invalid DB_MAX_IDLE_CONNS; using default")
 	}
 	if maxOpen < 1 {
 		maxOpen = 1

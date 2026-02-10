@@ -95,6 +95,30 @@ jobs:
             const releaseType = '${{ steps.check.outputs.release_type }}';
             const nextVersion = '${{ steps.check.outputs.next_version }}';
 
+            const isThrottleError = (error) => {
+              const status = error?.status;
+              const message = String(error?.response?.data?.message || error?.message || '').toLowerCase();
+              return status === 429 || (status === 403 && message.includes('temporarily being throttled'));
+            };
+
+            const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+            const withRetry = async (fn, label) => {
+              const delays = [2000, 5000, 10000];
+              for (let attempt = 0; attempt <= delays.length; attempt++) {
+                try {
+                  return await fn();
+                } catch (error) {
+                  if (!isThrottleError(error) || attempt === delays.length) {
+                    throw error;
+                  }
+                  const delay = delays[attempt];
+                  core.warning(`${label} throttled by GitHub API (attempt ${attempt + 1}/${delays.length + 1}). Retrying in ${delay}ms.`);
+                  await sleep(delay);
+                }
+              }
+            };
+
             const body = `## 🏷️ Release Preview
 
             When this PR is merged, it will automatically create:
@@ -112,32 +136,40 @@ jobs:
             - \`## [Unreleased:minor]\` → minor release
             - \`## [Unreleased:major]\` → major release`;
 
-            // Find existing comment
-            const { data: comments } = await github.rest.issues.listComments({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number
-            });
-
-            const botComment = comments.find(comment =>
-              comment.user.type === 'Bot' &&
-              comment.body.includes('🏷️ Release Preview')
-            );
-
-            if (botComment) {
-              // Update existing comment
-              await github.rest.issues.updateComment({
+            try {
+              // Find existing comment
+              const { data: comments } = await withRetry(() => github.rest.issues.listComments({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                comment_id: botComment.id,
-                body: body
-              });
-            } else {
-              // Create new comment
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.issue.number,
-                body: body
-              });
+                issue_number: context.issue.number
+              }), 'List comments');
+
+              const botComment = comments.find(comment =>
+                comment.user.type === 'Bot' &&
+                comment.body.includes('🏷️ Release Preview')
+              );
+
+              if (botComment) {
+                // Update existing comment
+                await withRetry(() => github.rest.issues.updateComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  comment_id: botComment.id,
+                  body: body
+                }), 'Update comment');
+              } else {
+                // Create new comment
+                await withRetry(() => github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: context.issue.number,
+                  body: body
+                }), 'Create comment');
+              }
+            } catch (error) {
+              if (isThrottleError(error)) {
+                core.warning('Skipping release-preview PR comment due to temporary GitHub API throttling.');
+              } else {
+                throw error;
+              }
             }
