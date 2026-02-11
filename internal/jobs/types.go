@@ -51,8 +51,8 @@ type Job struct {
 	FoundTasks      int       `json:"found_tasks"`
 	SitemapTasks    int       `json:"sitemap_tasks"`
 	CreatedAt       time.Time `json:"created_at"`
-	StartedAt       time.Time `json:"started_at,omitempty"`
-	CompletedAt     time.Time `json:"completed_at,omitempty"`
+	StartedAt       time.Time `json:"started_at"`
+	CompletedAt     time.Time `json:"completed_at"`
 	Concurrency     int       `json:"concurrency"`
 	FindLinks       bool      `json:"find_links"`
 	MaxPages        int       `json:"max_pages"`
@@ -79,8 +79,8 @@ type Task struct {
 	DomainName  string     `json:"domain_name"`
 	Status      TaskStatus `json:"status"`
 	CreatedAt   time.Time  `json:"created_at"`
-	StartedAt   time.Time  `json:"started_at,omitempty"`
-	CompletedAt time.Time  `json:"completed_at,omitempty"`
+	StartedAt   time.Time  `json:"started_at"`
+	CompletedAt time.Time  `json:"completed_at"`
 	RetryCount  int        `json:"retry_count"`
 	Error       string     `json:"error,omitempty"`
 

@@ -587,9 +587,9 @@ func (h *Handler) SaveGoogleProperties(w http.ResponseWriter, r *http.Request) {
 		Int("active_count", len(req.ActivePropertyIDs)).
 		Msg("Google Analytics properties saved")
 
-	WriteSuccess(w, r, map[string]interface{}{
-		"saved_count":  savedCount,
-		"active_count": len(req.ActivePropertyIDs),
+	WriteSuccess(w, r, googleSavedPropertiesResponse{
+		SavedCount:  savedCount,
+		ActiveCount: len(req.ActivePropertyIDs),
 	}, "Google Analytics properties saved successfully")
 }
 
@@ -966,7 +966,7 @@ func (h *Handler) GoogleConnectionHandler(w http.ResponseWriter, r *http.Request
 		// Check request body to determine which PATCH operation
 		// If body contains "domain_ids", update domains
 		// If body contains "status", update status
-		var bodyCheck map[string]interface{}
+		var bodyCheck map[string]json.RawMessage
 		if err := json.NewDecoder(r.Body).Decode(&bodyCheck); err != nil {
 			BadRequest(w, r, "Invalid request body")
 			return
@@ -1124,12 +1124,12 @@ func (h *Handler) getPendingSession(w http.ResponseWriter, r *http.Request, sess
 
 	// Note: Tokens are intentionally excluded from this response for security.
 	// Server-side handlers will retrieve tokens from the session using sessionID.
-	WriteSuccess(w, r, map[string]interface{}{
-		"accounts":   session.Accounts,
-		"properties": session.Properties,
-		"state":      session.State,
-		"user_id":    session.UserID,
-		"email":      session.Email,
+	WriteSuccess(w, r, pendingGASessionResponse{
+		Accounts:   session.Accounts,
+		Properties: session.Properties,
+		State:      session.State,
+		UserID:     session.UserID,
+		Email:      session.Email,
 	}, "")
 }
 
@@ -1176,9 +1176,9 @@ func (h *Handler) fetchAccountProperties(w http.ResponseWriter, r *http.Request,
 	}
 	pendingGASessionsMu.Unlock()
 
-	WriteSuccess(w, r, map[string]interface{}{
-		"properties": properties,
-		"account_id": accountID,
+	WriteSuccess(w, r, accountPropertiesResponse{
+		Properties: properties,
+		AccountID:  accountID,
 	}, "")
 }
 
@@ -1248,7 +1248,7 @@ func (h *Handler) getOrganisationDomains(w http.ResponseWriter, r *http.Request)
 
 	orgID := h.DB.GetEffectiveOrganisationID(user)
 	if orgID == "" {
-		WriteSuccess(w, r, map[string]interface{}{"domains": []db.OrganisationDomain{}}, "No organisation")
+		WriteSuccess(w, r, organisationDomainsResponse{Domains: []db.OrganisationDomain{}}, "No organisation")
 		return
 	}
 
@@ -1264,7 +1264,7 @@ func (h *Handler) getOrganisationDomains(w http.ResponseWriter, r *http.Request)
 		Int("domain_count", len(domains)).
 		Msg("Returning domains for organisation")
 
-	WriteSuccess(w, r, map[string]interface{}{"domains": domains}, "")
+	WriteSuccess(w, r, organisationDomainsResponse{Domains: domains}, "")
 }
 
 // deleteGoogleConnection deletes a Google Analytics connection
@@ -1315,6 +1315,50 @@ type GA4AccountResponse struct {
 	CreatedAt         string `json:"created_at"`
 }
 
+type googleSavedPropertiesResponse struct {
+	SavedCount  int `json:"saved_count"`
+	ActiveCount int `json:"active_count"`
+}
+
+type pendingGASessionResponse struct {
+	Accounts   []GA4Account  `json:"accounts"`
+	Properties []GA4Property `json:"properties"`
+	State      string        `json:"state"`
+	UserID     string        `json:"user_id"`
+	Email      string        `json:"email"`
+}
+
+type accountPropertiesResponse struct {
+	Properties []GA4Property `json:"properties"`
+	AccountID  string        `json:"account_id"`
+}
+
+type organisationDomainsResponse struct {
+	Domains []db.OrganisationDomain `json:"domains"`
+}
+
+type ga4AccountsListResponse struct {
+	Accounts []GA4AccountResponse `json:"accounts"`
+}
+
+type googleReauthResponse struct {
+	NeedsReauth bool   `json:"needs_reauth"`
+	Message     string `json:"message"`
+}
+
+type refreshGA4AccountsResponse struct {
+	Accounts    []GA4AccountResponse `json:"accounts"`
+	NeedsReauth bool                 `json:"needs_reauth"`
+}
+
+type ga4PropertiesResponse struct {
+	Properties []GA4Property `json:"properties"`
+}
+
+type savedCountResponse struct {
+	SavedCount int `json:"saved_count"`
+}
+
 // ListGA4Accounts returns stored GA4 accounts from the database
 // GET /v1/integrations/google/accounts
 func (h *Handler) ListGA4Accounts(w http.ResponseWriter, r *http.Request) {
@@ -1340,7 +1384,7 @@ func (h *Handler) ListGA4Accounts(w http.ResponseWriter, r *http.Request) {
 
 	orgID := h.DB.GetEffectiveOrganisationID(user)
 	if orgID == "" {
-		WriteSuccess(w, r, map[string]any{"accounts": []GA4AccountResponse{}}, "No organisation")
+		WriteSuccess(w, r, ga4AccountsListResponse{Accounts: []GA4AccountResponse{}}, "No organisation")
 		return
 	}
 
@@ -1363,7 +1407,7 @@ func (h *Handler) ListGA4Accounts(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	WriteSuccess(w, r, map[string]any{"accounts": response}, "")
+	WriteSuccess(w, r, ga4AccountsListResponse{Accounts: response}, "")
 }
 
 // RefreshGA4Accounts syncs accounts from Google API and updates the database
@@ -1398,9 +1442,9 @@ func (h *Handler) RefreshGA4Accounts(w http.ResponseWriter, r *http.Request) {
 	accountWithToken, refreshToken, err := h.getGARefreshToken(r.Context(), logger, orgID)
 	if err != nil {
 		if errors.Is(err, db.ErrGoogleTokenNotFound) || errors.Is(err, db.ErrGoogleAccountNotFound) || errors.Is(err, db.ErrGoogleConnectionNotFound) {
-			WriteSuccess(w, r, map[string]any{
-				"needs_reauth": true,
-				"message":      "No valid Google token found. Please reconnect to Google Analytics.",
+			WriteSuccess(w, r, googleReauthResponse{
+				NeedsReauth: true,
+				Message:     "No valid Google token found. Please reconnect to Google Analytics.",
 			}, "")
 			return
 		}
@@ -1417,9 +1461,9 @@ func (h *Handler) RefreshGA4Accounts(w http.ResponseWriter, r *http.Request) {
 			Str("next_action", "reauth_required").
 			Msg("Failed to refresh Google access token")
 		// Token might be revoked
-		WriteSuccess(w, r, map[string]any{
-			"needs_reauth": true,
-			"message":      "Unable to refresh token. Please reconnect to Google Analytics.",
+		WriteSuccess(w, r, googleReauthResponse{
+			NeedsReauth: true,
+			Message:     "Unable to refresh token. Please reconnect to Google Analytics.",
 		}, "")
 		return
 	}
@@ -1477,9 +1521,9 @@ func (h *Handler) RefreshGA4Accounts(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	WriteSuccess(w, r, map[string]any{
-		"accounts":     response,
-		"needs_reauth": false,
+	WriteSuccess(w, r, refreshGA4AccountsResponse{
+		Accounts:    response,
+		NeedsReauth: false,
 	}, "Accounts refreshed successfully")
 }
 
@@ -1603,9 +1647,9 @@ func (h *Handler) GetAccountProperties(w http.ResponseWriter, r *http.Request, g
 	_, refreshToken, err := h.getGARefreshToken(r.Context(), logger, orgID)
 	if err != nil {
 		if errors.Is(err, db.ErrGoogleTokenNotFound) || errors.Is(err, db.ErrGoogleAccountNotFound) || errors.Is(err, db.ErrGoogleConnectionNotFound) {
-			WriteSuccess(w, r, map[string]any{
-				"needs_reauth": true,
-				"message":      "No valid Google token found. Please reconnect to Google Analytics.",
+			WriteSuccess(w, r, googleReauthResponse{
+				NeedsReauth: true,
+				Message:     "No valid Google token found. Please reconnect to Google Analytics.",
 			}, "")
 			return
 		}
@@ -1621,9 +1665,9 @@ func (h *Handler) GetAccountProperties(w http.ResponseWriter, r *http.Request, g
 			Err(err).
 			Str("next_action", "reauth_required").
 			Msg("Failed to refresh Google access token")
-		WriteSuccess(w, r, map[string]any{
-			"needs_reauth": true,
-			"message":      "Unable to refresh token. Please reconnect to Google Analytics.",
+		WriteSuccess(w, r, googleReauthResponse{
+			NeedsReauth: true,
+			Message:     "Unable to refresh token. Please reconnect to Google Analytics.",
 		}, "")
 		return
 	}
@@ -1642,9 +1686,7 @@ func (h *Handler) GetAccountProperties(w http.ResponseWriter, r *http.Request, g
 		Int("property_count", len(properties)).
 		Msg("Fetched GA4 properties for account")
 
-	WriteSuccess(w, r, map[string]any{
-		"properties": properties,
-	}, "")
+	WriteSuccess(w, r, ga4PropertiesResponse{Properties: properties}, "")
 }
 
 // SaveGA4AccountProperties saves all properties for a stored GA4 account as inactive
@@ -1693,9 +1735,9 @@ func (h *Handler) SaveGA4AccountProperties(w http.ResponseWriter, r *http.Reques
 			_, fallbackToken, fallbackErr := h.getGARefreshToken(r.Context(), logger, orgID)
 			if fallbackErr != nil {
 				if errors.Is(fallbackErr, db.ErrGoogleTokenNotFound) || errors.Is(fallbackErr, db.ErrGoogleAccountNotFound) || errors.Is(fallbackErr, db.ErrGoogleConnectionNotFound) {
-					WriteSuccess(w, r, map[string]any{
-						"needs_reauth": true,
-						"message":      "No valid Google token found. Please reconnect to Google Analytics.",
+					WriteSuccess(w, r, googleReauthResponse{
+						NeedsReauth: true,
+						Message:     "No valid Google token found. Please reconnect to Google Analytics.",
 					}, "")
 					return
 				}
@@ -1717,9 +1759,9 @@ func (h *Handler) SaveGA4AccountProperties(w http.ResponseWriter, r *http.Reques
 			Err(err).
 			Str("next_action", "reauth_required").
 			Msg("Failed to refresh Google access token")
-		WriteSuccess(w, r, map[string]any{
-			"needs_reauth": true,
-			"message":      "Unable to refresh token. Please reconnect to Google Analytics.",
+		WriteSuccess(w, r, googleReauthResponse{
+			NeedsReauth: true,
+			Message:     "Unable to refresh token. Please reconnect to Google Analytics.",
 		}, "")
 		return
 	}
@@ -1781,7 +1823,5 @@ func (h *Handler) SaveGA4AccountProperties(w http.ResponseWriter, r *http.Reques
 		Int("saved_count", savedCount).
 		Msg("Google Analytics account properties saved")
 
-	WriteSuccess(w, r, map[string]any{
-		"saved_count": savedCount,
-	}, "Google Analytics properties saved successfully")
+	WriteSuccess(w, r, savedCountResponse{SavedCount: savedCount}, "Google Analytics properties saved successfully")
 }

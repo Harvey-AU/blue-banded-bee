@@ -47,7 +47,7 @@ func (h *Handler) createJobShareLink(w http.ResponseWriter, r *http.Request, job
 
 	if err == nil {
 		shareURL := buildShareURL(r, existingToken)
-		WriteSuccess(w, r, map[string]interface{}{
+		WriteSuccess(w, r, map[string]any{
 			"token":      existingToken,
 			"share_link": shareURL,
 		}, "Share link already exists")
@@ -70,7 +70,7 @@ func (h *Handler) createJobShareLink(w http.ResponseWriter, r *http.Request, job
 
 	var token string
 	const maxAttempts = 5
-	for i := 0; i < maxAttempts; i++ {
+	for range maxAttempts {
 		candidate, genErr := generateShareToken()
 		if genErr != nil {
 			logger.Error().Err(genErr).Msg("Failed to generate share token")
@@ -109,7 +109,7 @@ func (h *Handler) createJobShareLink(w http.ResponseWriter, r *http.Request, job
 	}
 
 	shareURL := buildShareURL(r, token)
-	WriteSuccess(w, r, map[string]interface{}{
+	WriteSuccess(w, r, map[string]any{
 		"token":      token,
 		"share_link": shareURL,
 	}, "Share link created successfully")
@@ -142,7 +142,7 @@ func (h *Handler) getJobShareLink(w http.ResponseWriter, r *http.Request, jobID 
 
 		if errors.Is(err, sql.ErrNoRows) {
 			// No share link exists - return 200 with exists:false instead of 404
-			WriteSuccess(w, r, map[string]interface{}{
+			WriteSuccess(w, r, map[string]any{
 				"exists": false,
 			}, "No active share link")
 			return
@@ -154,7 +154,7 @@ func (h *Handler) getJobShareLink(w http.ResponseWriter, r *http.Request, jobID 
 	}
 
 	shareURL := buildShareURL(r, token)
-	WriteSuccess(w, r, map[string]interface{}{
+	WriteSuccess(w, r, map[string]any{
 		"exists":     true,
 		"token":      token,
 		"share_link": shareURL,
@@ -191,7 +191,7 @@ func (h *Handler) revokeJobShareLink(w http.ResponseWriter, r *http.Request, job
 		return
 	}
 
-	WriteSuccess(w, r, map[string]interface{}{
+	WriteSuccess(w, r, map[string]any{
 		"revoked": true,
 	}, "Share link revoked")
 }
@@ -295,9 +295,9 @@ func (h *Handler) getSharedJobTasks(w http.ResponseWriter, r *http.Request, toke
 	hasNext := params.Offset+params.Limit < total
 	hasPrev := params.Offset > 0
 
-	response := map[string]interface{}{
+	response := map[string]any{
 		"tasks": tasks,
-		"pagination": map[string]interface{}{
+		"pagination": map[string]any{
 			"limit":    params.Limit,
 			"offset":   params.Offset,
 			"total":    total,

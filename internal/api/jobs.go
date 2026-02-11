@@ -129,10 +129,10 @@ type JobResponse struct {
 	StartedAt      *string `json:"started_at,omitempty"`
 	CompletedAt    *string `json:"completed_at,omitempty"`
 	// Additional fields for dashboard
-	DurationSeconds       *int                   `json:"duration_seconds,omitempty"`
-	AvgTimePerTaskSeconds *float64               `json:"avg_time_per_task_seconds,omitempty"`
-	Stats                 map[string]interface{} `json:"stats,omitempty"`
-	SchedulerID           *string                `json:"scheduler_id,omitempty"`
+	DurationSeconds       *int           `json:"duration_seconds,omitempty"`
+	AvgTimePerTaskSeconds *float64       `json:"avg_time_per_task_seconds,omitempty"`
+	Stats                 map[string]any `json:"stats,omitempty"`
+	SchedulerID           *string        `json:"scheduler_id,omitempty"`
 	// Job configuration fields
 	Concurrency          int     `json:"concurrency"`
 	MaxPages             int     `json:"max_pages"`
@@ -195,9 +195,9 @@ func (h *Handler) listJobs(w http.ResponseWriter, r *http.Request) {
 	hasPrev := offset > 0
 
 	// Prepare response
-	response := map[string]interface{}{
+	response := map[string]any{
 		"jobs": jobs,
-		"pagination": map[string]interface{}{
+		"pagination": map[string]any{
 			"limit":    limit,
 			"offset":   offset,
 			"total":    total,
@@ -229,10 +229,7 @@ func (h *Handler) createJobFromRequest(ctx context.Context, user *db.User, req C
 
 	concurrency := 20 // Default concurrency
 	if req.Concurrency != nil && *req.Concurrency > 0 {
-		concurrency = *req.Concurrency
-		if concurrency > 100 {
-			concurrency = 100
-		}
+		concurrency = min(*req.Concurrency, 100)
 	}
 
 	maxPages := 0
@@ -322,7 +319,7 @@ func (h *Handler) createJob(w http.ResponseWriter, r *http.Request) {
 		req.SourceDetail = &sourceDetail
 	}
 	if req.SourceInfo == nil {
-		sourceInfoData := map[string]interface{}{
+		sourceInfoData := map[string]any{
 			"ip":        util.GetClientIP(r),
 			"userAgent": r.UserAgent(),
 			"timestamp": time.Now().UTC().Format(time.RFC3339),
@@ -429,7 +426,7 @@ func (h *Handler) fetchJobResponse(ctx context.Context, jobID string, organisati
 		JOIN domains d ON j.domain_id = d.id
 		WHERE j.id = $1`
 
-	args := []interface{}{jobID}
+	args := []any{jobID}
 	if organisationID != nil {
 		query += ` AND j.organisation_id = $2`
 		args = append(args, *organisationID)
@@ -492,7 +489,7 @@ func (h *Handler) fetchJobResponse(ctx context.Context, jobID string, organisati
 	}
 
 	if len(statsJSON) > 0 {
-		var stats map[string]interface{}
+		var stats map[string]any
 		if err := json.Unmarshal(statsJSON, &stats); err == nil {
 			response.Stats = stats
 		}
@@ -734,7 +731,7 @@ func (h *Handler) validateJobAccess(w http.ResponseWriter, r *http.Request, jobI
 type TaskQueryBuilder struct {
 	SelectQuery string
 	CountQuery  string
-	Args        []interface{}
+	Args        []any
 }
 
 // buildTaskQuery constructs SQL queries for task retrieval with filters and pagination
@@ -758,7 +755,7 @@ func buildTaskQuery(jobID string, params TaskQueryParams) TaskQueryBuilder {
 		FROM tasks t 
 		WHERE t.job_id = $1`
 
-	args := []interface{}{jobID}
+	args := []any{jobID}
 
 	// Add status filter if provided
 	if params.Status != "" {
@@ -1035,9 +1032,9 @@ func (h *Handler) getJobTasks(w http.ResponseWriter, r *http.Request, jobID stri
 	hasPrev := params.Offset > 0
 
 	// Prepare response
-	response := map[string]interface{}{
+	response := map[string]any{
 		"tasks": tasks,
-		"pagination": map[string]interface{}{
+		"pagination": map[string]any{
 			"limit":    params.Limit,
 			"offset":   params.Offset,
 			"total":    total,
@@ -1149,7 +1146,7 @@ func (h *Handler) serveJobExport(w http.ResponseWriter, r *http.Request, jobID s
 	}
 
 	// Prepare export response
-	response := map[string]interface{}{
+	response := map[string]any{
 		"job_id":      jobID,
 		"domain":      domain,
 		"status":      status,

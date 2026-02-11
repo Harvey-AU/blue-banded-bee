@@ -17,7 +17,7 @@ func TestAuthRegister(t *testing.T) {
 	tests := []struct {
 		name           string
 		method         string
-		body           interface{}
+		body           any
 		expectedStatus int
 		expectedError  string
 		skipDBCheck    bool // Skip tests that require DB
@@ -69,7 +69,7 @@ func TestAuthRegister(t *testing.T) {
 			body: AuthRegisterRequest{
 				UserID:   "user-123",
 				Email:    "test@example.com",
-				FullName: strPtr("John Doe"),
+				FullName: new("John Doe"),
 			},
 			expectedStatus: http.StatusNotImplemented,
 			skipDBCheck:    true, // Requires DB
@@ -80,7 +80,7 @@ func TestAuthRegister(t *testing.T) {
 			body: AuthRegisterRequest{
 				UserID:  "user-123",
 				Email:   "test@company.com",
-				OrgName: strPtr("My Company"),
+				OrgName: new("My Company"),
 			},
 			expectedStatus: http.StatusNotImplemented,
 			skipDBCheck:    true, // Requires DB
@@ -114,7 +114,7 @@ func TestAuthRegister(t *testing.T) {
 			assert.Equal(t, tt.expectedStatus, rec.Code)
 
 			if tt.expectedError != "" && rec.Code >= 400 {
-				var errResp map[string]interface{}
+				var errResp map[string]any
 				err := json.Unmarshal(rec.Body.Bytes(), &errResp)
 				if err == nil && errResp != nil {
 					if msg, ok := errResp["message"].(string); ok {
@@ -130,7 +130,7 @@ func TestAuthSession(t *testing.T) {
 	tests := []struct {
 		name           string
 		method         string
-		body           interface{}
+		body           any
 		hasAuth        bool
 		expectedStatus int
 		expectedError  string
@@ -202,7 +202,7 @@ func TestAuthSession(t *testing.T) {
 			assert.Equal(t, tt.expectedStatus, rec.Code)
 
 			if tt.expectedError != "" && rec.Code >= 400 {
-				var errResp map[string]interface{}
+				var errResp map[string]any
 				err := json.Unmarshal(rec.Body.Bytes(), &errResp)
 				if err == nil && errResp != nil {
 					if msg, ok := errResp["message"].(string); ok {
@@ -273,8 +273,8 @@ func TestUserResponse(t *testing.T) {
 	user := UserResponse{
 		ID:             "user-123",
 		Email:          "test@example.com",
-		FullName:       strPtr("John Doe"),
-		OrganisationID: strPtr("org-456"),
+		FullName:       new("John Doe"),
+		OrganisationID: new("org-456"),
 		CreatedAt:      "2024-01-01T12:00:00Z",
 		UpdatedAt:      "2024-01-02T12:00:00Z",
 	}
@@ -316,6 +316,8 @@ func TestOrganisationResponse(t *testing.T) {
 }
 
 // Helper function
+//
+//go:fix inline
 func strPtr(s string) *string {
-	return &s
+	return new(s)
 }

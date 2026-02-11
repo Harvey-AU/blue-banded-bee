@@ -4,6 +4,7 @@ package techdetect
 
 import (
 	"encoding/json"
+	"maps"
 	"net/http"
 	"sync"
 
@@ -66,9 +67,7 @@ func (d *Detector) Detect(headers http.Header, body []byte) *Result {
 	}
 
 	// Store raw headers for debugging
-	for key, values := range headers {
-		result.RawHeaders[key] = values
-	}
+	maps.Copy(result.RawHeaders, headers)
 
 	// Store truncated HTML sample
 	if len(body) > MaxHTMLSampleSize {

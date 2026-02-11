@@ -18,6 +18,11 @@ type MockAuthClient struct {
 	mock.Mock
 }
 
+type authErrorResponse struct {
+	Status int    `json:"status"`
+	Code   string `json:"code"`
+}
+
 func (m *MockAuthClient) ValidateToken(ctx context.Context, token string) (*auth.UserClaims, error) {
 	args := m.Called(ctx, token)
 	if args.Get(0) == nil {
@@ -89,12 +94,12 @@ func TestAuthMiddleware(t *testing.T) {
 			expectedStatus:    http.StatusUnauthorized,
 			expectUserContext: false,
 			checkResponse: func(t *testing.T, rec *httptest.ResponseRecorder) {
-				var response map[string]interface{}
+				var response authErrorResponse
 				err := json.Unmarshal(rec.Body.Bytes(), &response)
 				require.NoError(t, err)
 
-				assert.Equal(t, float64(401), response["status"])
-				assert.Equal(t, "UNAUTHORISED", response["code"])
+				assert.Equal(t, 401, response.Status)
+				assert.Equal(t, "UNAUTHORISED", response.Code)
 			},
 		},
 		{
@@ -112,12 +117,12 @@ func TestAuthMiddleware(t *testing.T) {
 			expectedStatus:    http.StatusUnauthorized,
 			expectUserContext: false,
 			checkResponse: func(t *testing.T, rec *httptest.ResponseRecorder) {
-				var response map[string]interface{}
+				var response authErrorResponse
 				err := json.Unmarshal(rec.Body.Bytes(), &response)
 				require.NoError(t, err)
 
-				assert.Equal(t, float64(401), response["status"])
-				assert.Equal(t, "UNAUTHORISED", response["code"])
+				assert.Equal(t, 401, response.Status)
+				assert.Equal(t, "UNAUTHORISED", response.Code)
 			},
 		},
 	}

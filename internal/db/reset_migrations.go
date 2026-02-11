@@ -232,7 +232,7 @@ func (db *DB) runMigrations() (int, error) {
 				scope.SetLevel(sentry.LevelError)
 				scope.SetTag("event_type", "migration_failure")
 				scope.SetTag("migration_file", filename)
-				scope.SetContext("migration_details", map[string]interface{}{
+				scope.SetContext("migration_details", map[string]any{
 					"file":               filename,
 					"migration_number":   i + 1,
 					"total_migrations":   len(migrationFiles),

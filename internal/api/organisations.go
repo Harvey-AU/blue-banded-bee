@@ -68,7 +68,7 @@ func (h *Handler) listUserOrganisations(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 
-	WriteSuccess(w, r, map[string]interface{}{
+	WriteSuccess(w, r, map[string]any{
 		"organisations":          formattedOrgs,
 		"active_organisation_id": user.ActiveOrganisationID,
 	}, "Organisations retrieved successfully")
@@ -125,8 +125,8 @@ func (h *Handler) createOrganisation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	WriteSuccess(w, r, map[string]interface{}{
-		"organisation": map[string]interface{}{
+	WriteSuccess(w, r, map[string]any{
+		"organisation": map[string]any{
 			"id":         org.ID,
 			"name":       org.Name,
 			"created_at": org.CreatedAt.Format(time.RFC3339),
@@ -192,8 +192,8 @@ func (h *Handler) switchOrganisation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	WriteSuccess(w, r, map[string]interface{}{
-		"organisation": map[string]interface{}{
+	WriteSuccess(w, r, map[string]any{
+		"organisation": map[string]any{
 			"id":         org.ID,
 			"name":       org.Name,
 			"created_at": org.CreatedAt.Format(time.RFC3339),
@@ -231,7 +231,7 @@ func (h *Handler) UsageHandler(w http.ResponseWriter, r *http.Request) {
 		Int("daily_limit", stats.DailyLimit).
 		Msg("Usage statistics retrieved")
 
-	WriteSuccess(w, r, map[string]interface{}{
+	WriteSuccess(w, r, map[string]any{
 		"usage": stats,
 	}, "Usage statistics retrieved successfully")
 }
@@ -278,7 +278,7 @@ func (h *Handler) PlansHandler(w http.ResponseWriter, r *http.Request) {
 		Int("plan_count", len(publicPlans)).
 		Msg("Plans retrieved")
 
-	WriteSuccess(w, r, map[string]interface{}{
+	WriteSuccess(w, r, map[string]any{
 		"plans": publicPlans,
 	}, "Plans retrieved successfully")
 }
@@ -320,9 +320,9 @@ func (h *Handler) OrganisationMembersHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	responseMembers := make([]map[string]interface{}, 0, len(members))
+	responseMembers := make([]map[string]any, 0, len(members))
 	for _, member := range members {
-		responseMembers = append(responseMembers, map[string]interface{}{
+		responseMembers = append(responseMembers, map[string]any{
 			"id":         member.UserID,
 			"email":      member.Email,
 			"full_name":  member.FullName,
@@ -331,7 +331,7 @@ func (h *Handler) OrganisationMembersHandler(w http.ResponseWriter, r *http.Requ
 		})
 	}
 
-	WriteSuccess(w, r, map[string]interface{}{
+	WriteSuccess(w, r, map[string]any{
 		"members":           responseMembers,
 		"current_user_id":   userClaims.UserID,
 		"current_user_role": currentRole,
@@ -389,7 +389,7 @@ func (h *Handler) OrganisationMemberHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	WriteSuccess(w, r, map[string]interface{}{
+	WriteSuccess(w, r, map[string]any{
 		"member_id": memberID,
 	}, "Organisation member removed successfully")
 }
@@ -448,8 +448,8 @@ func (h *Handler) OrganisationInvitePreviewHandler(w http.ResponseWriter, r *htt
 		}
 	}
 
-	WriteSuccess(w, r, map[string]interface{}{
-		"invite": map[string]interface{}{
+	WriteSuccess(w, r, map[string]any{
+		"invite": map[string]any{
 			"email":             invite.Email,
 			"role":              invite.Role,
 			"organisation_id":   invite.OrganisationID,
@@ -493,7 +493,7 @@ func (h *Handler) OrganisationInviteHandler(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	WriteSuccess(w, r, map[string]interface{}{
+	WriteSuccess(w, r, map[string]any{
 		"invite_id": inviteID,
 	}, "Invite revoked successfully")
 }
@@ -589,7 +589,7 @@ func (h *Handler) OrganisationInviteAcceptHandler(w http.ResponseWriter, r *http
 		activeOrganisationSet = true
 	}
 
-	responseData := map[string]interface{}{
+	responseData := map[string]any{
 		"organisation_id":              acceptedInvite.OrganisationID,
 		"role":                         acceptedInvite.Role,
 		"active_organisation_set":      activeOrganisationSet,
@@ -642,7 +642,7 @@ func (h *Handler) OrganisationPlanHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	WriteSuccess(w, r, map[string]interface{}{
+	WriteSuccess(w, r, map[string]any{
 		"plan_id": req.PlanID,
 	}, "Organisation plan updated successfully")
 }
@@ -676,16 +676,16 @@ func (h *Handler) UsageHistoryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response := make([]map[string]interface{}, 0, len(entries))
+	response := make([]map[string]any, 0, len(entries))
 	for _, entry := range entries {
-		response = append(response, map[string]interface{}{
+		response = append(response, map[string]any{
 			"usage_date":      entry.UsageDate.Format("2006-01-02"),
 			"pages_processed": entry.PagesProcessed,
 			"jobs_created":    entry.JobsCreated,
 		})
 	}
 
-	WriteSuccess(w, r, map[string]interface{}{
+	WriteSuccess(w, r, map[string]any{
 		"days":  days,
 		"usage": response,
 	}, "Usage history retrieved successfully")
@@ -718,11 +718,11 @@ func (h *Handler) listOrganisationInvites(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	responseInvites := make([]map[string]interface{}, 0, len(invites))
+	responseInvites := make([]map[string]any, 0, len(invites))
 	for _, invite := range invites {
 		inviteLink := buildInviteWelcomeURL(invite.Token)
 
-		responseInvites = append(responseInvites, map[string]interface{}{
+		responseInvites = append(responseInvites, map[string]any{
 			"id":          invite.ID,
 			"email":       invite.Email,
 			"role":        invite.Role,
@@ -732,7 +732,7 @@ func (h *Handler) listOrganisationInvites(w http.ResponseWriter, r *http.Request
 		})
 	}
 
-	WriteSuccess(w, r, map[string]interface{}{
+	WriteSuccess(w, r, map[string]any{
 		"invites": responseInvites,
 	}, "Organisation invites retrieved successfully")
 }
@@ -855,8 +855,8 @@ func (h *Handler) createOrganisationInvite(w http.ResponseWriter, r *http.Reques
 		}
 	}
 
-	WriteCreated(w, r, map[string]interface{}{
-		"invite": map[string]interface{}{
+	WriteCreated(w, r, map[string]any{
+		"invite": map[string]any{
 			"id":             invite.ID,
 			"email":          invite.Email,
 			"role":           invite.Role,

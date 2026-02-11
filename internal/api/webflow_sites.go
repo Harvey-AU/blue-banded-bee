@@ -454,15 +454,22 @@ func (h *Handler) updateSiteSchedule(w http.ResponseWriter, r *http.Request, sit
 		} else {
 			sourceType := "schedule_setup"
 			sourceDetail := fmt.Sprintf("Schedule enabled (%dh)", *req.ScheduleIntervalHours)
-			sourceInfoMap := map[string]interface{}{
-				"trigger":        "schedule_enabled",
-				"site_id":        siteID,
-				"site_name":      siteInfo.DisplayName,
-				"interval_hours": *req.ScheduleIntervalHours,
-				"scheduler_id":   schedulerID,
-				"enabled_at":     time.Now().UTC().Format(time.RFC3339),
+			sourceInfoPayload := struct {
+				Trigger       string `json:"trigger"`
+				SiteID        string `json:"site_id"`
+				SiteName      string `json:"site_name"`
+				IntervalHours int    `json:"interval_hours"`
+				SchedulerID   string `json:"scheduler_id"`
+				EnabledAt     string `json:"enabled_at"`
+			}{
+				Trigger:       "schedule_enabled",
+				SiteID:        siteID,
+				SiteName:      siteInfo.DisplayName,
+				IntervalHours: *req.ScheduleIntervalHours,
+				SchedulerID:   schedulerID,
+				EnabledAt:     time.Now().UTC().Format(time.RFC3339),
 			}
-			sourceInfoBytes, err := json.Marshal(sourceInfoMap)
+			sourceInfoBytes, err := json.Marshal(sourceInfoPayload)
 			if err != nil {
 				logger.Warn().Err(err).Msg("Failed to marshal source info for immediate job")
 			}
@@ -628,13 +635,18 @@ func (h *Handler) toggleSiteAutoPublish(w http.ResponseWriter, r *http.Request, 
 		} else {
 			sourceType := "auto_publish_setup"
 			sourceDetail := "Auto-publish enabled"
-			sourceInfoMap := map[string]interface{}{
-				"trigger":    "auto_publish_enabled",
-				"site_id":    siteID,
-				"site_name":  siteInfo.DisplayName,
-				"enabled_at": time.Now().UTC().Format(time.RFC3339),
+			sourceInfoPayload := struct {
+				Trigger   string `json:"trigger"`
+				SiteID    string `json:"site_id"`
+				SiteName  string `json:"site_name"`
+				EnabledAt string `json:"enabled_at"`
+			}{
+				Trigger:   "auto_publish_enabled",
+				SiteID:    siteID,
+				SiteName:  siteInfo.DisplayName,
+				EnabledAt: time.Now().UTC().Format(time.RFC3339),
 			}
-			sourceInfoBytes, err := json.Marshal(sourceInfoMap)
+			sourceInfoBytes, err := json.Marshal(sourceInfoPayload)
 			if err != nil {
 				logger.Warn().Err(err).Msg("Failed to marshal source info for immediate job")
 			}

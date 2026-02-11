@@ -47,7 +47,7 @@ func (m *MockAuthClient) CheckPermissions(ctx context.Context, userID string, or
 }
 
 // CreateUser mocks user registration functionality
-func (m *MockAuthClient) CreateUser(ctx context.Context, email string, password string, metadata map[string]interface{}) (*AuthUser, error) {
+func (m *MockAuthClient) CreateUser(ctx context.Context, email string, password string, metadata map[string]any) (*AuthUser, error) {
 	args := m.Called(ctx, email, password, metadata)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
@@ -72,14 +72,14 @@ func (m *MockAuthClient) SignOut(ctx context.Context, token string) error {
 
 // AuthUser represents an authenticated user for testing
 type AuthUser struct {
-	ID           string                 `json:"id"`
-	Email        string                 `json:"email"`
-	FullName     string                 `json:"full_name,omitempty"`
-	Metadata     map[string]interface{} `json:"user_metadata,omitempty"`
-	AppMetadata  map[string]interface{} `json:"app_metadata,omitempty"`
-	CreatedAt    string                 `json:"created_at"`
-	UpdatedAt    string                 `json:"updated_at"`
-	LastSignInAt string                 `json:"last_sign_in_at,omitempty"`
+	ID           string         `json:"id"`
+	Email        string         `json:"email"`
+	FullName     string         `json:"full_name,omitempty"`
+	Metadata     map[string]any `json:"user_metadata,omitempty"`
+	AppMetadata  map[string]any `json:"app_metadata,omitempty"`
+	CreatedAt    string         `json:"created_at"`
+	UpdatedAt    string         `json:"updated_at"`
+	LastSignInAt string         `json:"last_sign_in_at,omitempty"`
 }
 
 // TokenResponse represents authentication tokens for testing
@@ -93,16 +93,16 @@ type TokenResponse struct {
 
 // UserClaims represents JWT token claims for testing
 type UserClaims struct {
-	Sub           string                 `json:"sub"`   // User ID
-	Email         string                 `json:"email"` // User email
-	EmailVerified bool                   `json:"email_verified"`
-	Role          string                 `json:"role,omitempty"`
-	UserMetadata  map[string]interface{} `json:"user_metadata,omitempty"`
-	AppMetadata   map[string]interface{} `json:"app_metadata,omitempty"`
-	Aud           string                 `json:"aud"` // Audience
-	Iss           string                 `json:"iss"` // Issuer
-	Iat           int64                  `json:"iat"` // Issued at
-	Exp           int64                  `json:"exp"` // Expires at
+	Sub           string         `json:"sub"`   // User ID
+	Email         string         `json:"email"` // User email
+	EmailVerified bool           `json:"email_verified"`
+	Role          string         `json:"role,omitempty"`
+	UserMetadata  map[string]any `json:"user_metadata,omitempty"`
+	AppMetadata   map[string]any `json:"app_metadata,omitempty"`
+	Aud           string         `json:"aud"` // Audience
+	Iss           string         `json:"iss"` // Issuer
+	Iat           int64          `json:"iat"` // Issued at
+	Exp           int64          `json:"exp"` // Expires at
 }
 
 // MockSupabaseClient is a mock for Supabase authentication client
@@ -154,7 +154,7 @@ type AuthClientInterface interface {
 	RefreshToken(ctx context.Context, refreshToken string) (*TokenResponse, error)
 	GetUserClaims(ctx context.Context, token string) (*UserClaims, error)
 	CheckPermissions(ctx context.Context, userID string, orgID string, permission string) (bool, error)
-	CreateUser(ctx context.Context, email string, password string, metadata map[string]interface{}) (*AuthUser, error)
+	CreateUser(ctx context.Context, email string, password string, metadata map[string]any) (*AuthUser, error)
 	SignIn(ctx context.Context, email string, password string) (*TokenResponse, error)
 	SignOut(ctx context.Context, token string) error
 }

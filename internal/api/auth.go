@@ -125,7 +125,7 @@ func (h *Handler) AuthRegister(w http.ResponseWriter, r *http.Request) {
 		UpdatedAt: org.UpdatedAt.Format("2006-01-02T15:04:05Z"),
 	}
 
-	WriteCreated(w, r, map[string]interface{}{
+	WriteCreated(w, r, map[string]any{
 		"user":         userResp,
 		"organisation": orgResp,
 	}, "User registered successfully")
@@ -186,7 +186,7 @@ func (h *Handler) AuthProfile(w http.ResponseWriter, r *http.Request) {
 		UpdatedAt:      user.UpdatedAt.Format("2006-01-02T15:04:05Z"),
 	}
 
-	response := map[string]interface{}{
+	response := map[string]any{
 		"user": userResp,
 	}
 

@@ -26,11 +26,11 @@ type Notification struct {
 	OrganisationID   string
 	UserID           *string // nil for org-wide notifications
 	Type             NotificationType
-	Subject          string                 // Main heading (e.g., "✅ Job completed: example.com")
-	Preview          string                 // Short summary for previews/toasts
-	Message          string                 // Full details (optional)
-	Link             string                 // URL path to view details (e.g., "/jobs/abc-123")
-	Data             map[string]interface{} // Additional structured data
+	Subject          string         // Main heading (e.g., "✅ Job completed: example.com")
+	Preview          string         // Short summary for previews/toasts
+	Message          string         // Full details (optional)
+	Link             string         // URL path to view details (e.g., "/jobs/abc-123")
+	Data             map[string]any // Additional structured data
 	ReadAt           *time.Time
 	SlackDeliveredAt *time.Time
 	EmailDeliveredAt *time.Time
@@ -109,7 +109,7 @@ func (db *DB) GetNotification(ctx context.Context, notificationID string) (*Noti
 // ListNotifications retrieves notifications for an organisation
 func (db *DB) ListNotifications(ctx context.Context, organisationID string, limit, offset int, unreadOnly bool) ([]*Notification, int, error) {
 	var whereClause string
-	args := []interface{}{organisationID}
+	args := []any{organisationID}
 	argIndex := 2
 
 	if unreadOnly {
@@ -180,7 +180,7 @@ func (db *DB) ListNotifications(ctx context.Context, organisationID string, limi
 			n.EmailDeliveredAt = &emailDeliveredAt.Time
 		}
 		if dataJSON != nil {
-			n.Data = make(map[string]interface{})
+			n.Data = make(map[string]any)
 			if err := json.Unmarshal(dataJSON, &n.Data); err != nil {
 				log.Warn().Err(err).Str("notification_id", n.ID).Msg("Failed to unmarshal notification data")
 			}
@@ -291,7 +291,7 @@ func (db *DB) GetPendingSlackNotifications(ctx context.Context, limit int) ([]*N
 			n.EmailDeliveredAt = &emailDeliveredAt.Time
 		}
 		if dataJSON != nil {
-			n.Data = make(map[string]interface{})
+			n.Data = make(map[string]any)
 			if err := json.Unmarshal(dataJSON, &n.Data); err != nil {
 				log.Warn().Err(err).Str("notification_id", n.ID).Msg("Failed to unmarshal notification data")
 			}

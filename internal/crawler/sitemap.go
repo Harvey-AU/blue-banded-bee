@@ -342,14 +342,6 @@ func extractURLsFromXML(content, startTag, endTag, locStartTag, locEndTag string
 	return urls
 }
 
-// min returns the smaller of a and b
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
 // FilterURLs filters URLs based on include/exclude patterns
 func (c *Crawler) FilterURLs(urls []string, includePaths, excludePaths []string) []string {
 	if len(includePaths) == 0 && len(excludePaths) == 0 {

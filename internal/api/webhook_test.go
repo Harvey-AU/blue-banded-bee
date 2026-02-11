@@ -18,14 +18,14 @@ func TestWebhookSignatureValidation(t *testing.T) {
 
 	tests := []struct {
 		name           string
-		payload        map[string]interface{}
+		payload        map[string]any
 		signature      string
 		expectedStatus int
 		description    string
 	}{
 		{
 			name: "valid_signature",
-			payload: map[string]interface{}{
+			payload: map[string]any{
 				"site":  "example.com",
 				"event": "site_publish",
 			},
@@ -35,7 +35,7 @@ func TestWebhookSignatureValidation(t *testing.T) {
 		},
 		{
 			name: "invalid_signature",
-			payload: map[string]interface{}{
+			payload: map[string]any{
 				"site":  "example.com",
 				"event": "site_publish",
 			},
@@ -45,7 +45,7 @@ func TestWebhookSignatureValidation(t *testing.T) {
 		},
 		{
 			name: "missing_signature",
-			payload: map[string]interface{}{
+			payload: map[string]any{
 				"site":  "example.com",
 				"event": "site_publish",
 			},
@@ -105,14 +105,14 @@ func TestWebhookSignatureValidation(t *testing.T) {
 func TestWebhookPayloadParsing(t *testing.T) {
 	tests := []struct {
 		name           string
-		payload        interface{}
+		payload        any
 		contentType    string
 		expectedStatus int
 		description    string
 	}{
 		{
 			name: "valid_json",
-			payload: map[string]interface{}{
+			payload: map[string]any{
 				"site":  "example.com",
 				"event": "site_publish",
 			},
@@ -129,7 +129,7 @@ func TestWebhookPayloadParsing(t *testing.T) {
 		},
 		{
 			name: "missing_required_fields",
-			payload: map[string]interface{}{
+			payload: map[string]any{
 				"event": "site_publish",
 				// Missing 'site' field
 			},
@@ -139,7 +139,7 @@ func TestWebhookPayloadParsing(t *testing.T) {
 		},
 		{
 			name: "wrong_content_type",
-			payload: map[string]interface{}{
+			payload: map[string]any{
 				"site": "example.com",
 			},
 			contentType:    "text/plain",
@@ -162,7 +162,7 @@ func TestWebhookPayloadParsing(t *testing.T) {
 			switch v := tt.payload.(type) {
 			case string:
 				body = []byte(v)
-			case map[string]interface{}:
+			case map[string]any:
 				body, _ = json.Marshal(v)
 			default:
 				body = []byte{}
@@ -183,7 +183,7 @@ func TestWebhookPayloadParsing(t *testing.T) {
 				}
 
 				// Try to parse JSON
-				var payload map[string]interface{}
+				var payload map[string]any
 				if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 					w.WriteHeader(http.StatusBadRequest)
 					_ = json.NewEncoder(w).Encode(map[string]string{"error": "Invalid JSON"})
@@ -239,7 +239,7 @@ func TestWebhookDuplication(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			payload := map[string]interface{}{
+			payload := map[string]any{
 				"id":    tt.webhookID,
 				"site":  "example.com",
 				"event": "site_publish",
@@ -253,7 +253,7 @@ func TestWebhookDuplication(t *testing.T) {
 
 			// Mock handler with deduplication
 			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				var p map[string]interface{}
+				var p map[string]any
 				_ = json.NewDecoder(r.Body).Decode(&p)
 
 				webhookID, _ := p["id"].(string)
@@ -325,7 +325,7 @@ func TestWebhookTokenAuthentication(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			payload := map[string]interface{}{
+			payload := map[string]any{
 				"site":  "example.com",
 				"event": "site_publish",
 			}
@@ -403,7 +403,7 @@ func TestWebhookRateLimit(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			payload := map[string]interface{}{
+			payload := map[string]any{
 				"site":  "example.com",
 				"event": "site_publish",
 			}

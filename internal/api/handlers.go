@@ -66,7 +66,7 @@ func buildConfigSnippet() ([]byte, error) {
 	if !validKey {
 		log.Warn().Msg("SUPABASE_PUBLISHABLE_KEY has unexpected format; proceeding anyway")
 	}
-	config := map[string]interface{}{
+	config := map[string]any{
 		"supabaseUrl":     authURL,
 		"supabaseAnonKey": key,
 	}
@@ -89,7 +89,7 @@ func buildConfigSnippet() ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal config: %w", err)
 	}
-	return []byte(fmt.Sprintf("window.BBB_CONFIG=%s;", bytes)), nil
+	return fmt.Appendf(nil, "window.BBB_CONFIG=%s;", bytes), nil
 }
 
 // DBClient is an interface for database operations
@@ -636,7 +636,7 @@ func (h *Handler) DashboardStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	WriteSuccess(w, r, map[string]interface{}{
+	WriteSuccess(w, r, map[string]any{
 		"total_jobs":          stats.TotalJobs,
 		"running_jobs":        stats.RunningJobs,
 		"completed_jobs":      stats.CompletedJobs,
@@ -682,7 +682,7 @@ func (h *Handler) DashboardActivity(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	WriteSuccess(w, r, map[string]interface{}{
+	WriteSuccess(w, r, map[string]any{
 		"activity":     activity,
 		"date_range":   dateRange,
 		"period_start": startDate,
@@ -817,7 +817,7 @@ func (h *Handler) DashboardSlowPages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	WriteSuccess(w, r, map[string]interface{}{
+	WriteSuccess(w, r, map[string]any{
 		"slow_pages":   slowPages,
 		"date_range":   dateRange,
 		"period_start": startDate,
@@ -859,7 +859,7 @@ func (h *Handler) DashboardExternalRedirects(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	WriteSuccess(w, r, map[string]interface{}{
+	WriteSuccess(w, r, map[string]any{
 		"external_redirects": redirects,
 		"date_range":         dateRange,
 		"period_start":       startDate,
@@ -1028,10 +1028,7 @@ func (h *Handler) WebflowWebhook(w http.ResponseWriter, r *http.Request) {
 			BadRequest(w, r, "concurrency must be a positive integer")
 			return
 		}
-		concurrency = parsed
-		if concurrency > 100 {
-			concurrency = 100
-		}
+		concurrency = min(parsed, 100)
 	}
 	maxPages := 0 // Unlimited pages for webhook-triggered jobs
 	sourceType := "webflow_webhook"
@@ -1078,7 +1075,7 @@ func (h *Handler) WebflowWebhook(w http.ResponseWriter, r *http.Request) {
 		Str("selected_from", strings.Join(payload.Payload.Domains, ", ")).
 		Msg("Successfully created and started job from Webflow webhook")
 
-	WriteSuccess(w, r, map[string]interface{}{
+	WriteSuccess(w, r, map[string]any{
 		"job_id":  job.ID,
 		"user_id": user.ID,
 		"org_id":  orgID,
