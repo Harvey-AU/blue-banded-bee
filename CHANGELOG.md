@@ -29,6 +29,26 @@ On merge, CI will:
 
 ## [Unreleased]
 
+### Changed
+
+- **Go 1.26 Toolchain Upgrade**: Upgraded runtime and build tooling to Go 1.26.0
+  across `go.mod`, Docker builder image, and GitHub Actions workflows to keep
+  local, CI, and deploy environments aligned.
+- **Go Modernisation Pass**: Applied Go 1.26 modernisers (`go fix`) in queue and
+  worker hot paths, simplifying clamp/loop patterns while preserving existing
+  behaviour.
+- **Google API Response Typing**: Replaced remaining `map[string]any` success
+  payloads in Google integration handlers/tests with typed response structs for
+  stronger type intent and safer assertions.
+
+### Fixed
+
+- **Notification Listener Resilience**: Added panic recovery around the
+  background notification listener goroutine to prevent a single panic from
+  taking down the process.
+- **CI Lint Compatibility**: Upgraded `golangci-lint` in CI to `v2.9.0` so lint
+  runs correctly against Go 1.26 targets.
+
 ## [0.26.3] – 2026-02-07
 
 ### Fixed
