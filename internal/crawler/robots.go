@@ -270,8 +270,8 @@ func IsPathAllowed(rules *RobotsRules, path string) bool {
 // Supports * wildcard and $ end-of-URL marker
 func matchesRobotsPattern(path, pattern string) bool {
 	// Handle $ end marker
-	if strings.HasSuffix(pattern, "$") {
-		pattern = strings.TrimSuffix(pattern, "$")
+	if before, ok := strings.CutSuffix(pattern, "$"); ok {
+		pattern = before
 		// For exact end matching, the path must exactly match the pattern
 		return path == pattern
 	}

@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-- **Go 1.25** - We use Go 1.25 for advanced features (see
+- **Go 1.26** - We use Go 1.26 for advanced features (see
   [Go 1.25 Plan](./plans/_archive/go-1.25.md))
 - **Docker Desktop** - Required for local Supabase instance
   ([Download here](https://docs.docker.com/desktop/))
@@ -310,7 +310,7 @@ standards across the codebase.
 
 #### CI Linting (Enforced)
 
-Our **GitHub Actions CI** runs golangci-lint v1.59.0 with Go 1.25 support:
+Our **GitHub Actions CI** runs golangci-lint v1.59.0 with Go 1.26 support:
 
 - **Runs automatically** on every push/PR
 - **Blocks merges** if linting fails
@@ -352,14 +352,14 @@ go test -v -coverprofile=coverage.out ./...
 
 #### Running golangci-lint Locally
 
-If your local golangci-lint doesn't support Go 1.25, use Docker:
+If your local golangci-lint doesn't support Go 1.26, use Docker:
 
 ```bash
 # Run linting via Docker (recommended)
 docker run --rm -v "$(pwd)":/workspace -w /workspace \
   golangci/golangci-lint:v1.59.0 golangci-lint run
 
-# Or install Go 1.25-compatible version
+# Or install Go 1.26-compatible version
 brew upgrade golangci-lint  # macOS
 # Then run: golangci-lint run
 ```

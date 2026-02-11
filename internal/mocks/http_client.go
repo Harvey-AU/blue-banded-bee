@@ -31,7 +31,7 @@ func (m *MockHTTPClient) Get(url string) (*http.Response, error) {
 }
 
 // Post mocks the Post method of http.Client
-func (m *MockHTTPClient) Post(url, contentType string, body interface{}) (*http.Response, error) {
+func (m *MockHTTPClient) Post(url, contentType string, body any) (*http.Response, error) {
 	args := m.Called(url, contentType, body)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
@@ -40,7 +40,7 @@ func (m *MockHTTPClient) Post(url, contentType string, body interface{}) (*http.
 }
 
 // PostForm mocks the PostForm method of http.Client
-func (m *MockHTTPClient) PostForm(url string, data interface{}) (*http.Response, error) {
+func (m *MockHTTPClient) PostForm(url string, data any) (*http.Response, error) {
 	args := m.Called(url, data)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
@@ -75,8 +75,8 @@ func (m *MockRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) 
 type HTTPClientInterface interface {
 	Do(req *http.Request) (*http.Response, error)
 	Get(url string) (*http.Response, error)
-	Post(url, contentType string, body interface{}) (*http.Response, error)
-	PostForm(url string, data interface{}) (*http.Response, error)
+	Post(url, contentType string, body any) (*http.Response, error)
+	PostForm(url string, data any) (*http.Response, error)
 	Head(url string) (*http.Response, error)
 }
 

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/Harvey-AU/blue-banded-bee/internal/cache"
@@ -37,7 +38,7 @@ func BenchmarkCacheConcurrentAccess(b *testing.B) {
 	c := cache.NewInMemoryCache()
 
 	// Pre-populate cache
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		c.Set(string(rune(i)), i)
 	}
 
@@ -95,9 +96,9 @@ func BenchmarkConstructURL(b *testing.B) {
 
 // Benchmark response helpers - hot path for API responses
 func BenchmarkJSONResponse(b *testing.B) {
-	data := map[string]interface{}{
+	data := map[string]any{
 		"status": "success",
-		"data": map[string]interface{}{
+		"data": map[string]any{
 			"id":      123,
 			"name":    "Test",
 			"items":   []int{1, 2, 3, 4, 5},
@@ -201,11 +202,11 @@ func BenchmarkStringBuilder(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		result := ""
+		var result strings.Builder
 		for _, part := range parts {
-			result += part
+			result.WriteString(part)
 		}
-		_ = result
+		_ = result.String()
 	}
 }
 
@@ -219,7 +220,7 @@ func BenchmarkUUIDGeneration(b *testing.B) {
 
 // Benchmark map operations - used in various places
 func BenchmarkMapSet(b *testing.B) {
-	m := make(map[string]interface{})
+	m := make(map[string]any)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -228,8 +229,8 @@ func BenchmarkMapSet(b *testing.B) {
 }
 
 func BenchmarkMapGet(b *testing.B) {
-	m := make(map[string]interface{})
-	for i := 0; i < 1000; i++ {
+	m := make(map[string]any)
+	for i := range 1000 {
 		m[string(rune(i))] = i
 	}
 
@@ -240,8 +241,8 @@ func BenchmarkMapGet(b *testing.B) {
 }
 
 func BenchmarkMapConcurrent(b *testing.B) {
-	m := make(map[string]interface{})
-	for i := 0; i < 100; i++ {
+	m := make(map[string]any)
+	for i := range 100 {
 		m[string(rune(i))] = i
 	}
 
@@ -261,10 +262,10 @@ func BenchmarkMapConcurrent(b *testing.B) {
 }
 
 // Helper functions for benchmarks
-func respondWithSuccess(w http.ResponseWriter, data interface{}) {
+func respondWithSuccess(w http.ResponseWriter, data any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	json.NewEncoder(w).Encode(map[string]any{
 		"success": true,
 		"data":    data,
 	})
@@ -273,7 +274,7 @@ func respondWithSuccess(w http.ResponseWriter, data interface{}) {
 func respondWithError(w http.ResponseWriter, code int, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	json.NewEncoder(w).Encode(map[string]any{
 		"success": false,
 		"error":   message,
 	})

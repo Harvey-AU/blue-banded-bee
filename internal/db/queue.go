@@ -90,20 +90,14 @@ func NewDbQueue(db *DB) *DbQueue {
 	queueLimit := parseIntEnv("DB_QUEUE_MAX_CONCURRENCY", defaultQueueConcurrency)
 	txRetries := parseIntEnv("DB_TX_MAX_RETRIES", defaultTxRetries)
 	baseDelay := parseDurationEnvMS("DB_TX_BACKOFF_BASE_MS", defaultRetryBaseDelay)
-	maxDelay := parseDurationEnvMS("DB_TX_BACKOFF_MAX_MS", defaultRetryMaxDelay)
-	if maxDelay < baseDelay {
-		maxDelay = baseDelay
-	}
+	maxDelay := max(parseDurationEnvMS("DB_TX_BACKOFF_MAX_MS", defaultRetryMaxDelay), baseDelay)
 
 	var semaphore chan struct{}
 	maxConcurrent := queueLimit
 	if db != nil && db.config != nil {
 		maxOpen := db.config.MaxOpenConns
 		if maxOpen > 0 {
-			poolCapacity := maxOpen - reserve
-			if poolCapacity < 1 {
-				poolCapacity = 1
-			}
+			poolCapacity := max(maxOpen-reserve, 1)
 			if queueLimit > 0 && queueLimit < poolCapacity {
 				maxConcurrent = queueLimit
 			} else {
@@ -192,10 +186,7 @@ func (q *DbQueue) Execute(ctx context.Context, fn func(*sql.Tx) error) error {
 		defer cancel()
 	}
 
-	maxAttempts := q.maxTxRetries
-	if maxAttempts < 1 {
-		maxAttempts = 1
-	}
+	maxAttempts := max(q.maxTxRetries, 1)
 
 	var lastErr error
 	var poolWaitTotal time.Duration
@@ -322,10 +313,7 @@ func (q *DbQueue) ExecuteWithContext(ctx context.Context, fn func(context.Contex
 		defer cancel()
 	}
 
-	maxAttempts := q.maxTxRetries
-	if maxAttempts < 1 {
-		maxAttempts = 1
-	}
+	maxAttempts := max(q.maxTxRetries, 1)
 
 	var lastErr error
 	var poolWaitTotal time.Duration
@@ -679,10 +667,7 @@ func (q *DbQueue) computeBackoff(attempt int) time.Duration {
 	}
 
 	factor := 1 << attempt
-	delay := time.Duration(factor) * base
-	if delay > max {
-		delay = max
-	}
+	delay := min(time.Duration(factor)*base, max)
 
 	jitterRange := delay / 5
 	if jitterRange <= 0 {
@@ -808,7 +793,7 @@ func (q *DbQueue) ensurePoolCapacity(ctx context.Context) (func(), error) {
 			scope.SetLevel(sentry.LevelWarning)
 			scope.SetTag("event_type", "db_pool")
 			scope.SetTag("state", "queue")
-			scope.SetContext("db_pool", map[string]interface{}{
+			scope.SetContext("db_pool", map[string]any{
 				"in_use":     stats.InUse,
 				"max_open":   maxOpen,
 				"reserved":   q.preserveConnections,
@@ -917,7 +902,7 @@ func (q *DbQueue) GetNextTask(ctx context.Context, jobID string) (*Task, error) 
 		`
 
 		// Add job filter if specified
-		args := []interface{}{now}
+		args := []any{now}
 		if jobID != "" {
 			query += " AND t.job_id = $2"
 			args = append(args, jobID)
@@ -1151,18 +1136,12 @@ func calculateAvailableSlots(
 	if !effectiveConcurrency.Valid || effectiveConcurrency.Int64 == 0 {
 		// Even for unlimited concurrency jobs, cap pending queue to prevent flooding
 		used := runningTasks + pendingTaskCount
-		slots = maxPendingQueueSize - used
-		if slots < 0 {
-			slots = 0
-		}
+		slots = max(maxPendingQueueSize-used, 0)
 	} else {
 		// Capacity = concurrency - (running + existing_pending)
 		capacity := int(effectiveConcurrency.Int64)
 		used := runningTasks + pendingTaskCount
-		slots = capacity - used
-		if slots < 0 {
-			slots = 0
-		}
+		slots = max(capacity-used, 0)
 	}
 
 	// Cap available slots by daily quota remaining (if org has quota system)

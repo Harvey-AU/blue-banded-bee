@@ -21,14 +21,14 @@ func TestJWTTokenValidation(t *testing.T) {
 		name           string
 		token          string
 		expectedValid  bool
-		expectedClaims map[string]interface{}
+		expectedClaims map[string]any
 		description    string
 	}{
 		{
 			name:          "valid_token",
 			token:         createTestToken(secret, jwt.MapClaims{"sub": "user123", "exp": time.Now().Add(time.Hour).Unix()}),
 			expectedValid: true,
-			expectedClaims: map[string]interface{}{
+			expectedClaims: map[string]any{
 				"sub": "user123",
 			},
 			description: "Valid token should pass validation",
@@ -385,14 +385,14 @@ func TestOrganisationRolePermissions(t *testing.T) {
 func TestClaimsFromContext(t *testing.T) {
 	tests := []struct {
 		name          string
-		claims        interface{}
+		claims        any
 		expectedUser  string
 		expectedError bool
 		description   string
 	}{
 		{
 			name: "valid_claims_in_context",
-			claims: map[string]interface{}{
+			claims: map[string]any{
 				"sub":  "user123",
 				"role": "admin",
 			},
@@ -409,7 +409,7 @@ func TestClaimsFromContext(t *testing.T) {
 		},
 		{
 			name:          "empty_claims",
-			claims:        map[string]interface{}{},
+			claims:        map[string]any{},
 			expectedUser:  "",
 			expectedError: true,
 			description:   "Should error on empty claims",
@@ -431,7 +431,7 @@ func TestClaimsFromContext(t *testing.T) {
 			}
 
 			// Mock extraction
-			if claims, ok := ctx.Value(claimsKey).(map[string]interface{}); ok {
+			if claims, ok := ctx.Value(claimsKey).(map[string]any); ok {
 				if sub, ok := claims["sub"].(string); ok {
 					assert.Equal(t, tt.expectedUser, sub, tt.description)
 				} else {
@@ -453,7 +453,7 @@ func createTestToken(secret string, claims jwt.MapClaims) string {
 }
 
 func validateTestToken(tokenString, secret string) bool {
-	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (any, error) {
 		return []byte(secret), nil
 	})
 
@@ -465,7 +465,7 @@ func validateTestToken(tokenString, secret string) bool {
 }
 
 func parseTestToken(tokenString, secret string) jwt.MapClaims {
-	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (any, error) {
 		return []byte(secret), nil
 	})
 

@@ -165,10 +165,7 @@ func (h *Handler) createScheduler(w http.ResponseWriter, r *http.Request) {
 	// Set defaults
 	concurrency := 20
 	if req.Concurrency != nil && *req.Concurrency > 0 {
-		concurrency = *req.Concurrency
-		if concurrency > 100 {
-			concurrency = 100
-		}
+		concurrency = min(*req.Concurrency, 100)
 	}
 
 	findLinks := true
@@ -547,9 +544,9 @@ func (h *Handler) getSchedulerJobs(w http.ResponseWriter, r *http.Request, sched
 		return
 	}
 
-	response := map[string]interface{}{
+	response := map[string]any{
 		"jobs": jobs,
-		"pagination": map[string]interface{}{
+		"pagination": map[string]any{
 			"limit":    limit,
 			"offset":   offset,
 			"total":    total,

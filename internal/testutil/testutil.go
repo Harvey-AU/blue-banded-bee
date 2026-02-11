@@ -45,7 +45,7 @@ func findEnvTestFile() string {
 	dir, _ := os.Getwd()
 
 	// Search up to 5 levels up
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		envPath := filepath.Join(dir, ".env.test")
 		if _, err := os.Stat(envPath); err == nil {
 			return envPath

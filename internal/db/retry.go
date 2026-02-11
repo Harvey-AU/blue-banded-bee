@@ -92,10 +92,7 @@ func InitFromEnvWithRetryConfig(ctx context.Context, retryConfig RetryConfig) (*
 		}
 
 		// Calculate next backoff with exponential increase
-		backoff = time.Duration(float64(backoff) * retryConfig.Multiplier)
-		if backoff > retryConfig.MaxInterval {
-			backoff = retryConfig.MaxInterval
-		}
+		backoff = min(time.Duration(float64(backoff)*retryConfig.Multiplier), retryConfig.MaxInterval)
 
 		// Add jitter to prevent thundering herd
 		if retryConfig.Jitter {
@@ -194,10 +191,7 @@ func InitFromURLWithSuffixRetry(ctx context.Context, databaseURL string, appEnv 
 		}
 
 		// Calculate next backoff with exponential increase
-		backoff = time.Duration(float64(backoff) * config.Multiplier)
-		if backoff > config.MaxInterval {
-			backoff = config.MaxInterval
-		}
+		backoff = min(time.Duration(float64(backoff)*config.Multiplier), config.MaxInterval)
 
 		// Add jitter to prevent thundering herd
 		if config.Jitter {

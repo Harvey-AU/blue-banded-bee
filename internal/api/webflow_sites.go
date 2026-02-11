@@ -454,7 +454,7 @@ func (h *Handler) updateSiteSchedule(w http.ResponseWriter, r *http.Request, sit
 		} else {
 			sourceType := "schedule_setup"
 			sourceDetail := fmt.Sprintf("Schedule enabled (%dh)", *req.ScheduleIntervalHours)
-			sourceInfoMap := map[string]interface{}{
+			sourceInfoMap := map[string]any{
 				"trigger":        "schedule_enabled",
 				"site_id":        siteID,
 				"site_name":      siteInfo.DisplayName,
@@ -628,7 +628,7 @@ func (h *Handler) toggleSiteAutoPublish(w http.ResponseWriter, r *http.Request, 
 		} else {
 			sourceType := "auto_publish_setup"
 			sourceDetail := "Auto-publish enabled"
-			sourceInfoMap := map[string]interface{}{
+			sourceInfoMap := map[string]any{
 				"trigger":    "auto_publish_enabled",
 				"site_id":    siteID,
 				"site_name":  siteInfo.DisplayName,

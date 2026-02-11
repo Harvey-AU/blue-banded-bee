@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -163,8 +164,8 @@ func deriveOrganisationName(email string, fullName *string) string {
 	// Remove TLDs (.com, .co.uk, .com.au, etc.)
 	suffixes := []string{".com.au", ".co.uk", ".co.nz", ".com", ".co", ".net", ".org", ".io", ".ai", ".dev"}
 	for _, suffix := range suffixes {
-		if strings.HasSuffix(orgName, suffix) {
-			orgName = strings.TrimSuffix(orgName, suffix)
+		if before, ok := strings.CutSuffix(orgName, suffix); ok {
+			orgName = before
 			break
 		}
 	}
@@ -198,13 +199,7 @@ func isBusinessEmail(email string) bool {
 
 	domain := strings.ToLower(email[atIndex+1:])
 
-	for _, provider := range personalProviders {
-		if domain == provider {
-			return false
-		}
-	}
-
-	return true
+	return !slices.Contains(personalProviders, domain)
 }
 
 // titleCaseEmailPrefix converts email prefix to title case

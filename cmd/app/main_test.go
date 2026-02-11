@@ -74,7 +74,7 @@ func TestRateLimiter(t *testing.T) {
 	req1.Header.Set("X-Forwarded-For", "192.168.1.1")
 
 	// Test basic allowance - should allow up to burst capacity (10)
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		ip := getClientIP(req1)
 		rLimiter := limiter.getLimiter(ip)
 		if !rLimiter.Allow() {

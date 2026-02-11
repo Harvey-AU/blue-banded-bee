@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"math"
 	"math/rand"
 	"net/http"
@@ -247,7 +248,7 @@ func (wp *WorkerPool) loadJobInfo(ctx context.Context, jobID string, options *Jo
 
 	observability.RecordJobInfoCacheMiss(ctx, jobID)
 
-	val, err, _ := wp.jobInfoGroup.Do(jobID, func() (interface{}, error) {
+	val, err, _ := wp.jobInfoGroup.Do(jobID, func() (any, error) {
 		info, fetchErr := wp.fetchJobInfoFromDB(ctx, jobID)
 		if fetchErr != nil {
 			return nil, fetchErr
@@ -453,7 +454,7 @@ func NewWorkerPool(sqlDB *sql.DB, dbQueue DbQueueInterface, crawler CrawlerInter
 	// Initialise per-worker structures for concurrency control
 	workerSemaphores := make([]chan struct{}, numWorkers)
 	workerWaitGroups := make([]*sync.WaitGroup, numWorkers)
-	for i := 0; i < numWorkers; i++ {
+	for i := range numWorkers {
 		workerSemaphores[i] = make(chan struct{}, workerConcurrency)
 		workerWaitGroups[i] = &sync.WaitGroup{}
 	}
@@ -464,10 +465,7 @@ func NewWorkerPool(sqlDB *sql.DB, dbQueue DbQueueInterface, crawler CrawlerInter
 	probeInterval := probeIntervalFromEnv()
 	runningTaskBatchSize := runningTaskBatchSizeFromEnv()
 	runningTaskFlushInterval := runningTaskFlushIntervalFromEnv()
-	runningTaskBuffer := numWorkers * workerConcurrency * 2
-	if runningTaskBuffer < 64 {
-		runningTaskBuffer = 64
-	}
+	runningTaskBuffer := max(numWorkers*workerConcurrency*2, 64)
 
 	wp := &WorkerPool{
 		db:              sqlDB,
@@ -543,11 +541,9 @@ func NewWorkerPool(sqlDB *sql.DB, dbQueue DbQueueInterface, crawler CrawlerInter
 
 	// Start the notification listener when we have connection details available.
 	if hasNotificationConfig(dbConfig) {
-		wp.wg.Add(1)
-		go func() {
-			defer wp.wg.Done()
+		wp.wg.Go(func() {
 			wp.listenForNotifications(context.Background())
-		}()
+		})
 	} else {
 		log.Debug().Msg("Skipping LISTEN/NOTIFY setup: database config lacks connection details")
 	}
@@ -570,20 +566,16 @@ func (wp *WorkerPool) Start(ctx context.Context) {
 
 	for i := 0; i < wp.numWorkers; i++ {
 		i := i
-		wp.wg.Add(1)
-		go func() {
-			defer wp.wg.Done()
+		wp.wg.Go(func() {
 			time.Sleep(time.Duration(i*50) * time.Millisecond)
 			wp.worker(ctx, i)
-		}()
+		})
 	}
 
 	// Start the recovery monitor
-	wp.wg.Add(1)
-	go func() {
-		defer wp.wg.Done()
+	wp.wg.Go(func() {
 		wp.recoveryMonitor(ctx)
-	}()
+	})
 
 	// Run initial cleanup
 	if err := wp.CleanupStuckJobs(ctx); err != nil {
@@ -603,11 +595,9 @@ func (wp *WorkerPool) Start(ctx context.Context) {
 	wp.startRunningTaskReleaseLoop(ctx)
 
 	// Start orphaned task cleanup loop
-	wp.wg.Add(1)
-	go func() {
-		defer wp.wg.Done()
+	wp.wg.Go(func() {
 		wp.cleanupOrphanedTasksLoop(ctx)
-	}()
+	})
 }
 
 func (wp *WorkerPool) Stop() {
@@ -988,10 +978,7 @@ func (wp *WorkerPool) calculateConcurrencyTarget() int {
 	wp.jobsMutex.RUnlock()
 
 	if len(jobIDs) == 0 {
-		target := wp.baseWorkerCount
-		if target > wp.maxWorkers {
-			target = wp.maxWorkers
-		}
+		target := min(wp.baseWorkerCount, wp.maxWorkers)
 		return target
 	}
 
@@ -1017,15 +1004,9 @@ func (wp *WorkerPool) calculateConcurrencyTarget() int {
 	}
 	wp.jobInfoMutex.RUnlock()
 
-	perWorkerConcurrency := wp.workerConcurrency
-	if perWorkerConcurrency < 1 {
-		perWorkerConcurrency = 1
-	}
+	perWorkerConcurrency := max(wp.workerConcurrency, 1)
 
-	target := int(math.Ceil(float64(totalConcurrency) / float64(perWorkerConcurrency) * concurrencyBufferFactor))
-	if target < wp.baseWorkerCount {
-		target = wp.baseWorkerCount
-	}
+	target := max(int(math.Ceil(float64(totalConcurrency)/float64(perWorkerConcurrency)*concurrencyBufferFactor)), wp.baseWorkerCount)
 	if target > wp.maxWorkers {
 		target = wp.maxWorkers
 	}
@@ -1368,9 +1349,7 @@ func (wp *WorkerPool) worker(ctx context.Context, workerID int) {
 		select {
 		case sem <- struct{}{}:
 			// Successfully acquired slot, launch goroutine to process task
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
+			wg.Go(func() {
 				defer func() {
 					<-sem // Release semaphore slot
 					observability.RecordWorkerConcurrency(workerCtx, workerID, -1, 0)
@@ -1387,7 +1366,7 @@ func (wp *WorkerPool) worker(ctx context.Context, workerID int) {
 				case <-workerCtx.Done():
 					// Worker cancelled, don't block (covers both worker exit and parent context)
 				}
-			}()
+			})
 		default:
 			// All slots full, wait briefly for a slot to free up or check for results
 			select {
@@ -1618,9 +1597,7 @@ func (wp *WorkerPool) EnqueueURLs(ctx context.Context, jobID string, pages []db.
 // StartTaskMonitor starts a background process that monitors for pending tasks
 func (wp *WorkerPool) StartTaskMonitor(ctx context.Context) {
 	log.Info().Msg("Starting task monitor to check for pending tasks")
-	wp.wg.Add(1)
-	go func() {
-		defer wp.wg.Done()
+	wp.wg.Go(func() {
 		ticker := time.NewTicker(30 * time.Second)
 		defer ticker.Stop()
 
@@ -1665,7 +1642,7 @@ func (wp *WorkerPool) StartTaskMonitor(ctx context.Context) {
 				}
 			}
 		}
-	}()
+	})
 
 	log.Info().Msg("Task monitor started successfully")
 }
@@ -2387,7 +2364,7 @@ func (wp *WorkerPool) scaleWorkers(ctx context.Context, targetWorkers int) {
 		Msg("Scaling worker pool")
 
 	// Initialise semaphores and wait groups for new workers
-	for i := 0; i < workersToAdd; i++ {
+	for i := range workersToAdd {
 		workerID := wp.currentWorkers + i
 
 		// Extend slices if needed
@@ -2481,12 +2458,9 @@ func (wp *WorkerPool) maybeEmergencyScaleDown() {
 	}
 
 	// Calculate optimal workers with 1.2× buffer
-	optimalWorkers := int(math.Ceil(float64(totalConcurrency) / float64(wp.workerConcurrency) * 1.2))
-
-	// Ensure at least base worker count
-	if optimalWorkers < wp.baseWorkerCount {
-		optimalWorkers = wp.baseWorkerCount
-	}
+	optimalWorkers := max(
+		// Ensure at least base worker count
+		int(math.Ceil(float64(totalConcurrency)/float64(wp.workerConcurrency)*1.2)), wp.baseWorkerCount)
 
 	// Cap at configured max workers
 	if optimalWorkers > wp.maxWorkers {
@@ -2564,10 +2538,7 @@ func (wp *WorkerPool) maybeScaleDown() {
 	// Calculate target workers with buffer
 	target := wp.baseWorkerCount
 	if neededSlots > 0 {
-		target = int(math.Ceil(float64(neededSlots)/float64(wp.workerConcurrency))) + 2
-		if target < wp.baseWorkerCount {
-			target = wp.baseWorkerCount
-		}
+		target = max(int(math.Ceil(float64(neededSlots)/float64(wp.workerConcurrency)))+2, wp.baseWorkerCount)
 	}
 
 	// Only scale down if target is less than current
@@ -2713,9 +2684,7 @@ func (wp *WorkerPool) healthProbe(ctx context.Context) {
 
 // StartCleanupMonitor starts the cleanup monitor goroutine
 func (wp *WorkerPool) StartCleanupMonitor(ctx context.Context) {
-	wp.wg.Add(1)
-	go func() {
-		defer wp.wg.Done()
+	wp.wg.Go(func() {
 		ticker := time.NewTicker(wp.cleanupInterval)
 		defer ticker.Stop()
 
@@ -2731,15 +2700,13 @@ func (wp *WorkerPool) StartCleanupMonitor(ctx context.Context) {
 				}
 			}
 		}
-	}()
+	})
 	log.Info().Msg("Job cleanup monitor started")
 }
 
 // StartQuotaPromotionMonitor checks for waiting tasks that can be promoted when quota becomes available
 func (wp *WorkerPool) StartQuotaPromotionMonitor(ctx context.Context) {
-	wp.wg.Add(1)
-	go func() {
-		defer wp.wg.Done()
+	wp.wg.Go(func() {
 		// Check every 30 seconds for waiting tasks that can now be promoted
 		ticker := time.NewTicker(30 * time.Second)
 		defer ticker.Stop()
@@ -2756,7 +2723,7 @@ func (wp *WorkerPool) StartQuotaPromotionMonitor(ctx context.Context) {
 				}
 			}
 		}
-	}()
+	})
 	log.Info().Msg("Quota promotion monitor started")
 }
 
@@ -3146,9 +3113,7 @@ func (wp *WorkerPool) startRunningTaskReleaseLoop(ctx context.Context) {
 		return
 	}
 
-	wp.wg.Add(1)
-	go func() {
-		defer wp.wg.Done()
+	wp.wg.Go(func() {
 
 		interval := wp.runningTaskReleaseFlushInterval
 		if interval <= 0 {
@@ -3177,7 +3142,7 @@ func (wp *WorkerPool) startRunningTaskReleaseLoop(ctx context.Context) {
 				wp.flushRunningTaskReleases(ctx)
 			}
 		}
-	}()
+	})
 }
 
 func (wp *WorkerPool) incrementPendingRunningTaskRelease(jobID string) int {
@@ -3207,9 +3172,7 @@ func (wp *WorkerPool) flushRunningTaskReleases(ctx context.Context) {
 		return
 	}
 	pending := make(map[string]int, len(wp.runningTaskReleasePending))
-	for jobID, count := range wp.runningTaskReleasePending {
-		pending[jobID] = count
-	}
+	maps.Copy(pending, wp.runningTaskReleasePending)
 	wp.runningTaskReleasePending = make(map[string]int)
 	wp.runningTaskReleaseMu.Unlock()
 
@@ -3922,10 +3885,9 @@ func calculateBackoffDuration(retryCount int) time.Duration {
 	if retryCount < 0 {
 		retryCount = 0
 	}
-	shift := uint(retryCount) //nolint:gosec // retryCount is capped and checked for negative
-	if shift > 30 {
-		shift = 30
-	}
+	shift := min(
+		//nolint:gosec // retryCount is capped and checked for negative
+		uint(retryCount), 30)
 	backoffSeconds := 1 << shift // Bit shift for 2^retryCount
 	backoffDuration := time.Duration(backoffSeconds) * time.Second
 
@@ -4125,10 +4087,7 @@ func (wp *WorkerPool) evaluateJobPerformance(jobID string, responseTime int64) {
 		currentWorkers := wp.currentWorkers
 		wp.workersMutex.RUnlock()
 
-		desiredWorkers := currentWorkers + boostDiff
-		if desiredWorkers > targetWorkers {
-			desiredWorkers = targetWorkers
-		}
+		desiredWorkers := min(currentWorkers+boostDiff, targetWorkers)
 		if desiredWorkers > wp.maxWorkers {
 			desiredWorkers = wp.maxWorkers
 		}

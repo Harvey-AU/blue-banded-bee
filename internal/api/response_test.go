@@ -52,7 +52,7 @@ func TestResponseHelpers(t *testing.T) {
 				assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
 
 				// Verify JSON encoding failed - body should not be valid JSON or empty
-				var result map[string]interface{}
+				var result map[string]any
 				err := json.Unmarshal(w.Body.Bytes(), &result)
 				assert.Error(t, err, "unserialisable data should fail JSON decoding")
 			},

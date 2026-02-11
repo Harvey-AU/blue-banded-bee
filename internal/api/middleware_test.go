@@ -115,7 +115,7 @@ func TestGenerateRequestID(t *testing.T) {
 	// Test that generated IDs are unique
 	ids := make(map[string]bool)
 
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		id := generateRequestID()
 
 		// Check format
@@ -420,7 +420,7 @@ func TestRequestIDMiddlewareConcurrency(t *testing.T) {
 
 	done := make(chan bool, 10)
 	results := make(chan bool, 20)
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		go func(index int) {
 			defer func() { done <- true }()
 
@@ -435,12 +435,12 @@ func TestRequestIDMiddlewareConcurrency(t *testing.T) {
 	}
 
 	// Wait for all goroutines
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		<-done
 	}
 
 	// Verify results on main goroutine
-	for i := 0; i < 20; i++ { // two checks per goroutine
+	for range 20 { // two checks per goroutine
 		ok := <-results
 		assert.True(t, ok)
 	}
@@ -660,9 +660,9 @@ func TestRequestIDUniqueness(t *testing.T) {
 
 	idChan := make(chan string, numGoroutines*idsPerGoroutine)
 
-	for i := 0; i < numGoroutines; i++ {
+	for range numGoroutines {
 		go func() {
-			for j := 0; j < idsPerGoroutine; j++ {
+			for range idsPerGoroutine {
 				idChan <- generateRequestID()
 			}
 		}()
@@ -670,7 +670,7 @@ func TestRequestIDUniqueness(t *testing.T) {
 
 	// Collect all IDs
 	ids := make(map[string]bool)
-	for i := 0; i < numGoroutines*idsPerGoroutine; i++ {
+	for range numGoroutines * idsPerGoroutine {
 		id := <-idChan
 		require.False(t, ids[id], "Duplicate ID generated: %s", id)
 		ids[id] = true

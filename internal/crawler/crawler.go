@@ -529,7 +529,7 @@ func (c *Crawler) performCacheValidation(ctx context.Context, targetURL string, 
 	checkDelay := 700 // Start with 700ms delay between HEAD checks
 	cacheHit := false
 
-	for i := 0; i < maxChecks; i++ {
+	for i := range maxChecks {
 		// Check cache status with HEAD request
 		cacheStatus, err := c.CheckCacheStatus(ctx, targetURL)
 

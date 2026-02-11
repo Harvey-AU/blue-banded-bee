@@ -43,7 +43,7 @@ func (db *DB) GetJobStats(organisationID string, startDate, endDate *time.Time) 
 		FROM jobs 
 		WHERE organisation_id = $1`
 
-	args := []interface{}{organisationID}
+	args := []any{organisationID}
 	argCount := 1
 
 	// Add date filtering if provided
@@ -131,7 +131,7 @@ func (db *DB) GetJobActivity(organisationID string, startDate, endDate *time.Tim
 			FROM jobs 
 			WHERE organisation_id = $1`, intervalStr, timeGroup)
 
-	args := []interface{}{organisationID, startDate, endDate}
+	args := []any{organisationID, startDate, endDate}
 	argCount := 3
 
 	// Add date filtering if provided
@@ -224,7 +224,7 @@ func (db *DB) ListJobs(organisationID string, limit, offset int, status, dateRan
 		LEFT JOIN domains d ON j.domain_id = d.id
 		WHERE j.organisation_id = $1`
 
-	args := []interface{}{organisationID}
+	args := []any{organisationID}
 	argCount := 1
 
 	// Add status filter if provided
@@ -337,7 +337,7 @@ func (db *DB) ListJobsWithOffset(organisationID string, limit, offset int, statu
 		LEFT JOIN domains d ON j.domain_id = d.id
 		WHERE j.organisation_id = $1`
 
-	args := []interface{}{organisationID}
+	args := []any{organisationID}
 	argCount := 1
 
 	// Add status filter if provided

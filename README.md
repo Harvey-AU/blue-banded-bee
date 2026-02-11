@@ -96,7 +96,7 @@ See [Roadmap.md](./Roadmap.md) for detailed progress tracking.
 
 ## Tech Stack
 
-- **Backend**: Go 1.25 with PostgreSQL (Supabase)
+- **Backend**: Go 1.26 with PostgreSQL (Supabase)
 - **Frontend**: Vanilla JavaScript with data-binding (no build process)
 - **Infrastructure**: Fly.io (app + DB), Cloudflare CDN, Supabase (auth +
   realtime)

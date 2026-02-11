@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -61,11 +62,11 @@ const (
 // UserClaims represents the Supabase JWT claims
 type UserClaims struct {
 	jwt.RegisteredClaims
-	UserID       string                 `json:"sub"`
-	Email        string                 `json:"email"`
-	AppMetadata  map[string]interface{} `json:"app_metadata"`
-	UserMetadata map[string]interface{} `json:"user_metadata"`
-	Role         string                 `json:"role"`
+	UserID       string         `json:"sub"`
+	Email        string         `json:"email"`
+	AppMetadata  map[string]any `json:"app_metadata"`
+	UserMetadata map[string]any `json:"user_metadata"`
+	Role         string         `json:"role"`
 }
 
 // AuthMiddleware validates Supabase JWT tokens (uses default SupabaseAuthClient)
@@ -224,13 +225,7 @@ func validateSupabaseToken(ctx context.Context, tokenString string) (*UserClaims
 		return nil, fmt.Errorf("failed to read issuer: %w", err)
 	}
 
-	validIssuer := false
-	for _, allowed := range validIssuers {
-		if issuer == allowed {
-			validIssuer = true
-			break
-		}
-	}
+	validIssuer := slices.Contains(validIssuers, issuer)
 	if !validIssuer {
 		return nil, fmt.Errorf("token has unexpected issuer: %s", issuer)
 	}
@@ -309,7 +304,7 @@ func writeAuthError(w http.ResponseWriter, r *http.Request, message string, stat
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
 
-	response := map[string]interface{}{
+	response := map[string]any{
 		"status":     statusCode,
 		"message":    message,
 		"code":       "UNAUTHORISED",
@@ -319,14 +314,6 @@ func writeAuthError(w http.ResponseWriter, r *http.Request, message string, stat
 	if err := json.NewEncoder(w).Encode(response); err != nil {
 		log.Error().Err(err).Msg("Failed to encode unauthorised response")
 	}
-}
-
-// min returns the minimum of two integers
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }
 
 // SessionInfo holds session information and token validity

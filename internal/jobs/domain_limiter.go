@@ -135,25 +135,16 @@ func (dl *DomainLimiter) Seed(domain string, baseDelaySeconds int, adaptiveDelay
 	state.mu.Lock()
 	defer state.mu.Unlock()
 
-	base := time.Duration(baseDelaySeconds) * time.Second
-	if base < dl.cfg.BaseDelay {
-		base = dl.cfg.BaseDelay
-	}
+	base := max(time.Duration(baseDelaySeconds)*time.Second, dl.cfg.BaseDelay)
 	state.baseDelay = base
 
-	adaptive := time.Duration(adaptiveDelaySeconds) * time.Second
-	if adaptive < base {
-		adaptive = base
-	}
+	adaptive := max(time.Duration(adaptiveDelaySeconds)*time.Second, base)
 	if adaptive > dl.cfg.MaxAdaptiveDelay {
 		adaptive = dl.cfg.MaxAdaptiveDelay
 	}
 	state.adaptiveDelay = adaptive
 
-	floor := time.Duration(floorSeconds) * time.Second
-	if floor < 0 {
-		floor = 0
-	}
+	floor := max(time.Duration(floorSeconds)*time.Second, 0)
 	if floor > adaptive {
 		floor = adaptive
 	}
@@ -194,10 +185,7 @@ func (dl *DomainLimiter) UpdateRobotsDelay(domain string, delaySeconds int) {
 	state.mu.Lock()
 	defer state.mu.Unlock()
 
-	base := time.Duration(delaySeconds) * time.Second
-	if base < dl.cfg.BaseDelay {
-		base = dl.cfg.BaseDelay
-	}
+	base := max(time.Duration(delaySeconds)*time.Second, dl.cfg.BaseDelay)
 	state.baseDelay = base
 	if state.adaptiveDelay < base {
 		state.adaptiveDelay = base
@@ -301,10 +289,7 @@ func (ds *domainState) ensureJobState(jobID string, concurrency int) *jobDomainS
 }
 
 func (ds *domainState) effectiveDelay(cfg DomainLimiterConfig) time.Duration {
-	delay := ds.adaptiveDelay
-	if delay < ds.baseDelay {
-		delay = ds.baseDelay
-	}
+	delay := max(ds.adaptiveDelay, ds.baseDelay)
 	if delay > cfg.MaxAdaptiveDelay {
 		delay = cfg.MaxAdaptiveDelay
 	}
@@ -312,10 +297,7 @@ func (ds *domainState) effectiveDelay(cfg DomainLimiterConfig) time.Duration {
 }
 
 func (ds *domainState) computeAllowedConcurrency(cfg DomainLimiterConfig, jobConcurrency int) int {
-	base := ds.baseDelay
-	if base < cfg.BaseDelay {
-		base = cfg.BaseDelay
-	}
+	base := max(ds.baseDelay, cfg.BaseDelay)
 	effective := ds.effectiveDelay(cfg)
 	if effective <= base {
 		return jobConcurrency
@@ -323,10 +305,7 @@ func (ds *domainState) computeAllowedConcurrency(cfg DomainLimiterConfig, jobCon
 
 	diff := effective - base
 	reduction := int(diff / cfg.ConcurrencyStep)
-	allowed := jobConcurrency - reduction
-	if allowed < 1 {
-		allowed = 1
-	}
+	allowed := max(jobConcurrency-reduction, 1)
 	return allowed
 }
 
@@ -418,10 +397,7 @@ func (dl *DomainLimiter) release(domain string, jobID string, success bool, rate
 			}
 			state.probing = false
 		}
-		nextDelay := state.adaptiveDelay + dl.cfg.DelayStep
-		if nextDelay > dl.cfg.MaxAdaptiveDelay {
-			nextDelay = dl.cfg.MaxAdaptiveDelay
-		}
+		nextDelay := min(state.adaptiveDelay+dl.cfg.DelayStep, dl.cfg.MaxAdaptiveDelay)
 		if nextDelay > state.adaptiveDelay {
 			state.adaptiveDelay = nextDelay
 			needPersist = true
@@ -435,10 +411,7 @@ func (dl *DomainLimiter) release(domain string, jobID string, success bool, rate
 			state.probing = false
 			needPersist = true
 		} else if state.successStreak >= dl.cfg.SuccessProbeThreshold {
-			proposed := state.adaptiveDelay - dl.cfg.DelayStep
-			if proposed < state.delayFloor {
-				proposed = state.delayFloor
-			}
+			proposed := max(state.adaptiveDelay-dl.cfg.DelayStep, state.delayFloor)
 			if proposed < state.baseDelay {
 				proposed = state.baseDelay
 			}

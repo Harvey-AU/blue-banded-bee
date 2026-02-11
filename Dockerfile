@@ -1,5 +1,5 @@
 # Build stage
-FROM golang:1.25.7-alpine AS builder
+FROM golang:1.26.0-alpine AS builder
 
 WORKDIR /app
 
@@ -13,7 +13,7 @@ RUN go mod download
 COPY . .
 
 # Build the application
-RUN CGO_ENABLED=0 GOOS=linux GOEXPERIMENT=greenteagc go build -o main ./cmd/app/main.go
+RUN CGO_ENABLED=0 GOOS=linux go build -o main ./cmd/app/main.go
 
 # Final stage
 FROM alpine:3.19

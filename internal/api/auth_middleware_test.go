@@ -89,7 +89,7 @@ func TestAuthMiddleware(t *testing.T) {
 			expectedStatus:    http.StatusUnauthorized,
 			expectUserContext: false,
 			checkResponse: func(t *testing.T, rec *httptest.ResponseRecorder) {
-				var response map[string]interface{}
+				var response map[string]any
 				err := json.Unmarshal(rec.Body.Bytes(), &response)
 				require.NoError(t, err)
 
@@ -112,7 +112,7 @@ func TestAuthMiddleware(t *testing.T) {
 			expectedStatus:    http.StatusUnauthorized,
 			expectUserContext: false,
 			checkResponse: func(t *testing.T, rec *httptest.ResponseRecorder) {
-				var response map[string]interface{}
+				var response map[string]any
 				err := json.Unmarshal(rec.Body.Bytes(), &response)
 				require.NoError(t, err)
 

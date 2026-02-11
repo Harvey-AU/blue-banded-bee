@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -81,7 +82,7 @@ func (jm *JobManager) handleExistingJobs(ctx context.Context, domain string, use
 
 	// Build query dynamically based on available IDs
 	var query string
-	var args []interface{}
+	var args []any
 
 	if organisationID != nil && *organisationID != "" {
 		// Prefer organisation-level duplicate checking (multi-user organisations)
@@ -95,7 +96,7 @@ func (jm *JobManager) handleExistingJobs(ctx context.Context, domain string, use
 			ORDER BY j.created_at DESC
 			LIMIT 1
 		`
-		args = []interface{}{domain, *organisationID}
+		args = []any{domain, *organisationID}
 	} else {
 		// Fall back to user-level checking for users without organisations
 		query = `
@@ -108,7 +109,7 @@ func (jm *JobManager) handleExistingJobs(ctx context.Context, domain string, use
 			ORDER BY j.created_at DESC
 			LIMIT 1
 		`
-		args = []interface{}{domain, *userID}
+		args = []any{domain, *userID}
 	}
 
 	err := jm.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
@@ -921,10 +922,8 @@ func (jm *JobManager) ValidateStatusTransition(from, to JobStatus) error {
 		return fmt.Errorf("invalid status transition from %s to %s", from, to)
 	}
 
-	for _, valid := range allowed {
-		if valid == to {
-			return nil
-		}
+	if slices.Contains(allowed, to) {
+		return nil
 	}
 
 	return fmt.Errorf("invalid status transition from %s to %s", from, to)
@@ -934,18 +933,18 @@ func (jm *JobManager) ValidateStatusTransition(from, to JobStatus) error {
 func (jm *JobManager) UpdateJobStatus(ctx context.Context, jobID string, status JobStatus) error {
 	return jm.dbQueue.Execute(ctx, func(tx *sql.Tx) error {
 		var query string
-		var args []interface{}
+		var args []any
 
 		switch status {
 		case JobStatusCompleted:
 			query = "UPDATE jobs SET status = $1, completed_at = $2 WHERE id = $3"
-			args = []interface{}{string(status), time.Now().UTC(), jobID}
+			args = []any{string(status), time.Now().UTC(), jobID}
 		case JobStatusRunning:
 			query = "UPDATE jobs SET status = $1, started_at = $2 WHERE id = $3"
-			args = []interface{}{string(status), time.Now().UTC(), jobID}
+			args = []any{string(status), time.Now().UTC(), jobID}
 		default:
 			query = "UPDATE jobs SET status = $1 WHERE id = $2"
-			args = []interface{}{string(status), jobID}
+			args = []any{string(status), jobID}
 		}
 
 		_, err := tx.Exec(query, args...)
@@ -1079,10 +1078,7 @@ func (jm *JobManager) processSitemap(ctx context.Context, jobID, domain string, 
 			Msg("Enqueueing sitemap URLs in batches")
 
 		for i := 0; i < len(urls); i += batchSize {
-			end := i + batchSize
-			if end > len(urls) {
-				end = len(urls)
-			}
+			end := min(i+batchSize, len(urls))
 			batch := urls[i:end]
 			batchNum := (i / batchSize) + 1
 

@@ -70,7 +70,7 @@ func (h *Handler) AdminResetDatabase(w http.ResponseWriter, r *http.Request) {
 			ID:    user.ID,
 			Email: user.Email,
 		})
-		scope.SetContext("admin_action", map[string]interface{}{
+		scope.SetContext("admin_action", map[string]any{
 			"endpoint":   "/v1/admin/reset-db",
 			"user_agent": r.Header.Get("User-Agent"),
 			"ip_address": r.RemoteAddr,
@@ -96,7 +96,7 @@ func (h *Handler) AdminResetDatabase(w http.ResponseWriter, r *http.Request) {
 				ID:    user.ID,
 				Email: user.Email,
 			})
-			scope.SetContext("error_details", map[string]interface{}{
+			scope.SetContext("error_details", map[string]any{
 				"error":    err.Error(),
 				"duration": resetDuration.Milliseconds(),
 			})
@@ -122,7 +122,7 @@ func (h *Handler) AdminResetDatabase(w http.ResponseWriter, r *http.Request) {
 			ID:    user.ID,
 			Email: user.Email,
 		})
-		scope.SetContext("success_details", map[string]interface{}{
+		scope.SetContext("success_details", map[string]any{
 			"duration_ms": resetDuration.Milliseconds(),
 			"timestamp":   time.Now().UTC().Format(time.RFC3339),
 		})
@@ -193,7 +193,7 @@ func (h *Handler) AdminResetData(w http.ResponseWriter, r *http.Request) {
 			ID:    user.ID,
 			Email: user.Email,
 		})
-		scope.SetContext("admin_action", map[string]interface{}{
+		scope.SetContext("admin_action", map[string]any{
 			"endpoint":   "/v1/admin/reset-data",
 			"user_agent": r.Header.Get("User-Agent"),
 			"ip_address": r.RemoteAddr,
@@ -219,7 +219,7 @@ func (h *Handler) AdminResetData(w http.ResponseWriter, r *http.Request) {
 				ID:    user.ID,
 				Email: user.Email,
 			})
-			scope.SetContext("error_details", map[string]interface{}{
+			scope.SetContext("error_details", map[string]any{
 				"error":    err.Error(),
 				"duration": resetDuration.Milliseconds(),
 			})
@@ -245,7 +245,7 @@ func (h *Handler) AdminResetData(w http.ResponseWriter, r *http.Request) {
 			ID:    user.ID,
 			Email: user.Email,
 		})
-		scope.SetContext("success_details", map[string]interface{}{
+		scope.SetContext("success_details", map[string]any{
 			"duration_ms": resetDuration.Milliseconds(),
 			"timestamp":   time.Now().UTC().Format(time.RFC3339),
 		})

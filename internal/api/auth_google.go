@@ -587,7 +587,7 @@ func (h *Handler) SaveGoogleProperties(w http.ResponseWriter, r *http.Request) {
 		Int("active_count", len(req.ActivePropertyIDs)).
 		Msg("Google Analytics properties saved")
 
-	WriteSuccess(w, r, map[string]interface{}{
+	WriteSuccess(w, r, map[string]any{
 		"saved_count":  savedCount,
 		"active_count": len(req.ActivePropertyIDs),
 	}, "Google Analytics properties saved successfully")
@@ -966,7 +966,7 @@ func (h *Handler) GoogleConnectionHandler(w http.ResponseWriter, r *http.Request
 		// Check request body to determine which PATCH operation
 		// If body contains "domain_ids", update domains
 		// If body contains "status", update status
-		var bodyCheck map[string]interface{}
+		var bodyCheck map[string]any
 		if err := json.NewDecoder(r.Body).Decode(&bodyCheck); err != nil {
 			BadRequest(w, r, "Invalid request body")
 			return
@@ -1124,7 +1124,7 @@ func (h *Handler) getPendingSession(w http.ResponseWriter, r *http.Request, sess
 
 	// Note: Tokens are intentionally excluded from this response for security.
 	// Server-side handlers will retrieve tokens from the session using sessionID.
-	WriteSuccess(w, r, map[string]interface{}{
+	WriteSuccess(w, r, map[string]any{
 		"accounts":   session.Accounts,
 		"properties": session.Properties,
 		"state":      session.State,
@@ -1176,7 +1176,7 @@ func (h *Handler) fetchAccountProperties(w http.ResponseWriter, r *http.Request,
 	}
 	pendingGASessionsMu.Unlock()
 
-	WriteSuccess(w, r, map[string]interface{}{
+	WriteSuccess(w, r, map[string]any{
 		"properties": properties,
 		"account_id": accountID,
 	}, "")
@@ -1248,7 +1248,7 @@ func (h *Handler) getOrganisationDomains(w http.ResponseWriter, r *http.Request)
 
 	orgID := h.DB.GetEffectiveOrganisationID(user)
 	if orgID == "" {
-		WriteSuccess(w, r, map[string]interface{}{"domains": []db.OrganisationDomain{}}, "No organisation")
+		WriteSuccess(w, r, map[string]any{"domains": []db.OrganisationDomain{}}, "No organisation")
 		return
 	}
 
@@ -1264,7 +1264,7 @@ func (h *Handler) getOrganisationDomains(w http.ResponseWriter, r *http.Request)
 		Int("domain_count", len(domains)).
 		Msg("Returning domains for organisation")
 
-	WriteSuccess(w, r, map[string]interface{}{"domains": domains}, "")
+	WriteSuccess(w, r, map[string]any{"domains": domains}, "")
 }
 
 // deleteGoogleConnection deletes a Google Analytics connection

@@ -594,21 +594,12 @@ func main() {
 	// Keep staging worker capacity aligned with queue DB pool limits to reduce
 	// recurring queue-pressure alerts from brief capacity spikes.
 	if appEnv == "staging" {
-		reservedConnections := getEnvInt("DB_POOL_RESERVED_CONNECTIONS", 4)
-		if reservedConnections < 0 {
-			reservedConnections = 0
-		}
+		reservedConnections := max(getEnvInt("DB_POOL_RESERVED_CONNECTIONS", 4), 0)
 
 		if cfg := queueDB.GetConfig(); cfg != nil && cfg.MaxOpenConns > 0 {
-			availablePoolSlots := cfg.MaxOpenConns - reservedConnections
-			if availablePoolSlots < 1 {
-				availablePoolSlots = 1
-			}
+			availablePoolSlots := max(cfg.MaxOpenConns-reservedConnections, 1)
 
-			safeWorkers := availablePoolSlots / workerConcurrency
-			if safeWorkers < 1 {
-				safeWorkers = 1
-			}
+			safeWorkers := max(availablePoolSlots/workerConcurrency, 1)
 
 			if safeWorkers < jobWorkers {
 				log.Warn().
@@ -788,11 +779,9 @@ func main() {
 	go startJobScheduler(appCtx, &backgroundWG, jobsManager, pgDB)
 
 	// Start notification listener (uses polling mode with Supabase pooler)
-	backgroundWG.Add(1)
-	go func() {
-		defer backgroundWG.Done()
+	backgroundWG.Go(func() {
 		notifications.StartWithFallback(appCtx, pgDB.GetConfig().ConnectionString(), notificationService)
-	}()
+	})
 
 	// Wait for either the server to exit or shutdown signal completion
 	var serverErr error
@@ -851,7 +840,7 @@ func parseOTLPHeaders(raw string) map[string]string {
 		return headers
 	}
 
-	for _, pair := range strings.Split(raw, ",") {
+	for pair := range strings.SplitSeq(raw, ",") {
 		pair = strings.TrimSpace(pair)
 		if pair == "" {
 			continue

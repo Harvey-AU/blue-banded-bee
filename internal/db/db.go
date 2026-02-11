@@ -721,7 +721,7 @@ func (db *DB) RecalculateJobStats(ctx context.Context, jobID string) error {
 
 // Serialise converts data to JSON string representation.
 // It is named with British English spelling for consistency.
-func Serialise(v interface{}) string {
+func Serialise(v any) string {
 	data, err := json.Marshal(v)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to serialise data")

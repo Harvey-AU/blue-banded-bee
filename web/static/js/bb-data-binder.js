@@ -575,10 +575,15 @@ class BBDataBinder {
       errors.push(`Must be no more than ${rules.maxLength} characters`);
     }
 
-    // Custom pattern validation (wrapped in try-catch for ReDoS prevention)
+    // Custom pattern validation using native HTML pattern handling
     if (value && rules.pattern) {
       try {
-        if (!new RegExp(rules.pattern).test(value)) {
+        const patternProbe = document.createElement("input");
+        patternProbe.type = "text";
+        patternProbe.pattern = rules.pattern;
+        patternProbe.value = value;
+
+        if (!patternProbe.checkValidity()) {
           errors.push(rules.patternMessage || "Invalid format");
         }
       } catch (e) {

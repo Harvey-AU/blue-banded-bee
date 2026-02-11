@@ -10,14 +10,14 @@ import (
 
 // SuccessResponse represents a standardised success response
 type SuccessResponse struct {
-	Status    string      `json:"status"`
-	Data      interface{} `json:"data,omitempty"`
-	Message   string      `json:"message,omitempty"`
-	RequestID string      `json:"request_id,omitempty"`
+	Status    string `json:"status"`
+	Data      any    `json:"data,omitempty"`
+	Message   string `json:"message,omitempty"`
+	RequestID string `json:"request_id,omitempty"`
 }
 
 // WriteJSON writes a JSON response with the given status code
-func WriteJSON(w http.ResponseWriter, r *http.Request, data interface{}, status int) {
+func WriteJSON(w http.ResponseWriter, r *http.Request, data any, status int) {
 	requestID := GetRequestID(r)
 
 	w.Header().Set("Content-Type", "application/json")
@@ -32,7 +32,7 @@ func WriteJSON(w http.ResponseWriter, r *http.Request, data interface{}, status 
 }
 
 // WriteSuccess writes a standardised success response
-func WriteSuccess(w http.ResponseWriter, r *http.Request, data interface{}, message string) {
+func WriteSuccess(w http.ResponseWriter, r *http.Request, data any, message string) {
 	requestID := GetRequestID(r)
 
 	response := SuccessResponse{
@@ -46,7 +46,7 @@ func WriteSuccess(w http.ResponseWriter, r *http.Request, data interface{}, mess
 }
 
 // WriteCreated writes a standardised success response for created resources
-func WriteCreated(w http.ResponseWriter, r *http.Request, data interface{}, message string) {
+func WriteCreated(w http.ResponseWriter, r *http.Request, data any, message string) {
 	requestID := GetRequestID(r)
 
 	response := SuccessResponse{
@@ -88,7 +88,7 @@ func WriteHealthy(w http.ResponseWriter, r *http.Request, service string, versio
 func WriteUnhealthy(w http.ResponseWriter, r *http.Request, service string, err error) {
 	requestID := GetRequestID(r)
 
-	response := map[string]interface{}{
+	response := map[string]any{
 		"status":     "unhealthy",
 		"timestamp":  time.Now().Format(time.RFC3339),
 		"service":    service,
