@@ -780,6 +780,14 @@ func main() {
 
 	// Start notification listener (uses polling mode with Supabase pooler)
 	backgroundWG.Go(func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Error().
+					Any("panic", r).
+					Msg("Recovered panic in notification listener")
+			}
+		}()
+
 		notifications.StartWithFallback(appCtx, pgDB.GetConfig().ConnectionString(), notificationService)
 	})
 
