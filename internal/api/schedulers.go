@@ -353,9 +353,7 @@ func (h *Handler) updateScheduler(w http.ResponseWriter, r *http.Request, schedu
 			BadRequest(w, r, "concurrency must be greater than 0")
 			return
 		}
-		if concurrency > 100 {
-			concurrency = 100
-		}
+		concurrency = min(concurrency, 100)
 		scheduler.Concurrency = concurrency
 	}
 

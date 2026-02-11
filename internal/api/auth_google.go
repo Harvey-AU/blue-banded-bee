@@ -966,7 +966,7 @@ func (h *Handler) GoogleConnectionHandler(w http.ResponseWriter, r *http.Request
 		// Check request body to determine which PATCH operation
 		// If body contains "domain_ids", update domains
 		// If body contains "status", update status
-		var bodyCheck map[string]any
+		var bodyCheck map[string]json.RawMessage
 		if err := json.NewDecoder(r.Body).Decode(&bodyCheck); err != nil {
 			BadRequest(w, r, "Invalid request body")
 			return
