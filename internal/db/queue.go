@@ -192,7 +192,7 @@ func (q *DbQueue) Execute(ctx context.Context, fn func(*sql.Tx) error) error {
 	var poolWaitTotal time.Duration
 	var execTotal time.Duration
 
-	for attempt := 0; attempt < maxAttempts; attempt++ {
+	for attempt := range maxAttempts {
 		poolWaitStart := time.Now()
 		release, err := q.ensurePoolCapacity(ctx)
 		poolWait := time.Since(poolWaitStart)
@@ -319,7 +319,7 @@ func (q *DbQueue) ExecuteWithContext(ctx context.Context, fn func(context.Contex
 	var poolWaitTotal time.Duration
 	var execTotal time.Duration
 
-	for attempt := 0; attempt < maxAttempts; attempt++ {
+	for attempt := range maxAttempts {
 		poolWaitStart := time.Now()
 		release, err := q.ensurePoolCapacity(ctx)
 		poolWait := time.Since(poolWaitStart)

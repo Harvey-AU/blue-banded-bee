@@ -1006,10 +1006,7 @@ func (wp *WorkerPool) calculateConcurrencyTarget() int {
 
 	perWorkerConcurrency := max(wp.workerConcurrency, 1)
 
-	target := max(int(math.Ceil(float64(totalConcurrency)/float64(perWorkerConcurrency)*concurrencyBufferFactor)), wp.baseWorkerCount)
-	if target > wp.maxWorkers {
-		target = wp.maxWorkers
-	}
+	target := min(max(int(math.Ceil(float64(totalConcurrency)/float64(perWorkerConcurrency)*concurrencyBufferFactor)), wp.baseWorkerCount), wp.maxWorkers)
 
 	return target
 }
@@ -2458,14 +2455,12 @@ func (wp *WorkerPool) maybeEmergencyScaleDown() {
 	}
 
 	// Calculate optimal workers with 1.2× buffer
-	optimalWorkers := max(
+	optimalWorkers := min(
 		// Ensure at least base worker count
-		int(math.Ceil(float64(totalConcurrency)/float64(wp.workerConcurrency)*1.2)), wp.baseWorkerCount)
+		// Cap at configured max workers
+		max(
 
-	// Cap at configured max workers
-	if optimalWorkers > wp.maxWorkers {
-		optimalWorkers = wp.maxWorkers
-	}
+			int(math.Ceil(float64(totalConcurrency)/float64(wp.workerConcurrency)*1.2)), wp.baseWorkerCount), wp.maxWorkers)
 
 	// Only scale down if we're significantly over-provisioned (more than 20% above optimal)
 	threshold := int(float64(optimalWorkers) * 1.2)
@@ -4087,10 +4082,7 @@ func (wp *WorkerPool) evaluateJobPerformance(jobID string, responseTime int64) {
 		currentWorkers := wp.currentWorkers
 		wp.workersMutex.RUnlock()
 
-		desiredWorkers := min(currentWorkers+boostDiff, targetWorkers)
-		if desiredWorkers > wp.maxWorkers {
-			desiredWorkers = wp.maxWorkers
-		}
+		desiredWorkers := min(min(currentWorkers+boostDiff, targetWorkers), wp.maxWorkers)
 
 		additionalWorkers := desiredWorkers - currentWorkers
 		if additionalWorkers <= 0 {

@@ -138,16 +138,10 @@ func (dl *DomainLimiter) Seed(domain string, baseDelaySeconds int, adaptiveDelay
 	base := max(time.Duration(baseDelaySeconds)*time.Second, dl.cfg.BaseDelay)
 	state.baseDelay = base
 
-	adaptive := max(time.Duration(adaptiveDelaySeconds)*time.Second, base)
-	if adaptive > dl.cfg.MaxAdaptiveDelay {
-		adaptive = dl.cfg.MaxAdaptiveDelay
-	}
+	adaptive := min(max(time.Duration(adaptiveDelaySeconds)*time.Second, base), dl.cfg.MaxAdaptiveDelay)
 	state.adaptiveDelay = adaptive
 
-	floor := max(time.Duration(floorSeconds)*time.Second, 0)
-	if floor > adaptive {
-		floor = adaptive
-	}
+	floor := min(max(time.Duration(floorSeconds)*time.Second, 0), adaptive)
 	state.delayFloor = floor
 }
 
@@ -289,10 +283,7 @@ func (ds *domainState) ensureJobState(jobID string, concurrency int) *jobDomainS
 }
 
 func (ds *domainState) effectiveDelay(cfg DomainLimiterConfig) time.Duration {
-	delay := max(ds.adaptiveDelay, ds.baseDelay)
-	if delay > cfg.MaxAdaptiveDelay {
-		delay = cfg.MaxAdaptiveDelay
-	}
+	delay := min(max(ds.adaptiveDelay, ds.baseDelay), cfg.MaxAdaptiveDelay)
 	return delay
 }
 
@@ -411,10 +402,7 @@ func (dl *DomainLimiter) release(domain string, jobID string, success bool, rate
 			state.probing = false
 			needPersist = true
 		} else if state.successStreak >= dl.cfg.SuccessProbeThreshold {
-			proposed := max(state.adaptiveDelay-dl.cfg.DelayStep, state.delayFloor)
-			if proposed < state.baseDelay {
-				proposed = state.baseDelay
-			}
+			proposed := max(max(state.adaptiveDelay-dl.cfg.DelayStep, state.delayFloor), state.baseDelay)
 			if proposed < state.adaptiveDelay {
 				state.probing = true
 				state.probePrevious = state.adaptiveDelay
