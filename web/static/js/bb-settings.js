@@ -709,7 +709,9 @@
       const existing = schedulesList.querySelectorAll(
         '.bb-job-card:not([data-settings-template="schedule"])'
       );
-      existing.forEach((node) => node.remove());
+      existing.forEach((node) => {
+        node.remove();
+      });
 
       if (!schedules || schedules.length === 0) {
         if (emptyState) emptyState.style.display = "block";
