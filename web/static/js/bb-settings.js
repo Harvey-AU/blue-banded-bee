@@ -730,7 +730,8 @@
         if (scheduleInfo) {
           scheduleInfo.textContent = "";
           const hoursSpan = document.createElement("span");
-          hoursSpan.textContent = `${schedule.schedule_interval_hours} hours`;
+          const intervalHours = schedule.schedule_interval_hours ?? "—";
+          hoursSpan.textContent = `${intervalHours} hours`;
           const statusSpan = document.createElement("span");
           statusSpan.className = `bb-schedule-status bb-schedule-${schedule.is_enabled ? "enabled" : "disabled"}`;
           statusSpan.textContent = schedule.is_enabled ? "Enabled" : "Disabled";
