@@ -222,8 +222,8 @@ func (db *DB) UpdateScheduler(ctx context.Context, schedulerID string, updates *
 				return fmt.Errorf("failed to check scheduler existence: %w", err)
 			}
 			if exists {
-				log.Warn().Str("scheduler_id", schedulerID).Msg("Scheduler state conflict on update")
 				return ErrSchedulerStateConflict
+			}
 			}
 		}
 		log.Warn().Str("scheduler_id", schedulerID).Msg("Scheduler not found for update")
