@@ -178,8 +178,7 @@
     if (panel?.id) {
       if (panel.id.startsWith("planTab")) {
         activatePlanTab(panel.id);
-      }
-      if (panel.id.startsWith("autoCrawl")) {
+      } else if (panel.id.startsWith("autoCrawl")) {
         activateAutomationTab(panel.id);
       }
     }
