@@ -127,19 +127,26 @@ resolve_golangci_lint() {
     done
 
     local selected="${unique[0]}"
+    local found_compatible=false
     if [ -n "$required_go" ]; then
         for c in "${unique[@]}"; do
             local built_with
             built_with=$("$c" version 2>/dev/null | sed -nE 's/.*built with go([0-9]+(\.[0-9]+){1,2}).*/\1/p' | head -n 1)
             if [ -z "$built_with" ]; then
+                echo "  ⚠️  Could not parse golangci-lint build Go version: $c" >&2
                 continue
             fi
             # Compatible when built_with >= required_go (version-sort aware).
             if [ "$(printf '%s\n%s\n' "$built_with" "$required_go" | sort -V | tail -n 1)" = "$built_with" ]; then
                 selected="$c"
+                found_compatible=true
                 break
             fi
         done
+
+        if [ "$found_compatible" = false ]; then
+            echo "  ⚠️  No compatible golangci-lint found for go$required_go; using $selected" >&2
+        fi
     fi
 
     echo "$selected"
