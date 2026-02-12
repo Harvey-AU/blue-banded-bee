@@ -51,7 +51,9 @@
           "/settings/billing": "billing",
           "/settings/notifications": "notifications",
           "/settings/analytics": "analytics",
-          "/settings/auto-crawl": "auto-crawl",
+          "/settings/auto-crawl": "automated-jobs",
+          "/settings/automation": "automated-jobs",
+          "/settings/automated-jobs": "automated-jobs",
         };
         const target = sectionMap[path] || "account";
         document.documentElement.setAttribute("data-settings-section", target);
@@ -100,7 +102,9 @@
               >Notifications</a
             >
             <a class="settings-link" href="/settings/analytics">Analytics</a>
-            <a class="settings-link" href="/settings/auto-crawl">Auto-crawl</a>
+            <a class="settings-link" href="/settings/automated-jobs"
+              >Automated jobs</a
+            >
           </div>
 
           <div class="settings-group settings-hidden" id="adminGroup">
@@ -508,164 +512,288 @@
             </div>
           </section>
 
-          <section class="settings-section" id="auto-crawl">
-            <h2 class="settings-section-title" id="webflow">Auto-crawl</h2>
+          <section class="settings-section" id="automated-jobs">
+            <h2 class="settings-section-title" id="webflow">Automated jobs</h2>
             <p class="settings-section-subtitle">
-              Configure Webflow automation and run-on-publish behaviour.
+              Configure Webflow publish runs and scheduled crawl jobs.
             </p>
+            <div
+              class="settings-tabs"
+              role="tablist"
+              aria-label="Automated jobs views"
+            >
+              <button
+                class="settings-tab active"
+                type="button"
+                data-auto-crawl-tab-target="autoCrawlWebflowPanel"
+                id="autoCrawlWebflowTrigger"
+                role="tab"
+                aria-controls="autoCrawlWebflowPanel"
+                aria-selected="true"
+              >
+                Webflow
+              </button>
+              <button
+                class="settings-tab"
+                type="button"
+                data-auto-crawl-tab-target="autoCrawlSchedulesPanel"
+                id="autoCrawlSchedulesTrigger"
+                role="tab"
+                aria-controls="autoCrawlSchedulesPanel"
+                aria-selected="false"
+              >
+                Scheduled
+              </button>
+            </div>
 
-            <div class="settings-card">
-              <h3 class="settings-section-header">
-                <span class="settings-section-icon">⚡</span>
-                Webflow integration
-              </h3>
-              <p class="settings-muted">
-                Connect your Webflow sites to enable "Run on Publish" and manage
-                schedules.
-              </p>
+            <div
+              class="settings-tab-panel active"
+              id="autoCrawlWebflowPanel"
+              role="tabpanel"
+              aria-labelledby="autoCrawlWebflowTrigger"
+              tabindex="0"
+            >
+              <div class="settings-card">
+                <h3 class="settings-section-header">
+                  <span class="settings-section-icon">⚡</span>
+                  Webflow integration
+                </h3>
+                <p class="settings-muted">
+                  Connect your Webflow sites to enable "Run on Publish" and
+                  manage schedules.
+                </p>
 
-              <div id="webflowConnectionsList" bbb-list="webflow-connections">
-                <div
-                  class="settings-row settings-hidden"
-                  bbb-template="webflow-connection"
-                >
-                  <div>
-                    <div class="webflow-name settings-connection-name"></div>
-                    <div class="webflow-connected-date settings-muted"></div>
-                  </div>
-                  <button
-                    class="bb-button bb-button-outline"
-                    bbb-action="webflow-disconnect"
+                <div id="webflowConnectionsList" bbb-list="webflow-connections">
+                  <div
+                    class="settings-row settings-hidden"
+                    bbb-template="webflow-connection"
                   >
-                    Disconnect
+                    <div>
+                      <div class="webflow-name settings-connection-name"></div>
+                      <div class="webflow-connected-date settings-muted"></div>
+                    </div>
+                    <button
+                      class="bb-button bb-button-outline"
+                      bbb-action="webflow-disconnect"
+                    >
+                      Disconnect
+                    </button>
+                  </div>
+                </div>
+
+                <div id="webflowSitesConfig" class="settings-sites-panel">
+                  <div class="settings-sites-header">
+                    <h4 class="settings-sites-title">Configure Sites</h4>
+                    <button
+                      id="webflowSitesRefresh"
+                      class="bb-button bb-button-outline settings-btn-sm"
+                      bbb-action="webflow-sites-refresh"
+                      title="Refresh sites list"
+                      aria-label="Refresh sites list"
+                    >
+                      Refresh
+                    </button>
+                  </div>
+
+                  <div id="webflowSitesSearchBox" class="settings-sites-search">
+                    <input
+                      type="text"
+                      id="webflowSiteSearch"
+                      class="settings-sites-search-input"
+                      placeholder="Search sites..."
+                      aria-label="Search Webflow sites"
+                    />
+                  </div>
+
+                  <div id="webflowSitesList">
+                    <div
+                      class="webflow-site-row settings-site-row"
+                      bbb-template="webflow-site"
+                    >
+                      <div class="settings-site-content">
+                        <div class="settings-site-info">
+                          <span class="site-name settings-site-name"></span>
+                          <span class="site-domain settings-site-domain"></span>
+                        </div>
+                        <div class="settings-site-controls">
+                          <div class="settings-site-control-group">
+                            <label class="settings-site-label">Schedule:</label>
+                            <select
+                              class="site-schedule settings-site-select"
+                              bbb-action="site-schedule-change"
+                              aria-label="Schedule frequency for site"
+                            >
+                              <option value="">None</option>
+                              <option value="6">Every 6 hours</option>
+                              <option value="12">Every 12 hours</option>
+                              <option value="24">Every 24 hours</option>
+                              <option value="48">Every 48 hours</option>
+                            </select>
+                          </div>
+                          <div class="settings-site-control-group">
+                            <label class="settings-site-label"
+                              >Run on Publish:</label
+                            >
+                            <label class="bb-toggle">
+                              <input
+                                type="checkbox"
+                                class="site-autopublish"
+                                aria-label="Run on Publish"
+                              />
+                              <span class="bb-toggle-slider"></span>
+                            </label>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="site-status settings-site-status"></div>
+                    </div>
+
+                    <div
+                      id="webflowSitesLoading"
+                      class="settings-sites-loading"
+                    >
+                      Loading sites...
+                    </div>
+                    <div id="webflowSitesEmpty" class="settings-sites-empty">
+                      No sites found in this Webflow workspace.
+                    </div>
+                  </div>
+
+                  <div
+                    id="webflowSitesPagination"
+                    class="settings-sites-pagination"
+                  >
+                    <button
+                      id="webflowSitesPrevPage"
+                      class="bb-button bb-button-outline settings-pagination-btn settings-pagination-btn--prev"
+                      bbb-action="webflow-sites-prev"
+                      aria-label="Previous page of Webflow sites"
+                      disabled
+                    >
+                      Previous
+                    </button>
+                    <span
+                      id="webflowSitesPageInfo"
+                      class="settings-pagination-info"
+                    ></span>
+                    <button
+                      id="webflowSitesNextPage"
+                      class="bb-button bb-button-outline settings-pagination-btn settings-pagination-btn--next"
+                      bbb-action="webflow-sites-next"
+                      aria-label="Next page of Webflow sites"
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+
+                <div id="webflowEmptyState" class="settings-empty-state">
+                  <p class="settings-empty-text">No Webflow connection yet.</p>
+                  <button
+                    class="bb-button bb-button-primary settings-btn-icon"
+                    bbb-action="webflow-connect"
+                  >
+                    Connect Webflow
                   </button>
                 </div>
-              </div>
 
-              <div id="webflowSitesConfig" class="settings-sites-panel">
-                <div class="settings-sites-header">
-                  <h4 class="settings-sites-title">Configure Sites</h4>
+                <div
+                  id="webflowSuccessMessage"
+                  class="settings-notification settings-notification--success settings-notification--compact"
+                >
+                  <span id="webflowSuccessText"></span>
+                </div>
+                <div
+                  id="webflowErrorMessage"
+                  class="settings-notification settings-notification--error settings-notification--compact"
+                >
+                  <span id="webflowErrorText"></span>
+                </div>
+              </div>
+            </div>
+
+            <div
+              class="settings-tab-panel"
+              id="autoCrawlSchedulesPanel"
+              role="tabpanel"
+              aria-labelledby="autoCrawlSchedulesTrigger"
+              tabindex="0"
+            >
+              <div class="settings-card">
+                <div class="settings-row">
+                  <div>
+                    <strong id="schedules">Scheduled jobs</strong>
+                    <div class="settings-muted">
+                      Manage recurring crawl jobs for this organisation.
+                    </div>
+                  </div>
                   <button
-                    id="webflowSitesRefresh"
                     class="bb-button bb-button-outline settings-btn-sm"
-                    bbb-action="webflow-sites-refresh"
-                    title="Refresh sites list"
-                    aria-label="Refresh sites list"
+                    id="autoCrawlSchedulesRefresh"
+                    type="button"
                   >
                     Refresh
                   </button>
                 </div>
 
-                <div id="webflowSitesSearchBox" class="settings-sites-search">
-                  <input
-                    type="text"
-                    id="webflowSiteSearch"
-                    class="settings-sites-search-input"
-                    placeholder="Search sites..."
-                    aria-label="Search Webflow sites"
-                  />
-                </div>
-
-                <div id="webflowSitesList">
+                <div class="bb-jobs-list" id="settingsSchedulesList">
                   <div
-                    class="webflow-site-row settings-site-row"
-                    bbb-template="webflow-site"
+                    class="bb-job-card"
+                    data-settings-template="schedule"
+                    style="display: none"
                   >
-                    <div class="settings-site-content">
-                      <div class="settings-site-info">
-                        <span class="site-name settings-site-name"></span>
-                        <span class="site-domain settings-site-domain"></span>
-                      </div>
-                      <div class="settings-site-controls">
-                        <div class="settings-site-control-group">
-                          <label class="settings-site-label">Schedule:</label>
-                          <select
-                            class="site-schedule settings-site-select"
-                            bbb-action="site-schedule-change"
-                            aria-label="Schedule frequency for site"
-                          >
-                            <option value="">None</option>
-                            <option value="6">Every 6 hours</option>
-                            <option value="12">Every 12 hours</option>
-                            <option value="24">Every 24 hours</option>
-                            <option value="48">Every 48 hours</option>
-                          </select>
-                        </div>
-                        <div class="settings-site-control-group">
-                          <label class="settings-site-label"
-                            >Run on Publish:</label
-                          >
-                          <label class="bb-toggle">
-                            <input
-                              type="checkbox"
-                              class="site-autopublish"
-                              aria-label="Run on Publish"
-                            />
-                            <span class="bb-toggle-slider"></span>
-                          </label>
-                        </div>
+                    <div class="bb-job-header">
+                      <div class="bb-job-domain">example.com</div>
+                      <div class="bb-schedule-info">
+                        <span>24 hours</span>
+                        <span class="bb-schedule-status bb-schedule-enabled">
+                          Enabled
+                        </span>
                       </div>
                     </div>
-                    <div class="site-status settings-site-status"></div>
+                    <div class="bb-job-footer">
+                      <div>
+                        <span style="font-weight: 500">Next run:</span>
+                        <span>-</span>
+                      </div>
+                      <div class="bb-job-actions">
+                        <button
+                          class="bb-job-link"
+                          data-schedule-action="toggle"
+                          type="button"
+                        >
+                          Disable
+                        </button>
+                        <button
+                          class="bb-job-link"
+                          data-schedule-action="view-jobs"
+                          type="button"
+                        >
+                          View Jobs
+                        </button>
+                        <button
+                          class="bb-job-link"
+                          data-schedule-action="delete"
+                          style="color: #dc2626"
+                          type="button"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
                   </div>
-
-                  <div id="webflowSitesLoading" class="settings-sites-loading">
-                    Loading sites...
-                  </div>
-                  <div id="webflowSitesEmpty" class="settings-sites-empty">
-                    No sites found in this Webflow workspace.
+                  <div
+                    id="settingsSchedulesEmpty"
+                    style="
+                      text-align: center;
+                      padding: 32px;
+                      color: #6b7280;
+                      display: none;
+                    "
+                  >
+                    No schedules configured.
                   </div>
                 </div>
-
-                <div
-                  id="webflowSitesPagination"
-                  class="settings-sites-pagination"
-                >
-                  <button
-                    id="webflowSitesPrevPage"
-                    class="bb-button bb-button-outline settings-pagination-btn settings-pagination-btn--prev"
-                    bbb-action="webflow-sites-prev"
-                    aria-label="Previous page of Webflow sites"
-                    disabled
-                  >
-                    Previous
-                  </button>
-                  <span
-                    id="webflowSitesPageInfo"
-                    class="settings-pagination-info"
-                  ></span>
-                  <button
-                    id="webflowSitesNextPage"
-                    class="bb-button bb-button-outline settings-pagination-btn settings-pagination-btn--next"
-                    bbb-action="webflow-sites-next"
-                    aria-label="Next page of Webflow sites"
-                  >
-                    Next
-                  </button>
-                </div>
-              </div>
-
-              <div id="webflowEmptyState" class="settings-empty-state">
-                <p class="settings-empty-text">No Webflow connection yet.</p>
-                <button
-                  class="bb-button bb-button-primary settings-btn-icon"
-                  bbb-action="webflow-connect"
-                >
-                  Connect Webflow
-                </button>
-              </div>
-
-              <div
-                id="webflowSuccessMessage"
-                class="settings-notification settings-notification--success settings-notification--compact"
-              >
-                <span id="webflowSuccessText"></span>
-              </div>
-              <div
-                id="webflowErrorMessage"
-                class="settings-notification settings-notification--error settings-notification--compact"
-              >
-                <span id="webflowErrorText"></span>
               </div>
             </div>
           </section>

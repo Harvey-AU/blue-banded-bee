@@ -422,9 +422,9 @@ async function handleDashboardJobCreation(event) {
         throw jobError;
       }
 
-      // Refresh schedules and dashboard
-      if (window.loadSchedules) {
-        await window.loadSchedules();
+      // Refresh schedules (settings page) and dashboard data if present
+      if (window.loadSettingsSchedules) {
+        await window.loadSettingsSchedules();
       }
       if (window.dataBinder) {
         await window.dataBinder.refresh();
