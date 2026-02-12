@@ -132,6 +132,35 @@ func (db *DB) RemoveOrganisationMember(ctx context.Context, userID, organisation
 	return nil
 }
 
+// UpdateOrganisationMemberRole updates a member's role in an organisation.
+func (db *DB) UpdateOrganisationMemberRole(ctx context.Context, userID, organisationID, role string) error {
+	role = strings.TrimSpace(strings.ToLower(role))
+	if role != "admin" && role != "member" {
+		return fmt.Errorf("invalid role: %s", role)
+	}
+
+	query := `
+		UPDATE organisation_members
+		SET role = $3
+		WHERE user_id = $1 AND organisation_id = $2
+	`
+
+	result, err := db.client.ExecContext(ctx, query, userID, organisationID, role)
+	if err != nil {
+		return fmt.Errorf("failed to update organisation member role: %w", err)
+	}
+
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to read rows affected: %w", err)
+	}
+	if rows == 0 {
+		return fmt.Errorf("organisation member not found")
+	}
+
+	return nil
+}
+
 // CountOrganisationAdmins returns the number of admins in an organisation.
 func (db *DB) CountOrganisationAdmins(ctx context.Context, organisationID string) (int, error) {
 	query := `

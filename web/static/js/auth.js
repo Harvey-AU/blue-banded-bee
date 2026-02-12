@@ -478,36 +478,39 @@ async function updateUserInfo() {
 }
 
 /**
- * Generate initials from email address
- * @param {string} email - Email address
+ * Generate initials from a display name or email address.
+ * @param {string} value - Name or email address
  * @returns {string} User initials
  */
-function getInitials(email) {
-  if (!email) return "?";
+function getInitials(value) {
+  const raw = (value || "").trim();
+  if (!raw) return "?";
 
-  // Try to get name parts from email or use email prefix
-  const emailPrefix = email.split("@")[0];
-
-  // Check if email has recognisable name patterns (firstname.lastname, etc.)
-  if (emailPrefix.includes(".")) {
-    const parts = emailPrefix.split(".");
-    return parts
-      .map((part) => part.charAt(0).toUpperCase())
-      .slice(0, 2)
-      .join("");
-  } else if (emailPrefix.includes("_")) {
-    const parts = emailPrefix.split("_");
-    return parts
-      .map((part) => part.charAt(0).toUpperCase())
-      .slice(0, 2)
-      .join("");
-  } else {
-    // Just use first two characters of email prefix
-    return emailPrefix.slice(0, 2).toUpperCase();
+  // Name format: "Jane Doe" -> "JD"
+  if (raw.includes(" ")) {
+    const parts = raw
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2);
+    if (parts.length) {
+      return parts.map((part) => part.charAt(0).toUpperCase()).join("");
+    }
   }
+
+  // Email format fallback
+  const emailPrefix = raw.includes("@") ? raw.split("@")[0] : raw;
+  const parts = emailPrefix.split(/[._-]+/).filter(Boolean);
+  if (parts.length >= 2) {
+    return parts
+      .slice(0, 2)
+      .map((part) => part.charAt(0).toUpperCase())
+      .join("");
+  }
+
+  return emailPrefix.slice(0, 2).toUpperCase();
 }
 
-async function setUserAvatar(target, email, initials) {
+async function setUserAvatar(target, email, initials, options = {}) {
   if (!target) return;
 
   const existingImg = target.querySelector("img");
@@ -517,12 +520,12 @@ async function setUserAvatar(target, email, initials) {
 
   target.textContent = initials || "?";
 
-  const gravatarUrl = await getGravatarUrl(email, 80);
+  const gravatarUrl = await getGravatarUrl(email, options.size || 80);
   if (!gravatarUrl) return;
 
   const avatarImg = document.createElement("img");
   avatarImg.src = gravatarUrl;
-  avatarImg.alt = "User avatar";
+  avatarImg.alt = options.alt || "User avatar";
   avatarImg.loading = "lazy";
   avatarImg.decoding = "async";
   avatarImg.addEventListener("load", () => {
@@ -1795,8 +1798,16 @@ if (typeof module !== "undefined" && module.exports) {
     defaultHandleAuthSuccess,
     initCliAuthPage,
     resumeCliAuthFromStorage,
+    setUserAvatar,
+    getGravatarUrl,
   };
 } else {
+  window.BBAvatar = {
+    getInitials,
+    setUserAvatar,
+    getGravatarUrl,
+  };
+
   // Browser environment - make functions globally available
   window.BBAuth = {
     initialiseSupabase,
@@ -1827,6 +1838,8 @@ if (typeof module !== "undefined" && module.exports) {
     initCliAuthPage,
     resumeCliAuthFromStorage,
     clearPendingInviteToken,
+    setUserAvatar,
+    getGravatarUrl,
   };
 
   // Also make individual functions available globally for backward compatibility
@@ -1838,6 +1851,8 @@ if (typeof module !== "undefined" && module.exports) {
   window.updateAuthState = updateAuthState;
   window.updateUserInfo = updateUserInfo;
   window.getInitials = getInitials;
+  window.setUserAvatar = setUserAvatar;
+  window.getGravatarUrl = getGravatarUrl;
   window.showAuthModal = showAuthModal;
   window.closeAuthModal = closeAuthModal;
   window.showAuthForm = showAuthForm;

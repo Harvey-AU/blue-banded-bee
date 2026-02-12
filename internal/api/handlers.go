@@ -103,6 +103,7 @@ type DBClient interface {
 	GetUserByWebhookToken(token string) (*db.User, error)
 	// Additional methods used by API handlers
 	GetUser(userID string) (*db.User, error)
+	UpdateUserFullName(userID string, fullName *string) error
 	ResetSchema() error
 	ResetDataOnly() error
 	CreateUser(userID, email string, fullName *string, orgName string) (*db.User, *db.Organisation, error)
@@ -129,6 +130,7 @@ type DBClient interface {
 	ListOrganisationMembers(ctx context.Context, organisationID string) ([]db.OrganisationMember, error)
 	IsOrganisationMemberEmail(ctx context.Context, organisationID, email string) (bool, error)
 	RemoveOrganisationMember(ctx context.Context, userID, organisationID string) error
+	UpdateOrganisationMemberRole(ctx context.Context, userID, organisationID, role string) error
 	CountOrganisationAdmins(ctx context.Context, organisationID string) (int, error)
 	// Organisation management methods
 	CreateOrganisation(name string) (*db.Organisation, error)

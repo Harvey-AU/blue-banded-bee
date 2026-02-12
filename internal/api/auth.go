@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+	"slices"
 	"strings"
 
 	emailverifier "github.com/AfterShip/email-verifier"
@@ -153,14 +154,24 @@ func (h *Handler) AuthSession(w http.ResponseWriter, r *http.Request) {
 	WriteSuccess(w, r, sessionInfo, "Session validated")
 }
 
-// AuthProfile handles GET /v1/auth/profile
-func (h *Handler) AuthProfile(w http.ResponseWriter, r *http.Request) {
-	logger := loggerWithRequest(r)
+type AuthProfileUpdateRequest struct {
+	FullName *string `json:"full_name"`
+}
 
-	if r.Method != http.MethodGet {
+// AuthProfile handles GET/PATCH /v1/auth/profile
+func (h *Handler) AuthProfile(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		h.getAuthProfile(w, r)
+	case http.MethodPatch:
+		h.updateAuthProfile(w, r)
+	default:
 		MethodNotAllowed(w, r)
-		return
 	}
+}
+
+func (h *Handler) getAuthProfile(w http.ResponseWriter, r *http.Request) {
+	logger := loggerWithRequest(r)
 
 	userClaims, ok := auth.GetUserFromContext(r.Context())
 	if !ok {
@@ -168,13 +179,21 @@ func (h *Handler) AuthProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	claimsFullName := fullNameFromClaims(userClaims)
+
 	// Auto-create user if they don't exist
-	user, err := h.DB.GetOrCreateUser(userClaims.UserID, userClaims.Email, nil)
+	user, err := h.DB.GetOrCreateUser(userClaims.UserID, userClaims.Email, claimsFullName)
 	if err != nil {
 		sentry.CaptureException(err)
 		logger.Error().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to get or create user")
 		InternalError(w, r, err)
 		return
+	}
+
+	if (user.FullName == nil || strings.TrimSpace(*user.FullName) == "") && claimsFullName != nil {
+		if err := h.DB.UpdateUserFullName(userClaims.UserID, claimsFullName); err == nil {
+			user.FullName = claimsFullName
+		}
 	}
 
 	userResp := UserResponse{
@@ -187,7 +206,8 @@ func (h *Handler) AuthProfile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response := map[string]any{
-		"user": userResp,
+		"user":         userResp,
+		"auth_methods": authMethodsFromClaims(userClaims),
 	}
 
 	// Get organisation if user has one
@@ -207,4 +227,124 @@ func (h *Handler) AuthProfile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	WriteSuccess(w, r, response, "Profile retrieved successfully")
+}
+
+func (h *Handler) updateAuthProfile(w http.ResponseWriter, r *http.Request) {
+	userClaims, ok := auth.GetUserFromContext(r.Context())
+	if !ok {
+		Unauthorised(w, r, "User information not found")
+		return
+	}
+
+	var req AuthProfileUpdateRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		BadRequest(w, r, "Invalid JSON request body")
+		return
+	}
+
+	if req.FullName == nil {
+		BadRequest(w, r, "full_name is required")
+		return
+	}
+
+	name := strings.TrimSpace(*req.FullName)
+	if name == "" {
+		req.FullName = nil
+	} else {
+		if len(name) > 120 {
+			BadRequest(w, r, "full_name must be 120 characters or fewer")
+			return
+		}
+		req.FullName = &name
+	}
+
+	if _, err := h.DB.GetOrCreateUser(userClaims.UserID, userClaims.Email, req.FullName); err != nil {
+		InternalError(w, r, err)
+		return
+	}
+
+	if err := h.DB.UpdateUserFullName(userClaims.UserID, req.FullName); err != nil {
+		InternalError(w, r, err)
+		return
+	}
+
+	user, err := h.DB.GetUser(userClaims.UserID)
+	if err != nil {
+		InternalError(w, r, err)
+		return
+	}
+
+	userResp := UserResponse{
+		ID:             user.ID,
+		Email:          user.Email,
+		FullName:       user.FullName,
+		OrganisationID: user.OrganisationID,
+		CreatedAt:      user.CreatedAt.Format("2006-01-02T15:04:05Z"),
+		UpdatedAt:      user.UpdatedAt.Format("2006-01-02T15:04:05Z"),
+	}
+
+	WriteSuccess(w, r, map[string]any{
+		"user":         userResp,
+		"auth_methods": authMethodsFromClaims(userClaims),
+	}, "Profile updated successfully")
+}
+
+func fullNameFromClaims(userClaims *auth.UserClaims) *string {
+	if userClaims == nil {
+		return nil
+	}
+
+	for _, key := range []string{"full_name", "name"} {
+		value, ok := userClaims.UserMetadata[key]
+		if !ok {
+			continue
+		}
+		name, ok := value.(string)
+		if !ok {
+			continue
+		}
+		name = strings.TrimSpace(name)
+		if name != "" {
+			return &name
+		}
+	}
+
+	return nil
+}
+
+func authMethodsFromClaims(userClaims *auth.UserClaims) []string {
+	if userClaims == nil {
+		return []string{"email"}
+	}
+
+	var methods []string
+	if providersRaw, ok := userClaims.AppMetadata["providers"]; ok {
+		if providers, ok := providersRaw.([]any); ok {
+			for _, providerRaw := range providers {
+				provider, ok := providerRaw.(string)
+				if !ok {
+					continue
+				}
+				provider = strings.TrimSpace(strings.ToLower(provider))
+				if provider != "" && !slices.Contains(methods, provider) {
+					methods = append(methods, provider)
+				}
+			}
+		}
+	}
+
+	if providerRaw, ok := userClaims.AppMetadata["provider"]; ok {
+		if provider, ok := providerRaw.(string); ok {
+			provider = strings.TrimSpace(strings.ToLower(provider))
+			if provider != "" && !slices.Contains(methods, provider) {
+				methods = append(methods, provider)
+			}
+		}
+	}
+
+	if len(methods) == 0 {
+		methods = append(methods, "email")
+	}
+
+	return methods
 }

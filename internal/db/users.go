@@ -557,6 +557,30 @@ func (db *DB) SetActiveOrganisation(userID, organisationID string) error {
 	return nil
 }
 
+// UpdateUserFullName updates the user's full name.
+func (db *DB) UpdateUserFullName(userID string, fullName *string) error {
+	query := `
+		UPDATE users
+		SET full_name = $2, updated_at = NOW()
+		WHERE id = $1
+	`
+
+	result, err := db.client.Exec(query, userID, fullName)
+	if err != nil {
+		return fmt.Errorf("failed to update user full name: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+	if rowsAffected == 0 {
+		return fmt.Errorf("user not found")
+	}
+
+	return nil
+}
+
 // AddOrganisationMember adds a user as a member of an organisation
 func (db *DB) AddOrganisationMember(userID, organisationID, role string) error {
 	role = strings.TrimSpace(strings.ToLower(role))

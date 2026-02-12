@@ -7,6 +7,7 @@
   const settingsState = {
     currentUserRole: "member",
     currentUserId: null,
+    authMethods: [],
   };
 
   function showSettingsToast(type, message) {
@@ -261,21 +262,115 @@
     });
   }
 
+  function formatAuthMethod(method) {
+    const value = (method || "").trim().toLowerCase();
+    if (value === "google") return "Google";
+    if (value === "email") return "Email/Password";
+    if (!value) return "Unknown";
+    return value.charAt(0).toUpperCase() + value.slice(1);
+  }
+
+  function renderAuthMethods(methods) {
+    const authMethodsEl = document.getElementById("settingsAuthMethods");
+    if (!authMethodsEl) return;
+
+    authMethodsEl.innerHTML = "";
+    if (!Array.isArray(methods) || methods.length === 0) {
+      authMethodsEl.innerHTML =
+        '<span class="settings-muted">No authentication methods found.</span>';
+      return;
+    }
+
+    methods.forEach((method) => {
+      const pill = document.createElement("span");
+      pill.className = "settings-auth-method-pill";
+      pill.textContent = formatAuthMethod(method);
+      authMethodsEl.appendChild(pill);
+    });
+  }
+
   async function loadAccountDetails() {
     const sessionResult = await window.supabase.auth.getSession();
     const session = sessionResult?.data?.session;
     if (!session?.user) return;
 
-    const email = session.user.email || "";
-    const fullName =
+    const fallbackEmail = session.user.email || "";
+    const fallbackFullName =
       session.user.user_metadata?.full_name ||
       session.user.user_metadata?.name ||
       "";
+    const fallbackMethods = session.user.app_metadata?.providers || [];
+
+    let email = fallbackEmail;
+    let fullName = fallbackFullName;
+    let authMethods = fallbackMethods;
+
+    try {
+      const response = await window.dataBinder.fetchData("/v1/auth/profile");
+      const profileUser = response?.user || {};
+      if (profileUser.email) {
+        email = profileUser.email;
+      }
+      if (typeof profileUser.full_name === "string" && profileUser.full_name) {
+        fullName = profileUser.full_name;
+      }
+      if (Array.isArray(response?.auth_methods)) {
+        authMethods = response.auth_methods;
+      }
+    } catch (err) {
+      console.warn("Failed to load profile from API:", err);
+    }
 
     const emailEl = document.getElementById("settingsUserEmail");
-    const nameEl = document.getElementById("settingsUserName");
+    const nameInputEl = document.getElementById("settingsUserNameInput");
     if (emailEl) emailEl.textContent = email || "Not set";
-    if (nameEl) nameEl.textContent = fullName || "Not set";
+    if (nameInputEl) nameInputEl.value = fullName || "";
+
+    settingsState.authMethods = Array.isArray(authMethods) ? authMethods : [];
+    renderAuthMethods(settingsState.authMethods);
+  }
+
+  async function saveProfileName() {
+    const nameInputEl = document.getElementById("settingsUserNameInput");
+    const saveBtn = document.getElementById("settingsSaveName");
+    if (!nameInputEl || !saveBtn) return;
+
+    const fullName = nameInputEl.value.trim();
+    if (fullName.length > 120) {
+      showSettingsToast("error", "Name must be 120 characters or fewer");
+      return;
+    }
+
+    saveBtn.disabled = true;
+    const originalText = saveBtn.textContent;
+    saveBtn.textContent = "Saving...";
+
+    try {
+      try {
+        const payload = fullName ? { full_name: fullName } : { full_name: "" };
+        await window.supabase.auth.updateUser({
+          data: { full_name: payload.full_name },
+        });
+      } catch (err) {
+        console.warn("Failed to update auth metadata name:", err);
+      }
+
+      await window.dataBinder.fetchData("/v1/auth/profile", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ full_name: fullName }),
+      });
+
+      showSettingsToast("success", "Name updated");
+      await loadAccountDetails();
+      await loadOrganisationMembers();
+    } catch (err) {
+      console.error("Failed to save profile name:", err);
+      showSettingsToast("error", "Failed to update name");
+    } finally {
+      saveBtn.disabled = false;
+      saveBtn.textContent = originalText || "Save name";
+    }
   }
 
   async function sendPasswordReset() {
@@ -329,9 +424,10 @@
       members.forEach((member) => {
         const clone = memberTemplate.content.cloneNode(true);
         const row = clone.querySelector(".settings-member-row");
+        const avatarEl = clone.querySelector(".settings-member-avatar");
         const nameEl = clone.querySelector(".settings-member-name");
         const emailEl = clone.querySelector(".settings-member-email");
-        const roleEl = clone.querySelector(".settings-member-role");
+        const roleSelect = clone.querySelector(".settings-member-role-select");
         const removeBtn = clone.querySelector(".settings-member-remove");
 
         if (row) row.dataset.memberId = member.id;
@@ -339,13 +435,42 @@
           nameEl.textContent = member.full_name || "Unnamed";
         }
         if (emailEl) emailEl.textContent = member.email || "";
-        if (roleEl) roleEl.textContent = member.role || "member";
+        if (avatarEl) {
+          const initialsSource = member.full_name || member.email || "";
+          const initials =
+            window.BBAvatar?.getInitials?.(initialsSource) ||
+            window.BBAuth?.getInitials?.(initialsSource) ||
+            "?";
+          window.BBAvatar?.setUserAvatar?.(avatarEl, member.email || "", initials, {
+            size: 68,
+            alt: `${member.full_name || member.email || "Member"} avatar`,
+          });
+        }
+        if (roleSelect) {
+          roleSelect.value = member.role || "member";
+          const canEditRole =
+            settingsState.currentUserRole === "admin" &&
+            member.id !== settingsState.currentUserId;
+          roleSelect.disabled = !canEditRole;
+          roleSelect.addEventListener("change", async () => {
+            const previousValue = member.role || "member";
+            try {
+              await updateMemberRole(member.id, roleSelect.value);
+              member.role = roleSelect.value;
+            } catch {
+              roleSelect.value = previousValue;
+            }
+          });
+        }
 
         if (removeBtn) {
           removeBtn.dataset.memberId = member.id;
           removeBtn.addEventListener("click", () => removeMember(member.id));
 
-          if (settingsState.currentUserRole !== "admin") {
+          const canRemove =
+            settingsState.currentUserRole === "admin" &&
+            member.id !== settingsState.currentUserId;
+          if (!canRemove) {
             removeBtn.disabled = true;
           }
         }
@@ -376,6 +501,24 @@
     } catch (err) {
       console.error("Failed to remove member:", err);
       showSettingsToast("error", "Failed to remove member");
+    }
+  }
+
+  async function updateMemberRole(memberId, role) {
+    if (!memberId) return;
+
+    try {
+      await window.dataBinder.fetchData(`/v1/organisations/members/${memberId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ role }),
+      });
+      showSettingsToast("success", "Member role updated");
+      await loadOrganisationMembers();
+    } catch (err) {
+      console.error("Failed to update member role:", err);
+      showSettingsToast("error", "Failed to update member role");
+      throw err;
     }
   }
 
@@ -1673,6 +1816,10 @@
       const resetBtn = document.getElementById("settingsResetPassword");
       if (resetBtn) {
         resetBtn.addEventListener("click", sendPasswordReset);
+      }
+      const saveNameBtn = document.getElementById("settingsSaveName");
+      if (saveNameBtn) {
+        saveNameBtn.addEventListener("click", saveProfileName);
       }
 
       if (window.setupSlackIntegration) {
