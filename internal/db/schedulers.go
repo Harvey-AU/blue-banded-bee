@@ -224,7 +224,6 @@ func (db *DB) UpdateScheduler(ctx context.Context, schedulerID string, updates *
 			if exists {
 				return ErrSchedulerStateConflict
 			}
-			}
 		}
 		log.Warn().Str("scheduler_id", schedulerID).Msg("Scheduler not found for update")
 		return ErrSchedulerNotFound
