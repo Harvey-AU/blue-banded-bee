@@ -2763,7 +2763,7 @@ body.page-settings .bb-toggle-slider:before {
   align-items: end;
 }
 
-@media (max-width: 900px) {
+@media (width <= 900px) {
   .settings-profile-edit {
     flex-direction: column;
     align-items: stretch;
