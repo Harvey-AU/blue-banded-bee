@@ -473,6 +473,7 @@
               await updateMemberRole(member.id, roleSelect.value);
               member.role = roleSelect.value;
             } catch {
+              // Error already handled/toasted in updateMemberRole; revert UI.
               roleSelect.value = previousValue;
             }
           });
