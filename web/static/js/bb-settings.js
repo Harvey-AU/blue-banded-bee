@@ -441,10 +441,15 @@
             window.BBAvatar?.getInitials?.(initialsSource) ||
             window.BBAuth?.getInitials?.(initialsSource) ||
             "?";
-          window.BBAvatar?.setUserAvatar?.(avatarEl, member.email || "", initials, {
-            size: 68,
-            alt: `${member.full_name || member.email || "Member"} avatar`,
-          });
+          window.BBAvatar?.setUserAvatar?.(
+            avatarEl,
+            member.email || "",
+            initials,
+            {
+              size: 68,
+              alt: `${member.full_name || member.email || "Member"} avatar`,
+            }
+          );
         }
         if (roleSelect) {
           roleSelect.value = member.role || "member";
@@ -508,11 +513,14 @@
     if (!memberId) return;
 
     try {
-      await window.dataBinder.fetchData(`/v1/organisations/members/${memberId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ role }),
-      });
+      await window.dataBinder.fetchData(
+        `/v1/organisations/members/${memberId}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ role }),
+        }
+      );
       showSettingsToast("success", "Member role updated");
       await loadOrganisationMembers();
     } catch (err) {
