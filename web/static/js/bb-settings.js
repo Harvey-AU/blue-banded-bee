@@ -346,6 +346,7 @@
     saveBtn.textContent = "Saving...";
 
     try {
+      let metadataUpdateSucceeded = true;
       try {
         const payload = fullName ? { full_name: fullName } : { full_name: "" };
         await window.supabase.auth.updateUser({
@@ -353,6 +354,7 @@
         });
       } catch (err) {
         console.warn("Failed to update auth metadata name:", err);
+        metadataUpdateSucceeded = false;
       }
 
       await window.dataBinder.fetchData("/v1/auth/profile", {
@@ -361,7 +363,14 @@
         body: JSON.stringify({ full_name: fullName }),
       });
 
-      showSettingsToast("success", "Name updated");
+      if (metadataUpdateSucceeded) {
+        showSettingsToast("success", "Name updated");
+      } else {
+        showSettingsToast(
+          "warning",
+          "Name saved, but auth metadata sync failed. Please re-login if needed."
+        );
+      }
       await loadAccountDetails();
       await loadOrganisationMembers();
     } catch (err) {
