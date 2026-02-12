@@ -131,7 +131,9 @@
             <div class="settings-card" id="profile">
               <div class="settings-row">
                 <div>
-                  <strong>Name</strong>
+                  <label for="settingsUserNameInput"
+                    ><strong>Name</strong></label
+                  >
                   <div class="settings-profile-edit">
                     <input
                       class="settings-input"
@@ -833,7 +835,10 @@
             <span class="settings-member-email"></span>
           </div>
         </div>
-        <select class="settings-input settings-member-role-select">
+        <select
+          class="settings-input settings-member-role-select"
+          aria-label="Member role"
+        >
           <option value="member">Member</option>
           <option value="admin">Admin</option>
         </select>
