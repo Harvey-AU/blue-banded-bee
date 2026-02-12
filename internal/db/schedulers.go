@@ -13,6 +13,7 @@ import (
 
 // ErrSchedulerNotFound is returned when a scheduler is not found
 var ErrSchedulerNotFound = errors.New("scheduler not found")
+var ErrSchedulerStateConflict = errors.New("scheduler state conflict")
 
 // Scheduler represents a recurring job schedule
 type Scheduler struct {
@@ -164,8 +165,10 @@ func (db *DB) ListSchedulers(ctx context.Context, organisationID string) ([]*Sch
 	return schedulers, rows.Err()
 }
 
-// UpdateScheduler updates a scheduler's configuration
-func (db *DB) UpdateScheduler(ctx context.Context, schedulerID string, updates *Scheduler) error {
+// UpdateScheduler updates a scheduler's configuration.
+// If expectedIsEnabled is non-nil, the update is conditional on current is_enabled
+// matching the expected value (optimistic concurrency).
+func (db *DB) UpdateScheduler(ctx context.Context, schedulerID string, updates *Scheduler, expectedIsEnabled *bool) error {
 	query := `
 		UPDATE schedulers
 		SET schedule_interval_hours = $1,
@@ -181,12 +184,24 @@ func (db *DB) UpdateScheduler(ctx context.Context, schedulerID string, updates *
 		WHERE id = $11
 	`
 
-	result, err := db.client.ExecContext(ctx, query,
-		updates.ScheduleIntervalHours, updates.NextRunAt, updates.IsEnabled,
-		updates.Concurrency, updates.FindLinks, updates.MaxPages,
-		Serialise(updates.IncludePaths), Serialise(updates.ExcludePaths),
-		updates.RequiredWorkers, time.Now().UTC(), schedulerID,
-	)
+	var result sql.Result
+	var err error
+	if expectedIsEnabled != nil {
+		query = query + " AND is_enabled = $12"
+		result, err = db.client.ExecContext(ctx, query,
+			updates.ScheduleIntervalHours, updates.NextRunAt, updates.IsEnabled,
+			updates.Concurrency, updates.FindLinks, updates.MaxPages,
+			Serialise(updates.IncludePaths), Serialise(updates.ExcludePaths),
+			updates.RequiredWorkers, time.Now().UTC(), schedulerID, *expectedIsEnabled,
+		)
+	} else {
+		result, err = db.client.ExecContext(ctx, query,
+			updates.ScheduleIntervalHours, updates.NextRunAt, updates.IsEnabled,
+			updates.Concurrency, updates.FindLinks, updates.MaxPages,
+			Serialise(updates.IncludePaths), Serialise(updates.ExcludePaths),
+			updates.RequiredWorkers, time.Now().UTC(), schedulerID,
+		)
+	}
 	if err != nil {
 		log.Error().Err(err).Str("scheduler_id", schedulerID).Msg("Failed to update scheduler")
 		return fmt.Errorf("failed to update scheduler: %w", err)
@@ -199,6 +214,18 @@ func (db *DB) UpdateScheduler(ctx context.Context, schedulerID string, updates *
 	}
 
 	if rowsAffected == 0 {
+		if expectedIsEnabled != nil {
+			var exists bool
+			err := db.client.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM schedulers WHERE id = $1)", schedulerID).Scan(&exists)
+			if err != nil {
+				log.Error().Err(err).Str("scheduler_id", schedulerID).Msg("Failed to check scheduler existence after conflict")
+				return fmt.Errorf("failed to check scheduler existence: %w", err)
+			}
+			if exists {
+				log.Warn().Str("scheduler_id", schedulerID).Msg("Scheduler state conflict on update")
+				return ErrSchedulerStateConflict
+			}
+		}
 		log.Warn().Str("scheduler_id", schedulerID).Msg("Scheduler not found for update")
 		return ErrSchedulerNotFound
 	}

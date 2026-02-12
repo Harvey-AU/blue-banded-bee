@@ -338,13 +338,6 @@ func (h *Handler) updateScheduler(w http.ResponseWriter, r *http.Request, schedu
 		return
 	}
 
-	// Optional optimistic concurrency check for toggle/update operations.
-	if req.IsEnabled != nil && req.ExpectedIsEnabled != nil &&
-		scheduler.IsEnabled != *req.ExpectedIsEnabled {
-		WriteErrorMessage(w, r, "Scheduler state changed; refresh and retry", http.StatusConflict, ErrCodeConflict)
-		return
-	}
-
 	// Update fields if provided
 	if req.ScheduleIntervalHours != nil {
 		if *req.ScheduleIntervalHours != 6 && *req.ScheduleIntervalHours != 12 &&
@@ -390,9 +383,11 @@ func (h *Handler) updateScheduler(w http.ResponseWriter, r *http.Request, schedu
 		scheduler.IsEnabled = *req.IsEnabled
 	}
 
-	if err := h.DB.UpdateScheduler(r.Context(), schedulerID, scheduler); err != nil {
+	if err := h.DB.UpdateScheduler(r.Context(), schedulerID, scheduler, req.ExpectedIsEnabled); err != nil {
 		if errors.Is(err, db.ErrSchedulerNotFound) {
 			NotFound(w, r, "Scheduler not found")
+		} else if errors.Is(err, db.ErrSchedulerStateConflict) {
+			WriteErrorMessage(w, r, "Scheduler state changed; refresh and retry", http.StatusConflict, ErrCodeConflict)
 		} else {
 			logger.Error().Err(err).Str("scheduler_id", schedulerID).Msg("Failed to update scheduler")
 			InternalError(w, r, err)

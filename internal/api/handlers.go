@@ -113,7 +113,7 @@ type DBClient interface {
 	CreateScheduler(ctx context.Context, scheduler *db.Scheduler) error
 	GetScheduler(ctx context.Context, schedulerID string) (*db.Scheduler, error)
 	ListSchedulers(ctx context.Context, organisationID string) ([]*db.Scheduler, error)
-	UpdateScheduler(ctx context.Context, schedulerID string, updates *db.Scheduler) error
+	UpdateScheduler(ctx context.Context, schedulerID string, updates *db.Scheduler, expectedIsEnabled *bool) error
 	DeleteScheduler(ctx context.Context, schedulerID string) error
 	GetSchedulersReadyToRun(ctx context.Context, limit int) ([]*db.Scheduler, error)
 	UpdateSchedulerNextRun(ctx context.Context, schedulerID string, nextRun time.Time) error
