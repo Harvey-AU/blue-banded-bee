@@ -441,12 +441,13 @@
             window.BBAvatar?.getInitials?.(initialsSource) ||
             window.BBAuth?.getInitials?.(initialsSource) ||
             "?";
+          const avatarSize = Math.ceil(34 * (window.devicePixelRatio || 1));
           window.BBAvatar?.setUserAvatar?.(
             avatarEl,
             member.email || "",
             initials,
             {
-              size: 68,
+              size: avatarSize,
               alt: `${member.full_name || member.email || "Member"} avatar`,
             }
           );
