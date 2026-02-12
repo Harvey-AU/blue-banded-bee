@@ -438,90 +438,6 @@
             </div>
           </div>
         </div>
-
-        <!-- Schedules Section -->
-        <div class="bb-jobs-section" style="margin-top: 32px">
-          <div class="bb-section-header">
-            <h3>Schedules</h3>
-            <div class="bb-section-actions">
-              <button
-                class="bb-btn bb-btn-secondary"
-                bbb-action="refresh-schedules"
-                aria-label="Refresh schedules list"
-              >
-                <span>↻</span> Refresh
-              </button>
-            </div>
-          </div>
-
-          <div class="bb-jobs-list" id="schedulesList">
-            <!-- Schedule Template -->
-            <div
-              class="bb-job-card"
-              bbb-template="schedule"
-              style="display: none"
-            >
-              <div class="bb-job-header">
-                <div class="bb-job-domain" bbb-text="domain">example.com</div>
-                <div class="bb-schedule-info">
-                  <span bbb-text="schedule_interval_hours">24</span> hours
-                  <span
-                    class="bb-schedule-status"
-                    bbb-class="bb-schedule-{is_enabled}"
-                    bbb-text="is_enabled_text"
-                  >
-                    Enabled
-                  </span>
-                </div>
-              </div>
-              <div class="bb-job-footer">
-                <div>
-                  <span style="font-weight: 500">Next run:</span>
-                  <span bbb-text="next_run_at_formatted">-</span>
-                </div>
-                <div class="bb-job-actions">
-                  <button
-                    class="bb-job-link"
-                    bbb-action="toggle-schedule"
-                    bbb-id="{id}"
-                    bbb-text="toggle_text"
-                    aria-label="Toggle schedule enabled or disabled"
-                  >
-                    Disable
-                  </button>
-                  <button
-                    class="bb-job-link"
-                    bbb-action="view-schedule-jobs"
-                    bbb-id="{id}"
-                    aria-label="View jobs for this schedule"
-                  >
-                    View Jobs
-                  </button>
-                  <button
-                    class="bb-job-link"
-                    bbb-action="delete-schedule"
-                    bbb-id="{id}"
-                    style="color: #dc2626"
-                    aria-label="Delete this schedule"
-                  >
-                    Delete
-                  </button>
-                </div>
-              </div>
-            </div>
-            <div
-              id="schedulesEmpty"
-              style="
-                text-align: center;
-                padding: 40px;
-                color: #6b7280;
-                display: none;
-              "
-            >
-              No schedules configured. Create a scheduled job to get started.
-            </div>
-          </div>
-        </div>
       </div>
     </main>
 
@@ -770,11 +686,6 @@
             }
           }
 
-          // Load schedules after auth is confirmed
-          if (session?.user && window.loadSchedules) {
-            window.loadSchedules();
-          }
-
           if (window.BB_NAV_READY) {
             await window.BB_NAV_READY;
           }
@@ -872,14 +783,6 @@
             console.warn("Failed to refresh data binder:", err);
           }
         }
-        if (window.loadSchedules) {
-          try {
-            await window.loadSchedules();
-          } catch (err) {
-            console.warn("Failed to load schedules:", err);
-          }
-        }
-
         // Refresh quota display for new organisation
         if (typeof fetchAndDisplayQuota === "function") {
           try {

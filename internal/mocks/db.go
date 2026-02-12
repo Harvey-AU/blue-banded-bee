@@ -194,8 +194,8 @@ func (m *MockDB) ListSchedulers(ctx context.Context, organisationID string) ([]*
 }
 
 // UpdateScheduler mocks the UpdateScheduler method
-func (m *MockDB) UpdateScheduler(ctx context.Context, schedulerID string, updates *db.Scheduler) error {
-	args := m.Called(ctx, schedulerID, updates)
+func (m *MockDB) UpdateScheduler(ctx context.Context, schedulerID string, updates *db.Scheduler, expectedIsEnabled *bool) error {
+	args := m.Called(ctx, schedulerID, updates, expectedIsEnabled)
 	return args.Error(0)
 }
 

@@ -109,7 +109,7 @@
                     <a class="bb-dropdown-item" href="/settings/plans">Plans</a>
                     <a class="bb-dropdown-item" href="/settings/notifications">Notifications</a>
                     <a class="bb-dropdown-item" href="/settings/analytics">Analytics</a>
-                    <a class="bb-dropdown-item" href="/settings/auto-crawl">Auto-crawl</a>
+                    <a class="bb-dropdown-item" href="/settings/automated-jobs">Automated jobs</a>
                     <a class="bb-dropdown-item" href="/settings/team">Team</a>
                     <div class="bb-dropdown-divider"></div>
                     <button

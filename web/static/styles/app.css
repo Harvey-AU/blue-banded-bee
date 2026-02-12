@@ -2392,7 +2392,7 @@ html[data-settings-section="plans"] #plans,
 html[data-settings-section="billing"] #billing,
 html[data-settings-section="notifications"] #notifications,
 html[data-settings-section="analytics"] #analytics,
-html[data-settings-section="auto-crawl"] #auto-crawl {
+html[data-settings-section="automated-jobs"] #automated-jobs {
   display: block;
 }
 

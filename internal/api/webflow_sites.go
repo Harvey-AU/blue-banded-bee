@@ -369,7 +369,7 @@ func (h *Handler) updateSiteSchedule(w http.ResponseWriter, r *http.Request, sit
 			// Update existing scheduler
 			existingScheduler.ScheduleIntervalHours = *req.ScheduleIntervalHours
 			existingScheduler.NextRunAt = time.Now().Add(time.Duration(*req.ScheduleIntervalHours) * time.Hour)
-			if err := h.DB.UpdateScheduler(ctx, existingScheduler.ID, existingScheduler); err != nil {
+			if err := h.DB.UpdateScheduler(ctx, existingScheduler.ID, existingScheduler, nil); err != nil {
 				logger.Error().Err(err).Str("scheduler_id", existingScheduler.ID).Msg("Failed to update scheduler")
 				InternalError(w, r, err)
 				return

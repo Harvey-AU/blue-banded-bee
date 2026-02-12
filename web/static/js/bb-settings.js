@@ -126,7 +126,9 @@
       "/settings/billing": "billing",
       "/settings/notifications": "notifications",
       "/settings/analytics": "analytics",
-      "/settings/auto-crawl": "auto-crawl",
+      "/settings/auto-crawl": "automated-jobs",
+      "/settings/automation": "automated-jobs",
+      "/settings/automated-jobs": "automated-jobs",
     };
 
     const hash = window.location.hash.replace("#", "");
@@ -162,6 +164,9 @@
     if (targetId === "plans" && !window.location.hash) {
       activatePlanTab("planTabCurrent");
     }
+    if (targetId === "automated-jobs" && !window.location.hash) {
+      activateAutomationTab("autoCrawlWebflowPanel");
+    }
     activateTabFromHash();
   }
 
@@ -171,7 +176,11 @@
     const target = document.getElementById(hash);
     const panel = target?.closest(".settings-tab-panel");
     if (panel?.id) {
-      activatePlanTab(panel.id);
+      if (panel.id.startsWith("planTab")) {
+        activatePlanTab(panel.id);
+      } else if (panel.id.startsWith("autoCrawl")) {
+        activateAutomationTab(panel.id);
+      }
     }
   }
 
@@ -189,9 +198,12 @@
     });
   }
 
-  function activatePlanTab(panelId) {
-    const tabs = document.querySelectorAll(".settings-tab");
-    const panels = document.querySelectorAll(".settings-tab-panel");
+  function activateTabGroup(sectionId, tabAttribute, panelId) {
+    const section = document.getElementById(sectionId);
+    if (!section) return;
+
+    const tabs = section.querySelectorAll(`.settings-tab[${tabAttribute}]`);
+    const panels = section.querySelectorAll(".settings-tab-panel");
 
     panels.forEach((panel) => {
       const isActive = panel.id === panelId;
@@ -200,15 +212,21 @@
     });
 
     tabs.forEach((tab) => {
-      const isActive = tab.dataset.tabTarget === panelId;
+      const isActive = tab.getAttribute(tabAttribute) === panelId;
       tab.classList.toggle("active", isActive);
       tab.setAttribute("aria-selected", isActive ? "true" : "false");
       tab.setAttribute("tabindex", isActive ? "0" : "-1");
     });
   }
 
+  function activatePlanTab(panelId) {
+    activateTabGroup("plans", "data-tab-target", panelId);
+  }
+
   function setupPlanTabs() {
-    const tabs = document.querySelectorAll(".settings-tab");
+    const section = document.getElementById("plans");
+    if (!section) return;
+    const tabs = section.querySelectorAll(".settings-tab[data-tab-target]");
     if (!tabs.length) return;
 
     tabs.forEach((tab) => {
@@ -216,6 +234,28 @@
         const targetId = tab.dataset.tabTarget;
         if (targetId) {
           activatePlanTab(targetId);
+        }
+      });
+    });
+  }
+
+  function activateAutomationTab(panelId) {
+    activateTabGroup("automated-jobs", "data-auto-crawl-tab-target", panelId);
+  }
+
+  function setupAutomationTabs() {
+    const section = document.getElementById("automated-jobs");
+    if (!section) return;
+    const tabs = section.querySelectorAll(
+      ".settings-tab[data-auto-crawl-tab-target]"
+    );
+    if (!tabs.length) return;
+
+    tabs.forEach((tab) => {
+      tab.addEventListener("click", () => {
+        const targetId = tab.dataset.autoCrawlTabTarget;
+        if (targetId) {
+          activateAutomationTab(targetId);
         }
       });
     });
@@ -632,6 +672,187 @@
     }
   }
 
+  function formatNextRunTime(timestamp) {
+    if (!timestamp) return "Not scheduled";
+    const nextRun = new Date(timestamp);
+    if (Number.isNaN(nextRun.getTime())) return "Not scheduled";
+    const now = new Date();
+    const diffMs = nextRun - now;
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    const diffHours = Math.floor(
+      (diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)
+    );
+    const diffMins = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+
+    if (diffMs < 0) return "Overdue";
+    if (diffDays > 0) return `In ${diffDays}d ${diffHours}h`;
+    if (diffHours > 0) return `In ${diffHours}h ${diffMins}m`;
+    return `In ${diffMins}m`;
+  }
+
+  async function loadSettingsSchedules() {
+    const schedulesList = document.getElementById("settingsSchedulesList");
+    const emptyState = document.getElementById("settingsSchedulesEmpty");
+    if (!schedulesList) return;
+
+    const template = schedulesList.querySelector(
+      '[data-settings-template="schedule"]'
+    );
+    if (!template) return;
+
+    try {
+      const schedules = await window.dataBinder.fetchData("/v1/schedulers", {
+        method: "GET",
+      });
+
+      const existing = schedulesList.querySelectorAll(
+        '.bb-job-card:not([data-settings-template="schedule"])'
+      );
+      existing.forEach((node) => {
+        node.remove();
+      });
+
+      if (!schedules || schedules.length === 0) {
+        if (emptyState) emptyState.style.display = "block";
+        return;
+      }
+      if (emptyState) emptyState.style.display = "none";
+
+      schedules.forEach((schedule) => {
+        const clone = template.cloneNode(true);
+        clone.style.display = "block";
+        clone.removeAttribute("data-settings-template");
+
+        const domainEl = clone.querySelector(".bb-job-domain");
+        if (domainEl) domainEl.textContent = schedule.domain;
+
+        const scheduleInfo = clone.querySelector(".bb-schedule-info");
+        if (scheduleInfo) {
+          scheduleInfo.textContent = "";
+          const hoursSpan = document.createElement("span");
+          const intervalHours = schedule.schedule_interval_hours ?? "—";
+          hoursSpan.textContent = `${intervalHours} hours`;
+          const statusSpan = document.createElement("span");
+          statusSpan.className = `bb-schedule-status bb-schedule-${schedule.is_enabled ? "enabled" : "disabled"}`;
+          statusSpan.textContent = schedule.is_enabled ? "Enabled" : "Disabled";
+          scheduleInfo.appendChild(hoursSpan);
+          scheduleInfo.appendChild(statusSpan);
+        }
+
+        const nextRunContainer = clone.querySelector(".bb-job-footer > div");
+        if (nextRunContainer) {
+          nextRunContainer.textContent = "";
+          const label = document.createElement("span");
+          label.style.fontWeight = "500";
+          label.textContent = "Next run: ";
+          const value = document.createElement("span");
+          value.textContent = formatNextRunTime(schedule.next_run_at);
+          nextRunContainer.appendChild(label);
+          nextRunContainer.appendChild(value);
+        }
+
+        const toggleBtn = clone.querySelector(
+          '[data-schedule-action="toggle"]'
+        );
+        const deleteBtn = clone.querySelector(
+          '[data-schedule-action="delete"]'
+        );
+        const viewBtn = clone.querySelector(
+          '[data-schedule-action="view-jobs"]'
+        );
+        if (toggleBtn) {
+          toggleBtn.dataset.schedulerId = schedule.id;
+          toggleBtn.textContent = schedule.is_enabled ? "Disable" : "Enable";
+        }
+        if (deleteBtn) deleteBtn.dataset.schedulerId = schedule.id;
+        if (viewBtn) viewBtn.dataset.schedulerId = schedule.id;
+
+        schedulesList.appendChild(clone);
+      });
+    } catch (err) {
+      console.error("Failed to load schedules:", err);
+      showSettingsToast("error", "Failed to load schedules");
+    }
+  }
+
+  async function toggleSettingsSchedule(schedulerId) {
+    try {
+      const scheduler = await window.dataBinder.fetchData(
+        `/v1/schedulers/${encodeURIComponent(schedulerId)}`,
+        { method: "GET" }
+      );
+      const updated = await window.dataBinder.fetchData(
+        `/v1/schedulers/${encodeURIComponent(schedulerId)}`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            is_enabled: !scheduler.is_enabled,
+            expected_is_enabled: scheduler.is_enabled,
+          }),
+        }
+      );
+      showSettingsToast(
+        "success",
+        `Schedule ${updated.is_enabled ? "enabled" : "disabled"}`
+      );
+      await loadSettingsSchedules();
+    } catch (err) {
+      console.error("Failed to toggle schedule:", err);
+      showSettingsToast("error", "Failed to toggle schedule");
+    }
+  }
+
+  async function deleteSettingsSchedule(schedulerId) {
+    if (!confirm("Are you sure you want to delete this schedule?")) return;
+
+    try {
+      await window.dataBinder.fetchData(
+        `/v1/schedulers/${encodeURIComponent(schedulerId)}`,
+        { method: "DELETE" }
+      );
+      showSettingsToast("success", "Schedule deleted");
+      await loadSettingsSchedules();
+    } catch (err) {
+      console.error("Failed to delete schedule:", err);
+      showSettingsToast("error", "Failed to delete schedule");
+    }
+  }
+
+  function viewSettingsScheduleJobs(schedulerId) {
+    window.location.href = `/jobs?scheduler_id=${encodeURIComponent(schedulerId)}`;
+  }
+
+  function setupSchedulesActions() {
+    const refreshBtn = document.getElementById("autoCrawlSchedulesRefresh");
+    if (refreshBtn) {
+      refreshBtn.addEventListener("click", () => {
+        loadSettingsSchedules();
+      });
+    }
+
+    const schedulesList = document.getElementById("settingsSchedulesList");
+    if (!schedulesList) return;
+    schedulesList.addEventListener("click", (event) => {
+      const actionEl = event.target.closest("[data-schedule-action]");
+      if (!actionEl) return;
+
+      const schedulerId = actionEl.dataset.schedulerId;
+      if (!schedulerId) return;
+
+      const action = actionEl.dataset.scheduleAction;
+      if (action === "toggle") {
+        toggleSettingsSchedule(schedulerId);
+      } else if (action === "delete") {
+        deleteSettingsSchedule(schedulerId);
+      } else if (action === "view-jobs") {
+        viewSettingsScheduleJobs(schedulerId);
+      }
+    });
+  }
+
+  window.loadSettingsSchedules = loadSettingsSchedules;
+
   function updateAdminVisibility() {
     document.querySelectorAll("[data-admin-only]").forEach((el) => {
       if (settingsState.currentUserRole === "admin") {
@@ -669,6 +890,7 @@
     await loadOrganisationInvites();
     await loadPlansAndUsage();
     await loadUsageHistory();
+    await loadSettingsSchedules();
 
     if (window.loadSlackConnections) {
       await window.loadSlackConnections();
@@ -1419,6 +1641,8 @@
 
       setupSettingsNavigation();
       setupPlanTabs();
+      setupAutomationTabs();
+      setupSchedulesActions();
 
       const sessionResult = await window.supabase.auth.getSession();
       const session = sessionResult?.data?.session;
