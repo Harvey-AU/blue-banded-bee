@@ -488,10 +488,7 @@ function getInitials(value) {
 
   // Name format: "Jane Doe" -> "JD"
   if (raw.includes(" ")) {
-    const parts = raw
-      .split(/\s+/)
-      .filter(Boolean)
-      .slice(0, 2);
+    const parts = raw.split(/\s+/).filter(Boolean).slice(0, 2);
     if (parts.length) {
       return parts.map((part) => part.charAt(0).toUpperCase()).join("");
     }
