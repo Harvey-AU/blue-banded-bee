@@ -84,16 +84,81 @@ fi
 echo ""
 echo "🔍 Linting Go files..."
 
+# Resolve a compatible golangci-lint binary for this repository's Go version.
+resolve_golangci_lint() {
+    local required_go
+    required_go=$(awk '/^go / {print $2; exit}' go.mod 2>/dev/null)
+    if [ -z "$required_go" ]; then
+        required_go=$(go env GOVERSION 2>/dev/null | sed -E 's/^go//')
+    fi
+
+    local candidates=()
+    local default_lint
+    default_lint=$(command -v golangci-lint 2>/dev/null || true)
+    if [ -n "$default_lint" ] && [ -x "$default_lint" ]; then
+        candidates+=("$default_lint")
+    fi
+
+    local go_bin_lint
+    go_bin_lint="$(go env GOPATH 2>/dev/null)/bin/golangci-lint"
+    if [ -x "$go_bin_lint" ]; then
+        candidates+=("$go_bin_lint")
+    fi
+
+    if [ "${#candidates[@]}" -eq 0 ]; then
+        return 1
+    fi
+
+    # De-duplicate while preserving order.
+    local unique=()
+    local c
+    for c in "${candidates[@]}"; do
+        local seen=false
+        local u
+        for u in "${unique[@]}"; do
+            if [ "$u" = "$c" ]; then
+                seen=true
+                break
+            fi
+        done
+        if [ "$seen" = false ]; then
+            unique+=("$c")
+        fi
+    done
+
+    local selected="${unique[0]}"
+    if [ -n "$required_go" ]; then
+        for c in "${unique[@]}"; do
+            local built_with
+            built_with=$("$c" version 2>/dev/null | sed -nE 's/.*built with go([0-9]+(\.[0-9]+){1,2}).*/\1/p' | head -n 1)
+            if [ -z "$built_with" ]; then
+                continue
+            fi
+            # Compatible when built_with >= required_go (version-sort aware).
+            if [ "$(printf '%s\n%s\n' "$built_with" "$required_go" | sort -V | tail -n 1)" = "$built_with" ]; then
+                selected="$c"
+                break
+            fi
+        done
+    fi
+
+    echo "$selected"
+    return 0
+}
+
+LINT_BIN=$(resolve_golangci_lint || true)
+
 # Check if golangci-lint is installed
-if ! command -v golangci-lint &> /dev/null; then
+if [ -z "$LINT_BIN" ]; then
     echo -e "${YELLOW}⚠️  golangci-lint not installed. Install with: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest${NC}"
     echo "Skipping linting... (CI will still check)"
 elif [ -n "$STAGED_GO_FILES" ]; then
     # Run golangci-lint on staged files only
     echo "Running golangci-lint on staged files..."
+    echo "Using: $LINT_BIN"
 
     # Run linter with same config as CI (package-aware so type info isn't lost)
-    if ! golangci-lint run --config .golangci.yml --modules-download-mode=mod; then
+    if ! "$LINT_BIN" run --config .golangci.yml --modules-download-mode=mod; then
         echo ""
         echo -e "${RED}❌ Linting failed${NC}"
         echo ""
