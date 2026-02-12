@@ -25,6 +25,7 @@ type SchedulerRequest struct {
 	IncludePaths          []string `json:"include_paths,omitempty"`
 	ExcludePaths          []string `json:"exclude_paths,omitempty"`
 	IsEnabled             *bool    `json:"is_enabled,omitempty"`
+	ExpectedIsEnabled     *bool    `json:"expected_is_enabled,omitempty"` // Optional optimistic concurrency hint
 }
 
 // SchedulerResponse represents a scheduler in API responses
@@ -334,6 +335,13 @@ func (h *Handler) updateScheduler(w http.ResponseWriter, r *http.Request, schedu
 	var req SchedulerRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		BadRequest(w, r, "Invalid JSON request body")
+		return
+	}
+
+	// Optional optimistic concurrency check for toggle/update operations.
+	if req.IsEnabled != nil && req.ExpectedIsEnabled != nil &&
+		scheduler.IsEnabled != *req.ExpectedIsEnabled {
+		WriteErrorMessage(w, r, "Scheduler state changed; refresh and retry", http.StatusConflict, ErrCodeConflict)
 		return
 	}
 

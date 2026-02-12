@@ -786,7 +786,10 @@
         {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ is_enabled: !scheduler.is_enabled }),
+          body: JSON.stringify({
+            is_enabled: !scheduler.is_enabled,
+            expected_is_enabled: scheduler.is_enabled,
+          }),
         }
       );
       showSettingsToast(
