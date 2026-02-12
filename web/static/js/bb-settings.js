@@ -674,7 +674,9 @@
   }
 
   function formatNextRunTime(timestamp) {
+    if (!timestamp) return "Not scheduled";
     const nextRun = new Date(timestamp);
+    if (Number.isNaN(nextRun.getTime())) return "Not scheduled";
     const now = new Date();
     const diffMs = nextRun - now;
     const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
