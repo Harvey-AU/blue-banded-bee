@@ -795,43 +795,25 @@ body {
 .bb-social-icon {
   width: 24px;
   height: 24px;
-  border-radius: 50%;
+  border-radius: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-weight: 700;
-  font-size: 12px;
+  border: 1px solid #d1d5db;
+  background: #ffffff;
+  overflow: hidden;
 }
 
-.bb-social-icon-google {
-  background: #e8f0fe;
-  color: #1a73e8;
+.bb-social-icon svg {
+  width: 16px;
+  height: 16px;
+  display: block;
 }
 
-.bb-social-icon-github {
-  background: #e5e7eb;
-  color: #111827;
-}
-
-.bb-social-icon-azure {
-  background: #dbeafe;
-  color: #1d4ed8;
-}
-
-.bb-social-icon-facebook {
-  background: #dbeafe;
-  color: #2563eb;
-}
-
-.bb-social-icon-slack {
-  background: #ede9fe;
-  color: #6d28d9;
-}
-
-.bb-social-icon-sso {
-  background: #e5e7eb;
-  color: #374151;
-  font-size: 10px;
+.bb-social-icon-sso svg,
+.bb-social-icon-microsoft svg {
+  width: 17px;
+  height: 17px;
 }
 
 .bb-social-btn-coming-soon {
@@ -2666,48 +2648,26 @@ html[data-settings-section="automated-jobs"] #automated-jobs {
 .settings-auth-provider-icon {
   width: 28px;
   height: 28px;
-  border-radius: 50%;
+  border-radius: 8px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 11px;
-  font-weight: 700;
   flex-shrink: 0;
+  border: 1px solid #d1d5db;
+  background: #ffffff;
+  overflow: hidden;
 }
 
-.settings-auth-provider-google {
-  color: #1a73e8;
-  background: #e8f0fe;
+.settings-auth-provider-icon svg {
+  width: 18px;
+  height: 18px;
+  display: block;
 }
 
-.settings-auth-provider-github {
-  color: #111827;
-  background: #e5e7eb;
-}
-
-.settings-auth-provider-email {
-  color: #065f46;
-  background: #d1fae5;
-}
-
-.settings-auth-provider-azure {
-  color: #1d4ed8;
-  background: #dbeafe;
-}
-
-.settings-auth-provider-facebook {
-  color: #2563eb;
-  background: #dbeafe;
-}
-
-.settings-auth-provider-slack_oidc {
-  color: #6d28d9;
-  background: #ede9fe;
-}
-
-.settings-auth-provider-saml {
-  color: #374151;
-  background: #e5e7eb;
+.settings-auth-provider-azure svg,
+.settings-auth-provider-saml svg {
+  width: 19px;
+  height: 19px;
 }
 
 .settings-invite-actions {
