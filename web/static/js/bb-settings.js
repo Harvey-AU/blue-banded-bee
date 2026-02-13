@@ -4,6 +4,16 @@
  */
 
 (function () {
+  const AUTH_METHOD_DEFS = [
+    { key: "google", label: "Google", icon: "G", supported: true },
+    { key: "github", label: "GitHub", icon: "GH", supported: true },
+    { key: "email", label: "Email/Password", icon: "@", supported: true },
+    { key: "azure", label: "Azure", icon: "MS", supported: false },
+    { key: "facebook", label: "Facebook", icon: "f", supported: false },
+    { key: "slack_oidc", label: "Slack (OIDC)", icon: "S", supported: false },
+    { key: "saml", label: "SSO (SAML)", icon: "SSO", supported: false },
+  ];
+
   const settingsState = {
     currentUserRole: "member",
     currentUserId: null,
@@ -266,25 +276,40 @@
 
   function normaliseAuthProvider(provider) {
     const value = (provider || "").trim().toLowerCase();
-    if (value === "google" || value === "github" || value === "email") {
+    if (value === "slack") return "slack_oidc";
+    if (value === "saml2") return "saml";
+    if (
+      value === "google" ||
+      value === "github" ||
+      value === "email" ||
+      value === "azure" ||
+      value === "facebook" ||
+      value === "slack_oidc" ||
+      value === "saml"
+    ) {
       return value;
     }
     return "";
   }
 
+  function getAuthMethodDef(provider) {
+    return (
+      AUTH_METHOD_DEFS.find((method) => method.key === provider) || {
+        key: provider,
+        label: provider || "Unknown",
+        icon: "?",
+        supported: false,
+      }
+    );
+  }
+
   function formatAuthMethod(method) {
-    const value = (method || "").trim().toLowerCase();
-    if (value === "google") return "Google";
-    if (value === "github") return "GitHub";
-    if (value === "email") return "Email/Password";
-    if (!value) return "Unknown";
-    return value.charAt(0).toUpperCase() + value.slice(1);
+    const value = normaliseAuthProvider(method) || method;
+    return getAuthMethodDef(value).label;
   }
 
   function providerIcon(provider) {
-    if (provider === "google") return "G";
-    if (provider === "github") return "GH";
-    return "@";
+    return getAuthMethodDef(provider).icon;
   }
 
   function providerSubtitle(method) {
@@ -294,11 +319,19 @@
     if (method.provider === "email") {
       return "Set a password to enable email sign-in";
     }
+    if (!method.supported) {
+      return "Coming soon";
+    }
     return "Not connected";
   }
 
   async function connectAuthMethod(provider) {
     if (!window.supabase?.auth) return;
+    const methodDef = getAuthMethodDef(provider);
+    if (!methodDef.supported) {
+      showSettingsToast("warning", `${methodDef.label} is coming soon`);
+      return;
+    }
 
     try {
       if (provider === "email") {
@@ -464,20 +497,28 @@
       const actionBtn = document.createElement("button");
       actionBtn.className = "bb-button bb-button-outline settings-btn-sm";
       actionBtn.type = "button";
-      actionBtn.textContent = method.connected ? "Remove" : "Connect";
+      actionBtn.textContent = method.connected
+        ? "Remove"
+        : method.supported
+          ? "Connect"
+          : "Coming soon";
 
       if (
-        method.connected &&
-        (connectedCount <= 1 || method.provider === "email")
+        (method.connected &&
+          (connectedCount <= 1 || method.provider === "email")) ||
+        (!method.connected && !method.supported)
       ) {
         actionBtn.disabled = true;
-        actionBtn.title = "At least one sign-in method must remain";
+        actionBtn.title = method.connected
+          ? "At least one sign-in method must remain"
+          : `${formatAuthMethod(method.provider)} is not available yet`;
       }
 
       actionBtn.addEventListener("click", async () => {
         const permanentlyDisabled =
-          method.connected &&
-          (connectedCount <= 1 || method.provider === "email");
+          (method.connected &&
+            (connectedCount <= 1 || method.provider === "email")) ||
+          (!method.connected && !method.supported);
         if (permanentlyDisabled) return;
 
         actionBtn.disabled = true;
@@ -559,13 +600,14 @@
       if (normalised) connectedProviders.add(normalised);
     });
 
-    const knownProviders = ["google", "github", "email"];
-    const methodModels = knownProviders.map((provider) => {
+    const methodModels = AUTH_METHOD_DEFS.map((methodDef) => {
+      const provider = methodDef.key;
       const identity = authIdentities.find(
         (candidate) => normaliseAuthProvider(candidate.provider) === provider
       );
       return {
         provider,
+        supported: Boolean(methodDef.supported),
         connected: connectedProviders.has(provider),
         email:
           identity?.identity_data?.email ||

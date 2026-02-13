@@ -813,6 +813,46 @@ body {
   color: #111827;
 }
 
+.bb-social-icon-azure {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.bb-social-icon-facebook {
+  background: #dbeafe;
+  color: #2563eb;
+}
+
+.bb-social-icon-slack {
+  background: #ede9fe;
+  color: #6d28d9;
+}
+
+.bb-social-icon-sso {
+  background: #e5e7eb;
+  color: #374151;
+  font-size: 10px;
+}
+
+.bb-social-btn-coming-soon {
+  opacity: 0.68;
+  cursor: not-allowed;
+}
+
+.bb-social-badge {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 11px;
+  font-weight: 600;
+  color: #6b7280;
+  background: #f3f4f6;
+  border: 1px solid #d1d5db;
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+
 .bb-auth-links {
   text-align: center;
   display: flex;
@@ -2648,6 +2688,26 @@ html[data-settings-section="automated-jobs"] #automated-jobs {
 .settings-auth-provider-email {
   color: #065f46;
   background: #d1fae5;
+}
+
+.settings-auth-provider-azure {
+  color: #1d4ed8;
+  background: #dbeafe;
+}
+
+.settings-auth-provider-facebook {
+  color: #2563eb;
+  background: #dbeafe;
+}
+
+.settings-auth-provider-slack_oidc {
+  color: #6d28d9;
+  background: #ede9fe;
+}
+
+.settings-auth-provider-saml {
+  color: #374151;
+  background: #e5e7eb;
 }
 
 .settings-invite-actions {
