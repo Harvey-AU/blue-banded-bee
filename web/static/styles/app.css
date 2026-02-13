@@ -600,48 +600,75 @@ body {
 
 .bb-modal-content {
   background: white;
-  border-radius: 12px;
-  padding: 32px;
-  max-width: 480px;
+  border-radius: 16px;
+  padding: 28px;
+  max-width: 520px;
   width: 90%;
-  max-height: 80vh;
+  max-height: 86vh;
   overflow-y: auto;
   box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
 }
 
 .bb-modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 24px;
-  padding-bottom: 16px;
-  border-bottom: 1px solid #e5e7eb;
+  display: block;
+  margin-bottom: 18px;
+  padding-bottom: 0;
+  border-bottom: none;
+  position: relative;
 }
 
 .bb-modal-title {
-  font-size: 1.5rem;
-  font-weight: 600;
+  font-size: 2.7rem;
+  line-height: 1.05;
+  font-weight: 700;
   margin: 0;
+  letter-spacing: -0.02em;
 }
 
 .bb-modal-close {
   background: none;
   border: none;
-  font-size: 24px;
+  font-size: 22px;
   cursor: pointer;
   color: #6b7280;
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
 }
 
 .bb-modal-close:hover {
-  color: #374151;
+  color: #111827;
+  background: #f3f4f6;
 }
 
 .bb-auth-form {
-  padding: 8px 0;
+  padding: 4px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.bb-auth-form > .bb-social-buttons {
+  order: 1;
+}
+
+.bb-auth-form > .bb-auth-divider {
+  order: 2;
+}
+
+.bb-auth-form > form {
+  order: 3;
+}
+
+.bb-auth-form > .bb-auth-links {
+  order: 4;
 }
 
 .bb-form-group {
-  margin-bottom: 20px;
+  margin-bottom: 12px;
 }
 
 .bb-form-group label {
@@ -654,10 +681,10 @@ body {
 
 .bb-form-input {
   width: 100%;
-  padding: 12px 16px;
+  padding: 14px 16px;
   border: 1px solid #d1d5db;
-  border-radius: 6px;
-  font-size: 14px;
+  border-radius: 10px;
+  font-size: 17px;
   background: white;
   color: #374151;
 }
@@ -705,15 +732,15 @@ body {
 .bb-button-full {
   width: 100%;
   justify-content: center;
-  margin-bottom: 16px;
+  margin-bottom: 0;
 }
 
 .bb-auth-divider {
   text-align: center;
-  margin: 24px 0;
+  margin: 8px 0 2px;
   position: relative;
   color: #6b7280;
-  font-size: 14px;
+  font-size: 17px;
 }
 
 .bb-auth-divider::before {
@@ -723,7 +750,7 @@ body {
   left: 0;
   right: 0;
   height: 1px;
-  background: #e5e7eb;
+  background: #d1d5db;
   z-index: 1;
 }
 
@@ -737,8 +764,8 @@ body {
 .bb-social-buttons {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  margin-bottom: 24px;
+  gap: 10px;
+  margin-bottom: 4px;
 }
 
 .bb-social-btn {
@@ -747,32 +774,73 @@ body {
   justify-content: center;
   gap: 12px;
   position: relative;
+  border-radius: 10px;
+  border-color: #d1d5db;
+  color: #111827;
+  background: #ffffff;
+  font-size: 17px;
+  min-height: 54px;
+  font-weight: 500;
+}
+
+.bb-social-btn.bb-button-full {
+  margin-bottom: 0;
+}
+
+.bb-social-btn .bb-social-icon {
+  position: absolute;
+  left: 16px;
 }
 
 .bb-social-icon {
-  width: 20px;
-  height: 20px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-weight: bold;
+  font-weight: 700;
   font-size: 12px;
+}
+
+.bb-social-icon-google {
+  background: #e8f0fe;
+  color: #1a73e8;
+}
+
+.bb-social-icon-github {
+  background: #e5e7eb;
+  color: #111827;
 }
 
 .bb-auth-links {
   text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .bb-auth-links a {
   color: var(--color-primary);
   text-decoration: none;
-  font-size: 14px;
+  font-size: 15px;
   display: block;
-  margin-bottom: 8px;
+  margin-bottom: 0;
 }
 
 .bb-auth-links a:hover {
   text-decoration: underline;
+}
+
+@media (width <= 640px) {
+  .bb-modal-content {
+    padding: 22px;
+    width: 94%;
+  }
+
+  .bb-modal-title {
+    font-size: 2rem;
+  }
 }
 
 .bb-auth-loading {
@@ -2527,17 +2595,59 @@ html[data-settings-section="automated-jobs"] #automated-jobs {
 
 .settings-auth-methods {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+  flex-direction: column;
+  gap: 10px;
   margin-top: 8px;
 }
 
-.settings-auth-method-pill {
-  font-size: 12px;
-  color: #1f2937;
+.settings-auth-method-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  background: #ffffff;
+  padding: 10px 12px;
+}
+
+.settings-auth-method-details {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.settings-auth-method-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.settings-auth-provider-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.settings-auth-provider-google {
+  color: #1a73e8;
+  background: #e8f0fe;
+}
+
+.settings-auth-provider-github {
+  color: #111827;
   background: #e5e7eb;
-  border-radius: 999px;
-  padding: 4px 10px;
+}
+
+.settings-auth-provider-email {
+  color: #065f46;
+  background: #d1fae5;
 }
 
 .settings-invite-actions {
