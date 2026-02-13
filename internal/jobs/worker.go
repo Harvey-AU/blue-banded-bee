@@ -3300,6 +3300,8 @@ func (wp *WorkerPool) processDiscoveredLinks(ctx context.Context, task *Task, re
 		if err := ctx.Err(); err != nil {
 			log.Debug().
 				Err(err).
+				Str("job_id", task.JobID).
+				Str("domain", task.DomainName).
 				Str("task_id", task.ID).
 				Msg("Skipping discovered link processing: parent task context is done")
 			return
@@ -3351,6 +3353,8 @@ func (wp *WorkerPool) processDiscoveredLinks(ctx context.Context, task *Task, re
 			remaining := time.Until(deadline)
 			if remaining <= discoveredLinksMinRemain {
 				log.Warn().
+					Str("job_id", task.JobID).
+					Str("domain", task.DomainName).
 					Str("task_id", task.ID).
 					Dur("remaining", remaining).
 					Msg("Skipping discovered link persistence: task deadline too close")
@@ -3364,6 +3368,8 @@ func (wp *WorkerPool) processDiscoveredLinks(ctx context.Context, task *Task, re
 		}
 		if linkCtxTimeout < discoveredLinksMinTimeout {
 			log.Warn().
+				Str("job_id", task.JobID).
+				Str("domain", task.DomainName).
 				Str("task_id", task.ID).
 				Dur("timeout", linkCtxTimeout).
 				Msg("Skipping discovered link persistence: insufficient timeout budget")
