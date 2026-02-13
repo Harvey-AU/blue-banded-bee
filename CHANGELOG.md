@@ -29,6 +29,17 @@ On merge, CI will:
 
 ## [Unreleased]
 
+## [0.26.5] – 2026-02-13
+
+### Fixed
+
+- **Discovered Link Timeout Noise**: Hardened discovered-link persistence to use
+  a bounded detached context and skip writes when task deadline budget is too
+  low, reducing intermittent `context deadline exceeded` spikes in
+  `BLUE-BANDED-BEE-86`.
+- **Skip Log Context**: Added `job_id` and `domain` structured fields to new
+  discovered-link skip logs for easier job-level traceability.
+
 ## [0.26.4] – 2026-02-11
 
 ### Changed

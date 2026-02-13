@@ -41,6 +41,9 @@ const (
 	defaultJobFailureThreshold = 20
 	defaultRunningTaskBatch    = 4
 	defaultRunningTaskFlush    = 50 * time.Millisecond
+	discoveredLinksDBTimeout   = 30 * time.Second
+	discoveredLinksMinRemain   = 8 * time.Second
+	discoveredLinksMinTimeout  = 5 * time.Second
 
 	// concurrencyBufferFactor controls the headroom applied when converting
 	// job-level concurrency into worker capacity so we keep a small cushion
@@ -3294,6 +3297,15 @@ func (wp *WorkerPool) processDiscoveredLinks(ctx context.Context, task *Task, re
 		if len(links) == 0 {
 			return
 		}
+		if err := ctx.Err(); err != nil {
+			log.Debug().
+				Err(err).
+				Str("job_id", task.JobID).
+				Str("domain", task.DomainName).
+				Str("task_id", task.ID).
+				Msg("Skipping discovered link processing: parent task context is done")
+			return
+		}
 
 		// 1. Filter links for same-domain and robots.txt compliance
 		var filtered []string
@@ -3336,8 +3348,39 @@ func (wp *WorkerPool) processDiscoveredLinks(ctx context.Context, task *Task, re
 			return
 		}
 
+		linkCtxTimeout := discoveredLinksDBTimeout
+		if deadline, ok := ctx.Deadline(); ok {
+			remaining := time.Until(deadline)
+			if remaining <= discoveredLinksMinRemain {
+				log.Warn().
+					Str("job_id", task.JobID).
+					Str("domain", task.DomainName).
+					Str("task_id", task.ID).
+					Dur("remaining", remaining).
+					Msg("Skipping discovered link persistence: task deadline too close")
+				return
+			}
+
+			maxTimeout := remaining - discoveredLinksMinRemain
+			if maxTimeout < linkCtxTimeout {
+				linkCtxTimeout = maxTimeout
+			}
+		}
+		if linkCtxTimeout < discoveredLinksMinTimeout {
+			log.Warn().
+				Str("job_id", task.JobID).
+				Str("domain", task.DomainName).
+				Str("task_id", task.ID).
+				Dur("timeout", linkCtxTimeout).
+				Msg("Skipping discovered link persistence: insufficient timeout budget")
+			return
+		}
+		// Keep request-scoped values while detaching from parent cancellation/deadline.
+		linkCtx, linkCancel := context.WithTimeout(context.WithoutCancel(ctx), linkCtxTimeout)
+		defer linkCancel()
+
 		// 2. Create page records
-		pageIDs, paths, err := db.CreatePageRecords(ctx, wp.dbQueue, domainID, task.DomainName, filtered)
+		pageIDs, paths, err := db.CreatePageRecords(linkCtx, wp.dbQueue, domainID, task.DomainName, filtered)
 		if err != nil {
 			log.Error().Err(err).Msg("Failed to create page records for links")
 			return
@@ -3354,13 +3397,13 @@ func (wp *WorkerPool) processDiscoveredLinks(ctx context.Context, task *Task, re
 		}
 
 		// 4. Enqueue new tasks
-		if err := wp.EnqueueURLs(ctx, task.JobID, pagesToEnqueue, "link", sourceURL); err != nil {
+		if err := wp.EnqueueURLs(linkCtx, task.JobID, pagesToEnqueue, "link", sourceURL); err != nil {
 			log.Error().Err(err).Msg("Failed to enqueue discovered links")
 			return // Stop if enqueuing fails
 		}
 
 		// 5. Update priorities for the newly created tasks
-		if err := wp.updateTaskPriorities(ctx, task.JobID, domainID, priority, paths); err != nil {
+		if err := wp.updateTaskPriorities(linkCtx, task.JobID, domainID, priority, paths); err != nil {
 			log.Error().Err(err).Msg("Failed to update task priorities for discovered links")
 		}
 	}
