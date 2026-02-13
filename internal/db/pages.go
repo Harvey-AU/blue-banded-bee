@@ -99,22 +99,35 @@ func ensurePageBatch(ctx context.Context, q TransactionExecutor, domainID int, b
 		return nil
 	}
 
-	insertQuery := `
+	upsertBatchQuery := `
+		WITH batch(path) AS (
+			SELECT UNNEST($2::text[])
+		)
 		INSERT INTO pages (domain_id, path)
-		VALUES ($1, $2)
+		SELECT $1, path
+		FROM batch
 		ON CONFLICT (domain_id, path)
 		DO UPDATE SET path = EXCLUDED.path
-		RETURNING id
+		RETURNING path, id
 	`
 
 	return q.Execute(ctx, func(tx *sql.Tx) error {
-		for _, path := range unique {
-			var pageID int
-			if err := tx.QueryRowContext(ctx, insertQuery, domainID, path).Scan(&pageID); err != nil {
-				return fmt.Errorf("failed to upsert page record: %w", err)
-			}
+		rows, err := tx.QueryContext(ctx, upsertBatchQuery, domainID, unique)
+		if err != nil {
+			return fmt.Errorf("failed to upsert page batch: %w", err)
+		}
+		defer rows.Close()
 
+		for rows.Next() {
+			var path string
+			var pageID int
+			if err := rows.Scan(&path, &pageID); err != nil {
+				return fmt.Errorf("failed to scan upserted page batch row: %w", err)
+			}
 			seen[path] = pageID
+		}
+		if err := rows.Err(); err != nil {
+			return fmt.Errorf("failed during page batch upsert iteration: %w", err)
 		}
 		return nil
 	})
