@@ -885,15 +885,11 @@ async function executeEmailSignup() {
       );
       showAuthForm("login");
     } else if (data.user) {
-      await registerUserWithBackend(data.user);
-
-      closeAuthModal();
-      updateUserInfo();
-      updateAuthState(true);
-      if (window.dataBinder) {
-        await window.dataBinder.refresh();
-      }
-      await handlePendingDomain();
+      const handler =
+        typeof window.handleAuthSuccess === "function"
+          ? window.handleAuthSuccess
+          : defaultHandleAuthSuccess;
+      await handler(data.user);
     }
   } catch (error) {
     const retryable = shouldRetryTurnstile(error);
@@ -958,6 +954,10 @@ async function defaultHandleAuthSuccess(user) {
     await window.dataBinder.refresh();
   }
   await handlePendingDomain();
+
+  if (window.location.pathname === "/") {
+    window.location.assign("/dashboard");
+  }
 }
 
 /**
