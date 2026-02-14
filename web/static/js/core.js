@@ -129,6 +129,7 @@
     await ensureSupabase();
     const isCliAuthPage = Boolean(window.BB_APP?.cliAuth);
     const isAuthCallbackPage = Boolean(window.BB_APP?.authCallback);
+    const isExtensionAuthPage = Boolean(window.BB_APP?.extensionAuth);
 
     // Callback/CLI auth pages must not block on optional third-party scripts.
     if (!isCliAuthPage && !isAuthCallbackPage) {
@@ -155,6 +156,11 @@
 
     if (isAuthCallbackPage && window.BBAuth?.initAuthCallbackPage) {
       window.BBAuth.initAuthCallbackPage();
+      return;
+    }
+
+    if (isExtensionAuthPage && window.BBAuth?.initExtensionAuthPage) {
+      window.BBAuth.initExtensionAuthPage();
       return;
     }
 

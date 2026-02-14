@@ -414,6 +414,9 @@ func (h *Handler) SetupRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/auth-modal.html", h.ServeAuthModal)
 	mux.HandleFunc("/auth/callback", h.ServeAuthCallback)
 	mux.HandleFunc("/auth/callback/", h.ServeAuthCallback)
+	mux.HandleFunc("/extension-auth", h.ServeExtensionAuth)
+	mux.HandleFunc("/extension-auth/", h.ServeExtensionAuth)
+	mux.HandleFunc("/extension-auth.html", h.ServeExtensionAuth)
 	mux.HandleFunc("/cli-login.html", h.ServeCliLogin)
 	mux.HandleFunc("/debug-auth.html", h.ServeDebugAuth)
 	mux.HandleFunc("/jobs/", h.ServeJobDetails)
@@ -561,6 +564,19 @@ func (h *Handler) ServeDebugAuth(w http.ResponseWriter, r *http.Request) {
 // ServeCliLogin serves the CLI login page for browser-based auth flows
 func (h *Handler) ServeCliLogin(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, "cli-login.html")
+}
+
+// ServeExtensionAuth serves the extension auth popup bridge page.
+func (h *Handler) ServeExtensionAuth(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		MethodNotAllowed(w, r)
+		return
+	}
+
+	w.Header().Set("Cache-Control", "no-store, max-age=0")
+	w.Header().Set("Pragma", "no-cache")
+	w.Header().Set("Expires", "0")
+	http.ServeFile(w, r, "extension-auth.html")
 }
 
 // ServeJobDetails serves the standalone job details page
