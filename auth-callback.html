@@ -81,10 +81,13 @@
             }
 
             await loadScript("/js/auth.js");
-            if (!window.BBAuth?.initAuthCallbackPage) {
+            const callbackHandler =
+              window.BBAuth?.initAuthCallbackPage ||
+              window.initAuthCallbackPage;
+            if (typeof callbackHandler !== "function") {
               throw new Error("Auth callback handler unavailable");
             }
-            window.BBAuth.initAuthCallbackPage();
+            callbackHandler();
           } catch (error) {
             console.error("Auth callback bootstrap failed:", error);
             setStatus(

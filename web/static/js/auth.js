@@ -2021,6 +2021,7 @@ if (typeof module !== "undefined" && module.exports) {
     setupAuthModalHandlers,
     setupLoginPageHandlers,
     handleLogout,
+    initAuthCallbackPage,
     initCliAuthPage,
     resumeCliAuthFromStorage,
     clearPendingInviteToken,
