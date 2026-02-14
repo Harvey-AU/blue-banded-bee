@@ -67,6 +67,7 @@ const OAUTH_CALLBACK_QUERY_KEYS = [
   "sb",
   "code",
   "state",
+  "return_to",
 ];
 const PUBLIC_ROUTE_PATHS = new Set([
   "/",
@@ -159,7 +160,27 @@ function toSafeReturnPath(raw) {
 
 function getPostAuthReturnTarget() {
   try {
+    const params = new URLSearchParams(window.location.search);
+    const fromQuery = toSafeReturnPath(params.get("return_to"));
+    if (fromQuery) {
+      return fromQuery;
+    }
+  } catch (_error) {
+    // Ignore malformed query params.
+  }
+
+  try {
     const stored = window.sessionStorage.getItem(
+      POST_AUTH_RETURN_TARGET_STORAGE_KEY
+    );
+    const safeStored = toSafeReturnPath(stored);
+    if (safeStored) return safeStored;
+  } catch (_error) {
+    // Ignore storage errors and try localStorage.
+  }
+
+  try {
+    const stored = window.localStorage.getItem(
       POST_AUTH_RETURN_TARGET_STORAGE_KEY
     );
     return toSafeReturnPath(stored);
@@ -179,6 +200,11 @@ function setPostAuthReturnTarget(path) {
   } catch (_error) {
     // sessionStorage may be unavailable.
   }
+  try {
+    window.localStorage.setItem(POST_AUTH_RETURN_TARGET_STORAGE_KEY, safePath);
+  } catch (_error) {
+    // localStorage may be unavailable.
+  }
 }
 
 function clearPostAuthReturnTarget() {
@@ -186,6 +212,11 @@ function clearPostAuthReturnTarget() {
     window.sessionStorage.removeItem(POST_AUTH_RETURN_TARGET_STORAGE_KEY);
   } catch (_error) {
     // sessionStorage may be unavailable.
+  }
+  try {
+    window.localStorage.removeItem(POST_AUTH_RETURN_TARGET_STORAGE_KEY);
+  } catch (_error) {
+    // localStorage may be unavailable.
   }
 }
 

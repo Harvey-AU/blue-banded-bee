@@ -403,7 +403,11 @@
           // Ignore storage failures and continue OAuth flow.
         }
       }
-      const callbackUrl = `${window.location.origin}/auth/callback`;
+      const callbackTarget = new URL(`${window.location.origin}/auth/callback`);
+      if (currentPath && currentPath !== "/") {
+        callbackTarget.searchParams.set("return_to", currentPath);
+      }
+      const callbackUrl = callbackTarget.toString();
       const queryParams = getOAuthQueryParams(provider);
 
       if (typeof window.supabase.auth.linkIdentity === "function") {
