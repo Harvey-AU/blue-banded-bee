@@ -210,7 +210,26 @@ func (jm *JobManager) setupJobDatabase(ctx context.Context, job *Job, normalised
 			job.FoundTasks, job.SitemapTasks, job.SourceType, job.SourceDetail, job.SourceInfo,
 			job.SchedulerID,
 		)
-		return err
+		if err != nil {
+			return err
+		}
+
+		// Track daily job creation volume for usage history and billing analytics.
+		if job.OrganisationID != nil && *job.OrganisationID != "" {
+			_, err = tx.ExecContext(ctx, `
+				INSERT INTO daily_usage (organisation_id, usage_date, jobs_created, updated_at)
+				VALUES ($1, (NOW() AT TIME ZONE 'UTC')::DATE, 1, NOW())
+				ON CONFLICT (organisation_id, usage_date)
+				DO UPDATE SET
+					jobs_created = daily_usage.jobs_created + 1,
+					updated_at = NOW()
+			`, *job.OrganisationID)
+			if err != nil {
+				return fmt.Errorf("failed to increment daily jobs_created: %w", err)
+			}
+		}
+
+		return nil
 	})
 
 	if err != nil {

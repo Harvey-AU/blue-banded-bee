@@ -33,6 +33,7 @@ const (
 	ErrCodeConflict         ErrorCode = "CONFLICT"
 	ErrCodeValidation       ErrorCode = "VALIDATION_ERROR"
 	ErrCodeRateLimit        ErrorCode = "RATE_LIMIT_EXCEEDED"
+	ErrCodeQuotaExceeded    ErrorCode = "QUOTA_EXCEEDED"
 
 	// Server errors (5xx)
 	ErrCodeInternal           ErrorCode = "INTERNAL_ERROR"

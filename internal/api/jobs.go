@@ -242,6 +242,29 @@ func (h *Handler) createJobFromRequest(ctx context.Context, user *db.User, req C
 	var orgIDPtr *string
 	if effectiveOrgID != "" {
 		orgIDPtr = &effectiveOrgID
+
+		// Fail fast when org quota is already exhausted so users get immediate feedback.
+		var remaining int
+		if err := h.DB.GetDB().QueryRowContext(ctx, `SELECT get_daily_quota_remaining($1::uuid)`, effectiveOrgID).Scan(&remaining); err != nil {
+			return nil, fmt.Errorf("failed to check daily quota remaining: %w", err)
+		}
+		if remaining <= 0 {
+			stats, statsErr := h.DB.GetOrganisationUsageStats(ctx, effectiveOrgID)
+			if statsErr != nil {
+				stats = &db.UsageStats{
+					DailyUsed:       0,
+					DailyLimit:      0,
+					PlanDisplayName: "Current",
+					ResetsAt:        time.Now().UTC().Add(24 * time.Hour),
+				}
+			}
+			return nil, &jobs.QuotaExceededError{
+				Used:     stats.DailyUsed,
+				Limit:    stats.DailyLimit,
+				ResetsAt: stats.ResetsAt,
+				PlanName: stats.PlanDisplayName,
+			}
+		}
 	}
 
 	opts := &jobs.JobOptions{
@@ -334,6 +357,19 @@ func (h *Handler) createJob(w http.ResponseWriter, r *http.Request) {
 	job, err := h.createJobFromRequest(r.Context(), user, req, logger)
 	if err != nil {
 		if HandlePoolSaturation(w, r, err) {
+			return
+		}
+		var quotaErr *jobs.QuotaExceededError
+		if errors.As(err, &quotaErr) {
+			resetAt := quotaErr.ResetsAt.UTC().Format(time.RFC3339)
+			message := fmt.Sprintf(
+				"Daily quota reached (%d/%d pages on %s plan). Resets at %s.",
+				quotaErr.Used,
+				quotaErr.Limit,
+				quotaErr.PlanName,
+				resetAt,
+			)
+			WriteErrorMessage(w, r, message, http.StatusPaymentRequired, ErrCodeQuotaExceeded)
 			return
 		}
 		logger.Error().Err(err).Msg("Failed to create job")

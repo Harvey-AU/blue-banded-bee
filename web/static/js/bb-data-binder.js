@@ -806,7 +806,18 @@ class BBDataBinder {
       );
 
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        let message = `HTTP ${response.status}: ${response.statusText}`;
+        try {
+          const errorBody = await response.json();
+          if (typeof errorBody?.message === "string" && errorBody.message) {
+            message = errorBody.message;
+          } else if (typeof errorBody?.error === "string" && errorBody.error) {
+            message = errorBody.error;
+          }
+        } catch (_) {
+          // Ignore parsing failures and keep default status text.
+        }
+        throw new Error(message);
       }
 
       const result = await response.json();

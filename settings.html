@@ -355,12 +355,20 @@
             <div class="settings-card">
               <div class="settings-row">
                 <div>
-                  <strong>Payment methods</strong>
-                  <div class="settings-muted">
-                    Paddle connection is required to manage billing.
+                  <strong>Subscription</strong>
+                  <div class="settings-muted" id="billingPlanLabel">
+                    Plan: -
                   </div>
+                  <div class="settings-muted" id="billingStatusLabel">
+                    Status: -
+                  </div>
+                  <div class="settings-muted" id="billingRenewalLabel"></div>
                 </div>
-                <button class="bb-button bb-button-outline" disabled>
+                <button
+                  class="bb-button bb-button-outline"
+                  id="billingPortalButton"
+                  data-admin-only
+                >
                   Manage billing
                 </button>
               </div>
@@ -370,9 +378,12 @@
               <div class="settings-row">
                 <div>
                   <strong>Invoices</strong>
-                  <div class="settings-muted">No invoices available yet.</div>
+                  <div class="settings-muted" id="billingInvoicesSummary">
+                    No invoices available yet.
+                  </div>
                 </div>
               </div>
+              <div id="billingInvoicesList" class="settings-spacing-top"></div>
             </div>
           </section>
 
