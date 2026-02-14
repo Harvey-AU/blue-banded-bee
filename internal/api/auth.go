@@ -11,6 +11,7 @@ import (
 	emailverifier "github.com/AfterShip/email-verifier"
 	"github.com/Harvey-AU/blue-banded-bee/internal/auth"
 	"github.com/getsentry/sentry-go"
+	"github.com/rs/zerolog/log"
 )
 
 var (
@@ -88,16 +89,7 @@ func (h *Handler) AuthRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if fullName == nil {
-		fullName = composeFullName(firstName, lastName)
-	}
-	derivedFirst, derivedLast := deriveNameParts(fullName)
-	if firstName == nil {
-		firstName = derivedFirst
-	}
-	if lastName == nil {
-		lastName = derivedLast
-	}
+	firstName, lastName, fullName = fillMissingNameParts(firstName, lastName, fullName)
 
 	var orgName string
 
@@ -241,16 +233,7 @@ func (h *Handler) getAuthProfile(w http.ResponseWriter, r *http.Request) {
 		fullName = claimsFullName
 	}
 
-	if fullName == nil {
-		fullName = composeFullName(firstName, lastName)
-	}
-	derivedFirst, derivedLast := deriveNameParts(fullName)
-	if firstName == nil {
-		firstName = derivedFirst
-	}
-	if lastName == nil {
-		lastName = derivedLast
-	}
+	firstName, lastName, fullName = fillMissingNameParts(firstName, lastName, fullName)
 
 	shouldSyncNames := !sameNameValue(user.FirstName, firstName) ||
 		!sameNameValue(user.LastName, lastName) ||
@@ -334,16 +317,7 @@ func (h *Handler) updateAuthProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if fullName == nil {
-		fullName = composeFullName(firstName, lastName)
-	}
-	derivedFirst, derivedLast := deriveNameParts(fullName)
-	if firstName == nil {
-		firstName = derivedFirst
-	}
-	if lastName == nil {
-		lastName = derivedLast
-	}
+	firstName, lastName, fullName = fillMissingNameParts(firstName, lastName, fullName)
 
 	if _, err := h.DB.GetOrCreateUser(userClaims.UserID, userClaims.Email, fullName); err != nil {
 		InternalError(w, r, err)
@@ -401,20 +375,20 @@ func nameFieldsFromClaims(userClaims *auth.UserClaims) (*string, *string, *strin
 		return nil
 	}
 
-	firstName, _ := normaliseNamePart(readName("given_name", "first_name"), 80)
-	lastName, _ := normaliseNamePart(readName("family_name", "last_name"), 80)
-	fullName, _ := normaliseNamePart(readName("full_name", "name"), 120)
+	firstName, err := normaliseNamePart(readName("given_name", "first_name"), 80)
+	if err != nil {
+		log.Debug().Err(err).Msg("Ignoring oversized first name claim")
+	}
+	lastName, err := normaliseNamePart(readName("family_name", "last_name"), 80)
+	if err != nil {
+		log.Debug().Err(err).Msg("Ignoring oversized last name claim")
+	}
+	fullName, err := normaliseNamePart(readName("full_name", "name"), 120)
+	if err != nil {
+		log.Debug().Err(err).Msg("Ignoring oversized full name claim")
+	}
 
-	if fullName == nil {
-		fullName = composeFullName(firstName, lastName)
-	}
-	derivedFirst, derivedLast := deriveNameParts(fullName)
-	if firstName == nil {
-		firstName = derivedFirst
-	}
-	if lastName == nil {
-		lastName = derivedLast
-	}
+	firstName, lastName, fullName = fillMissingNameParts(firstName, lastName, fullName)
 
 	return firstName, lastName, fullName
 }
@@ -446,6 +420,22 @@ func composeFullName(firstName, lastName *string) *string {
 		return nil
 	}
 	return &joined
+}
+
+// fillMissingNameParts composes fullName from name parts when missing, then
+// derives missing split parts from fullName for consistency.
+func fillMissingNameParts(firstName, lastName, fullName *string) (*string, *string, *string) {
+	if fullName == nil {
+		fullName = composeFullName(firstName, lastName)
+	}
+	derivedFirst, derivedLast := deriveNameParts(fullName)
+	if firstName == nil {
+		firstName = derivedFirst
+	}
+	if lastName == nil {
+		lastName = derivedLast
+	}
+	return firstName, lastName, fullName
 }
 
 // deriveNameParts intentionally uses a simple split strategy:
