@@ -377,10 +377,23 @@
         return;
       }
 
+      const currentPath = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+      if (currentPath && currentPath !== "/") {
+        try {
+          window.sessionStorage.setItem(
+            "bb_post_auth_return_target",
+            currentPath
+          );
+        } catch (_error) {
+          // Ignore storage failures and continue OAuth flow.
+        }
+      }
+      const callbackUrl = `${window.location.origin}/auth/callback`;
+
       if (typeof window.supabase.auth.linkIdentity === "function") {
         const { data, error } = await window.supabase.auth.linkIdentity({
           provider,
-          options: { redirectTo: window.location.href },
+          options: { redirectTo: callbackUrl },
         });
         if (error) throw error;
         if (data?.url) {
@@ -390,7 +403,7 @@
       } else {
         const { data, error } = await window.supabase.auth.signInWithOAuth({
           provider,
-          options: { redirectTo: window.location.href },
+          options: { redirectTo: callbackUrl },
         });
         if (error) throw error;
         if (data?.url) {

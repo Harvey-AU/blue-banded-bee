@@ -72,6 +72,8 @@ const PUBLIC_ROUTE_PATHS = new Set([
   "/welcome/invite/",
   "/cli-login.html",
   "/auth-modal.html",
+  "/auth/callback",
+  "/auth/callback/",
   "/debug-auth.html",
   "/test-login.html",
   "/test-components.html",
@@ -192,6 +194,16 @@ function setPostAuthReturnTargetFromCurrentPath() {
   }
   const currentPath = `${window.location.pathname}${window.location.search}${window.location.hash}`;
   setPostAuthReturnTarget(currentPath);
+}
+
+function getOAuthCallbackURL(params = {}) {
+  const callbackUrl = new URL("/auth/callback", window.location.origin);
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== "") {
+      callbackUrl.searchParams.set(key, String(value));
+    }
+  });
+  return callbackUrl.toString();
 }
 
 /**
@@ -1145,24 +1157,11 @@ async function handleSocialLogin(provider) {
   try {
     const getOAuthRedirectTarget = () => {
       const params = new URLSearchParams(window.location.search);
-      const currentUrl = new URL(window.location.href);
-      currentUrl.hash = "";
       const inviteToken = params.get("invite_token");
       if (inviteToken) {
         setPendingInviteToken(inviteToken);
       }
-
-      if (params.has("invite_token")) {
-        return currentUrl.toString();
-      }
-      const returnTarget = getPostAuthReturnTarget();
-      if (returnTarget) {
-        return `${window.location.origin}${returnTarget}`;
-      }
-      if (window.location.pathname === "/") {
-        return `${window.location.origin}/dashboard`;
-      }
-      return currentUrl.toString();
+      return getOAuthCallbackURL({ invite_token: inviteToken || undefined });
     };
 
     const { data, error } = await supabase.auth.signInWithOAuth({
@@ -1186,6 +1185,36 @@ async function handleSocialLogin(provider) {
     showAuthError(error.message || `${provider} login failed.`);
     hideAuthLoading();
   }
+}
+
+async function initAuthCallbackPage() {
+  if (!initialiseSupabase()) {
+    window.location.replace("/");
+    return;
+  }
+
+  try {
+    await handleAuthCallback();
+  } catch (error) {
+    console.error("Auth callback page failed:", error);
+  }
+
+  const returnTarget = getPostAuthReturnTarget();
+  if (returnTarget) {
+    clearPostAuthReturnTarget();
+    window.location.replace(returnTarget);
+    return;
+  }
+
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (session) {
+    window.location.replace("/dashboard");
+    return;
+  }
+
+  window.location.replace("/");
 }
 
 /**
@@ -1940,7 +1969,9 @@ if (typeof module !== "undefined" && module.exports) {
     setupLoginPageHandlers,
     handleLogout,
     defaultHandleAuthSuccess,
+    initAuthCallbackPage,
     initCliAuthPage,
+    initAuthCallbackPage,
     resumeCliAuthFromStorage,
     setUserAvatar,
     getGravatarUrl,
@@ -2016,6 +2047,7 @@ if (typeof module !== "undefined" && module.exports) {
   window.handleLogout = handleLogout;
   window.handleAuthSuccess = defaultHandleAuthSuccess;
   window.initCliAuthPage = initCliAuthPage;
+  window.initAuthCallbackPage = initAuthCallbackPage;
   window.resumeCliAuthFromStorage = resumeCliAuthFromStorage;
   window.clearPendingInviteToken = clearPendingInviteToken;
 

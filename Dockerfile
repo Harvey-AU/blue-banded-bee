@@ -36,6 +36,7 @@ COPY --from=builder /app/settings.html .
 COPY --from=builder /app/welcome.html .
 COPY --from=builder /app/invite-welcome.html .
 COPY --from=builder /app/auth-modal.html .
+COPY --from=builder /app/auth-callback.html .
 COPY --from=builder /app/cli-login.html .
 COPY --from=builder /app/web/static ./web/static
 COPY --from=builder /app/web/partials ./web/partials

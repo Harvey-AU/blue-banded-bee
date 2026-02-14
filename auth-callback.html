@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Signing In...</title>
+    <link rel="stylesheet" href="/styles/app.css" />
+    <script>
+      window.BB_APP = Object.assign({}, window.BB_APP || {}, {
+        authCallback: true,
+      });
+    </script>
+    <script src="/js/bb-bootstrap.js"></script>
+    <script src="/js/core.js" defer></script>
+  </head>
+  <body class="page-auth-callback">
+    <main aria-live="polite" style="padding: 24px; text-align: center">
+      <p>Signing you in...</p>
+    </main>
+  </body>
+</html>

@@ -412,6 +412,8 @@ func (h *Handler) SetupRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/welcome/invite", h.ServeInviteWelcome)
 	mux.HandleFunc("/welcome/invite/", h.ServeInviteWelcome)
 	mux.HandleFunc("/auth-modal.html", h.ServeAuthModal)
+	mux.HandleFunc("/auth/callback", h.ServeAuthCallback)
+	mux.HandleFunc("/auth/callback/", h.ServeAuthCallback)
 	mux.HandleFunc("/cli-login.html", h.ServeCliLogin)
 	mux.HandleFunc("/debug-auth.html", h.ServeDebugAuth)
 	mux.HandleFunc("/jobs/", h.ServeJobDetails)
@@ -541,6 +543,14 @@ func (h *Handler) ServeAuthModal(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Pragma", "no-cache")
 	w.Header().Set("Expires", "0")
 	http.ServeFile(w, r, "auth-modal.html")
+}
+
+// ServeAuthCallback serves the OAuth callback bridge page.
+func (h *Handler) ServeAuthCallback(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store, max-age=0")
+	w.Header().Set("Pragma", "no-cache")
+	w.Header().Set("Expires", "0")
+	http.ServeFile(w, r, "auth-callback.html")
 }
 
 // ServeDebugAuth serves the debug auth test page

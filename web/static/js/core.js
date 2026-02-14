@@ -147,6 +147,11 @@
       return;
     }
 
+    if (window.BB_APP?.authCallback && window.BBAuth?.initAuthCallbackPage) {
+      window.BBAuth.initAuthCallbackPage();
+      return;
+    }
+
     if (typeof window.BBAuth?.setupAuthHandlers === "function") {
       window.BBAuth.setupAuthHandlers();
     }
