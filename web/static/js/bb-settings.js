@@ -8,43 +8,44 @@
     {
       key: "google",
       label: "Google",
-      icon: `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#EA4335" d="M12 10.2v3.9h5.5c-.2 1.2-1.4 3.6-5.5 3.6-3.3 0-6-2.7-6-6s2.7-6 6-6c1.9 0 3.2.8 3.9 1.4l2.7-2.6C16.9 2.9 14.7 2 12 2 6.9 2 2.8 6.1 2.8 11.2S6.9 20.4 12 20.4c6.9 0 9.1-4.8 9.1-7.2 0-.5 0-.9-.1-1.2H12z"/></svg>`,
+      icon_url:
+        "https://www.gstatic.com/images/branding/product/1x/googleg_32dp.png",
       supported: true,
     },
     {
       key: "github",
       label: "GitHub",
-      icon: `<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#111827" d="M12 2a10 10 0 0 0-3.2 19.5c.5.1.7-.2.7-.5v-1.8c-2.8.6-3.4-1.2-3.4-1.2-.5-1.1-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.6 1 1.6 1 .9 1.5 2.4 1 3 .8.1-.7.4-1 .7-1.2-2.2-.3-4.6-1.1-4.6-5a4 4 0 0 1 1-2.8c-.1-.3-.5-1.3.1-2.7 0 0 .9-.3 2.9 1a10 10 0 0 1 5.2 0c2-1.3 2.9-1 2.9-1 .6 1.4.2 2.4.1 2.7a4 4 0 0 1 1 2.8c0 3.9-2.4 4.7-4.7 5 .4.3.8 1 .8 2v3c0 .3.2.6.7.5A10 10 0 0 0 12 2z"/></svg>`,
+      icon_url: "https://github.githubassets.com/favicons/favicon.svg",
       supported: true,
     },
     {
       key: "email",
       label: "Email/Password",
-      icon: `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5.5" width="18" height="13" rx="2" fill="#065F46"/><path d="M4.5 7.5 12 12.5 19.5 7.5" fill="none" stroke="#fff" stroke-width="1.8"/></svg>`,
+      icon_url: "",
       supported: true,
     },
     {
       key: "azure",
       label: "Microsoft",
-      icon: `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="2.5" width="8.5" height="8.5" fill="#F25022"/><rect x="13" y="2.5" width="8.5" height="8.5" fill="#7FBA00"/><rect x="2.5" y="13" width="8.5" height="8.5" fill="#00A4EF"/><rect x="13" y="13" width="8.5" height="8.5" fill="#FFB900"/></svg>`,
+      icon_url: "https://www.microsoft.com/favicon.ico",
       supported: false,
     },
     {
       key: "facebook",
       label: "Facebook",
-      icon: `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="#1877F2"/><path fill="#fff" d="M13.2 20v-7h2.3l.4-2.8h-2.7V8.4c0-.8.2-1.4 1.4-1.4h1.5V4.4c-.3 0-1.2-.1-2.3-.1-2.3 0-3.8 1.4-3.8 4V10H7.7v2.8H10v7h3.2z"/></svg>`,
+      icon_url: "https://www.facebook.com/favicon.ico",
       supported: false,
     },
     {
       key: "slack_oidc",
       label: "Slack",
-      icon: `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="10.8" y="2" width="3.4" height="8.2" rx="1.7" fill="#36C5F0"/><rect x="13.8" y="10.8" width="8.2" height="3.4" rx="1.7" fill="#36C5F0"/><rect x="13.8" y="2" width="3.4" height="8.2" rx="1.7" fill="#2EB67D"/><rect x="10.8" y="13.8" width="8.2" height="3.4" rx="1.7" fill="#2EB67D"/><rect x="2" y="10.8" width="8.2" height="3.4" rx="1.7" fill="#E01E5A"/><rect x="10.8" y="13.8" width="3.4" height="8.2" rx="1.7" fill="#E01E5A"/><rect x="2" y="13.8" width="8.2" height="3.4" rx="1.7" fill="#ECB22E"/><rect x="13.8" y="2" width="3.4" height="8.2" rx="1.7" fill="#ECB22E" transform="rotate(90 15.5 6.1)"/></svg>`,
+      icon_url: "https://slack.com/favicon.ico",
       supported: false,
     },
     {
       key: "saml",
       label: "SSO (SAML)",
-      icon: `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2" fill="#374151"/><path d="M8 11V8a4 4 0 0 1 8 0v3" fill="none" stroke="#374151" stroke-width="2"/><circle cx="12" cy="16" r="1.6" fill="#fff"/></svg>`,
+      icon_url: "",
       supported: false,
     },
   ];
@@ -344,7 +345,14 @@
   }
 
   function providerIcon(provider) {
-    return getAuthMethodDef(provider).icon;
+    const method = getAuthMethodDef(provider);
+    if (method.icon_url) {
+      return `<img src="${method.icon_url}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" />`;
+    }
+    if (provider === "saml") {
+      return `<span class="settings-auth-fallback-icon" aria-hidden="true">🔒</span>`;
+    }
+    return `<span class="settings-auth-fallback-icon" aria-hidden="true">•</span>`;
   }
 
   function providerSubtitle(method) {

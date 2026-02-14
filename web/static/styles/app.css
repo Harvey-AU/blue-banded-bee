@@ -804,16 +804,19 @@ body {
   overflow: hidden;
 }
 
-.bb-social-icon svg {
+.bb-social-icon img {
   width: 16px;
   height: 16px;
   display: block;
 }
 
-.bb-social-icon-sso svg,
-.bb-social-icon-microsoft svg {
+.bb-social-icon-microsoft img {
   width: 17px;
   height: 17px;
+}
+
+.bb-social-icon-sso {
+  font-size: 14px;
 }
 
 .bb-social-btn-coming-soon {
@@ -2658,16 +2661,21 @@ html[data-settings-section="automated-jobs"] #automated-jobs {
   overflow: hidden;
 }
 
-.settings-auth-provider-icon svg {
+.settings-auth-provider-icon img {
   width: 18px;
   height: 18px;
   display: block;
 }
 
-.settings-auth-provider-azure svg,
-.settings-auth-provider-saml svg {
+.settings-auth-provider-azure img {
   width: 19px;
   height: 19px;
+}
+
+.settings-auth-fallback-icon {
+  font-size: 14px;
+  line-height: 1;
+  color: #6b7280;
 }
 
 .settings-invite-actions {
