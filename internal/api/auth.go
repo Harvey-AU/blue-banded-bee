@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"slices"
 	"strings"
@@ -17,10 +18,12 @@ var (
 
 // AuthRegisterRequest represents a user registration request
 type AuthRegisterRequest struct {
-	UserID   string  `json:"user_id"`
-	Email    string  `json:"email"`
-	FullName *string `json:"full_name,omitempty"`
-	OrgName  *string `json:"org_name,omitempty"`
+	UserID    string  `json:"user_id"`
+	Email     string  `json:"email"`
+	FirstName *string `json:"first_name,omitempty"`
+	LastName  *string `json:"last_name,omitempty"`
+	FullName  *string `json:"full_name,omitempty"`
+	OrgName   *string `json:"org_name,omitempty"`
 }
 
 // AuthSessionRequest represents a session validation request
@@ -32,6 +35,8 @@ type AuthSessionRequest struct {
 type UserResponse struct {
 	ID             string  `json:"id"`
 	Email          string  `json:"email"`
+	FirstName      *string `json:"first_name"`
+	LastName       *string `json:"last_name"`
 	FullName       *string `json:"full_name"`
 	OrganisationID *string `json:"organisation_id"`
 	CreatedAt      string  `json:"created_at"`
@@ -66,6 +71,33 @@ func (h *Handler) AuthRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	firstName, err := normaliseNamePart(req.FirstName, 80)
+	if err != nil {
+		BadRequest(w, r, "first_name must be 80 characters or fewer")
+		return
+	}
+	lastName, err := normaliseNamePart(req.LastName, 80)
+	if err != nil {
+		BadRequest(w, r, "last_name must be 80 characters or fewer")
+		return
+	}
+	fullName, err := normaliseNamePart(req.FullName, 120)
+	if err != nil {
+		BadRequest(w, r, "full_name must be 120 characters or fewer")
+		return
+	}
+
+	if fullName == nil {
+		fullName = composeFullName(firstName, lastName)
+	}
+	derivedFirst, derivedLast := deriveNameParts(fullName)
+	if firstName == nil {
+		firstName = derivedFirst
+	}
+	if lastName == nil {
+		lastName = derivedLast
+	}
+
 	var orgName string
 
 	// 1. Org name if explicitly provided
@@ -92,8 +124,8 @@ func (h *Handler) AuthRegister(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 3. Person's full name as fallback
-	if orgName == "" && req.FullName != nil && *req.FullName != "" {
-		orgName = *req.FullName
+	if orgName == "" && fullName != nil && *fullName != "" {
+		orgName = *fullName
 	}
 
 	// 4. Final default if nothing else worked
@@ -102,7 +134,7 @@ func (h *Handler) AuthRegister(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Create user with organisation automatically
-	user, org, err := h.DB.CreateUser(req.UserID, req.Email, req.FullName, orgName)
+	user, org, err := h.DB.CreateUser(req.UserID, req.Email, firstName, lastName, fullName, orgName)
 	if err != nil {
 		sentry.CaptureException(err)
 		logger.Error().Err(err).Str("user_id", req.UserID).Msg("Failed to create user with organisation")
@@ -113,6 +145,8 @@ func (h *Handler) AuthRegister(w http.ResponseWriter, r *http.Request) {
 	userResp := UserResponse{
 		ID:             user.ID,
 		Email:          user.Email,
+		FirstName:      user.FirstName,
+		LastName:       user.LastName,
 		FullName:       user.FullName,
 		OrganisationID: user.OrganisationID,
 		CreatedAt:      user.CreatedAt.Format("2006-01-02T15:04:05Z"),
@@ -155,7 +189,9 @@ func (h *Handler) AuthSession(w http.ResponseWriter, r *http.Request) {
 }
 
 type AuthProfileUpdateRequest struct {
-	FullName *string `json:"full_name"`
+	FirstName *string `json:"first_name"`
+	LastName  *string `json:"last_name"`
+	FullName  *string `json:"full_name"`
 }
 
 // AuthProfile handles GET/PATCH /v1/auth/profile
@@ -179,7 +215,7 @@ func (h *Handler) getAuthProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	claimsFullName := fullNameFromClaims(userClaims)
+	claimsFirstName, claimsLastName, claimsFullName := nameFieldsFromClaims(userClaims)
 
 	// Auto-create user if they don't exist
 	user, err := h.DB.GetOrCreateUser(userClaims.UserID, userClaims.Email, claimsFullName)
@@ -190,15 +226,47 @@ func (h *Handler) getAuthProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if (user.FullName == nil || strings.TrimSpace(*user.FullName) == "") && claimsFullName != nil {
-		if err := h.DB.UpdateUserFullName(userClaims.UserID, claimsFullName); err == nil {
-			user.FullName = claimsFullName
+	firstName := user.FirstName
+	lastName := user.LastName
+	fullName := user.FullName
+
+	if isBlankName(firstName) {
+		firstName = claimsFirstName
+	}
+	if isBlankName(lastName) {
+		lastName = claimsLastName
+	}
+	if isBlankName(fullName) {
+		fullName = claimsFullName
+	}
+
+	if fullName == nil {
+		fullName = composeFullName(firstName, lastName)
+	}
+	derivedFirst, derivedLast := deriveNameParts(fullName)
+	if firstName == nil {
+		firstName = derivedFirst
+	}
+	if lastName == nil {
+		lastName = derivedLast
+	}
+
+	shouldSyncNames := !sameNameValue(user.FirstName, firstName) ||
+		!sameNameValue(user.LastName, lastName) ||
+		!sameNameValue(user.FullName, fullName)
+	if shouldSyncNames {
+		if err := h.DB.UpdateUserNames(userClaims.UserID, firstName, lastName, fullName); err == nil {
+			user.FirstName = firstName
+			user.LastName = lastName
+			user.FullName = fullName
 		}
 	}
 
 	userResp := UserResponse{
 		ID:             user.ID,
 		Email:          user.Email,
+		FirstName:      user.FirstName,
+		LastName:       user.LastName,
 		FullName:       user.FullName,
 		OrganisationID: user.OrganisationID,
 		CreatedAt:      user.CreatedAt.Format("2006-01-02T15:04:05Z"),
@@ -242,28 +310,44 @@ func (h *Handler) updateAuthProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.FullName == nil {
-		BadRequest(w, r, "full_name is required")
+	if req.FirstName == nil && req.LastName == nil && req.FullName == nil {
+		BadRequest(w, r, "first_name, last_name, or full_name is required")
 		return
 	}
 
-	name := strings.TrimSpace(*req.FullName)
-	if name == "" {
-		req.FullName = nil
-	} else {
-		if len(name) > 120 {
-			BadRequest(w, r, "full_name must be 120 characters or fewer")
-			return
-		}
-		req.FullName = &name
+	firstName, err := normaliseNamePart(req.FirstName, 80)
+	if err != nil {
+		BadRequest(w, r, "first_name must be 80 characters or fewer")
+		return
+	}
+	lastName, err := normaliseNamePart(req.LastName, 80)
+	if err != nil {
+		BadRequest(w, r, "last_name must be 80 characters or fewer")
+		return
+	}
+	fullName, err := normaliseNamePart(req.FullName, 120)
+	if err != nil {
+		BadRequest(w, r, "full_name must be 120 characters or fewer")
+		return
 	}
 
-	if _, err := h.DB.GetOrCreateUser(userClaims.UserID, userClaims.Email, req.FullName); err != nil {
+	if fullName == nil {
+		fullName = composeFullName(firstName, lastName)
+	}
+	derivedFirst, derivedLast := deriveNameParts(fullName)
+	if firstName == nil {
+		firstName = derivedFirst
+	}
+	if lastName == nil {
+		lastName = derivedLast
+	}
+
+	if _, err := h.DB.GetOrCreateUser(userClaims.UserID, userClaims.Email, fullName); err != nil {
 		InternalError(w, r, err)
 		return
 	}
 
-	if err := h.DB.UpdateUserFullName(userClaims.UserID, req.FullName); err != nil {
+	if err := h.DB.UpdateUserNames(userClaims.UserID, firstName, lastName, fullName); err != nil {
 		InternalError(w, r, err)
 		return
 	}
@@ -277,6 +361,8 @@ func (h *Handler) updateAuthProfile(w http.ResponseWriter, r *http.Request) {
 	userResp := UserResponse{
 		ID:             user.ID,
 		Email:          user.Email,
+		FirstName:      user.FirstName,
+		LastName:       user.LastName,
 		FullName:       user.FullName,
 		OrganisationID: user.OrganisationID,
 		CreatedAt:      user.CreatedAt.Format("2006-01-02T15:04:05Z"),
@@ -289,27 +375,109 @@ func (h *Handler) updateAuthProfile(w http.ResponseWriter, r *http.Request) {
 	}, "Profile updated successfully")
 }
 
-func fullNameFromClaims(userClaims *auth.UserClaims) *string {
+func nameFieldsFromClaims(userClaims *auth.UserClaims) (*string, *string, *string) {
 	if userClaims == nil {
+		return nil, nil, nil
+	}
+
+	readName := func(keys ...string) *string {
+		for _, key := range keys {
+			value, ok := userClaims.UserMetadata[key]
+			if !ok {
+				continue
+			}
+			name, ok := value.(string)
+			if !ok {
+				continue
+			}
+			name = strings.TrimSpace(name)
+			if name != "" {
+				return &name
+			}
+		}
 		return nil
 	}
 
-	for _, key := range []string{"full_name", "name"} {
-		value, ok := userClaims.UserMetadata[key]
-		if !ok {
-			continue
-		}
-		name, ok := value.(string)
-		if !ok {
-			continue
-		}
-		name = strings.TrimSpace(name)
-		if name != "" {
-			return &name
-		}
+	firstName, _ := normaliseNamePart(readName("given_name", "first_name"), 80)
+	lastName, _ := normaliseNamePart(readName("family_name", "last_name"), 80)
+	fullName, _ := normaliseNamePart(readName("full_name", "name"), 120)
+
+	if fullName == nil {
+		fullName = composeFullName(firstName, lastName)
+	}
+	derivedFirst, derivedLast := deriveNameParts(fullName)
+	if firstName == nil {
+		firstName = derivedFirst
+	}
+	if lastName == nil {
+		lastName = derivedLast
 	}
 
-	return nil
+	return firstName, lastName, fullName
+}
+
+func normaliseNamePart(value *string, maxLen int) (*string, error) {
+	if value == nil {
+		return nil, nil
+	}
+	trimmed := strings.TrimSpace(*value)
+	if trimmed == "" {
+		return nil, nil
+	}
+	if len(trimmed) > maxLen {
+		return nil, fmt.Errorf("name part exceeds %d characters", maxLen)
+	}
+	return &trimmed, nil
+}
+
+func composeFullName(firstName, lastName *string) *string {
+	parts := make([]string, 0, 2)
+	if firstName != nil {
+		parts = append(parts, strings.TrimSpace(*firstName))
+	}
+	if lastName != nil {
+		parts = append(parts, strings.TrimSpace(*lastName))
+	}
+	joined := strings.TrimSpace(strings.Join(parts, " "))
+	if joined == "" {
+		return nil
+	}
+	return &joined
+}
+
+func deriveNameParts(fullName *string) (*string, *string) {
+	if fullName == nil {
+		return nil, nil
+	}
+	trimmed := strings.TrimSpace(*fullName)
+	if trimmed == "" {
+		return nil, nil
+	}
+	parts := strings.Fields(trimmed)
+	if len(parts) == 0 {
+		return nil, nil
+	}
+	first := parts[0]
+	if len(parts) == 1 {
+		return &first, nil
+	}
+	last := strings.Join(parts[1:], " ")
+	return &first, &last
+}
+
+func isBlankName(value *string) bool {
+	return value == nil || strings.TrimSpace(*value) == ""
+}
+
+func sameNameValue(a, b *string) bool {
+	switch {
+	case a == nil && b == nil:
+		return true
+	case a == nil || b == nil:
+		return false
+	default:
+		return strings.TrimSpace(*a) == strings.TrimSpace(*b)
+	}
 }
 
 func authMethodsFromClaims(userClaims *auth.UserClaims) []string {

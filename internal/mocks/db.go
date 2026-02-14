@@ -74,15 +74,15 @@ func (m *MockDB) GetUser(userID string) (*db.User, error) {
 	return args.Get(0).(*db.User), args.Error(1)
 }
 
-// UpdateUserFullName mocks updating a user's full name
-func (m *MockDB) UpdateUserFullName(userID string, fullName *string) error {
-	args := m.Called(userID, fullName)
+// UpdateUserNames mocks updating user name fields
+func (m *MockDB) UpdateUserNames(userID string, firstName, lastName, fullName *string) error {
+	args := m.Called(userID, firstName, lastName, fullName)
 	return args.Error(0)
 }
 
 // CreateUser mocks creating a user and organisation
-func (m *MockDB) CreateUser(userID, email string, fullName *string, orgName string) (*db.User, *db.Organisation, error) {
-	args := m.Called(userID, email, fullName, orgName)
+func (m *MockDB) CreateUser(userID, email string, firstName, lastName, fullName *string, orgName string) (*db.User, *db.Organisation, error) {
+	args := m.Called(userID, email, firstName, lastName, fullName, orgName)
 	var user *db.User
 	var org *db.Organisation
 	if u := args.Get(0); u != nil {

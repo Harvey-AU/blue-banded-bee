@@ -592,12 +592,29 @@
     });
   }
 
+  function splitName(fullName) {
+    const value = (fullName || "").trim();
+    if (!value) return { firstName: "", lastName: "" };
+    const parts = value.split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return { firstName: "", lastName: "" };
+    if (parts.length === 1) return { firstName: parts[0], lastName: "" };
+    return { firstName: parts[0], lastName: parts.slice(1).join(" ") };
+  }
+
   async function loadAccountDetails() {
     const sessionResult = await window.supabase.auth.getSession();
     const session = sessionResult?.data?.session;
     if (!session?.user) return;
 
     const fallbackEmail = session.user.email || "";
+    const fallbackFirstName =
+      session.user.user_metadata?.given_name ||
+      session.user.user_metadata?.first_name ||
+      "";
+    const fallbackLastName =
+      session.user.user_metadata?.family_name ||
+      session.user.user_metadata?.last_name ||
+      "";
     const fallbackFullName =
       session.user.user_metadata?.full_name ||
       session.user.user_metadata?.name ||
@@ -605,6 +622,8 @@
     const fallbackMethods = session.user.app_metadata?.providers || [];
 
     let email = fallbackEmail;
+    let firstName = fallbackFirstName;
+    let lastName = fallbackLastName;
     let fullName = fallbackFullName;
     let authMethods = fallbackMethods;
     let authIdentities = [];
@@ -626,8 +645,14 @@
       if (profileUser.email) {
         email = profileUser.email;
       }
-      if (typeof profileUser.full_name === "string" && profileUser.full_name) {
-        fullName = profileUser.full_name;
+      if (Object.hasOwn(profileUser, "full_name")) {
+        fullName = (profileUser.full_name || "").trim();
+      }
+      if (Object.hasOwn(profileUser, "first_name")) {
+        firstName = (profileUser.first_name || "").trim();
+      }
+      if (Object.hasOwn(profileUser, "last_name")) {
+        lastName = (profileUser.last_name || "").trim();
       }
       if (Array.isArray(response?.auth_methods)) {
         authMethods = response.auth_methods;
@@ -636,10 +661,22 @@
       console.warn("Failed to load profile from API.");
     }
 
+    if (!firstName && !lastName && fullName) {
+      const split = splitName(fullName);
+      firstName = split.firstName;
+      lastName = split.lastName;
+    }
+
     const emailEl = document.getElementById("settingsUserEmail");
-    const nameInputEl = document.getElementById("settingsUserNameInput");
+    const firstNameInputEl = document.getElementById(
+      "settingsUserFirstNameInput"
+    );
+    const lastNameInputEl = document.getElementById(
+      "settingsUserLastNameInput"
+    );
     if (emailEl) emailEl.textContent = email || "Not set";
-    if (nameInputEl) nameInputEl.value = fullName || "";
+    if (firstNameInputEl) firstNameInputEl.value = firstName || "";
+    if (lastNameInputEl) lastNameInputEl.value = lastName || "";
 
     const connectedProviders = new Set();
     const hasIdentityData =
@@ -694,13 +731,24 @@
   }
 
   async function saveProfileName() {
-    const nameInputEl = document.getElementById("settingsUserNameInput");
+    const firstNameInputEl = document.getElementById(
+      "settingsUserFirstNameInput"
+    );
+    const lastNameInputEl = document.getElementById(
+      "settingsUserLastNameInput"
+    );
     const saveBtn = document.getElementById("settingsSaveName");
-    if (!nameInputEl || !saveBtn) return;
+    if (!firstNameInputEl || !lastNameInputEl || !saveBtn) return;
 
-    const fullName = nameInputEl.value.trim();
-    if (fullName.length > 120) {
-      showSettingsToast("error", "Name must be 120 characters or fewer");
+    const firstName = firstNameInputEl.value.trim();
+    const lastName = lastNameInputEl.value.trim();
+    const fullName = `${firstName} ${lastName}`.trim();
+    if (firstName.length > 80) {
+      showSettingsToast("error", "First name must be 80 characters or fewer");
+      return;
+    }
+    if (lastName.length > 80) {
+      showSettingsToast("error", "Last name must be 80 characters or fewer");
       return;
     }
 
@@ -711,9 +759,16 @@
     try {
       let metadataUpdateSucceeded = true;
       try {
-        const payload = fullName ? { full_name: fullName } : { full_name: "" };
+        const payload = {
+          first_name: firstName || "",
+          last_name: lastName || "",
+          given_name: firstName || "",
+          family_name: lastName || "",
+          full_name: fullName || "",
+          name: fullName || "",
+        };
         await window.supabase.auth.updateUser({
-          data: { full_name: payload.full_name },
+          data: payload,
         });
       } catch (_err) {
         console.warn("Failed to update auth metadata name.");
@@ -723,7 +778,11 @@
       await window.dataBinder.fetchData("/v1/auth/profile", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ full_name: fullName }),
+        body: JSON.stringify({
+          first_name: firstName,
+          last_name: lastName,
+          full_name: fullName,
+        }),
       });
 
       if (metadataUpdateSucceeded) {

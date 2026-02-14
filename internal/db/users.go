@@ -16,6 +16,8 @@ import (
 type User struct {
 	ID                   string    `json:"id"`
 	Email                string    `json:"email"`
+	FirstName            *string   `json:"first_name,omitempty"`
+	LastName             *string   `json:"last_name,omitempty"`
 	FullName             *string   `json:"full_name,omitempty"`
 	OrganisationID       *string   `json:"organisation_id,omitempty"`
 	ActiveOrganisationID *string   `json:"active_organisation_id,omitempty"`
@@ -38,13 +40,13 @@ func (db *DB) GetUser(userID string) (*User, error) {
 	user := &User{}
 
 	query := `
-		SELECT id, email, full_name, organisation_id, active_organisation_id, slack_user_id, webhook_token, created_at, updated_at
+		SELECT id, email, first_name, last_name, full_name, organisation_id, active_organisation_id, slack_user_id, webhook_token, created_at, updated_at
 		FROM users
 		WHERE id = $1
 	`
 
 	err := db.client.QueryRow(query, userID).Scan(
-		&user.ID, &user.Email, &user.FullName, &user.OrganisationID,
+		&user.ID, &user.Email, &user.FirstName, &user.LastName, &user.FullName, &user.OrganisationID,
 		&user.ActiveOrganisationID, &user.SlackUserID, &user.WebhookToken, &user.CreatedAt, &user.UpdatedAt,
 	)
 	if err != nil {
@@ -62,13 +64,13 @@ func (db *DB) GetUserByWebhookToken(webhookToken string) (*User, error) {
 	user := &User{}
 
 	query := `
-		SELECT id, email, full_name, organisation_id, active_organisation_id, slack_user_id, webhook_token, created_at, updated_at
+		SELECT id, email, first_name, last_name, full_name, organisation_id, active_organisation_id, slack_user_id, webhook_token, created_at, updated_at
 		FROM users
 		WHERE webhook_token = $1
 	`
 
 	err := db.client.QueryRow(query, webhookToken).Scan(
-		&user.ID, &user.Email, &user.FullName, &user.OrganisationID,
+		&user.ID, &user.Email, &user.FirstName, &user.LastName, &user.FullName, &user.OrganisationID,
 		&user.ActiveOrganisationID, &user.SlackUserID, &user.WebhookToken, &user.CreatedAt, &user.UpdatedAt,
 	)
 	if err != nil {
@@ -100,7 +102,7 @@ func (db *DB) GetOrCreateUser(userID, email string, fullName *string) (*User, er
 	orgName := deriveOrganisationName(email, fullName)
 
 	// Create the user
-	newUser, _, err := db.CreateUser(userID, email, fullName, orgName)
+	newUser, _, err := db.CreateUser(userID, email, nil, nil, fullName, orgName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to auto-create user: %w", err)
 	}
@@ -302,7 +304,7 @@ func (db *DB) GetOrganisation(organisationID string) (*Organisation, error) {
 
 func (db *DB) GetOrganisationMembers(organisationID string) ([]*User, error) {
 	query := `
-		SELECT u.id, u.email, u.full_name, u.organisation_id, u.active_organisation_id, u.slack_user_id, u.created_at, u.updated_at
+		SELECT u.id, u.email, u.first_name, u.last_name, u.full_name, u.organisation_id, u.active_organisation_id, u.slack_user_id, u.created_at, u.updated_at
 		FROM organisation_members om
 		JOIN users u ON u.id = om.user_id
 		WHERE om.organisation_id = $1
@@ -319,7 +321,7 @@ func (db *DB) GetOrganisationMembers(organisationID string) ([]*User, error) {
 	for rows.Next() {
 		user := &User{}
 		err := rows.Scan(
-			&user.ID, &user.Email, &user.FullName, &user.OrganisationID,
+			&user.ID, &user.Email, &user.FirstName, &user.LastName, &user.FullName, &user.OrganisationID,
 			&user.ActiveOrganisationID, &user.SlackUserID, &user.CreatedAt, &user.UpdatedAt,
 		)
 		if err != nil {
@@ -336,7 +338,7 @@ func (db *DB) GetOrganisationMembers(organisationID string) ([]*User, error) {
 }
 
 // If user already exists, returns the existing user and their organisation
-func (db *DB) CreateUser(userID, email string, fullName *string, orgName string) (*User, *Organisation, error) {
+func (db *DB) CreateUser(userID, email string, firstName, lastName, fullName *string, orgName string) (*User, *Organisation, error) {
 	// First check if user already exists
 	existingUser, err := db.GetUser(userID)
 	if err == nil {
@@ -412,18 +414,20 @@ func (db *DB) CreateUser(userID, email string, fullName *string, orgName string)
 	user := &User{
 		ID:                   userID,
 		Email:                email,
+		FirstName:            firstName,
+		LastName:             lastName,
 		FullName:             fullName,
 		OrganisationID:       &org.ID,
 		ActiveOrganisationID: &org.ID,
 	}
 
 	userQuery := `
-		INSERT INTO users (id, email, full_name, organisation_id, active_organisation_id, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $4, NOW(), NOW())
+		INSERT INTO users (id, email, first_name, last_name, full_name, organisation_id, active_organisation_id, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $6, NOW(), NOW())
 		RETURNING created_at, updated_at
 	`
 
-	err = tx.QueryRow(userQuery, user.ID, user.Email, user.FullName, user.OrganisationID).Scan(
+	err = tx.QueryRow(userQuery, user.ID, user.Email, user.FirstName, user.LastName, user.FullName, user.OrganisationID).Scan(
 		&user.CreatedAt, &user.UpdatedAt,
 	)
 	if err != nil {
@@ -557,17 +561,20 @@ func (db *DB) SetActiveOrganisation(userID, organisationID string) error {
 	return nil
 }
 
-// UpdateUserFullName updates the user's full name.
-func (db *DB) UpdateUserFullName(userID string, fullName *string) error {
+// UpdateUserNames updates the user's name fields.
+func (db *DB) UpdateUserNames(userID string, firstName, lastName, fullName *string) error {
 	query := `
 		UPDATE users
-		SET full_name = $2, updated_at = NOW()
+		SET first_name = $2,
+		    last_name = $3,
+		    full_name = $4,
+		    updated_at = NOW()
 		WHERE id = $1
 	`
 
-	result, err := db.client.Exec(query, userID, fullName)
+	result, err := db.client.Exec(query, userID, firstName, lastName, fullName)
 	if err != nil {
-		return fmt.Errorf("failed to update user full name: %w", err)
+		return fmt.Errorf("failed to update user names: %w", err)
 	}
 
 	rowsAffected, err := result.RowsAffected()

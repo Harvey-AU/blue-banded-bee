@@ -326,15 +326,18 @@ func (h *Handler) OrganisationMembersHandler(w http.ResponseWriter, r *http.Requ
 		if at := strings.Index(displayName, "@"); at > 0 {
 			displayName = displayName[:at]
 		}
-		if member.FullName != nil {
-			if fullName := strings.TrimSpace(*member.FullName); fullName != "" {
-				displayName = fullName
-			}
+		if derivedFull := composeFullName(member.FirstName, member.LastName); derivedFull != nil {
+			displayName = *derivedFull
+		}
+		if member.FullName != nil && strings.TrimSpace(*member.FullName) != "" {
+			displayName = strings.TrimSpace(*member.FullName)
 		}
 
 		responseMembers = append(responseMembers, map[string]any{
 			"id":         member.UserID,
 			"email":      member.Email,
+			"first_name": member.FirstName,
+			"last_name":  member.LastName,
 			"full_name":  displayName,
 			"role":       member.Role,
 			"created_at": member.CreatedAt.Format(time.RFC3339),
@@ -529,6 +532,8 @@ func (h *Handler) OrganisationInvitePreviewHandler(w http.ResponseWriter, r *htt
 		if inviter, inviterErr := h.DB.GetUser(invite.CreatedBy); inviterErr == nil {
 			if inviter.FullName != nil && strings.TrimSpace(*inviter.FullName) != "" {
 				inviterLabel = strings.TrimSpace(*inviter.FullName)
+			} else if derivedFull := composeFullName(inviter.FirstName, inviter.LastName); derivedFull != nil {
+				inviterLabel = strings.TrimSpace(*derivedFull)
 			} else if strings.TrimSpace(inviter.Email) != "" {
 				inviterLabel = strings.TrimSpace(inviter.Email)
 			}
@@ -910,7 +915,11 @@ func (h *Handler) createOrganisationInvite(w http.ResponseWriter, r *http.Reques
 	emailDelivery := "sent"
 	responseMsg := "Invite sent successfully"
 
-	inviterName, _ := userClaims.UserMetadata["full_name"].(string)
+	_, _, inviterFullName := nameFieldsFromClaims(userClaims)
+	inviterName := ""
+	if inviterFullName != nil {
+		inviterName = strings.TrimSpace(*inviterFullName)
+	}
 	if inviterName == "" {
 		inviterName = userClaims.Email
 	}
