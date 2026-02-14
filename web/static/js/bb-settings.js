@@ -41,12 +41,6 @@
       icon_url: "/assets/auth-providers/slack.svg",
       supported: true,
     },
-    {
-      key: "saml",
-      label: "SSO (SAML)",
-      icon_url: "",
-      supported: true,
-    },
   ];
 
   const settingsState = {
@@ -312,15 +306,13 @@
   function normaliseAuthProvider(provider) {
     const value = (provider || "").trim().toLowerCase();
     if (value === "slack") return "slack_oidc";
-    if (value === "saml2") return "saml";
     if (
       value === "google" ||
       value === "github" ||
       value === "email" ||
       value === "azure" ||
       value === "facebook" ||
-      value === "slack_oidc" ||
-      value === "saml"
+      value === "slack_oidc"
     ) {
       return value;
     }
@@ -347,9 +339,6 @@
     const method = getAuthMethodDef(provider);
     if (method.icon_url) {
       return `<img src="${method.icon_url}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" />`;
-    }
-    if (provider === "saml") {
-      return `<span class="settings-auth-fallback-icon" aria-hidden="true">🔒</span>`;
     }
     return `<span class="settings-auth-fallback-icon" aria-hidden="true">•</span>`;
   }
