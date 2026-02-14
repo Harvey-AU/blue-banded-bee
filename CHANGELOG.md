@@ -29,6 +29,15 @@ On merge, CI will:
 
 ## [Unreleased]
 
+## [0.26.6] – 2026-02-14
+
+### Fixed
+
+- **Batch Page Upsert Robustness**: Page record creation now binds bulk text
+  array parameters correctly and deduplicates duplicate paths within a chunk
+  before upsert, preventing PostgreSQL batch upsert conflicts while preserving
+  `RETURNING` IDs for both new and existing rows.
+
 ## [0.26.5] – 2026-02-13
 
 ### Fixed
