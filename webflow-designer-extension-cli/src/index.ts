@@ -13,9 +13,10 @@ const apiStatusText = document.getElementById("apiStatusText");
 const apiDetailsText = document.getElementById("apiDetailsText");
 
 const API_BASE_STORAGE_KEY = "bbb_extension_api_base";
-const API_TOKEN_STORAGE_KEY = "bbb_extension_api_token";
+const API_TOKEN_STORAGE_KEY = "bbb_extension_api_token_session";
 const AUTH_POPUP_WIDTH = 520;
 const AUTH_POPUP_HEIGHT = 760;
+const DEFAULT_BBB_APP_ORIGIN = "https://app.bluebandedbee.co";
 
 if (pingButton && counterText && statusText) {
   pingButton.addEventListener("click", () => {
@@ -41,7 +42,7 @@ if (connectAuthButton && apiStatusText && apiDetailsText) {
 
 function hydrateApiInputs() {
   const savedBaseUrl = window.localStorage.getItem(API_BASE_STORAGE_KEY);
-  const savedToken = window.localStorage.getItem(API_TOKEN_STORAGE_KEY);
+  const savedToken = window.sessionStorage.getItem(API_TOKEN_STORAGE_KEY);
 
   if (apiBaseUrlInput) {
     apiBaseUrlInput.value = savedBaseUrl || "https://app.bluebandedbee.co";
@@ -78,7 +79,11 @@ async function runApiCheck() {
   const token = apiTokenInput.value.trim();
 
   window.localStorage.setItem(API_BASE_STORAGE_KEY, baseUrl);
-  window.localStorage.setItem(API_TOKEN_STORAGE_KEY, token);
+  if (token) {
+    window.sessionStorage.setItem(API_TOKEN_STORAGE_KEY, token);
+  } else {
+    window.sessionStorage.removeItem(API_TOKEN_STORAGE_KEY);
+  }
 
   if (!baseUrl) {
     apiStatusText.textContent = "Enter API base URL first.";
@@ -185,7 +190,11 @@ async function connectAccount() {
   }
 
   const state = createAuthState();
-  const authUrl = new URL(`${baseOrigin}/extension-auth.html`);
+  const authBaseOrigin =
+    baseOrigin.includes("localhost") || baseOrigin.includes("127.0.0.1")
+      ? baseOrigin
+      : DEFAULT_BBB_APP_ORIGIN;
+  const authUrl = new URL(`${authBaseOrigin}/extension-auth.html`);
   authUrl.searchParams.set("origin", window.location.origin);
   authUrl.searchParams.set("state", state);
 
@@ -224,7 +233,7 @@ async function connectAccount() {
     };
 
     const onMessage = (event: MessageEvent) => {
-      if (event.origin !== baseOrigin) {
+      if (event.origin !== authBaseOrigin) {
         return;
       }
 
@@ -242,9 +251,12 @@ async function connectAccount() {
 
       if (payload.type === "success" && payload.accessToken) {
         apiTokenInput.value = payload.accessToken;
-        window.localStorage.setItem(API_TOKEN_STORAGE_KEY, payload.accessToken);
+        window.sessionStorage.setItem(
+          API_TOKEN_STORAGE_KEY,
+          payload.accessToken
+        );
         apiStatusText.textContent =
-          "Authenticated. Token stored for API checks.";
+          "Authenticated. Token stored for this session.";
         apiDetailsText.textContent =
           "Click Check API to verify backend access.";
       } else {

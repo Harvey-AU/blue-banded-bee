@@ -1988,7 +1988,21 @@ function isValidExtensionTargetOrigin(rawOrigin) {
   if (!rawOrigin) return false;
   try {
     const parsed = new URL(rawOrigin);
-    return parsed.protocol === "https:" || parsed.protocol === "http:";
+    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+      return false;
+    }
+
+    // Only allow Webflow-hosted extension origins and local development.
+    const host = parsed.hostname.toLowerCase();
+    if (
+      host === "localhost" ||
+      host === "127.0.0.1" ||
+      host.endsWith(".webflow-ext.com")
+    ) {
+      return true;
+    }
+
+    return false;
   } catch (_error) {
     return false;
   }
@@ -2022,6 +2036,20 @@ function initExtensionAuthPage() {
 
   if (!isValidExtensionTargetOrigin(targetOrigin)) {
     setStatus("Invalid extension origin. Please reopen sign-in.", true);
+    return;
+  }
+
+  // Ensure the opener origin matches the declared target origin.
+  try {
+    const referrerOrigin = document.referrer
+      ? new URL(document.referrer).origin
+      : "";
+    if (!referrerOrigin || referrerOrigin !== targetOrigin) {
+      setStatus("Origin mismatch. Please relaunch from the extension.", true);
+      return;
+    }
+  } catch (_error) {
+    setStatus("Unable to validate opener origin. Please relaunch.", true);
     return;
   }
 

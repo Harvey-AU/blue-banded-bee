@@ -13,6 +13,7 @@ The command does two things:
 
 - Watches `src/index.ts` and compiles to `public/index.js`
 - Serves the extension via `webflow extension serve`
+- Keeps `public/index.js` generated from source (not committed)
 
 ## Deploying
 
@@ -44,6 +45,7 @@ Expected behavior:
 - Calls `GET /health` first to confirm reachability.
 - Calls `GET /v1/integrations/webflow` and shows connection count.
 - If unauthenticated, shows a clear "auth required" state.
+- Auth token is stored in `sessionStorage` only (tab/session scoped).
 
 ## Popup auth bridge
 
@@ -51,3 +53,4 @@ Expected behavior:
 - Popup reuses shared auth modal (`/js/auth.js`) for sign in/sign up.
 - On success, popup posts `{ source: "bbb-extension-auth", accessToken }` back
   to extension with origin and state checks.
+- Popup only accepts trusted target origins (`*.webflow-ext.com` or localhost).

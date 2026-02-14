@@ -13,6 +13,16 @@ Designer. It does not contain backend business logic.
 4. Backend handles authentication, token storage, scheduling, jobs, and
    webhooks.
 
+## Auth model
+
+- Extension initiates auth via popup to BBB-hosted `/extension-auth.html`.
+- Popup reuses existing shared auth system in `web/static/js/auth.js`.
+- First-time users are created via existing `POST /v1/auth/register` path.
+- Token handoff returns to extension using `postMessage` with origin/state
+  validation.
+- Extension keeps auth token in session scope (`sessionStorage`) rather than
+  persistent local storage.
+
 ## Repository boundaries
 
 - Extension code: `/webflow-designer-extension-cli`
