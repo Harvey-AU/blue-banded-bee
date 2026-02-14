@@ -89,10 +89,15 @@ func CreatePageRecords(ctx context.Context, q TransactionExecutor, domainID int,
 
 func ensurePageBatch(ctx context.Context, q TransactionExecutor, domainID int, batch []string, seen map[string]int) error {
 	unique := make([]string, 0, len(batch))
+	uniqueSet := make(map[string]struct{}, len(batch))
 	for _, path := range batch {
 		if _, ok := seen[path]; ok {
 			continue
 		}
+		if _, ok := uniqueSet[path]; ok {
+			continue
+		}
+		uniqueSet[path] = struct{}{}
 		unique = append(unique, path)
 	}
 
