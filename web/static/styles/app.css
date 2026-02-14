@@ -857,6 +857,15 @@ body {
   text-decoration: underline;
 }
 
+/* Route-level auth gate: keep URL, hide page content, show only auth modal */
+body.bb-auth-route-gated > *:not(#authModalContainer) {
+  display: none !important;
+}
+
+body.bb-auth-route-gated #authModalContainer {
+  display: block !important;
+}
+
 @media (width <= 640px) {
   .bb-modal-content {
     padding: 22px;

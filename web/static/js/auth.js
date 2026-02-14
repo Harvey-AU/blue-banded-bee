@@ -64,6 +64,7 @@ const OAUTH_CALLBACK_QUERY_KEYS = [
   "code",
   "state",
 ];
+const PROTECTED_ROUTE_PATTERNS = [/^\/settings(?:\/|$)/, /^\/jobs(?:\/|$)/];
 
 function getCleanOAuthCallbackPath() {
   const url = new URL(window.location.href);
@@ -72,6 +73,32 @@ function getCleanOAuthCallbackPath() {
     url.searchParams.delete(key);
   });
   return `${url.pathname}${url.search}`;
+}
+
+function isProtectedRoutePath(pathname) {
+  return PROTECTED_ROUTE_PATTERNS.some((pattern) => pattern.test(pathname));
+}
+
+function applyProtectedRouteAuthGate(isAuthenticated) {
+  const body = document.body;
+  if (!body) return;
+
+  const shouldGate =
+    !isAuthenticated && isProtectedRoutePath(window.location.pathname);
+  body.classList.toggle("bb-auth-route-gated", shouldGate);
+
+  if (shouldGate) {
+    setPostAuthReturnTargetFromCurrentPath();
+    // Show login modal as the only visible UI while preserving current URL.
+    setTimeout(() => {
+      if (typeof window.showAuthModal === "function") {
+        window.showAuthModal();
+      }
+      if (typeof window.showLoginForm === "function") {
+        window.showLoginForm();
+      }
+    }, 0);
+  }
 }
 
 function getPendingInviteToken() {
@@ -496,6 +523,8 @@ function updateAuthState(isAuthenticated) {
       }
     }, 150);
   }
+
+  applyProtectedRouteAuthGate(isAuthenticated);
 }
 
 /**
