@@ -726,8 +726,8 @@
         await window.supabase.auth.updateUser({
           data: { full_name: payload.full_name },
         });
-      } catch (err) {
-        console.warn("Failed to update auth metadata name:", err);
+      } catch (_err) {
+        console.warn("Failed to update auth metadata name.");
         metadataUpdateSucceeded = false;
       }
 
@@ -747,8 +747,8 @@
       }
       await loadAccountDetails();
       await loadOrganisationMembers();
-    } catch (err) {
-      console.error("Failed to save profile name:", err);
+    } catch (_err) {
+      console.error("Failed to save profile name.");
       showSettingsToast("error", "Failed to update name");
     } finally {
       saveBtn.disabled = false;
