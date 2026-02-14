@@ -419,6 +419,7 @@ func (h *Handler) SetupRoutes(mux *http.ServeMux) {
 	// Web Components static files
 	mux.Handle("/js/", http.StripPrefix("/js/", http.FileServer(http.Dir("./web/static/js/"))))
 	mux.Handle("/styles/", http.StripPrefix("/styles/", http.FileServer(http.Dir("./web/static/styles/"))))
+	mux.Handle("/assets/", http.StripPrefix("/assets/", http.FileServer(http.Dir("./web/static/assets/"))))
 	mux.Handle("/web/", http.StripPrefix("/web/", h.jsFileServer(http.Dir("./web/"))))
 }
 
