@@ -6,9 +6,9 @@ ADD COLUMN IF NOT EXISTS last_name TEXT;
 -- Keep historical full_name data usable if needed.
 UPDATE users
 SET
-  first_name = COALESCE(first_name, NULLIF(split_part(trim(full_name), ' ', 1), '')),
+  first_name = COALESCE(NULLIF(trim(first_name), ''), NULLIF(split_part(trim(full_name), ' ', 1), '')),
   last_name = COALESCE(
-    last_name,
+    NULLIF(trim(last_name), ''),
     NULLIF(
       CASE
         WHEN strpos(trim(full_name), ' ') > 0
