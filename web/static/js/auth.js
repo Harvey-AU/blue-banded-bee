@@ -27,14 +27,18 @@ const runtimeConfig =
       }
     : null);
 
-if (!runtimeConfig?.supabaseUrl || !runtimeConfig?.supabaseAnonKey) {
-  throw new Error(
+const SUPABASE_URL = runtimeConfig?.supabaseUrl || "";
+const SUPABASE_ANON_KEY = runtimeConfig?.supabaseAnonKey || "";
+
+function hasSupabaseRuntimeConfig() {
+  return Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
+}
+
+if (!hasSupabaseRuntimeConfig()) {
+  console.error(
     "Supabase configuration unavailable — ensure BBB_CONFIG or environment vars are set"
   );
 }
-
-const SUPABASE_URL = runtimeConfig.supabaseUrl;
-const SUPABASE_ANON_KEY = runtimeConfig.supabaseAnonKey;
 
 // Global state
 let supabase;
@@ -214,6 +218,13 @@ function initialiseSupabase() {
   // If already initialised (client has auth property), return success
   if (window.supabase && window.supabase.auth) {
     return true;
+  }
+
+  if (!hasSupabaseRuntimeConfig()) {
+    console.error(
+      "Cannot initialise Supabase: missing supabaseUrl or supabaseAnonKey"
+    );
+    return false;
   }
 
   // Otherwise, create the client from the SDK
