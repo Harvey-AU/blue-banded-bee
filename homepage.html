@@ -5,6 +5,29 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Blue Banded Bee - Speed Up Your Site Now</title>
 
+    <script>
+      (function () {
+        try {
+          if (window.location.pathname !== "/") return;
+          const hasOAuthHash =
+            window.location.hash.includes("access_token=") ||
+            window.location.hash.includes("refresh_token=");
+          const params = new URLSearchParams(window.location.search);
+          const hasOAuthQuery =
+            params.has("code") ||
+            params.has("state") ||
+            params.has("error") ||
+            params.has("error_code");
+          if (!hasOAuthHash && !hasOAuthQuery) return;
+
+          window.location.replace(
+            `/auth/callback${window.location.search}${window.location.hash}`
+          );
+        } catch (_error) {
+          // Continue with normal render if redirect bootstrap fails.
+        }
+      })();
+    </script>
     <link rel="stylesheet" href="/styles/app.css" />
     <script src="/js/bb-bootstrap.js"></script>
     <script src="/js/core.js" defer></script>

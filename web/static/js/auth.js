@@ -27,14 +27,18 @@ const runtimeConfig =
       }
     : null);
 
-if (!runtimeConfig?.supabaseUrl || !runtimeConfig?.supabaseAnonKey) {
-  throw new Error(
+const SUPABASE_URL = runtimeConfig?.supabaseUrl || "";
+const SUPABASE_ANON_KEY = runtimeConfig?.supabaseAnonKey || "";
+
+function hasSupabaseRuntimeConfig() {
+  return Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
+}
+
+if (!hasSupabaseRuntimeConfig()) {
+  console.error(
     "Supabase configuration unavailable — ensure BBB_CONFIG or environment vars are set"
   );
 }
-
-const SUPABASE_URL = runtimeConfig.supabaseUrl;
-const SUPABASE_ANON_KEY = runtimeConfig.supabaseAnonKey;
 
 // Global state
 let supabase;
@@ -54,7 +58,9 @@ const AUTH_SYNC_RETRY_ATTEMPTS = 40;
 const AUTH_SYNC_RETRY_DELAY_MS = 100;
 let authSyncRetryTimer = null;
 let authSyncRetryCount = 0;
+let authCallbackRedirectIssued = false;
 const PENDING_INVITE_TOKEN_STORAGE_KEY = "bb_pending_invite_token";
+const POST_AUTH_RETURN_TARGET_STORAGE_KEY = "bb_post_auth_return_target";
 const OAUTH_CALLBACK_QUERY_KEYS = [
   "error",
   "error_code",
@@ -62,7 +68,23 @@ const OAUTH_CALLBACK_QUERY_KEYS = [
   "sb",
   "code",
   "state",
+  "return_to",
 ];
+const PUBLIC_ROUTE_PATHS = new Set([
+  "/",
+  "/welcome",
+  "/welcome/",
+  "/welcome/invite",
+  "/welcome/invite/",
+  "/cli-login.html",
+  "/auth-modal.html",
+  "/auth/callback",
+  "/auth/callback/",
+  "/debug-auth.html",
+  "/test-login.html",
+  "/test-components.html",
+  "/test-data-components.html",
+]);
 
 function getCleanOAuthCallbackPath() {
   const url = new URL(window.location.href);
@@ -71,6 +93,32 @@ function getCleanOAuthCallbackPath() {
     url.searchParams.delete(key);
   });
   return `${url.pathname}${url.search}`;
+}
+
+function isProtectedRoutePath(pathname) {
+  return !PUBLIC_ROUTE_PATHS.has(pathname);
+}
+
+function applyProtectedRouteAuthGate(isAuthenticated) {
+  const body = document.body;
+  if (!body) return;
+
+  const shouldGate =
+    !isAuthenticated && isProtectedRoutePath(window.location.pathname);
+  body.classList.toggle("bb-auth-route-gated", shouldGate);
+
+  if (shouldGate) {
+    setPostAuthReturnTargetFromCurrentPath();
+    // Show login modal as the only visible UI while preserving current URL.
+    setTimeout(() => {
+      if (typeof window.showAuthModal === "function") {
+        window.showAuthModal();
+      }
+      if (typeof window.showLoginForm === "function") {
+        window.showLoginForm();
+      }
+    }, 0);
+  }
 }
 
 function getPendingInviteToken() {
@@ -98,6 +146,102 @@ function clearPendingInviteToken() {
   }
 }
 
+function toSafeReturnPath(raw) {
+  if (!raw) return "";
+  try {
+    const parsed = new URL(raw, window.location.origin);
+    if (parsed.origin !== window.location.origin) return "";
+    const path = `${parsed.pathname}${parsed.search}${parsed.hash}`;
+    if (!path || path === "/" || path.startsWith("/auth-modal.html")) return "";
+    return path;
+  } catch (_error) {
+    return "";
+  }
+}
+
+function getPostAuthReturnTarget() {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const fromQuery = toSafeReturnPath(params.get("return_to"));
+    if (fromQuery) {
+      return fromQuery;
+    }
+  } catch (_error) {
+    // Ignore malformed query params.
+  }
+
+  try {
+    const stored = window.sessionStorage.getItem(
+      POST_AUTH_RETURN_TARGET_STORAGE_KEY
+    );
+    const safeStored = toSafeReturnPath(stored);
+    if (safeStored) return safeStored;
+  } catch (_error) {
+    // Ignore storage errors and try localStorage.
+  }
+
+  try {
+    const stored = window.localStorage.getItem(
+      POST_AUTH_RETURN_TARGET_STORAGE_KEY
+    );
+    return toSafeReturnPath(stored);
+  } catch (_error) {
+    return "";
+  }
+}
+
+function setPostAuthReturnTarget(path) {
+  const safePath = toSafeReturnPath(path);
+  if (!safePath) return;
+  try {
+    window.sessionStorage.setItem(
+      POST_AUTH_RETURN_TARGET_STORAGE_KEY,
+      safePath
+    );
+  } catch (_error) {
+    // sessionStorage may be unavailable.
+  }
+  try {
+    window.localStorage.setItem(POST_AUTH_RETURN_TARGET_STORAGE_KEY, safePath);
+  } catch (_error) {
+    // localStorage may be unavailable.
+  }
+}
+
+function clearPostAuthReturnTarget() {
+  try {
+    window.sessionStorage.removeItem(POST_AUTH_RETURN_TARGET_STORAGE_KEY);
+  } catch (_error) {
+    // sessionStorage may be unavailable.
+  }
+  try {
+    window.localStorage.removeItem(POST_AUTH_RETURN_TARGET_STORAGE_KEY);
+  } catch (_error) {
+    // localStorage may be unavailable.
+  }
+}
+
+function setPostAuthReturnTargetFromCurrentPath() {
+  if (
+    window.location.pathname === "/" ||
+    window.location.pathname === "/cli-login.html"
+  ) {
+    return;
+  }
+  const currentPath = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+  setPostAuthReturnTarget(currentPath);
+}
+
+function getOAuthCallbackURL(params = {}) {
+  const callbackUrl = new URL("/auth/callback", window.location.origin);
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== "") {
+      callbackUrl.searchParams.set(key, String(value));
+    }
+  });
+  return callbackUrl.toString();
+}
+
 /**
  * Initialise Supabase client
  * @returns {boolean} Success status
@@ -106,6 +250,13 @@ function initialiseSupabase() {
   // If already initialised (client has auth property), return success
   if (window.supabase && window.supabase.auth) {
     return true;
+  }
+
+  if (!hasSupabaseRuntimeConfig()) {
+    console.error(
+      "Cannot initialise Supabase: missing supabaseUrl or supabaseAnonKey"
+    );
+    return false;
   }
 
   // Otherwise, create the client from the SDK
@@ -122,7 +273,7 @@ function initialiseSupabase() {
  */
 async function loadAuthModal() {
   try {
-    const response = await fetch("/auth-modal.html");
+    const response = await fetch("/auth-modal.html", { cache: "no-store" });
 
     if (!response.ok) {
       throw new Error(
@@ -196,6 +347,7 @@ async function handleAuthCallback() {
           `${window.location.origin}/welcome/invite?invite_token=${encodeURIComponent(inviteToken)}`
         );
         inviteUrl.searchParams.set("auth_error", "oauth_failed");
+        authCallbackRedirectIssued = true;
         window.location.replace(inviteUrl.toString());
         return false;
       }
@@ -213,6 +365,8 @@ async function handleAuthCallback() {
     const hashParams = new URLSearchParams(window.location.hash.substring(1));
     const accessToken = hashParams.get("access_token");
     const refreshToken = hashParams.get("refresh_token");
+    const hasOAuthHashParams = Boolean(accessToken || refreshToken);
+    const isOAuthCallbackReturn = hasOAuthCallbackParams || hasOAuthHashParams;
 
     if (accessToken) {
       // Set the session in Supabase using the tokens
@@ -233,8 +387,23 @@ async function handleAuthCallback() {
           const inviteUrl = new URL(
             `${window.location.origin}/welcome/invite?invite_token=${encodeURIComponent(pendingInviteToken)}`
           );
+          authCallbackRedirectIssued = true;
           window.location.replace(inviteUrl.toString());
           return false;
+        }
+        if (isOAuthCallbackReturn) {
+          const returnTarget = getPostAuthReturnTarget();
+          if (returnTarget) {
+            clearPostAuthReturnTarget();
+            if (
+              returnTarget !==
+              `${window.location.pathname}${window.location.search}${window.location.hash}`
+            ) {
+              authCallbackRedirectIssued = true;
+              window.location.replace(returnTarget);
+              return false;
+            }
+          }
         }
         // Clear the URL hash to clean up the URL
         history.replaceState(null, null, getCleanOAuthCallbackPath());
@@ -259,8 +428,23 @@ async function handleAuthCallback() {
           const inviteUrl = new URL(
             `${window.location.origin}/welcome/invite?invite_token=${encodeURIComponent(pendingInviteToken)}`
           );
+          authCallbackRedirectIssued = true;
           window.location.replace(inviteUrl.toString());
           return false;
+        }
+        if (isOAuthCallbackReturn) {
+          const returnTarget = getPostAuthReturnTarget();
+          if (returnTarget) {
+            clearPostAuthReturnTarget();
+            if (
+              returnTarget !==
+              `${window.location.pathname}${window.location.search}${window.location.hash}`
+            ) {
+              authCallbackRedirectIssued = true;
+              window.location.replace(returnTarget);
+              return false;
+            }
+          }
         }
         return true;
       }
@@ -296,6 +480,19 @@ async function registerUserWithBackend(user) {
       return false;
     }
 
+    const metadata = user.user_metadata || {};
+    const firstName =
+      (metadata.given_name || metadata.first_name || "").trim() || null;
+    const lastName =
+      (metadata.family_name || metadata.last_name || "").trim() || null;
+    const fullName =
+      (
+        metadata.full_name ||
+        metadata.name ||
+        composeDisplayName(firstName, lastName) ||
+        ""
+      ).trim() || null;
+
     const response = await fetch("/v1/auth/register", {
       method: "POST",
       headers: {
@@ -305,7 +502,9 @@ async function registerUserWithBackend(user) {
       body: JSON.stringify({
         user_id: user.id,
         email: user.email,
-        full_name: user.user_metadata?.full_name || null,
+        first_name: firstName,
+        last_name: lastName,
+        full_name: fullName,
       }),
     });
 
@@ -439,6 +638,8 @@ function updateAuthState(isAuthenticated) {
       }
     }, 150);
   }
+
+  applyProtectedRouteAuthGate(isAuthenticated);
 }
 
 /**
@@ -458,12 +659,23 @@ async function updateUserInfo() {
 
     if (session && session.user && session.user.email) {
       const email = session.user.email;
+      const metadata = session.user.user_metadata || {};
+      const firstName =
+        (metadata.given_name || metadata.first_name || "").trim() || "";
+      const lastName =
+        (metadata.family_name || metadata.last_name || "").trim() || "";
+      const fullName = (
+        metadata.full_name ||
+        metadata.name ||
+        composeDisplayName(firstName, lastName) ||
+        ""
+      ).trim();
+      const displayLabel = fullName || email;
 
-      // Update email display
-      userEmailElement.textContent = email;
+      userEmailElement.textContent = displayLabel;
 
       // Update avatar with Gravatar fallback to initials
-      const initials = getInitials(email);
+      const initials = getInitials(displayLabel);
       await setUserAvatar(userAvatarElement, email, initials);
     } else {
       // No session, reset to defaults
@@ -478,36 +690,43 @@ async function updateUserInfo() {
 }
 
 /**
- * Generate initials from email address
- * @param {string} email - Email address
+ * Generate initials from a display name or email address.
+ * @param {string} value - Name or email address
  * @returns {string} User initials
  */
-function getInitials(email) {
-  if (!email) return "?";
+function getInitials(value) {
+  const raw = (value || "").trim();
+  if (!raw) return "?";
 
-  // Try to get name parts from email or use email prefix
-  const emailPrefix = email.split("@")[0];
-
-  // Check if email has recognisable name patterns (firstname.lastname, etc.)
-  if (emailPrefix.includes(".")) {
-    const parts = emailPrefix.split(".");
-    return parts
-      .map((part) => part.charAt(0).toUpperCase())
-      .slice(0, 2)
-      .join("");
-  } else if (emailPrefix.includes("_")) {
-    const parts = emailPrefix.split("_");
-    return parts
-      .map((part) => part.charAt(0).toUpperCase())
-      .slice(0, 2)
-      .join("");
-  } else {
-    // Just use first two characters of email prefix
-    return emailPrefix.slice(0, 2).toUpperCase();
+  // Name format: "Jane Doe" -> "JD"
+  if (raw.includes(" ")) {
+    const parts = raw.split(/\s+/).filter(Boolean).slice(0, 2);
+    if (parts.length) {
+      return parts.map((part) => part.charAt(0).toUpperCase()).join("");
+    }
   }
+
+  // Email format fallback
+  const emailPrefix = raw.includes("@") ? raw.split("@")[0] : raw;
+  const parts = emailPrefix.split(/[._-]+/).filter(Boolean);
+  if (parts.length >= 2) {
+    return parts
+      .slice(0, 2)
+      .map((part) => part.charAt(0).toUpperCase())
+      .join("");
+  }
+
+  return emailPrefix.slice(0, 2).toUpperCase();
 }
 
-async function setUserAvatar(target, email, initials) {
+function composeDisplayName(firstName, lastName) {
+  const first = (firstName || "").trim();
+  const last = (lastName || "").trim();
+  const full = `${first} ${last}`.trim();
+  return full || "";
+}
+
+async function setUserAvatar(target, email, initials, options = {}) {
   if (!target) return;
 
   const existingImg = target.querySelector("img");
@@ -517,12 +736,12 @@ async function setUserAvatar(target, email, initials) {
 
   target.textContent = initials || "?";
 
-  const gravatarUrl = await getGravatarUrl(email, 80);
+  const gravatarUrl = await getGravatarUrl(email, options.size || 80);
   if (!gravatarUrl) return;
 
   const avatarImg = document.createElement("img");
   avatarImg.src = gravatarUrl;
-  avatarImg.alt = "User avatar";
+  avatarImg.alt = options.alt || "User avatar";
   avatarImg.loading = "lazy";
   avatarImg.decoding = "async";
   avatarImg.addEventListener("load", () => {
@@ -565,6 +784,7 @@ async function getGravatarUrl(email, size) {
 function showAuthModal() {
   const authModal = document.getElementById("authModal");
   if (authModal) {
+    setPostAuthReturnTargetFromCurrentPath();
     authModal.classList.add("show");
     showAuthForm("login");
   }
@@ -820,6 +1040,8 @@ async function handleEmailSignup(event) {
   const formData = new FormData(event.target);
   pendingSignupSubmission = {
     email: formData.get("email"),
+    firstName: (formData.get("firstName") || "").trim(),
+    lastName: (formData.get("lastName") || "").trim(),
     password: formData.get("password"),
     passwordConfirm: formData.get("passwordConfirm"),
   };
@@ -834,7 +1056,8 @@ async function executeEmailSignup() {
     return;
   }
 
-  const { email, password, passwordConfirm } = pendingSignupSubmission;
+  const { email, firstName, lastName, password, passwordConfirm } =
+    pendingSignupSubmission;
 
   if (password !== passwordConfirm) {
     showAuthError("Passwords do not match.");
@@ -863,6 +1086,15 @@ async function executeEmailSignup() {
       signupOptions.captchaToken = captchaToken;
     }
     signupOptions.emailRedirectTo = getEmailSignupRedirectTarget();
+    const fullName = composeDisplayName(firstName, lastName);
+    signupOptions.data = {
+      first_name: firstName || "",
+      last_name: lastName || "",
+      given_name: firstName || "",
+      family_name: lastName || "",
+      full_name: fullName || "",
+      name: fullName || "",
+    };
 
     const { data, error } = await supabase.auth.signUp({
       email,
@@ -885,15 +1117,11 @@ async function executeEmailSignup() {
       );
       showAuthForm("login");
     } else if (data.user) {
-      await registerUserWithBackend(data.user);
-
-      closeAuthModal();
-      updateUserInfo();
-      updateAuthState(true);
-      if (window.dataBinder) {
-        await window.dataBinder.refresh();
-      }
-      await handlePendingDomain();
+      const handler =
+        typeof window.handleAuthSuccess === "function"
+          ? window.handleAuthSuccess
+          : defaultHandleAuthSuccess;
+      await handler(data.user);
     }
   } catch (error) {
     const retryable = shouldRetryTurnstile(error);
@@ -958,6 +1186,26 @@ async function defaultHandleAuthSuccess(user) {
     await window.dataBinder.refresh();
   }
   await handlePendingDomain();
+
+  const returnTarget = getPostAuthReturnTarget();
+  if (returnTarget) {
+    clearPostAuthReturnTarget();
+    if (
+      returnTarget !==
+      `${window.location.pathname}${window.location.search}${window.location.hash}`
+    ) {
+      window.location.assign(returnTarget);
+    }
+    return;
+  }
+
+  if (isProtectedRoutePath(window.location.pathname)) {
+    return;
+  }
+
+  if (window.location.pathname === "/") {
+    window.location.assign("/dashboard");
+  }
 }
 
 /**
@@ -1002,20 +1250,11 @@ async function handleSocialLogin(provider) {
   try {
     const getOAuthRedirectTarget = () => {
       const params = new URLSearchParams(window.location.search);
-      const currentUrl = new URL(window.location.href);
-      currentUrl.hash = "";
       const inviteToken = params.get("invite_token");
       if (inviteToken) {
         setPendingInviteToken(inviteToken);
       }
-
-      if (params.has("invite_token")) {
-        return currentUrl.toString();
-      }
-      if (window.location.pathname === "/") {
-        return `${window.location.origin}/dashboard`;
-      }
-      return currentUrl.toString();
+      return getOAuthCallbackURL({ invite_token: inviteToken || undefined });
     };
 
     const { data, error } = await supabase.auth.signInWithOAuth({
@@ -1039,6 +1278,46 @@ async function handleSocialLogin(provider) {
     showAuthError(error.message || `${provider} login failed.`);
     hideAuthLoading();
   }
+}
+
+async function initAuthCallbackPage() {
+  authCallbackRedirectIssued = false;
+
+  if (!initialiseSupabase()) {
+    authCallbackRedirectIssued = true;
+    window.location.replace("/");
+    return;
+  }
+
+  try {
+    await handleAuthCallback();
+  } catch (error) {
+    console.error("Auth callback page failed:", error);
+  }
+
+  if (authCallbackRedirectIssued) {
+    return;
+  }
+
+  const returnTarget = getPostAuthReturnTarget();
+  if (returnTarget) {
+    clearPostAuthReturnTarget();
+    authCallbackRedirectIssued = true;
+    window.location.replace(returnTarget);
+    return;
+  }
+
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (session) {
+    authCallbackRedirectIssued = true;
+    window.location.replace("/dashboard");
+    return;
+  }
+
+  authCallbackRedirectIssued = true;
+  window.location.replace("/");
 }
 
 /**
@@ -1793,10 +2072,20 @@ if (typeof module !== "undefined" && module.exports) {
     setupLoginPageHandlers,
     handleLogout,
     defaultHandleAuthSuccess,
+    initAuthCallbackPage,
     initCliAuthPage,
+    initAuthCallbackPage,
     resumeCliAuthFromStorage,
+    setUserAvatar,
+    getGravatarUrl,
   };
 } else {
+  window.BBAvatar = {
+    getInitials,
+    setUserAvatar,
+    getGravatarUrl,
+  };
+
   // Browser environment - make functions globally available
   window.BBAuth = {
     initialiseSupabase,
@@ -1824,9 +2113,12 @@ if (typeof module !== "undefined" && module.exports) {
     setupAuthModalHandlers,
     setupLoginPageHandlers,
     handleLogout,
+    initAuthCallbackPage,
     initCliAuthPage,
     resumeCliAuthFromStorage,
     clearPendingInviteToken,
+    setUserAvatar,
+    getGravatarUrl,
   };
 
   // Also make individual functions available globally for backward compatibility
@@ -1838,6 +2130,8 @@ if (typeof module !== "undefined" && module.exports) {
   window.updateAuthState = updateAuthState;
   window.updateUserInfo = updateUserInfo;
   window.getInitials = getInitials;
+  window.setUserAvatar = setUserAvatar;
+  window.getGravatarUrl = getGravatarUrl;
   window.showAuthModal = showAuthModal;
   window.closeAuthModal = closeAuthModal;
   window.showAuthForm = showAuthForm;
@@ -1857,6 +2151,7 @@ if (typeof module !== "undefined" && module.exports) {
   window.handleLogout = handleLogout;
   window.handleAuthSuccess = defaultHandleAuthSuccess;
   window.initCliAuthPage = initCliAuthPage;
+  window.initAuthCallbackPage = initAuthCallbackPage;
   window.resumeCliAuthFromStorage = resumeCliAuthFromStorage;
   window.clearPendingInviteToken = clearPendingInviteToken;
 

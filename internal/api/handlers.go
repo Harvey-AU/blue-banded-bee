@@ -103,9 +103,10 @@ type DBClient interface {
 	GetUserByWebhookToken(token string) (*db.User, error)
 	// Additional methods used by API handlers
 	GetUser(userID string) (*db.User, error)
+	UpdateUserNames(userID string, firstName, lastName, fullName *string) error
 	ResetSchema() error
 	ResetDataOnly() error
-	CreateUser(userID, email string, fullName *string, orgName string) (*db.User, *db.Organisation, error)
+	CreateUser(userID, email string, firstName, lastName, fullName *string, orgName string) (*db.User, *db.Organisation, error)
 	GetOrganisation(organisationID string) (*db.Organisation, error)
 	ListJobs(organisationID string, limit, offset int, status, dateRange, timezone string) ([]db.JobWithDomain, int, error)
 	ListJobsWithOffset(organisationID string, limit, offset int, status, dateRange string, tzOffsetMinutes int) ([]db.JobWithDomain, int, error)
@@ -129,6 +130,7 @@ type DBClient interface {
 	ListOrganisationMembers(ctx context.Context, organisationID string) ([]db.OrganisationMember, error)
 	IsOrganisationMemberEmail(ctx context.Context, organisationID, email string) (bool, error)
 	RemoveOrganisationMember(ctx context.Context, userID, organisationID string) error
+	UpdateOrganisationMemberRole(ctx context.Context, userID, organisationID, role string) error
 	CountOrganisationAdmins(ctx context.Context, organisationID string) (int, error)
 	// Organisation management methods
 	CreateOrganisation(name string) (*db.Organisation, error)
@@ -410,6 +412,8 @@ func (h *Handler) SetupRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/welcome/invite", h.ServeInviteWelcome)
 	mux.HandleFunc("/welcome/invite/", h.ServeInviteWelcome)
 	mux.HandleFunc("/auth-modal.html", h.ServeAuthModal)
+	mux.HandleFunc("/auth/callback", h.ServeAuthCallback)
+	mux.HandleFunc("/auth/callback/", h.ServeAuthCallback)
 	mux.HandleFunc("/cli-login.html", h.ServeCliLogin)
 	mux.HandleFunc("/debug-auth.html", h.ServeDebugAuth)
 	mux.HandleFunc("/jobs/", h.ServeJobDetails)
@@ -417,6 +421,7 @@ func (h *Handler) SetupRoutes(mux *http.ServeMux) {
 	// Web Components static files
 	mux.Handle("/js/", http.StripPrefix("/js/", http.FileServer(http.Dir("./web/static/js/"))))
 	mux.Handle("/styles/", http.StripPrefix("/styles/", http.FileServer(http.Dir("./web/static/styles/"))))
+	mux.Handle("/assets/", http.StripPrefix("/assets/", http.FileServer(http.Dir("./web/static/assets/"))))
 	mux.Handle("/web/", http.StripPrefix("/web/", h.jsFileServer(http.Dir("./web/"))))
 }
 
@@ -534,7 +539,18 @@ func (h *Handler) ServeNewDashboard(w http.ResponseWriter, r *http.Request) {
 
 // ServeAuthModal serves the shared authentication modal
 func (h *Handler) ServeAuthModal(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store, max-age=0")
+	w.Header().Set("Pragma", "no-cache")
+	w.Header().Set("Expires", "0")
 	http.ServeFile(w, r, "auth-modal.html")
+}
+
+// ServeAuthCallback serves the OAuth callback bridge page.
+func (h *Handler) ServeAuthCallback(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store, max-age=0")
+	w.Header().Set("Pragma", "no-cache")
+	w.Header().Set("Expires", "0")
+	http.ServeFile(w, r, "auth-callback.html")
 }
 
 // ServeDebugAuth serves the debug auth test page

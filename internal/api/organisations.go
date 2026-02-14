@@ -322,10 +322,23 @@ func (h *Handler) OrganisationMembersHandler(w http.ResponseWriter, r *http.Requ
 
 	responseMembers := make([]map[string]any, 0, len(members))
 	for _, member := range members {
+		displayName := strings.TrimSpace(member.Email)
+		if at := strings.Index(displayName, "@"); at > 0 {
+			displayName = displayName[:at]
+		}
+		if derivedFull := composeFullName(member.FirstName, member.LastName); derivedFull != nil {
+			displayName = *derivedFull
+		}
+		if member.FullName != nil && strings.TrimSpace(*member.FullName) != "" {
+			displayName = strings.TrimSpace(*member.FullName)
+		}
+
 		responseMembers = append(responseMembers, map[string]any{
 			"id":         member.UserID,
 			"email":      member.Email,
-			"full_name":  member.FullName,
+			"first_name": member.FirstName,
+			"last_name":  member.LastName,
+			"full_name":  displayName,
 			"role":       member.Role,
 			"created_at": member.CreatedAt.Format(time.RFC3339),
 		})
@@ -338,13 +351,23 @@ func (h *Handler) OrganisationMembersHandler(w http.ResponseWriter, r *http.Requ
 	}, "Organisation members retrieved successfully")
 }
 
-// OrganisationMemberHandler handles DELETE /v1/organisations/members/:id
-func (h *Handler) OrganisationMemberHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodDelete {
-		MethodNotAllowed(w, r)
-		return
-	}
+type UpdateOrganisationMemberRoleRequest struct {
+	Role string `json:"role"`
+}
 
+// OrganisationMemberHandler handles PATCH/DELETE /v1/organisations/members/:id
+func (h *Handler) OrganisationMemberHandler(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodPatch:
+		h.updateOrganisationMemberRole(w, r)
+	case http.MethodDelete:
+		h.deleteOrganisationMember(w, r)
+	default:
+		MethodNotAllowed(w, r)
+	}
+}
+
+func (h *Handler) deleteOrganisationMember(w http.ResponseWriter, r *http.Request) {
 	orgID := h.GetActiveOrganisation(w, r)
 	if orgID == "" {
 		return
@@ -392,6 +415,73 @@ func (h *Handler) OrganisationMemberHandler(w http.ResponseWriter, r *http.Reque
 	WriteSuccess(w, r, map[string]any{
 		"member_id": memberID,
 	}, "Organisation member removed successfully")
+}
+
+func (h *Handler) updateOrganisationMemberRole(w http.ResponseWriter, r *http.Request) {
+	orgID := h.GetActiveOrganisation(w, r)
+	if orgID == "" {
+		return
+	}
+
+	userClaims, ok := auth.GetUserFromContext(r.Context())
+	if !ok {
+		Unauthorised(w, r, "User information not found")
+		return
+	}
+
+	if ok := h.requireOrganisationAdmin(w, r, orgID, userClaims.UserID); !ok {
+		return
+	}
+
+	memberID := strings.TrimPrefix(r.URL.Path, "/v1/organisations/members/")
+	if memberID == "" {
+		BadRequest(w, r, "member ID is required")
+		return
+	}
+	if memberID == userClaims.UserID {
+		BadRequest(w, r, "You cannot change your own role")
+		return
+	}
+
+	var req UpdateOrganisationMemberRoleRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		BadRequest(w, r, "Invalid JSON request body")
+		return
+	}
+
+	role := strings.TrimSpace(strings.ToLower(req.Role))
+	if role != "admin" && role != "member" {
+		BadRequest(w, r, "role must be admin or member")
+		return
+	}
+
+	memberRole, err := h.DB.GetOrganisationMemberRole(r.Context(), memberID, orgID)
+	if err != nil {
+		BadRequest(w, r, "Member not found")
+		return
+	}
+
+	if memberRole == "admin" && role != "admin" {
+		adminCount, err := h.DB.CountOrganisationAdmins(r.Context(), orgID)
+		if err != nil {
+			InternalError(w, r, err)
+			return
+		}
+		if adminCount <= 1 {
+			Forbidden(w, r, "Organisation must have at least one admin")
+			return
+		}
+	}
+
+	if err := h.DB.UpdateOrganisationMemberRole(r.Context(), memberID, orgID, role); err != nil {
+		InternalError(w, r, err)
+		return
+	}
+
+	WriteSuccess(w, r, map[string]any{
+		"member_id": memberID,
+		"role":      role,
+	}, "Organisation member role updated successfully")
 }
 
 // OrganisationInvitesHandler handles GET/POST /v1/organisations/invites
@@ -442,6 +532,8 @@ func (h *Handler) OrganisationInvitePreviewHandler(w http.ResponseWriter, r *htt
 		if inviter, inviterErr := h.DB.GetUser(invite.CreatedBy); inviterErr == nil {
 			if inviter.FullName != nil && strings.TrimSpace(*inviter.FullName) != "" {
 				inviterLabel = strings.TrimSpace(*inviter.FullName)
+			} else if derivedFull := composeFullName(inviter.FirstName, inviter.LastName); derivedFull != nil {
+				inviterLabel = strings.TrimSpace(*derivedFull)
 			} else if strings.TrimSpace(inviter.Email) != "" {
 				inviterLabel = strings.TrimSpace(inviter.Email)
 			}
@@ -823,7 +915,13 @@ func (h *Handler) createOrganisationInvite(w http.ResponseWriter, r *http.Reques
 	emailDelivery := "sent"
 	responseMsg := "Invite sent successfully"
 
-	inviterName, _ := userClaims.UserMetadata["full_name"].(string)
+	inviterFirstName, inviterLastName, inviterFullName := nameFieldsFromClaims(userClaims)
+	inviterName := ""
+	if inviterFullName != nil {
+		inviterName = strings.TrimSpace(*inviterFullName)
+	} else if derivedFull := composeFullName(inviterFirstName, inviterLastName); derivedFull != nil {
+		inviterName = strings.TrimSpace(*derivedFull)
+	}
 	if inviterName == "" {
 		inviterName = userClaims.Email
 	}
