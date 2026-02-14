@@ -144,7 +144,7 @@ function toSafeReturnPath(raw) {
     const parsed = new URL(raw, window.location.origin);
     if (parsed.origin !== window.location.origin) return "";
     const path = `${parsed.pathname}${parsed.search}${parsed.hash}`;
-    if (!path || path.startsWith("/auth-modal.html")) return "";
+    if (!path || path === "/" || path.startsWith("/auth-modal.html")) return "";
     return path;
   } catch (_error) {
     return "";
@@ -1057,7 +1057,16 @@ async function defaultHandleAuthSuccess(user) {
   const returnTarget = getPostAuthReturnTarget();
   if (returnTarget) {
     clearPostAuthReturnTarget();
-    window.location.assign(returnTarget);
+    if (
+      returnTarget !==
+      `${window.location.pathname}${window.location.search}${window.location.hash}`
+    ) {
+      window.location.assign(returnTarget);
+    }
+    return;
+  }
+
+  if (isProtectedRoutePath(window.location.pathname)) {
     return;
   }
 
