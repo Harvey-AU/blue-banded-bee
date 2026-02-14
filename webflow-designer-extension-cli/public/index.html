@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link href="./styles.css" rel="stylesheet" />
+  </head>
+
+  <body>
+    <main class="panel">
+      <p class="eyebrow">Blue Banded Bee</p>
+      <h1>Designer Extension Smoke Test</h1>
+      <p class="status" id="statusText">UI loaded in Webflow Designer.</p>
+      <div class="actions">
+        <button id="pingButton" type="button">Test Interaction</button>
+      </div>
+      <p class="counter" id="counterText">Clicks: 0</p>
+      <p class="hint">
+        If you can see this and click the button, step 1 is complete.
+      </p>
+
+      <hr />
+
+      <h2>Backend Read Test</h2>
+      <label class="field-label" for="apiBaseUrl">API Base URL</label>
+      <input
+        id="apiBaseUrl"
+        type="url"
+        placeholder="https://app.bluebandedbee.co"
+      />
+
+      <label class="field-label" for="apiToken">Bearer Token (optional)</label>
+      <input
+        id="apiToken"
+        type="password"
+        placeholder="Paste JWT if /v1 endpoints require auth"
+      />
+
+      <div class="actions">
+        <button id="connectAuthButton" type="button">
+          Sign in / Create account
+        </button>
+      </div>
+
+      <div class="actions">
+        <button id="checkApiButton" type="button">Check API</button>
+      </div>
+
+      <p class="status" id="apiStatusText">Not checked yet.</p>
+      <p class="hint" id="apiDetailsText"></p>
+    </main>
+
+    <script src="index.js" defer></script>
+  </body>
+</html>

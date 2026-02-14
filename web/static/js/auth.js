@@ -1984,6 +1984,205 @@ function initCliAuthPage() {
   })();
 }
 
+function isValidExtensionTargetOrigin(rawOrigin) {
+  if (!rawOrigin) return false;
+  try {
+    const parsed = new URL(rawOrigin);
+    return parsed.protocol === "https:" || parsed.protocol === "http:";
+  } catch (_error) {
+    return false;
+  }
+}
+
+function initExtensionAuthPage() {
+  const params = new URLSearchParams(window.location.search);
+  const targetOrigin = params.get("origin") || "";
+  const state = params.get("state") || "";
+  const statusEl = document.getElementById("extensionAuthStatus");
+  const modalContainer = document.getElementById("authModalContainer");
+  const reopenButton = document.getElementById("reopenModalBtn");
+
+  if (!statusEl || !modalContainer) {
+    console.warn("Extension auth: required elements missing");
+    return;
+  }
+
+  function setStatus(message, isError = false) {
+    statusEl.textContent = message;
+    statusEl.classList.toggle("error", Boolean(isError));
+  }
+
+  if (!window.opener || window.opener.closed) {
+    setStatus(
+      "This login window must be opened from the Webflow extension.",
+      true
+    );
+    return;
+  }
+
+  if (!isValidExtensionTargetOrigin(targetOrigin)) {
+    setStatus("Invalid extension origin. Please reopen sign-in.", true);
+    return;
+  }
+
+  if (!initialiseSupabase()) {
+    setStatus("Supabase initialisation failed. Please retry.", true);
+    return;
+  }
+
+  const postAuthMessage = (message) => {
+    try {
+      window.opener.postMessage(
+        {
+          source: "bbb-extension-auth",
+          state,
+          ...message,
+        },
+        targetOrigin
+      );
+      return true;
+    } catch (error) {
+      console.error("Extension auth: postMessage failed", error);
+      return false;
+    }
+  };
+
+  const closePopupSoon = () => {
+    window.setTimeout(() => {
+      window.close();
+    }, 350);
+  };
+
+  async function sendSessionToExtension() {
+    const {
+      data: { session },
+      error,
+    } = await supabase.auth.getSession();
+
+    if (error || !session?.access_token || !session.user) {
+      throw new Error(error?.message || "No active session found");
+    }
+
+    const registered = await registerUserWithBackend(session.user);
+    if (!registered) {
+      throw new Error("Account setup failed. Please retry.");
+    }
+
+    const posted = postAuthMessage({
+      type: "success",
+      accessToken: session.access_token,
+      user: {
+        id: session.user.id,
+        email: session.user.email || "",
+      },
+    });
+
+    if (!posted) {
+      throw new Error("Could not communicate with extension");
+    }
+
+    setStatus("Connected. Returning to extension…");
+    closePopupSoon();
+  }
+
+  function overrideHandleAuthSuccess() {
+    window.handleAuthSuccess = async function () {
+      try {
+        setStatus("Auth successful. Finalising connection…");
+        await sendSessionToExtension();
+      } catch (error) {
+        console.error("Extension auth success handler failed:", error);
+        setStatus(
+          error?.message || "Failed to complete connection. Please try again.",
+          true
+        );
+      }
+    };
+  }
+
+  function overrideHandleSocialLogin() {
+    window.handleSocialLogin = async function (provider) {
+      if (typeof window.showAuthLoading === "function") {
+        window.showAuthLoading();
+      }
+      if (typeof window.clearAuthError === "function") {
+        window.clearAuthError();
+      }
+
+      try {
+        const { error } = await supabase.auth.signInWithOAuth({
+          provider,
+          options: {
+            redirectTo: window.location.href,
+          },
+        });
+
+        if (error) throw error;
+      } catch (error) {
+        console.error("Extension social login failed:", error);
+        if (typeof window.showAuthError === "function") {
+          window.showAuthError(error.message || `${provider} login failed.`);
+        }
+        if (typeof window.hideAuthLoading === "function") {
+          window.hideAuthLoading();
+        }
+        setStatus(error.message || `${provider} login failed.`, true);
+      }
+    };
+  }
+
+  if (reopenButton) {
+    reopenButton.addEventListener("click", () => {
+      if (typeof window.showAuthModal === "function") {
+        window.showAuthModal();
+        setStatus("Sign-in modal reopened.");
+      }
+    });
+  }
+
+  (async () => {
+    try {
+      // Process OAuth callback params/hash if returning from provider.
+      await handleAuthCallback();
+
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (session?.access_token) {
+        setStatus("Existing session found. Connecting extension…");
+        await sendSessionToExtension();
+        return;
+      }
+
+      await loadAuthModal();
+      await waitForAuthScript();
+      if (typeof window.setupAuthHandlers === "function") {
+        window.setupAuthHandlers();
+      }
+      overrideHandleAuthSuccess();
+      overrideHandleSocialLogin();
+      if (typeof window.showLoginForm === "function") {
+        window.showLoginForm();
+      }
+      if (typeof window.showAuthModal === "function") {
+        window.showAuthModal();
+      }
+      setStatus("Sign in or create your account to connect this extension.");
+    } catch (error) {
+      console.error("Extension auth initialisation failed:", error);
+      postAuthMessage({
+        type: "error",
+        message:
+          error?.message || "Unable to start sign-in flow. Please try again.",
+      });
+      setStatus(
+        error?.message || "Unable to start sign-in flow. Please try again.",
+        true
+      );
+    }
+  })();
+}
+
 // CAPTCHA success callback (global function)
 window.onTurnstileSuccess = function (token) {
   captchaToken = token;
@@ -2029,6 +2228,7 @@ if (typeof module !== "undefined" && module.exports) {
     defaultHandleAuthSuccess,
     initAuthCallbackPage,
     initCliAuthPage,
+    initExtensionAuthPage,
     initAuthCallbackPage,
     resumeCliAuthFromStorage,
     setUserAvatar,
@@ -2070,6 +2270,7 @@ if (typeof module !== "undefined" && module.exports) {
     handleLogout,
     initAuthCallbackPage,
     initCliAuthPage,
+    initExtensionAuthPage,
     resumeCliAuthFromStorage,
     clearPendingInviteToken,
     setUserAvatar,
@@ -2106,6 +2307,7 @@ if (typeof module !== "undefined" && module.exports) {
   window.handleLogout = handleLogout;
   window.handleAuthSuccess = defaultHandleAuthSuccess;
   window.initCliAuthPage = initCliAuthPage;
+  window.initExtensionAuthPage = initExtensionAuthPage;
   window.initAuthCallbackPage = initAuthCallbackPage;
   window.resumeCliAuthFromStorage = resumeCliAuthFromStorage;
   window.clearPendingInviteToken = clearPendingInviteToken;

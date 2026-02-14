@@ -1,0 +1,41 @@
+name: Webflow Extension Checks
+
+on:
+  pull_request:
+    branches:
+      - main
+      - test-branch
+    paths:
+      - "webflow-designer-extension-cli/**"
+      - ".github/workflows/webflow-extension.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "webflow-designer-extension-cli/**"
+      - ".github/workflows/webflow-extension.yml"
+
+jobs:
+  extension-quality:
+    name: Lint and Format (Extension)
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    defaults:
+      run:
+        working-directory: webflow-designer-extension-cli
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install extension dependencies
+        run: npm install
+
+      - name: Lint extension code
+        run: npm run lint
+
+      - name: Check extension formatting
+        run: npm run format:check

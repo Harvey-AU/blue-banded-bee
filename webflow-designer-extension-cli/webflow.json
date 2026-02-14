@@ -1,0 +1,6 @@
+{
+  "name": "webflow-designer-extension-cli",
+  "publicDir": "public",
+  "size": "default",
+  "apiVersion": "2"
+}
