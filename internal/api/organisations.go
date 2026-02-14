@@ -915,10 +915,12 @@ func (h *Handler) createOrganisationInvite(w http.ResponseWriter, r *http.Reques
 	emailDelivery := "sent"
 	responseMsg := "Invite sent successfully"
 
-	_, _, inviterFullName := nameFieldsFromClaims(userClaims)
+	inviterFirstName, inviterLastName, inviterFullName := nameFieldsFromClaims(userClaims)
 	inviterName := ""
 	if inviterFullName != nil {
 		inviterName = strings.TrimSpace(*inviterFullName)
+	} else if derivedFull := composeFullName(inviterFirstName, inviterLastName); derivedFull != nil {
+		inviterName = strings.TrimSpace(*derivedFull)
 	}
 	if inviterName == "" {
 		inviterName = userClaims.Email
