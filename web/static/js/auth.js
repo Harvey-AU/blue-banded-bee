@@ -332,6 +332,19 @@ async function handleAuthCallback() {
           window.location.replace(inviteUrl.toString());
           return false;
         }
+        if (hasOAuthCallbackParams) {
+          const returnTarget = getPostAuthReturnTarget();
+          if (returnTarget) {
+            clearPostAuthReturnTarget();
+            if (
+              returnTarget !==
+              `${window.location.pathname}${window.location.search}${window.location.hash}`
+            ) {
+              window.location.replace(returnTarget);
+              return false;
+            }
+          }
+        }
         // Clear the URL hash to clean up the URL
         history.replaceState(null, null, getCleanOAuthCallbackPath());
 
@@ -357,6 +370,19 @@ async function handleAuthCallback() {
           );
           window.location.replace(inviteUrl.toString());
           return false;
+        }
+        if (hasOAuthCallbackParams) {
+          const returnTarget = getPostAuthReturnTarget();
+          if (returnTarget) {
+            clearPostAuthReturnTarget();
+            if (
+              returnTarget !==
+              `${window.location.pathname}${window.location.search}${window.location.hash}`
+            ) {
+              window.location.replace(returnTarget);
+              return false;
+            }
+          }
         }
         return true;
       }
