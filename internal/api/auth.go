@@ -256,7 +256,9 @@ func (h *Handler) getAuthProfile(w http.ResponseWriter, r *http.Request) {
 		!sameNameValue(user.LastName, lastName) ||
 		!sameNameValue(user.FullName, fullName)
 	if shouldSyncNames {
-		if err := h.DB.UpdateUserNames(userClaims.UserID, firstName, lastName, fullName); err == nil {
+		if err := h.DB.UpdateUserNames(userClaims.UserID, firstName, lastName, fullName); err != nil {
+			logger.Warn().Err(err).Str("user_id", userClaims.UserID).Msg("Failed to sync user names from claims")
+		} else {
 			user.FirstName = firstName
 			user.LastName = lastName
 			user.FullName = fullName
