@@ -127,7 +127,13 @@
   async function initialise() {
     await ensureConfig();
     await ensureSupabase();
-    await Promise.all([ensurePasswordStrength(), ensureTurnstile()]);
+    const isCliAuthPage = Boolean(window.BB_APP?.cliAuth);
+    const isAuthCallbackPage = Boolean(window.BB_APP?.authCallback);
+
+    // Callback/CLI auth pages must not block on optional third-party scripts.
+    if (!isCliAuthPage && !isAuthCallbackPage) {
+      await Promise.all([ensurePasswordStrength(), ensureTurnstile()]);
+    }
     await ensureAuthBundle();
 
     // Initialise Supabase client after loading SDK and auth bundle
@@ -142,8 +148,13 @@
       window.BBAuth.resumeCliAuthFromStorage();
     }
 
-    if (window.BB_APP?.cliAuth && window.BBAuth?.initCliAuthPage) {
+    if (isCliAuthPage && window.BBAuth?.initCliAuthPage) {
       window.BBAuth.initCliAuthPage();
+      return;
+    }
+
+    if (isAuthCallbackPage && window.BBAuth?.initAuthCallbackPage) {
+      window.BBAuth.initAuthCallbackPage();
       return;
     }
 

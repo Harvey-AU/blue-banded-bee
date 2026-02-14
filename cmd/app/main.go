@@ -688,6 +688,7 @@ func main() {
 		p := r.URL.Path
 		isStatic := strings.HasPrefix(p, "/js/") ||
 			strings.HasPrefix(p, "/styles/") ||
+			strings.HasPrefix(p, "/assets/") ||
 			strings.HasPrefix(p, "/web/") ||
 			strings.HasPrefix(p, "/images/") ||
 			p == "/config.js" ||

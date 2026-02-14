@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Signing In...</title>
+    <link rel="stylesheet" href="/styles/app.css" />
+    <script>
+      window.BB_APP = Object.assign({}, window.BB_APP || {}, {
+        authCallback: true,
+      });
+      (function () {
+        const statusId = "authCallbackStatus";
+
+        function setStatus(message) {
+          const el = document.getElementById(statusId);
+          if (el) el.textContent = message;
+        }
+
+        function loadScript(src, attrs = {}, timeoutMs = 12000) {
+          return new Promise((resolve, reject) => {
+            const script = document.createElement("script");
+            script.src = src;
+            Object.entries(attrs).forEach(([key, value]) => {
+              if (value !== undefined && value !== null) {
+                script.setAttribute(key, String(value));
+              }
+            });
+
+            const timeoutId = window.setTimeout(() => {
+              script.remove();
+              reject(new Error(`Timed out loading ${src}`));
+            }, timeoutMs);
+
+            script.onload = () => {
+              window.clearTimeout(timeoutId);
+              resolve();
+            };
+            script.onerror = () => {
+              window.clearTimeout(timeoutId);
+              reject(new Error(`Failed loading ${src}`));
+            };
+            document.head.appendChild(script);
+          });
+        }
+
+        async function bootAuthCallback() {
+          try {
+            await loadScript("/config.js");
+
+            const supabaseSources = [
+              {
+                src: "https://unpkg.com/@supabase/supabase-js@2.80.0/dist/umd/supabase.js",
+                attrs: {
+                  integrity:
+                    "sha384-i0m00Vn1ERlKXxNWSa87g6OUB7eLxpmsQoNF68IHuQVtfJTebIca7XhFsYt9h/gN",
+                  crossorigin: "anonymous",
+                },
+              },
+              {
+                src: "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.80.0/dist/umd/supabase.js",
+                attrs: {
+                  crossorigin: "anonymous",
+                },
+              },
+            ];
+
+            let sdkLoaded = false;
+            let sdkError = null;
+            for (const candidate of supabaseSources) {
+              try {
+                await loadScript(candidate.src, candidate.attrs);
+                sdkLoaded = true;
+                break;
+              } catch (err) {
+                sdkError = err;
+              }
+            }
+            if (!sdkLoaded) {
+              throw sdkError || new Error("Failed to load Supabase SDK");
+            }
+
+            await loadScript("/js/auth.js");
+            const callbackHandler =
+              window.BBAuth?.initAuthCallbackPage ||
+              window.initAuthCallbackPage;
+            if (typeof callbackHandler !== "function") {
+              throw new Error("Auth callback handler unavailable");
+            }
+            callbackHandler();
+          } catch (error) {
+            console.error("Auth callback bootstrap failed:", error);
+            setStatus(
+              "Sign-in callback failed to load. Please close this tab and try again."
+            );
+          }
+        }
+
+        window.addEventListener("DOMContentLoaded", bootAuthCallback, {
+          once: true,
+        });
+      })();
+    </script>
+  </head>
+  <body class="page-auth-callback">
+    <main aria-live="polite" style="padding: 24px; text-align: center">
+      <p id="authCallbackStatus">Signing you in...</p>
+    </main>
+  </body>
+</html>

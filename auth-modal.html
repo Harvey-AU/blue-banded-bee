@@ -54,16 +54,79 @@
           class="bb-button bb-button-outline bb-button-full bb-social-btn"
           data-provider="google"
         >
-          <span class="bb-social-icon">G</span>
-          Google
+          <span class="bb-social-icon bb-social-icon-google" aria-hidden="true"
+            ><img
+              src="/assets/auth-providers/google.svg"
+              alt=""
+              loading="lazy"
+              decoding="async"
+              referrerpolicy="no-referrer"
+          /></span>
+          Continue with Google
         </button>
         <button
           type="button"
           class="bb-button bb-button-outline bb-button-full bb-social-btn"
           data-provider="github"
         >
-          <span class="bb-social-icon">⚡</span>
-          GitHub
+          <span class="bb-social-icon bb-social-icon-github" aria-hidden="true"
+            ><img
+              src="/assets/auth-providers/github.svg"
+              alt=""
+              loading="lazy"
+              decoding="async"
+              referrerpolicy="no-referrer"
+          /></span>
+          Continue with GitHub
+        </button>
+        <button
+          type="button"
+          class="bb-button bb-button-outline bb-button-full bb-social-btn"
+          data-provider="azure"
+        >
+          <span
+            class="bb-social-icon bb-social-icon-microsoft"
+            aria-hidden="true"
+            ><img
+              src="/assets/auth-providers/microsoft.svg"
+              alt=""
+              loading="lazy"
+              decoding="async"
+              referrerpolicy="no-referrer"
+          /></span>
+          Continue with Microsoft
+        </button>
+        <button
+          type="button"
+          class="bb-button bb-button-outline bb-button-full bb-social-btn"
+          data-provider="facebook"
+        >
+          <span
+            class="bb-social-icon bb-social-icon-facebook"
+            aria-hidden="true"
+            ><img
+              src="/assets/auth-providers/facebook.png"
+              alt=""
+              loading="lazy"
+              decoding="async"
+              referrerpolicy="no-referrer"
+          /></span>
+          Continue with Facebook
+        </button>
+        <button
+          type="button"
+          class="bb-button bb-button-outline bb-button-full bb-social-btn"
+          data-provider="slack_oidc"
+        >
+          <span class="bb-social-icon bb-social-icon-slack" aria-hidden="true"
+            ><img
+              src="/assets/auth-providers/slack.svg"
+              alt=""
+              loading="lazy"
+              decoding="async"
+              referrerpolicy="no-referrer"
+          /></span>
+          Continue with Slack
         </button>
       </div>
 
@@ -147,16 +210,79 @@
           class="bb-button bb-button-outline bb-button-full bb-social-btn"
           data-provider="google"
         >
-          <span class="bb-social-icon">G</span>
-          Google
+          <span class="bb-social-icon bb-social-icon-google" aria-hidden="true"
+            ><img
+              src="/assets/auth-providers/google.svg"
+              alt=""
+              loading="lazy"
+              decoding="async"
+              referrerpolicy="no-referrer"
+          /></span>
+          Continue with Google
         </button>
         <button
           type="button"
           class="bb-button bb-button-outline bb-button-full bb-social-btn"
           data-provider="github"
         >
-          <span class="bb-social-icon">⚡</span>
-          GitHub
+          <span class="bb-social-icon bb-social-icon-github" aria-hidden="true"
+            ><img
+              src="/assets/auth-providers/github.svg"
+              alt=""
+              loading="lazy"
+              decoding="async"
+              referrerpolicy="no-referrer"
+          /></span>
+          Continue with GitHub
+        </button>
+        <button
+          type="button"
+          class="bb-button bb-button-outline bb-button-full bb-social-btn"
+          data-provider="azure"
+        >
+          <span
+            class="bb-social-icon bb-social-icon-microsoft"
+            aria-hidden="true"
+            ><img
+              src="/assets/auth-providers/microsoft.svg"
+              alt=""
+              loading="lazy"
+              decoding="async"
+              referrerpolicy="no-referrer"
+          /></span>
+          Continue with Microsoft
+        </button>
+        <button
+          type="button"
+          class="bb-button bb-button-outline bb-button-full bb-social-btn"
+          data-provider="facebook"
+        >
+          <span
+            class="bb-social-icon bb-social-icon-facebook"
+            aria-hidden="true"
+            ><img
+              src="/assets/auth-providers/facebook.png"
+              alt=""
+              loading="lazy"
+              decoding="async"
+              referrerpolicy="no-referrer"
+          /></span>
+          Continue with Facebook
+        </button>
+        <button
+          type="button"
+          class="bb-button bb-button-outline bb-button-full bb-social-btn"
+          data-provider="slack_oidc"
+        >
+          <span class="bb-social-icon bb-social-icon-slack" aria-hidden="true"
+            ><img
+              src="/assets/auth-providers/slack.svg"
+              alt=""
+              loading="lazy"
+              decoding="async"
+              referrerpolicy="no-referrer"
+          /></span>
+          Continue with Slack
         </button>
       </div>
 
@@ -211,441 +337,3 @@
     ></div>
   </div>
 </div>
-
-<script>
-  // Shared auth modal JavaScript
-  let supabase;
-  let captchaToken = null;
-
-  function disableAuthForms(message) {
-    const errorDiv = document.getElementById("authError");
-    if (errorDiv) {
-      errorDiv.textContent = message;
-      errorDiv.style.display = "block";
-      errorDiv.setAttribute("role", "status");
-      errorDiv.setAttribute("aria-live", "assertive");
-      errorDiv.setAttribute("tabindex", "-1");
-      if (typeof errorDiv.focus === "function") {
-        errorDiv.focus({ preventScroll: true });
-      }
-    }
-
-    document
-      .querySelectorAll(
-        ".bb-auth-form input, .bb-auth-form button, .bb-social-btn"
-      )
-      .forEach((el) => {
-        el.setAttribute("disabled", "disabled");
-        el.setAttribute("aria-disabled", "true");
-        el.style.cursor = "not-allowed";
-        el.style.opacity = "0.6";
-      });
-  }
-
-  // Initialize Supabase
-  function initializeSupabase() {
-    if (!window.supabase || !window.supabase.createClient) {
-      disableAuthForms(
-        "Authentication scripts failed to load. Please refresh and try again."
-      );
-      return false;
-    }
-    if (
-      !window.BBB_CONFIG?.supabaseUrl ||
-      !window.BBB_CONFIG?.supabaseAnonKey
-    ) {
-      console.error(
-        "BBB_CONFIG is missing Supabase settings; auth modal unavailable"
-      );
-      disableAuthForms(
-        "Authentication configuration is unavailable. Please contact support."
-      );
-      return false;
-    }
-    supabase = window.supabase.createClient(
-      window.BBB_CONFIG.supabaseUrl,
-      window.BBB_CONFIG.supabaseAnonKey
-    );
-    return true;
-  }
-
-  // CAPTCHA success callback
-  window.onTurnstileSuccess = function (token) {
-    captchaToken = token;
-    const signupBtn = document.getElementById("signupSubmitBtn");
-    if (signupBtn) {
-      signupBtn.disabled = false;
-    }
-  };
-
-  // Modal control functions
-  function showAuthModal() {
-    document.getElementById("authModal").classList.add("show");
-  }
-
-  function closeAuthModal() {
-    document.getElementById("authModal").classList.remove("show");
-    clearAuthError();
-    hideAuthLoading();
-  }
-
-  function showLoginForm() {
-    document.getElementById("signupForm").style.display = "none";
-    document.getElementById("loginForm").style.display = "block";
-    document.getElementById("resetForm").style.display = "none";
-    document.getElementById("authModalTitle").textContent = "Sign In";
-
-    // Update submit button text based on page context
-    const loginBtn = document.getElementById("loginSubmitBtn");
-    if (loginBtn) {
-      loginBtn.textContent =
-        window.location.pathname === "/" ? "Sign In & Start Crawl" : "Sign In";
-    }
-  }
-
-  function showSignupForm() {
-    document.getElementById("signupForm").style.display = "block";
-    document.getElementById("loginForm").style.display = "none";
-    document.getElementById("resetForm").style.display = "none";
-    document.getElementById("authModalTitle").textContent = "Create Account";
-
-    // Update submit button text based on page context
-    const signupBtn = document.getElementById("signupSubmitBtn");
-    if (signupBtn) {
-      signupBtn.textContent =
-        window.location.pathname === "/"
-          ? "Create Account & Start Crawl"
-          : "Create Account";
-    }
-
-    // Reset CAPTCHA
-    captchaToken = null;
-    if (signupBtn) {
-      signupBtn.disabled = true;
-    }
-    if (window.turnstile) {
-      const turnstileWidget = document.querySelector(".cf-turnstile");
-      if (turnstileWidget) {
-        window.turnstile.reset(turnstileWidget);
-      }
-    }
-  }
-
-  function showResetForm() {
-    document.getElementById("signupForm").style.display = "none";
-    document.getElementById("loginForm").style.display = "none";
-    document.getElementById("resetForm").style.display = "block";
-    document.getElementById("authModalTitle").textContent = "Reset Password";
-  }
-
-  // Setup auth handlers
-  function setupAuthHandlers() {
-    if (!initializeSupabase()) {
-      console.error("Supabase not available - auth will fail");
-      return;
-    }
-
-    // Email signup form
-    document
-      .getElementById("emailSignupForm")
-      .addEventListener("submit", handleEmailSignup);
-
-    // Email login form
-    document
-      .getElementById("emailLoginForm")
-      .addEventListener("submit", handleEmailLogin);
-
-    // Password reset form
-    document
-      .getElementById("passwordResetForm")
-      .addEventListener("submit", handlePasswordReset);
-
-    // Social login buttons
-    document
-      .querySelectorAll(".bb-social-btn[data-provider]")
-      .forEach((button) => {
-        button.addEventListener("click", (e) => {
-          const provider = e.currentTarget.dataset.provider;
-          handleSocialLogin(provider);
-        });
-      });
-  }
-
-  // Auth handlers
-  async function handleEmailSignup(event) {
-    event.preventDefault();
-    const formData = new FormData(event.target);
-    const email = formData.get("email");
-    const password = formData.get("password");
-    const passwordConfirm = formData.get("passwordConfirm");
-
-    if (password !== passwordConfirm) {
-      showAuthError("Passwords do not match.");
-      return;
-    }
-
-    if (password.length < 8) {
-      showAuthError("Password must be at least 8 characters long.");
-      return;
-    }
-
-    if (!captchaToken) {
-      showAuthError("Please complete the CAPTCHA verification.");
-      return;
-    }
-
-    showAuthLoading();
-    clearAuthError();
-
-    try {
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: { captchaToken },
-      });
-
-      if (error) throw error;
-
-      if (data.user && !data.user.email_confirmed_at) {
-        showAuthError(
-          "Please check your email and click the confirmation link, then sign in."
-        );
-        showLoginForm();
-      } else if (data.user) {
-        await handleAuthSuccess(data.user);
-      }
-    } catch (error) {
-      showAuthError(error.message || "Signup failed. Please try again.");
-    } finally {
-      hideAuthLoading();
-    }
-  }
-
-  async function handleEmailLogin(event) {
-    event.preventDefault();
-    const formData = new FormData(event.target);
-    const email = formData.get("email");
-    const password = formData.get("password");
-
-    showAuthLoading();
-    clearAuthError();
-
-    try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
-      if (error) throw error;
-
-      await handleAuthSuccess(data.user);
-    } catch (error) {
-      showAuthError(
-        error.message || "Login failed. Please check your credentials."
-      );
-    } finally {
-      hideAuthLoading();
-    }
-  }
-
-  async function handleSocialLogin(provider) {
-    showAuthLoading();
-    clearAuthError();
-
-    try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider,
-        options: {
-          redirectTo: window.location.origin + "/dashboard",
-        },
-      });
-
-      if (error) throw error;
-    } catch (error) {
-      showAuthError(error.message || `${provider} login failed.`);
-      hideAuthLoading();
-    }
-  }
-
-  async function handlePasswordReset(event) {
-    event.preventDefault();
-    const formData = new FormData(event.target);
-    const email = formData.get("email");
-
-    showAuthLoading();
-    clearAuthError();
-
-    try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: window.location.origin + "/dashboard",
-      });
-
-      if (error) throw error;
-
-      showAuthError("Check your email for password reset instructions.");
-      setTimeout(() => showLoginForm(), 2000);
-    } catch (error) {
-      showAuthError(
-        error.message || "Password reset failed. Please try again."
-      );
-    } finally {
-      hideAuthLoading();
-    }
-  }
-
-  // Auth success handler - to be overridden by each page
-  async function handleAuthSuccess(user) {
-    // Default implementation - can be overridden by including pages
-    await registerUserWithBackend(user);
-
-    // Check for pending domain (homepage flow)
-    const pendingDomain = sessionStorage.getItem("bb_pending_domain");
-
-    if (pendingDomain) {
-      // Create job and redirect to dashboard
-      try {
-        const session = await supabase.auth.getSession();
-        await fetch("/v1/jobs", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${session.data.session.access_token}`,
-          },
-          body: JSON.stringify({
-            domain: pendingDomain,
-            use_sitemap: true,
-            find_links: true,
-            max_pages: 0,
-            concurrency: 5,
-          }),
-        });
-
-        sessionStorage.removeItem("bb_pending_domain");
-        showSuccess(
-          `Great! We're starting to warm ${pendingDomain}. Redirecting to your dashboard...`
-        );
-
-        setTimeout(() => {
-          window.location.href = "/dashboard";
-        }, 2000);
-      } catch (error) {
-        console.error("Failed to create job:", error);
-        showSuccess("Account created! Redirecting to dashboard...");
-        setTimeout(() => {
-          window.location.href = "/dashboard";
-        }, 1500);
-      }
-    } else {
-      // No pending domain, just go to dashboard
-      showSuccess("Welcome! Redirecting to your dashboard...");
-      setTimeout(() => {
-        window.location.href = "/dashboard";
-      }, 1500);
-    }
-  }
-
-  async function registerUserWithBackend(user) {
-    try {
-      const session = await supabase.auth.getSession();
-      const response = await fetch("/v1/auth/register", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${session.data.session.access_token}`,
-        },
-        body: JSON.stringify({
-          user_id: user.id,
-          email: user.email,
-          full_name: user.user_metadata?.full_name || null,
-        }),
-      });
-
-      if (!response.ok && response.status !== 409) {
-        console.error("Backend registration failed");
-      }
-    } catch (error) {
-      console.error("Failed to register user with backend:", error);
-    }
-  }
-
-  // Loading states
-  function showAuthLoading() {
-    document.getElementById("authLoading").style.display = "block";
-    const visibleForm = document.querySelector(
-      '.bb-auth-form:not([style*="display: none"])'
-    );
-    if (visibleForm) {
-      visibleForm.style.display = "none";
-    }
-  }
-
-  function hideAuthLoading() {
-    document.getElementById("authLoading").style.display = "none";
-    const forms = document.querySelectorAll(".bb-auth-form");
-    forms.forEach((form) => {
-      if (
-        form.id === "loginForm" &&
-        document.getElementById("authModalTitle").textContent === "Sign In"
-      ) {
-        form.style.display = "block";
-      } else if (
-        form.id === "signupForm" &&
-        document.getElementById("authModalTitle").textContent ===
-          "Create Account"
-      ) {
-        form.style.display = "block";
-      } else if (
-        form.id === "resetForm" &&
-        document.getElementById("authModalTitle").textContent ===
-          "Reset Password"
-      ) {
-        form.style.display = "block";
-      }
-    });
-  }
-
-  // Error handling
-  function showAuthError(message) {
-    const errorDiv = document.getElementById("authError");
-    errorDiv.textContent = message;
-    errorDiv.style.display = "block";
-  }
-
-  function clearAuthError() {
-    document.getElementById("authError").style.display = "none";
-  }
-
-  // Success/error notifications
-  function showError(message) {
-    showNotification(message, "error");
-  }
-
-  function showSuccess(message) {
-    showNotification(message, "success");
-  }
-
-  function showNotification(message, type = "error") {
-    const notification = document.createElement("div");
-    notification.className = `bb-notification bb-notification-${type}`;
-    notification.innerHTML = `
-      <div class="bb-notification-content">
-        <span>${message}</span>
-      </div>
-    `;
-
-    document.body.appendChild(notification);
-
-    setTimeout(() => {
-      notification.classList.add("bb-notification-show");
-    }, 10);
-
-    setTimeout(() => {
-      notification.remove();
-    }, 5000);
-  }
-
-  // Initialize when DOM is loaded
-  document.addEventListener("DOMContentLoaded", () => {
-    setupAuthHandlers();
-  });
-</script>

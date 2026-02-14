@@ -4,9 +4,51 @@
  */
 
 (function () {
+  const AUTH_METHOD_DEFS = [
+    {
+      key: "google",
+      label: "Google",
+      icon_url: "/assets/auth-providers/google.svg",
+      supported: true,
+    },
+    {
+      key: "github",
+      label: "GitHub",
+      icon_url: "/assets/auth-providers/github.svg",
+      supported: true,
+    },
+    {
+      key: "email",
+      label: "Email/Password",
+      icon_url: "",
+      supported: true,
+    },
+    {
+      key: "azure",
+      label: "Microsoft",
+      icon_url: "/assets/auth-providers/microsoft.svg",
+      supported: true,
+    },
+    {
+      key: "facebook",
+      label: "Facebook",
+      icon_url: "/assets/auth-providers/facebook.png",
+      supported: true,
+    },
+    {
+      key: "slack_oidc",
+      label: "Slack",
+      icon_url: "/assets/auth-providers/slack.svg",
+      supported: true,
+    },
+  ];
+
   const settingsState = {
     currentUserRole: "member",
     currentUserId: null,
+    authMethods: [],
+    authIdentities: [],
+    authUserEmail: "",
   };
 
   function showSettingsToast(type, message) {
@@ -261,21 +303,446 @@
     });
   }
 
+  function normaliseAuthProvider(provider) {
+    const value = (provider || "").trim().toLowerCase();
+    if (value === "slack") return "slack_oidc";
+    if (
+      value === "google" ||
+      value === "github" ||
+      value === "email" ||
+      value === "azure" ||
+      value === "facebook" ||
+      value === "slack_oidc"
+    ) {
+      return value;
+    }
+    return "";
+  }
+
+  function getAuthMethodDef(provider) {
+    return (
+      AUTH_METHOD_DEFS.find((method) => method.key === provider) || {
+        key: provider,
+        label: provider || "Unknown",
+        icon: "?",
+        supported: true,
+      }
+    );
+  }
+
+  function formatAuthMethod(method) {
+    const value = normaliseAuthProvider(method) || method;
+    return getAuthMethodDef(value).label;
+  }
+
+  function providerIcon(provider) {
+    const method = getAuthMethodDef(provider);
+    if (method.icon_url) {
+      return `<img src="${method.icon_url}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" />`;
+    }
+    return `<span class="settings-auth-fallback-icon" aria-hidden="true">•</span>`;
+  }
+
+  function providerSubtitle(method) {
+    if (method.connected) {
+      return method.email || "Connected";
+    }
+    if (method.provider === "email") {
+      return "Set a password to enable email sign-in";
+    }
+    return "Not connected";
+  }
+
+  function getOAuthQueryParams(provider) {
+    switch (provider) {
+      case "google":
+        return { prompt: "select_account consent" };
+      case "azure":
+        return { prompt: "select_account" };
+      case "facebook":
+        return { auth_type: "reauthenticate" };
+      case "slack_oidc":
+        return { prompt: "consent" };
+      default:
+        return {};
+    }
+  }
+
+  async function connectAuthMethod(provider) {
+    if (!window.supabase?.auth) return;
+
+    try {
+      if (provider === "email") {
+        await sendPasswordReset();
+        showSettingsToast(
+          "success",
+          "Password setup email sent. This enables email sign-in."
+        );
+        return;
+      }
+
+      const currentPath = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+      if (currentPath && currentPath !== "/") {
+        try {
+          window.sessionStorage.setItem(
+            "bb_post_auth_return_target",
+            currentPath
+          );
+        } catch (_error) {
+          // Ignore storage failures and continue OAuth flow.
+        }
+      }
+      const callbackTarget = new URL(`${window.location.origin}/auth/callback`);
+      if (currentPath && currentPath !== "/") {
+        callbackTarget.searchParams.set("return_to", currentPath);
+      }
+      const callbackUrl = callbackTarget.toString();
+      const queryParams = getOAuthQueryParams(provider);
+
+      if (typeof window.supabase.auth.linkIdentity === "function") {
+        const { data, error } = await window.supabase.auth.linkIdentity({
+          provider,
+          options: { redirectTo: callbackUrl, queryParams },
+        });
+        if (error) throw error;
+        if (data?.url) {
+          window.location.assign(data.url);
+          return;
+        }
+      } else {
+        const { data, error } = await window.supabase.auth.signInWithOAuth({
+          provider,
+          options: { redirectTo: callbackUrl, queryParams },
+        });
+        if (error) throw error;
+        if (data?.url) {
+          window.location.assign(data.url);
+          return;
+        }
+      }
+
+      showSettingsToast("success", `${formatAuthMethod(provider)} connected`);
+      await loadAccountDetails();
+    } catch (err) {
+      console.error(`Failed to connect ${provider}:`, err);
+      showSettingsToast(
+        "error",
+        err?.message || `Failed to connect ${formatAuthMethod(provider)}`
+      );
+    }
+  }
+
+  async function unlinkIdentityViaApi(identityId) {
+    const sessionResult = await window.supabase.auth.getSession();
+    const accessToken = sessionResult?.data?.session?.access_token;
+    const authUrl = window.BBB_CONFIG?.supabaseUrl;
+    const anonKey = window.BBB_CONFIG?.supabaseAnonKey;
+    if (!accessToken || !authUrl || !anonKey) {
+      throw new Error("Missing auth session details");
+    }
+
+    const response = await fetch(
+      `${authUrl}/auth/v1/user/identities/${encodeURIComponent(identityId)}`,
+      {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          apikey: anonKey,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    if (!response.ok) {
+      const responseJson = await response.json().catch(() => ({}));
+      throw new Error(
+        responseJson?.msg || responseJson?.error || "Unlink failed"
+      );
+    }
+  }
+
+  async function removeAuthMethod(method, connectedCount) {
+    if (connectedCount <= 1) {
+      showSettingsToast("error", "You must keep at least one sign-in method.");
+      return;
+    }
+    if (method.provider === "email") {
+      showSettingsToast(
+        "warning",
+        "Email/password removal isn’t supported in settings yet."
+      );
+      return;
+    }
+
+    if (!method.identity?.identity_id) {
+      showSettingsToast("error", "Unable to remove this method.");
+      return;
+    }
+
+    if (!confirm(`Remove ${formatAuthMethod(method.provider)} sign-in?`)) {
+      return;
+    }
+
+    try {
+      if (typeof window.supabase.auth.unlinkIdentity === "function") {
+        const { error } = await window.supabase.auth.unlinkIdentity(
+          method.identity
+        );
+        if (error) throw error;
+      } else {
+        await unlinkIdentityViaApi(method.identity.identity_id);
+      }
+
+      try {
+        await window.supabase.auth.refreshSession();
+      } catch (err) {
+        console.warn("Failed to refresh session after unlink:", err);
+      }
+
+      showSettingsToast(
+        "success",
+        `${formatAuthMethod(method.provider)} removed`
+      );
+      await loadAccountDetails();
+    } catch (err) {
+      console.error(`Failed to remove ${method.provider}:`, err);
+      showSettingsToast(
+        "error",
+        err?.message || `Failed to remove ${formatAuthMethod(method.provider)}`
+      );
+    }
+  }
+
+  function renderAuthMethods(methods) {
+    const authMethodsEl = document.getElementById("settingsAuthMethods");
+    if (!authMethodsEl) return;
+
+    authMethodsEl.innerHTML = "";
+    if (!Array.isArray(methods)) {
+      return;
+    }
+
+    const connectedCount = methods.filter((method) => method.connected).length;
+    const visibleMethods = methods.filter(
+      (method) => method.provider !== "email"
+    );
+
+    visibleMethods.forEach((method) => {
+      const card = document.createElement("div");
+      card.className = "settings-auth-method-card";
+
+      const details = document.createElement("div");
+      details.className = "settings-auth-method-details";
+
+      const icon = document.createElement("span");
+      icon.className = `settings-auth-provider-icon settings-auth-provider-${method.provider}`;
+      icon.innerHTML = providerIcon(method.provider);
+
+      const text = document.createElement("div");
+      text.className = "settings-auth-method-text";
+
+      const name = document.createElement("strong");
+      name.textContent = formatAuthMethod(method.provider);
+
+      const subtitle = document.createElement("span");
+      subtitle.className = "settings-muted";
+      subtitle.textContent = providerSubtitle(method);
+
+      text.appendChild(name);
+      text.appendChild(subtitle);
+      details.appendChild(icon);
+      details.appendChild(text);
+
+      const actionBtn = document.createElement("button");
+      actionBtn.className = "bb-button bb-button-outline settings-btn-sm";
+      actionBtn.type = "button";
+      actionBtn.textContent = method.connected ? "Remove" : "Connect";
+
+      if (
+        method.connected &&
+        (connectedCount <= 1 || method.provider === "email")
+      ) {
+        actionBtn.disabled = true;
+        actionBtn.title = "At least one sign-in method must remain";
+      }
+
+      actionBtn.addEventListener("click", async () => {
+        const permanentlyDisabled =
+          method.connected &&
+          (connectedCount <= 1 || method.provider === "email");
+        if (permanentlyDisabled) return;
+
+        actionBtn.disabled = true;
+        const originalText = actionBtn.textContent;
+        actionBtn.textContent = method.connected
+          ? "Removing..."
+          : "Connecting...";
+        if (method.connected) {
+          await removeAuthMethod(method, connectedCount);
+        } else {
+          await connectAuthMethod(method.provider);
+        }
+        actionBtn.textContent = originalText;
+        actionBtn.disabled = permanentlyDisabled;
+      });
+
+      card.appendChild(details);
+      card.appendChild(actionBtn);
+      authMethodsEl.appendChild(card);
+    });
+  }
+
   async function loadAccountDetails() {
     const sessionResult = await window.supabase.auth.getSession();
     const session = sessionResult?.data?.session;
     if (!session?.user) return;
 
-    const email = session.user.email || "";
-    const fullName =
+    const fallbackEmail = session.user.email || "";
+    const fallbackFullName =
       session.user.user_metadata?.full_name ||
       session.user.user_metadata?.name ||
       "";
+    const fallbackMethods = session.user.app_metadata?.providers || [];
+
+    let email = fallbackEmail;
+    let fullName = fallbackFullName;
+    let authMethods = fallbackMethods;
+    let authIdentities = [];
+    let authUser = session.user;
+
+    try {
+      const userResult = await window.supabase.auth.getUser();
+      authUser = userResult?.data?.user || session.user;
+      authIdentities = Array.isArray(authUser?.identities)
+        ? authUser.identities
+        : [];
+    } catch (err) {
+      console.warn("Failed to load auth identities:", err);
+    }
+
+    try {
+      const response = await window.dataBinder.fetchData("/v1/auth/profile");
+      const profileUser = response?.user || {};
+      if (profileUser.email) {
+        email = profileUser.email;
+      }
+      if (typeof profileUser.full_name === "string" && profileUser.full_name) {
+        fullName = profileUser.full_name;
+      }
+      if (Array.isArray(response?.auth_methods)) {
+        authMethods = response.auth_methods;
+      }
+    } catch (_err) {
+      console.warn("Failed to load profile from API.");
+    }
 
     const emailEl = document.getElementById("settingsUserEmail");
-    const nameEl = document.getElementById("settingsUserName");
+    const nameInputEl = document.getElementById("settingsUserNameInput");
     if (emailEl) emailEl.textContent = email || "Not set";
-    if (nameEl) nameEl.textContent = fullName || "Not set";
+    if (nameInputEl) nameInputEl.value = fullName || "";
+
+    const connectedProviders = new Set();
+    const hasIdentityData =
+      Array.isArray(authIdentities) && authIdentities.length > 0;
+    if (hasIdentityData) {
+      authIdentities.forEach((identity) => {
+        const normalised = normaliseAuthProvider(identity.provider);
+        if (normalised) connectedProviders.add(normalised);
+      });
+    } else {
+      (Array.isArray(authMethods) ? authMethods : []).forEach((provider) => {
+        const normalised = normaliseAuthProvider(provider);
+        if (normalised) connectedProviders.add(normalised);
+      });
+    }
+
+    const methodModels = AUTH_METHOD_DEFS.map((methodDef) => {
+      const provider = methodDef.key;
+      const identity = authIdentities.find(
+        (candidate) => normaliseAuthProvider(candidate.provider) === provider
+      );
+      return {
+        provider,
+        supported: true,
+        connected: connectedProviders.has(provider),
+        email:
+          identity?.identity_data?.email ||
+          identity?.email ||
+          authUser?.email ||
+          email,
+        identity: identity || null,
+      };
+    });
+
+    settingsState.authMethods = Array.from(connectedProviders);
+    settingsState.authIdentities = authIdentities;
+    settingsState.authUserEmail = email;
+
+    const passwordStatusEl = document.getElementById(
+      "settingsPasswordMethodStatus"
+    );
+    if (passwordStatusEl) {
+      const emailMethod = methodModels.find(
+        (method) => method.provider === "email"
+      );
+      passwordStatusEl.textContent = emailMethod?.connected
+        ? "Email/password sign-in enabled. Use reset email to change your password."
+        : "Email/password sign-in not connected yet. Send reset email to set it up.";
+    }
+
+    renderAuthMethods(methodModels);
+  }
+
+  async function saveProfileName() {
+    const nameInputEl = document.getElementById("settingsUserNameInput");
+    const saveBtn = document.getElementById("settingsSaveName");
+    if (!nameInputEl || !saveBtn) return;
+
+    const fullName = nameInputEl.value.trim();
+    if (fullName.length > 120) {
+      showSettingsToast("error", "Name must be 120 characters or fewer");
+      return;
+    }
+
+    saveBtn.disabled = true;
+    const originalText = saveBtn.textContent;
+    saveBtn.textContent = "Saving...";
+
+    try {
+      let metadataUpdateSucceeded = true;
+      try {
+        const payload = fullName ? { full_name: fullName } : { full_name: "" };
+        await window.supabase.auth.updateUser({
+          data: { full_name: payload.full_name },
+        });
+      } catch (_err) {
+        console.warn("Failed to update auth metadata name.");
+        metadataUpdateSucceeded = false;
+      }
+
+      await window.dataBinder.fetchData("/v1/auth/profile", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ full_name: fullName }),
+      });
+
+      if (metadataUpdateSucceeded) {
+        showSettingsToast("success", "Name updated");
+      } else {
+        showSettingsToast(
+          "warning",
+          "Name saved, but auth metadata sync failed. Please re-login if needed."
+        );
+      }
+      await loadAccountDetails();
+      await loadOrganisationMembers();
+    } catch (_err) {
+      console.error("Failed to save profile name.");
+      showSettingsToast("error", "Failed to update name");
+    } finally {
+      saveBtn.disabled = false;
+      saveBtn.textContent = originalText || "Save name";
+    }
   }
 
   async function sendPasswordReset() {
@@ -329,9 +796,10 @@
       members.forEach((member) => {
         const clone = memberTemplate.content.cloneNode(true);
         const row = clone.querySelector(".settings-member-row");
+        const avatarEl = clone.querySelector(".settings-member-avatar");
         const nameEl = clone.querySelector(".settings-member-name");
         const emailEl = clone.querySelector(".settings-member-email");
-        const roleEl = clone.querySelector(".settings-member-role");
+        const roleSelect = clone.querySelector(".settings-member-role-select");
         const removeBtn = clone.querySelector(".settings-member-remove");
 
         if (row) row.dataset.memberId = member.id;
@@ -339,13 +807,49 @@
           nameEl.textContent = member.full_name || "Unnamed";
         }
         if (emailEl) emailEl.textContent = member.email || "";
-        if (roleEl) roleEl.textContent = member.role || "member";
+        if (avatarEl) {
+          const initialsSource = member.full_name || member.email || "";
+          const initials =
+            window.BBAvatar?.getInitials?.(initialsSource) ||
+            window.BBAuth?.getInitials?.(initialsSource) ||
+            "?";
+          const avatarSize = Math.ceil(34 * (window.devicePixelRatio || 1));
+          window.BBAvatar?.setUserAvatar?.(
+            avatarEl,
+            member.email || "",
+            initials,
+            {
+              size: avatarSize,
+              alt: `${member.full_name || member.email || "Member"} avatar`,
+            }
+          );
+        }
+        if (roleSelect) {
+          roleSelect.value = member.role || "member";
+          const canEditRole =
+            settingsState.currentUserRole === "admin" &&
+            member.id !== settingsState.currentUserId;
+          roleSelect.disabled = !canEditRole;
+          roleSelect.addEventListener("change", async () => {
+            const previousValue = member.role || "member";
+            try {
+              await updateMemberRole(member.id, roleSelect.value);
+              member.role = roleSelect.value;
+            } catch {
+              // Error already handled/toasted in updateMemberRole; revert UI.
+              roleSelect.value = previousValue;
+            }
+          });
+        }
 
         if (removeBtn) {
           removeBtn.dataset.memberId = member.id;
           removeBtn.addEventListener("click", () => removeMember(member.id));
 
-          if (settingsState.currentUserRole !== "admin") {
+          const canRemove =
+            settingsState.currentUserRole === "admin" &&
+            member.id !== settingsState.currentUserId;
+          if (!canRemove) {
             removeBtn.disabled = true;
           }
         }
@@ -376,6 +880,27 @@
     } catch (err) {
       console.error("Failed to remove member:", err);
       showSettingsToast("error", "Failed to remove member");
+    }
+  }
+
+  async function updateMemberRole(memberId, role) {
+    if (!memberId) return;
+
+    try {
+      await window.dataBinder.fetchData(
+        `/v1/organisations/members/${memberId}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ role }),
+        }
+      );
+      showSettingsToast("success", "Member role updated");
+      await loadOrganisationMembers();
+    } catch (err) {
+      console.error("Failed to update member role.");
+      showSettingsToast("error", "Failed to update member role");
+      throw err;
     }
   }
 
@@ -1673,6 +2198,10 @@
       const resetBtn = document.getElementById("settingsResetPassword");
       if (resetBtn) {
         resetBtn.addEventListener("click", sendPasswordReset);
+      }
+      const saveNameBtn = document.getElementById("settingsSaveName");
+      if (saveNameBtn) {
+        saveNameBtn.addEventListener("click", saveProfileName);
       }
 
       if (window.setupSlackIntegration) {

@@ -60,7 +60,7 @@
       })();
     </script>
   </head>
-  <body class="page-settings">
+  <body class="page-settings bb-auth-route-gated">
     <script src="/js/bb-global-nav.js" defer></script>
     <main class="settings-main">
       <div class="settings-container">
@@ -131,9 +131,24 @@
             <div class="settings-card" id="profile">
               <div class="settings-row">
                 <div>
-                  <strong>Name</strong>
-                  <div class="settings-muted" id="settingsUserName">
-                    Loading...
+                  <label for="settingsUserNameInput"
+                    ><strong>Name</strong></label
+                  >
+                  <div class="settings-profile-edit">
+                    <input
+                      class="settings-input"
+                      id="settingsUserNameInput"
+                      type="text"
+                      maxlength="120"
+                      placeholder="Enter your name"
+                    />
+                    <button
+                      class="bb-button bb-button-outline settings-btn-sm"
+                      id="settingsSaveName"
+                      type="button"
+                    >
+                      Save name
+                    </button>
                   </div>
                 </div>
               </div>
@@ -151,7 +166,9 @@
               <div class="settings-row">
                 <div>
                   <strong>Password</strong>
-                  <div class="settings-muted">Reset via email.</div>
+                  <div class="settings-muted" id="settingsPasswordMethodStatus">
+                    Email/password sign-in status: loading...
+                  </div>
                 </div>
                 <button
                   class="bb-button bb-button-outline"
@@ -159,6 +176,14 @@
                 >
                   Send reset email
                 </button>
+              </div>
+              <div class="settings-row">
+                <div>
+                  <strong>Authentication methods</strong>
+                  <div class="settings-auth-methods" id="settingsAuthMethods">
+                    <span class="settings-muted">Loading...</span>
+                  </div>
+                </div>
               </div>
             </div>
           </section>
@@ -806,10 +831,19 @@
     <template id="teamMemberTemplate">
       <div class="settings-member-row">
         <div class="settings-member-details">
-          <span class="settings-member-name"></span>
-          <span class="settings-member-email"></span>
+          <span class="settings-member-avatar" aria-hidden="true">?</span>
+          <div class="settings-member-text">
+            <span class="settings-member-name"></span>
+            <span class="settings-member-email"></span>
+          </div>
         </div>
-        <span class="settings-member-role"></span>
+        <select
+          class="settings-input settings-member-role-select"
+          aria-label="Member role"
+        >
+          <option value="member">Member</option>
+          <option value="admin">Admin</option>
+        </select>
         <button class="bb-button bb-button-outline settings-member-remove">
           Remove
         </button>
