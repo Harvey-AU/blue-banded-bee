@@ -448,6 +448,12 @@ func composeFullName(firstName, lastName *string) *string {
 	return &joined
 }
 
+// deriveNameParts intentionally uses a simple split strategy:
+// first name is the first whitespace-delimited token, and last name is the
+// remaining tokens. This can misclassify titles/prefixes (for example,
+// "Dr. John Smith" -> first="Dr.", last="John Smith") and names with multi-word
+// given names. If name accuracy becomes critical, use a more sophisticated
+// parser.
 func deriveNameParts(fullName *string) (*string, *string) {
 	if fullName == nil {
 		return nil, nil
