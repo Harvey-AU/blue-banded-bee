@@ -58,6 +58,7 @@ const AUTH_SYNC_RETRY_ATTEMPTS = 40;
 const AUTH_SYNC_RETRY_DELAY_MS = 100;
 let authSyncRetryTimer = null;
 let authSyncRetryCount = 0;
+let authCallbackRedirectIssued = false;
 const PENDING_INVITE_TOKEN_STORAGE_KEY = "bb_pending_invite_token";
 const POST_AUTH_RETURN_TARGET_STORAGE_KEY = "bb_post_auth_return_target";
 const OAUTH_CALLBACK_QUERY_KEYS = [
@@ -346,6 +347,7 @@ async function handleAuthCallback() {
           `${window.location.origin}/welcome/invite?invite_token=${encodeURIComponent(inviteToken)}`
         );
         inviteUrl.searchParams.set("auth_error", "oauth_failed");
+        authCallbackRedirectIssued = true;
         window.location.replace(inviteUrl.toString());
         return false;
       }
@@ -385,6 +387,7 @@ async function handleAuthCallback() {
           const inviteUrl = new URL(
             `${window.location.origin}/welcome/invite?invite_token=${encodeURIComponent(pendingInviteToken)}`
           );
+          authCallbackRedirectIssued = true;
           window.location.replace(inviteUrl.toString());
           return false;
         }
@@ -396,6 +399,7 @@ async function handleAuthCallback() {
               returnTarget !==
               `${window.location.pathname}${window.location.search}${window.location.hash}`
             ) {
+              authCallbackRedirectIssued = true;
               window.location.replace(returnTarget);
               return false;
             }
@@ -424,6 +428,7 @@ async function handleAuthCallback() {
           const inviteUrl = new URL(
             `${window.location.origin}/welcome/invite?invite_token=${encodeURIComponent(pendingInviteToken)}`
           );
+          authCallbackRedirectIssued = true;
           window.location.replace(inviteUrl.toString());
           return false;
         }
@@ -435,6 +440,7 @@ async function handleAuthCallback() {
               returnTarget !==
               `${window.location.pathname}${window.location.search}${window.location.hash}`
             ) {
+              authCallbackRedirectIssued = true;
               window.location.replace(returnTarget);
               return false;
             }
@@ -1230,7 +1236,10 @@ async function handleSocialLogin(provider) {
 }
 
 async function initAuthCallbackPage() {
+  authCallbackRedirectIssued = false;
+
   if (!initialiseSupabase()) {
+    authCallbackRedirectIssued = true;
     window.location.replace("/");
     return;
   }
@@ -1241,9 +1250,14 @@ async function initAuthCallbackPage() {
     console.error("Auth callback page failed:", error);
   }
 
+  if (authCallbackRedirectIssued) {
+    return;
+  }
+
   const returnTarget = getPostAuthReturnTarget();
   if (returnTarget) {
     clearPostAuthReturnTarget();
+    authCallbackRedirectIssued = true;
     window.location.replace(returnTarget);
     return;
   }
@@ -1252,10 +1266,12 @@ async function initAuthCallbackPage() {
     data: { session },
   } = await supabase.auth.getSession();
   if (session) {
+    authCallbackRedirectIssued = true;
     window.location.replace("/dashboard");
     return;
   }
 
+  authCallbackRedirectIssued = true;
   window.location.replace("/");
 }
 
