@@ -8,15 +8,13 @@
     {
       key: "google",
       label: "Google",
-      icon_url:
-        "https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_%22G%22_logo.svg",
+      icon_url: "/assets/auth-providers/google.svg",
       supported: true,
     },
     {
       key: "github",
       label: "GitHub",
-      icon_url:
-        "https://upload.wikimedia.org/wikipedia/commons/9/91/Octicons-mark-github.svg",
+      icon_url: "/assets/auth-providers/github.svg",
       supported: true,
     },
     {
@@ -28,22 +26,19 @@
     {
       key: "azure",
       label: "Microsoft",
-      icon_url:
-        "https://upload.wikimedia.org/wikipedia/commons/4/44/Microsoft_logo.svg",
+      icon_url: "/assets/auth-providers/microsoft.svg",
       supported: false,
     },
     {
       key: "facebook",
       label: "Facebook",
-      icon_url:
-        "https://upload.wikimedia.org/wikipedia/commons/0/05/Facebook_Logo_%282019%29.png",
+      icon_url: "/assets/auth-providers/facebook.png",
       supported: false,
     },
     {
       key: "slack_oidc",
       label: "Slack",
-      icon_url:
-        "https://upload.wikimedia.org/wikipedia/commons/d/d5/Slack_icon_2019.svg",
+      icon_url: "/assets/auth-providers/slack.svg",
       supported: false,
     },
     {
