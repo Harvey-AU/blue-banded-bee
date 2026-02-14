@@ -122,7 +122,7 @@ function initialiseSupabase() {
  */
 async function loadAuthModal() {
   try {
-    const response = await fetch("/auth-modal.html");
+    const response = await fetch("/auth-modal.html", { cache: "no-store" });
 
     if (!response.ok) {
       throw new Error(

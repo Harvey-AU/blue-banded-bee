@@ -537,6 +537,9 @@ func (h *Handler) ServeNewDashboard(w http.ResponseWriter, r *http.Request) {
 
 // ServeAuthModal serves the shared authentication modal
 func (h *Handler) ServeAuthModal(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store, max-age=0")
+	w.Header().Set("Pragma", "no-cache")
+	w.Header().Set("Expires", "0")
 	http.ServeFile(w, r, "auth-modal.html")
 }
 
