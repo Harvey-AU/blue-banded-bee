@@ -643,8 +643,8 @@
       if (Array.isArray(response?.auth_methods)) {
         authMethods = response.auth_methods;
       }
-    } catch (err) {
-      console.warn("Failed to load profile from API:", err);
+    } catch (_err) {
+      console.warn("Failed to load profile from API.");
     }
 
     const emailEl = document.getElementById("settingsUserEmail");
