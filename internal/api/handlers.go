@@ -330,12 +330,17 @@ func (h *Handler) SetupRoutes(mux *http.ServeMux) {
 	// Usage routes (require auth)
 	mux.Handle("/v1/usage", auth.AuthMiddleware(http.HandlerFunc(h.UsageHandler)))
 	mux.Handle("/v1/usage/history", auth.AuthMiddleware(http.HandlerFunc(h.UsageHistoryHandler)))
+	mux.Handle("/v1/billing", auth.AuthMiddleware(http.HandlerFunc(h.BillingHandler)))
+	mux.Handle("/v1/billing/invoices", auth.AuthMiddleware(http.HandlerFunc(h.BillingInvoicesHandler)))
+	mux.Handle("/v1/billing/checkout", auth.AuthMiddleware(http.HandlerFunc(h.BillingCheckoutHandler)))
+	mux.Handle("/v1/billing/portal", auth.AuthMiddleware(http.HandlerFunc(h.BillingPortalHandler)))
 
 	// Plans route (public - for pricing page)
 	mux.Handle("/v1/plans", http.HandlerFunc(h.PlansHandler))
 
 	// Webhook endpoints (no auth required)
 	mux.HandleFunc("/v1/webhooks/webflow/", h.WebflowWebhook) // Note: trailing slash for path params
+	mux.HandleFunc("/v1/webhooks/paddle", h.PaddleWebhook)
 
 	// Slack integration endpoints
 	mux.Handle("/v1/integrations/slack", auth.AuthMiddleware(http.HandlerFunc(h.SlackConnectionsHandler)))
@@ -1073,6 +1078,23 @@ func (h *Handler) WebflowWebhook(w http.ResponseWriter, r *http.Request) {
 	}
 	job, err := h.createJobFromRequest(r.Context(), &userForJob, req, logger)
 	if err != nil {
+		var quotaErr *jobs.QuotaExceededError
+		if errors.As(err, &quotaErr) {
+			logger.Info().
+				Str("user_id", user.ID).
+				Str("org_id", orgID).
+				Str("domain", selectedDomain).
+				Int("daily_used", quotaErr.Used).
+				Int("daily_limit", quotaErr.Limit).
+				Time("resets_at", quotaErr.ResetsAt).
+				Msg("Skipping webhook-triggered job because organisation quota is exhausted")
+			WriteSuccess(w, r, map[string]any{
+				"domain":    selectedDomain,
+				"status":    "quota_exhausted",
+				"resets_at": quotaErr.ResetsAt.UTC().Format(time.RFC3339),
+			}, "Webhook received but daily quota is exhausted")
+			return
+		}
 		logger.Error().Err(err).
 			Str("user_id", user.ID).
 			Str("domain", selectedDomain).

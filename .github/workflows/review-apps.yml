@@ -151,6 +151,8 @@ jobs:
               WEBFLOW_CLIENT_SECRET="${{ secrets.WEBFLOW_CLIENT_SECRET }}" \
               GOOGLE_CLIENT_ID="${{ secrets.GOOGLE_CLIENT_ID }}" \
               GOOGLE_CLIENT_SECRET="${{ secrets.GOOGLE_CLIENT_SECRET }}" \
+              PADDLE_API_KEY="${{ secrets.PADDLE_API_KEY }}" \
+              PADDLE_WEBHOOK_SECRET="${{ secrets.PADDLE_WEBHOOK_SECRET }}" \
               GOOGLE_REDIRECT_URI="https://$APP_NAME.fly.dev/v1/integrations/google/callback" \
               APP_URL="https://$APP_NAME.fly.dev" \
               --app $APP_NAME --stage
@@ -167,6 +169,8 @@ jobs:
               WEBFLOW_CLIENT_SECRET="${{ secrets.WEBFLOW_CLIENT_SECRET }}" \
               GOOGLE_CLIENT_ID="${{ secrets.GOOGLE_CLIENT_ID }}" \
               GOOGLE_CLIENT_SECRET="${{ secrets.GOOGLE_CLIENT_SECRET }}" \
+              PADDLE_API_KEY="${{ secrets.PADDLE_API_KEY }}" \
+              PADDLE_WEBHOOK_SECRET="${{ secrets.PADDLE_WEBHOOK_SECRET }}" \
               GOOGLE_REDIRECT_URI="https://$APP_NAME.fly.dev/v1/integrations/google/callback" \
               APP_URL="https://$APP_NAME.fly.dev" \
               --app $APP_NAME --stage
