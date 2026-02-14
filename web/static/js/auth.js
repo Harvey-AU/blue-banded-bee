@@ -64,7 +64,19 @@ const OAUTH_CALLBACK_QUERY_KEYS = [
   "code",
   "state",
 ];
-const PROTECTED_ROUTE_PATTERNS = [/^\/settings(?:\/|$)/, /^\/jobs(?:\/|$)/];
+const PUBLIC_ROUTE_PATHS = new Set([
+  "/",
+  "/welcome",
+  "/welcome/",
+  "/welcome/invite",
+  "/welcome/invite/",
+  "/cli-login.html",
+  "/auth-modal.html",
+  "/debug-auth.html",
+  "/test-login.html",
+  "/test-components.html",
+  "/test-data-components.html",
+]);
 
 function getCleanOAuthCallbackPath() {
   const url = new URL(window.location.href);
@@ -76,7 +88,7 @@ function getCleanOAuthCallbackPath() {
 }
 
 function isProtectedRoutePath(pathname) {
-  return PROTECTED_ROUTE_PATTERNS.some((pattern) => pattern.test(pathname));
+  return !PUBLIC_ROUTE_PATHS.has(pathname);
 }
 
 function applyProtectedRouteAuthGate(isAuthenticated) {
