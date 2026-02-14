@@ -113,6 +113,7 @@ func ensurePageBatch(ctx context.Context, q TransactionExecutor, domainID int, b
 		SELECT $1, path
 		FROM batch
 		ON CONFLICT (domain_id, path)
+		-- No-op update ensures RETURNING emits both inserted and existing rows.
 		DO UPDATE SET path = EXCLUDED.path
 		RETURNING path, id
 	`
