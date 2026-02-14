@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/lib/pq"
 	"github.com/rs/zerolog/log"
 )
 
@@ -112,7 +113,7 @@ func ensurePageBatch(ctx context.Context, q TransactionExecutor, domainID int, b
 	`
 
 	return q.Execute(ctx, func(tx *sql.Tx) error {
-		rows, err := tx.QueryContext(ctx, upsertBatchQuery, domainID, unique)
+		rows, err := tx.QueryContext(ctx, upsertBatchQuery, domainID, pq.Array(unique))
 		if err != nil {
 			return fmt.Errorf("failed to upsert page batch: %w", err)
 		}
