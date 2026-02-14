@@ -55,6 +55,7 @@ const AUTH_SYNC_RETRY_DELAY_MS = 100;
 let authSyncRetryTimer = null;
 let authSyncRetryCount = 0;
 const PENDING_INVITE_TOKEN_STORAGE_KEY = "bb_pending_invite_token";
+const POST_AUTH_RETURN_TARGET_STORAGE_KEY = "bb_post_auth_return_target";
 const OAUTH_CALLBACK_QUERY_KEYS = [
   "error",
   "error_code",
@@ -96,6 +97,62 @@ function clearPendingInviteToken() {
   } catch (_error) {
     // sessionStorage may be unavailable.
   }
+}
+
+function toSafeReturnPath(raw) {
+  if (!raw) return "";
+  try {
+    const parsed = new URL(raw, window.location.origin);
+    if (parsed.origin !== window.location.origin) return "";
+    const path = `${parsed.pathname}${parsed.search}${parsed.hash}`;
+    if (!path || path.startsWith("/auth-modal.html")) return "";
+    return path;
+  } catch (_error) {
+    return "";
+  }
+}
+
+function getPostAuthReturnTarget() {
+  try {
+    const stored = window.sessionStorage.getItem(
+      POST_AUTH_RETURN_TARGET_STORAGE_KEY
+    );
+    return toSafeReturnPath(stored);
+  } catch (_error) {
+    return "";
+  }
+}
+
+function setPostAuthReturnTarget(path) {
+  const safePath = toSafeReturnPath(path);
+  if (!safePath) return;
+  try {
+    window.sessionStorage.setItem(
+      POST_AUTH_RETURN_TARGET_STORAGE_KEY,
+      safePath
+    );
+  } catch (_error) {
+    // sessionStorage may be unavailable.
+  }
+}
+
+function clearPostAuthReturnTarget() {
+  try {
+    window.sessionStorage.removeItem(POST_AUTH_RETURN_TARGET_STORAGE_KEY);
+  } catch (_error) {
+    // sessionStorage may be unavailable.
+  }
+}
+
+function setPostAuthReturnTargetFromCurrentPath() {
+  if (
+    window.location.pathname === "/" ||
+    window.location.pathname === "/cli-login.html"
+  ) {
+    return;
+  }
+  const currentPath = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+  setPostAuthReturnTarget(currentPath);
 }
 
 /**
@@ -565,6 +622,7 @@ async function getGravatarUrl(email, size) {
 function showAuthModal() {
   const authModal = document.getElementById("authModal");
   if (authModal) {
+    setPostAuthReturnTargetFromCurrentPath();
     authModal.classList.add("show");
     showAuthForm("login");
   }
@@ -955,6 +1013,13 @@ async function defaultHandleAuthSuccess(user) {
   }
   await handlePendingDomain();
 
+  const returnTarget = getPostAuthReturnTarget();
+  if (returnTarget) {
+    clearPostAuthReturnTarget();
+    window.location.assign(returnTarget);
+    return;
+  }
+
   if (window.location.pathname === "/") {
     window.location.assign("/dashboard");
   }
@@ -1011,6 +1076,10 @@ async function handleSocialLogin(provider) {
 
       if (params.has("invite_token")) {
         return currentUrl.toString();
+      }
+      const returnTarget = getPostAuthReturnTarget();
+      if (returnTarget) {
+        return `${window.location.origin}${returnTarget}`;
       }
       if (window.location.pathname === "/") {
         return `${window.location.origin}/dashboard`;
