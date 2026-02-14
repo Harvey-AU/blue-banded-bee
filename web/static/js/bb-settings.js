@@ -364,6 +364,21 @@
     return "Not connected";
   }
 
+  function getOAuthQueryParams(provider) {
+    switch (provider) {
+      case "google":
+        return { prompt: "select_account consent" };
+      case "azure":
+        return { prompt: "select_account" };
+      case "facebook":
+        return { auth_type: "reauthenticate" };
+      case "slack_oidc":
+        return { prompt: "consent" };
+      default:
+        return {};
+    }
+  }
+
   async function connectAuthMethod(provider) {
     if (!window.supabase?.auth) return;
 
@@ -389,11 +404,12 @@
         }
       }
       const callbackUrl = `${window.location.origin}/auth/callback`;
+      const queryParams = getOAuthQueryParams(provider);
 
       if (typeof window.supabase.auth.linkIdentity === "function") {
         const { data, error } = await window.supabase.auth.linkIdentity({
           provider,
-          options: { redirectTo: callbackUrl },
+          options: { redirectTo: callbackUrl, queryParams },
         });
         if (error) throw error;
         if (data?.url) {
@@ -403,7 +419,7 @@
       } else {
         const { data, error } = await window.supabase.auth.signInWithOAuth({
           provider,
-          options: { redirectTo: callbackUrl },
+          options: { redirectTo: callbackUrl, queryParams },
         });
         if (error) throw error;
         if (data?.url) {
@@ -633,14 +649,19 @@
     if (nameInputEl) nameInputEl.value = fullName || "";
 
     const connectedProviders = new Set();
-    (Array.isArray(authMethods) ? authMethods : []).forEach((provider) => {
-      const normalised = normaliseAuthProvider(provider);
-      if (normalised) connectedProviders.add(normalised);
-    });
-    authIdentities.forEach((identity) => {
-      const normalised = normaliseAuthProvider(identity.provider);
-      if (normalised) connectedProviders.add(normalised);
-    });
+    const hasIdentityData =
+      Array.isArray(authIdentities) && authIdentities.length > 0;
+    if (hasIdentityData) {
+      authIdentities.forEach((identity) => {
+        const normalised = normaliseAuthProvider(identity.provider);
+        if (normalised) connectedProviders.add(normalised);
+      });
+    } else {
+      (Array.isArray(authMethods) ? authMethods : []).forEach((provider) => {
+        const normalised = normaliseAuthProvider(provider);
+        if (normalised) connectedProviders.add(normalised);
+      });
+    }
 
     const methodModels = AUTH_METHOD_DEFS.map((methodDef) => {
       const provider = methodDef.key;
