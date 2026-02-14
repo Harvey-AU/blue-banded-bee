@@ -309,6 +309,8 @@ async function handleAuthCallback() {
     const hashParams = new URLSearchParams(window.location.hash.substring(1));
     const accessToken = hashParams.get("access_token");
     const refreshToken = hashParams.get("refresh_token");
+    const hasOAuthHashParams = Boolean(accessToken || refreshToken);
+    const isOAuthCallbackReturn = hasOAuthCallbackParams || hasOAuthHashParams;
 
     if (accessToken) {
       // Set the session in Supabase using the tokens
@@ -332,7 +334,7 @@ async function handleAuthCallback() {
           window.location.replace(inviteUrl.toString());
           return false;
         }
-        if (hasOAuthCallbackParams) {
+        if (isOAuthCallbackReturn) {
           const returnTarget = getPostAuthReturnTarget();
           if (returnTarget) {
             clearPostAuthReturnTarget();
@@ -371,7 +373,7 @@ async function handleAuthCallback() {
           window.location.replace(inviteUrl.toString());
           return false;
         }
-        if (hasOAuthCallbackParams) {
+        if (isOAuthCallbackReturn) {
           const returnTarget = getPostAuthReturnTarget();
           if (returnTarget) {
             clearPostAuthReturnTarget();
