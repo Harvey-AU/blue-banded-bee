@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"slices"
 	"strings"
+	"unicode/utf8"
 
 	emailverifier "github.com/AfterShip/email-verifier"
 	"github.com/Harvey-AU/blue-banded-bee/internal/auth"
@@ -424,7 +425,7 @@ func normaliseNamePart(value *string, maxLen int) (*string, error) {
 	if trimmed == "" {
 		return nil, nil
 	}
-	if len(trimmed) > maxLen {
+	if utf8.RuneCountInString(trimmed) > maxLen {
 		return nil, fmt.Errorf("name part exceeds %d characters", maxLen)
 	}
 	return &trimmed, nil
