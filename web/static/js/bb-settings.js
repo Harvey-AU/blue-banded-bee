@@ -27,25 +27,25 @@
       key: "azure",
       label: "Microsoft",
       icon_url: "/assets/auth-providers/microsoft.svg",
-      supported: false,
+      supported: true,
     },
     {
       key: "facebook",
       label: "Facebook",
       icon_url: "/assets/auth-providers/facebook.png",
-      supported: false,
+      supported: true,
     },
     {
       key: "slack_oidc",
       label: "Slack",
       icon_url: "/assets/auth-providers/slack.svg",
-      supported: false,
+      supported: true,
     },
     {
       key: "saml",
       label: "SSO (SAML)",
       icon_url: "",
-      supported: false,
+      supported: true,
     },
   ];
 
@@ -333,7 +333,7 @@
         key: provider,
         label: provider || "Unknown",
         icon: "?",
-        supported: false,
+        supported: true,
       }
     );
   }
@@ -361,19 +361,11 @@
     if (method.provider === "email") {
       return "Set a password to enable email sign-in";
     }
-    if (!method.supported) {
-      return "Coming soon";
-    }
     return "Not connected";
   }
 
   async function connectAuthMethod(provider) {
     if (!window.supabase?.auth) return;
-    const methodDef = getAuthMethodDef(provider);
-    if (!methodDef.supported) {
-      showSettingsToast("warning", `${methodDef.label} is coming soon`);
-      return;
-    }
 
     try {
       if (provider === "email") {
@@ -542,28 +534,20 @@
       const actionBtn = document.createElement("button");
       actionBtn.className = "bb-button bb-button-outline settings-btn-sm";
       actionBtn.type = "button";
-      actionBtn.textContent = method.connected
-        ? "Remove"
-        : method.supported
-          ? "Connect"
-          : "Coming soon";
+      actionBtn.textContent = method.connected ? "Remove" : "Connect";
 
       if (
-        (method.connected &&
-          (connectedCount <= 1 || method.provider === "email")) ||
-        (!method.connected && !method.supported)
+        method.connected &&
+        (connectedCount <= 1 || method.provider === "email")
       ) {
         actionBtn.disabled = true;
-        actionBtn.title = method.connected
-          ? "At least one sign-in method must remain"
-          : `${formatAuthMethod(method.provider)} is not available yet`;
+        actionBtn.title = "At least one sign-in method must remain";
       }
 
       actionBtn.addEventListener("click", async () => {
         const permanentlyDisabled =
-          (method.connected &&
-            (connectedCount <= 1 || method.provider === "email")) ||
-          (!method.connected && !method.supported);
+          method.connected &&
+          (connectedCount <= 1 || method.provider === "email");
         if (permanentlyDisabled) return;
 
         actionBtn.disabled = true;
@@ -652,7 +636,7 @@
       );
       return {
         provider,
-        supported: Boolean(methodDef.supported),
+        supported: true,
         connected: connectedProviders.has(provider),
         email:
           identity?.identity_data?.email ||
