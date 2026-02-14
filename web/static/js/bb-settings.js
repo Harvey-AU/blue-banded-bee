@@ -909,7 +909,7 @@
       showSettingsToast("success", "Member role updated");
       await loadOrganisationMembers();
     } catch (err) {
-      console.error("Failed to update member role:", err);
+      console.error("Failed to update member role.");
       showSettingsToast("error", "Failed to update member role");
       throw err;
     }
