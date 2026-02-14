@@ -480,6 +480,19 @@ async function registerUserWithBackend(user) {
       return false;
     }
 
+    const metadata = user.user_metadata || {};
+    const firstName =
+      (metadata.given_name || metadata.first_name || "").trim() || null;
+    const lastName =
+      (metadata.family_name || metadata.last_name || "").trim() || null;
+    const fullName =
+      (
+        metadata.full_name ||
+        metadata.name ||
+        composeDisplayName(firstName, lastName) ||
+        ""
+      ).trim() || null;
+
     const response = await fetch("/v1/auth/register", {
       method: "POST",
       headers: {
@@ -489,7 +502,9 @@ async function registerUserWithBackend(user) {
       body: JSON.stringify({
         user_id: user.id,
         email: user.email,
-        full_name: user.user_metadata?.full_name || null,
+        first_name: firstName,
+        last_name: lastName,
+        full_name: fullName,
       }),
     });
 
@@ -644,12 +659,23 @@ async function updateUserInfo() {
 
     if (session && session.user && session.user.email) {
       const email = session.user.email;
+      const metadata = session.user.user_metadata || {};
+      const firstName =
+        (metadata.given_name || metadata.first_name || "").trim() || "";
+      const lastName =
+        (metadata.family_name || metadata.last_name || "").trim() || "";
+      const fullName = (
+        metadata.full_name ||
+        metadata.name ||
+        composeDisplayName(firstName, lastName) ||
+        ""
+      ).trim();
+      const displayLabel = fullName || email;
 
-      // Update email display
-      userEmailElement.textContent = email;
+      userEmailElement.textContent = displayLabel;
 
       // Update avatar with Gravatar fallback to initials
-      const initials = getInitials(email);
+      const initials = getInitials(displayLabel);
       await setUserAvatar(userAvatarElement, email, initials);
     } else {
       // No session, reset to defaults
@@ -691,6 +717,13 @@ function getInitials(value) {
   }
 
   return emailPrefix.slice(0, 2).toUpperCase();
+}
+
+function composeDisplayName(firstName, lastName) {
+  const first = (firstName || "").trim();
+  const last = (lastName || "").trim();
+  const full = `${first} ${last}`.trim();
+  return full || "";
 }
 
 async function setUserAvatar(target, email, initials, options = {}) {
@@ -1007,6 +1040,8 @@ async function handleEmailSignup(event) {
   const formData = new FormData(event.target);
   pendingSignupSubmission = {
     email: formData.get("email"),
+    firstName: (formData.get("firstName") || "").trim(),
+    lastName: (formData.get("lastName") || "").trim(),
     password: formData.get("password"),
     passwordConfirm: formData.get("passwordConfirm"),
   };
@@ -1021,7 +1056,8 @@ async function executeEmailSignup() {
     return;
   }
 
-  const { email, password, passwordConfirm } = pendingSignupSubmission;
+  const { email, firstName, lastName, password, passwordConfirm } =
+    pendingSignupSubmission;
 
   if (password !== passwordConfirm) {
     showAuthError("Passwords do not match.");
@@ -1050,6 +1086,15 @@ async function executeEmailSignup() {
       signupOptions.captchaToken = captchaToken;
     }
     signupOptions.emailRedirectTo = getEmailSignupRedirectTarget();
+    const fullName = composeDisplayName(firstName, lastName);
+    signupOptions.data = {
+      first_name: firstName || "",
+      last_name: lastName || "",
+      given_name: firstName || "",
+      family_name: lastName || "",
+      full_name: fullName || "",
+      name: fullName || "",
+    };
 
     const { data, error } = await supabase.auth.signUp({
       email,

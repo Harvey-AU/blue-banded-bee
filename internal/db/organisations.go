@@ -12,6 +12,8 @@ import (
 type OrganisationMember struct {
 	UserID    string
 	Email     string
+	FirstName *string
+	LastName  *string
 	FullName  *string
 	Role      string
 	CreatedAt time.Time
@@ -60,7 +62,7 @@ func (db *DB) GetOrganisationMemberRole(ctx context.Context, userID, organisatio
 // ListOrganisationMembers returns all members for an organisation.
 func (db *DB) ListOrganisationMembers(ctx context.Context, organisationID string) ([]OrganisationMember, error) {
 	query := `
-		SELECT u.id, u.email, u.full_name, om.role, om.created_at
+		SELECT u.id, u.email, u.first_name, u.last_name, u.full_name, om.role, om.created_at
 		FROM organisation_members om
 		JOIN users u ON u.id = om.user_id
 		WHERE om.organisation_id = $1
@@ -76,7 +78,7 @@ func (db *DB) ListOrganisationMembers(ctx context.Context, organisationID string
 	var members []OrganisationMember
 	for rows.Next() {
 		var member OrganisationMember
-		if err := rows.Scan(&member.UserID, &member.Email, &member.FullName, &member.Role, &member.CreatedAt); err != nil {
+		if err := rows.Scan(&member.UserID, &member.Email, &member.FirstName, &member.LastName, &member.FullName, &member.Role, &member.CreatedAt); err != nil {
 			return nil, fmt.Errorf("failed to scan organisation member: %w", err)
 		}
 		members = append(members, member)

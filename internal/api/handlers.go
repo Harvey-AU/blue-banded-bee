@@ -103,10 +103,10 @@ type DBClient interface {
 	GetUserByWebhookToken(token string) (*db.User, error)
 	// Additional methods used by API handlers
 	GetUser(userID string) (*db.User, error)
-	UpdateUserFullName(userID string, fullName *string) error
+	UpdateUserNames(userID string, firstName, lastName, fullName *string) error
 	ResetSchema() error
 	ResetDataOnly() error
-	CreateUser(userID, email string, fullName *string, orgName string) (*db.User, *db.Organisation, error)
+	CreateUser(userID, email string, firstName, lastName, fullName *string, orgName string) (*db.User, *db.Organisation, error)
 	GetOrganisation(organisationID string) (*db.Organisation, error)
 	ListJobs(organisationID string, limit, offset int, status, dateRange, timezone string) ([]db.JobWithDomain, int, error)
 	ListJobsWithOffset(organisationID string, limit, offset int, status, dateRange string, tzOffsetMinutes int) ([]db.JobWithDomain, int, error)
